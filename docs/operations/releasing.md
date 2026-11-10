@@ -101,6 +101,8 @@ nor `release.yml`.
    The run attaches `aixle-runner-linux-amd64`, `aixle-runner-linux-arm64` and `checksums.txt`
    to a GitHub Release, which is never marked the repository's latest, and pushes
    `ghcr.io/aixlehq/aixle-runner:X.Y.Z`. A pre-release (`runner-vX.Y.Z-rc.1`) is marked as one.
+   The image does not update itself: it sets `AIXLE_RUNNER_NO_SELF_UPDATE=1`, because in a
+   container the image tag is the version (DESIGN.md §14.4).
 3. **Pin it.** Publishing changes nothing on the platform yet. An application PR adds the
    version and the digests of the run's `checksums.txt` under `binaries` in
    `config/runner_release.yml`, and moves `recommended_version` (and, when older runners must

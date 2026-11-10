@@ -19,7 +19,11 @@
     {
       "request": {
         "method": "GET",
-        "path": "/runner/v1/releases/1.5.0/checksums"
+        "path": "/runner/v1/releases/1.5.0/checksums",
+        "headers": {
+          "X-Aixle-Runner-Protocol": null,
+          "X-Aixle-Runner-Version": null
+        }
       },
       "response": {
         "status": 200,

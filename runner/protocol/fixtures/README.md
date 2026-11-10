@@ -12,8 +12,11 @@ get. Both sides run them:
   from each fixture and drives `aixle-runner`'s client through every exchange the client can
   send. The fake checks that each request is exactly the fixture's request, and answers with the
   fixture's response, its matchers filled in with concrete values; the client must read that
-  answer as the protocol says. An exchange the client never sends (a protocol header other than
-  `1`, a malformed `after`, an invalid result body) is skipped, because it tests the gateway's
+  answer as the protocol says. The fake checks the protocol headers both ways: a header the
+  fixture's request carries must be there with that value, and one it removes with `null` must
+  be absent. An exchange the client never sends (a protocol header other than `1`, a release
+  request that carries the protocol headers, a malformed `after`, an invalid result body) is
+  skipped, because it tests the gateway's
   checks, which the Rails side runs. The test fails if no register, token, unregister, ops or
   releases exchange was driven, and it fails for a fixture of which it drives no exchange at
   all, unless the fixture is on its `gatewayOnly` list with the reason (empty today). It runs in

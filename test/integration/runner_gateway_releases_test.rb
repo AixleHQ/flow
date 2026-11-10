@@ -114,6 +114,25 @@ class RunnerGatewayReleasesTest < ActionDispatch::IntegrationTest
     assert_refused :unauthorized, "invalid_token"
   end
 
+  test "a runner version over 255 characters is invalid_registration whether or not it is below min_version" do
+    token = Runners::Credentials.mint_registration!(@runner)
+    # Strict SemVer, 256 characters, below 1.2.0.
+    overlength = "1.0.0-#{'a' * 250}"
+    assert_equal 256, overlength.length
+
+    pin
+    register(token, version: overlength)
+    assert_refused :unprocessable_entity, "invalid_registration"
+
+    pin("min_version" => nil)
+    register(token, version: overlength)
+    assert_refused :unprocessable_entity, "invalid_registration"
+
+    assert_equal 0, RunnerEnvironment.count
+    register(token, version: "1.2.0")
+    assert_response :created
+  end
+
   test "a machine registered before min_version was raised keeps polling" do
     pair = registered_pair
     pin("min_version" => "1.5.0")

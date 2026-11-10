@@ -195,7 +195,9 @@ func (c *Client) do(ctx context.Context, endpoint Endpoint, method, path, token 
 }
 
 // newRequest builds a request with the protocol's headers (§1), and the token as
-// the bearer when there is one.
+// the bearer when there is one. The release endpoints take neither protocol
+// header (§1, §5.6, §5.7): an operator downloads a binary before the machine has
+// a version or a protocol to report, so the runner sends them none either.
 func (c *Client) newRequest(ctx context.Context, endpoint Endpoint, method, path, token string, body any) (*http.Request, error) {
 	var reader io.Reader
 	if body != nil {
@@ -217,8 +219,10 @@ func (c *Client) newRequest(ctx context.Context, endpoint Endpoint, method, path
 	if err != nil {
 		return nil, fmt.Errorf("building the %s request: %w", endpoint, err)
 	}
-	req.Header.Set("X-Aixle-Runner-Protocol", ProtocolVersion)
-	req.Header.Set("X-Aixle-Runner-Version", c.version)
+	if endpoint != EndpointReleases {
+		req.Header.Set("X-Aixle-Runner-Protocol", ProtocolVersion)
+		req.Header.Set("X-Aixle-Runner-Version", c.version)
+	}
 	req.Header.Set("Accept", "application/json")
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")

@@ -19,7 +19,11 @@
     {
       "request": {
         "method": "GET",
-        "path": "/runner/v1/releases/1.4.0/linux-amd64"
+        "path": "/runner/v1/releases/1.4.0/linux-amd64",
+        "headers": {
+          "X-Aixle-Runner-Protocol": null,
+          "X-Aixle-Runner-Version": null
+        }
       },
       "response": {
         "status": 404,
@@ -37,7 +41,11 @@
     {
       "request": {
         "method": "GET",
-        "path": "/runner/v1/releases/1.5.0/darwin-arm64"
+        "path": "/runner/v1/releases/1.5.0/darwin-arm64",
+        "headers": {
+          "X-Aixle-Runner-Protocol": null,
+          "X-Aixle-Runner-Version": null
+        }
       },
       "response": {
         "status": 404,
@@ -52,7 +60,11 @@
     {
       "request": {
         "method": "GET",
-        "path": "/runner/v1/releases/1.4.0/checksums"
+        "path": "/runner/v1/releases/1.4.0/checksums",
+        "headers": {
+          "X-Aixle-Runner-Protocol": null,
+          "X-Aixle-Runner-Version": null
+        }
       },
       "response": {
         "status": 404,
@@ -67,7 +79,11 @@
     {
       "request": {
         "method": "GET",
-        "path": "/runner/v1/releases/v1.5.0/linux-amd64"
+        "path": "/runner/v1/releases/v1.5.0/linux-amd64",
+        "headers": {
+          "X-Aixle-Runner-Protocol": null,
+          "X-Aixle-Runner-Version": null
+        }
       },
       "response": {
         "status": 400,
@@ -82,7 +98,11 @@
     {
       "request": {
         "method": "GET",
-        "path": "/runner/v1/releases/1.5.0/linux"
+        "path": "/runner/v1/releases/1.5.0/linux",
+        "headers": {
+          "X-Aixle-Runner-Protocol": null,
+          "X-Aixle-Runner-Version": null
+        }
       },
       "response": {
         "status": 400,

@@ -6,16 +6,26 @@ module RunnerGateway
     # (docs/design/agent-runtimes/DESIGN.md §6.2, §6.3): `aixle-runner
     # configure` and `aixle-runner unregister` on a `manual` machine.
     class RegistrationsController < ApplicationController
+      # runner_environments.runner_version (RunnerEnvironment's validation).
+      RUNNER_VERSION_MAX_LENGTH = 255
+
       before_action(only: :create) { authenticate(:registration) }
       before_action(only: :destroy) { authenticate(:access) }
 
       # Body: {name, os, arch, facts, ephemeral, auto_update}, checked against
       # runner/protocol/schemas/v1/register.request.json after the version
       # and ephemeral refusals, which come first (PROTOCOL.md §5.1): a runner
-      # below the platform's min_version (config/runner_release.yml) is
-      # refused with the upgrade message. The token is spent only by a
-      # registration that succeeds.
+      # version over 255 characters, which the machine could not record, is
+      # `invalid_registration` whatever the pins say, and then a runner below
+      # the platform's min_version (config/runner_release.yml) is refused with
+      # the upgrade message. The token is spent only by a registration that
+      # succeeds.
       def create
+        if runner_version.length > RUNNER_VERSION_MAX_LENGTH
+          return refuse(:unprocessable_entity, "invalid_registration",
+                        "X-Aixle-Runner-Version must be at most #{RUNNER_VERSION_MAX_LENGTH} characters.")
+        end
+
         if Runners::Release.unsupported_version?(runner_version)
           return refuse(:bad_request, "runner_version_unsupported",
                         "aixle-runner #{runner_version} is no longer supported (minimum #{Runners::Release.min_version}). " \

@@ -35,6 +35,37 @@ class Runners::ReleaseTest < ActiveSupport::TestCase
     assert_includes pins.download_url, "%{version}"
   end
 
+  # The path a real pin takes, YAML to Settings: the same `add_source!` as
+  # config/initializers/_config_settings.rb, so dotted version keys and the
+  # `<os>-<arch>` keys go through the Config gem's options and back.
+  test "pinned binaries and a recommended version survive the Config gem" do
+    settings = Config.load_files
+    settings.add_source!({ "runners" => { "release" => PINS.deep_dup } })
+    settings.reload!
+    Settings.stubs(:runners).returns(settings.runners)
+    Runners::Release.reset!
+
+    assert_equal Runners::Version.parse("1.5.0"), Runners::Release.pins.recommended_version
+    binary = Runners::Release.binary("1.5.0", "linux-amd64")
+    assert_equal AMD64, binary.sha256
+    assert_equal "https://github.com/AixleHQ/flow/releases/download/runner-v1.5.0/aixle-runner-linux-amd64", binary.url
+    assert_equal ARM64, Runners::Release.checksums("1.5.0").binaries["linux-arm64"]
+    assert_equal Runners::Release::Offer.new(version: "1.5.0", platform: "linux-amd64", sha256: AMD64),
+                 Runners::Release.update_for(@environment, runner_version: "1.4.0")
+  ensure
+    Runners::Release.reset!
+  end
+
+  test "the parsed pins are kept until reset" do
+    Runners::Release.reset!
+    first = Runners::Release.pins
+
+    assert_same first, Runners::Release.pins
+    Runners::Release.reset!
+    assert_not_same first, Runners::Release.pins
+    assert_equal first, Runners::Release.pins
+  end
+
   test "the pins parse into versions and lowercase digests" do
     pins = Runners::Release.parse(PINS)
 
@@ -54,6 +85,9 @@ class Runners::ReleaseTest < ActiveSupport::TestCase
       { "recommended_version" => "1.6.0" } => "no pinned binaries",
       { "download_url" => "https://example.com/aixle-runner" } => "download_url",
       { "download_url" => "ftp://example.com/%{version}/%{platform}" } => "download_url",
+      { "download_url" => "https://example.test/%{version}/%{platform}/%{unexpected}" } => "cannot be filled in",
+      { "download_url" => "https://example.test/a%2Fb/%{version}/%{platform}" } => "cannot be filled in",
+      { "download_url" => "https://example.test/%{version}/%{platform}/%" } => "cannot be filled in",
       { "binaries" => [] } => "binaries",
       { "binaries" => { "latest" => { "linux-amd64" => { "sha256" => AMD64 } } } } => "not a semantic version",
       { "binaries" => { "1.5.0" => {} } } => "map of platforms",

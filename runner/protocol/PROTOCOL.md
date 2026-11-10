@@ -102,7 +102,7 @@ These are the only refusals without this shape:
 | `runners_disabled` | 403 | all | External runners are turned off for the runner's company. The credentials stay valid. |
 | `not_found` | 404 | `ops/:id/result`, releases | The op does not exist, or belongs to another machine; or the platform pins no such release (§5.6, §5.7). |
 | `ephemeral_not_supported` | 422 | `register` | The body asked for `ephemeral: true`. |
-| `invalid_registration` | 422 | `register` | The body is invalid: a blank or missing `name`, `facts` that is not an object (`null` included), or a field over 255 characters. An `X-Aixle-Runner-Version` over 255 characters is refused this way too, since it is recorded with the machine. |
+| `invalid_registration` | 422 | `register` | The body is invalid: a blank or missing `name`, `facts` that is not an object (`null` included), or a field over 255 characters. An `X-Aixle-Runner-Version` over 255 characters is refused this way too, since it is recorded with the machine, and before the `min_version` check, so the answer does not depend on the pins. |
 | `invalid_result` | 422 | `ops/:id/result` | The result body is invalid (§5.5). |
 
 **Check order.** Every request is checked in this order, and the first failure answers:
@@ -261,8 +261,10 @@ refused by the other endpoints: a session is never killed because a newer runner
 `environment.id` is an integer and `environment.key` an opaque string; a runner does not parse
 either.
 
-Its own refusals: `400 runner_version_unsupported`, then `422 ephemeral_not_supported`, then
-`422 invalid_registration`. None of them spends the token. Two machines that race on one token create one environment; the other gets
+Its own refusals: `422 invalid_registration` for an `X-Aixle-Runner-Version` over 255
+characters, then `400 runner_version_unsupported`, then `422 ephemeral_not_supported`, then
+`422 invalid_registration` for the body. None of them spends the token. An overlength version is
+refused the same way whatever `min_version` is. Two machines that race on one token create one environment; the other gets
 `invalid_token`.
 
 Schema: [`schemas/v1/register.request.json`](schemas/v1/register.request.json), checked after the

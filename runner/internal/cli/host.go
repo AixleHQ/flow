@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/aixlehq/aixle-runner/internal/credentials"
 	"github.com/aixlehq/aixle-runner/internal/docker"
@@ -25,6 +27,21 @@ type HostOptions struct {
 	Logger     *slog.Logger
 	// Binary is the file a self-update replaces. Empty is the running binary.
 	Binary string
+	// NoSelfUpdate turns self-update off whatever the credentials say: the
+	// published image sets NoSelfUpdateEnv, since in a container the image tag is
+	// the version (DESIGN.md §14.4).
+	NoSelfUpdate bool
+}
+
+// NoSelfUpdateEnv, set to a true value (`1`, `true`), turns self-update off for
+// the host runner. docker/runner/Dockerfile sets it.
+const NoSelfUpdateEnv = "AIXLE_RUNNER_NO_SELF_UPDATE"
+
+// SelfUpdateOff reads NoSelfUpdateEnv's value. Empty, or a value that is not a
+// boolean, leaves self-update to the credentials.
+func SelfUpdateOff(value string) bool {
+	off, err := strconv.ParseBool(strings.TrimSpace(value))
+	return err == nil && off
 }
 
 // RunHost runs the host runner until ctx is done. It holds the state directory's
@@ -71,7 +88,7 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 	}
 
 	opts.Logger.Info("aixle-runner starting", "mode", "host", "version", version.Version,
-		"platform", creds.URL, "environment", creds.Environment.Key, "auto_update", creds.AutoUpdateEnabled())
+		"platform", creds.URL, "environment", creds.Environment.Key, "auto_update", creds.AutoUpdateEnabled() && !opts.NoSelfUpdate)
 	// The host runner runs every op itself, the session ops included, through the
 	// Docker API against the environment's session container (DESIGN.md §6.8).
 	env := &docker.Environment{API: api, Key: creds.Environment.Key, StateDir: opts.StateDir, Logger: opts.Logger}
@@ -94,7 +111,7 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 			Releases: client,
 			Current:  version.Version,
 			Binary:   binary,
-			Disabled: !creds.AutoUpdateEnabled(),
+			Disabled: !creds.AutoUpdateEnabled() || opts.NoSelfUpdate,
 			Busy:     env.HoldsSession,
 			Logger:   opts.Logger,
 		},

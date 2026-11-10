@@ -31,7 +31,9 @@ const usage = `Usage:
 service install copies this binary to /var/lib/aixle-runner/bin/aixle-runner,
 owned by the service's own user, and the service runs that copy. The runner
 updates that copy itself while the machine is idle, to the version the platform
-recommends, unless configure was run with --no-auto-update.
+recommends, unless configure was run with --no-auto-update. A runner with
+AIXLE_RUNNER_NO_SELF_UPDATE=1 in its environment, as the published image sets,
+never updates itself.
 `
 
 func main() {
@@ -172,5 +174,6 @@ func hostMode(ctx context.Context, args []string, stderr io.Writer) error {
 		return errUsage
 	}
 	logger := slog.New(slog.NewTextHandler(stderr, nil))
-	return cli.RunHost(ctx, cli.HostOptions{StateDir: *stateDir, Logger: logger})
+	return cli.RunHost(ctx, cli.HostOptions{StateDir: *stateDir, Logger: logger,
+		NoSelfUpdate: cli.SelfUpdateOff(os.Getenv(cli.NoSelfUpdateEnv))})
 }

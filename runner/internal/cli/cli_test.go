@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -570,5 +571,33 @@ func TestConfigureAsRootBeforeServiceInstallKeepsTheCredentials(t *testing.T) {
 	}
 	if len(p.requests) != 1 || !credsExist(t, dir) {
 		t.Fatalf("requests %v", p.requests)
+	}
+}
+
+func TestSelfUpdateOffReadsABoolean(t *testing.T) {
+	for value, want := range map[string]bool{"1": true, "true": true, " TRUE ": true, "": false, "0": false, "false": false, "off": false, "yes": false} {
+		if got := SelfUpdateOff(value); got != want {
+			t.Errorf("%q: got %v, want %v", value, got, want)
+		}
+	}
+}
+
+// The published image sets AIXLE_RUNNER_NO_SELF_UPDATE (docker/runner/Dockerfile):
+// a host runner started from it reports self-update as off, whatever its
+// credentials say.
+func TestAHostRunnerWithNoSelfUpdateStartsWithSelfUpdateOff(t *testing.T) {
+	for _, noSelfUpdate := range []bool{false, true} {
+		_, url := newPlatform(t, map[string][]answer{})
+		dir := t.TempDir()
+		storeCreds(t, dir, url)
+		var logs bytes.Buffer
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		_ = RunHost(ctx, HostOptions{StateDir: dir, Docker: hostDocker{}, NoSelfUpdate: noSelfUpdate,
+			Logger: slog.New(slog.NewTextHandler(&logs, nil))})
+		want := fmt.Sprintf("auto_update=%v", !noSelfUpdate)
+		if !strings.Contains(logs.String(), want) {
+			t.Errorf("NoSelfUpdate %v: the start line lacks %s:\n%s", noSelfUpdate, want, logs.String())
+		}
 	}
 }

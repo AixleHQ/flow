@@ -21,5 +21,9 @@ COPY --chmod=0755 dist/aixle-runner-linux-${TARGETARCH} /usr/local/bin/aixle-run
 # Not root. Whoever runs the image decides what it may reach: the Docker socket
 # for a host runner, the Kubernetes API for the controller (task 19).
 USER 10001:10001
+# In a container the image tag is the version: the runner does not update itself
+# (DESIGN.md §14.4). Its binary is root-owned, and a container recreated from the
+# image would bring the old binary back anyway.
+ENV AIXLE_RUNNER_NO_SELF_UPDATE=1
 ENTRYPOINT ["aixle-runner"]
 CMD ["--mode", "host"]

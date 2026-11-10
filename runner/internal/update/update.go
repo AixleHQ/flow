@@ -7,8 +7,10 @@
 // then does the new binary replace the old one, atomically. The runner then exits,
 // and systemd starts the new binary (`Restart=always`).
 //
-// A machine whose operator turned self-update off (`configure --no-auto-update`)
-// never updates itself, whatever the platform offers.
+// A machine whose operator turned self-update off (`configure --no-auto-update`),
+// and a runner started from the published image, which sets
+// AIXLE_RUNNER_NO_SELF_UPDATE, never update themselves, whatever the platform
+// offers.
 package update
 
 import (
@@ -34,8 +36,13 @@ import (
 // MaxBinaryBytes bounds a download. The runner's binary is about 20 MiB.
 const MaxBinaryBytes = 256 << 20
 
-// DownloadTimeout bounds one download.
-const DownloadTimeout = 10 * time.Minute
+// DownloadTimeout bounds one download. It is well under the platform's lifecycle
+// op budget (Settings.runners.lifecycle_op_timeout, 10 minutes): a session the
+// platform assigns to this machine while it updates has its `container.start`
+// queued, and that op outlives the download and the restart, after which the
+// runner polls and runs it (DESIGN.md §14.4). A download that does not finish in
+// time is retried after RetryAfter.
+const DownloadTimeout = 2 * time.Minute
 
 // RetryAfter is how long an update that failed is not tried again: the platform
 // offers it on every empty poll, every 25 seconds.
@@ -88,7 +95,9 @@ type Updater struct {
 	// Binary is the running binary's path, which an update replaces. The service
 	// runs it from a directory its own user owns (internal/service).
 	Binary string
-	// Disabled is the machine's opt-out, `configure --no-auto-update`.
+	// Disabled turns self-update off: the machine's opt-out,
+	// `configure --no-auto-update`, or AIXLE_RUNNER_NO_SELF_UPDATE, which the
+	// published image sets because its tag is its version.
 	Disabled bool
 	// Busy says whether the machine holds a session: its session container
 	// exists. The runner then waits for a later offer.
@@ -142,7 +151,7 @@ func (u *Updater) Apply(ctx context.Context, offer protocol.Update) bool {
 	u.defaults()
 	log := u.Logger.With("version", offer.Version, "current", u.Current)
 	if u.Disabled {
-		u.notice("disabled:"+offer.Version, "the platform recommends a newer aixle-runner, and self-update is off on this machine (configure --no-auto-update)",
+		u.notice("disabled:"+offer.Version, "the platform recommends a newer aixle-runner, and self-update is off on this machine (configure --no-auto-update, or AIXLE_RUNNER_NO_SELF_UPDATE in the image)",
 			"version", offer.Version, "current", u.Current)
 		return false
 	}

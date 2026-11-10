@@ -243,6 +243,9 @@ func strictDecode(t *testing.T, raw []byte, out any) bool {
 type call struct {
 	endpoint string
 	version  string
+	// protocolHeader and versionHeader are the X-Aixle-Runner-Protocol and
+	// X-Aixle-Runner-Version the request must carry, nil when it must carry none.
+	protocolHeader, versionHeader *string
 	run      func(ctx context.Context, c *protocol.Client) (any, error)
 	// check, when set, checks a successful answer the response has no body for.
 	check func(t *testing.T, got any, headers map[string]*string)
@@ -263,12 +266,32 @@ var gatewayOnly = map[string]string{}
 // clientCall maps an exchange to the client call that sends it, or returns false
 // when this client cannot send that request.
 func clientCall(t *testing.T, method, path, token string, headers map[string]*string, body []byte) (call, bool) {
-	c := call{version: fixtureVersion}
+	// Every request carries both protocol headers unless the fixture replaces or
+	// removes them (fixtures/README.md); explicit null removes one.
+	protocolHeader, versionHeader := strPtr(protocol.ProtocolVersion), strPtr(fixtureVersion)
 	for name, value := range headers {
-		if !strings.EqualFold(name, "X-Aixle-Runner-Version") || value == nil {
+		switch {
+		case strings.EqualFold(name, "X-Aixle-Runner-Protocol"):
+			protocolHeader = value
+		case strings.EqualFold(name, "X-Aixle-Runner-Version"):
+			versionHeader = value
+		default:
 			return call{}, false
 		}
-		c.version = *value
+	}
+	// The client sends both headers, protocol 1, on every endpoint but the
+	// release ones, and neither on those (PROTOCOL.md §1).
+	releases := method == http.MethodGet && (checksumsPath.MatchString(path) || releasePath.MatchString(path))
+	if releases {
+		if protocolHeader != nil || versionHeader != nil {
+			return call{}, false
+		}
+	} else if protocolHeader == nil || *protocolHeader != protocol.ProtocolVersion || versionHeader == nil {
+		return call{}, false
+	}
+	c := call{version: fixtureVersion, protocolHeader: protocolHeader, versionHeader: versionHeader}
+	if versionHeader != nil {
+		c.version = *versionHeader
 	}
 
 	switch {
@@ -350,8 +373,9 @@ type fakeGateway struct {
 }
 
 type expectedExchange struct {
-	method, path, token, version string
-	body                         []byte
+	method, path, token           string
+	protocolHeader, versionHeader *string
+	body                          []byte
 	status                       int
 	headers                      map[string]*string
 	response                     []byte
@@ -372,12 +396,8 @@ func (g *fakeGateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != e.method || r.URL.RequestURI() != e.path {
 		g.t.Errorf("request is %s %s, the fixture's is %s %s", r.Method, r.URL.RequestURI(), e.method, e.path)
 	}
-	if got := r.Header.Get("X-Aixle-Runner-Protocol"); got != "1" {
-		g.t.Errorf("X-Aixle-Runner-Protocol is %q", got)
-	}
-	if got := r.Header.Get("X-Aixle-Runner-Version"); got != e.version {
-		g.t.Errorf("X-Aixle-Runner-Version is %q, the fixture's is %q", got, e.version)
-	}
+	checkHeader(g.t, r, "X-Aixle-Runner-Protocol", e.protocolHeader)
+	checkHeader(g.t, r, "X-Aixle-Runner-Version", e.versionHeader)
 	wantAuth := ""
 	if e.token != "" {
 		wantAuth = "Bearer " + e.token
@@ -410,6 +430,21 @@ func (g *fakeGateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(e.status)
 	_, _ = w.Write(e.response)
 }
+
+// checkHeader checks that r carries name exactly once with want's value, or not
+// at all when want is nil.
+func checkHeader(t *testing.T, r *http.Request, name string, want *string) {
+	t.Helper()
+	got := r.Header.Values(name)
+	switch {
+	case want == nil && len(got) > 0:
+		t.Errorf("%s is %q, the fixture's request has none", name, got)
+	case want != nil && (len(got) != 1 || got[0] != *want):
+		t.Errorf("%s is %q, the fixture's is %q", name, got, *want)
+	}
+}
+
+func strPtr(s string) *string { return &s }
 
 // defaultBody stands in for a success body the fixture does not check.
 func (w *world) defaultBody(method, path string) any {
@@ -629,7 +664,8 @@ func exchange(t *testing.T, w *world, gateway *fakeGateway, baseURL, file string
 
 	gateway.mu.Lock()
 	gateway.expected = &expectedExchange{
-		method: x.Request.Method, path: path, token: token, version: c.version, body: body,
+		method: x.Request.Method, path: path, token: token, body: body,
+		protocolHeader: c.protocolHeader, versionHeader: c.versionHeader,
 		status: x.Response.Status, headers: x.Response.Headers, response: response,
 	}
 	seenBefore := gateway.seen

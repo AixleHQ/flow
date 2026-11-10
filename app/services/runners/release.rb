@@ -13,9 +13,10 @@ module Runners
   #   Runners::Release.below_recommended?("0.1.0")          # an update may be offered
   #   Runners::Release.update_for(environment, runner_version: "0.1.0") # => Offer, or nil
   #
-  # The pins are read on every call, so a test that stubs Settings sees its own,
-  # and checked each time: an invalid file fails boot
-  # (config/initializers/runner_release.rb), never a request.
+  # The pins are parsed and checked once, on first use, and kept for the life of
+  # the process: the file is committed and does not change under it. An invalid
+  # file fails boot (config/initializers/runner_release.rb), never a request.
+  # A test that changes Settings calls `reset!`.
   module Release
     # The runner protocol versions this gateway's code implements. The pins may
     # list only these.
@@ -37,7 +38,12 @@ module Runners
     module_function
 
     def pins
-      parse(Settings.runners.release.to_h.deep_stringify_keys)
+      @pins ||= parse(Settings.runners.release.to_h.deep_stringify_keys)
+    end
+
+    # Forgets the parsed pins, so the next call reads Settings again.
+    def reset!
+      @pins = nil
     end
 
     def protocol_supported?(header)
@@ -144,6 +150,15 @@ module Runners
       valid = value.is_a?(String) && value.include?("%{version}") && value.include?("%{platform}") &&
               value.match?(%r{\Ahttps?://[^/\s]+/\S*\z})
       invalid!("download_url must be an http(s) URL with %{version} and %{platform}") unless valid
+
+      # `binary` fills the template in with `format`, which raises on any other
+      # placeholder or on a `%` that is not a directive. Filling it in once here
+      # makes such a template fail boot instead of a request.
+      begin
+        format(value, version: "0.0.0", platform: PLATFORMS.first)
+      rescue KeyError, ArgumentError => e
+        invalid!("download_url #{value.inspect} cannot be filled in: #{e.message}")
+      end
 
       value
     end
