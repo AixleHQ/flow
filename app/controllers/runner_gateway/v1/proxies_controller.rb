@@ -45,7 +45,12 @@ module RunnerGateway
       ].freeze
       OPEN_TIMEOUT = 5
       # MCP's streamable HTTP holds a tool call's response until the tool
-      # ends, and a GET stream between events.
+      # ends, and a GET stream between events. Net::HTTP applies it to each
+      # read, so it cuts an answer that sends no data for that long, not a
+      # long one that keeps sending (PROTOCOL.md §5.6). It stays finite: a
+      # silent upstream would otherwise hold a gateway thread for good, even
+      # after the runner has gone. A longer tool is asynchronous
+      # (`read_tool_result`).
       READ_TIMEOUT = 900
       UPSTREAM_ERRORS = [
         SocketError, SystemCallError, IOError, Timeout::Error, OpenSSL::SSL::SSLError, Net::HTTPBadResponse

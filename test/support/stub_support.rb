@@ -54,6 +54,13 @@ module StubSupport
     runtime
   end
 
+  # Every hosted callback address, by name: the Settings values. Adapters
+  # take their callbacks from the session's runtime, so a test that calls
+  # one directly passes these.
+  def hosted_callbacks
+    ContainerRuntime::CallbackUrls::NAMES.index_with { |name| ContainerRuntime::CallbackUrls.hosted(name) }
+  end
+
   def cleanup_runtime_overrides
     restore_runtime_timeouts
   end

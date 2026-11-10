@@ -3,7 +3,8 @@
 module ContainerRuntime
   # The addresses an agent container calls back to the platform on
   # (docs/design/agent-runtimes/DESIGN.md §6.6), by name. A session reads
-  # them through its runtime, `runtime.callback_url(:mcp, session)`, and
+  # them through its runtime, `ContainerRuntime.callback_url(:mcp, session)`
+  # or `runtime.callback_url(:mcp, session)` when it already holds one, and
   # never from Settings itself: every runtime but RunnerRuntime answers the
   # Settings value below unchanged, and RunnerRuntime answers the session's
   # local callback proxy (Runners::Proxy). The names:
@@ -37,12 +38,6 @@ module ContainerRuntime
     # The hosted address of a callback: the Settings value, unchanged.
     def hosted(name)
       HOSTED.fetch(name.to_sym) { raise ArgumentError, "unknown callback #{name.inspect}" }.call
-    end
-
-    # Every hosted address, by name: what a caller without a session's
-    # runtime gets (an adapter called outside a strategy).
-    def hosted_all
-      NAMES.index_with { |name| hosted(name) }
     end
   end
 end

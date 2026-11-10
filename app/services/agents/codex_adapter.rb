@@ -135,7 +135,7 @@ module Agents
     end
 
     # Override to write multiple config files
-    def config_files(credentials, workflow_config = {})
+    def config_files(credentials, workflow_config)
       {
         # Auth credentials
         config_path => generate_config(credentials, workflow_config).to_json,

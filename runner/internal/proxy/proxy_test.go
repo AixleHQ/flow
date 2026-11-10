@@ -488,6 +488,9 @@ func TestTheRelayRefusesPathsThatLeaveTheProxyRoute(t *testing.T) {
 		{"listener", http.DefaultClient, fmt.Sprintf("http://127.0.0.1:%d/../ops", port)},
 		{"listener", http.DefaultClient, fmt.Sprintf("http://127.0.0.1:%d/mcp/%%2e%%2e/ops", port)},
 		{"listener", http.DefaultClient, fmt.Sprintf("http://127.0.0.1:%d//ops", port)},
+		{"socket", onSocket, "http://relay/runner/v1/proxy/mcp//"},
+		{"socket", onSocket, "http://relay/runner/v1/proxy/"},
+		{"socket", onSocket, "http://relay/runner/v1/proxy//"},
 	}
 	for _, c := range cases {
 		req, err := http.NewRequest(http.MethodGet, c.url, nil)
@@ -505,6 +508,27 @@ func TestTheRelayRefusesPathsThatLeaveTheProxyRoute(t *testing.T) {
 	}
 	if g.count() != 0 {
 		t.Fatalf("the gateway got %d requests", g.count())
+	}
+
+	// One trailing slash passes, as on hosted: `/mcp/` is the MCP route.
+	for _, c := range []struct {
+		client *http.Client
+		url    string
+	}{
+		{onSocket, "http://relay/runner/v1/proxy/mcp/"},
+		{http.DefaultClient, fmt.Sprintf("http://127.0.0.1:%d/mcp/", port)},
+	} {
+		resp, err := c.client.Post(c.url, "application/json", strings.NewReader("{}"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK || resp.Header.Get(protocol.RefusalHeader) != "" {
+			t.Errorf("%s: %d %v", c.url, resp.StatusCode, resp.Header)
+		}
+	}
+	if g.count() != 2 {
+		t.Fatalf("the gateway got %d requests, not the two with a trailing slash", g.count())
 	}
 }
 

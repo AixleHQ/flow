@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/moby/moby/api/pkg/stdcopy"
@@ -54,6 +55,11 @@ const (
 	// SidecarLogTail is how many lines of a sidecar's log the host runner logs
 	// when it exits.
 	SidecarLogTail = 50
+	// SidecarWaitRetry is the first pause before the host runner watches a
+	// sidecar again after Docker's wait stream failed; each failure in a row
+	// doubles it, up to SidecarWaitRetryMax.
+	SidecarWaitRetry    = time.Second
+	SidecarWaitRetryMax = 30 * time.Second
 )
 
 // ProxyHost is the host runner's relay (proxy.Host). Nil on an Environment
@@ -141,11 +147,12 @@ func (e *Environment) openListener(sessionID int64, port int) *protocol.Result {
 
 // startSidecar opens the session's relay socket, then creates and starts the
 // sidecar from the agent image, running the host runner's own binary in proxy
-// mode on 127.0.0.1:ProxyPort, in the network the payload names. It answers
+// mode on 127.0.0.1:port, the payload's `proxy_port`, in the network the
+// payload names. It answers
 // the sidecar's id, which the agent container joins
 // (`NetworkMode: container:<id>`). On a refusal nothing is left: no
 // container, no socket.
-func (e *Environment) startSidecar(ctx context.Context, sessionID int64, image string, network container.NetworkMode) (string, *protocol.Result) {
+func (e *Environment) startSidecar(ctx context.Context, sessionID int64, image string, network container.NetworkMode, port int) (string, *protocol.Result) {
 	fail := func(r protocol.Result) (string, *protocol.Result) {
 		e.Proxy.Close(sessionID)
 		return "", &r
@@ -158,7 +165,7 @@ func (e *Environment) startSidecar(ctx context.Context, sessionID int64, image s
 	name := e.SidecarName(sessionID)
 	config := &container.Config{
 		Image:      image,
-		Entrypoint: []string{SidecarBinary, "--mode", "proxy", "--socket", SidecarSocketDir + "/relay.sock", "--listen", "127.0.0.1:" + strconv.Itoa(protocol.ProxyPort)},
+		Entrypoint: []string{SidecarBinary, "--mode", "proxy", "--socket", SidecarSocketDir + "/relay.sock", "--listen", "127.0.0.1:" + strconv.Itoa(port)},
 		User:       SidecarUser,
 		WorkingDir: "/",
 		Labels: map[string]string{
@@ -225,25 +232,70 @@ func (e *Environment) abandonSidecar(ctx context.Context, sessionID int64, id st
 // its network with it: the agent's container is stopped, so that the session
 // fails through the platform's dead-container path, and the exit is logged
 // with its code and the tail of the sidecar's log (task 8b, decision 10).
+//
+// Docker's wait is a long-lived HTTP stream, and it can break while the
+// sidecar still runs. The watcher then looks at the sidecar: one that has
+// stopped or is gone has exited; one that still runs is waited for again,
+// after a pause that doubles from SidecarWaitRetry up to
+// SidecarWaitRetryMax. Only the sidecar's intentional removal or the host
+// runner's stopping ends the watch.
 func (e *Environment) watchSidecar(sessionID int64, id string) {
 	ctx := e.background()
 	go func() {
-		wait := e.API.ContainerWait(ctx, id, client.ContainerWaitOptions{Condition: container.WaitConditionNotRunning})
-		code := int64(-1)
-		select {
-		case res := <-wait.Result:
-			code = res.StatusCode
-		case err := <-wait.Error:
-			if ctx.Err() != nil || cerrdefs.IsNotFound(err) || e.isRetired(id) {
+		pause := e.sidecarWaitRetry()
+		for {
+			wait := e.API.ContainerWait(ctx, id, client.ContainerWaitOptions{Condition: container.WaitConditionNotRunning})
+			select {
+			case res := <-wait.Result:
+				e.sidecarExited(ctx, sessionID, id, res.StatusCode)
+				return
+			case err := <-wait.Error:
+				if ctx.Err() != nil || e.isRetired(id) {
+					return
+				}
+				if !cerrdefs.IsNotFound(err) {
+					e.logger().Warn("watching the proxy sidecar failed; looking at it, then watching it again",
+						"environment", e.Key, "session", sessionID, "sidecar", id, "error", err, "retry_in", pause)
+				}
+			case <-ctx.Done():
 				return
 			}
-			e.logger().Warn("watching the proxy sidecar failed", "environment", e.Key, "session", sessionID, "sidecar", id, "error", err)
-			return
-		case <-ctx.Done():
-			return
+			if code, stopped := e.sidecarStopped(ctx, id); stopped {
+				e.sidecarExited(ctx, sessionID, id, code)
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(pause):
+			}
+			pause = min(2*pause, SidecarWaitRetryMax)
 		}
-		e.sidecarExited(ctx, sessionID, id, code)
 	}()
+}
+
+func (e *Environment) sidecarWaitRetry() time.Duration {
+	if e.SidecarWaitRetry > 0 {
+		return e.SidecarWaitRetry
+	}
+	return SidecarWaitRetry
+}
+
+// sidecarStopped says whether the sidecar has stopped or is gone, with its
+// exit code (-1 when it is gone). A sidecar that cannot be inspected is
+// taken to run, and is waited for again.
+func (e *Environment) sidecarStopped(ctx context.Context, id string) (int64, bool) {
+	inspected, err := e.API.ContainerInspect(ctx, id, client.ContainerInspectOptions{})
+	if cerrdefs.IsNotFound(err) {
+		return -1, true
+	}
+	if err != nil || inspected.Container.State == nil {
+		return 0, false
+	}
+	if inspected.Container.State.Running {
+		return 0, false
+	}
+	return int64(inspected.Container.State.ExitCode), true
 }
 
 func (e *Environment) sidecarExited(ctx context.Context, sessionID int64, id string, code int64) {

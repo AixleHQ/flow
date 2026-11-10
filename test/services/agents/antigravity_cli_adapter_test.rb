@@ -204,7 +204,7 @@ module Agents
     end
 
     test "default_env_vars hides the CLI logo, keeps the pinned CLI, and points the proxy log at Google's hosts" do
-      env = @adapter.default_env_vars(@session, callbacks: ContainerRuntime::CallbackUrls.hosted_all)
+      env = @adapter.default_env_vars(@session, callbacks: hosted_callbacks)
 
       assert_equal "1", env["AGY_CLI_HIDE_LOGO"]
       assert_equal "true", env["AGY_CLI_DISABLE_AUTO_UPDATE"]

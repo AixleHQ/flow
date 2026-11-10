@@ -31,13 +31,12 @@ module Trackers
       return if session&.container_id.blank?
 
       uid = AgentCredentialsService.for(session.agent_type).adapter.container_uid
-      runtime = ContainerRuntime.for_session(session)
-      new(runtime: runtime, container: session.container_id, uid: uid,
-          asset_host: runtime.callback_url(:container_assets, session))
+      new(runtime: ContainerRuntime.for_session(session), container: session.container_id, uid: uid,
+          asset_host: ContainerRuntime.callback_url(:container_assets, session))
     end
 
     # `asset_host` is where the container downloads stored files from: the
-    # session runtime's `callback_url(:container_assets)`.
+    # session's `ContainerRuntime.callback_url(:container_assets, session)`.
     def initialize(runtime:, container:, uid:, asset_host:)
       @runtime = runtime
       @container = container

@@ -76,6 +76,9 @@ type Environment struct {
 	// Background is the context the sidecars' watchers run under, the host
 	// runner's own. Nil is context.Background().
 	Background context.Context
+	// SidecarWaitRetry is the first pause before a sidecar's watcher waits
+	// again after Docker's wait stream failed. Zero is SidecarWaitRetry.
+	SidecarWaitRetry time.Duration
 
 	mu sync.Mutex
 	// retired are the sidecars the host runner removes itself, by id.

@@ -396,14 +396,16 @@ machine's access token. The gateway forwards the request to the internal endpoin
 - **The sidecar**, by default. `container.start` (§6.2) starts a second container per session,
   the proxy sidecar, before the agent's: `aixle-runner --mode proxy` from the agent image, with
   the host runner's own binary bind-mounted read-only as its entrypoint. It owns the session's
-  network namespace, which the agent container joins, and listens on `127.0.0.1:7690`, the
-  constant **proxy port**, outside the agent image's own ports (7681, 7682, 4040, 4041, 8443,
-  8888). It holds no credential. It relays every request, as it came, to the host runner over a
+  network namespace, which the agent container joins, and listens on `127.0.0.1:<proxy_port>`,
+  the **proxy port** that `container.start`'s payload names. The platform configures it, `7690`
+  by default, outside the agent image's own ports (7681, 7682, 4040, 4041, 8443, 8888); the host
+  runner has no port setting of its own, so the two sides cannot disagree. It holds no credential. It relays every request, as it came, to the host runner over a
   Unix socket in a directory of the host runner's state directory that is bind-mounted, read-only,
   into the sidecar only, and streams the answer back.
 - **The host runner's own listener**, with `network: host`. The agent shares the machine's
   network namespace, so there is no sidecar: the host runner listens on `127.0.0.1:<proxy_port>`
-  of the machine, the session's own port, which `container.start`'s payload names. Every process
+  of the machine, the session's own port, which `container.start`'s payload names (the platform
+  gives a session `20000 + session id mod 10000` by default, both numbers configurable). Every process
   on the machine can then reach it, with the agent's own keys and no more.
 
 On that socket, and on that listener, the host runner serves the proxy route only, for the
@@ -411,6 +413,7 @@ session's requests: never ops, results, `token` or another endpoint. A request f
 is answered `404 not_proxied` by the host runner itself, and so is a path that could lead out of
 the proxy route once normalized: an empty, `.` or `..` segment after percent-decoding, or a
 segment with an encoded `/` or a `\` (`/runner/v1/proxy/../ops`, `/mcp/%2e%2e/ops`, `//ops`).
+One trailing slash is not an empty segment: `/mcp/` passes, as it does on hosted.
 The host runner adds the machine's credential, so it does not rely on the gateway's router, or on
 a proxy in front of it, to refuse such a path.
 
@@ -427,7 +430,11 @@ headers unchanged, except that:
 
 A body over the 2 MiB cap (§2) is answered `413 body_too_large` by the host runner, and a body
 that does not arrive within 30 s `408 body_timeout`, by the sidecar and by the host runner. The
-answer has no time limit, so that an MCP stream stays open as long as it needs. When the
+answer has no total time limit, so that an MCP stream stays open as long as it sends data, but
+the gateway cuts an answer that sends no data for 900 s: before the answer has started it is
+`502 upstream_unavailable`, after it the stream ends. Without that limit a silent upstream would
+hold a gateway thread for good, even after the runner has gone. A tool that runs longer is
+asynchronous (`read_tool_result`). When the
 gateway answers `401 invalid_token`, the host runner refreshes once and sends the request again,
 as for every endpoint (§3). When it cannot reach the gateway at all, it answers
 `502 relay_failed`. Refusals of the host runner have the JSON refusal shape and carry
@@ -446,7 +453,7 @@ as for every endpoint (§3). When it cannot reach the gateway at all, it answers
    | `git-credentials` | `POST` | none | git credentials for GitHub, GitLab and Bitbucket | `X-Session-Id` and `X-Git-Key` |
    | `azure-git-credentials` | `POST` | none | git credentials for Azure DevOps | `X-Session-Id` and `X-Azure-Git-Key` |
    | `cloud-credentials` | `POST` | none | cloud credentials | `X-Session-Id` and `X-Cloud-Key` |
-   | `assets` | `GET`, `HEAD` | `store/…`, with no empty, `.` or `..` segment | stored files | none |
+   | `assets` | `GET`, `HEAD` | `store/…`, with no empty, `.` or `..` segment, and none with a `/` or `\` once decoded | stored files | none |
 
    There is no OTLP route in protocol 1 yet: a runner session gets no telemetry endpoint.
 2. **The session.** The request must carry the route's key of the session that holds this
@@ -609,7 +616,7 @@ directory.
 **The proxy sidecar** (§5.6). Unless `network` is `host`, the op creates and starts the session's
 proxy sidecar after the volumes and before the agent container, from the same image: its
 entrypoint is the host runner's own binary, bind-mounted read-only, in proxy mode on
-`127.0.0.1:7690`, and the session's relay socket directory is bind-mounted read-only beside it. It
+`127.0.0.1:<proxy_port>`, and the session's relay socket directory is bind-mounted read-only beside it. It
 runs as `65534:65534` with every capability dropped, `no-new-privileges`, a read-only root
 filesystem, the restart policy `no`, no environment of the session's and the `network` of the
 payload. The agent container is then created in its network namespace
@@ -628,7 +635,7 @@ Payload:
 | `workspace_volume` | boolean | Optional, default `true`: the workspace volume is mounted at `/workspace`. `false` mounts nothing there. |
 | `mounts` | array | Optional, default `[]`. Each entry is one of the two below. |
 | `network` | string | Optional: `bridge` (the default) or `host`. |
-| `proxy_port` | integer | Required with `network: host`, from `1024` to `65535`: the session's port of the callback proxy on the machine's `127.0.0.1` (§5.6). Ignored otherwise. |
+| `proxy_port` | integer | Required, from `1024` to `65535`: the session's port of the callback proxy on `127.0.0.1` (§5.6). The sidecar listens on it in the session's network namespace, or with `network: host` the host runner on the machine. |
 | `pid` | string | Optional: `private` (the default) or `host`. |
 | `resources` | object | Optional: `{"cpus": <number>, "memory_bytes": <integer>, "pids_limit": <integer>}`, each optional and not negative. An absent or `0` field sets no limit. `memory_bytes` also caps swap. |
 | `privilege_escalation` | boolean | Optional, default `false`. `false` starts the container with `no-new-privileges`, as the hosted pod is started for a runtime that needs no `sudo`. |

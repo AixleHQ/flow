@@ -54,7 +54,7 @@ class HostedRuntimeUnchangedTest < ActiveSupport::TestCase
     assert_includes on[:callback_env], "OTEL_EXPORTER_OTLP_ENDPOINT=#{Settings.otel.endpoint}"
     assert_includes on[:callback_env], "CLAUDE_CODE_ENABLE_TELEMETRY=1"
     session = TerminalSession.order(:id).last
-    assert_equal ContainerRuntime::CallbackUrls.hosted_all, ContainerRuntime.for_session(session).callback_urls(session)
+    assert_equal hosted_callbacks, ContainerRuntime.for_session(session).callback_urls(session)
   end
 
   test "the live log and the session scanners read a hosted session the same with the flag on" do

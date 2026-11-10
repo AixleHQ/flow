@@ -448,12 +448,13 @@ module ContainerRuntime
       setting(config, "container.image_override").presence || image
     end
 
-    # With `network: host` there is no proxy sidecar: the host runner
-    # listens on the machine's 127.0.0.1 on `proxy_port`, the session's own
-    # port (PROTOCOL.md §6.2).
+    # `proxy_port` is the session's port of its callback proxy, which the
+    # platform alone configures (Runners::Proxy.port): the sidecar's, or with
+    # `network: host`, where there is no sidecar, the host runner's listener's
+    # on the machine's 127.0.0.1 (PROTOCOL.md §6.2).
     def container_payload(session, spec)
       config = session.runner&.config || {}
-      payload = {
+      {
         "image" => runner_image(config, spec[:image]),
         "env" => env_hash(spec[:env_vars]),
         "workspace_volume" => setting(config, "container.workspace_volume"),
@@ -461,10 +462,9 @@ module ContainerRuntime
         "network" => setting(config, "container.network"),
         "pid" => setting(config, "container.pid"),
         "resources" => resources(config, (spec[:host_config] || {}).stringify_keys),
-        "privilege_escalation" => spec[:privilege_escalation] == true
+        "privilege_escalation" => spec[:privilege_escalation] == true,
+        "proxy_port" => Runners::Proxy.port(session)
       }
-      payload["proxy_port"] = Runners::Proxy.host_port(session) if Runners::Proxy.host_network?(session)
-      payload
     end
 
     def env_hash(env_vars)

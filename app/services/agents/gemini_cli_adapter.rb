@@ -81,7 +81,7 @@ module Agents
 
     # API key auth: GEMINI_API_KEY env var + settings.json. Also pre-trusts the
     # workspace so the agent session doesn't stop on the folder-trust prompt.
-    def config_files(_credentials, workflow_config = {})
+    def config_files(_credentials, workflow_config)
       workspace = workflow_config[:workspace] || "/workspace"
       {
         "#{home_dir}/.gemini/settings.json" => generate_settings(

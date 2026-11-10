@@ -143,7 +143,7 @@ func TestContainerStartPutsTheAgentInTheNetworkOfItsProxySidecar(t *testing.T) {
 		t.Fatalf("sidecar %v, agent %v", sidecar, agent)
 	}
 
-	wantEntrypoint := []string{SidecarBinary, "--mode", "proxy", "--socket", SidecarSocketDir + "/relay.sock", "--listen", "127.0.0.1:7690"}
+	wantEntrypoint := []string{SidecarBinary, "--mode", "proxy", "--socket", SidecarSocketDir + "/relay.sock", "--listen", "127.0.0.1:" + strconv.Itoa(testProxyPort)}
 	if !reflect.DeepEqual([]string(sidecar.Config.Entrypoint), wantEntrypoint) || sidecar.Config.Image != pinned {
 		t.Fatalf("sidecar runs %v from %s", sidecar.Config.Entrypoint, sidecar.Config.Image)
 	}
@@ -204,18 +204,32 @@ func TestContainerStartWithHostNetworkListensOnTheMachineAndStartsNoSidecar(t *t
 	}
 }
 
-func TestContainerStartWithHostNetworkNeedsTheProxyPort(t *testing.T) {
-	for _, port := range []any{nil, 0, 80, 70000, "20123"} {
-		h := newEnvironment(t)
-		h.withProxy()
-		extra := map[string]any{"network": "host"}
-		if port != nil {
-			extra["proxy_port"] = port
+func TestContainerStartNeedsTheProxyPort(t *testing.T) {
+	for _, network := range []string{"bridge", "host"} {
+		for _, port := range []any{nil, 0, 80, 70000, "20123"} {
+			h := newEnvironment(t)
+			h.withProxy()
+			payload := startPayload(map[string]any{"network": network, "proxy_port": port})
+			if port == nil {
+				delete(payload, "proxy_port")
+			}
+			r := h.run(h.env.ContainerStart, payload)
+			if r.Error == nil || r.Error.Class != ClassInvalidPayload || len(h.engine.containers) != 0 {
+				t.Fatalf("network %s, proxy_port %v: %#v", network, port, r)
+			}
 		}
-		r := h.run(h.env.ContainerStart, startPayload(extra))
-		if r.Error == nil || r.Error.Class != ClassInvalidPayload || len(h.engine.containers) != 0 {
-			t.Fatalf("proxy_port %v: %#v", port, r)
-		}
+	}
+}
+
+func TestTheSidecarListensOnThePayloadsProxyPort(t *testing.T) {
+	h := newEnvironment(t)
+	h.withProxy()
+	h.start(h.env, map[string]any{"proxy_port": 7800})
+
+	sidecar := h.byName(h.env.SidecarName(sessionID))
+	entrypoint := []string(sidecar.Config.Entrypoint)
+	if got := entrypoint[len(entrypoint)-1]; got != "127.0.0.1:7800" {
+		t.Fatalf("the sidecar listens on %s, not the payload's port: %v", got, entrypoint)
 	}
 }
 
@@ -336,6 +350,51 @@ func TestASidecarThatExitsStopsTheAgentAndIsLogged(t *testing.T) {
 	}
 	out := log.String()
 	for _, want := range []string{"the proxy sidecar exited", "exit_code=2", "panic: something broke", "session=123"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the log lacks %q: %s", want, out)
+		}
+	}
+}
+
+func TestASidecarIsWatchedAgainWhenTheWaitStreamFails(t *testing.T) {
+	h := newEnvironment(t)
+	_, log := h.withProxy()
+	h.env.SidecarWaitRetry = 10 * time.Millisecond
+	h.engine.mu.Lock()
+	h.engine.waitFailures = 2
+	h.engine.mu.Unlock()
+	h.start(h.env, nil)
+
+	// The first two waits break while the sidecar runs; the third one waits.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		h.engine.mu.Lock()
+		waits := h.engine.waits
+		h.engine.mu.Unlock()
+		if waits >= 3 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the watcher stopped after %d waits: %s", waits, log)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !h.running(h.env.ContainerName(sessionID)) {
+		t.Fatal("a broken wait stream stopped the agent, but its sidecar still runs")
+	}
+
+	sidecar := h.byName(h.env.SidecarName(sessionID))
+	h.engine.mu.Lock()
+	h.engine.exit(sidecar, 3)
+	h.engine.mu.Unlock()
+	for h.running(h.env.ContainerName(sessionID)) {
+		if time.Now().After(deadline) {
+			t.Fatal("the agent's container still runs after its sidecar exited")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	out := log.String()
+	for _, want := range []string{"watching the proxy sidecar failed", "the proxy sidecar exited", "exit_code=3"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the log lacks %q: %s", want, out)
 		}

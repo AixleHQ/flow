@@ -19,18 +19,6 @@ module Runners
   # - upstream_url: where the gateway forwards a route to.
   module Proxy
     LOOPBACK = "127.0.0.1"
-    # The sidecar's port, a constant of PROTOCOL.md: outside the agent
-    # image's own ports (7681, 7682, 4040, 4041, 8443, 8888).
-    PORT = 7690
-    # With `network: host` the agent shares the machine's network namespace,
-    # so the host runner listens on the machine's 127.0.0.1, and every
-    # session needs a port of its own there: a port in
-    # HOST_PORT_BASE...HOST_PORT_BASE + HOST_PORT_SPAN, from the session's
-    # id. The port has to be known when the strategy builds the container's
-    # environment, before the session takes a machine, so it cannot come
-    # from the machine.
-    HOST_PORT_BASE = 20_000
-    HOST_PORT_SPAN = 10_000
 
     # One allow-listed route: its path segment, the callback it stands for
     # (ContainerRuntime::CallbackUrls), the methods it takes, whether a path
@@ -39,7 +27,9 @@ module Runners
     Route = Data.define(:name, :callback, :verbs, :prefix, :key) do
       # Whether a request of this method, with this path below the route (as
       # it was sent, percent-encoded), passes. A route without a prefix takes
-      # no path below it, and no segment may lead out of the prefix.
+      # no path below it, and no segment may lead out of the prefix: none is
+      # empty, `.` or `..` once decoded, or holds a decoded `/` or `\`, as the
+      # host runner's relay checks (runner/internal/proxy, `canonical`).
       def allows?(method, path)
         return false unless verbs.include?(method.to_s.upcase)
 
@@ -47,7 +37,7 @@ module Runners
         return path.empty? if prefix.nil?
 
         segments = path.split("/", -1).map { |segment| CGI.unescape(segment) }
-        path.start_with?(prefix) && segments.none? { |segment| segment.empty? || %w[. ..].include?(segment) || segment.include?("/") }
+        path.start_with?(prefix) && segments.none? { |segment| segment.empty? || %w[. ..].include?(segment) || segment.match?(%r{[/\\]}) }
       end
     end
 
@@ -99,14 +89,29 @@ module Runners
       "http://#{LOOPBACK}:#{port(session)}/#{route.name}"
     end
 
-    # The sidecar's constant port, or with `network: host` the session's
-    # port on the machine.
+    # The session's port of its proxy, which `container.start` sends as
+    # `proxy_port`: the sidecar's (`Settings.runners.proxy.port`), or with
+    # `network: host` the session's port on the machine.
     def port(session)
-      host_network?(session) ? host_port(session) : PORT
+      host_network?(session) ? host_port(session) : sidecar_port
     end
 
+    # The sidecar's port, outside the agent image's own ports (7681, 7682,
+    # 4040, 4041, 8443, 8888).
+    def sidecar_port
+      Integer(Settings.runners.proxy.port)
+    end
+
+    # With `network: host` the agent shares the machine's network namespace,
+    # so the host runner listens on the machine's 127.0.0.1, and every
+    # session needs a port of its own there: one in
+    # host_port_base...host_port_base + host_port_span, from the session's
+    # id. The port has to be known when the strategy builds the container's
+    # environment, before the session takes a machine, so it cannot come
+    # from the machine.
     def host_port(session)
-      HOST_PORT_BASE + (session.id % HOST_PORT_SPAN)
+      settings = Settings.runners.proxy
+      Integer(settings.host_port_base) + (session.id % Integer(settings.host_port_span))
     end
 
     def host_network?(session)

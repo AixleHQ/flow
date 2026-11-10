@@ -93,6 +93,8 @@ class RunnerGatewayProxyTest < ActionDispatch::IntegrationTest
     assert_refused :not_found, "route_not_allowed"
     get "/runner/v1/proxy/assets/store/%2e%2e/secrets", headers: proxy_headers
     assert_refused :not_found, "route_not_allowed"
+    get "/runner/v1/proxy/assets/store/a%5cb", headers: proxy_headers
+    assert_refused :not_found, "route_not_allowed"
     get "/runner/v1/proxy/assets/public/index.html", headers: proxy_headers
     assert_refused :not_found, "route_not_allowed"
 

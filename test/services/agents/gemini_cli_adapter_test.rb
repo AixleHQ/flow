@@ -243,12 +243,12 @@ module Agents
       create(:agent_credential, user: @user, company: other_company, agent_type: "gemini_cli",
                                 config_data: { "api_key" => "other-tenant-key" })
 
-      assert_nil @adapter.default_env_vars(@session, callbacks: ContainerRuntime::CallbackUrls.hosted_all)["GEMINI_API_KEY"]
+      assert_nil @adapter.default_env_vars(@session, callbacks: hosted_callbacks)["GEMINI_API_KEY"]
 
       create(:agent_credential, user: @user, company: @company, agent_type: "gemini_cli",
                                 config_data: { "api_key" => "mine" })
 
-      assert_equal "mine", @adapter.default_env_vars(@session, callbacks: ContainerRuntime::CallbackUrls.hosted_all)["GEMINI_API_KEY"]
+      assert_equal "mine", @adapter.default_env_vars(@session, callbacks: hosted_callbacks)["GEMINI_API_KEY"]
     end
 
     test "mcp_config pins the Playwright MCP command to the baked version (task #340)" do

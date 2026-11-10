@@ -163,12 +163,18 @@ func (r *Relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 // canonical says whether the path below the proxy route's prefix, as it was
 // sent (percent-encoded), stays below it: no segment is empty, `.` or `..`
-// once decoded, and none holds an encoded `/` or a `\`. The host runner adds
+// once decoded, and none holds an encoded `/` or a `\`. One trailing slash is
+// allowed, as hosted Rails allows it (`/mcp/`), but not an empty segment in
+// the middle (`//ops`) or a path that is only a slash. The host runner adds
 // the environment credential, so it must not rely on the gateway's router,
 // or on whatever stands in front of it, to refuse `/runner/v1/proxy/../ops`:
 // a proxy that normalizes paths would make that `/runner/v1/ops`. The
 // gateway's Runners::Proxy::Route#allows? checks the same.
 func canonical(below string) bool {
+	below = strings.TrimSuffix(below, "/")
+	if below == "" {
+		return false
+	}
 	for _, segment := range strings.Split(below, "/") {
 		decoded, err := url.PathUnescape(segment)
 		if err != nil || decoded == "" || decoded == "." || decoded == ".." || strings.ContainsAny(decoded, `/\`) {

@@ -32,9 +32,7 @@ module InternalTools
     # Where the agent's container downloads the files from: its session
     # runtime's address, the callback proxy on a runner.
     def asset_host
-      return ContainerRuntime::CallbackUrls.hosted(:container_assets) if session.nil?
-
-      ContainerRuntime.for_session(session).callback_url(:container_assets, session)
+      ContainerRuntime.callback_url(:container_assets, session)
     end
 
     # Results this session started, plus those of the other sessions in the same

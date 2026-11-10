@@ -672,6 +672,20 @@ runners:
   # container, quota and no-output scans), in seconds: a machine that does not
   # answer reads as unknown, never as dead or idle, and costs the sweep no more.
   scan_op_timeout: 15
+  # The callback proxy's ports (DESIGN.md §6.9.3, runner/protocol/PROTOCOL.md
+  # §5.6). Configured here alone: `container.start` carries the session's port
+  # as `proxy_port`, and the host runner listens where it says, so the two
+  # sides cannot disagree. Unlike the values above, these are deployment
+  # inputs, for a machine where the defaults are taken.
+  proxy:
+    # The sidecar's port on 127.0.0.1 of the session's own network namespace.
+    # It must stay outside the agent image's own ports (7681, 7682, 4040,
+    # 4041, 8443, 8888).
+    port: <%= ENV['RUNNER_PROXY_PORT'] || 7690 %>
+    # With `network: host`, a session listens on the machine's 127.0.0.1 on
+    # host_port_base + (session id mod host_port_span).
+    host_port_base: <%= ENV['RUNNER_PROXY_HOST_PORT_BASE'] || 20_000 %>
+    host_port_span: <%= ENV['RUNNER_PROXY_HOST_PORT_SPAN'] || 10_000 %>
 
 # Which product this installation is: `self_hosted`, `saas` or `aws_marketplace`.
 # It decides who may move a company's session limit and who is billed for it.

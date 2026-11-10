@@ -31,7 +31,6 @@ class ContainerRuntime::CallbackUrlsTest < ActiveSupport::TestCase
       ContainerRuntime::FakeRuntime.new ].each do |runtime|
       assert_equal expected, runtime.callback_urls(session), runtime.class.name
     end
-    assert_equal expected, ContainerRuntime::CallbackUrls.hosted_all
     assert expected.values.all?(&:present?), "every hosted callback has an address"
   end
 
@@ -39,6 +38,19 @@ class ContainerRuntime::CallbackUrlsTest < ActiveSupport::TestCase
     session = @session
 
     assert_equal Settings.mcp.server_url, ContainerRuntime.for_session(session).callback_url(:mcp, session)
+  end
+
+  test "ContainerRuntime.callback_url asks the session's runtime, and a nil session gets the hosted address" do
+    runner = create(:runner, :manual)
+    environment = create(:runner_environment, runner: runner)
+    runner_session = create(:runner_session, environment: environment)
+    environment.update!(current_session: runner_session)
+
+    assert_equal Settings.container_asset_host, ContainerRuntime.callback_url(:container_assets, nil)
+    assert_equal Settings.mcp.server_url, ContainerRuntime.callback_url(:mcp, @session)
+    assert_equal ContainerRuntime::RunnerRuntime.new.callback_url(:mcp, runner_session),
+                 ContainerRuntime.callback_url(:mcp, runner_session)
+    assert_match %r{\Ahttp://127\.0\.0\.1:\d+/mcp\z}, ContainerRuntime.callback_url(:mcp, runner_session)
   end
 
   test "an unknown callback is an error" do

@@ -58,9 +58,12 @@ type ContainerStartPayload struct {
 	PID                 string     `json:"pid"`
 	Resources           *Resources `json:"resources"`
 	PrivilegeEscalation bool       `json:"privilege_escalation"`
-	// ProxyPort is the session's port of the callback proxy on the machine's
-	// 127.0.0.1, required with `network: host` and ignored otherwise: then the
-	// sidecar listens on protocol.ProxyPort in the session's own namespace.
+	// ProxyPort is the session's port of the callback proxy on 127.0.0.1: the
+	// sidecar's, in the session's own network namespace, or with `network:
+	// host` the host runner's listener's, on the machine. The platform
+	// configures it and sends it; the host runner has no port of its own.
+	// Required whenever the environment runs the proxy, and with `network:
+	// host`.
 	ProxyPort int `json:"proxy_port"`
 }
 
@@ -211,6 +214,9 @@ func (e *Environment) containerSpec(p ContainerStartPayload, sessionID int64) (*
 	default:
 		return nil, nil, nil, invalid("`network` must be \"bridge\" or \"host\", got %q", p.Network)
 	}
+	if e.Proxy != nil && (p.ProxyPort < MinProxyPort || p.ProxyPort > MaxProxyPort) {
+		return nil, nil, nil, invalid("`proxy_port` must be an integer from %d to %d, got %d", MinProxyPort, MaxProxyPort, p.ProxyPort)
+	}
 	var pid container.PidMode
 	switch p.PID {
 	case "", "private":
@@ -268,8 +274,9 @@ func (e *Environment) containerSpec(p ContainerStartPayload, sessionID int64) (*
 // it: no binary, no socket, no token and nothing of the state directory. With a
 // Proxy, the session's proxy sidecar is created and started first, and the agent
 // container joins its network namespace; the runner's binary and the relay's
-// socket go into the sidecar only. With `network: host` the relay listens on the
-// payload's `proxy_port` instead, and there is no sidecar. Over
+// socket go into the sidecar only, and the sidecar listens on the payload's
+// `proxy_port`. With `network: host` the relay listens on that port of the
+// machine instead, and there is no sidecar. Over
 // another session's container it answers `session_mismatch`; over its own, or
 // over a container of the environment that names no session, `container_exists`.
 //
@@ -351,7 +358,7 @@ func (e *Environment) ContainerStart(ctx context.Context, sessionID int64, raw j
 			}
 			config.Labels[LabelProxyPort] = strconv.Itoa(p.ProxyPort)
 		} else {
-			id, r := e.startSidecar(ctx, sessionID, config.Image, host.NetworkMode)
+			id, r := e.startSidecar(ctx, sessionID, config.Image, host.NetworkMode, p.ProxyPort)
 			if r != nil {
 				return *r
 			}

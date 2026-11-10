@@ -71,6 +71,11 @@ type fakeEngine struct {
 	bindsNotVisible bool
 	// startErrorFor refuses the start of the containers with these names.
 	startErrorFor map[string]string
+	// waitFailures breaks that many container waits, the next ones first, as
+	// a daemon whose wait stream fails does: the headers, then no body.
+	waitFailures int
+	// waits counts every container wait.
+	waits int
 }
 
 type fakeContainer struct {
@@ -453,6 +458,17 @@ func (f *fakeEngine) waitContainer(w http.ResponseWriter, r *http.Request, ref s
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.(http.Flusher).Flush()
+	f.mu.Lock()
+	f.waits++
+	broken := f.waitFailures > 0
+	if broken {
+		f.waitFailures--
+	}
+	f.mu.Unlock()
+	if broken {
+		_, _ = w.Write([]byte("{\"StatusCo"))
+		return
+	}
 	select {
 	case <-c.exited:
 	case <-r.Context().Done():

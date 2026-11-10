@@ -30,10 +30,23 @@ class Runners::ProxyTest < ActiveSupport::TestCase
 
   test "with network: host the session calls its own port on the machine" do
     @runner.update!(config: { "container" => { "network" => "host" } })
-    port = Runners::Proxy::HOST_PORT_BASE + (@session.id % Runners::Proxy::HOST_PORT_SPAN)
+    port = 20_000 + (@session.id % 10_000)
 
     assert_equal "http://127.0.0.1:#{port}/mcp", Runners::Proxy.local_url(:mcp, @session.reload)
     assert_operator port, :<, 65_536
+  end
+
+  test "the proxy's ports come from Settings, and container.start sends the session's" do
+    Settings.runners.stubs(:proxy).returns(Hashie::Mash.new(port: 7800, host_port_base: 30_000, host_port_span: 100))
+
+    assert_equal "http://127.0.0.1:7800/mcp", Runners::Proxy.local_url(:mcp, @session)
+    assert_equal 7800, Runners::Proxy.port(@session)
+
+    @runner.update!(config: { "container" => { "network" => "host" } })
+    session = @session.reload
+    assert_equal 30_000 + (session.id % 100), Runners::Proxy.port(session)
+    assert_equal "http://127.0.0.1:#{30_000 + (session.id % 100)}/git-credentials",
+                 Runners::Proxy.local_url(:git_credentials, session)
   end
 
   test "every callback but OTLP has a route, and every route a callback" do
@@ -58,6 +71,8 @@ class Runners::ProxyTest < ActiveSupport::TestCase
     assert_not assets.allows?("GET", "store/../x")
     assert_not assets.allows?("GET", "store/%2E%2E/x")
     assert_not assets.allows?("GET", "store/a%2Fb")
+    assert_not assets.allows?("GET", "store/a%5cb")
+    assert_not assets.allows?("GET", "store/a%5Cb")
     assert_not assets.allows?("GET", "store//x")
     assert_nil Runners::Proxy.route("otlp")
   end
