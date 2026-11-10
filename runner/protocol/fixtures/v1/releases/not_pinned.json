@@ -1,0 +1,131 @@
+{
+  "description": "A version or a platform the platform does not pin is 404 not_found, so nothing unpinned is ever served, and a version or platform that is malformed is 400 invalid_request. Every refusal has `Cache-Control: no-store`, like every other answer of the release endpoints.",
+  "steps": [
+    {
+      "given": "release_pins",
+      "min_version": "1.2.0",
+      "recommended_version": "1.5.0",
+      "binaries": {
+        "1.5.0": {
+          "linux-amd64": {
+            "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+          },
+          "linux-arm64": {
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/releases/1.4.0/linux-amd64",
+        "headers": {
+          "X-Aixle-Runner-Protocol": null,
+          "X-Aixle-Runner-Version": null
+        }
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Aixle-Runner-Sha256": null
+        },
+        "body": {
+          "error": "not_found",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/releases/1.5.0/darwin-arm64",
+        "headers": {
+          "X-Aixle-Runner-Protocol": null,
+          "X-Aixle-Runner-Version": null
+        }
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "Cache-Control": "no-store"
+        },
+        "body": {
+          "error": "not_found",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/releases/1.4.0/checksums",
+        "headers": {
+          "X-Aixle-Runner-Protocol": null,
+          "X-Aixle-Runner-Version": null
+        }
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "Cache-Control": "no-store"
+        },
+        "body": {
+          "error": "not_found",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/releases/v1.5.0/linux-amd64",
+        "headers": {
+          "X-Aixle-Runner-Protocol": null,
+          "X-Aixle-Runner-Version": null
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "Cache-Control": "no-store"
+        },
+        "body": {
+          "error": "invalid_request",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/releases/1.5.0/linux",
+        "headers": {
+          "X-Aixle-Runner-Protocol": null,
+          "X-Aixle-Runner-Version": null
+        }
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "Cache-Control": "no-store"
+        },
+        "body": {
+          "error": "invalid_request",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    }
+  ]
+}

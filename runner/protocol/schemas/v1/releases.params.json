@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/AixleHQ/flow/runner/protocol/schemas/v1/releases.params.json",
+  "title": "GET /runner/v1/releases/:version/:os-:arch and GET /runner/v1/releases/:version/checksums: the path parameters",
+  "description": "PROTOCOL.md §5.6, §5.7. Parameters that fail this schema are 400 invalid_request. A well-formed version or platform that the platform does not pin is 404 not_found.",
+  "type": "object",
+  "required": ["version"],
+  "properties": {
+    "version": {
+      "description": "A strict SemVer 2.0 version, without a `v` prefix, e.g. `0.1.0`.",
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)(\\.(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?(\\+[0-9a-zA-Z-]+(\\.[0-9a-zA-Z-]+)*)?$"
+    },
+    "platform": {
+      "description": "`<os>-<arch>`, e.g. `linux-amd64`.",
+      "type": "string",
+      "pattern": "^[a-z0-9]+-[a-z0-9_]+$"
+    }
+  }
+}

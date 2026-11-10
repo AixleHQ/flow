@@ -15,6 +15,12 @@ module RunnerGateway
     # poll selected stay deliverable until `after` acknowledges them, so
     # refusing then loses none.
     #
+    # An answer without ops may carry `update` (§14.4, PROTOCOL.md §5.4): the
+    # version the platform recommends and its pinned digest, offered only while the machine holds no session and runs below
+    # it, and never to a runner or a machine that opted out
+    # (Runners::Release.update_for). It is decided after the wait, from the
+    # machine as it is then.
+    #
     # The parameters are checked against
     # runner/protocol/schemas/v1/ops.query.json, whose `after` is at most
     # 2^63 - 1: runner_operations.sequence is a bigint, so a larger one cannot
@@ -39,10 +45,26 @@ module RunnerGateway
         end
 
         response.set_header("Cache-Control", "no-store")
-        render json: { ops: operations.map { |operation| RunnerGatewayOperationResource.new(operation).to_h } }
+        answer = { ops: operations.map { |operation| RunnerGatewayOperationResource.new(operation).to_h } }
+        offer = update_offer if operations.empty?
+        answer[:update] = offer if offer
+        render json: answer
       end
 
       private
+
+      # The machine is read again, and only when the platform recommends a
+      # newer version than the request's: a session may have taken it during
+      # the wait.
+      def update_offer
+        return nil unless Runners::Release.below_recommended?(runner_version)
+
+        environment = ActiveRecord::Base.uncached { RunnerEnvironment.find(@credential.runner_environment_id) }
+        offer = Runners::Release.update_for(environment, runner_version: runner_version)
+        return nil if offer.nil?
+
+        RunnerGatewayUpdateResource.new(offer).to_h
+      end
 
       # The before_action's checks, read fresh: this request's query cache, its
       # memoized flag values and the request-local copy of Rails.cache still

@@ -11,6 +11,10 @@
 # `current_session` is the session that holds the machine (Runners::Machines):
 # a `registered` machine without one is free. It is cleared once the machine
 # has been reset after the session, and when it fails.
+#
+# `auto_update` is false for a machine configured with `aixle-runner configure
+# --no-auto-update`: it is never offered an update (Runners::Release.update_for,
+# §14.4).
 class RunnerEnvironment < ApplicationRecord
   extend Enumerize
 

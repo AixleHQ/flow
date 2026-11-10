@@ -14,15 +14,17 @@ module RunnerGateway
     # STATUS_TTL so a revocation lands within seconds) and the external_runners
     # flag for the runner's company (403 runners_disabled, which leaves the
     # credentials valid, §9.3).
+    #
+    # The protocol versions accepted are the platform's pins,
+    # config/runner_release.yml (Runners::Release, §14.2).
     class ApplicationController < ActionController::API
-      PROTOCOL_VERSION = "1"
-      SEMVER = /\A\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?\z/
       STATUS_TTL = 5.seconds
 
       REFUSAL_STATUS = {
         "invalid_token" => :unauthorized,
         "credential_reuse_detected" => :unauthorized,
         "runner_revoked" => :unauthorized,
+        "runner_version_unsupported" => :bad_request,
         "ephemeral_not_supported" => :unprocessable_entity,
         "invalid_registration" => :unprocessable_entity
       }.freeze
@@ -74,16 +76,20 @@ module RunnerGateway
         request.headers["X-Aixle-Runner-Version"].to_s
       end
 
-      def check_protocol
-        protocol = request.headers["X-Aixle-Runner-Protocol"].to_s
-        unless protocol == PROTOCOL_VERSION
-          return refuse(:bad_request, "unsupported_protocol",
-                        "This gateway speaks runner protocol #{PROTOCOL_VERSION}, and the request asked for " \
-                        "#{protocol.empty? ? 'none' : protocol.first(16).inspect}. Update aixle-runner.")
-        end
-        return if runner_version.match?(SEMVER)
+      def protocol_version
+        request.headers["X-Aixle-Runner-Protocol"].to_s
+      end
 
-        refuse(:bad_request, "invalid_runner_version", "X-Aixle-Runner-Version must be a semantic version.")
+      def check_protocol
+        protocol = protocol_version
+        unless Runners::Release.protocol_supported?(protocol)
+          return refuse(:bad_request, "unsupported_protocol",
+                        "This gateway speaks runner protocol #{Runners::Release.protocol_supported.join(', ')}, and the " \
+                        "request asked for #{protocol.empty? ? 'none' : protocol.first(16).inspect}. Update aixle-runner.")
+        end
+        return if Runners::Version.valid?(runner_version)
+
+        refuse(:bad_request, "invalid_runner_version", "X-Aixle-Runner-Version must be a semantic version (SemVer 2.0).")
       end
 
       def refuse(status, error, message)

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/aixlehq/aixle-runner/internal/credentials"
 	"github.com/aixlehq/aixle-runner/internal/docker"
@@ -13,6 +15,7 @@ import (
 	"github.com/aixlehq/aixle-runner/internal/journal"
 	"github.com/aixlehq/aixle-runner/internal/protocol"
 	"github.com/aixlehq/aixle-runner/internal/tokens"
+	"github.com/aixlehq/aixle-runner/internal/update"
 	"github.com/aixlehq/aixle-runner/internal/version"
 )
 
@@ -22,12 +25,30 @@ type HostOptions struct {
 	HTTPClient *http.Client
 	Docker     docker.API
 	Logger     *slog.Logger
+	// Binary is the file a self-update replaces. Empty is the running binary.
+	Binary string
+	// NoSelfUpdate turns self-update off whatever the credentials say: the
+	// published image sets NoSelfUpdateEnv, since in a container the image tag is
+	// the version (DESIGN.md §14.4).
+	NoSelfUpdate bool
+}
+
+// NoSelfUpdateEnv, set to a true value (`1`, `true`), turns self-update off for
+// the host runner, and makes configure register the machine as
+// `--no-auto-update`. docker/runner/Dockerfile sets it.
+const NoSelfUpdateEnv = "AIXLE_RUNNER_NO_SELF_UPDATE"
+
+// SelfUpdateOff reads NoSelfUpdateEnv's value. Empty, or a value that is not a
+// boolean, leaves self-update to the credentials.
+func SelfUpdateOff(value string) bool {
+	off, err := strconv.ParseBool(strings.TrimSpace(value))
+	return err == nil && off
 }
 
 // RunHost runs the host runner until ctx is done. It holds the state directory's
 // lock while it runs, and refuses at once if another process holds it. A failure
 // that needs an operator, such as a refusal or missing credentials, satisfies
-// NeedsOperator.
+// NeedsOperator. A self-update that replaced the binary returns host.ErrUpdated.
 func RunHost(ctx context.Context, opts HostOptions) error {
 	lock, err := lockForHost(opts.StateDir)
 	if err != nil {
@@ -67,8 +88,11 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 		api = c
 	}
 
+	// One value for the start line and the updater, so the line reports what the
+	// updater does.
+	selfUpdate := creds.AutoUpdateEnabled() && !opts.NoSelfUpdate
 	opts.Logger.Info("aixle-runner starting", "mode", "host", "version", version.Version,
-		"platform", creds.URL, "environment", creds.Environment.Key)
+		"platform", creds.URL, "environment", creds.Environment.Key, "auto_update", selfUpdate)
 	// The host runner runs every op itself, the session ops included, through the
 	// Docker API against the environment's session container (DESIGN.md §6.8).
 	env := &docker.Environment{API: api, Key: creds.Environment.Key, StateDir: opts.StateDir, Logger: opts.Logger}
@@ -76,12 +100,26 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 	for name, handler := range env.Handlers() {
 		handlers[name] = handler
 	}
+	binary := opts.Binary
+	if binary == "" {
+		if binary, err = update.BinaryPath(); err != nil {
+			return fmt.Errorf("finding the running binary: %w", err)
+		}
+	}
 	loop := &host.Loop{
 		Gateway:  client,
 		Tokens:   tokens.NewSource(store, client, creds),
 		Journal:  j,
 		Handlers: handlers,
-		Logger:   opts.Logger,
+		Updater: &update.Updater{
+			Releases: client,
+			Current:  version.Version,
+			Binary:   binary,
+			Disabled: !selfUpdate,
+			Busy:     env.HoldsSession,
+			Logger:   opts.Logger,
+		},
+		Logger: opts.Logger,
 	}
 	return loop.Run(ctx)
 }
