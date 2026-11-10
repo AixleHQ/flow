@@ -87,6 +87,10 @@ func (h *Host) OpenSocket(sessionID int64) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("listening on %s: %w", path, err)
 	}
+	// The socket's file is the host's to remove (above, and in Close): a
+	// replaced server that closes its listener late must not unlink the
+	// socket that took its place at the same path.
+	listener.(*net.UnixListener).SetUnlinkOnClose(false)
 	if err := os.Chmod(path, 0o666); err != nil {
 		listener.Close()
 		return "", err
