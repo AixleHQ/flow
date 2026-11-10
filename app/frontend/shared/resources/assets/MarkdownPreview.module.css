@@ -1,0 +1,89 @@
+.root {
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.6;
+  color: var(--mantine-color-text);
+  overflow-wrap: anywhere;
+}
+
+.root h1,
+.root h2,
+.root h3,
+.root h4 {
+  margin: 1.2em 0 0.5em;
+  line-height: 1.25;
+}
+
+.root p,
+.root ul,
+.root ol,
+.root blockquote,
+.root pre,
+.root table {
+  margin: 0 0 0.9em;
+}
+
+.root a {
+  color: var(--mantine-color-anchor);
+}
+
+.root code {
+  padding: 0.1em 0.35em;
+  border-radius: var(--mantine-radius-xs);
+  background: var(--mantine-color-default-hover);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 0.9em;
+}
+
+.root pre {
+  padding: var(--mantine-spacing-sm);
+  overflow-x: auto;
+  border: 1px solid var(--app-border-default);
+  border-radius: var(--mantine-radius-sm);
+  background: var(--mantine-color-default-hover);
+}
+
+.root pre code {
+  padding: 0;
+  background: none;
+}
+
+.root blockquote {
+  padding-left: var(--mantine-spacing-sm);
+  border-left: 3px solid var(--mantine-color-default-border);
+  color: var(--mantine-color-dimmed);
+}
+
+.root table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.root th,
+.root td {
+  padding: 4px 10px;
+  border: 1px solid var(--mantine-color-default-border);
+}
+
+.root th {
+  background: var(--mantine-color-default-hover);
+  text-align: left;
+}
+
+.root input[type='checkbox'] {
+  margin-right: 0.4em;
+}
+
+.root li:has(> input[type='checkbox']) {
+  list-style: none;
+}
+
+.root hr {
+  border: none;
+  border-top: 1px solid var(--mantine-color-default-border);
+}
+
+.unresolved {
+  color: var(--mantine-color-dimmed);
+}

@@ -33,6 +33,7 @@ import {
   IconCloudUpload,
   IconCoin,
   IconDownload,
+  IconEye,
   IconFileTypePdf,
   IconHourglass,
   IconLayoutGrid,
@@ -73,6 +74,9 @@ import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 import { apiMutate } from 'shared/lib/apiFetch';
 import { formatDateTime } from 'shared/lib/formatDate';
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
+import { AssetPreviewModal } from 'shared/resources/assets/AssetPreviewModal';
+import { taskAssetToPreviewItem } from 'shared/resources/assets/previewItem';
+import { getPreviewType, isCarouselPreviewable } from 'shared/resources/assets/previewType';
 import {
   apiV1ProjectTaskPath,
   apiV1ProjectTaskCommentsPath,
@@ -235,6 +239,26 @@ export function TaskDetailSidebar({
 }) {
   const [tab, setTab] = useState<string | null>('details');
   const [editingTitle, setEditingTitle] = useState(false);
+  const [previewKey, setPreviewKey] = useState<string | null>(null);
+  const previewItems = useMemo(
+    () =>
+      (taskAssets ?? [])
+        .filter((a) => a.fileUrl && isCarouselPreviewable(getPreviewType(a.contentType, a.name)))
+        .map((a) => {
+          const authorName =
+            a.authorType === 'human'
+              ? (members.find((m) => m.id === a.authorId)?.name ?? null)
+              : a.authorType.charAt(0).toUpperCase() + a.authorType.slice(1);
+          return taskAssetToPreviewItem(a, authorName);
+        }),
+    [taskAssets, members],
+  );
+  const previewIndex = previewItems.findIndex((i) => i.key === previewKey);
+  const handlePreviewIndexChange = useCallback(
+    (next: number) => setPreviewKey(previewItems[next]?.key ?? null),
+    [previewItems],
+  );
+  const closePreview = useCallback(() => setPreviewKey(null), []);
   const [titleValue, setTitleValue] = useState('');
   const [pendingTitle, setPendingTitle] = useState<string | null>(null);
   const [editingDesc, setEditingDesc] = useState(false);
@@ -1619,6 +1643,7 @@ export function TaskDetailSidebar({
                       ? `${(a.fileSize / 1024).toFixed(1)} KB`
                       : `${(a.fileSize / (1024 * 1024)).toFixed(1)} MB`
                   : null;
+                const previewable = !!a.fileUrl && isCarouselPreviewable(getPreviewType(a.contentType, a.name));
                 const fromIssue = a.trackerIssueKey ? `from ${a.trackerIssueKey}` : null;
                 const subText = [fromIssue, a.contentType, sizeStr].filter(Boolean).join(' · ');
                 return (
@@ -1647,9 +1672,27 @@ export function TaskDetailSidebar({
 
                     {/* Name + sub */}
                     <Box style={{ flex: 1, minWidth: 0 }}>
-                      <Text style={{ fontSize: 13, color: 'var(--mantine-color-text)', fontWeight: 500 }} lineClamp={1}>
-                        {a.name}
-                      </Text>
+                      {previewable ? (
+                        <UnstyledButton
+                          aria-label={`Preview ${a.name}`}
+                          onClick={() => setPreviewKey(`task-${a.id}`)}
+                          style={{ display: 'block', maxWidth: '100%' }}
+                        >
+                          <Text
+                            style={{ fontSize: 13, color: 'var(--mantine-color-text)', fontWeight: 500 }}
+                            lineClamp={1}
+                          >
+                            {a.name}
+                          </Text>
+                        </UnstyledButton>
+                      ) : (
+                        <Text
+                          style={{ fontSize: 13, color: 'var(--mantine-color-text)', fontWeight: 500 }}
+                          lineClamp={1}
+                        >
+                          {a.name}
+                        </Text>
+                      )}
                       {subText && (
                         <Text style={{ fontSize: 11, color: 'var(--mantine-color-placeholder)' }}>{subText}</Text>
                       )}
@@ -1683,6 +1726,18 @@ export function TaskDetailSidebar({
                             style={{ color: 'var(--mantine-color-placeholder)' }}
                           >
                             <IconWorldOff size={15} />
+                          </ActionIcon>
+                        </Tooltip>
+                      )}
+                      {previewable && (
+                        <Tooltip label="Preview">
+                          <ActionIcon
+                            variant="subtle"
+                            size="sm"
+                            aria-label={`Open preview of ${a.name}`}
+                            onClick={() => setPreviewKey(`task-${a.id}`)}
+                          >
+                            <IconEye size={15} />
                           </ActionIcon>
                         </Tooltip>
                       )}
@@ -2077,6 +2132,13 @@ export function TaskDetailSidebar({
           </Button>
         </Group>
       </Modal>
+
+      <AssetPreviewModal
+        items={previewItems}
+        index={previewIndex >= 0 ? previewIndex : null}
+        onIndexChange={handlePreviewIndexChange}
+        onClose={closePreview}
+      />
     </Drawer>
   );
 }
