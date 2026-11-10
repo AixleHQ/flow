@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"sync"
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
@@ -20,8 +21,9 @@ import (
 const (
 	LabelEnvironment = "aixle.com/environment"
 	LabelSession     = "aixle.com/session"
-	// LabelRole marks the short-lived container of `env.scrub` that empties the
-	// outputs, so that it is never taken for a session container.
+	// LabelRole marks a container of the environment that is not the session
+	// container: the short-lived one of `env.scrub` that empties the outputs
+	// (`scrub`), and a session's proxy sidecar (`proxy`).
 	LabelRole = "aixle.com/role"
 )
 
@@ -67,6 +69,20 @@ type Environment struct {
 	RemoveTimeout time.Duration
 	// Logger receives what an op cannot put in its answer. Nil is slog.Default().
 	Logger *slog.Logger
+	// Proxy is the host runner's callback-proxy relay (PROTOCOL.md §5.8).
+	// `container.start` starts a session's proxy through it: a sidecar, or with
+	// `network: host` a listener. Nil starts none.
+	Proxy ProxyHost
+	// Background is the context the sidecars' watchers run under, the host
+	// runner's own. Nil is context.Background().
+	Background context.Context
+	// SidecarWaitRetry is the first pause before a sidecar's watcher waits
+	// again after Docker's wait stream failed. Zero is SidecarWaitRetry.
+	SidecarWaitRetry time.Duration
+
+	mu sync.Mutex
+	// retired are the sidecars the host runner removes itself, by id.
+	retired map[string]bool
 }
 
 func (e *Environment) now() time.Time {
@@ -121,7 +137,8 @@ func (e *Environment) containers(ctx context.Context) ([]container.Summary, erro
 // restarted host runner does: the container belongs to the daemon, not to the
 // runner, so nothing about it is kept in the runner's memory or state. It answers
 // nil when the environment has none. `container.start` refuses to start a second
-// one, so there is at most one.
+// one, so there is at most one. A container with a role (the proxy sidecar, the
+// scrub's) is never the session container.
 func (e *Environment) sessionContainer(ctx context.Context) (*container.InspectResponse, error) {
 	filters := e.environmentFilter().Add("label", LabelSession)
 	res, err := e.API.ContainerList(ctx, client.ContainerListOptions{All: true, Filters: filters})
@@ -129,7 +146,8 @@ func (e *Environment) sessionContainer(ctx context.Context) (*container.InspectR
 		return nil, err
 	}
 	for _, c := range res.Items {
-		if c.Labels[LabelEnvironment] != e.Key || c.Labels[LabelSession] == "" {
+		// A session's proxy sidecar carries the session's label too.
+		if c.Labels[LabelEnvironment] != e.Key || c.Labels[LabelSession] == "" || c.Labels[LabelRole] != "" {
 			continue
 		}
 		inspected, err := e.API.ContainerInspect(ctx, c.ID, client.ContainerInspectOptions{})

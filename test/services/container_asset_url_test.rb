@@ -27,6 +27,14 @@ class ContainerAssetUrlTest < ActiveSupport::TestCase
     assert_equal OURS, ContainerAssetUrl.call(OURS, host: "")
   end
 
+  test "the URL's path goes below a host that has one, as a runner session's proxy does" do
+    assert_equal "http://127.0.0.1:7690/assets/store/out.txt",
+                 ContainerAssetUrl.call(OURS, host: "http://127.0.0.1:7690/assets")
+    assert_equal "http://127.0.0.1:7690/assets/store/out.txt?v=1",
+                 ContainerAssetUrl.call("#{OURS}?v=1", host: "http://127.0.0.1:7690/assets/")
+    assert_equal SIGNED, ContainerAssetUrl.call(SIGNED, host: "http://127.0.0.1:7690/assets")
+  end
+
   test "a blank url survives" do
     assert_nil ContainerAssetUrl.call(nil, host: "web:4000")
   end

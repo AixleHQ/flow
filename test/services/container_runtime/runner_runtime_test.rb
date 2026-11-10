@@ -34,6 +34,15 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert_equal "runner-session-#{@session.id}", @identity
   end
 
+  test "without network: host, container.start sends the sidecar's port from Settings" do
+    @runner.update!(config: @runner.config.deep_merge("container" => { "network" => "bridge" }))
+    Settings.runners.stubs(:proxy).returns(Hashie::Mash.new(port: 7800, host_port_base: 20_000, host_port_span: 10_000))
+
+    @runtime.create_container(spec)
+
+    assert_equal 7800, @host_runner.operations.sole[:payload]["proxy_port"]
+  end
+
   test "the runner's image override is the image started" do
     @runner.update!(config: @runner.config.deep_merge("container" => { "image_override" => "registry.internal/agents/claude:7" }))
 
@@ -61,7 +70,8 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
       "mounts" => [ { "type" => "cache", "name" => "pip", "target" => "/home/agent/.cache/pip" } ],
       "network" => "host", "pid" => "private",
       "resources" => { "cpus" => 2, "memory_bytes" => 8.gigabytes, "pids_limit" => 4096 },
-      "privilege_escalation" => false
+      "privilege_escalation" => false,
+      "proxy_port" => 20_000 + (@session.id % 10_000)
     }, start[:payload])
     assert_not start[:payload].key?("session_id"), "the session is in the envelope, not the payload"
     assert_equal [ IMAGE ], @host_runner.machine.images, "container.start pulled the image"

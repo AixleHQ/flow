@@ -8,6 +8,8 @@ module GitCredentials
   # MCP access must not also stop `git push`.
   module SessionKey
     PURPOSE = "git-credentials"
+    # The request header the key travels in (GitCredentialsController).
+    HEADER = "X-Git-Key"
 
     module_function
 

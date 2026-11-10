@@ -28,6 +28,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   # One assembly, on the runtime the test hands it.
   def context_service(session, container_id = "ctr1", runtime: @default_runtime_mock)
+    stub_hosted_callbacks(runtime) if runtime.is_a?(Mocha::Mock)
     SessionContextService.new(container_id, session, runtime: runtime)
   end
 
@@ -911,6 +912,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session_runtime.stubs(:write_file).with { |ctr, path, *| written << [ ctr, path ] }.returns(true)
     session_runtime.stubs(:exec).returns([ [], [], 0 ])
     session_runtime.stubs(:read_file).returns(nil)
+    stub_hosted_callbacks(session_runtime)
     ContainerRuntime.expects(:for_session).with(session).once.returns(session_runtime)
     ContainerRuntime.expects(:build).never
 

@@ -243,7 +243,9 @@ func strictDecode(t *testing.T, raw []byte, out any) bool {
 type call struct {
 	endpoint string
 	version  string
-	run      func(ctx context.Context, c *protocol.Client) (any, error)
+	// forwarded are the agent's headers a proxy request carries.
+	forwarded http.Header
+	run       func(ctx context.Context, c *protocol.Client) (any, error)
 	// check, when set, checks a successful answer the response has no body for.
 	check func(t *testing.T, got any, headers map[string]*string)
 	// protocolHeader and versionHeader are the X-Aixle-Runner-Protocol and
@@ -267,7 +269,11 @@ var gatewayOnly = map[string]string{}
 // when this client cannot send that request.
 func clientCall(t *testing.T, method, path, token string, headers map[string]*string, body []byte) (call, bool) {
 	// Every request carries both protocol headers unless the fixture replaces or
-	// removes them (fixtures/README.md); explicit null removes one.
+	// removes them (fixtures/README.md); explicit null removes one. The proxy
+	// route also carries the agent's own headers; every other endpoint takes
+	// only the protocol's.
+	proxied := strings.HasPrefix(path, protocol.ProxyPathPrefix)
+	forwarded := http.Header{}
 	protocolHeader, versionHeader := strPtr(protocol.ProtocolVersion), strPtr(fixtureVersion)
 	for name, value := range headers {
 		switch {
@@ -275,6 +281,8 @@ func clientCall(t *testing.T, method, path, token string, headers map[string]*st
 			protocolHeader = value
 		case strings.EqualFold(name, "X-Aixle-Runner-Version"):
 			versionHeader = value
+		case proxied && value != nil && !strings.HasPrefix(strings.ToLower(name), "x-aixle-runner-") && !strings.EqualFold(name, "Authorization"):
+			forwarded.Set(name, *value)
 		default:
 			return call{}, false
 		}
@@ -293,8 +301,35 @@ func clientCall(t *testing.T, method, path, token string, headers map[string]*st
 	if versionHeader != nil {
 		c.version = *versionHeader
 	}
+	c.forwarded = forwarded
 
 	switch {
+	case proxied && token != "":
+		c.endpoint = "proxy"
+		below := strings.TrimPrefix(path, protocol.ProxyPathPrefix)
+		header := forwarded.Clone()
+		if body != nil {
+			header.Set("Content-Type", "application/json")
+		}
+		c.run = func(ctx context.Context, cl *protocol.Client) (any, error) {
+			resp, err := cl.Proxy(ctx, token, method, below, header, body)
+			if err != nil {
+				return nil, err
+			}
+			defer resp.Body.Close()
+			raw, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, err
+			}
+			if len(raw) == 0 {
+				return nil, nil
+			}
+			var out any
+			if err := json.Unmarshal(raw, &out); err != nil {
+				return nil, err
+			}
+			return out, nil
+		}
 	case method == http.MethodPost && path == "/runner/v1/register":
 		var req protocol.RegisterRequest
 		if body == nil || !strictDecode(t, body, &req) {
@@ -376,9 +411,11 @@ type expectedExchange struct {
 	method, path, token           string
 	protocolHeader, versionHeader *string
 	body                          []byte
-	status                        int
-	headers                       map[string]*string
-	response                      []byte
+	// forwarded are the request headers a proxy request must carry.
+	forwarded http.Header
+	status    int
+	headers   map[string]*string
+	response  []byte
 }
 
 func (g *fakeGateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -404,6 +441,11 @@ func (g *fakeGateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if got := r.Header.Get("Authorization"); got != wantAuth {
 		g.t.Errorf("Authorization is %q, the fixture's is %q", got, wantAuth)
+	}
+	for name := range e.forwarded {
+		if got := r.Header.Get(name); got != e.forwarded.Get(name) {
+			g.t.Errorf("%s is %q, the fixture's is %q", name, got, e.forwarded.Get(name))
+		}
 	}
 	got, _ := io.ReadAll(r.Body)
 	if e.body == nil {
@@ -474,6 +516,17 @@ type coverage struct {
 	fixtures map[string]int
 }
 
+// refusalHeader says whether a fixture's response is marked as the gateway's
+// own refusal of the proxy route.
+func refusalHeader(headers map[string]*string) bool {
+	for name, value := range headers {
+		if strings.EqualFold(name, protocol.RefusalHeader) && value != nil {
+			return true
+		}
+	}
+	return false
+}
+
 func TestConformanceFixtures(t *testing.T) {
 	files, err := filepath.Glob(filepath.Join(fixturesDir, "*", "*.json"))
 	if err != nil || len(files) == 0 {
@@ -507,7 +560,7 @@ func TestConformanceFixtures(t *testing.T) {
 	}
 
 	// The scenarios the client uses must really have been driven.
-	for _, endpoint := range []string{"register", "token", "unregister", "ops", "releases"} {
+	for _, endpoint := range []string{"register", "token", "unregister", "ops", "releases", "proxy"} {
 		if cov.driven[endpoint] == 0 {
 			t.Errorf("no %s exchange was driven through the client", endpoint)
 		}
@@ -561,6 +614,9 @@ func setup(t *testing.T, w *world, raw json.RawMessage) {
 		MinVersion         *string         `json:"min_version"`
 		RecommendedVersion *string         `json:"recommended_version"`
 		Binaries           json.RawMessage `json:"binaries"`
+		Route              string          `json:"route"`
+		Status             int             `json:"status"`
+		Body               json.RawMessage `json:"body"`
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()
@@ -577,6 +633,15 @@ func setup(t *testing.T, w *world, raw json.RawMessage) {
 	case "session_on_machine":
 		w.lookup(s.Machine + ".access_token")
 		w.define(s.As+".id", w.next())
+		w.define(s.As+".mcp_key", randomToken("mcpkey_"))
+	case "session_holds_machine":
+		w.lookup(s.Machine + ".access_token")
+		w.lookup(s.Session + ".id")
+	case "upstream_answers":
+		// The fake replays the forwarded answer the fixture expects.
+		if s.Route == "" || s.Status == 0 {
+			t.Fatalf("upstream_answers needs a route and a status: %s", raw)
+		}
 	case "op_enqueued":
 		w.lookup(s.Machine + ".access_token")
 		if s.Session != "" {
@@ -664,7 +729,7 @@ func exchange(t *testing.T, w *world, gateway *fakeGateway, baseURL, file string
 
 	gateway.mu.Lock()
 	gateway.expected = &expectedExchange{
-		method: x.Request.Method, path: path, token: token, body: body,
+		method: x.Request.Method, path: path, token: token, body: body, forwarded: c.forwarded,
 		protocolHeader: c.protocolHeader, versionHeader: c.versionHeader,
 		status: x.Response.Status, headers: x.Response.Headers, response: response,
 	}
@@ -683,8 +748,10 @@ func exchange(t *testing.T, w *world, gateway *fakeGateway, baseURL, file string
 	}
 	gateway.mu.Unlock()
 
-	// A 302 is the release endpoint's success (PROTOCOL.md §5.6).
-	if x.Response.Status < 400 {
+	// A 302 is the release endpoint's success (PROTOCOL.md §5.6). On the proxy
+	// route any answer without X-Aixle-Runner-Refusal is the endpoint's, which
+	// the client returns as it is (§5.8).
+	if x.Response.Status < 400 || (c.endpoint == "proxy" && !refusalHeader(x.Response.Headers)) {
 		if err != nil {
 			t.Fatalf("step %d: %s %s: the client failed on a %d: %v", index, x.Request.Method, path, x.Response.Status, err)
 		}

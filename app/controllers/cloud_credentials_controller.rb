@@ -16,7 +16,7 @@ class CloudCredentialsController < ActionController::API
   def create
     session = TerminalSession.find_by(id: request.headers["X-Session-Id"])
     return unauthorized unless session&.active?
-    return unauthorized unless CloudAuth::SessionKey.valid?(session, request.headers["X-Cloud-Key"])
+    return unauthorized unless CloudAuth::SessionKey.valid?(session, request.headers[CloudAuth::SessionKey::HEADER])
     return unauthorized unless session.owner_entitled?
 
     # An auth session must start with nothing connected. Vending a connection made earlier

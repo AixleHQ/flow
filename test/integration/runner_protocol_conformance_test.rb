@@ -38,6 +38,8 @@ class RunnerProtocolConformanceTest < ActionDispatch::IntegrationTest
     "registration_token" => { "as" => true },
     "registered_machine" => { "as" => true, "name" => false },
     "session_on_machine" => { "machine" => true, "as" => true },
+    "session_holds_machine" => { "machine" => true, "session" => true },
+    "upstream_answers" => { "route" => true, "status" => true, "body" => false },
     "op_enqueued" => { "machine" => true, "session" => false, "as" => true, "op" => true, "payload" => true },
     "runner_revoked" => {},
     "flag_off" => {},
@@ -135,6 +137,10 @@ class RunnerProtocolConformanceTest < ActionDispatch::IntegrationTest
       register_machine(step["as"], step.fetch("name", step["as"]), where)
     when "session_on_machine"
       session_on_machine(step, where)
+    when "session_holds_machine"
+      session_holds_machine(step, where)
+    when "upstream_answers"
+      upstream_answers(step, where)
     when "op_enqueued"
       enqueue_op(step, where)
     when "runner_revoked"
@@ -179,6 +185,28 @@ class RunnerProtocolConformanceTest < ActionDispatch::IntegrationTest
                                                         runner_environment: environment, mode: "non_interactive",
                                                         initial_prompt: "go")
     define("#{step['as']}.id", session.id, where)
+    define("#{step['as']}.mcp_key", session.mcp_key, where)
+  end
+
+  # The session takes the machine, as Runners::Machines does.
+  def session_holds_machine(step, where)
+    environment = @runner.environments.find(variable("#{step['machine']}.environment_id", where))
+    session = TerminalSession.find(variable("#{step['session']}.id", where))
+    RunnerEnvironment.where(current_session_id: session.id).where.not(id: environment.id).update_all(current_session_id: nil)
+    environment.update!(current_session_id: session.id)
+  end
+
+  # The platform's endpoint of a proxy route answers with this status and
+  # JSON body (WebMock stands in for it).
+  def upstream_answers(step, where)
+    route = Runners::Proxy.route(step["route"])
+    raise FixtureError, "#{where}: #{step['route'].inspect} is not a proxy route" if route.nil?
+    raise FixtureError, "#{where}: `status` must be an integer" unless step["status"].is_a?(Integer)
+
+    base = Runners::Proxy.upstream_url(route, "", nil).to_s
+    stub_request(:any, /\A#{Regexp.escape(base)}/)
+      .to_return(status: step["status"], body: step.key?("body") ? step["body"].to_json : "",
+                 headers: { "Content-Type" => "application/json" })
   end
 
   # The platform enqueues an op only while its session holds the machine

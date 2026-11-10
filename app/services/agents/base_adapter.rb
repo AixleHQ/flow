@@ -333,8 +333,14 @@ module Agents
 
     # Default environment variables for the container runtime.
     # @param session [TerminalSession, nil]
+    # @param callbacks [Hash<Symbol, String, nil>] required: the session's
+    #   callback addresses, by name, from its runtime
+    #   (ContainerRuntime::CallbackUrls, `runtime.callback_urls(session)`); an
+    #   adapter that sets one reads it from here, never from Settings. A value
+    #   inside it may be nil: the session has no such address (`:otel` on a
+    #   runner).
     # @return [Hash<String, String>]
-    def default_env_vars(_session = nil)
+    def default_env_vars(_session = nil, callbacks:)
       {}
     end
 

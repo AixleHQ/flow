@@ -167,19 +167,19 @@ module Agents
       create(:agent_credential, user: @user, company: other_company, agent_type: "grok",
                                 config_data: { "api_key" => "other-tenant-key" })
 
-      assert_nil @adapter.default_env_vars(@session)["XAI_API_KEY"]
+      assert_nil @adapter.default_env_vars(@session, callbacks: hosted_callbacks)["XAI_API_KEY"]
 
       create(:agent_credential, user: @user, company: @company, agent_type: "grok",
                                 config_data: { "api_key" => "mine" })
 
-      assert_equal "mine", @adapter.default_env_vars(@session)["XAI_API_KEY"]
+      assert_equal "mine", @adapter.default_env_vars(@session, callbacks: hosted_callbacks)["XAI_API_KEY"]
     end
 
     # Both inference routes must be tracked: api.x.ai for an API-key login and
     # cli-chat-proxy.grok.com for the default signed-in (device-code/OAuth) login.
     # Tracking x.ai alone leaves every OAuth session with no usage at all.
     test "default_env_vars tracks both the x.ai and grok.com traffic through the MITM proxy" do
-      env = @adapter.default_env_vars(@session)
+      env = @adapter.default_env_vars(@session, callbacks: hosted_callbacks)
 
       assert_equal "x.ai,grok.com", env["MITM_TRACKED_DOMAINS"]
       assert_equal "/var/log/mitm/http.log", env["MITM_LOG_PATH"]

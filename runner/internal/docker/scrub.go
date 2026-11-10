@@ -112,8 +112,9 @@ func (e *Environment) Reset(ctx context.Context, _ json.RawMessage) protocol.Res
 	}}
 }
 
-// removeContainers removes every container labelled with the environment, then
-// checks by label that none is left.
+// removeContainers removes every container labelled with the environment, the
+// proxy sidecars included, then checks by label that none is left, and stops
+// every relay of the environment.
 func (e *Environment) removeContainers(ctx context.Context, class string) ([]string, *protocol.Result) {
 	found, err := e.containers(ctx)
 	if err != nil {
@@ -121,7 +122,14 @@ func (e *Environment) removeContainers(ctx context.Context, class string) ([]str
 		return nil, &r
 	}
 	removed := []string{}
+	// No session is left on the environment, so neither is a relay of one.
+	if e.Proxy != nil {
+		defer e.Proxy.CloseAll()
+	}
 	for _, c := range found {
+		if c.Labels[LabelRole] == RoleProxy {
+			e.retire(c.ID)
+		}
 		gone, err := e.removeContainer(ctx, c.ID, false)
 		if err != nil {
 			r := protocol.ErrorResult(class, err.Error())

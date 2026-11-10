@@ -1,0 +1,99 @@
+{
+  "description": "A session key is accepted only through the credential of the machine its session holds: another session's key through this machine's credential, and this session's key through another machine's credential, are refused with session_not_on_environment.",
+  "steps": [
+    {
+      "given": "registered_machine",
+      "as": "m"
+    },
+    {
+      "given": "registered_machine",
+      "as": "other"
+    },
+    {
+      "given": "session_on_machine",
+      "machine": "m",
+      "as": "s"
+    },
+    {
+      "given": "session_holds_machine",
+      "machine": "m",
+      "session": "s"
+    },
+    {
+      "given": "session_on_machine",
+      "machine": "other",
+      "as": "t"
+    },
+    {
+      "given": "session_holds_machine",
+      "machine": "other",
+      "session": "t"
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/proxy/mcp",
+        "token": "{{m.access_token}}",
+        "headers": {
+          "X-Session-Key": "{{t.mcp_key}}"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "X-Aixle-Runner-Refusal": "session_not_on_environment"
+        },
+        "body": {
+          "error": "session_not_on_environment",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/proxy/mcp",
+        "token": "{{other.access_token}}",
+        "headers": {
+          "X-Session-Key": "{{s.mcp_key}}"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "X-Aixle-Runner-Refusal": "session_not_on_environment"
+        },
+        "body": {
+          "error": "session_not_on_environment",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/proxy/mcp",
+        "token": "{{m.access_token}}",
+        "body": {}
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "X-Aixle-Runner-Refusal": "session_not_on_environment"
+        },
+        "body": {
+          "error": "session_not_on_environment",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    }
+  ]
+}

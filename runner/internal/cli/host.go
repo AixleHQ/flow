@@ -14,6 +14,7 @@ import (
 	"github.com/aixlehq/aixle-runner/internal/host"
 	"github.com/aixlehq/aixle-runner/internal/journal"
 	"github.com/aixlehq/aixle-runner/internal/protocol"
+	"github.com/aixlehq/aixle-runner/internal/proxy"
 	"github.com/aixlehq/aixle-runner/internal/tokens"
 	"github.com/aixlehq/aixle-runner/internal/update"
 	"github.com/aixlehq/aixle-runner/internal/version"
@@ -25,7 +26,10 @@ type HostOptions struct {
 	HTTPClient *http.Client
 	Docker     docker.API
 	Logger     *slog.Logger
-	// Binary is the file a self-update replaces. Empty is the running binary.
+	// Binary is the runner's own executable, symlinks resolved. It has two uses:
+	// it is the file a self-update replaces, and the one the callback proxy's
+	// sidecar runs, bind-mounted read-only (PROTOCOL.md §5.8). Empty is the
+	// running binary (update.BinaryPath).
 	Binary string
 	// NoSelfUpdate turns self-update off whatever the credentials say: the
 	// published image sets NoSelfUpdateEnv, since in a container the image tag is
@@ -88,27 +92,43 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 		api = c
 	}
 
-	// One value for the start line and the updater, so the line reports what the
-	// updater does.
-	selfUpdate := creds.AutoUpdateEnabled() && !opts.NoSelfUpdate
-	opts.Logger.Info("aixle-runner starting", "mode", "host", "version", version.Version,
-		"platform", creds.URL, "environment", creds.Environment.Key, "auto_update", selfUpdate)
-	// The host runner runs every op itself, the session ops included, through the
-	// Docker API against the environment's session container (DESIGN.md §6.8).
-	env := &docker.Environment{API: api, Key: creds.Environment.Key, StateDir: opts.StateDir, Logger: opts.Logger}
-	handlers := map[string]host.Handler{}
-	for name, handler := range env.Handlers() {
-		handlers[name] = handler
-	}
+	// One path for the updater and the proxy sidecars. An update runs only while
+	// the machine holds no session (Busy), and a sidecar exists only with its
+	// session; the update renames the new file into place, so a sidecar that
+	// still runs keeps the old inode and the next one mounts the new file.
 	binary := opts.Binary
 	if binary == "" {
 		if binary, err = update.BinaryPath(); err != nil {
 			return fmt.Errorf("finding the running binary: %w", err)
 		}
 	}
+
+	// One value for the start line and the updater, so the line reports what the
+	// updater does.
+	selfUpdate := creds.AutoUpdateEnabled() && !opts.NoSelfUpdate
+	opts.Logger.Info("aixle-runner starting", "mode", "host", "version", version.Version,
+		"platform", creds.URL, "environment", creds.Environment.Key, "auto_update", selfUpdate)
+	source := tokens.NewSource(store, client, creds)
+	// The callback proxy's relay (PROTOCOL.md §5.8): the sessions' sidecars, or
+	// with `network: host` the agents themselves, reach the platform through it,
+	// with this machine's credential. It serves the proxy route only.
+	relay := &proxy.Relay{Gateway: client, Tokens: source, Logger: opts.Logger}
+	proxies := proxy.NewHost(opts.StateDir, binary, relay, opts.Logger)
+	defer proxies.Stop()
+	// The host runner runs every op itself, the session ops included, through the
+	// Docker API against the environment's session container (DESIGN.md §6.8).
+	env := &docker.Environment{API: api, Key: creds.Environment.Key, StateDir: opts.StateDir, Logger: opts.Logger,
+		Proxy: proxies, Background: ctx}
+	if err := env.Resume(ctx); err != nil {
+		opts.Logger.Warn("serving the running sessions' callback proxies again failed", "error", err)
+	}
+	handlers := map[string]host.Handler{}
+	for name, handler := range env.Handlers() {
+		handlers[name] = handler
+	}
 	loop := &host.Loop{
 		Gateway:  client,
-		Tokens:   tokens.NewSource(store, client, creds),
+		Tokens:   source,
 		Journal:  j,
 		Handlers: handlers,
 		Updater: &update.Updater{

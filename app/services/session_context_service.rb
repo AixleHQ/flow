@@ -205,8 +205,10 @@ class SessionContextService
 
   def credential_workflow_config(credential, mcp_server_names = nil)
     mcp_server_names ||= build_all_servers.map { |server| MCPServer.config_key_for(server.name) }
+    # `otel_endpoint` is kept when nil: a runner session has no OTLP endpoint, and the
+    # adapters that write one into a config file then write none.
     { enabled_mcp_servers: mcp_server_names, model: resolve_session_model(credential), mode: session.mode,
-      reasoning_effort: session.reasoning_effort }.compact
+      reasoning_effort: session.reasoning_effort }.compact.merge(otel_endpoint: runtime.callback_url(:otel, session))
   end
 
   # == Story 9.2: Config File Injection ==
@@ -730,7 +732,7 @@ class SessionContextService
   end
 
   def container_accessible_url(url)
-    ContainerAssetUrl.call(url, host: Settings.container_asset_host)
+    ContainerAssetUrl.call(url, host: runtime.callback_url(:container_assets, session))
   end
 
   def read_file(path)
@@ -770,7 +772,7 @@ class SessionContextService
   def build_internal_mcp
     OpenStruct.new(
       name: "aixle-tools",
-      url: Settings.mcp.server_url,
+      url: runtime.callback_url(:mcp, session),
       transport: "streamable-http",
       headers: { "X-Session-Key" => session.mcp_key }
     )

@@ -21,6 +21,8 @@ module AzureDevops
   # session id and this key; the server recomputes rather than looks up.
   module GitSessionKey
     PURPOSE = "azure-devops-git-credential-vending"
+    # The request header the key travels in (AzureGitCredentialsController).
+    HEADER = "X-Azure-Git-Key"
 
     module_function
 

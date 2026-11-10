@@ -32,7 +32,7 @@ module ContainerRuntime
       end
     end
 
-    attr_reader :fs, :execs, :agent_type, :deleted_session_resources, :uploads, :cleaned_sessions
+    attr_reader :fs, :execs, :agent_type, :deleted_session_resources, :uploads, :cleaned_sessions, :created_specs
 
     def initialize(agent_type: "claude_code", filesystem: nil)
       super()
@@ -57,6 +57,7 @@ module ContainerRuntime
       @deleted_session_resources = []
       @undeletable_resource_names = []
       @cleaned_sessions = []
+      @created_specs = []
     end
 
     # Liveness injection: answer #container_status with `status` for one container
@@ -162,7 +163,8 @@ module ContainerRuntime
       { status: :cached, image: image, duration_seconds: 0 }
     end
 
-    def create_container(_spec)
+    def create_container(spec)
+      @created_specs << spec
       Handle.new(FULL_ID)
     end
 

@@ -1,0 +1,59 @@
+{
+  "description": "An error the platform's endpoint answers is its own: it comes back as it is, without the refusal header, so the runner does not take it for a refusal of the gateway.",
+  "steps": [
+    {
+      "given": "registered_machine",
+      "as": "m"
+    },
+    {
+      "given": "session_on_machine",
+      "machine": "m",
+      "as": "s"
+    },
+    {
+      "given": "session_holds_machine",
+      "machine": "m",
+      "session": "s"
+    },
+    {
+      "given": "upstream_answers",
+      "route": "mcp",
+      "status": 401,
+      "body": {
+        "jsonrpc": "2.0",
+        "error": {
+          "code": -32000,
+          "message": "Unauthorized"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/proxy/mcp",
+        "token": "{{m.access_token}}",
+        "headers": {
+          "X-Session-Key": "{{s.mcp_key}}"
+        },
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/list"
+        }
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "X-Aixle-Runner-Refusal": null
+        },
+        "body": {
+          "jsonrpc": "2.0",
+          "error": {
+            "code": -32000,
+            "message": "Unauthorized"
+          }
+        }
+      }
+    }
+  ]
+}
