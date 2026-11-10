@@ -26,6 +26,9 @@ governance, community health — carry none.
   the app's projects page instead of the marketing landing page.
 - **Workflows**: personal MCP can set a step's repositories, assets, expected
   input and output files, failure action, retry limit and skip policy.
+- **Workflows**: a session set to retry on failure now retries. The builder asks
+  how many times (1–10), and sessions saved with Retry before this release retry
+  once.
 
 ## [1.11.0] - 2026-11-09
 

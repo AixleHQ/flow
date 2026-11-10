@@ -231,11 +231,11 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "workflow step tools reject retry counts outside zero through five" do
+  test "workflow step tools reject retry counts outside zero through MAX_RETRIES" do
     step = create(:step, workflow: @workflow, max_retries: 2)
     workflow_args = { project_id: @project.id, workflow_id: @workflow.id }
 
-    [ -1, 6 ].each do |max_retries|
+    [ -1, Step::MAX_RETRIES + 1 ].each do |max_retries|
       assert_no_difference("Step.count") do
         result = call_tool("create_workflow_step", workflow_args.merge(name: "Invalid retry count", max_retries: max_retries))
         assert error?(result)

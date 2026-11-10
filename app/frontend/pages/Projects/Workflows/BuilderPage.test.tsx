@@ -937,20 +937,29 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(screen.getByText('AUTO')).toBeInTheDocument();
   });
 
-  it('setting On Failure to "Retry" is sent on Save', async () => {
+  it('setting On Failure to "Retry" asks for a retry count from one, and both are sent on Save', async () => {
     const { bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
-      props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, onFailure: 'fail' })] }),
+      props: projectProps({
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, onFailure: 'fail', maxRetries: 0 })],
+      }),
     });
+
+    expect(screen.queryByRole('combobox', { name: 'Max retries' })).not.toBeInTheDocument();
 
     // The On Failure select has no accessible name; it is the combobox currently showing "Fail".
     const onFailureCombobox = screen.getAllByRole('combobox').find((cb) => cb.getAttribute('value') === 'Fail');
     await userEvent.click(onFailureCombobox!);
     await userEvent.click(await screen.findByRole('option', { name: 'Retry' }));
 
+    const maxRetries = screen.getByRole('combobox', { name: 'Max retries' });
+    expect(maxRetries).toHaveValue('1');
+    await userEvent.click(maxRetries);
+    await userEvent.click(await screen.findByRole('option', { name: '3' }));
+
     const aggregate = await save(bodies);
 
-    expect(aggregate.steps[0].onFailure).toBe('retry');
+    expect(aggregate.steps[0]).toMatchObject({ onFailure: 'retry', maxRetries: 3 });
   });
 
   it('choosing an Execution Environment sends the runtime and a cleared preferredModel on Save', async () => {

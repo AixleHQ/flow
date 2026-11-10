@@ -60,8 +60,10 @@ module PersonalTools
                                    min_size: { type: "integer" },
                                    required_sections: { type: "array", items: { type: "string" } } } }
       param :on_failure, type: :string, description: "Action when the step fails.", enum: Step.on_failure.values
-      param(:max_retries, type: :integer, description: "Maximum retries when on_failure is retry.")
-        .merge!("minimum" => 0, "maximum" => 5)
+      param(:max_retries, type: :integer,
+            description: "How many times a failed step starts again when on_failure is retry. " \
+                         "With retry, 0 is saved as 1.")
+        .merge!("minimum" => 0, "maximum" => Step::MAX_RETRIES)
       param :skip_policy, type: :string, description: "When to skip this step.", enum: Step.skip_policy.values
       param :config_item_ids, type: :array,
             description: "Config item ids (secrets / environment variables) this step's agent may read with " \
