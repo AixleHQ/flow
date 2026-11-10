@@ -1,9 +1,11 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -61,8 +63,26 @@ func RunSidecar(ctx context.Context, opts SidecarOptions) error {
 }
 
 // SidecarHandler relays to the relay socket at socket, under the proxy route's
-// prefix.
+// prefix. It reads the request's body first, within bodyReadTimeout and up to
+// the gateway's cap, as the relay does.
 func SidecarHandler(socket string, logger *slog.Logger) http.Handler {
+	relay := sidecarProxy(socket, logger)
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		body, ok := readBody(w, req)
+		if !ok {
+			return
+		}
+		req.TransferEncoding = nil
+		req.ContentLength = int64(len(body))
+		req.Body = http.NoBody
+		if len(body) > 0 {
+			req.Body = io.NopCloser(bytes.NewReader(body))
+		}
+		relay.ServeHTTP(w, req)
+	})
+}
+
+func sidecarProxy(socket string, logger *slog.Logger) *httputil.ReverseProxy {
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 			var d net.Dialer

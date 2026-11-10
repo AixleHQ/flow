@@ -413,3 +413,186 @@ func TestTheHostListenerServesANetworkHostSession(t *testing.T) {
 		t.Fatal("the listener still answers after Close")
 	}
 }
+
+func TestOpeningTheSocketAgainKeepsItsDirectory(t *testing.T) {
+	host := socketHost(t, newRelay(t, &gateway{}))
+	dir, err := host.OpenSocket(123)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A restarted host runner opens the socket of a running sidecar again. The
+	// sidecar's bind mount follows the directory's inode, so the directory
+	// must be the same one, not a new one at the same path.
+	again, err := host.OpenSocket(123)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Stat(again)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again != dir || !os.SameFile(before, after) {
+		t.Fatalf("the socket directory was replaced: %s, %s", dir, again)
+	}
+	if _, err := os.Stat(filepath.Join(dir, SocketName)); err != nil {
+		t.Fatalf("no socket after the re-open: %v", err)
+	}
+}
+
+// unixClient calls the relay on its socket, as the sidecar does.
+func unixClient(socket string) *http.Client {
+	return &http.Client{Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		var d net.Dialer
+		return d.DialContext(ctx, "unix", socket)
+	}}}
+}
+
+func freePort(t *testing.T) int {
+	t.Helper()
+	probe, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer probe.Close()
+	return probe.Addr().(*net.TCPAddr).Port
+}
+
+func TestTheRelayRefusesPathsThatLeaveTheProxyRoute(t *testing.T) {
+	g := &gateway{}
+	host := socketHost(t, newRelay(t, g))
+	dir, err := host.OpenSocket(123)
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := freePort(t)
+	if err := host.OpenListener(7, port); err != nil {
+		t.Fatal(err)
+	}
+	onSocket := unixClient(filepath.Join(dir, SocketName))
+
+	cases := []struct {
+		via    string
+		client *http.Client
+		url    string
+	}{
+		{"socket", onSocket, "http://relay/runner/v1/proxy/../ops"},
+		{"socket", onSocket, "http://relay/runner/v1/proxy/mcp/%2e%2e/ops"},
+		{"socket", onSocket, "http://relay/runner/v1/proxy//ops"},
+		{"socket", onSocket, "http://relay/runner/v1/proxy/assets/store%2F..%2Fops"},
+		{"socket", onSocket, "http://relay/runner/v1/proxy/assets/store/a%5Cb"},
+		{"listener", http.DefaultClient, fmt.Sprintf("http://127.0.0.1:%d/../ops", port)},
+		{"listener", http.DefaultClient, fmt.Sprintf("http://127.0.0.1:%d/mcp/%%2e%%2e/ops", port)},
+		{"listener", http.DefaultClient, fmt.Sprintf("http://127.0.0.1:%d//ops", port)},
+	}
+	for _, c := range cases {
+		req, err := http.NewRequest(http.MethodGet, c.url, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := c.client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound || resp.Header.Get(protocol.RefusalHeader) != ClassNotProxied {
+			t.Errorf("%s %s: %d %v", c.via, c.url, resp.StatusCode, resp.Header)
+		}
+	}
+	if g.count() != 0 {
+		t.Fatalf("the gateway got %d requests", g.count())
+	}
+}
+
+// shortBodyTimeout shortens the body's read limit for one test.
+func shortBodyTimeout(t *testing.T, d time.Duration) {
+	t.Helper()
+	before := bodyReadTimeout
+	bodyReadTimeout = d
+	t.Cleanup(func() { bodyReadTimeout = before })
+}
+
+// stallBody sends the headers of a POST with a body of 10 bytes and only 2 of
+// them, and answers the status and the refusal header it gets back.
+func stallBody(t *testing.T, address, path string) (int, string) {
+	t.Helper()
+	conn, err := net.Dial("tcp", address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+	if _, err := fmt.Fprintf(conn, "POST %s HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nContent-Length: 10\r\n\r\n{}", path); err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
+	if err != nil {
+		t.Fatalf("no answer to a stalled body: %v", err)
+	}
+	resp.Body.Close()
+	return resp.StatusCode, resp.Header.Get(protocol.RefusalHeader)
+}
+
+func TestARequestBodyThatStallsIsRefusedOnTheRelayAndTheSidecar(t *testing.T) {
+	shortBodyTimeout(t, 200*time.Millisecond)
+	g := &gateway{}
+	r := newRelay(t, g)
+	relay := httptest.NewServer(r)
+	defer relay.Close()
+	if status, class := stallBody(t, strings.TrimPrefix(relay.URL, "http://"), "/runner/v1/proxy/mcp"); status != http.StatusRequestTimeout || class != ClassBodyTimeout {
+		t.Fatalf("relay: %d %q", status, class)
+	}
+
+	host := socketHost(t, r)
+	dir, err := host.OpenSocket(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := startSidecar(t, filepath.Join(dir, SocketName))
+	if status, class := stallBody(t, address, "/mcp"); status != http.StatusRequestTimeout || class != ClassBodyTimeout {
+		t.Fatalf("sidecar: %d %q", status, class)
+	}
+	if g.count() != 0 {
+		t.Fatalf("the gateway got %d requests", g.count())
+	}
+}
+
+func TestTheBodysTimeLimitDoesNotCutASlowAnswer(t *testing.T) {
+	shortBodyTimeout(t, 100*time.Millisecond)
+	g := &gateway{answer: func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		time.Sleep(400 * time.Millisecond)
+		_, _ = io.WriteString(w, "data: late\n\n")
+	}}
+	host := socketHost(t, newRelay(t, g))
+	dir, err := host.OpenSocket(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := startSidecar(t, filepath.Join(dir, SocketName))
+	for _, method := range []string{http.MethodPost, http.MethodGet} {
+		var body io.Reader
+		if method == http.MethodPost {
+			body = strings.NewReader(`{"method":"tools/call"}`)
+		}
+		req, _ := http.NewRequest(method, "http://"+address+"/mcp", body)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK || !strings.Contains(string(got), "data: late") {
+			t.Fatalf("%s: %d %q", method, resp.StatusCode, got)
+		}
+	}
+	if _, sent := g.last(t); sent != "" {
+		t.Fatalf("the GET carried %q", sent)
+	}
+}

@@ -3,6 +3,7 @@ package docker
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -32,6 +33,8 @@ type fakeProxy struct {
 	closedAll int
 	// listenErr refuses every OpenListener.
 	listenErr error
+	// socketErr refuses every OpenSocket.
+	socketErr error
 }
 
 func newFakeProxy(t *testing.T) *fakeProxy {
@@ -47,6 +50,9 @@ func (p *fakeProxy) OpenSocket(sessionID int64) (string, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.sockets = append(p.sockets, sessionID)
+	if p.socketErr != nil {
+		return "", p.socketErr
+	}
 	dir := filepath.Join(p.dir, strconv.FormatInt(sessionID, 10))
 	return dir, os.MkdirAll(dir, 0o755)
 }
@@ -361,5 +367,58 @@ func TestResumeServesTheRunningSessionsAgain(t *testing.T) {
 	}
 	if p2b.listeners[456] != 20456 || len(p2b.sockets) != 0 {
 		t.Fatalf("listeners %v, sockets %v (before: %v)", p2b.listeners, p2b.sockets, p2.listeners)
+	}
+}
+
+func (h *harness) running(name string) bool {
+	h.t.Helper()
+	h.engine.mu.Lock()
+	defer h.engine.mu.Unlock()
+	c := h.engine.lookup(name)
+	if c == nil {
+		h.t.Fatalf("no container %s", name)
+	}
+	return c.State.Running
+}
+
+func TestResumeStopsTheAgentWhenItsRelayCannotBeServedAgain(t *testing.T) {
+	h := newEnvironment(t)
+	h.withProxy()
+	h.start(h.env, nil)
+
+	// A restarted host runner whose relay socket cannot be opened.
+	p := newFakeProxy(t)
+	p.socketErr = errors.New("listening on relay.sock: permission denied")
+	h.env.Proxy = p
+	if err := h.env.Resume(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if h.running(h.env.ContainerName(sessionID)) {
+		t.Fatal("the agent still runs with no relay to reach the platform")
+	}
+	if !h.running(h.env.SidecarName(sessionID)) {
+		t.Fatal("the sidecar was stopped: only the agent is, so that the session fails")
+	}
+	if status := h.run(h.env.Status, map[string]any{}); status.Data["state"] != "terminated" {
+		t.Fatalf("status %v", status.Data)
+	}
+}
+
+func TestResumeStopsANetworkHostAgentWhenItsListenerCannotBeServedAgain(t *testing.T) {
+	h := newEnvironment(t)
+	h.withProxy()
+	h.start(h.env, map[string]any{"network": "host", "proxy_port": 20123})
+
+	p := newFakeProxy(t)
+	p.listenErr = fmt.Errorf("listening on 127.0.0.1:20123: %w", syscall.EADDRINUSE)
+	h.env.Proxy = p
+	if err := h.env.Resume(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if h.running(h.env.ContainerName(sessionID)) {
+		t.Fatal("the agent still runs with no listener to reach the platform")
+	}
+	if status := h.run(h.env.Status, map[string]any{}); status.Data["state"] != "terminated" {
+		t.Fatalf("status %v", status.Data)
 	}
 }

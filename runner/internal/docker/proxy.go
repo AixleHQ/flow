@@ -253,26 +253,34 @@ func (e *Environment) sidecarExited(ctx context.Context, sessionID int64, id str
 	tail := e.logTail(ctx, id)
 	e.logger().Warn("the proxy sidecar exited during the session; stopping the agent's container, so the session fails",
 		"environment", e.Key, "session", sessionID, "sidecar", e.SidecarName(sessionID), "exit_code", code, "log_tail", tail)
+	e.stopAgent(ctx, sessionID, "its sidecar exited")
+}
 
+// stopAgent stops the session's agent container, when it has the
+// environment's and the session's labels, so that the session fails through
+// the platform's dead-container path: the agent has lost its callbacks
+// (task 8b, decision 10). The container stays, stopped, for the platform to
+// read. why says what happened, for the log.
+func (e *Environment) stopAgent(ctx context.Context, sessionID int64, why string) {
 	name := e.ContainerName(sessionID)
 	inspected, err := e.API.ContainerInspect(ctx, name, client.ContainerInspectOptions{})
 	if cerrdefs.IsNotFound(err) {
 		return
 	}
 	if err != nil {
-		e.logger().Warn("inspecting the agent's container after its sidecar exited failed", "environment", e.Key, "container", name, "error", err)
+		e.logger().Warn("inspecting the agent's container after "+why+" failed", "environment", e.Key, "container", name, "error", err)
 		return
 	}
 	var labels map[string]string
 	if inspected.Container.Config != nil {
 		labels = inspected.Container.Config.Labels
 	}
-	if labels[LabelEnvironment] != e.Key || labels[LabelSession] != strconv.FormatInt(sessionID, 10) {
+	if labels[LabelEnvironment] != e.Key || labels[LabelSession] != strconv.FormatInt(sessionID, 10) || labels[LabelRole] != "" {
 		return
 	}
 	timeout := StopTimeout
 	if _, err := e.API.ContainerStop(ctx, inspected.Container.ID, client.ContainerStopOptions{Timeout: &timeout}); err != nil && !cerrdefs.IsNotFound(err) {
-		e.logger().Warn("stopping the agent's container after its sidecar exited failed", "environment", e.Key, "container", name, "error", err)
+		e.logger().Warn("stopping the agent's container after "+why+" failed", "environment", e.Key, "container", name, "error", err)
 	}
 }
 
@@ -320,7 +328,10 @@ func (e *Environment) removeSidecar(ctx context.Context, sessionID int64) error 
 // Resume serves the relays of the sessions that run on the environment again,
 // after a restart of the host runner: the containers belong to the daemon and
 // kept running, but the relay was the host runner's. A sidecar that exited
-// while the host runner was down is handled as a crash.
+// while the host runner was down is handled as a crash. A relay or a
+// `network: host` listener that cannot be served again leaves its agent with
+// no callback, so the agent's container is stopped and the session fails
+// through the dead-container path, as when a sidecar exits; nothing retries.
 func (e *Environment) Resume(ctx context.Context) error {
 	if e.Proxy == nil {
 		return nil
@@ -341,17 +352,25 @@ func (e *Environment) Resume(ctx context.Context) error {
 				continue
 			}
 			if _, err := e.Proxy.OpenSocket(session); err != nil {
-				e.logger().Warn("serving a running sidecar's relay again failed", "environment", e.Key, "session", session, "error", err)
+				e.logger().Warn("serving a running sidecar's relay again failed; stopping the agent's container, so the session fails",
+					"environment", e.Key, "session", session, "error", err)
+				e.stopAgent(ctx, session, "its relay could not be served again")
 				continue
 			}
 			e.watchSidecar(session, c.ID)
 		case c.Labels[LabelRole] == "" && c.Labels[LabelProxyPort] != "" && c.State == container.StateRunning:
 			port, err := strconv.Atoi(c.Labels[LabelProxyPort])
+			var r *protocol.Result
 			if err != nil {
-				continue
+				failed := protocol.ErrorResult(ClassProxyStartFailed, fmt.Sprintf("the container's %s label %q is not a port", LabelProxyPort, c.Labels[LabelProxyPort]))
+				r = &failed
+			} else {
+				r = e.openListener(session, port)
 			}
-			if r := e.openListener(session, port); r != nil {
-				e.logger().Warn("serving a network: host session's proxy again failed", "environment", e.Key, "session", session, "error", r.Error.Message)
+			if r != nil {
+				e.logger().Warn("serving a network: host session's proxy again failed; stopping the agent's container, so the session fails",
+					"environment", e.Key, "session", session, "error", r.Error.Message)
+				e.stopAgent(ctx, session, "its proxy listener could not be served again")
 			}
 		}
 	}

@@ -63,10 +63,11 @@ func (h *Host) SocketDir(sessionID int64) string {
 
 // OpenSocket serves the relay on the session's socket and returns its
 // directory. A socket left by an earlier start (a restarted host runner) is
-// replaced in the same directory, which a running sidecar has mounted, so the
-// sidecar reaches the new one.
+// replaced in the same directory. The directory itself is kept: a running
+// sidecar has it bind-mounted, and a bind mount follows the directory's inode,
+// not its path, so only a socket in that same directory reaches the sidecar.
 func (h *Host) OpenSocket(sessionID int64) (string, error) {
-	h.Close(sessionID)
+	h.stopServer(sessionID)
 	if err := os.MkdirAll(h.root(), 0o711); err != nil {
 		return "", fmt.Errorf("creating %s: %w", h.root(), err)
 	}
@@ -98,7 +99,7 @@ func (h *Host) OpenSocket(sessionID int64) (string, error) {
 // session with `network: host`. A port that is taken is an error that wraps
 // syscall.EADDRINUSE.
 func (h *Host) OpenListener(sessionID int64, port int) error {
-	h.Close(sessionID)
+	h.stopServer(sessionID)
 	address := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
@@ -124,6 +125,13 @@ func (h *Host) serve(sessionID int64, listener net.Listener, handler http.Handle
 // Close stops the session's relay, at once: its container is gone or going,
 // and a call still in flight is cut. Its socket directory is removed.
 func (h *Host) Close(sessionID int64) {
+	h.stopServer(sessionID)
+	_ = os.RemoveAll(h.SocketDir(sessionID))
+}
+
+// stopServer stops the session's relay server, if it has one, and leaves its
+// socket directory.
+func (h *Host) stopServer(sessionID int64) {
 	h.mu.Lock()
 	server := h.servers[sessionID]
 	delete(h.servers, sessionID)
@@ -131,7 +139,6 @@ func (h *Host) Close(sessionID int64) {
 	if server != nil {
 		_ = server.Close()
 	}
-	_ = os.RemoveAll(h.SocketDir(sessionID))
 }
 
 // CloseAll stops every session's relay and removes every socket directory, as

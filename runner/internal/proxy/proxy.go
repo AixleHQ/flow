@@ -18,10 +18,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/aixlehq/aixle-runner/internal/protocol"
 )
@@ -47,7 +51,19 @@ const (
 	ClassNotProxied = "not_proxied"
 	// ClassBodyTooLarge: a body over the gateway's cap, which it would refuse.
 	ClassBodyTooLarge = "body_too_large"
+	// ClassBodyTimeout: a request body that did not arrive within
+	// BodyReadTimeout.
+	ClassBodyTimeout = "body_timeout"
 )
+
+// BodyReadTimeout bounds reading a request's body, on the relay and on the
+// sidecar: a caller that drips a body must not hold the host runner's
+// goroutines and descriptors. The answer is not bounded, so that an MCP
+// stream stays open as long as it needs.
+const BodyReadTimeout = 30 * time.Second
+
+// bodyReadTimeout is BodyReadTimeout, shortened by the tests.
+var bodyReadTimeout = BodyReadTimeout
 
 // hopHeaders are never forwarded in either direction (RFC 9110 §7.6.1), and
 // neither are the gateway's own: the relay sets the bearer and the protocol's
@@ -87,7 +103,7 @@ func (r *Relay) logger() *slog.Logger {
 
 func (r *Relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	escaped := req.URL.EscapedPath()
-	if !strings.HasPrefix(escaped, protocol.ProxyPathPrefix) {
+	if !strings.HasPrefix(escaped, protocol.ProxyPathPrefix) || !canonical(strings.TrimPrefix(escaped, protocol.ProxyPathPrefix)) {
 		WriteRefusal(w, http.StatusNotFound, ClassNotProxied, "the host runner serves only the callback proxy here")
 		return
 	}
@@ -96,14 +112,8 @@ func (r *Relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		below += "?" + req.URL.RawQuery
 	}
 
-	body, err := io.ReadAll(http.MaxBytesReader(w, req.Body, protocol.MaxBodyBytes))
-	if err != nil {
-		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) {
-			WriteRefusal(w, http.StatusRequestEntityTooLarge, ClassBodyTooLarge, "the request body is over the gateway's 2 MiB cap")
-			return
-		}
-		WriteRefusal(w, http.StatusBadRequest, ClassRelayFailed, "reading the request body failed")
+	body, ok := readBody(w, req)
+	if !ok {
 		return
 	}
 	header := req.Header.Clone()
@@ -116,7 +126,7 @@ func (r *Relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	var resp *http.Response
-	err = r.Tokens.Do(req.Context(), func(access string) error {
+	err := r.Tokens.Do(req.Context(), func(access string) error {
 		var err error
 		resp, err = r.Gateway.Proxy(req.Context(), access, req.Method, below, header, body)
 		return err
@@ -149,6 +159,50 @@ func (r *Relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	w.WriteHeader(resp.StatusCode)
 	Stream(w, resp.Body)
+}
+
+// canonical says whether the path below the proxy route's prefix, as it was
+// sent (percent-encoded), stays below it: no segment is empty, `.` or `..`
+// once decoded, and none holds an encoded `/` or a `\`. The host runner adds
+// the environment credential, so it must not rely on the gateway's router,
+// or on whatever stands in front of it, to refuse `/runner/v1/proxy/../ops`:
+// a proxy that normalizes paths would make that `/runner/v1/ops`. The
+// gateway's Runners::Proxy::Route#allows? checks the same.
+func canonical(below string) bool {
+	for _, segment := range strings.Split(below, "/") {
+		decoded, err := url.PathUnescape(segment)
+		if err != nil || decoded == "" || decoded == "." || decoded == ".." || strings.ContainsAny(decoded, `/\`) {
+			return false
+		}
+	}
+	return true
+}
+
+// readBody reads a request's body, up to the gateway's cap and within
+// bodyReadTimeout, and answers the refusal itself when it cannot. The read
+// deadline is set only while a body is read, and cleared after: a deadline
+// left on the connection would cut the answer's stream.
+func readBody(w http.ResponseWriter, req *http.Request) ([]byte, bool) {
+	rc := http.NewResponseController(w)
+	bounded := req.ContentLength != 0 && rc.SetReadDeadline(time.Now().Add(bodyReadTimeout)) == nil
+	body, err := io.ReadAll(http.MaxBytesReader(w, req.Body, protocol.MaxBodyBytes))
+	if bounded {
+		_ = rc.SetReadDeadline(time.Time{})
+	}
+	if err == nil {
+		return body, true
+	}
+	var tooLarge *http.MaxBytesError
+	switch {
+	case errors.As(err, &tooLarge):
+		WriteRefusal(w, http.StatusRequestEntityTooLarge, ClassBodyTooLarge, "the request body is over the gateway's 2 MiB cap")
+	case errors.Is(err, os.ErrDeadlineExceeded):
+		WriteRefusal(w, http.StatusRequestTimeout, ClassBodyTimeout,
+			fmt.Sprintf("the request body did not arrive within %s", bodyReadTimeout))
+	default:
+		WriteRefusal(w, http.StatusBadRequest, ClassRelayFailed, "reading the request body failed")
+	}
+	return nil, false
 }
 
 // Stream copies body to w, flushing every chunk as it arrives: an MCP answer
