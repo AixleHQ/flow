@@ -408,7 +408,11 @@ machine's access token. The gateway forwards the request to the internal endpoin
 
 On that socket, and on that listener, the host runner serves the proxy route only, for the
 session's requests: never ops, results, `token` or another endpoint. A request for any other path
-is answered `404 not_proxied` by the host runner itself.
+is answered `404 not_proxied` by the host runner itself, and so is a path that could lead out of
+the proxy route once normalized: an empty, `.` or `..` segment after percent-decoding, or a
+segment with an encoded `/` or a `\` (`/runner/v1/proxy/../ops`, `/mcp/%2e%2e/ops`, `//ops`).
+The host runner adds the machine's credential, so it does not rely on the gateway's router, or on
+a proxy in front of it, to refuse such a path.
 
 **The relay.** For `/<route>/<path>?<query>` the host runner sends
 `<method> /runner/v1/proxy/<route>/<path>?<query>` to the gateway, with the agent's body and
@@ -418,10 +422,12 @@ headers unchanged, except that:
   forwarded: the platform's endpoints take their keys in headers of their own);
 - `X-Aixle-Runner-Protocol` and `X-Aixle-Runner-Version` are the host runner's, and any other
   `X-Aixle-Runner-*` header of the agent's is dropped;
-- the hop-by-hop headers (`Connection`, `Keep-Alive`, `Transfer-Encoding`, `Upgrade`, …) are not
-  forwarded.
+- the hop-by-hop headers (`Connection`, `Keep-Alive`, `Transfer-Encoding`, `Upgrade`, …), and the
+  headers that `Connection` names, are not forwarded.
 
-A body over the 2 MiB cap (§2) is answered `413 body_too_large` by the host runner. When the
+A body over the 2 MiB cap (§2) is answered `413 body_too_large` by the host runner, and a body
+that does not arrive within 30 s `408 body_timeout`, by the sidecar and by the host runner. The
+answer has no time limit, so that an MCP stream stays open as long as it needs. When the
 gateway answers `401 invalid_token`, the host runner refreshes once and sends the request again,
 as for every endpoint (§3). When it cannot reach the gateway at all, it answers
 `502 relay_failed`. Refusals of the host runner have the JSON refusal shape and carry
@@ -455,8 +461,9 @@ as for every endpoint (§3). When it cannot reach the gateway at all, it answers
 platform, unchanged, with `X-Aixle-Runner-Environment: <environment id>` added and the gateway's
 own headers left out, and streams the answer back as it arrives: MCP's streamable HTTP can hold a
 response open for as long as a tool runs. The answer is the endpoint's own, status, headers and
-body, whatever they are; the gateway adds nothing to it. An endpoint that does not answer is
-`502 upstream_unavailable`.
+body, whatever they are; the gateway adds nothing to it, and drops only the hop-by-hop headers
+and the ones the endpoint's `Connection` header names, as it does for the request. An endpoint
+that does not answer is `502 upstream_unavailable`.
 
 **Telling the two apart.** Every refusal of the gateway on this route, the common ones of §3
 included, carries `X-Aixle-Runner-Refusal: <error>`. An answer without it is the endpoint's, and
