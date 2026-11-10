@@ -539,7 +539,8 @@ as for every endpoint (§3). When it cannot reach the gateway at all, it answers
 **The gateway's checks**, in this order, after the common ones of §3:
 
 1. **The route.** Only these routes, methods and paths pass; anything else is
-   `404 route_not_allowed`.
+   `404 route_not_allowed`, a path below the route that doesn't percent-decode strictly
+   included: a `%` not followed by two hex digits, or decoded octets that aren't UTF-8.
 
    | `:route` | Methods | Path below the route | The platform's endpoint | Session key |
    | --- | --- | --- | --- | --- |
@@ -722,7 +723,8 @@ payload. The agent container is then created in its network namespace
 `network: host` there is no sidecar: the host runner listens on `127.0.0.1:<proxy_port>` of the
 machine. A sidecar that exits during the session takes the agent's network with it: the host
 runner stops the agent container, which then reports `terminated` (§6.3), and logs the sidecar's
-exit code and the tail of its log.
+exit code and the tail of its log. It stops the agent first and reads the log after, under a
+deadline of its own, so a log that can't be read never keeps the agent running.
 
 Payload:
 
