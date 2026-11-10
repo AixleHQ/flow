@@ -14,6 +14,8 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Fixed
+- **Admin**: impersonating a user, and "Back to app" during an impersonation, open
+  the app's projects page instead of the marketing landing page.
 - **Workflows**: personal MCP can set a step's repositories, assets, expected
   input and output files, failure action, retry limit and skip policy.
 
