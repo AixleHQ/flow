@@ -58,6 +58,12 @@ x-web-environment: &web-environment
   # builds domain, asset_host, container_asset_host and the internal base URL
   # from the same two values.
   PORT: ${PORT:-4000}
+  # Fixed here rather than derived inside the app: foreman gives every
+  # Procfile.dev process its own PORT (mcp 4100, runner_gateway 4200), so the
+  # `web:#{PORT}` default of config/settings.yml points those two processes at a
+  # port nothing listens on. The runner gateway forwards the callback proxy's
+  # `assets` route to this host (Runners::Proxy.upstream_url).
+  CONTAINER_ASSET_HOST: web:${PORT:-4000}
   MCP_PORT: ${MCP_PORT:-4002}
   RUNNER_GATEWAY_PORT: ${RUNNER_GATEWAY_PORT:-4003}
   VITE_RUBY_PORT: ${VITE_RUBY_PORT:-4001}
