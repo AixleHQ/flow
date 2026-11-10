@@ -35,7 +35,7 @@ One Step = one agent session = one container = one major deliverable.
 | `allow_non_interactive`| Can the step run with no user in the loop.                                |
 | `skip_policy`          | `never`, `if_outputs_exist`, or `manual`.                                |
 | `on_failure`           | `retry`, `skip`, or `fail` (default).                                    |
-| `max_retries`          | Auto-retry count.                                                        |
+| `max_retries`          | Times a failed step starts again when `on_failure` is `retry`: 1–10.     |
 | `tool_ids`             | Tools available in this step (merged with workflow base).                |
 | `skill_ids`            | Skills injected (merged with workflow base).                             |
 | `mcp_server_ids`       | MCP servers connected (merged with workflow base).                       |
