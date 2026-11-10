@@ -469,7 +469,7 @@ module Agents
     test "default_env_vars asks the container to forward the platform's MCP service" do
       session = build(:terminal_session, agent_type: "kiro_cli", route_token: "tok-1")
 
-      env = @adapter.default_env_vars(session)
+      env = @adapter.default_env_vars(session, callbacks: ContainerRuntime::CallbackUrls.hosted_all)
 
       assert_equal "4002", env["MCP_FORWARD_PORT"]
       assert_equal URI.parse(Settings.mcp.server_url).then { |u| "#{u.host}:#{u.port}" }, env["MCP_FORWARD_TARGET"]
@@ -509,7 +509,7 @@ module Agents
     test "default_env_vars redirects the CLI's telemetry at the platform collector" do
       session = build(:terminal_session, agent_type: "kiro_cli", route_token: "tok-123")
 
-      env = @adapter.default_env_vars(session)
+      env = @adapter.default_env_vars(session, callbacks: ContainerRuntime::CallbackUrls.hosted_all)
 
       assert_equal "1", env["KIRO_TELEMETRY_OTEL"]
       assert_equal Settings.otel.endpoint, env["KIRO_TELEMETRY_OTLP_ENDPOINT"]

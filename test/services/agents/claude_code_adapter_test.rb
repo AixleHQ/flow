@@ -556,7 +556,7 @@ module Agents
     test "default_env_vars includes MITM and OTLP settings" do
       Settings.stubs(:otel).returns(OpenStruct.new(endpoint: "http://otel:4318"))
 
-      env = @adapter.default_env_vars(@session)
+      env = @adapter.default_env_vars(@session, callbacks: ContainerRuntime::CallbackUrls.hosted_all)
 
       assert_equal "/var/log/mitm/http.log", env["MITM_LOG_PATH"]
       # The OAuth host is tracked alongside the inference host: without it the log says
@@ -580,7 +580,7 @@ module Agents
     end
 
     test "default_env_vars keeps the CLI off the alternate screen so the session log scrolls" do
-      env = @adapter.default_env_vars(@session)
+      env = @adapter.default_env_vars(@session, callbacks: ContainerRuntime::CallbackUrls.hosted_all)
 
       assert_equal "1", env["CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN"]
     end
@@ -1637,7 +1637,7 @@ module Agents
     # == Vending key in process env ==
 
     test "no vending key is injected for a working session without a cloud connection" do
-      env = @adapter.default_env_vars(agent_session)
+      env = @adapter.default_env_vars(agent_session, callbacks: ContainerRuntime::CallbackUrls.hosted_all)
 
       assert_not_includes env.keys, "AIXLE_CLOUD_KEY"
       assert_not_includes env.keys, "AIXLE_CLOUD_CREDENTIALS_URL"
@@ -1647,7 +1647,7 @@ module Agents
     # helper has to be able to answer "no connection yet" from there — that answer is the
     # signal that opens the connect step in the browser.
     test "an auth session gets the vending env even with no connection at all" do
-      env = @adapter.default_env_vars(@session)
+      env = @adapter.default_env_vars(@session, callbacks: ContainerRuntime::CallbackUrls.hosted_all)
 
       assert_equal "auth_setup", @session.session_type
       assert_equal CloudAuth::SessionKey.generate(@session), env["AIXLE_CLOUD_KEY"]
@@ -1658,7 +1658,7 @@ module Agents
       AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", { "awsBedrock" => bedrock_block })
       session = agent_session
 
-      env = @adapter.default_env_vars(session)
+      env = @adapter.default_env_vars(session, callbacks: ContainerRuntime::CallbackUrls.hosted_all)
 
       assert_equal Settings.cloud.credentials_url, env["AIXLE_CLOUD_CREDENTIALS_URL"]
       assert_equal CloudAuth::SessionKey.generate(session), env["AIXLE_CLOUD_KEY"]
@@ -1668,7 +1668,7 @@ module Agents
       AgentCredential.from_artifacts(@user.id, @company.id, "claude_code",
                                      { "awsBedrock" => { "region" => "us-east-1", "bearer_token" => "x" } })
 
-      assert_not_includes @adapter.default_env_vars(agent_session).keys, "AIXLE_CLOUD_KEY"
+      assert_not_includes @adapter.default_env_vars(agent_session, callbacks: ContainerRuntime::CallbackUrls.hosted_all).keys, "AIXLE_CLOUD_KEY"
     end
 
     test "sso_region falls back to the bedrock region when not given separately" do

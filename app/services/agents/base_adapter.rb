@@ -338,7 +338,7 @@ module Agents
     #   that sets one reads it from here, never from Settings. Nil means the
     #   hosted addresses.
     # @return [Hash<String, String>]
-    def default_env_vars(_session = nil, callbacks: nil)
+    def default_env_vars(_session = nil, callbacks:)
       {}
     end
 

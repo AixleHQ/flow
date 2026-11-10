@@ -768,8 +768,7 @@ module Agents
     # A session without an OTLP endpoint (a runner session: its proxy has no OTLP route
     # yet) gets `KIRO_DISABLE_TELEMETRY` instead, so the export does not fall back to the
     # vendor's collector.
-    def default_env_vars(session, callbacks: nil)
-      callbacks ||= ContainerRuntime::CallbackUrls.hosted_all
+    def default_env_vars(session, callbacks:)
       {
         "MITM_LOG_PATH" => "/var/log/mitm/http.log",
         "MITM_TRACKED_DOMAINS" => mitm_tracked_domains.join(","),

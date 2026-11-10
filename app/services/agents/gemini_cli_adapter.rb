@@ -86,7 +86,7 @@ module Agents
       {
         "#{home_dir}/.gemini/settings.json" => generate_settings(
           model: workflow_config[:model], effort: workflow_config[:reasoning_effort], auth_type: "gemini-api-key",
-          otel_endpoint: workflow_config.fetch(:otel_endpoint) { ContainerRuntime::CallbackUrls.hosted(:otel) }
+          otel_endpoint: workflow_config.fetch(:otel_endpoint)
         ).to_json
       }.merge(trusted_folders_files(workspace))
     end
@@ -97,7 +97,9 @@ module Agents
     # here can create a credential that looks connected but fails provider calls.
     def auth_setup_files
       {
-        "#{home_dir}/.gemini/settings.json" => generate_settings(auth_type: "gemini-api-key").to_json
+        "#{home_dir}/.gemini/settings.json" => generate_settings(
+          auth_type: "gemini-api-key", otel_endpoint: ContainerRuntime::CallbackUrls.hosted(:otel)
+        ).to_json
       }.merge(trusted_folders_files)
     end
 
@@ -111,7 +113,7 @@ module Agents
     end
 
     # Pass API key as env var — Gemini CLI picks it up automatically
-    def default_env_vars(session, callbacks: nil)
+    def default_env_vars(session, callbacks:)
       env = { "OTEL_RESOURCE_ATTRIBUTES" => UsageStatistics::SessionKey.resource_attributes(session) }
 
       # Inject the API key from the credential of THIS session's company: keys are per
@@ -276,8 +278,7 @@ module Agents
 
     # `otel_endpoint` is the session's OTLP endpoint; nil (a runner session, which has
     # none yet) turns the CLI's telemetry off.
-    def generate_settings(model: nil, auth_type: "gemini-api-key", effort: nil,
-                          otel_endpoint: ContainerRuntime::CallbackUrls.hosted(:otel))
+    def generate_settings(otel_endpoint:, model: nil, auth_type: "gemini-api-key", effort: nil)
       settings = {
         "security" => {
           "auth" => { "selectedType" => auth_type },

@@ -233,7 +233,7 @@ module Agents
     # Env vars for MITM proxy and http2-logger configuration.
     # MITM_TRACKED_DOMAINS limits mitm_logger.py to cursor.sh traffic only.
     # http2-logger.js uses MITM_LOG_PATH to write AgentService/Run timestamps.
-    def default_env_vars(_session, callbacks: nil)
+    def default_env_vars(_session, callbacks:)
       {
         "MITM_LOG_PATH" => "/var/log/mitm/http.log",
         # cursor.com as well as cursor.sh: the filter is a suffix match, Cursor has been

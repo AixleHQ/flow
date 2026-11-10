@@ -1065,8 +1065,7 @@ module Agents
     # Default environment variables for Claude Code runtime. `callbacks` are the
     # session's callback addresses (ContainerRuntime::CallbackUrls); without an
     # OTLP endpoint (a runner session) the CLI's telemetry stays off.
-    def default_env_vars(session, callbacks: nil)
-      callbacks ||= ContainerRuntime::CallbackUrls.hosted_all
+    def default_env_vars(session, callbacks:)
       {
         # MITM proxy — intercept Anthropic API traffic
         "MITM_LOG_PATH" => "/var/log/mitm/http.log",
@@ -1107,7 +1106,7 @@ module Agents
     # Only a session that actually vends gets a vending key. These go in process env
     # rather than the settings file because the helper is spawned by the AWS SDK, not by
     # Claude Code, and must work regardless of which process resolves credentials.
-    def cloud_credential_env(session, callbacks = ContainerRuntime::CallbackUrls.hosted_all)
+    def cloud_credential_env(session, callbacks)
       block = bedrock_block(CloudAuth::CredentialLookup.for_session(session)&.config_data || {})
       connected = block.present? && block["credential_process"].present?
       # An auth container gets the vending env even with no connection: reporting that
