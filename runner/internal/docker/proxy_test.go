@@ -460,6 +460,112 @@ func TestASidecarRemovedBehindTheHostRunnersBackStopsTheAgent(t *testing.T) {
 	}
 }
 
+// Reading the log of a sidecar that exited is a diagnostic: a logs endpoint
+// that stalls must not keep the agent running (decision 10).
+func TestASidecarWhoseLogCannotBeReadStillStopsTheAgent(t *testing.T) {
+	h := newEnvironment(t)
+	_, log := h.withProxy()
+	// Long enough that only the order, stop then read, lets the agent stop.
+	h.env.SidecarLogTimeout = time.Hour
+	h.start(h.env, nil)
+	sidecar := h.byName(h.env.SidecarName(sessionID))
+	h.engine.mu.Lock()
+	h.engine.logsBlock = true
+	h.engine.exit(sidecar, 2)
+	h.engine.mu.Unlock()
+
+	h.waitForTheAgentToStop(log)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		h.engine.mu.Lock()
+		reads := h.engine.logReads
+		h.engine.mu.Unlock()
+		if reads > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the sidecar's log was never read after the agent was stopped")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// A host runner restarted after a sidecar exited finds it stopped, still
+// there: the log carries the sidecar's real exit code, not the -1 of a
+// removed one.
+func TestResumeLogsTheRealExitCodeOfASidecarThatStoppedMeanwhile(t *testing.T) {
+	h := newEnvironment(t)
+	_, log := h.withProxy()
+	h.startWithNoWatcher()
+	sidecar := h.byName(h.env.SidecarName(sessionID))
+	h.engine.mu.Lock()
+	sidecar.Logs = []byte("panic: the relay socket went away\n")
+	h.engine.exit(sidecar, 7)
+	h.engine.mu.Unlock()
+
+	h.env.Proxy = newFakeProxy(t)
+	if err := h.env.Resume(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if h.running(h.env.ContainerName(sessionID)) {
+		t.Fatal("the agent still runs after its sidecar exited")
+	}
+	out := log.String()
+	for _, want := range []string{"the proxy sidecar exited", "exit_code=7", "panic: the relay socket went away", "session=123"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the log lacks %q: %s", want, out)
+		}
+	}
+}
+
+// Resume handles an exited sidecar in line, before the host runner polls: its
+// log tail is read under SidecarLogTimeout, so a stalled logs endpoint does
+// not hold up the start.
+func TestResumeIsNotHeldUpByASidecarLogThatCannotBeRead(t *testing.T) {
+	h := newEnvironment(t)
+	_, log := h.withProxy()
+	h.env.SidecarLogTimeout = 50 * time.Millisecond
+	h.startWithNoWatcher()
+	sidecar := h.byName(h.env.SidecarName(sessionID))
+	h.engine.mu.Lock()
+	h.engine.logsBlock = true
+	h.engine.exit(sidecar, 7)
+	h.engine.mu.Unlock()
+
+	h.env.Proxy = newFakeProxy(t)
+	done := make(chan error, 1)
+	go func() { done <- h.env.Resume(context.Background()) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Resume is held up by the sidecar's log")
+	}
+	if h.running(h.env.ContainerName(sessionID)) {
+		t.Fatal("the agent still runs after its sidecar exited")
+	}
+	for _, want := range []string{"exit_code=7", "the log could not be read"} {
+		if !strings.Contains(log.String(), want) {
+			t.Errorf("the log lacks %q: %s", want, log)
+		}
+	}
+}
+
+// startWithNoWatcher starts a session as a host runner that then stops: its
+// sidecar's watcher has ended, so what happens to the sidecar next is for
+// Resume to find.
+func (h *harness) startWithNoWatcher() {
+	h.t.Helper()
+	live := h.env.Background
+	stopped, cancel := context.WithCancel(context.Background())
+	cancel()
+	h.env.Background = stopped
+	h.start(h.env, nil)
+	h.env.Background = live
+}
+
 func TestResumeServesTheRunningSessionsAgain(t *testing.T) {
 	h := newEnvironment(t)
 	h.withProxy()

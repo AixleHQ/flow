@@ -76,6 +76,11 @@ type fakeEngine struct {
 	waitFailures int
 	// waits counts every container wait.
 	waits int
+	// logsBlock keeps every container log read from answering until the
+	// client gives up, as a stalled logs endpoint or log driver does.
+	logsBlock bool
+	// logReads counts every container log read.
+	logReads int
 }
 
 type fakeContainer struct {
@@ -263,7 +268,13 @@ func (f *fakeEngine) serveContainers(w http.ResponseWriter, r *http.Request, p s
 		if c != nil {
 			logs = append(logs, c.Logs...)
 		}
+		f.logReads++
+		blocks := f.logsBlock
 		f.mu.Unlock()
+		if blocks {
+			<-r.Context().Done()
+			return
+		}
 		if c == nil {
 			writeJSON(w, http.StatusNotFound, map[string]any{"message": "No such container: " + ref})
 			return
