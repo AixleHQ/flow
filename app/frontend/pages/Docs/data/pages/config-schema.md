@@ -167,6 +167,18 @@ per-project namespaces and network policies separate them.
 | `ANTIGRAVITY_OAUTH_CLIENT_SECRET` | no    | —                 | The matching secret. Never commit it: secret scanning reports it to Google, which revokes the client for every `agy` user. |
 | `KIRO_CREDIT_USD`              | no       | `0.10`            | What one Kiro credit is reported as in a session's cost, in USD: the API-equivalent price other runtimes report, not what the Kiro plan charges. |
 
+### External runners' callback proxy
+
+An agent on an external runner calls the platform through a proxy on its own
+`127.0.0.1` (`runner/protocol/PROTOCOL.md` §5.6). The platform alone sets its
+ports: `container.start` sends a session's port, and the runner listens there.
+
+| Variable                       | Required | Default | Purpose                                                          |
+| ------------------------------ | -------- | ------- | ---------------------------------------------------------------- |
+| `RUNNER_PROXY_PORT`            | no       | `7690`  | The proxy sidecar's port in the session's network namespace. Keep it off the agent image's own ports (7681, 7682, 4040, 4041, 8443, 8888). |
+| `RUNNER_PROXY_HOST_PORT_BASE`  | no       | `20000` | With `network: host`, a session listens on the machine's `127.0.0.1` on this base plus its id mod `RUNNER_PROXY_HOST_PORT_SPAN`. |
+| `RUNNER_PROXY_HOST_PORT_SPAN`  | no       | `10000` | The size of that port range. Base plus span must not pass 65536. |
+
 ### Kubernetes runtime (when `CONTAINER_RUNTIME=kubernetes`)
 
 | Variable                          | Required | Default                                                | Purpose                                                     |
