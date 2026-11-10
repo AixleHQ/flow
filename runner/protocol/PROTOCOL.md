@@ -356,16 +356,15 @@ integer is read as that integer before it is checked.
     "ops": [],
     "update": {
       "version": "1.5.0",
-      "url": "https://flow.aixle.com/runner/v1/releases/1.5.0/linux-amd64",
       "sha256": "4f2b…"
     }
   }
   ```
 
-  `version` is the platform's `recommended_version`, `url` its release URL on the platform (§5.6)
-  for the machine's registered `os` and `arch`, and `sha256` that binary's pinned digest, in
-  lowercase hex. It is there only when all of these hold, read once the wait is over: the machine
-  holds no session, the request's `X-Aixle-Runner-Version` is below `recommended_version`, the
+  `version` is the platform's `recommended_version`, and `sha256` the pinned digest of its binary
+  for the machine's registered `os` and `arch`, in lowercase hex. It names no URL: the runner asks
+  its own platform for the release (§5.6, §5.7). It is there only when all of these hold, read
+  once the wait is over: the machine holds no session, the request's `X-Aixle-Runner-Version` is below `recommended_version`, the
   binary for the machine's `os` and `arch` is pinned, and neither the runner (`config.auto_update:
   false`) nor the machine (`auto_update: false` at register) opted out. An answer with ops never
   carries it. A runner that does not update itself ignores it (§7).
@@ -373,7 +372,7 @@ integer is read as that integer before it is checked.
   **What a runner does with it** (DESIGN.md §14.4). Only while it holds no session container,
   only towards a version above its own, and never on a machine configured with
   `--no-auto-update`: it reads the release's checksums (§5.7) and asks the release URL where the
-  binary is (§5.6), both on its own platform, whatever host `url` names; refuses the update unless
+  binary is (§5.6), both on the platform URL it was configured with; refuses the update unless
   the `sha256` of all three agrees; downloads the binary into the directory of its own binary,
   checks its SHA-256 against the pinned one, and only then renames it over its own binary and
   exits, so that its supervisor starts the new one. A binary whose digest does not match is
@@ -444,7 +443,8 @@ it downloaded against it before it runs the binary.
 Its own refusals: `400 invalid_request`, for a version that is not a SemVer version or a platform
 not of the form `<os>-<arch>` (schema: [`schemas/v1/releases.params.json`](schemas/v1/releases.params.json)),
 and `404 not_found`, for a version or platform the platform does not pin. Nothing unpinned is
-served.
+served. The refusals have `Cache-Control: no-store` too, so none outlives the deploy that pins
+the version.
 
 Fixtures: `releases/`.
 
@@ -464,8 +464,8 @@ token and no header. `200 OK`, with `Cache-Control: no-store`:
 ```
 
 The digests are those of the release's own `checksums.txt`, as copied into the platform's pins.
-Its own refusals: `400 invalid_request`, for a malformed version, and `404 not_found`, for a
-version the platform does not pin. Schema:
+Its own refusals, with `Cache-Control: no-store` as well: `400 invalid_request`, for a
+malformed version, and `404 not_found`, for a version the platform does not pin. Schema:
 [`schemas/v1/releases.params.json`](schemas/v1/releases.params.json).
 
 Fixtures: `releases/`.

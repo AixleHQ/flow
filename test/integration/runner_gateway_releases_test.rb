@@ -57,6 +57,19 @@ class RunnerGatewayReleasesTest < ActionDispatch::IntegrationTest
     assert_nil response.headers["X-Aixle-Runner-Sha256"]
   end
 
+  # PROTOCOL.md §2: a cached refusal would outlive the deploy that pins the version.
+  test "every refusal of the release endpoints is no-store" do
+    pin
+
+    [ "/runner/v1/releases/1.4.0/linux-amd64", "/runner/v1/releases/1.4.0/checksums",
+      "/runner/v1/releases/v1.5.0/linux-amd64", "/runner/v1/releases/v1.5.0/checksums" ].each do |path|
+      get path
+
+      assert_includes [ 400, 404 ], response.status, path
+      assert_equal "no-store", response.headers["Cache-Control"], path
+    end
+  end
+
   test "a version with a pre-release and build metadata is routed whole" do
     pin("binaries" => { "1.5.0" => { "linux-amd64" => { "sha256" => AMD64 } },
                         "1.6.0-rc.1+build.7" => { "linux-amd64" => { "sha256" => ARM64 } } })
@@ -183,8 +196,7 @@ class RunnerGatewayReleasesTest < ActionDispatch::IntegrationTest
 
     assert_response :ok
     assert_equal({ "ops" => [],
-                   "update" => { "version" => "1.5.0", "url" => "http://www.example.com/runner/v1/releases/1.5.0/linux-amd64",
-                                 "sha256" => AMD64 } },
+                   "update" => { "version" => "1.5.0", "sha256" => AMD64 } },
                  response.parsed_body)
   end
 

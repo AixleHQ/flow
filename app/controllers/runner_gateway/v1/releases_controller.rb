@@ -14,16 +14,19 @@ module RunnerGateway
     # Public: no token and no protocol headers, since an operator downloads
     # the binary before the machine has either. A version or platform the pins
     # do not list is `404 not_found`, so nothing unpinned is ever served.
+    # Every answer, the refusals included, has `Cache-Control: no-store`
+    # (PROTOCOL.md §2): a cached `404` would outlive the deploy that pins the
+    # version.
     class ReleasesController < ApplicationController
       skip_before_action :check_protocol
 
+      before_action { response.set_header("Cache-Control", "no-store") }
       before_action :check_params
 
       def show
         binary = Runners::Release.binary(params[:version], params[:platform])
         return not_pinned if binary.nil?
 
-        response.set_header("Cache-Control", "no-store")
         response.set_header("X-Aixle-Runner-Sha256", binary.sha256)
         redirect_to binary.url, status: :found, allow_other_host: true
       end
@@ -32,7 +35,6 @@ module RunnerGateway
         checksums = Runners::Release.checksums(params[:version])
         return not_pinned if checksums.nil?
 
-        response.set_header("Cache-Control", "no-store")
         render json: RunnerGatewayChecksumsResource.new(checksums).to_h
       end
 

@@ -33,6 +33,10 @@ type ConfigureOptions struct {
 	// NoAutoUpdate is `--no-auto-update`: the machine never updates itself, and
 	// the platform is told so at registration (DESIGN.md §14.4).
 	NoAutoUpdate bool
+	// NoSelfUpdate is NoSelfUpdateEnv set in configure's environment, as the
+	// published image sets it. It counts as NoAutoUpdate, so the platform records
+	// the machine as one that does not update itself (DESIGN.md §14.4).
+	NoSelfUpdate bool
 	// Preflight is the machine the preflight inspects.
 	Preflight  preflight.Env
 	HTTPClient *http.Client
@@ -107,8 +111,9 @@ func Configure(ctx context.Context, opts ConfigureOptions) error {
 		Arch:  report.Arch,
 		Facts: report.Facts(),
 	}
+	noAutoUpdate := opts.NoAutoUpdate || opts.NoSelfUpdate
 	var autoUpdate *bool
-	if opts.NoAutoUpdate {
+	if noAutoUpdate {
 		off := false
 		autoUpdate, req.AutoUpdate = &off, &off
 	}
@@ -125,7 +130,7 @@ func Configure(ctx context.Context, opts ConfigureOptions) error {
 		return err
 	}
 	fmt.Fprintf(opts.Out, "Registered this machine as %q. Its credentials are in %s.\n", reg.Environment.DisplayName, store.Path())
-	if opts.NoAutoUpdate {
+	if noAutoUpdate {
 		fmt.Fprintln(opts.Out, "Self-update is off on this machine: update aixle-runner yourself when the runner page says an update is available.")
 	}
 	return nil

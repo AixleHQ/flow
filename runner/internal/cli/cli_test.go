@@ -191,6 +191,30 @@ func TestConfigureNoAutoUpdateTellsThePlatformAndKeepsTheOptOut(t *testing.T) {
 	}
 }
 
+// configure run from the published image, which sets NoSelfUpdateEnv, registers
+// the machine as one that does not update itself, as --no-auto-update does.
+func TestConfigureWithNoSelfUpdateRegistersAsNoAutoUpdate(t *testing.T) {
+	p, url := newPlatform(t, map[string][]answer{"POST /runner/v1/register": {registered()}})
+	dir := t.TempDir()
+	opts := configureOpts(url, dir)
+	opts.NoSelfUpdate = true
+	var out bytes.Buffer
+	opts.Out = &out
+	if err := Configure(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if v, sent := p.requests[0].body["auto_update"]; !sent || v != false {
+		t.Fatalf("register sent %#v", p.requests[0].body)
+	}
+	creds, err := credentials.NewStore(dir).Load()
+	if err != nil || creds.AutoUpdateEnabled() {
+		t.Fatalf("stored %#v, %v", creds.AutoUpdate, err)
+	}
+	if !strings.Contains(out.String(), "Self-update is off") {
+		t.Fatalf("printed %q", out.String())
+	}
+}
+
 func TestAFailedPreflightRegistersNothing(t *testing.T) {
 	p, url := newPlatform(t, map[string][]answer{"POST /runner/v1/register": {registered()}})
 	dir := t.TempDir()

@@ -89,11 +89,10 @@ type Poll struct {
 }
 
 // Update is the `update` of an empty poll (§5.4): the version the platform
-// recommends, its release URL on the platform, and the binary's SHA-256 for this
-// machine's os and arch, from the platform's pins.
+// recommends, and the binary's SHA-256 for this machine's os and arch, from the
+// platform's pins. The runner asks its own platform URL for the release.
 type Update struct {
 	Version string `json:"version"`
-	URL     string `json:"url"`
 	SHA256  string `json:"sha256"`
 }
 

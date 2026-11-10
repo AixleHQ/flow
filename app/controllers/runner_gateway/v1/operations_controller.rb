@@ -16,8 +16,7 @@ module RunnerGateway
     # refusing then loses none.
     #
     # An answer without ops may carry `update` (§14.4, PROTOCOL.md §5.4): the
-    # version the platform recommends, its release URL here and its pinned
-    # digest, offered only while the machine holds no session and runs below
+    # version the platform recommends and its pinned digest, offered only while the machine holds no session and runs below
     # it, and never to a runner or a machine that opted out
     # (Runners::Release.update_for). It is decided after the wait, from the
     # machine as it is then.
@@ -64,8 +63,7 @@ module RunnerGateway
         offer = Runners::Release.update_for(environment, runner_version: runner_version)
         return nil if offer.nil?
 
-        url = runner_gateway_v1_release_url(version: offer.version, platform: offer.platform)
-        RunnerGatewayUpdateResource.new(offer, params: { url: url }).to_h
+        RunnerGatewayUpdateResource.new(offer).to_h
       end
 
       # The before_action's checks, read fresh: this request's query cache, its

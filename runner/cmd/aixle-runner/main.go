@@ -33,7 +33,7 @@ owned by the service's own user, and the service runs that copy. The runner
 updates that copy itself while the machine is idle, to the version the platform
 recommends, unless configure was run with --no-auto-update. A runner with
 AIXLE_RUNNER_NO_SELF_UPDATE=1 in its environment, as the published image sets,
-never updates itself.
+never updates itself, and configure run with it registers as --no-auto-update.
 `
 
 func main() {
@@ -124,7 +124,8 @@ func configure(ctx context.Context, args []string, stdout, stderr io.Writer) err
 	defer api.Close()
 	return cli.Configure(ctx, cli.ConfigureOptions{
 		URL: *url, Token: *token, Name: *name, StateDir: *stateDir, NoAutoUpdate: *noAutoUpdate,
-		Preflight: preflight.Env{Docker: api},
+		NoSelfUpdate: cli.SelfUpdateOff(os.Getenv(cli.NoSelfUpdateEnv)),
+		Preflight:    preflight.Env{Docker: api},
 		Out:       stdout,
 	})
 }

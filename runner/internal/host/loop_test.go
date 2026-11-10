@@ -501,7 +501,7 @@ func (u *updater) Apply(_ context.Context, offer protocol.Update) bool {
 	return u.apply
 }
 
-var offer = protocol.Update{Version: "1.5.0", URL: "https://flow.aixle.com/runner/v1/releases/1.5.0/linux-amd64", SHA256: "ab"}
+var offer = protocol.Update{Version: "1.5.0", SHA256: "ab"}
 
 func TestAnUpdateThatReplacedTheBinaryEndsTheLoop(t *testing.T) {
 	gw := newGateway()

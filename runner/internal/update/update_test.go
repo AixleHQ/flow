@@ -104,7 +104,7 @@ func newFixture(t *testing.T) *fixture {
 }
 
 func (f *fixture) offer() protocol.Update {
-	return protocol.Update{Version: "1.5.0", URL: "https://flow.aixle.com/runner/v1/releases/1.5.0/linux-amd64", SHA256: digest(newBinary)}
+	return protocol.Update{Version: "1.5.0", SHA256: digest(newBinary)}
 }
 
 func (f *fixture) binary() string {

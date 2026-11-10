@@ -1,5 +1,5 @@
 {
-  "description": "An answer without ops to a machine that holds no session and reports a version below the recommended one carries `update`: the recommended version, its release URL on the platform and the SHA-256 the platform pins for the machine's os and arch. A machine at the recommended version, an answer with ops, and a machine that holds a session get none.",
+  "description": "An answer without ops to a machine that holds no session and reports a version below the recommended one carries `update`: the recommended version and the SHA-256 the platform pins for the machine's os and arch. A machine at the recommended version, an answer with ops, and a machine that holds a session get none.",
   "steps": [
     {
       "given": "release_pins",
@@ -35,9 +35,6 @@
           "ops": [],
           "update": {
             "version": "1.5.0",
-            "url": {
-              "$type": "string"
-            },
             "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
           }
         }

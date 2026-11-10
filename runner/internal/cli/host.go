@@ -34,7 +34,8 @@ type HostOptions struct {
 }
 
 // NoSelfUpdateEnv, set to a true value (`1`, `true`), turns self-update off for
-// the host runner. docker/runner/Dockerfile sets it.
+// the host runner, and makes configure register the machine as
+// `--no-auto-update`. docker/runner/Dockerfile sets it.
 const NoSelfUpdateEnv = "AIXLE_RUNNER_NO_SELF_UPDATE"
 
 // SelfUpdateOff reads NoSelfUpdateEnv's value. Empty, or a value that is not a
@@ -87,8 +88,11 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 		api = c
 	}
 
+	// One value for the start line and the updater, so the line reports what the
+	// updater does.
+	selfUpdate := creds.AutoUpdateEnabled() && !opts.NoSelfUpdate
 	opts.Logger.Info("aixle-runner starting", "mode", "host", "version", version.Version,
-		"platform", creds.URL, "environment", creds.Environment.Key, "auto_update", creds.AutoUpdateEnabled() && !opts.NoSelfUpdate)
+		"platform", creds.URL, "environment", creds.Environment.Key, "auto_update", selfUpdate)
 	// The host runner runs every op itself, the session ops included, through the
 	// Docker API against the environment's session container (DESIGN.md §6.8).
 	env := &docker.Environment{API: api, Key: creds.Environment.Key, StateDir: opts.StateDir, Logger: opts.Logger}
@@ -111,7 +115,7 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 			Releases: client,
 			Current:  version.Version,
 			Binary:   binary,
-			Disabled: !creds.AutoUpdateEnabled() || opts.NoSelfUpdate,
+			Disabled: !selfUpdate,
 			Busy:     env.HoldsSession,
 			Logger:   opts.Logger,
 		},

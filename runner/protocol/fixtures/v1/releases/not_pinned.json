@@ -1,5 +1,5 @@
 {
-  "description": "A version or a platform the platform does not pin is 404 not_found, so nothing unpinned is ever served, and a version or platform that is malformed is 400 invalid_request.",
+  "description": "A version or a platform the platform does not pin is 404 not_found, so nothing unpinned is ever served, and a version or platform that is malformed is 400 invalid_request. Every refusal has `Cache-Control: no-store`, like every other answer of the release endpoints.",
   "steps": [
     {
       "given": "release_pins",
@@ -28,6 +28,7 @@
       "response": {
         "status": 404,
         "headers": {
+          "Cache-Control": "no-store",
           "X-Aixle-Runner-Sha256": null
         },
         "body": {
@@ -49,6 +50,9 @@
       },
       "response": {
         "status": 404,
+        "headers": {
+          "Cache-Control": "no-store"
+        },
         "body": {
           "error": "not_found",
           "message": {
@@ -68,6 +72,9 @@
       },
       "response": {
         "status": 404,
+        "headers": {
+          "Cache-Control": "no-store"
+        },
         "body": {
           "error": "not_found",
           "message": {
@@ -87,6 +94,9 @@
       },
       "response": {
         "status": 400,
+        "headers": {
+          "Cache-Control": "no-store"
+        },
         "body": {
           "error": "invalid_request",
           "message": {
@@ -106,6 +116,9 @@
       },
       "response": {
         "status": 400,
+        "headers": {
+          "Cache-Control": "no-store"
+        },
         "body": {
           "error": "invalid_request",
           "message": {
