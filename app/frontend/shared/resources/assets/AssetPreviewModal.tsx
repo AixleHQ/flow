@@ -1,5 +1,20 @@
-import { Alert, Anchor, Badge, Box, Button, Center, Code, Group, Loader, Modal, Stack, Text } from '@mantine/core';
-import { IconDownload, IconFile, IconWorld } from '@tabler/icons-react';
+import {
+  ActionIcon,
+  Alert,
+  Anchor,
+  Badge,
+  Box,
+  Button,
+  Center,
+  Code,
+  Group,
+  Loader,
+  Modal,
+  ScrollArea,
+  Stack,
+  Text,
+} from '@mantine/core';
+import { IconChevronLeft, IconChevronRight, IconDownload, IconFile, IconWorld } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 
 import type { Asset } from '@/types/generated';
@@ -7,184 +22,103 @@ import type { Asset } from '@/types/generated';
 import { formatDateMedium } from 'shared/lib/formatDate';
 import { formatFileSize } from 'shared/lib/formatFileSize';
 
+import { MarkdownPreview } from './MarkdownPreview';
+import type { PreviewItem } from './previewItem';
+import { getPreviewType, MAX_TEXT_SIZE } from './previewType';
+
 interface AssetPreviewModalProps {
-  asset: Asset | null;
+  items: PreviewItem[];
+  /** `null` or out of range closes the modal. */
+  index: number | null;
+  onIndexChange: (index: number) => void;
   onClose: () => void;
-  downloadUrl: string;
   /** Offered only to someone who may change the asset. */
   onUnshare?: (asset: Asset) => Promise<boolean>;
 }
 
-type PreviewType = 'image' | 'video' | 'audio' | 'pdf' | 'text' | 'markdown' | 'svg' | 'unsupported';
+type TextState = { key: string; status: 'ready'; text: string } | { key: string; status: 'error' };
 
-function detectPreviewType(contentType: string | null | undefined): PreviewType {
-  if (!contentType) return 'unsupported';
-  const ct = contentType.toLowerCase();
+const isEditableTarget = (target: EventTarget | null) =>
+  target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable]') !== null;
 
-  if (ct.startsWith('image/svg')) return 'svg';
-  if (ct.startsWith('image/')) return 'image';
-  if (ct.startsWith('video/')) return 'video';
-  if (ct.startsWith('audio/')) return 'audio';
-  if (ct === 'application/pdf') return 'pdf';
+export function AssetPreviewModal({ items, index, onIndexChange, onClose, onUnshare }: AssetPreviewModalProps) {
+  const [textState, setTextState] = useState<TextState | null>(null);
 
-  if (
-    ct.startsWith('text/') ||
-    ct.includes('json') ||
-    ct.includes('xml') ||
-    ct.includes('yaml') ||
-    ct.includes('yml') ||
-    ct.includes('javascript') ||
-    ct.includes('typescript') ||
-    ct.includes('css') ||
-    ct.includes('html') ||
-    ct.includes('sql') ||
-    ct.includes('ruby') ||
-    ct.includes('python') ||
-    ct.includes('shell') ||
-    ct.includes('sh') ||
-    ct.includes('bash') ||
-    ct.includes('csv') ||
-    ct.includes('log')
-  ) {
-    if (ct.includes('markdown') || ct.includes('md')) return 'markdown';
-    return 'text';
-  }
-
-  return 'unsupported';
-}
-
-function extensionFromName(name: string): string {
-  const idx = name.lastIndexOf('.');
-  return idx > 0 ? name.substring(idx + 1).toLowerCase() : '';
-}
-
-function detectPreviewTypeFromExt(name: string): PreviewType {
-  const ext = extensionFromName(name);
-  const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'ico', 'avif'];
-  const videoExts = ['mp4', 'webm', 'ogg', 'mov'];
-  const audioExts = ['mp3', 'wav', 'ogg', 'aac', 'flac', 'opus', 'wma', 'm4a'];
-  const textExts = [
-    'txt',
-    'log',
-    'json',
-    'xml',
-    'yaml',
-    'yml',
-    'csv',
-    'tsv',
-    'js',
-    'jsx',
-    'ts',
-    'tsx',
-    'css',
-    'scss',
-    'less',
-    'html',
-    'htm',
-    'sql',
-    'rb',
-    'py',
-    'go',
-    'rs',
-    'java',
-    'kt',
-    'swift',
-    'c',
-    'cpp',
-    'h',
-    'hpp',
-    'cs',
-    'php',
-    'sh',
-    'bash',
-    'zsh',
-    'fish',
-    'toml',
-    'ini',
-    'cfg',
-    'env',
-    'gitignore',
-    'dockerignore',
-    'makefile',
-    'rake',
-    'gemfile',
-    'lock',
-    'dockerfile',
-  ];
-  const mdExts = ['md', 'mdx', 'markdown'];
-
-  if (ext === 'svg') return 'svg';
-  if (imageExts.includes(ext)) return 'image';
-  if (videoExts.includes(ext)) return 'video';
-  if (audioExts.includes(ext)) return 'audio';
-  if (ext === 'pdf') return 'pdf';
-  if (mdExts.includes(ext)) return 'markdown';
-  if (textExts.includes(ext)) return 'text';
-  return 'unsupported';
-}
-
-function getPreviewType(contentType: string | null | undefined, name: string): PreviewType {
-  const fromCt = detectPreviewType(contentType);
-  if (fromCt !== 'unsupported') return fromCt;
-  return detectPreviewTypeFromExt(name);
-}
-
-const MAX_TEXT_SIZE = 2 * 1024 * 1024;
-
-export function AssetPreviewModal({ asset, onClose, downloadUrl, onUnshare }: AssetPreviewModalProps) {
-  const [textContent, setTextContent] = useState<string | null>(null);
-  const [textLoading, setTextLoading] = useState(false);
-
-  const fileUrl = asset?.latestVersion?.fileUrl ?? null;
-  const contentType = asset?.latestVersion?.contentType;
-  const previewType = asset ? getPreviewType(contentType, asset.name) : 'unsupported';
+  const count = items.length;
+  const item = index !== null && index >= 0 && index < count ? items[index] : null;
+  const previewType = item ? getPreviewType(item.contentType, item.name) : 'unsupported';
+  const itemKey = item?.key;
+  const fileUrl = item?.fileUrl ?? null;
+  const fileSize = item?.fileSize ?? 0;
+  const needsTextFetch = previewType === 'text' || previewType === 'markdown';
+  const tooLarge = needsTextFetch && fileSize > MAX_TEXT_SIZE;
+  const open = item !== null;
+  const canNavigate = count > 1;
 
   useEffect(() => {
-    if (!asset || !fileUrl) {
-      setTextContent(null);
-      return;
-    }
+    if (!itemKey || !fileUrl || !needsTextFetch || tooLarge) return;
 
-    const needsTextFetch = previewType === 'text' || previewType === 'markdown';
-    if (!needsTextFetch) {
-      setTextContent(null);
-      return;
-    }
-
-    const fileSize = asset.latestVersion?.fileSize ?? 0;
-    if (fileSize > MAX_TEXT_SIZE) {
-      setTextContent(null);
-      return;
-    }
-
-    setTextLoading(true);
-    fetch(fileUrl, { credentials: 'include' })
+    const controller = new AbortController();
+    // 'omit': a presigned cross-origin URL needs no cookie, and a credentialed request fails CORS against a wildcard origin.
+    fetch(fileUrl, { credentials: 'omit', signal: controller.signal })
       .then((res) => (res.ok ? res.text() : null))
-      .then((text) => setTextContent(text))
-      .catch(() => setTextContent(null))
-      .finally(() => setTextLoading(false));
-  }, [asset, fileUrl, previewType]);
+      .then((text) => {
+        if (controller.signal.aborted) return;
+        setTextState(text === null ? { key: itemKey, status: 'error' } : { key: itemKey, status: 'ready', text });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setTextState({ key: itemKey, status: 'error' });
+      });
+    return () => controller.abort();
+  }, [itemKey, fileUrl, needsTextFetch, tooLarge]);
 
-  if (!asset) return null;
+  useEffect(() => {
+    if (!open || !canNavigate || index === null) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+      if (isEditableTarget(event.target)) return;
+      event.preventDefault();
+      onIndexChange(event.key === 'ArrowRight' ? (index + 1) % count : (index - 1 + count) % count);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open, canNavigate, index, count, onIndexChange]);
+
+  useEffect(() => {
+    if (!open || !canNavigate || index === null) return;
+
+    for (const neighbour of [items[(index + 1) % count], items[(index - 1 + count) % count]]) {
+      const type = getPreviewType(neighbour.contentType, neighbour.name);
+      if (neighbour.fileUrl && (type === 'image' || type === 'svg')) new Image().src = neighbour.fileUrl;
+    }
+  }, [open, canNavigate, index, count, items]);
+
+  if (!item || index === null) return null;
+
+  const currentText = textState?.key === item.key ? textState : null;
+
+  const unsupported = (message?: string) => (
+    <UnsupportedPreview
+      contentType={item.contentType}
+      fileSize={item.fileSize}
+      downloadUrl={item.downloadUrl}
+      message={message}
+    />
+  );
 
   const renderPreview = () => {
-    if (!fileUrl) {
-      return (
-        <UnsupportedPreview
-          contentType={contentType}
-          fileSize={asset.latestVersion?.fileSize ?? null}
-          downloadUrl={downloadUrl}
-        />
-      );
-    }
+    if (!fileUrl) return unsupported();
 
     switch (previewType) {
       case 'image':
         return (
           <Center>
             <img
+              key={item.key}
               src={fileUrl}
-              alt={asset.name}
+              alt={item.name}
               style={{
                 maxWidth: '100%',
                 maxHeight: '70vh',
@@ -202,7 +136,12 @@ export function AssetPreviewModal({ asset, onClose, downloadUrl, onUnshare }: As
         // (flow.aixle.com, which holds the session cookie) = stored XSS.
         return (
           <Center>
-            <img src={fileUrl} alt={asset.name} style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }} />
+            <img
+              key={item.key}
+              src={fileUrl}
+              alt={item.name}
+              style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }}
+            />
           </Center>
         );
 
@@ -236,62 +175,75 @@ export function AssetPreviewModal({ asset, onClose, downloadUrl, onUnshare }: As
           <Box style={{ height: '70vh', borderRadius: 'var(--mantine-radius-sm)', overflow: 'hidden' }}>
             <iframe
               src={`${fileUrl}#toolbar=1`}
-              title={asset.name}
+              title={item.name}
               style={{ width: '100%', height: '100%', border: 'none' }}
             />
           </Box>
         );
 
       case 'text':
-      case 'markdown':
-        if (textLoading) return <PreviewLoader />;
-        if (textContent !== null) {
-          return (
-            <Code block style={{ maxHeight: '60vh', overflow: 'auto', whiteSpace: 'pre-wrap' }}>
-              {textContent}
-            </Code>
-          );
+      case 'markdown': {
+        if (tooLarge) return unsupported('File too large for inline preview');
+        if (!currentText) return <PreviewLoader />;
+        if (currentText.status === 'error') {
+          return unsupported(previewType === 'markdown' ? "Couldn't load preview" : undefined);
         }
-        if ((asset.latestVersion?.fileSize ?? 0) > MAX_TEXT_SIZE) {
+        if (previewType === 'markdown') {
           return (
-            <UnsupportedPreview
-              contentType={contentType}
-              fileSize={asset.latestVersion?.fileSize ?? null}
-              downloadUrl={downloadUrl}
-              message="File too large for inline preview"
-            />
+            <ScrollArea.Autosize mah="65vh" maw={760} mx="auto">
+              <MarkdownPreview source={currentText.text} />
+            </ScrollArea.Autosize>
           );
         }
         return (
-          <UnsupportedPreview
-            contentType={contentType}
-            fileSize={asset.latestVersion?.fileSize ?? null}
-            downloadUrl={downloadUrl}
-          />
+          <Code block style={{ maxHeight: '60vh', overflow: 'auto', whiteSpace: 'pre-wrap' }}>
+            {currentText.text}
+          </Code>
         );
+      }
 
       default:
-        return (
-          <UnsupportedPreview
-            contentType={contentType}
-            fileSize={asset.latestVersion?.fileSize ?? null}
-            downloadUrl={downloadUrl}
-          />
-        );
+        return unsupported();
     }
   };
 
+  const goTo = (next: number) => onIndexChange((next + count) % count);
+
+  const metadata = [
+    item.version !== undefined ? `v${item.version}` : null,
+    item.authorName,
+    item.date ? formatDateMedium(item.date) : null,
+    formatFileSize(item.fileSize),
+  ].filter((part): part is string => Boolean(part));
+
+  const title = (
+    <Group gap="sm" wrap="nowrap">
+      <Text fw={600} truncate>
+        {item.name}
+      </Text>
+      {canNavigate && (
+        <Text fz={12} c="dimmed" style={{ flexShrink: 0 }}>
+          {index + 1} / {count}
+        </Text>
+      )}
+    </Group>
+  );
+
   return (
-    <Modal opened={!!asset} onClose={onClose} title={asset.name} centered size="xl">
+    <Modal opened onClose={onClose} title={title} centered size="xl">
       <Stack gap="md">
-        {asset.shareUrl && (
+        {item.shareUrl && (
           <Alert icon={<IconWorld size={16} />} color="yellow" variant="light" title="Shared publicly">
             <Group justify="space-between" wrap="nowrap" gap="sm">
-              <Anchor href={asset.shareUrl} target="_blank" rel="noreferrer" fz={13} truncate>
-                {asset.shareUrl}
+              <Anchor href={item.shareUrl} target="_blank" rel="noreferrer" fz={13} truncate>
+                {item.shareUrl}
               </Anchor>
-              {onUnshare && (
-                <Button size="xs" variant="default" onClick={() => void onUnshare(asset).then((ok) => ok && onClose())}>
+              {onUnshare && item.source && (
+                <Button
+                  size="xs"
+                  variant="default"
+                  onClick={() => void onUnshare(item.source as Asset).then((ok) => ok && onClose())}
+                >
                   Stop sharing
                 </Button>
               )}
@@ -299,41 +251,59 @@ export function AssetPreviewModal({ asset, onClose, downloadUrl, onUnshare }: As
           </Alert>
         )}
 
-        {renderPreview()}
+        <Group wrap="nowrap" gap="xs" align="center">
+          {canNavigate && (
+            <ActionIcon variant="default" size="lg" aria-label="Previous asset" onClick={() => goTo(index - 1)}>
+              <IconChevronLeft size={18} />
+            </ActionIcon>
+          )}
+          <Box style={{ flex: 1, minWidth: 0 }}>{renderPreview()}</Box>
+          {canNavigate && (
+            <ActionIcon variant="default" size="lg" aria-label="Next asset" onClick={() => goTo(index + 1)}>
+              <IconChevronRight size={18} />
+            </ActionIcon>
+          )}
+        </Group>
 
         <Group justify="space-between">
           <Group gap="xs">
-            <Text fz={12} c="dimmed">
-              v{asset.latestVersion?.version ?? 1}
-            </Text>
-            <Text fz={12} c="dimmed">
-              &middot;
-            </Text>
-            <Text fz={12} c="dimmed">
-              {asset.createdByName ?? 'Unknown'}
-            </Text>
-            <Text fz={12} c="dimmed">
-              &middot;
-            </Text>
-            <Text fz={12} c="dimmed">
-              {formatDateMedium(asset.updatedAt)}
-            </Text>
-            <Text fz={12} c="dimmed">
-              &middot;
-            </Text>
-            <Text fz={12} c="dimmed">
-              {formatFileSize(asset.latestVersion?.fileSize ?? null)}
-            </Text>
+            {metadata.map((part, i) => (
+              <Group key={`${i}-${part}`} gap="xs">
+                {i > 0 && (
+                  <Text fz={12} c="dimmed">
+                    &middot;
+                  </Text>
+                )}
+                <Text fz={12} c="dimmed">
+                  {part}
+                </Text>
+              </Group>
+            ))}
           </Group>
-          {asset.tags && asset.tags.length > 0 && (
-            <Group gap={4}>
-              {asset.tags.map((tag) => (
-                <Badge key={tag} size="xs" variant="outline">
-                  {tag}
-                </Badge>
-              ))}
-            </Group>
-          )}
+          <Group gap="sm">
+            {item.tags && item.tags.length > 0 && (
+              <Group gap={4}>
+                {item.tags.map((tag) => (
+                  <Badge key={tag} size="xs" variant="outline">
+                    {tag}
+                  </Badge>
+                ))}
+              </Group>
+            )}
+            {previewType !== 'unsupported' && fileUrl && !tooLarge && currentText?.status !== 'error' && (
+              <Button
+                component="a"
+                href={item.downloadUrl}
+                target="_blank"
+                rel="noreferrer"
+                variant="default"
+                size="xs"
+                leftSection={<IconDownload size={14} />}
+              >
+                Download
+              </Button>
+            )}
+          </Group>
         </Group>
       </Stack>
     </Modal>

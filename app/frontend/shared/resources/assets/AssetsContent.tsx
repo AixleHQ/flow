@@ -69,6 +69,7 @@ import {
   siblingNames,
 } from './folderTree';
 import { MoveToFolderModal } from './MoveToFolderModal';
+import { assetToPreviewItem } from './previewItem';
 import { useAssetMutations } from './useAssetMutations';
 import { useAssetSelection } from './useAssetSelection';
 import { useAssetViewState } from './useAssetViewState';
@@ -898,9 +899,10 @@ export function AssetsContent({
 
       {/* Preview Modal */}
       <AssetPreviewModal
-        asset={previewAsset}
+        items={previewAsset ? [assetToPreviewItem(previewAsset, downloadUrl(previewAsset))] : []}
+        index={previewAsset ? 0 : null}
+        onIndexChange={() => {}}
         onClose={() => setPreviewAsset(null)}
-        downloadUrl={previewAsset ? downloadUrl(previewAsset) : ''}
         onUnshare={canExecute ? (asset) => assetMutations.unshare(asset.id) : undefined}
       />
 
