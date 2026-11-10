@@ -138,10 +138,10 @@ rather than next month.
 ## 4. The free trial
 
 Every new workspace starts with a **free trial on one worker** — `TRIAL_DAYS`,
-30 by default — and is invoiced for none of it.
+14 by default — and is invoiced for none of it.
 
 **Counted in hours, shown in days.** The trial is an allowance of worker-hours
-(30 days is at most 720), spent from the same hourly measurement an invoice is
+(14 days is at most 336), spent from the same hourly measurement an invoice is
 made from. The day the company signs up is its first, and the trial ends with
 the last day's end (UTC) — the same end a last day set from the admin has.
 A trialing workspace runs one worker whatever limit it set, and a worker is
@@ -250,7 +250,7 @@ over the first ledger, and a sum cannot drift from the thing it sums.
 | `DEPLOYMENT_MODE` | `saas` | Whether any of this exists at all |
 | `REGISTRATION_ENABLED` | `false` | Whether a stranger may sign a company up |
 | `PRICING_QUEUE_HOURLY_RATE` | `5` | The list price shown on `/how-it-works` |
-| `TRIAL_DAYS` | `30` | How long a new company's free trial lasts |
+| `TRIAL_DAYS` | `14` | How long a new company's free trial lasts |
 | `SESSION_PROJECT_CONCURRENCY_DEFAULT` | `4` | A project's share when it has reserved none |
 
 Full descriptions in [reference/configuration.md](../reference/configuration.md).

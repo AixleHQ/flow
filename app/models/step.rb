@@ -9,6 +9,7 @@ class Step < ApplicationRecord
   MODEL_ID_FORMAT = /\A[a-z0-9][a-z0-9._:-]*\z/
   # MODEL_ID_FORMAT as a JSON Schema pattern, for the MCP tools that take a model.
   MODEL_ID_JSON_PATTERN = "^[a-z0-9][a-z0-9._:-]*$"
+  MAX_RETRIES = 10
 
   belongs_to :workflow
   belongs_to :agent, optional: true
@@ -28,6 +29,7 @@ class Step < ApplicationRecord
   validates :position, presence: true, uniqueness: { scope: :workflow_id }
   validates :preferred_model, format: { with: MODEL_ID_FORMAT, message: "invalid model ID format" }, allow_nil: true
   validates :required_agent_runtime, inclusion: { in: SUPPORTED_AGENT_RUNTIMES }, allow_nil: true
+  validates :max_retries, numericality: { only_integer: true, in: 0..MAX_RETRIES }
   # A level needs an explicit runtime and preferred model and must be one that pair
   # takes. Clearing either while a level is set is refused, so the caller clears the
   # level with it.
@@ -43,6 +45,7 @@ class Step < ApplicationRecord
 
   before_validation :assign_next_position, on: :create
   before_validation :normalize_asset_specs
+  before_validation :retry_at_least_once
 
   def soft_delete!
     update_column(:deleted_at, Time.current)
@@ -150,6 +153,13 @@ class Step < ApplicationRecord
 
       self[column] = DataFlow::AssetSpec.list(self[column]).map(&:to_h)
     end
+  end
+
+  # WorkflowExecutionWorkflow retries only while max_retries is positive, so a
+  # step set to retry with 0 would just fail. Raised rather than refused: old
+  # version snapshots and templates hold that pair and must still restore.
+  def retry_at_least_once
+    self.max_retries = 1 if on_failure == "retry" && max_retries == 0
   end
 
   REFERENCE_OWNERS = {

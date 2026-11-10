@@ -779,7 +779,7 @@ legal:
 # one worker. Hosted deployments only. A company keeps the length of the trial it
 # started; an operator moves its last day from the company's admin page.
 trial:
-  days: <%= (ENV['TRIAL_DAYS'] || 30).to_i %>
+  days: <%= (ENV['TRIAL_DAYS'] || 14).to_i %>
 
 # Stripe, for the hosted product's metered capacity. Absent everywhere else, and
 # absent here until an operator sets it — nothing calls Stripe without all three,

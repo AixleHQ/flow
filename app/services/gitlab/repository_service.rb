@@ -2,9 +2,10 @@
 
 module Gitlab
   class RepositoryService
-    # GitLab answers 20 rows a page unless asked for more. Branches are walked
-    # 100 a page up to this many — the whole listing for any real repository,
-    # but never an unbounded walk inside a web request.
+    # GitLab answers 20 rows a page unless asked for more. Projects and branches
+    # are walked 100 a page up to these many — the whole listing for any real
+    # account or repository, but never an unbounded walk inside a web request.
+    MAX_PROJECTS = 1000
     MAX_BRANCHES = 1000
 
     def initialize(integration)
@@ -13,7 +14,7 @@ module Gitlab
 
     def list_available
       client = token_service.client
-      projects = client.projects(membership: true, per_page: 100, auto_paginate: true)
+      projects = client.projects(membership: true, per_page: 100).paginate_with_limit(MAX_PROJECTS)
       projects.map { |proj| map_project(proj) }
     rescue ::Gitlab::Error::Error => e
       Rails.logger.warn("[Gitlab::RepositoryService] Failed to list repos: #{e.message}")

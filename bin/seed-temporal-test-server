@@ -1,15 +1,26 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Downloads the Temporal time-skipping test server into TEMPORAL_TEST_SERVER_DIR at image
-# build time, so test runs find it there instead of fetching it. Fetched lazily, every
+# Downloads the Temporal servers the tests boot into TEMPORAL_TEST_SERVER_DIR at image build
+# time, so test runs find them there instead of fetching them. Fetched lazily, every
 # parallel test worker raced the same download, and a lost race failed whichever workflow
-# test was first ("Failed starting server: error decoding response body").
+# test was first ("Failed starting server: error decoding response body"). A failed request
+# to temporal.download did the same ("failed to download ephemeral server executable").
+#
+# Two servers, two binaries:
+# - the time-skipping test server, for the workflow tests (test/support/temporal_workflow_helper.rb);
+# - the CLI dev server, behind TemporalService.connection in every other test (test/test_helper.rb).
 #
 # The SDK has no download-only call: starting an environment is what fetches the binary.
 
 require "temporalio/testing"
 
+dest_dir = ENV.fetch("TEMPORAL_TEST_SERVER_DIR")
+
 Temporalio::Testing::WorkflowEnvironment
-  .start_time_skipping(test_server_download_dest_dir: ENV.fetch("TEMPORAL_TEST_SERVER_DIR"))
+  .start_time_skipping(test_server_download_dest_dir: dest_dir)
+  .shutdown
+
+Temporalio::Testing::WorkflowEnvironment
+  .start_local(dev_server_download_dest_dir: dest_dir)
   .shutdown

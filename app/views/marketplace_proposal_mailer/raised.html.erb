@@ -1,18 +1,63 @@
-<p>Hello,</p>
+<%
+  font = "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;"
+  strong = "color:#d1cfcd; font-weight:600;"
+%>
+<!-- Preheader (hidden preview text) -->
+<div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">
+  <%= @asked_by %> asks for <%= @company.name %> to be billed through AWS Marketplace.&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+</div>
 
-<p><strong><%= @asked_by %></strong> has bought an AWS Marketplace subscription to Aixle Flow
-and asks for it to be applied to <strong><%= @company.name %></strong>, where you are an
-administrator.</p>
+<!-- Card -->
+<tr>
+  <td style="background-color:#121110; border:1px solid #292726; border-radius:8px; padding:44px 44px 40px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 
-<p>If you accept, <%= @company.name %> is billed through AWS Marketplace from that moment,
-on AWS account <strong><%= @aws_account_id %></strong>
-<%= " — an account you may not control" if @aws_account_id.present? %>.
-<% if @card_billed %>
-The card subscription paying for it now is stopped in the same step, and a final invoice
-for the capacity used up to then follows.
-<% end %>
-Whoever holds that AWS subscription can end it, and the workspace stops when they do.</p>
+      <!-- Heading -->
+      <tr>
+        <td role="heading" aria-level="1" style="<%= font %> font-size:20px; line-height:28px; font-weight:600; letter-spacing:-0.01em; color:#d1cfcd; padding-bottom:16px;">
+          A request to bill <%= @company.name %> through AWS Marketplace
+        </td>
+      </tr>
 
-<p>If you did not expect this, decline it. Nothing changes until somebody accepts.</p>
+      <!-- Body -->
+      <tr>
+        <td style="<%= font %> font-size:14px; line-height:22px; color:#9f9d9c; padding-bottom:28px;">
+          <strong style="<%= strong %>"><%= @asked_by %></strong> has bought an AWS Marketplace subscription to Aixle Flow
+          and asks for it to be applied to <strong style="<%= strong %>"><%= @company.name %></strong>, where you are an
+          administrator.<br><br>
+          If you accept, <%= @company.name %> is billed through AWS Marketplace from that moment,
+          on AWS account <strong style="<%= strong %>"><%= @aws_account_id %></strong>
+          <%= " — an account you may not control" if @aws_account_id.present? %>.
+          <% if @card_billed %>
+          The card subscription paying for it now is stopped in the same step, and a final invoice
+          for the capacity used up to then follows.
+          <% end %>
+          Whoever holds that AWS subscription can end it, and the workspace stops when they do.
+        </td>
+      </tr>
 
-<p><%= link_to "Open billing settings", @url %></p>
+      <!-- CTA -->
+      <tr>
+        <td style="padding-bottom:32px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td bgcolor="#cf6b4a" style="background-color:#cf6b4a; border-radius:5px;">
+                <a href="<%= @url %>" target="_blank" role="button" aria-label="Open billing settings"
+                   style="display:inline-block; padding:11px 24px; <%= font %> font-size:14px; font-weight:600; line-height:20px; color:#0a0908; text-decoration:none; border-radius:5px;">
+                  Open billing settings
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+
+      <tr>
+        <td style="<%= font %> font-size:12px; line-height:18px; color:#5d5b5a; border-top:1px solid #292726; padding-top:24px;">
+          If you did not expect this, decline it. Nothing changes until somebody accepts.
+        </td>
+      </tr>
+
+    </table>
+  </td>
+</tr>

@@ -8,7 +8,7 @@ module Billing
   # spent from the same usage log the meter writes. A trialing company is held to
   # one worker (`ceiling_for`), and capacity is counted for every hour it is
   # offered, busy or not, so an hour of the allowance is an hour on the clock:
-  # thirty days is 720 worker-hours, and what is left divides into the days a
+  # fourteen days is 336 worker-hours, and what is left divides into the days a
   # person is shown. The two part only while the company is suspended, which
   # offers nothing and so spends nothing.
   #

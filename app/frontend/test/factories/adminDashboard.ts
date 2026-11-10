@@ -1,4 +1,14 @@
-import type { CompanyBreakdown, UsageDay } from 'pages/Admin/Dashboard/types';
+import type { CompanyBreakdown, Tenant, UsageDay } from 'pages/Admin/Dashboard/types';
+
+// A company paying through Stripe, as Usage::TenantReport lists it.
+export const buildTenant = (overrides: Partial<Tenant> = {}): Tenant => ({
+  id: 1,
+  name: 'Acme',
+  accountStatus: 'active_customer',
+  accountType: 'paid',
+  billingMethod: 'saas_stripe',
+  ...overrides,
+});
 
 // One tenant's whole UTC day at a steady two workers out of a limit of four, as
 // Usage::TenantReport sends it.

@@ -32,7 +32,8 @@ class Admin::DashboardsTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     report = report_in(response.body)
-    assert_equal [ { "id" => @company.id, "name" => "Acme" } ], report["tenants"]
+    assert_equal [ { "id" => @company.id, "name" => "Acme", "accountStatus" => "active_customer",
+                     "accountType" => "paid", "billingMethod" => nil } ], report["tenants"]
     day = report["days"].sole
     assert_equal 1_800, day["occupiedSeconds"]
     assert_equal "managed", day["billingClass"]

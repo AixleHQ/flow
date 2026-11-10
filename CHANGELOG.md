@@ -13,6 +13,27 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Changed
+- **Admin**: the dashboard's companies table splits its Billing column into
+  three sortable ones: Account status (Active Customer, Trial – Active, Trial –
+  Expired, Canceled Customer, Account Locked – nonpayment, Pending activation,
+  Inactive), Account type (Paid Account or Managed by Aixle) and Billing method
+  (SaaS – Stripe, SaaS – AWS Marketplace, Self-Hosted – AWS Marketplace). They
+  show each company as it stands now, whatever period is selected.
+
+### Fixed
+- **Repositories**: adding a GitLab repository lists every project the
+  connection's user belongs to, not only the 100 most recently created.
+- **Admin**: impersonating a user, and "Back to app" during an impersonation, open
+  the app's projects page instead of the marketing landing page.
+- **Workflows**: personal MCP can set a step's repositories, assets, expected
+  input and output files, failure action, retry limit and skip policy.
+- **Workflows**: a session set to retry on failure now retries. The builder asks
+  how many times (1–10), and sessions saved with Retry before this release retry
+  once.
+
+## [1.11.0] - 2026-11-09
+
 ### Added
 - **Integrations**: Azure DevOps can be connected through your own Microsoft Entra app.
   Register an app in your directory, add a federated credential that trusts Flow, and
@@ -63,22 +84,9 @@ governance, community health — carry none.
   project's connection with the company. Other members who can change a project
   connect it for that project. Moving a project to another company switches off
   the Slack or Teams connection that was made for it.
-- **Company settings**: the Billing tab lists every subscription the workspace has
-  had. The one paying now — the card, or the AWS Marketplace subscription — shows its
-  billing method, current period, next invoice and the usage so far; the ones that
-  ended are listed beneath it with their active period, the day they were cancelled,
-  the usage their last bill covered, and a way to the invoices (Stripe's for a card,
-  the AWS Billing console for AWS Marketplace). A workspace not paying through AWS is
-  offered "Pay via AWS Marketplace" beside "Add a card", and everything that ended
-  reads "Cancelled". AWS Marketplace usage is priced at the rate the agreement was
-  accepted at, read from AWS when the subscription is registered, created or amended, so
-  a private offer shows its own price; a subscription whose price was never read shows
-  minutes and no sum. Operators: the offer points at `AWS_MARKETPLACE_SAAS_LISTING_URL`
-  and is not made where that is empty; the seller role needs
-  `aws-marketplace:GetAgreementTerms` beside `DescribeAgreement`, or prices stay unread;
-  a migration adds two columns each to `billing_cancellations` and `marketplace_licenses`.
-
-### Changed
+- **Company settings**: a new hosted workspace's free trial lasts 14 days on one
+  worker instead of 30 (`TRIAL_DAYS` now defaults to 14). A workspace already on
+  a trial keeps the length it started with.
 - **Sessions & Runs**: agent CLIs raised to Claude Code 2.1.318, Codex 0.166.0,
   Antigravity CLI 1.5.0 and Kiro CLI 3.0.0. Claude Code's new check that asks
   before a command sends the account email is turned off, so an automatic run
@@ -88,6 +96,12 @@ governance, community health — carry none.
   edits a build file or runs a command on a path an earlier command printed.
 
 ### Fixed
+- **Company settings**: the AWS Marketplace emails — confirming a request, asking
+  administrators to accept it, and the answer — are readable again: their text
+  was near-black on the emails' dark background.
+- **Sign-in & onboarding**: on the "Connect your agents" step, an agent whose login
+  is waiting for a free slot reads *Queued* instead of *Connecting*. Two agent logins
+  run at a time, and the rest used to look like they were stuck connecting.
 - **Sessions & Runs**: an automatic Kiro step whose agent ends its turn without
   `finish_session` no longer waits for a person. A minute or two later the agent
   is reminded in its terminal to finish or continue, up to 3 times, and the step
@@ -96,7 +110,7 @@ governance, community health — carry none.
 - **Sessions & Runs**: a Kiro step whose terminal screen has not changed for 30
   minutes now fails even when the terminal keeps redrawing the same screen, for
   example while its web terminal is open. Before, such a step could stay
-  running for hours. Silent steps on every runtime are now ended 30 to 35
+  running for hours. Silent steps on every runtime are now ended 30 to 31
   minutes after they went quiet.
 - **Sessions & Runs**: a run's live console reads *Session finishing…* while a
   session is ending, instead of *Session starting…* as if it were starting again.
@@ -1210,7 +1224,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.10.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.11.0...develop
+[1.11.0]: https://github.com/AixleHQ/flow/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/AixleHQ/flow/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/AixleHQ/flow/compare/v1.8.0...v1.9.0
 [1.8.0]: https://github.com/AixleHQ/flow/compare/v1.7.0...v1.8.0
