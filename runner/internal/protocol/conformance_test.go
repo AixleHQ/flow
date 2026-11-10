@@ -243,12 +243,12 @@ func strictDecode(t *testing.T, raw []byte, out any) bool {
 type call struct {
 	endpoint string
 	version  string
-	// protocolHeader and versionHeader are the X-Aixle-Runner-Protocol and
-	// X-Aixle-Runner-Version the request must carry, nil when it must carry none.
-	protocolHeader, versionHeader *string
 	run      func(ctx context.Context, c *protocol.Client) (any, error)
 	// check, when set, checks a successful answer the response has no body for.
 	check func(t *testing.T, got any, headers map[string]*string)
+	// protocolHeader and versionHeader are the X-Aixle-Runner-Protocol and
+	// X-Aixle-Runner-Version the request must carry, nil when it must carry none.
+	protocolHeader, versionHeader *string
 }
 
 var (
@@ -376,9 +376,9 @@ type expectedExchange struct {
 	method, path, token           string
 	protocolHeader, versionHeader *string
 	body                          []byte
-	status                       int
-	headers                      map[string]*string
-	response                     []byte
+	status                        int
+	headers                       map[string]*string
+	response                      []byte
 }
 
 func (g *fakeGateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
