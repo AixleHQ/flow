@@ -49,11 +49,13 @@ deleted / super-admin users. The matching header cell is added in
           class: "link"
         ) %>
       <% else %>
+        <%# Lands in the Inertia app, which Turbo cannot render in place. %>
         <%= button_to(
           t("administrate.actions.impersonate"),
           impersonate_admin_user_path(resource),
           method: :post,
-          class: "link"
+          class: "link",
+          form: { data: { turbo: false } }
         ) %>
       <% end %>
     <% end %>

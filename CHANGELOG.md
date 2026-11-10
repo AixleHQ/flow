@@ -13,6 +13,10 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Fixed
+- **Admin**: impersonating a user, and "Back to app" during an impersonation, open
+  the app's projects page instead of the marketing landing page.
+
 ## [1.11.0] - 2026-11-09
 
 ### Added
