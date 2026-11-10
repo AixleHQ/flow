@@ -82,6 +82,7 @@ type Environment struct {
 	// SidecarLogTimeout bounds reading an exited sidecar's log tail. Zero is
 	// SidecarLogTimeout.
 	SidecarLogTimeout time.Duration
+
 	mu sync.Mutex
 	// retired are the sidecars the host runner removes itself, by id.
 	retired map[string]bool

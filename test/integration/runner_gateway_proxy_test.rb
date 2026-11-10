@@ -98,10 +98,15 @@ class RunnerGatewayProxyTest < ActionDispatch::IntegrationTest
     get "/runner/v1/proxy/assets/public/index.html", headers: proxy_headers
     assert_refused :not_found, "route_not_allowed"
 
-    # A path that does not decode strictly: malformed triplets, and octets
-    # that are not UTF-8. Refused, not raised.
-    %w[store/a% store/a%zz store/%G1/x store/%FF store/a%C3 store/%C0%AF].each do |path|
+    # A path that does not decode strictly: octets that are not UTF-8, and
+    # malformed triplets, which the test client cannot put in a URL, so they
+    # go in PATH_INFO as a server passes them. Refused, not raised.
+    %w[store/%FF store/a%C3 store/%C0%AF].each do |path|
       get "/runner/v1/proxy/assets/#{path}", headers: proxy_headers
+      assert_refused :not_found, "route_not_allowed", path
+    end
+    %w[store/a% store/a%zz store/%G1/x].each do |path|
+      get "/runner/v1/proxy/assets/store/x", headers: proxy_headers, env: { "PATH_INFO" => "/runner/v1/proxy/assets/#{path}" }
       assert_refused :not_found, "route_not_allowed", path
     end
 

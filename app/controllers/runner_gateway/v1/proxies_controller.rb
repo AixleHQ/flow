@@ -32,7 +32,10 @@ module RunnerGateway
       # The path is the agent's: Rails would refuse a path parameter that is
       # not valid UTF-8 with a 400 of its own, before this controller could
       # refuse it as `route_not_allowed`. Left binary, it reaches
-      # Runners::Proxy::Route#allows?, which decodes it strictly.
+      # Runners::Proxy::Route#allows?, which decodes it strictly. An API
+      # controller lacks ParameterEncoding, and its table is set up only for
+      # the subclasses of the class that includes it, so this one sets it up.
+      setup_param_encode
       skip_parameter_encoding :forward
 
       REFUSAL_HEADER = "X-Aixle-Runner-Refusal"
