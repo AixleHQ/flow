@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it } from 'vitest';
 
-import { buildCompanyBreakdown, buildUsageDay } from 'test/factories/adminDashboard';
+import { buildCompanyBreakdown, buildTenant, buildUsageDay } from 'test/factories/adminDashboard';
 import { answerFetch, jsonResponse } from 'test/fetchStub';
 import { render, screen, userEvent, within } from 'test/renderPage';
 
@@ -11,7 +11,7 @@ import type { CompanyBreakdown, DashboardData } from './types';
 const now = new Date('2026-10-19T12:00:00Z');
 
 const data: DashboardData = {
-  tenants: [{ id: 1, name: 'Acme' }],
+  tenants: [buildTenant()],
   days: [buildUsageDay({ companyId: 1, day: '2026-10-14' })],
   measuredThrough: '2026-10-19T11:00:00Z',
   snapshot: { companies: 1, members: 3, projects: 2 },

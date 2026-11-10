@@ -24,9 +24,27 @@ export interface UsageDay {
   billingClass: BillingClass;
 }
 
+// Billing::AccountClassification: how each company stands now, whatever period is shown.
+export type AccountStatus =
+  | 'active_customer'
+  | 'trial_active'
+  | 'trial_expired'
+  | 'canceled'
+  | 'locked_nonpayment'
+  | 'pending_activation'
+  | 'inactive';
+
+export type AccountType = 'paid' | 'managed';
+
+export type BillingMethod = 'saas_stripe' | 'saas_aws_marketplace' | 'self_hosted_aws_marketplace';
+
 export interface Tenant {
   id: number;
   name: string;
+  accountStatus: AccountStatus;
+  accountType: AccountType;
+  /** Null when nobody invoices the company: managed, not paying yet, or self-hosted. */
+  billingMethod: BillingMethod | null;
 }
 
 export interface Snapshot {

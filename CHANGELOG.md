@@ -13,6 +13,14 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Changed
+- **Admin**: the dashboard's companies table splits its Billing column into
+  three sortable ones: Account status (Active Customer, Trial – Active, Trial –
+  Expired, Canceled Customer, Account Locked – nonpayment, Pending activation,
+  Inactive), Account type (Paid Account or Managed by Aixle) and Billing method
+  (SaaS – Stripe, SaaS – AWS Marketplace, Self-Hosted – AWS Marketplace). They
+  show each company as it stands now, whatever period is selected.
+
 ### Fixed
 - **Admin**: impersonating a user, and "Back to app" during an impersonation, open
   the app's projects page instead of the marketing landing page.

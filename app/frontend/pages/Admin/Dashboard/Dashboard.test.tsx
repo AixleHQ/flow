@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { buildUsageDay } from 'test/factories/adminDashboard';
+import { buildTenant, buildUsageDay } from 'test/factories/adminDashboard';
 import { answerFetch, jsonResponse } from 'test/fetchStub';
 import { render, screen, userEvent, within } from 'test/renderPage';
 
@@ -12,8 +12,8 @@ const now = new Date('2026-10-19T12:00:00Z');
 
 const data: DashboardData = {
   tenants: [
-    { id: 1, name: 'Acme' },
-    { id: 2, name: 'Globex' },
+    buildTenant({ id: 1, name: 'Acme' }),
+    buildTenant({ id: 2, name: 'Globex', accountType: 'managed', billingMethod: null }),
   ],
   days: [
     buildUsageDay({ companyId: 1, day: '2026-09-15', sessionsSucceeded: 10 }),
@@ -40,14 +40,34 @@ describe('Dashboard', () => {
     answerFetch({ 'GET /admin/dashboard/waits.json': [] });
   });
 
-  it('opens on the current month, one row per company, with why each is billed or not', () => {
+  it("opens on the current month, one row per company, with each company's status, type and billing method", () => {
     render(<Dashboard data={data} now={now} />);
 
     expect(screen.getByRole('combobox', { name: 'Period' })).toHaveDisplayValue('October 2026 (current)');
     expect(screen.getByText('Oct 14 – Oct 15, 2026 · to date · 2 companies')).toBeInTheDocument();
-    expect(within(rowOf('Acme')).getByText('Paying')).toBeInTheDocument();
-    expect(within(rowOf('Globex')).getByText('Free · managed')).toBeInTheDocument();
+    const [acmeStatus, acmeType, acmeMethod] = within(rowOf('Acme')).getAllByRole('cell');
+    expect(acmeStatus).toHaveTextContent('Active Customer');
+    expect(acmeType).toHaveTextContent('Paid Account');
+    expect(acmeMethod).toHaveTextContent('SaaS – Stripe');
+    const [, globexType, globexMethod] = within(rowOf('Globex')).getAllByRole('cell');
+    expect(globexType).toHaveTextContent('Managed by Aixle');
+    expect(globexMethod).toHaveTextContent('—');
     expect(screen.getByRole('button', { name: 'Acme' })).toBeInTheDocument();
+  });
+
+  it('sorts by account status', async () => {
+    const locked = {
+      ...data,
+      tenants: [data.tenants[0], buildTenant({ id: 2, name: 'Globex', accountStatus: 'locked_nonpayment' })],
+    };
+    render(<Dashboard data={locked} now={now} />);
+    const companiesInOrder = () => screen.getAllByRole('rowheader').map((cell) => cell.textContent);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Account status' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Account status' }));
+
+    expect(companiesInOrder()).toEqual(['Globex', 'Acme', 'Total, all companies']);
+    expect(within(rowOf('Globex')).getByText('Account Locked – nonpayment')).toBeInTheDocument();
   });
 
   it('shows the platform as it stands in tiles', () => {
@@ -75,7 +95,6 @@ describe('Dashboard', () => {
     };
     render(<Dashboard data={unbilled} now={now} />);
 
-    expect(within(rowOf('Acme')).getByText('Not billed · no limit')).toBeInTheDocument();
     expect(tile('Companies').getByText(/1 not billed/)).toBeInTheDocument();
   });
 
@@ -109,7 +128,7 @@ describe('Dashboard', () => {
 
     const globex = within(rowOf('Globex'));
     expect(globex.getAllByText('∞')).toHaveLength(2);
-    const [, workerHours, busyHours, , , , utilization] = globex.getAllByRole('cell');
+    const [, , , workerHours, busyHours, , , , utilization] = globex.getAllByRole('cell');
     expect(workerHours).toHaveTextContent(/^48/);
     expect(busyHours).toHaveTextContent(/^48/);
     expect(utilization).toHaveTextContent(/^100%/);
