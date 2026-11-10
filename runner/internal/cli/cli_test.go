@@ -363,6 +363,39 @@ func (hostDocker) ContainerList(context.Context, client.ContainerListOptions) (c
 	return client.ContainerListResult{}, nil
 }
 
+// unlistableDocker is the Docker of a machine whose daemon cannot list the
+// environment's containers when the host runner starts.
+type unlistableDocker struct{ docker.API }
+
+func (unlistableDocker) ContainerList(context.Context, client.ContainerListOptions) (client.ContainerListResult, error) {
+	return client.ContainerListResult{}, errors.New("Cannot connect to the Docker daemon")
+}
+
+// A host runner that cannot list the environment's containers has served no
+// running session's proxy again, and nothing would try later: it exits, with a
+// failure the service manager restarts, before it polls.
+func TestAHostRunnerThatCannotResumeItsSessionsExitsBeforePolling(t *testing.T) {
+	p, url := newPlatform(t, map[string][]answer{"GET /runner/v1/ops": {{200, map[string]any{"ops": []any{}}}}})
+	dir := t.TempDir()
+	storeCreds(t, dir, url)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := RunHost(ctx, HostOptions{StateDir: dir, Docker: unlistableDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	if err == nil || !strings.Contains(err.Error(), "Cannot connect to the Docker daemon") || !strings.Contains(err.Error(), "restarts") {
+		t.Fatalf("got %v", err)
+	}
+	if NeedsOperator(err) {
+		t.Fatalf("a restart can fix it, but it is reported as needing an operator: %v", err)
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, r := range p.requests {
+		if r.method == http.MethodGet && r.path == "/runner/v1/ops" {
+			t.Fatalf("the host runner polled with its sessions not served again: %v", p.requests)
+		}
+	}
+}
+
 func TestConfigureDeletesTheJournalOfAPreviousRegistration(t *testing.T) {
 	dir := t.TempDir()
 	// The credentials are gone, as after credential_reuse_detected, but the

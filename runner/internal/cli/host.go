@@ -119,8 +119,16 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 	// Docker API against the environment's session container (DESIGN.md §6.8).
 	env := &docker.Environment{API: api, Key: creds.Environment.Key, StateDir: opts.StateDir, Logger: opts.Logger,
 		Proxy: proxies, Background: ctx}
+	// A Resume that cannot list the environment's containers has served no
+	// running session's proxy again, and nothing would call it later. So the
+	// host runner does not poll: it exits with a plain failure, not
+	// service.ExitStop, and the service manager starts it again
+	// (Restart=always, RestartSec=5), which retries Resume until Docker answers.
 	if err := env.Resume(ctx); err != nil {
-		opts.Logger.Warn("serving the running sessions' callback proxies again failed", "error", err)
+		if ctx.Err() != nil {
+			return nil
+		}
+		return fmt.Errorf("serving the running sessions' callback proxies again failed; exiting so that the service manager restarts the runner and it tries again: %w", err)
 	}
 	handlers := map[string]host.Handler{}
 	for name, handler := range env.Handlers() {
