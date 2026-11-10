@@ -202,7 +202,7 @@ class Admin::CompanyBillingTermsTest < ActionDispatch::IntegrationTest
     get admin_company_path(company)
 
     assert_response :success
-    assert_match(/30 days left, on one worker/, response.body)
+    assert_match(/14 days left, on one worker/, response.body)
   end
 
   test "unticking a company we carry that has no limit puts it on one worker" do

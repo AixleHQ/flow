@@ -80,6 +80,28 @@ class StepTest < ActiveSupport::TestCase
     assert_equal "retry", step.on_failure
   end
 
+  test "a step set to retry with no retries is saved to retry once" do
+    step = create(:step, workflow: @workflow, on_failure: :retry, max_retries: 0)
+    assert_equal 1, step.max_retries
+
+    step.update!(max_retries: 3)
+    assert_equal 3, step.reload.max_retries
+
+    step.update!(on_failure: :fail, max_retries: 0)
+    assert_equal 0, step.reload.max_retries
+  end
+
+  test "max_retries runs from 0 to MAX_RETRIES" do
+    step = build(:step, workflow: @workflow, on_failure: :retry, max_retries: Step::MAX_RETRIES)
+    assert step.valid?, step.errors.full_messages.to_sentence
+
+    [ -1, Step::MAX_RETRIES + 1 ].each do |count|
+      step.max_retries = count
+      assert_not step.valid?, "#{count} should be refused"
+      assert_includes step.errors.attribute_names, :max_retries
+    end
+  end
+
   test "agent is optional" do
     step = build(:step, workflow: @workflow, agent: nil)
     assert step.valid?

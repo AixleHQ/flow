@@ -80,7 +80,7 @@ class Web::Company::BillingTest < ActionDispatch::IntegrationTest
     billing = billing_props[:billing]
 
     assert_equal "trialing", billing[:status]
-    assert_equal({ "days" => 30, "daysLeft" => 30, "lastDay" => (Date.current + 29).iso8601 }, billing[:trial])
+    assert_equal({ "days" => 14, "daysLeft" => 14, "lastDay" => (Date.current + 13).iso8601 }, billing[:trial])
     assert_nil billing[:usage]
   end
 

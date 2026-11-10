@@ -1,4 +1,4 @@
-import type { BillingClass, Tenant, UsageDay } from './types';
+import type { AccountStatus, AccountType, BillingClass, BillingMethod, Tenant, UsageDay } from './types';
 
 // Days are UTC calendar days written as YYYY-MM-DD; weeks start on Monday.
 
@@ -26,6 +26,10 @@ export interface TenantSummary {
   sessionsSucceeded: number;
   sessionsFailed: number;
   billingClass: BillingClass;
+  /** Null for a company the report sent no tenant for. */
+  accountStatus: AccountStatus | null;
+  accountType: AccountType | null;
+  billingMethod: BillingMethod | null;
 }
 
 export interface Totals {
@@ -109,7 +113,7 @@ export function comparisonRange(grain: Grain, range: DayRange, dataEnd: string):
 }
 
 export function summarize(days: UsageDay[], tenants: Tenant[], range: DayRange): TenantSummary[] {
-  const names = new Map(tenants.map((tenant) => [tenant.id, tenant.name]));
+  const byId = new Map(tenants.map((tenant) => [tenant.id, tenant]));
   const byTenant = new Map<number, UsageDay[]>();
   for (const row of days) {
     if (row.day < range.start || row.day > range.end) continue;
@@ -127,10 +131,11 @@ export function summarize(days: UsageDay[], tenants: Tenant[], range: DayRange):
     const bounded = rows.flatMap((row) => (row.limitMin === null ? [] : [row.limitMin]));
     const maxima = rows.flatMap((row) => (row.limitMax === null ? [] : [row.limitMax]));
     const everUnlimited = rows.some((row) => row.unlimitedSeconds > 0);
+    const tenant = byId.get(tenantId);
 
     return {
       tenantId,
-      name: names.get(tenantId) ?? `Company #${tenantId}`,
+      name: tenant?.name ?? `Company #${tenantId}`,
       firstDay: rows[0].day,
       lastDay: rows[rows.length - 1].day,
       workerHours: worker / 3600,
@@ -144,6 +149,9 @@ export function summarize(days: UsageDay[], tenants: Tenant[], range: DayRange):
       sessionsSucceeded: sum((row) => row.sessionsSucceeded),
       sessionsFailed: sum((row) => row.sessionsFailed),
       billingClass: rows[rows.length - 1].billingClass,
+      accountStatus: tenant?.accountStatus ?? null,
+      accountType: tenant?.accountType ?? null,
+      billingMethod: tenant?.billingMethod ?? null,
     };
   });
 }

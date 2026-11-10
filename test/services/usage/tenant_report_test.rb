@@ -48,8 +48,19 @@ class Usage::TenantReportTest < ActiveSupport::TestCase
 
     assert_equal [ [ @acme.id, "2026-10-14" ], [ @acme.id, "2026-10-15" ], [ @globex.id, "2026-10-15" ] ],
                  report[:days].map { |day| [ day[:company_id], day[:day] ] }
-    assert_equal [ { id: @acme.id, name: "Acme" }, { id: @globex.id, name: "Globex" } ], report[:tenants]
+    assert_equal [ { id: @acme.id, name: "Acme" }, { id: @globex.id, name: "Globex" } ],
+                 report[:tenants].map { |tenant| tenant.slice(:id, :name) }
     assert_equal "2026-10-15T06:00:00Z", report[:measured_through]
+  end
+
+  test "each tenant carries its account status, account type and billing method as they stand" do
+    hour(@acme, @day + 9.hours)
+    @acme.update!(billing_state: "blocked", billing_block_reason: "payment_failed")
+
+    tenant = Usage::TenantReport.new(now: @day + 1.day).to_h[:tenants].sole
+
+    assert_equal({ account_status: "locked_nonpayment", account_type: "paid", billing_method: nil },
+                 tenant.slice(:account_status, :account_type, :billing_method))
   end
 
   test "the platform's size counts what is live: active companies, their active members and projects" do
