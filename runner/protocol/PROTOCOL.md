@@ -40,8 +40,8 @@ Every request carries these three headers, except a request to the release endpo
 | `X-Aixle-Runner-Version` | The runner's own version, a strict [Semantic Versioning 2.0](https://semver.org) version (`1.4.0`, `1.5.0-rc.1+build.7`; no `v` prefix) | `400 invalid_runner_version` |
 
 **The protocol versions the gateway accepts** are the platform's pins,
-`protocol_supported` in the platform's `config/runner_release.yml` (DESIGN.md §14.2), which lists
-`1` today. After the first protocol bump it lists the current and the previous version (§7).
+`protocol_supported` in the `runners.release` block of the platform's `config/settings.yml`
+(DESIGN.md §14.2), which lists `1` today. After the first protocol bump it lists the current and the previous version (§7).
 
 **The version grammar is strict SemVer 2.0.** `MAJOR.MINOR.PATCH`, each a number without leading
 zeros, then an optional `-PRERELEASE` of dot-separated identifiers (`0-9A-Za-z-`, none empty, a
@@ -238,8 +238,8 @@ The `X-Aixle-Runner-Version` and `X-Aixle-Runner-Protocol` of the request are re
 machine's runner and protocol versions.
 
 **The minimum version.** A runner whose `X-Aixle-Runner-Version` is below the platform's
-`min_version` (`config/runner_release.yml`) is refused with `400 runner_version_unsupported`, and
-the message names the minimum, e.g. `aixle-runner 1.1.9 is no longer supported (minimum 1.2.0).
+`min_version` (`runners.release` in `config/settings.yml`) is refused with
+`400 runner_version_unsupported`, and the message names the minimum, e.g. `aixle-runner 1.1.9 is no longer supported (minimum 1.2.0).
 Update aixle-runner.` The check comes after the token, the runner and the flag (§3, step 5), so a
 dead token learns nothing about the minimum, and it does not spend the registration token. The
 platform pins no minimum yet. A machine that registered before the minimum was raised is not
@@ -436,8 +436,8 @@ the machine has either.
 | `Location` | Where the binary is: the `runner-v<version>` GitHub Release's asset `aixle-runner-<os>-<arch>`, or a mirror the platform's pins name |
 | `X-Aixle-Runner-Sha256` | The binary's SHA-256, lowercase hex, from the platform's pins |
 
-The digest comes from the platform's pins (`config/runner_release.yml`), not from the host the
-binary is on, so a binary changed there fails verification. A client checks the SHA-256 of what
+The digest comes from the platform's pins (`runners.release` in `config/settings.yml`), not from
+the host the binary is on, so a binary changed there fails verification. A client checks the SHA-256 of what
 it downloaded against it before it runs the binary.
 
 Its own refusals: `400 invalid_request`, for a version that is not a SemVer version or a platform

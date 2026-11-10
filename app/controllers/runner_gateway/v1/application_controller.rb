@@ -15,8 +15,14 @@ module RunnerGateway
     # flag for the runner's company (403 runners_disabled, which leaves the
     # credentials valid, §9.3).
     #
-    # The protocol versions accepted are the platform's pins,
-    # config/runner_release.yml (Runners::Release, §14.2).
+    # The protocol versions accepted are the platform's pins, the
+    # `runners.release` block of config/settings.yml (Runners::Release, §14.2).
+    #
+    # The controllers check transport only: the headers, the token and a
+    # parameter's type. A service checks a request body and raises each refusal
+    # as Runners::Credentials::Refused, which `rescue_from` maps to its status
+    # through REFUSAL_STATUS (docs/architecture/implementation-patterns.md,
+    # "Error Handling").
     class ApplicationController < ActionController::API
       STATUS_TTL = 5.seconds
 
@@ -26,7 +32,8 @@ module RunnerGateway
         "runner_revoked" => :unauthorized,
         "runner_version_unsupported" => :bad_request,
         "ephemeral_not_supported" => :unprocessable_entity,
-        "invalid_registration" => :unprocessable_entity
+        "invalid_registration" => :unprocessable_entity,
+        "invalid_result" => :unprocessable_entity
       }.freeze
 
       wrap_parameters false

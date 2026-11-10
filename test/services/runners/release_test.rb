@@ -2,8 +2,9 @@
 
 require "test_helper"
 
-# Runners::Release: the platform's runner pins, config/runner_release.yml read as
-# Settings.runners.release (docs/design/agent-runtimes/DESIGN.md §14.2, §14.4).
+# Runners::Release: the platform's runner pins, the `runners.release` block of
+# config/settings.yml read as Settings.runners.release
+# (docs/design/agent-runtimes/DESIGN.md §14.2, §14.4).
 class Runners::ReleaseTest < ActiveSupport::TestCase
   AMD64 = "a" * 64
   ARM64 = "b" * 64
@@ -26,18 +27,49 @@ class Runners::ReleaseTest < ActiveSupport::TestCase
     create(:runner_environment, runner: @runner, os: "linux", arch: arch, runner_version: "1.4.0", protocol_version: "1")
   end
 
-  test "the committed pins are valid and read through Settings" do
-    committed = YAML.safe_load_file(Rails.root.join("config/runner_release.yml"))
+  # The digests of runner-v0.1.0's checksums.txt
+  # (https://github.com/AixleHQ/flow/releases/tag/runner-v0.1.0).
+  RELEASED = {
+    "0.1.0" => { "linux-amd64" => "55af0ecb22c70f52ca4213f7f310c6321ba0e1d175545f663c1c948107caad44",
+                 "linux-arm64" => "e27d43e8d29ec520f5868b4394d66c9e95ea7476ffc3ee3d0a85e6b259527441" }
+  }.freeze
 
-    assert_equal committed, Settings.runners.release.to_h.deep_stringify_keys
+  test "the committed pins are config/settings.yml's runners.release block, read through Settings" do
+    assert_equal({ "protocol_supported" => [ 1 ], "min_version" => nil, "recommended_version" => "0.1.0",
+                   "download_url" => PINS["download_url"],
+                   "binaries" => RELEASED.transform_values { |platforms| platforms.transform_values { |digest| { "sha256" => digest } } } },
+                 Settings.runners.release.to_h.deep_stringify_keys)
     pins = Runners::Release.pins
     assert_equal [ 1 ], pins.protocol_supported
-    assert_includes pins.download_url, "%{version}"
+    assert_nil pins.min_version
+    assert_equal Runners::Version.parse("0.1.0"), pins.recommended_version
+    assert_equal RELEASED, pins.binaries
+    assert_equal "https://github.com/AixleHQ/flow/releases/download/runner-v0.1.0/aixle-runner-linux-amd64",
+                 Runners::Release.binary("0.1.0", "linux-amd64").url
   end
 
-  # The path a real pin takes, YAML to Settings: the same `add_source!` as
-  # config/initializers/_config_settings.rb, so dotted version keys and the
-  # `<os>-<arch>` keys go through the Config gem's options and back.
+  # config/initializers/runner_release.rb checks the pins once the app is
+  # loaded, so an invalid block stops the boot.
+  test "an invalid runners.release block fails boot" do
+    settings = Config.load_files({ "runners" => { "release" => PINS.merge("min_version" => "1.2") } })
+    Settings.stubs(:runners).returns(settings.runners)
+    Runners::Release.reset!
+    initializer = Rails.root.join("config/initializers/runner_release.rb").to_s
+    hook = nil
+    config = Object.new
+    config.define_singleton_method(:after_initialize) { |&block| hook = block }
+    Rails.application.stubs(:config).returns(config)
+    load initializer
+    Rails.application.unstub(:config)
+
+    error = assert_raises(Runners::Release::InvalidPins) { hook.call }
+    assert_equal "config/settings.yml runners.release: min_version \"1.2\" is not a semantic version", error.message
+  ensure
+    Runners::Release.reset!
+  end
+
+  # The path a real pin takes, YAML to Settings, so dotted version keys and
+  # the `<os>-<arch>` keys go through the Config gem's options and back.
   test "pinned binaries and a recommended version survive the Config gem" do
     settings = Config.load_files({ "runners" => { "release" => PINS.deep_dup } })
     Settings.stubs(:runners).returns(settings.runners)
@@ -48,7 +80,7 @@ class Runners::ReleaseTest < ActiveSupport::TestCase
     assert_equal AMD64, binary.sha256
     assert_equal "https://github.com/AixleHQ/flow/releases/download/runner-v1.5.0/aixle-runner-linux-amd64", binary.url
     assert_equal ARM64, Runners::Release.checksums("1.5.0").binaries["linux-arm64"]
-    assert_equal Runners::Release::Offer.new(version: "1.5.0", platform: "linux-amd64", sha256: AMD64),
+    assert_equal Runners::Release::Offer.new(version: "1.5.0", sha256: AMD64),
                  Runners::Release.update_for(@environment, runner_version: "1.4.0")
   ensure
     Runners::Release.reset!
@@ -129,7 +161,7 @@ class Runners::ReleaseTest < ActiveSupport::TestCase
     pin
 
     offer = Runners::Release.update_for(@environment, runner_version: "1.4.0")
-    assert_equal Runners::Release::Offer.new(version: "1.5.0", platform: "linux-amd64", sha256: AMD64), offer
+    assert_equal Runners::Release::Offer.new(version: "1.5.0", sha256: AMD64), offer
     arm = registered_environment(arch: "arm64")
     assert_equal ARM64, Runners::Release.update_for(arm, runner_version: "1.5.0-rc.1").sha256
   end

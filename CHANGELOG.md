@@ -21,6 +21,12 @@ governance, community health — carry none.
   previews Markdown the same way (rendered, not raw text).
 
 ### Changed
+- Runner compatibility: the platform now serves and recommends `aixle-runner`
+  0.1.0. It pins the `linux-amd64` and `linux-arm64` binaries of
+  [runner-v0.1.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.1.0)
+  by their SHA-256, and an idle machine below 0.1.0 that has not opted out is
+  offered the update. Runner protocol 1 only, and no minimum runner version.
+  The pins now live in the `runners.release` block of `config/settings.yml`.
 - **Admin**: the dashboard's companies table splits its Billing column into
   three sortable ones: Account status (Active Customer, Trial – Active, Trial –
   Expired, Canceled Customer, Account Locked – nonpayment, Pending activation,
