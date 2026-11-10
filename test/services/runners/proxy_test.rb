@@ -77,6 +77,28 @@ class Runners::ProxyTest < ActiveSupport::TestCase
     assert_nil Runners::Proxy.route("otlp")
   end
 
+  test "a path segment that does not decode strictly is refused, without raising" do
+    assets = Runners::Proxy.route("assets")
+
+    assert assets.allows?("GET", "store/a+b%C3%A9.pdf")
+    # Malformed triplets: a `%` with no, one, or non-hex digits after it.
+    %w[store/a% store/a%2 store/a%zz store/%G1/x store/a%%41].each do |path|
+      assert_not assets.allows?("GET", path), path
+    end
+    # Octets that are not UTF-8: escaped, a truncated sequence, and raw.
+    [ "store/%FF", "store/a%C3", "store/%C0%AF", "store/\xFF".b ].each do |path|
+      assert_not assets.allows?("GET", path), path.inspect
+    end
+  end
+
+  test "decode_segment decodes strictly" do
+    assert_equal "a b+c", Runners::Proxy.decode_segment("a%20b+c")
+    assert_equal "é", Runners::Proxy.decode_segment("%c3%a9")
+    assert_nil Runners::Proxy.decode_segment("%")
+    assert_nil Runners::Proxy.decode_segment("%4")
+    assert_nil Runners::Proxy.decode_segment("%FF")
+  end
+
   test "the MCP route takes the key of the session that holds the machine, and no other" do
     mcp = Runners::Proxy.route("mcp")
     other = create(:runner_session, environment: create(:runner_environment, runner: @runner))

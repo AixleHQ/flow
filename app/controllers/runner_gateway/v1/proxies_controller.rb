@@ -27,6 +27,13 @@ module RunnerGateway
     # which it passes on as it is.
     class ProxiesController < ApplicationController
       include ActionController::Live
+      include ActionController::ParameterEncoding
+
+      # The path is the agent's: Rails would refuse a path parameter that is
+      # not valid UTF-8 with a 400 of its own, before this controller could
+      # refuse it as `route_not_allowed`. Left binary, it reaches
+      # Runners::Proxy::Route#allows?, which decodes it strictly.
+      skip_parameter_encoding :forward
 
       REFUSAL_HEADER = "X-Aixle-Runner-Refusal"
       ENVIRONMENT_HEADER = "X-Aixle-Runner-Environment"

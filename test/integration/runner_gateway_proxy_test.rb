@@ -98,6 +98,13 @@ class RunnerGatewayProxyTest < ActionDispatch::IntegrationTest
     get "/runner/v1/proxy/assets/public/index.html", headers: proxy_headers
     assert_refused :not_found, "route_not_allowed"
 
+    # A path that does not decode strictly: malformed triplets, and octets
+    # that are not UTF-8. Refused, not raised.
+    %w[store/a% store/a%zz store/%G1/x store/%FF store/a%C3 store/%C0%AF].each do |path|
+      get "/runner/v1/proxy/assets/#{path}", headers: proxy_headers
+      assert_refused :not_found, "route_not_allowed", path
+    end
+
     @environment.update!(current_session: nil)
     get "/runner/v1/proxy/assets/store/ab/report%20one.pdf?v=1", headers: proxy_headers
     assert_refused :forbidden, "session_not_on_environment"

@@ -29,15 +29,21 @@ module Runners
       # it was sent, percent-encoded), passes. A route without a prefix takes
       # no path below it, and no segment may lead out of the prefix: none is
       # empty, `.` or `..` once decoded, or holds a decoded `/` or `\`, as the
-      # host runner's relay checks (runner/internal/proxy, `canonical`).
+      # host runner's relay checks (runner/internal/proxy, `canonical`). A
+      # segment that does not decode, a `%` not followed by two hex digits or
+      # octets that are not UTF-8, does not pass either, as the relay's
+      # `url.PathUnescape` refuses it.
       def allows?(method, path)
         return false unless verbs.include?(method.to_s.upcase)
 
-        path = path.to_s
+        path = path.to_s.b
         return path.empty? if prefix.nil?
+        return false unless path.start_with?(prefix)
 
-        segments = path.split("/", -1).map { |segment| CGI.unescape(segment) }
-        path.start_with?(prefix) && segments.none? { |segment| segment.empty? || %w[. ..].include?(segment) || segment.match?(%r{[/\\]}) }
+        path.split("/", -1).all? do |raw|
+          segment = Proxy.decode_segment(raw)
+          !segment.nil? && !segment.empty? && %w[. ..].exclude?(segment) && !segment.match?(%r{[/\\]})
+        end
       end
     end
 
@@ -75,6 +81,20 @@ module Runners
 
     def route(name)
       ROUTES[name.to_s]
+    end
+
+    MALFORMED_ESCAPE = /%(?![0-9A-Fa-f]{2})/
+
+    # One path segment, percent-decoded strictly, as UTF-8. Nil when it does
+    # not decode: a `%` not followed by two hex digits, or decoded octets (or
+    # raw ones) that are not valid UTF-8. A `+` stays a `+`: in a path it is
+    # not a space.
+    def decode_segment(raw)
+      raw = raw.to_s.b
+      return nil if raw.match?(MALFORMED_ESCAPE)
+
+      decoded = raw.gsub(/%([0-9A-Fa-f]{2})/) { Regexp.last_match(1).hex.chr }.force_encoding(Encoding::UTF_8)
+      decoded if decoded.valid_encoding?
     end
 
     # The address a runner session calls a callback on: its proxy's route.
