@@ -401,6 +401,65 @@ func TestASidecarIsWatchedAgainWhenTheWaitStreamFails(t *testing.T) {
 	}
 }
 
+// breakEveryWait breaks every container wait from now on, so the watcher sees
+// the sidecar only through ContainerInspect after each broken wait.
+func (h *harness) breakEveryWait() {
+	h.engine.mu.Lock()
+	h.engine.waitFailures = 1 << 30
+	h.engine.mu.Unlock()
+}
+
+func (h *harness) waitForTheAgentToStop(log *lockedBuffer) {
+	h.t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for h.running(h.env.ContainerName(sessionID)) {
+		if time.Now().After(deadline) {
+			h.t.Fatalf("the agent's container still runs: %s", log)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func TestASidecarThatExitsWhileTheWaitStreamIsBrokenStopsTheAgent(t *testing.T) {
+	h := newEnvironment(t)
+	_, log := h.withProxy()
+	h.env.SidecarWaitRetry = 10 * time.Millisecond
+	h.breakEveryWait()
+	h.start(h.env, nil)
+
+	sidecar := h.byName(h.env.SidecarName(sessionID))
+	h.engine.mu.Lock()
+	h.engine.exit(sidecar, 3)
+	h.engine.mu.Unlock()
+	h.waitForTheAgentToStop(log)
+	for _, want := range []string{"the proxy sidecar exited", "exit_code=3"} {
+		if !strings.Contains(log.String(), want) {
+			t.Errorf("the log lacks %q: %s", want, log)
+		}
+	}
+}
+
+// A sidecar removed by something other than the host runner (`docker rm -f`)
+// is gone like one that exited, and the agent is stopped.
+func TestASidecarRemovedBehindTheHostRunnersBackStopsTheAgent(t *testing.T) {
+	h := newEnvironment(t)
+	_, log := h.withProxy()
+	h.env.SidecarWaitRetry = 10 * time.Millisecond
+	h.breakEveryWait()
+	h.start(h.env, nil)
+
+	sidecar := h.byName(h.env.SidecarName(sessionID))
+	h.engine.mu.Lock()
+	delete(h.engine.containers, sidecar.ID)
+	h.engine.mu.Unlock()
+	h.waitForTheAgentToStop(log)
+	for _, want := range []string{"the proxy sidecar exited", "exit_code=-1"} {
+		if !strings.Contains(log.String(), want) {
+			t.Errorf("the log lacks %q: %s", want, log)
+		}
+	}
+}
+
 func TestResumeServesTheRunningSessionsAgain(t *testing.T) {
 	h := newEnvironment(t)
 	h.withProxy()

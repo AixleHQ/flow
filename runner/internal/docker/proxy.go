@@ -239,6 +239,11 @@ func (e *Environment) abandonSidecar(ctx context.Context, sessionID int64, id st
 // after a pause that doubles from SidecarWaitRetry up to
 // SidecarWaitRetryMax. Only the sidecar's intentional removal or the host
 // runner's stopping ends the watch.
+//
+// A sidecar that is gone without the host runner retiring it (removed by
+// `docker rm -f`, say) stops the agent too, logged with exit code -1. That is
+// intended: the agent has lost its network all the same, so it is handled as
+// a sidecar exit (decision 10).
 func (e *Environment) watchSidecar(sessionID int64, id string) {
 	ctx := e.background()
 	go func() {

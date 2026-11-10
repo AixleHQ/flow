@@ -126,6 +126,13 @@ class RunnerGatewayProxyTest < ActionDispatch::IntegrationTest
     assert_refused :bad_gateway, "upstream_unavailable"
   end
 
+  # This harness runs the request in-process and hands back the finished
+  # response, so it cannot observe partial delivery: a gateway that buffered
+  # both chunks until the upstream closed would pass too. What it checks is
+  # that a chunked, event-stream answer reaches the runner whole and as it was
+  # sent. Incremental streaming is covered by the Go relay's
+  # TestTheProxyStreamsTheAnswerAsItComes (runner/internal/proxy), which holds
+  # the second chunk back and reads the first.
   test "an answer the endpoint streams in chunks reaches the runner whole, as it was sent" do
     server = TCPServer.new("127.0.0.1", 0)
     port = server.addr[1]
