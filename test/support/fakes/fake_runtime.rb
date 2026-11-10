@@ -450,6 +450,7 @@ module ContainerRuntime
       return live_terminal_read(cmd_str) if cmd_str.include?("capture-pane")
       return terminal_clients if cmd_str.include?("tmux list-clients")
       return KIRO_MODEL_CATALOGUE if cmd_str.include?("--list-models")
+      return COPILOT_MODEL_CATALOGUE if cmd_str.include?(Agents::CopilotCliAdapter::MODELS_SCRIPT)
 
       if cmd_str.include?("find") && cmd_str.include?("/workspace/outputs")
         return @fs.keys.select { |k| k.start_with?("/workspace/outputs/") }.join("\n")
@@ -652,6 +653,14 @@ module ContainerRuntime
 
           Created file1.txt and file2.txt with sample content.
         LOG
+      when "copilot_cli"
+        <<~LOG
+          Copilot v1.0.108 uses AI. Check for mistakes.
+
+          ❯ Create two test files with sample content
+
+          ● Created file1.txt and file2.txt with sample content.
+        LOG
       when "kiro_cli"
         <<~LOG
           kiro-cli 2.20.1
@@ -740,8 +749,41 @@ module ContainerRuntime
                  '{"access_token":"placeholder","refresh_token":"placeholder"} ' \
                  "state #{Agents::KiroCliAdapter::PROFILE_STATE_KEY} " \
                  '{"arn":"arn:aws:codewhisperer:us-east-1:1:profile/A"}'
+      },
+      # What `copilot login` leaves in config.json with no keychain (1.0.108): the comment
+      # lines the CLI writes at the top, the trusted folder seeded before login, and the
+      # token stored under both of the keys it uses for one github.com account.
+      "copilot_cli" => {
+        path: "/home/copilot/.copilot/config.json",
+        content: <<~JSONC
+          // User settings belong in settings.json.
+          // This file is managed automatically.
+          {
+            "trustedFolders": ["/workspace"],
+            "authTokens": {
+              "https://github.com:octocat:github": { "token": "gho_copilotplaceholdertoken0000000000" },
+              "https://github.com:octocat": { "token": "gho_copilotplaceholdertoken0000000000" }
+            },
+            "loggedInUsers": [{ "host": "https://github.com", "login": "octocat", "kind": "githubDotCom" }],
+            "lastLoggedInUser": { "host": "https://github.com", "login": "octocat" }
+          }
+        JSONC
       }
     }.freeze
+
+    # docker/copilot-cli/aixle-copilot-models.mjs, trimmed to three entries.
+    COPILOT_MODEL_CATALOGUE = {
+      "default_model" => "claude-sonnet-5.5",
+      "models" => [
+        { "id" => "auto", "name" => "Auto", "description" => "Let Copilot pick the best model", "reasoning_efforts" => [] },
+        { "id" => "claude-sonnet-5.5", "name" => "Claude Sonnet 5.5", "description" => "Versatile · Medium cost",
+          "usage" => "1x", "price_category" => "medium", "enablement" => "enabled",
+          "reasoning_efforts" => %w[low medium high xhigh max] },
+        { "id" => "gpt-5.3-codex", "name" => "GPT-5.3-Codex", "description" => "Powerful · Medium cost",
+          "usage" => "1x", "price_category" => "medium", "enablement" => "enabled",
+          "reasoning_efforts" => %w[low medium high xhigh] }
+      ]
+    }.to_json
 
     # `kiro-cli --v3 chat --list-models --format json`, trimmed to three entries and
     # keeping the CLI's snake_case field names — which differ from the CodeWhisperer
@@ -763,6 +805,7 @@ module ContainerRuntime
       "gemini_cli" => "",
       "grok" => "",
       "kiro_cli" => "",
+      "copilot_cli" => "",
       "cursor_cli" => [
         { _source: "http2-logger", direction: "request", scheme: "https", method: "POST",
           host: "api2.cursor.sh", port: 443,

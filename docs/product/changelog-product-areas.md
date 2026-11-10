@@ -23,7 +23,7 @@ can run in parallel, wait for each other, retry, or pause for a human. Every
 run leaves a trail: status, log, artifacts, tokens, and cost.
 
 Supported agent runtimes: Claude Code, Cursor CLI, Codex, Gemini CLI,
-Antigravity CLI, Grok and Kiro CLI.
+Antigravity CLI, Grok, Kiro CLI and GitHub Copilot CLI.
 
 ## Product areas (changelog taxonomy)
 

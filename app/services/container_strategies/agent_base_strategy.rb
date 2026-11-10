@@ -31,7 +31,10 @@ module ContainerStrategies
       # itself for the token payload's field names and the selected profile instead
       # (Agents::KiroCliAdapter::AUTH_MARKERS), which appear only once the login has
       # actually completed, so no marker file is needed.
-      "kiro_cli" => "kiro-cli login --use-device-flow"
+      "kiro_cli" => "kiro-cli login --use-device-flow",
+      # Device-code, like Grok: the CLI's own default in a container, forced so a desktop
+      # check inside it can never pick the browser flow, whose callback cannot arrive here.
+      "copilot_cli" => "copilot login --device-code"
     }.freeze
 
     SESSION_COMMANDS = {
@@ -44,7 +47,10 @@ module ContainerStrategies
       # --v3 skips Kiro 3.0's first-launch engine choice (V3 is the default since 3.0).
       # Overridden by Agents::KiroCliAdapter#session_command; this entry is the
       # fallback the base strategy reads when no adapter command is resolved.
-      "kiro_cli" => "kiro-cli --v3 chat --trust-all-tools --trust-workspace"
+      "kiro_cli" => "kiro-cli --v3 chat --trust-all-tools --trust-workspace",
+      # Overridden by Agents::CopilotCliAdapter#session_command, which also hands the CLI
+      # its token.
+      "copilot_cli" => "copilot --allow-all"
     }.freeze
 
     # == before_create_container ==
@@ -309,6 +315,8 @@ module ContainerStrategies
         next if merged == credential.metadata
 
         credential.update_column(:metadata, merged)
+        # A picker opened before this ran cached the adapter's fallback list for an hour.
+        Rails.cache.delete(credential.models_cache_key)
         Rails.logger.info("[#{self.class.name.demodulize}] Stored #{extras.keys.join(', ')} on credential #{credential.id}")
       end
     rescue StandardError => e

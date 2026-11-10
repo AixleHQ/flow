@@ -53,6 +53,12 @@ class AuthErrorDetectorTest < ActiveSupport::TestCase
     assert_not AuthErrorDetector.detect("Eligibility check failed: UNAVAILABLE (code 503): The service is currently unavailable.").auth_error?
   end
 
+  # Copilot CLI 1.0.108, measured with a revoked token (TUI and -p) and with a classic PAT.
+  test "detects a Copilot token it cannot use" do
+    assert AuthErrorDetector.detect("Authentication token found but could not be validated.").auth_error?
+    assert AuthErrorDetector.detect("Error: Classic Personal Access Tokens (ghp_) are not supported by Copilot.").auth_error?
+  end
+
   test "detects a dead Gemini API key" do
     assert AuthErrorDetector.detect("API key not valid. Please pass a valid API key.").auth_error?
   end

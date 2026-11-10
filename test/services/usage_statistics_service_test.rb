@@ -123,7 +123,44 @@ class UsageStatisticsServiceTest < ActiveSupport::TestCase
     assert_nil victim.reload.usage_statistic
   end
 
+  # Copilot CLI exports its AI credits on trace spans only.
+  test "a trace batch reaches its session's runtime, keyed like the other signals" do
+    copilot = create(:terminal_session, :running, user: @user, project: @project, agent_type: "copilot_cli")
+
+    result = UsageStatisticsService.process(trace_payload(copilot, key: UsageStatistics::SessionKey.generate(copilot.route_token)).to_json)
+
+    assert_equal :ok, result.status
+    stat = copilot.reload.usage_statistic
+    assert_equal 40, stat.input_tokens
+    assert_in_delta 1.5, stat.total_cents_precise.to_f, 0.0001
+  end
+
+  test "a trace batch without its session's key is refused" do
+    copilot = create(:terminal_session, :running, user: @user, project: @project, agent_type: "copilot_cli")
+
+    result = UsageStatisticsService.process(trace_payload(copilot, key: nil).to_json)
+
+    assert_equal :unauthorized, result.status
+    assert_nil copilot.reload.usage_statistic
+  end
+
   private
+
+  def trace_payload(session, key:)
+    attributes = [ { "key" => "terminal_session_token", "value" => { "stringValue" => session.route_token } } ]
+    attributes << { "key" => UsageStatistics::SessionKey::ATTRIBUTE, "value" => { "stringValue" => key } } if key
+    span_attributes = {
+      "gen_ai.operation.name" => { "stringValue" => "chat" },
+      "gen_ai.request.model" => { "stringValue" => "gpt-5.3-codex" },
+      "gen_ai.usage.input_tokens" => { "intValue" => "40" },
+      "gen_ai.usage.output_tokens" => { "intValue" => "3" },
+      "github.copilot.nano_aiu" => { "doubleValue" => 1_500_000_000.0 }
+    }.map { |k, v| { "key" => k, "value" => v } }
+
+    { "resourceSpans" => [ { "resource" => { "attributes" => attributes },
+                             "scopeSpans" => [ { "spans" => [ { "name" => "chat gpt-5.3-codex", "spanId" => "a1",
+                                                                "attributes" => span_attributes } ] } ] } ] }
+  end
 
   # A resource metric carrying the session's valid usage-ingest key.
   def keyed_metric(session, **opts)

@@ -3,6 +3,29 @@
 require "test_helper"
 
 class InteractivePromptDetectorTest < ActiveSupport::TestCase
+  # `tmux capture-pane` of Copilot CLI 1.0.108 in a 100x30 pane, started in a directory
+  # missing from trustedFolders. `--allow-all` does not answer this dialog.
+  COPILOT_TRUST_PANE = <<~PANE
+    ╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+    │ Confirm folder trust                                                                             │
+    │ ──────────────────────────────────────────────────────────────────────────────────────────────── │
+    │ ╭──────────────────────────────────────────────────────────────────────────────────────────────╮ │
+    │ │ /workspace                                                                                   │ │
+    │ ╰──────────────────────────────────────────────────────────────────────────────────────────────╯ │
+    │                                                                                                  │
+    │ Copilot can read files in this folder and, with your permission, edit them or run code and shell │
+    │ commands. It will remember your permissions for the rest of this session.                        │
+    │                                                                                                  │
+    │ Do you trust the files in this folder?                                                           │
+    │                                                                                                  │
+    │ ❯ 1. Yes                                                                                         │
+    │   2. Yes, and remember this folder for future sessions                                           │
+    │   3. No (Esc)                                                                                    │
+    │                                                                                                  │
+    │ ↑/↓ to navigate · enter to select · esc to cancel                                                │
+    ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+  PANE
+
   # `tmux capture-pane` of Codex 0.161.0 parked on its folder-trust dialog in an
   # 80x24 pane (tmux's detached default), the TUI running in-process. `--yolo` does
   # not cover this dialog, and a non_interactive session has nobody to press Enter.
@@ -351,6 +374,21 @@ class InteractivePromptDetectorTest < ActiveSupport::TestCase
     result = InteractivePromptDetector.detect(KIRO_QUESTION_PANE, agent_type: "claude_code")
 
     assert_equal false, result.blocked? # rubocop:disable Minitest/RefuteFalse
+  end
+
+  test "detects Copilot waiting on its folder-trust dialog" do
+    result = InteractivePromptDetector.detect(COPILOT_TRUST_PANE, agent_type: "copilot_cli")
+
+    assert result.blocked?
+    assert_equal :copilot_folder_trust, result.prompt_id
+    assert_match(/trustedFolders/, result.message)
+  end
+
+  test "does not fire once Copilot has moved past its folder-trust dialog" do
+    moved_on = "#{COPILOT_TRUST_PANE}● Folder /workspace has been added to trusted folders.\n❯\n"
+
+    refute_predicate InteractivePromptDetector.detect(moved_on, agent_type: "copilot_cli"), :blocked?
+    refute_predicate InteractivePromptDetector.detect(COPILOT_TRUST_PANE, agent_type: "codex"), :blocked?
   end
 
   test "reports healthy for ordinary output and for nothing at all" do

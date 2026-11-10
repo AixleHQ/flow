@@ -4,7 +4,7 @@
 
 ## Executive Summary
 
-**Aixle Flow** — a platform for running AI coding agents (Claude Code, Cursor CLI, Codex, Gemini CLI, Antigravity CLI, Grok, Kiro CLI) in isolated containers, driven from a team board, with full lifecycle orchestration via Temporal.
+**Aixle Flow** — a platform for running AI coding agents (Claude Code, Cursor CLI, Codex, Gemini CLI, Antigravity CLI, Grok, Kiro CLI, GitHub Copilot CLI) in isolated containers, driven from a team board, with full lifecycle orchestration via Temporal.
 
 ### Key capabilities
 
@@ -69,7 +69,7 @@ Each phase has `before_*` and `after_*` hooks (for example, `before_create_conta
 
 ### Agent Adapters
 
-One adapter per runtime in `app/services/agents/` (`claude_code`, `cursor_cli`, `codex`, `gemini_cli`, `antigravity_cli`, `grok`, `kiro_cli`), on the interface in `app/services/agents/base_adapter.rb`: auth file paths, config generation, credential extraction, session command, MCP config, and usage collection. The per-adapter table (and where each one's usage comes from) is in [architecture/index.md](../architecture/index.md#agent-adapters).
+One adapter per runtime in `app/services/agents/` (`claude_code`, `cursor_cli`, `codex`, `gemini_cli`, `antigravity_cli`, `grok`, `kiro_cli`, `copilot_cli`), on the interface in `app/services/agents/base_adapter.rb`: auth file paths, config generation, credential extraction, session command, MCP config, and usage collection. The per-adapter table (and where each one's usage comes from) is in [architecture/index.md](../architecture/index.md#agent-adapters).
 
 ### Temporal Workflows
 

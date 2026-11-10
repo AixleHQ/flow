@@ -288,6 +288,27 @@ class QuotaErrorDetectorTest < ActiveSupport::TestCase
     end
   end
 
+  # Copilot CLI 1.0.108's limit messages, read from its bundle.
+  test "detects copilot account and session limits for a copilot session only" do
+    [
+      "You've hit your rate limit.",
+      "You've reached your weekly rate limit.",
+      "You've hit your session rate limit.",
+      "The session reached its 50 AI credits. Increase or remove the session limit to continue."
+    ].each do |text|
+      result = QuotaErrorDetector.detect(text, agent_type: "copilot_cli")
+
+      assert result.quota_error?, "Expected #{text.inspect} to be a quota error"
+      assert_equal :github_copilot, result.provider
+      refute_predicate QuotaErrorDetector.detect(text, agent_type: "claude_code"), :quota_error?
+    end
+  end
+
+  # continueOnAutoMode switches to Auto on a model's own limit, so that line is not a stop.
+  test "a copilot model rate limit is not a quota stop" do
+    refute_predicate QuotaErrorDetector.detect("You've hit the rate limit for this model.", agent_type: "copilot_cli"), :quota_error?
+  end
+
   test "detects kiro rate-limit message" do
     result = QuotaErrorDetector.detect("⚠️ Kiro rate limit reached: Request quota exceeded. Please wait a moment and try again.")
 

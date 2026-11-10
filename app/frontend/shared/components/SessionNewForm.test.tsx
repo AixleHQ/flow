@@ -29,16 +29,17 @@ describe('SessionNewForm', () => {
   it('renders the agent runtime options and disables Start until a configured agent is chosen', () => {
     renderAuthedPage(<SessionNewForm {...makeProps()} />, { props: authProps([]) });
 
-    // All six runtimes are shown.
+    // Every runtime is shown.
     expect(screen.getByText('Claude Code')).toBeInTheDocument();
     expect(screen.getByText('Cursor CLI')).toBeInTheDocument();
     expect(screen.getByText('Codex')).toBeInTheDocument();
     expect(screen.getByText('Gemini CLI')).toBeInTheDocument();
     expect(screen.getByText('Antigravity CLI')).toBeInTheDocument();
     expect(screen.getByText('Grok')).toBeInTheDocument();
+    expect(screen.getByText('Copilot CLI')).toBeInTheDocument();
 
     // With no configured agents, every runtime tile is marked as needing setup.
-    expect(screen.getAllByText('Setup')).toHaveLength(7);
+    expect(screen.getAllByText('Setup')).toHaveLength(8);
 
     // Start is disabled because no agent can be selected.
     expect(screen.getByRole('button', { name: /start session/i })).toBeDisabled();

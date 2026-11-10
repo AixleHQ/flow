@@ -397,7 +397,8 @@ module Activities
         "antigravity_cli" => phrase("AI credits bal", "ance is too low. Top up to continue."),
         "cursor_cli" => phrase("Error: You've reached your normal usa", "ge limit."),
         "grok" => phrase("You're out of cre", "dits."),
-        "kiro_cli" => phrase("You have reached your mon", "thly usage lim", "it.")
+        "kiro_cli" => phrase("You have reached your mon", "thly usage lim", "it."),
+        "copilot_cli" => phrase("You've reached your wee", "kly rate lim", "it.")
       }.freeze
 
       OWN_QUOTA_STOPS.each do |agent_type, message|

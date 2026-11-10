@@ -1,7 +1,7 @@
 # Agent Runtime Registry
 
 `config/agent_runtimes.json` lists every built-in agent runtime — Claude Code, Cursor
-CLI, Codex, Gemini CLI, Antigravity CLI, Grok, Kiro CLI — with the CLI version its image
+CLI, Codex, Gemini CLI, Antigravity CLI, Grok, Kiro CLI, GitHub Copilot CLI — with the CLI version its image
 installs. It is the one place a runtime is enumerated for the build and for the app's
 runtime list: CI builds an image per entry, and the app validates, launches and
 describes runtimes from the same file. Before it existed, the runtime set was written out
@@ -88,6 +88,7 @@ docs:
 | Antigravity CLI | 1.5.0 | `agy --effort <level>` | low, medium, high | Yes: the CLI's grammar is low…max, but each model has its own variants, and the CLI refuses a level its model lacks (`--effort=… is not supported for model …`). Without a signed-in account the per-model list cannot be read, so only the levels every model offers are offered. |
 | Grok | 1.0.70 | `grok --reasoning-effort <level>` (alias `--effort`), honoured in the TUI as well as headless | low, medium, high, xhigh | Yes: the model catalogue says which models support it, and a model without reasoning effort ignores the flag. |
 | Kiro CLI | 3.0.0 | `kiro-cli chat --effort <level>` | low, medium, high, xhigh, max; claude-sonnet-4.6 has no xhigh; `auto` and the Haiku models have none | Yes, checked live on 2.34.0: an unsupported level prints `failed to set effort` and the session continues at the default. |
+| Copilot CLI | 1.0.108 | `copilot --reasoning-effort <level>` | low, medium, high, xhigh, max; GPT-5.3-Codex and the Grok models stop at xhigh; Gemini and MAI models take low, medium and high; `auto` and Claude Haiku 4.5 have none (some GPT models also take `none`, which is not offered) | Yes: read for every model of the account's catalogue from the CLI's ACP `reasoning_effort` option (`docker/copilot-cli/aixle-copilot-models.mjs`), 2026-11-10. The catalogue is per plan, so a model missing here falls under the default levels. |
 
 Every runtime supports a level in some form. The UI disables the select, with the
 reason, where the chosen runtime and model offer none: Gemini 2.5 models, and Kiro's
@@ -119,7 +120,7 @@ accepts a version without a pair while it is the channel's latest, checked again
 manifest; that is how the canary builds Kiro's newest. Cursor publishes no checksums, so
 its pin is the versioned package URL alone.
 
-For the runtimes whose usage arrives over OTLP (Claude Code, Codex, Gemini CLI), re-capture
+For the runtimes whose usage arrives over OTLP (Claude Code, Codex, Gemini CLI, Copilot CLI), re-capture
 what the new CLI exports: `make build-agents`, then `bin/capture-agent-otlp <id>` writes
 `test/fixtures/files/otlp/<id>-<version>.json` (the CLI answers one prompt against a mock
 model API, its telemetry relayed through `docker/otlp-ingest`).
