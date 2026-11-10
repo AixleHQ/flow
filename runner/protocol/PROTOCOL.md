@@ -30,25 +30,25 @@ that builds them (§8).
 - **No cookie session and no CSRF token.** The gateway sets no cookie.
 - A path the gateway does not serve answers `404`.
 
-Every request carries these three headers:
+Every request carries these three headers, except a request to the release endpoints (§5.6,
+§5.7), which takes none of them:
 
 | Header | Value | Refused with |
 | --- | --- | --- |
 | `Authorization` | `Bearer <token>`, the token kind the endpoint takes (§4) | `401 invalid_token` |
-| `X-Aixle-Runner-Protocol` | `1`, exactly | `400 unsupported_protocol` |
-| `X-Aixle-Runner-Version` | The runner's own version, in the grammar below (`1.4.0`, `1.5.0-rc.1+build.7`; no `v` prefix) | `400 invalid_runner_version` |
+| `X-Aixle-Runner-Protocol` | A protocol version the platform supports: `1`, exactly | `400 unsupported_protocol` |
+| `X-Aixle-Runner-Version` | The runner's own version, a strict [Semantic Versioning 2.0](https://semver.org) version (`1.4.0`, `1.5.0-rc.1+build.7`; no `v` prefix) | `400 invalid_runner_version` |
 
-**The version grammar the gateway accepts.** `MAJOR.MINOR.PATCH`, then an optional
-`-PRERELEASE`, then an optional `+BUILD`:
+**The protocol versions the gateway accepts** are the platform's pins,
+`protocol_supported` in the platform's `config/runner_release.yml` (DESIGN.md §14.2), which lists
+`1` today. After the first protocol bump it lists the current and the previous version (§7).
 
-- `MAJOR`, `MINOR` and `PATCH` are each one or more ASCII digits. Leading zeros are accepted.
-- `PRERELEASE` and `BUILD` are each one or more characters of `0-9`, `A-Z`, `a-z`, `.` and `-`.
-  Empty identifiers and numeric identifiers with leading zeros are accepted.
-
-So the gateway accepts some values that [Semantic Versioning 2.0](https://semver.org) refuses, such
-as `01.2.3`, `1.2.3-01` and `1.2.3-..`, and refuses `1.4`, `v1.4.0`, `1.2.3-` and `1.2.3+`. A
-runner sends a strict SemVer 2.0 version, which this grammar always accepts. The gateway
-requires strict SemVer 2.0 once the version skew policy (DESIGN.md §14.4) is built.
+**The version grammar is strict SemVer 2.0.** `MAJOR.MINOR.PATCH`, each a number without leading
+zeros, then an optional `-PRERELEASE` of dot-separated identifiers (`0-9A-Za-z-`, none empty, a
+numeric one without leading zeros), then an optional `+BUILD` of dot-separated identifiers. So
+`1.4`, `v1.4.0`, `01.2.3`, `1.2.3-01`, `1.2.3-..`, `1.2.3-` and `1.2.3+` are refused. Versions are
+ordered by SemVer precedence, with `+BUILD` ignored: `1.5.0-rc.1` is below `1.5.0`, and the
+platform's minimum and recommended versions compare that way (§5.1, §5.4).
 
 ## 2. Limits
 
@@ -64,10 +64,11 @@ requires strict SemVer 2.0 once the version skew policy (DESIGN.md §14.4) is bu
   | 30 requests a minute | client IP | `POST /runner/v1/register` |
 
   A request over a limit is answered `429` with a plain-text body, not the JSON refusal shape,
-  and no `Retry-After` header. A runner at rest makes one request every 25 s (the long-poll), so
+  and no `Retry-After` header. The release endpoints carry no token, so only the per-IP limit
+  counts them. A runner at rest makes one request every 25 s (the long-poll), so
   it stays far below these limits.
-- **Caching.** Every response that carries a token (`register` and `token`) and every `GET ops`
-  response has `Cache-Control: no-store`.
+- **Caching.** Every response that carries a token (`register` and `token`), every `GET ops`
+  response and every answer of the release endpoints has `Cache-Control: no-store`.
 
 ## 3. Refusals
 
@@ -93,14 +94,15 @@ These are the only refusals without this shape:
 | --- | --- | --- | --- |
 | `unsupported_protocol` | 400 | all | `X-Aixle-Runner-Protocol` is missing or not `1`. The message names the version the gateway speaks. |
 | `invalid_runner_version` | 400 | all | `X-Aixle-Runner-Version` is missing or not a semantic version. |
-| `invalid_request` | 400 | `GET ops` | `after` or `wait` is malformed or out of range (§5.4). |
+| `invalid_request` | 400 | `GET ops`, releases | `after` or `wait` is malformed or out of range (§5.4), or a release's version or platform is malformed (§5.6, §5.7). |
+| `runner_version_unsupported` | 400 | `register` | `X-Aixle-Runner-Version` is below the platform's minimum. The message names the minimum (§5.1). |
 | `invalid_token` | 401 | all | The token is unknown, of the wrong kind for the endpoint, revoked, expired, already used (a registration token), or of an unregistered machine. |
 | `runner_revoked` | 401 | all | The token is valid, but its runner is revoked or deleted. |
 | `credential_reuse_detected` | 401 | `token` | A spent refresh token was presented again, and it was not a retry after a lost response. Its whole family is now revoked (§4). |
 | `runners_disabled` | 403 | all | External runners are turned off for the runner's company. The credentials stay valid. |
-| `not_found` | 404 | `ops/:id/result` | The op does not exist, or belongs to another machine. |
+| `not_found` | 404 | `ops/:id/result`, releases | The op does not exist, or belongs to another machine; or the platform pins no such release (§5.6, §5.7). |
 | `ephemeral_not_supported` | 422 | `register` | The body asked for `ephemeral: true`. |
-| `invalid_registration` | 422 | `register` | The body is invalid: a blank or missing `name`, `facts` that is not an object (`null` included), or a field over 255 characters. An `X-Aixle-Runner-Version` over 255 characters is refused this way too, since it is recorded with the machine. |
+| `invalid_registration` | 422 | `register` | The body is invalid: a blank or missing `name`, `facts` that is not an object (`null` included), or a field over 255 characters. An `X-Aixle-Runner-Version` over 255 characters is refused this way too, since it is recorded with the machine, and before the `min_version` check, so the answer does not depend on the pins. |
 | `invalid_result` | 422 | `ops/:id/result` | The result body is invalid (§5.5). |
 
 **Check order.** Every request is checked in this order, and the first failure answers:
@@ -138,7 +140,7 @@ then gets the refusal, not the ops (§5.4).
 | `403 runners_disabled` | Keeps its credentials, backs off and retries. Once the company's runners are enabled again, the same tokens work. |
 | `429` | Backs off and retries. The windows are 60 seconds long. |
 | `413` | Does not resend the same body. |
-| `400 unsupported_protocol`, `400 invalid_runner_version` | Stops and reports that `aixle-runner` must be updated. Retrying cannot succeed. |
+| `400 unsupported_protocol`, `400 invalid_runner_version`, `400 runner_version_unsupported` | Stops and reports that `aixle-runner` must be updated, with the gateway's message. Retrying cannot succeed. A refused `register` leaves the registration token usable. |
 | `400 invalid_request`, `422 invalid_result` | A bug in the runner: it reports it and does not resend the same request. |
 | `400` without the JSON refusal shape | A bug in the runner, which sent a body that is not valid JSON: it reports it and does not resend the same body. |
 | `422 ephemeral_not_supported`, `422 invalid_registration` | Reports the problem with its configuration. The registration token is not spent, so `configure` can be run again with the same token once the input is fixed. |
@@ -209,10 +211,14 @@ A runner keeps its tokens in a file only its own user can read, and never logs t
 | `POST /runner/v1/token` | refresh | `200` with a token pair |
 | `GET /runner/v1/ops` | access | `200` with up to 20 ops |
 | `POST /runner/v1/ops/:id/result` | access | `200` with the op's state |
+| `GET /runner/v1/releases/:version/:os-:arch` | none | `302` to the binary, with its pinned SHA-256 |
+| `GET /runner/v1/releases/:version/checksums` | none | `200` with the pinned SHA-256 of each binary |
 
-Each endpoint can also answer the refusals of §3 for every endpoint (`unsupported_protocol`,
-`invalid_runner_version`, `invalid_token`, `runner_revoked`, `runners_disabled`, `413`, `429`).
-The refusals listed below are the endpoint's own.
+Each endpoint that takes a token can also answer the refusals of §3 for every endpoint
+(`unsupported_protocol`, `invalid_runner_version`, `invalid_token`, `runner_revoked`,
+`runners_disabled`, `413`, `429`). The release endpoints check no header, token, runner or flag,
+and can answer only their own refusals and `429`. The refusals listed below are the endpoint's
+own.
 
 ### 5.1 `POST /runner/v1/register`
 
@@ -226,8 +232,19 @@ machine, which the platform calls an environment.
 | `arch` | string | Optional, at most 255 characters, e.g. `amd64`. A value that is not a string is ignored. |
 | `facts` | object | Optional, default `{}` when the key is absent. What the machine reports about itself, e.g. `{"docker": "27.1.0"}`. Omit it or send an object: `null` is refused with `invalid_registration`. |
 | `ephemeral` | boolean | Optional, default `false`. `true` is refused: ephemeral registration is not in protocol 1 yet. |
+| `auto_update` | boolean | Optional, default `true`. `false` is `aixle-runner configure --no-auto-update`: the platform never offers the machine an update (§5.4). `null` is refused with `invalid_registration`. |
 
-The `X-Aixle-Runner-Version` of the request is recorded as the machine's runner version.
+The `X-Aixle-Runner-Version` and `X-Aixle-Runner-Protocol` of the request are recorded as the
+machine's runner and protocol versions.
+
+**The minimum version.** A runner whose `X-Aixle-Runner-Version` is below the platform's
+`min_version` (`config/runner_release.yml`) is refused with `400 runner_version_unsupported`, and
+the message names the minimum, e.g. `aixle-runner 1.1.9 is no longer supported (minimum 1.2.0).
+Update aixle-runner.` The check comes after the token, the runner and the flag (§3, step 5), so a
+dead token learns nothing about the minimum, and it does not spend the registration token. The
+platform pins no minimum yet. A machine that registered before the minimum was raised is not
+refused by the other endpoints: a session is never killed because a newer runner came out
+(DESIGN.md §14.4), and its long-poll is offered the update instead (§5.4).
 
 `201 Created`, with `Cache-Control: no-store`:
 
@@ -244,15 +261,17 @@ The `X-Aixle-Runner-Version` of the request is recorded as the machine's runner 
 `environment.id` is an integer and `environment.key` an opaque string; a runner does not parse
 either.
 
-Its own refusals: `422 ephemeral_not_supported`, then `422 invalid_registration`. Neither spends the
-token. Two machines that race on one token create one environment; the other gets
+Its own refusals: `422 invalid_registration` for an `X-Aixle-Runner-Version` over 255
+characters, then `400 runner_version_unsupported`, then `422 ephemeral_not_supported`, then
+`422 invalid_registration` for the body. None of them spends the token. An overlength version is
+refused the same way whatever `min_version` is. Two machines that race on one token create one environment; the other gets
 `invalid_token`.
 
 Schema: [`schemas/v1/register.request.json`](schemas/v1/register.request.json), checked after the
 `ephemeral` refusal; `name` blank once trimmed and a value over 255 characters are checked when
 the machine is recorded, with the same refusal.
 
-Fixtures: `register/`, `headers/`.
+Fixtures: `register/` (`below_min_version`, `no_auto_update` among them), `headers/`.
 
 ### 5.2 `DELETE /runner/v1/registration`
 
@@ -329,8 +348,38 @@ integer is read as that integer before it is checked.
 - **The check after the wait.** A poll that waited checks the token, the runner and the flag
   again before it answers (§3). If one fails, it answers the refusal without the ops, and those
   ops stay deliverable.
+- **`update`.** An answer without ops may carry the update the platform recommends for the
+  machine:
 
-Fixtures: `ops/` (all with `wait=0`; the waiting itself, and a newer poll ending an older one, are
+  ```json
+  {
+    "ops": [],
+    "update": {
+      "version": "1.5.0",
+      "sha256": "4f2b…"
+    }
+  }
+  ```
+
+  `version` is the platform's `recommended_version`, and `sha256` the pinned digest of its binary
+  for the machine's registered `os` and `arch`, in lowercase hex. It names no URL: the runner asks
+  its own platform for the release (§5.6, §5.7). It is there only when all of these hold, read
+  once the wait is over: the machine holds no session, the request's `X-Aixle-Runner-Version` is below `recommended_version`, the
+  binary for the machine's `os` and `arch` is pinned, and neither the runner (`config.auto_update:
+  false`) nor the machine (`auto_update: false` at register) opted out. An answer with ops never
+  carries it. A runner that does not update itself ignores it (§7).
+
+  **What a runner does with it** (DESIGN.md §14.4). Only while it holds no session container,
+  only towards a version above its own, and never on a machine configured with
+  `--no-auto-update`: it reads the release's checksums (§5.7) and asks the release URL where the
+  binary is (§5.6), both on the platform URL it was configured with; refuses the update unless
+  the `sha256` of all three agrees; downloads the binary into the directory of its own binary,
+  checks its SHA-256 against the pinned one, and only then renames it over its own binary and
+  exits, so that its supervisor starts the new one. A binary whose digest does not match is
+  deleted and the running one is kept; the runner tries that version again an hour later at the
+  earliest.
+
+Fixtures: `ops/` (`update_offered` for `update`; all with `wait=0`; the waiting itself, and a newer poll ending an older one, are
 tested by the gateway's own tests).
 
 ### 5.5 `POST /runner/v1/ops/:id/result`
@@ -372,6 +421,54 @@ Schema: [`schemas/v1/op_result.request.json`](schemas/v1/op_result.request.json)
 counts `1.0` as an integer, so an `exit_code` of `1.0` is accepted, and stored as `1`.
 
 Fixtures: `ops/`.
+
+### 5.6 `GET /runner/v1/releases/:version/:os-:arch`
+
+The platform's own URL of a runner binary, and the only one an installer or a runner knows
+(DESIGN.md §14.3): `:version` a SemVer version such as `0.1.0`, and `:os-:arch` one of
+`linux-amd64` and `linux-arm64`. No token and no header: an operator downloads the binary before
+the machine has either.
+
+`302 Found`, with `Cache-Control: no-store`:
+
+| Header | Value |
+| --- | --- |
+| `Location` | Where the binary is: the `runner-v<version>` GitHub Release's asset `aixle-runner-<os>-<arch>`, or a mirror the platform's pins name |
+| `X-Aixle-Runner-Sha256` | The binary's SHA-256, lowercase hex, from the platform's pins |
+
+The digest comes from the platform's pins (`config/runner_release.yml`), not from the host the
+binary is on, so a binary changed there fails verification. A client checks the SHA-256 of what
+it downloaded against it before it runs the binary.
+
+Its own refusals: `400 invalid_request`, for a version that is not a SemVer version or a platform
+not of the form `<os>-<arch>` (schema: [`schemas/v1/releases.params.json`](schemas/v1/releases.params.json)),
+and `404 not_found`, for a version or platform the platform does not pin. Nothing unpinned is
+served. The refusals have `Cache-Control: no-store` too, so none outlives the deploy that pins
+the version.
+
+Fixtures: `releases/`.
+
+### 5.7 `GET /runner/v1/releases/:version/checksums`
+
+The pinned digests of a release, the same that §5.6 sends, for every binary of the version. No
+token and no header. `200 OK`, with `Cache-Control: no-store`:
+
+```json
+{
+  "version": "1.5.0",
+  "binaries": {
+    "linux-amd64": { "sha256": "4f2b…" },
+    "linux-arm64": { "sha256": "9c1d…" }
+  }
+}
+```
+
+The digests are those of the release's own `checksums.txt`, as copied into the platform's pins.
+Its own refusals, with `Cache-Control: no-store` as well: `400 invalid_request`, for a
+malformed version, and `404 not_found`, for a version the platform does not pin. Schema:
+[`schemas/v1/releases.params.json`](schemas/v1/releases.params.json).
+
+Fixtures: `releases/`.
 
 ## 6. Ops
 
@@ -777,8 +874,11 @@ Fixtures: `ops/env_scrub_and_reset.json`.
   only; `1.0` is not `1`.
 - A breaking change bumps the integer, and adds `fixtures/v2/`. Adding an endpoint, an op or an
   optional field is not a breaking change, so a runner ignores response fields it does not know.
-- Supporting the current and the previous version side by side, with a minimum runner version,
-  is a later policy (DESIGN.md §14.4). It is not built.
+- **The skew policy** (DESIGN.md §14.4). The platform supports the protocol versions its pins
+  list in `protocol_supported`, which is the current and the previous one after the first bump,
+  and runners at or above its `min_version`. A runner below the minimum is refused at
+  `register` (§5.1), and with the check-in of task 8c at check-in too, never in the middle of a
+  session. A runner below `recommended_version` is offered the update while it is idle (§5.4).
 
 ## 8. Not in protocol 1 yet
 
@@ -792,8 +892,7 @@ Each of these is designed in DESIGN.md §6 and comes with its own section and fi
   task 8c. Until then a result whose encoded body is over the gateway's 2 MiB cap is answered
   `result_too_large` (§6).
 - `session.start` and `session.stop`: reserved, answered `unsupported_op`.
-- The releases endpoints `GET /runner/v1/releases/:version/:os-:arch` and
-  `GET /runner/v1/releases/:version/checksums`: task 10.
+- `update` in the check-in's answer: task 8c, with the check-in, the same field as in §5.4.
 - `409 busy` on `DELETE /registration` while a session runs. Task 8a assigns sessions to machines
   without it: a machine unregistered during a session stops holding that session, the session's
   next ops are not enqueued and answer `no_session_container`, and the session fails as one whose

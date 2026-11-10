@@ -1,0 +1,86 @@
+{
+  "description": "A machine registered with `auto_update: false` (`aixle-runner configure --no-auto-update`) is never offered an update, even below the recommended version. `auto_update` must be a boolean.",
+  "steps": [
+    {
+      "given": "release_pins",
+      "min_version": "1.2.0",
+      "recommended_version": "1.5.0",
+      "binaries": {
+        "1.5.0": {
+          "linux-amd64": {
+            "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+          },
+          "linux-arm64": {
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        }
+      }
+    },
+    {
+      "given": "registration_token",
+      "as": "reg"
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg}}",
+        "body": {
+          "name": "build-01",
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {
+            "docker": "27.1.0"
+          },
+          "ephemeral": false,
+          "auto_update": "no"
+        }
+      },
+      "response": {
+        "status": 422,
+        "body": {
+          "error": "invalid_registration",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg}}",
+        "body": {
+          "name": "build-01",
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {
+            "docker": "27.1.0"
+          },
+          "ephemeral": false,
+          "auto_update": false
+        }
+      },
+      "response": {
+        "status": 201
+      },
+      "capture": {
+        "m.access_token": "/access_token"
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": []
+        }
+      }
+    }
+  ]
+}

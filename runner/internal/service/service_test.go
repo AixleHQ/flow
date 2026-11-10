@@ -42,7 +42,7 @@ func manager(t *testing.T, userExists bool) (*Manager, *recorder, *[]chown) {
 		Runner:   rec,
 		UnitDir:  filepath.Join(root, "systemd"),
 		OpenSelf: func() (*os.File, error) { return os.Open(src) },
-		Binary:   filepath.Join(root, "bin", "aixle-runner"),
+		Binary:   filepath.Join(root, "state", "bin", "aixle-runner"),
 		StateDir: filepath.Join(root, "state"),
 		LookupUser: func(name string) (*user.User, error) {
 			if name != User {
@@ -79,8 +79,11 @@ func manager(t *testing.T, userExists bool) (*Manager, *recorder, *[]chown) {
 
 // source is the path the manager's running binary was started from.
 func source(m *Manager) string {
-	return filepath.Join(filepath.Dir(filepath.Dir(m.Binary)), "home", "aixle-runner")
+	return filepath.Join(filepath.Dir(m.StateDir), "home", "aixle-runner")
 }
+
+// serviceUID and serviceGID are the service user's, as the tests' lookup answers.
+const serviceUID, serviceGID = 998, 997
 
 func TestInstallCreatesTheUserAndTheUnit(t *testing.T) {
 	m, rec, chowns := manager(t, false)
@@ -97,15 +100,27 @@ func TestInstallCreatesTheUserAndTheUnit(t *testing.T) {
 		t.Fatalf("commands:\n%s\nwant:\n%s", strings.Join(rec.commands, "\n"), strings.Join(want, "\n"))
 	}
 
-	// The binary belongs to root, and the state directory and the credentials to
-	// the service user.
-	if len(*chowns) != 3 || (*chowns)[0].uid != 0 || (*chowns)[0].gid != 0 ||
-		(*chowns)[1].uid != 998 || (*chowns)[2].path != filepath.Join(m.StateDir, "credentials") {
+	// The state directory, the credentials, the binary's directory and the binary
+	// all belong to the service user, so a self-update can replace the binary.
+	binDir := filepath.Dir(m.Binary)
+	owned := []string{m.StateDir, binDir, filepath.Join(m.StateDir, "credentials")}
+	if len(*chowns) != 4 {
 		t.Fatalf("chowns %v", *chowns)
+	}
+	for i, c := range *chowns {
+		if c.uid != serviceUID || c.gid != serviceGID || (i < 3 && c.path != owned[i]) {
+			t.Fatalf("chowns %v", *chowns)
+		}
+	}
+	if last := (*chowns)[3].path; filepath.Dir(last) != binDir || last == m.Binary {
+		t.Fatalf("the binary was not given to the user before its rename: %v", *chowns)
 	}
 	info, _ := os.Stat(m.StateDir)
 	if info.Mode().Perm() != 0o700 {
 		t.Fatalf("state dir mode %v", info.Mode().Perm())
+	}
+	if info, _ := os.Stat(binDir); info.Mode().Perm() != 0o755 {
+		t.Fatalf("binary dir mode %v", info.Mode().Perm())
 	}
 
 	unit, err := os.ReadFile(filepath.Join(m.UnitDir, UnitName))
@@ -116,7 +131,7 @@ func TestInstallCreatesTheUserAndTheUnit(t *testing.T) {
 		"User=aixle-runner",
 		"SupplementaryGroups=docker",
 		"ExecStart=" + m.Binary + " --mode host --state-dir " + m.StateDir,
-		"Restart=on-failure",
+		"Restart=always",
 		"RestartPreventExitStatus=3",
 		"WantedBy=multi-user.target",
 	} {
@@ -200,14 +215,14 @@ func TestAPathTheUnitCannotQuoteIsRefused(t *testing.T) {
 
 func TestNewManagerRunsTheFixedPathWhereverTheBinaryRunsFrom(t *testing.T) {
 	m := NewManager("/var/lib/aixle-runner")
-	if m.Binary != BinaryPath || BinaryPath != "/usr/local/bin/aixle-runner" {
+	if m.Binary != BinaryPath || BinaryPath != "/var/lib/aixle-runner/bin/aixle-runner" {
 		t.Fatalf("binary %s", m.Binary)
 	}
 	unit, err := m.Unit()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(unit), "ExecStart=/usr/local/bin/aixle-runner --mode host --state-dir /var/lib/aixle-runner\n") {
+	if !strings.Contains(string(unit), "ExecStart=/var/lib/aixle-runner/bin/aixle-runner --mode host --state-dir /var/lib/aixle-runner\n") {
 		t.Fatalf("unit:\n%s", unit)
 	}
 	// It copies from the executing file, not from a path.
@@ -221,7 +236,7 @@ func TestNewManagerRunsTheFixedPathWhereverTheBinaryRunsFrom(t *testing.T) {
 	}
 }
 
-func TestInstallCopiesTheRunningBinaryForRoot(t *testing.T) {
+func TestInstallCopiesTheRunningBinaryForTheServiceUser(t *testing.T) {
 	m, _, chowns := manager(t, true)
 	if err := m.Install(context.Background()); err != nil {
 		t.Fatal(err)
@@ -230,15 +245,7 @@ func TestInstallCopiesTheRunningBinaryForRoot(t *testing.T) {
 	if err != nil || string(got) != "the runner" {
 		t.Fatalf("copied %q, %v", got, err)
 	}
-	info, _ := os.Lstat(m.Binary)
-	if !info.Mode().IsRegular() || info.Mode().Perm() != 0o755 {
-		t.Fatalf("mode %v", info.Mode())
-	}
-	// The copy is given to root before it appears at its path.
-	c := (*chowns)[0]
-	if c.uid != 0 || c.gid != 0 || filepath.Dir(c.path) != filepath.Dir(m.Binary) || c.path == m.Binary {
-		t.Fatalf("chowns %v", *chowns)
-	}
+	copiedForTheUser(t, m, *chowns, "the runner")
 
 	// The source the user can write is replaced: the service keeps its own copy.
 	if err := os.WriteFile(source(m), []byte("something else"), 0o755); err != nil {
@@ -265,6 +272,7 @@ func TestInstallFromTheFixedPathCopiesNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 	m.OpenSelf = func() (*os.File, error) { return os.Open(m.Binary) }
+	m.Owner = func(fs.FileInfo) int { return serviceUID }
 	if err := m.Install(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -274,8 +282,8 @@ func TestInstallFromTheFixedPathCopiesNothing(t *testing.T) {
 		t.Fatalf("the binary was rewritten: %q at %v", got, info.ModTime())
 	}
 	for _, c := range *chowns {
-		if filepath.Dir(c.path) == filepath.Dir(m.Binary) {
-			t.Fatalf("chowned %s", c.path)
+		if strings.HasPrefix(filepath.Base(c.path), ".") {
+			t.Fatalf("copied the binary again: chowned %s", c.path)
 		}
 	}
 	unit, _ := os.ReadFile(filepath.Join(m.UnitDir, UnitName))
@@ -320,9 +328,10 @@ func TestLookupAccount(t *testing.T) {
 	}
 }
 
-// copiedForRoot fails unless m.Binary is a regular file, not a link, with mode
-// 0755, holding want, and the copy was given to root before its rename.
-func copiedForRoot(t *testing.T, m *Manager, chowns []chown, want string) {
+// copiedForTheUser fails unless m.Binary is a regular file, not a link, with mode
+// 0755, holding want, and the copy was given to the service user before its
+// rename.
+func copiedForTheUser(t *testing.T, m *Manager, chowns []chown, want string) {
 	t.Helper()
 	info, err := os.Lstat(m.Binary)
 	if err != nil {
@@ -334,8 +343,9 @@ func copiedForRoot(t *testing.T, m *Manager, chowns []chown, want string) {
 	if got, _ := os.ReadFile(m.Binary); string(got) != want {
 		t.Fatalf("installed %q, want %q", got, want)
 	}
-	if len(chowns) == 0 || chowns[0].uid != 0 || chowns[0].gid != 0 ||
-		filepath.Dir(chowns[0].path) != filepath.Dir(m.Binary) || chowns[0].path == m.Binary {
+	last := chowns[len(chowns)-1]
+	if last.uid != serviceUID || last.gid != serviceGID ||
+		filepath.Dir(last.path) != filepath.Dir(m.Binary) || last.path == m.Binary {
 		t.Fatalf("chowns %v", chowns)
 	}
 }
@@ -345,7 +355,7 @@ func TestInstallReplacesASymlinkToTheRunningBinary(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(m.Binary), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// sudo ln -s ~/aixle-runner /usr/local/bin/aixle-runner, then install through it.
+	// ln -s ~/aixle-runner /var/lib/aixle-runner/bin/aixle-runner, then install through it.
 	if err := os.Symlink(source(m), m.Binary); err != nil {
 		t.Fatal(err)
 	}
@@ -353,7 +363,7 @@ func TestInstallReplacesASymlinkToTheRunningBinary(t *testing.T) {
 	if err := m.Install(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	copiedForRoot(t, m, *chowns, "the runner")
+	copiedForTheUser(t, m, *chowns, "the runner")
 
 	// The link is gone, not followed: the user's file is untouched, and a later
 	// write to it does not reach what the service runs.
@@ -368,16 +378,17 @@ func TestInstallReplacesASymlinkToTheRunningBinary(t *testing.T) {
 	}
 }
 
-func TestInstallReplacesTheRunningBinaryAtTheFixedPathUnlessOnlyRootCanWriteIt(t *testing.T) {
+func TestInstallReplacesTheRunningBinaryAtTheFixedPathUnlessItIsTheServiceUsers0755(t *testing.T) {
 	for name, tc := range map[string]struct {
 		owner int
 		perm  os.FileMode
 	}{
-		"owned by a user":            {1000, 0o755},
-		"writable by its group":      {0, 0o775},
-		"writable by others":         {0, 0o757},
-		"a user's, writable by many": {1000, 0o777},
-		"executable by root only":    {0, 0o700},
+		"owned by root, as 6a installed it": {0, 0o755},
+		"owned by another user":             {1000, 0o755},
+		"writable by its group":             {serviceUID, 0o775},
+		"writable by others":                {serviceUID, 0o757},
+		"another user's, writable by many":  {1000, 0o777},
+		"executable by its owner only":      {serviceUID, 0o700},
 	} {
 		t.Run(name, func(t *testing.T) {
 			m, _, chowns := manager(t, true)
@@ -395,7 +406,7 @@ func TestInstallReplacesTheRunningBinaryAtTheFixedPathUnlessOnlyRootCanWriteIt(t
 			if err := m.Install(context.Background()); err != nil {
 				t.Fatal(err)
 			}
-			copiedForRoot(t, m, *chowns, "installed")
+			copiedForTheUser(t, m, *chowns, "installed")
 		})
 	}
 }
@@ -422,7 +433,7 @@ func TestInstallCopiesTheFileItOpenedNotWhatIsAtItsPathNow(t *testing.T) {
 	if err := m.Install(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	copiedForRoot(t, m, *chowns, "the runner")
+	copiedForTheUser(t, m, *chowns, "the runner")
 	if got, _ := os.ReadFile(src); string(got) != "a replacement" {
 		t.Fatalf("the swap did not happen: %q", got)
 	}

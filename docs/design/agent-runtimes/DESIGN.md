@@ -327,7 +327,8 @@ values, and the §5.2 state machine replaces that with task 11. `state_reason` h
 given no session, besides its revoked credentials keeping it out.
 `project_id`, `external_id`, `reusable`, `auto_update`, `current_session_id`,
 `last_workflow_id`, the heartbeat and check-in columns and `reset_requested` land with their
-first reader.
+first reader. `auto_update` landed with task 10 (boolean, default true; false for a machine
+registered with `configure --no-auto-update`, which is then never offered an update, §14.4).
 
 ### 2.3 `runner_credentials` and `runner_operations`
 
@@ -1247,13 +1248,14 @@ ends as on hosted (§6.9.4).
   # 1. Download and verify (the digest is from config/runner_release.yml, §14.3)
   curl -fsSLo aixle-runner https://flow.aixle.com/runner/v1/releases/1.4.0/linux-amd64
   echo "<sha256>  aixle-runner" | sha256sum -c -
-  sudo install -m 0755 aixle-runner /usr/local/bin/aixle-runner
+  chmod 0755 aixle-runner
 
-  # 2. Register this machine (consumes the token)
-  sudo aixle-runner configure --url https://flow.aixle.com --token <registration token> --name build-01
+  # 2. Register this machine (consumes the token); --no-auto-update turns self-update off (§14.4)
+  sudo ./aixle-runner configure --url https://flow.aixle.com --token <registration token> --name build-01
 
-  # 3. Run as a service that survives logout and reboot
-  sudo aixle-runner service install && sudo aixle-runner service start
+  # 3. Run as a service that survives logout and reboot; install copies the binary into
+  #    /var/lib/aixle-runner/bin, which the service runs and updates (§14.4)
+  sudo ./aixle-runner service install && sudo aixle-runner service start
   ```
 
   `configure` calls `register`, which consumes the token, creates the environment row
@@ -1591,19 +1593,23 @@ session mode yet (task 6b):
   `aixle-runner` user could not open) and holds it while it runs; a second host runner
   refuses at once. `configure` and `unregister` take the same lock and, while a host runner
   runs, refuse and say to run `aixle-runner service stop` first.
-- **`aixle-runner service install`** copies the running binary to
-  `/usr/local/bin/aixle-runner`, atomically, owned by root with mode `0755`. It opens the
-  running binary once, through `/proc/self/exe`, and both decides and copies from that
-  descriptor, so a swap of the path it was started from cannot change what it installs. It
-  skips the copy only when that path, read without following a link, already is the running
-  binary as a regular file owned by root with mode `0755`, what the copy would make. In
-  every other case it copies, a root-owned `0700` binary the service user could not
-  execute included, and the rename replaces a symlink there itself, not its target. The unit
-  always runs that copy, so a binary started from a directory its user can write cannot be
-  replaced under the service, whose Docker access is root-equivalent (§9.7). `install` then creates the `aixle-runner` system user, adds it to
-  the `docker` group, gives it the state directory (mode `0700`) and installs and enables
+- **`aixle-runner service install`** creates the `aixle-runner` system user, adds it to the
+  `docker` group, and gives it the state directory (mode `0700`) and the binary's directory
+  `/var/lib/aixle-runner/bin` (mode `0755`, task 10, decision 3). It then copies the running
+  binary to `/var/lib/aixle-runner/bin/aixle-runner`, atomically, owned by that user with mode
+  `0755`, so the runner can replace it when it updates itself (§14.4), as the GitHub Actions
+  runner lives in its own user's directory. It opens the running binary once, through
+  `/proc/self/exe`, before anything else, and both decides and copies from that descriptor,
+  so a swap of the path it was started from cannot change what it installs. It skips the copy
+  only when that path, read without following a link, already is the running binary as a
+  regular file owned by the service user with mode `0755`, what the copy would make. In every
+  other case it copies, and the rename replaces a symlink there itself, not its target. The
+  unit always runs that copy, so a binary started from a directory another user can write
+  cannot be replaced under the service. The service user itself can replace it: it is
+  root-equivalent through the `docker` group anyway (§9.7). Until task 10 the copy was
+  `/usr/local/bin/aixle-runner`, owned by root. `install` then installs and enables
   `/etc/systemd/system/aixle-runner.service`, which runs
-  `/usr/local/bin/aixle-runner --mode host` as that user. `uninstall` disables and removes
+  `/var/lib/aixle-runner/bin/aixle-runner --mode host` as that user, with `Restart=always`. `uninstall` disables and removes
   the unit and keeps the user, the binary and the credentials. `start` and `stop` drive the
   unit. A host runner stopped by a refusal that needs an operator, or started with a missing
   or invalid credentials file or a `journal.json` that is not valid JSON, exits `3`, which
@@ -2728,6 +2734,10 @@ and the runner page and the user documentation say so plainly:
 - **The `docker` group is root-equivalent.** `service install` puts the `aixle-runner`
   system user in it, because the host runner starts containers. Anyone who controls that
   user controls the machine.
+- **The runner replaces its own binary** (§14.4), which that user owns, with a binary whose
+  SHA-256 the platform pins. An operator who wants no software change they did not make turns
+  self-update off with `configure --no-auto-update`, or `config.auto_update: false` for the
+  whole runner.
 - **Recommendation:** a dedicated machine for the runner, not a shared developer box; or,
   once it exists, the ephemeral mode (§6.3), with one fresh VM per session from the
   customer's own automation.
@@ -3270,7 +3280,8 @@ and the refusal table of `PROTOCOL.md` §3), `tokens`, `credentials`, `journal`,
 ops loop), `docker` (the session's container and its image), `preflight`, `service` and `cli`. The `Runner (Go)` job of
 `.github/workflows/ci.yml` runs `gofmt`, `go vet`, `go test -race` (the conformance tests
 against `runner/protocol/fixtures/v1/` included) and both builds on every pull request, with
-no path filter, as part of `Checks`. There is no `Dockerfile` and no release lane yet (task 10).
+no path filter, as part of `Checks`. Task 10 added the release lane, the image and
+self-update (§14.2 to §14.4).
 
 ### 14.2 Versions and release lanes, independent of the application release
 
@@ -3323,6 +3334,34 @@ supports runner protocol versions `[N-1, N]` and runners at or above `min_versio
 declared in `config/runner_release.yml` at that release.* The application changelog
 mentions any change to that file.
 
+**What v1 has (§15 task 10).** The first runner version is `0.1.0` (`runner-v0.1.0`, decision 1,
+Alex 2026-11-09): `1.0.0` comes with the extract or the first customer (§14.1).
+
+- **The lane** is `.github/workflows/runner-release.yml`. A `runner-v*` tag on `develop` runs
+  `go vet` and `go test -race`, builds both static binaries with the tag's version stamped in,
+  writes `checksums.txt` (`sha256sum` format), checks that each binary is static and reports its
+  version (`aixle-runner version`), and builds `ghcr.io/aixlehq/aixle-runner:X.Y.Z` for both
+  platforms from those same binaries with `docker/runner/Dockerfile` (no build from source in
+  the image, a non-root user, nothing run at build time). It pushes the image and creates the
+  GitHub Release with the two binaries and `checksums.txt`, never marked the repository's
+  latest, so `latest` stays the application's. Run by hand (`workflow_dispatch`, decision 4) it
+  takes a version and does everything except push and release: the dry run the verification
+  round uses, without a public tag.
+- **The pins** are `config/runner_release.yml`, loaded into `Settings.runners.release`
+  (`config/initializers/_config_settings.rb`) and read and checked by `Runners::Release`: an
+  invalid file fails boot. Besides the four keys above it holds `download_url`, the template
+  of the asset URL the release endpoint redirects to (`%{version}`, `%{platform}`), so a
+  mirror is one edit. As committed, it pins `protocol_supported: [1]` and no minimum, no
+  recommendation and no binary: Alex tags `runner-v0.1.0` after task 10 merges, and the PR
+  after it pins `0.1.0` and its digests. The gateway's `X-Aixle-Runner-Protocol` check reads
+  `protocol_supported`, and `X-Aixle-Runner-Version` is strict SemVer 2.0 from task 10 on, so
+  versions compare by SemVer precedence (`Runners::Version`).
+- **The endpoints** are `GET /runner/v1/releases/:version/:os-:arch`, a `302` to the pinned
+  asset with `X-Aixle-Runner-Sha256`, and `GET /runner/v1/releases/:version/checksums`, the
+  same digests as JSON. Both are public, take no protocol header, and answer `404 not_found`
+  for anything unpinned and `400 invalid_request` for a malformed version or platform
+  (`schemas/v1/releases.params.json`). `PROTOCOL.md` §5.6, §5.7.
+
 ### 14.3 Binary distribution and integrity
 
 - **Binaries are served from GitHub Release assets** of the `runner-v*` release.
@@ -3348,12 +3387,14 @@ mentions any change to that file.
 - **Skew policy:** the platform supports **the current and previous protocol version** and
   any runner ≥ `min_version`. Below that, `check-in`/`register` is refused with the upgrade
   message (§8). **A run never starts on an unsupported runner, and it is never killed
-  because a newer runner came out.**
+  because a newer runner came out.** Task 10 built the refusal at `register`
+  (`400 runner_version_unsupported`, whose message names the minimum; the registration token
+  is not spent); the check-in's is task 8c's.
 - **Self-update:**
   - **Runners on reusable environments self-update by default.** That means the host
     runner on `manual` machines and on Coder workspaces. When the check-in response or
-    an idle poll carries `update: {version, url, sha256}`, the runner downloads from the
-    release URL, verifies the digest, and re-execs. This happens only while the
+    an idle poll carries `update: {version, sha256}`, the runner downloads through the
+    release URL of its own platform, verifies the digest, and re-execs. This happens only while the
     environment is `idle`, never during a session, and only towards
     `recommended_version`. The session runner inside a session container is the host
     runner's own binary, so it is updated with it. Ephemeral pods never need an update,
@@ -3363,6 +3404,37 @@ mentions any change to that file.
     (`config.auto_update: false`) or per machine (`configure --no-auto-update`). Such a
     runner reports its version like the controller does: "update available" and `degraded`
     below `recommended_version` on the runner page, and refused below `min_version`, so an unmanaged skew still surfaces at check-in and never mid-session.
+  - **What v1 has (task 10).** A runner learns of an update from the answer of its
+    long-poll that has no ops (decision 2, Alex 2026-11-09): `GET /runner/v1/ops` then
+    carries `update: {version, sha256}`, read after the wait, only while the machine is
+    `registered` and holds no session, the request's `X-Aixle-Runner-Version` is below
+    `recommended_version` and the binary for the machine's `os` and `arch` is pinned, and
+    never when the runner's `config.auto_update` is false or the machine registered with
+    `auto_update: false` (`runner_environments.auto_update`, which `configure
+    --no-auto-update` sends at `register`; `Runners::Release.update_for`). 8c's `check-in`
+    adds the same field. The host runner (`internal/update`) takes it only while the machine
+    has no session container, only towards a version above its own, and never with the
+    machine's opt-out, which it keeps in its credentials file as well. It reads the release's
+    checksums and the redirect of the release URL, both from the platform URL it was
+    configured with (the offer names no URL), refuses the update unless the three digests agree, downloads the asset
+    into the directory of its running binary, and checks it with `update.Verify`, the
+    `verify` hook that checks the SHA-256 only until releases are signed. Only then does it
+    rename the download over its binary, atomically, and exit with code `4`, which the unit's
+    `Restart=always` (and the `local` adapter's Compose `on-failure`) restarts on the new
+    binary. A download whose digest does not match is deleted, the running binary stays, and
+    the same version is tried again an hour later at the earliest. A download has 2 minutes
+    (`update.DownloadTimeout`), well under the 600 s of a lifecycle op. **The update takes no
+    reservation** (Fix CR round 1, Alex 2026-11-10): the platform may give the machine a
+    session after the empty answer that offered the update, so a session assigned while its
+    machine updates has its `container.start` queued, and it starts after the runner has
+    restarted and polled again. The race only delays that start by the download and the
+    restart, and it happens at most once per release per machine.
+  - **Not in a container.** In a container the image tag is the version, so a runner started
+    from the published image (`docker/runner/Dockerfile`) does not update itself: the image
+    sets `AIXLE_RUNNER_NO_SELF_UPDATE=1`, which turns the updater off (`Updater.Disabled`)
+    whatever the credentials say. Its binary is root-owned there, and a container recreated
+    from the image would bring the old binary back anyway. Such a runner reports its version
+    like one that opted out.
   - **The controller does not self-update.** It is Helm-managed, and customers running
     GitOps would see that as drift. It reports its version, and the runner page shows
     "update available" (`degraded` if below `recommended`, refused if below `min`). A
@@ -3377,9 +3449,14 @@ mentions any change to that file.
     live runner is detected and not re-installed.
   - **`manual`:** the operator downloads the binary from the platform's release URL,
     verifies the SHA-256 shown next to it, and installs it with `configure` and
-    `service install` (§6.3). The systemd unit runs as the `aixle-runner` system user and
-    survives logout and reboot. Self-update replaces the binary in place and restarts the
-    unit while the machine is idle.
+    `service install` (§6.3). The binary lives in `/var/lib/aixle-runner/bin`, a directory
+    the runner's own `aixle-runner` user owns, as the GitHub Actions runner lives in its
+    user's directory (task 10, decision 3): `service install` creates it and copies the
+    binary there, and the unit's `ExecStart` runs it. The systemd unit runs as that user,
+    survives logout and reboot, and has `Restart=always`. Self-update replaces the binary in
+    place while the machine is idle and exits, and systemd starts the new binary. There is no
+    root helper and no package manager: operators who manage the machine themselves turn
+    self-update off.
   - **Kubernetes:** the init container and image as in §9.6.
   - **Decided (§6.9.6):** there is no session runner. The proxy sidecar on `manual` and
     `coder` runs the host runner's own binary, bind-mounted, so it is updated with it. On
@@ -3412,9 +3489,9 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 7 | 2 | **Done.** `runner/protocol/PROTOCOL.md`, protocol `1` as built: the transport and its three headers, the limits (the 2 MiB body cap, the three throttles, `no-store`), every refusal with its status, endpoints and check order and what a runner does on each, the token kinds and rules, the five endpoints of 5a and 5b, the op envelope and names (payload schemas left to 6a, 6b and 8), versioning, and what is not in protocol 1 yet. The conformance fixtures in `runner/protocol/fixtures/v1/` (register, token, unregister, headers, refusals and ops scenarios, the refused `ephemeral` case included, and the registration, access-token, spent-refresh and batch boundaries), in the JSON format of `runner/protocol/fixtures/README.md`: named setup steps, request/response exchanges, captured variables and type matchers. `RunnerProtocolConformanceTest` runs every fixture file against the gateway's routes, its setup steps calling the real services, in the normal Rails CI shards. The fixtures README lists the clauses verified outside the portable suite (`413`, `429`, the unserved-path `404`, `runner_revoked`) with the Rails tests that cover them. The protocol lives under `runner/protocol/`, with the runner (§14.1). §6 links to `PROTOCOL.md` for the wire details. The Go side of conformance and the Go CI lane came with 6a (§12.2). |
 | 8a | 2 | **Done.** `ContainerRuntime::RunnerRuntime` and the op path (Alex, 2026-11-07: row 8 is three tasks, 8a, 8b and 8c, each written against the code the one before merged). `ContainerRuntime.for_session(session)` gives a session with a runner `RunnerRuntime` and every other session `ContainerRuntime.build`, unchanged, and every call site that acts on one session goes through it: `BaseStrategy#runtime`, `AdmittedPhaseActivity`, `SessionContextService` (and the credential write it makes), `Sessions::LiveLogReader`, `Sessions::AuthPause`, `Sessions::SecretRegistry`, `Trackers::Workspace`, `Agents::CredentialDelivery`, the internal tools that read a session's files, and the scanners (`ScanDeadContainersActivity`, `ScanQuotaErrorsActivity`, `ScanNoOutputSessionsActivity`, `CleanupStaleActivity`); `ContainerSweepOrphanedResourcesActivity` sweeps the hosted runtime's own objects and stays as it was. `for_session` is the only place that picks a runtime (Alex, Fix CR round 2): the runtime reaches the code that uses it as an argument or a constructor dependency, never through `Thread.current`, a global or class-level state, and `SessionContextService` assembles a session's context through one object per assembly that holds the session, its runtime and the context log. **One runtime call of a strategy is one runner op** (requirement 2): `RunnerRuntime` enqueues it with `Runners::Operations.enqueue!`, waits for its result (`Runners::Operations.await`, heartbeating the activity) and answers what `DockerRuntime` answers; an op that ends `error` or `expired` answers as a hosted failure does (`ContainerUnreachableError` from `exec!` without the session's container, exit code 1 from `exec`, `false` from `write_file`, `nil` from `read_file`, `:missing` from `container_status`). No `batch` grouping (decision 5). An op's `deadline_at` is its own budget, and at most the end of the activity that sends it less 5 s (`RunnerRuntime::ACTIVITY_MARGIN`), and the wait stops at it and expires the op, so the strategy gets the expired outcome before Temporal times the activity out. The budgets: an `exec`'s `timeout` plus 30 s, `Settings.runners.op_timeout` (60 s, what `DockerRuntime#exec` waits by default) for the other session ops, `Settings.runners.lifecycle_op_timeout` (600 s) for `container.start`, `container.stop` and `env.reset`; the scanners cap theirs at `Settings.runners.scan_op_timeout` (15 s), so a machine that does not answer reads as unknown, never as dead or idle, and costs a scanner exactly that cap. The phases (§5.3, "What 8a built"). **Fix CR round 3 (Alex, 2026-11-07):** `RunnerRuntime#pull_image` does nothing, as `KubernetesRuntime#pull_image`, and the machine is taken in `create_container`; `container.start` always pulls the image reference, then creates and starts the container, and a failed pull is its `image_pull_failed`; the `image.ensure` op is removed from the platform, `PROTOCOL.md`, the fixtures and the Go runner, and with it `identity_before_pull?`, since the admission's identity is persisted before `create_container` for every runtime; the agent session's `create_container` budget is 600 s (§12.3). `RunnerRuntime` is not bound to a session, like `DockerRuntime`: `create_container` finds the session from the spec's `aixle.session_id` label, and every other call from the admission whose `runtime_id` its container id or cleanup identity is (a partial index on `session_admissions.runtime_id` for runner admissions); `op_timeout` stays the caller's budget. The wait for an op checks the activity's cancellation on every look, as `ToolStrategy#wait_with_heartbeat` does. A reused refresh token moves the machine to `failed` (§9.2), so it is given no session. **No digest** (Alex, Fix CR round 1): `container.start` and the helper container of `env.scrub` take the image reference as the user gave it, a tag or a digest, `container.image_override` included; the runner always pulls it, and no op returns a digest. The platform never contacts a registry, which it may not reach when a customer runs the runner in their own network. The dev `local` adapter therefore needs agent images from a registry: a pull always happens. The container's options come from the runner's `config.container` (§2.7), its resources from the hosted container's limits unless `container.resources` sets them. `Runners::Resolver` no longer refuses a `manual` runner with `runner_execution_not_enabled`: a runner without a registered machine, or whose every machine is `failed`, is refused `runner_unreachable` at launch, with a message that names it (and the failed machines, their reasons and how to bring one back). **Which machine takes a session** (decision 2): `Runners::Machines`, a free `registered` machine of the session's runner, one session per machine, taken under its row lock (`FOR UPDATE SKIP LOCKED`) and recorded in `runner_environments.current_session_id` and `terminal_sessions.runner_environment_id`; every machine busy raises `ContainerRuntime::CapacityError`, so the session waits in `capacity_wait`; the machine is taken in `create_container`, the first phase that needs it, and the admission's identity is persisted before that phase, as for every runtime, so a failure or a stop in it, the pull included, still runs the cleanup; after the session the machine gets `env.reset` and is free again, and a machine whose reset failed, or was not answered, moves to `failed` (§5.2), held by no session, with the reason in `state_reason`, so nothing that happens to the session, its deletion included, returns it to rotation (Return to service stays task 11). A session's ops reach its machine only while it holds it. `CleanupStaleActivity` sends a runner nothing, and moves a machine a stale session still holds to `failed`. **`session_id` in the op envelope** (requirement 1): `runner_operations.terminal_session_id`; a session op must name its session, an environment op names none, and every op is created only while its session holds the machine, checked by `enqueue!` under the machine's lock; `session_id` left the payloads of `container.start` and `container.stop`; the host runner refuses a session op without one (`session_required`) and one whose container is labelled with another session (`session_mismatch`), `container.start` and `container.stop` included, `container.stop` answers `no_session_container` without any session container, and `container.start` names and labels the container from the envelope (`PROTOCOL.md` §6, with the fixtures and the new `session_on_machine` setup step). **The queue's housekeeping**: an op still without a result is expired by the platform, with its payload nulled: at its `deadline_at` by the wait that sent it, and 10 s past it, `pending` or `delivered`, by `RunnerOperationsSweepWorkflow` every 5 minutes for the ops nobody waits for; the same sweep prunes finished ops older than 7 days. The sequence is a counter on the environment's row, `runner_environments.op_sequence` (Fix CR round 4: chosen over keeping each environment's newest op for `MAX(sequence) + 1`, which a session's deletion, taking its ops with it, broke), so the prune and that deletion remove any finished op. **The dev `local` adapter** (§12.2): the `runner-local` Compose service (profile `runners`), `aixle-runner` built from `runner/` with `docker/runner/local/Dockerfile` (the runner images live under `docker/runner/`), image `${RUNNER_IMAGE:-runner}`, and run in web's network namespace with this machine's Docker socket, and `bin/runner-local register <runner id>`, which mints a registration token and runs `configure`. **Fix CR round 4 (Alex, 2026-11-08):** `enqueue!` takes the session of every op and checks its hold under the machine's lock, which replaced the model's check that the session ran on the machine; `Machines.acquire!` no longer touches the caller's session and is idempotent for one session; `Machines.fail!(…, holder:)` is a compare-and-set, as `release!`; unregistering a machine ends its hold; `Machines.availability` answers `:available`, `:none_registered` or `:all_failed`, and one method words the refusal; the company keys of the session references; the cleanup sends nothing while an op of the session is unfinished, and `container.start` stops at its `deadline_at`; an answered `container.start` refusal is a `ContainerRuntime::CreateRefusedError` and pins no reservation; the runner pulls with the Docker credentials of the user it runs as; the Go session handlers take the envelope's `session_id` as a parameter (`SessionHandler`). **Fix CR round 5 (Alex, 2026-11-08):** Docker Hub's credentials are looked up under `https://index.docker.io/v1/`, as the Docker CLI's `getAuthConfigKey` maps them; a runner stopped during `ContainerCreate` removes what the daemon may have created and answers `container_start_failed`; a runtime call is external I/O and is never made inside a database transaction, on any runtime (`BaseRuntime`), which a test-time check enforces, and `Sessions::SecretRegistry#publish!` serializes a session's publications with a connection-level advisory lock instead of a transaction's; the cleanup waits for any unfinished op on the machine the session holds, an `env.reset` included; `create_container` returns the platform's container name, never the runner's. **Fix CR round 7 (Alex, 2026-11-08):** the host runner cuts an `exec`'s positive `timeout` to the seconds left until the op's `deadline_at`, as it bounds an `exec` without one, so an `exec` never holds the serial ops loop past its op's deadline. Tests: the contract test (`test/services/container_runtime/runner_runtime_contract_test.rb`) runs the same scenarios on `DockerRuntime`, against the Docker Engine API served by WebMock from an in-memory machine, and on `RunnerRuntime`, whose ops `ContainerRuntime::FakeHostRunner` answers from that machine with the results of `PROTOCOL.md` §6. |
 | 8b | 2 | The callback proxy (§6.6, §6.9.3): the proxy sidecar (`aixle-runner --mode proxy`) in the agent's network namespace, with the host runner's Unix-socket relay that serves the proxy routes only; a sidecar exit fails the session (no pause container); the URL rewrite to `127.0.0.1:<port>`; with `network: host`, the host runner's own listener. MCP, `finish_session`, and the git and cloud credential endpoints then reach the platform from a runner session. **Decision 4 (Alex, 2026-11-07), instead of a start check that the Docker daemon sees the host runner's files:** Docker refuses a bind mount whose source path does not exist ("bind source path does not exist"), and 6b mounts through the Mounts API, so 8b turns that refusal into a clear error when it starts the proxy sidecar. Operators learn of an unsupported Docker setup from the first session's error, and the operator docs (task 12) state the limitation. When it adds endpoints, the Go conformance test (`runner/internal/protocol/conformance_test.go`) must fail for a fixture that drives no exchange, unless the fixture is on an explicit gateway-only list with a reason (from row 8). |
-| 8c | 2 | The live log and parity with hosted (§6.5, §6.9.4): the host runner's `check-in` and heartbeat, the live log followed from the container's own log (the `local` log driver set per container) and shipped as `session_live_log_chunks`, which `Sessions::LiveLogReader` and the session monitor's snapshot (`Sessions::Snapshot.source_for`, task #211) read instead of `exec` ops; the live text of a runner session for `get_session_log` and `AuthErrorDetector`; larger output and files through an upload to a signed URL in the result (decision 3, Alex 2026-11-07), until which the 1 MiB cap of 6b stays and a terminal log over 1 MiB is not collected whole: `read_file` refuses it, and the cleanup stores the tail the `logs` op returns (at most the output cap) as `terminal_output.log` instead (Alex, Fix CR round 7); 8c replaces that tail with the full log through a signed URL. The live log skipped after a restart past a rotation is a known limitation. When it adds endpoints, the Go conformance test (`runner/internal/protocol/conformance_test.go`) must fail for a fixture that drives no exchange, unless the fixture is on an explicit gateway-only list with a reason (from row 8). |
+| 8c | 2 | The live log and parity with hosted (§6.5, §6.9.4): the host runner's `check-in` and heartbeat, the live log followed from the container's own log (the `local` log driver set per container) and shipped as `session_live_log_chunks`, which `Sessions::LiveLogReader` and the session monitor's snapshot (`Sessions::Snapshot.source_for`, task #211) read instead of `exec` ops; the live text of a runner session for `get_session_log` and `AuthErrorDetector`; larger output and files through an upload to a signed URL in the result (decision 3, Alex 2026-11-07), until which the 1 MiB cap of 6b stays and a terminal log over 1 MiB is not collected whole: `read_file` refuses it, and the cleanup stores the tail the `logs` op returns (at most the output cap) as `terminal_output.log` instead (Alex, Fix CR round 7); 8c replaces that tail with the full log through a signed URL. The live log skipped after a restart past a rotation is a known limitation. When it adds endpoints, the Go conformance test (`runner/internal/protocol/conformance_test.go`) must fail for a fixture that drives no exchange, unless the fixture is on an explicit gateway-only list with a reason (from row 8). `check-in` writes the `X-Aixle-Runner-Version` it is sent to `runner_environments.runner_version`, which until then keeps the version the machine registered with, so a machine that updated itself (row 10) shows its new version; task 12's "update available" and `degraded` read the version from there (task 10, Fix CR round 1). |
 | 9 | 2 | Admission: `runner:<id>` pools, company ceiling exclusion, `runner_limit`/`runner_capacity` wait reasons, hosted scanners skip runner sessions; the §12.3 regression test extended to admission. |
-| 10 | 2 | Runner release lane: `runner-release.yml` for `runner-v*` (binaries, `checksums.txt`, GHCR image). `config/runner_release.yml` read through `Settings.runners.release`. The `/runner/v1/releases` redirect and checksums endpoints. The "Runner compatibility" section in `docs/operations/releasing.md` (§14.2). Self-update with the opt-out (`config.auto_update: false`, `configure --no-auto-update`, §14.4), moved from task 6. |
+| 10 | 2 | **Done.** Runner release lane: `runner-release.yml` for `runner-v*` (binaries, `checksums.txt`, GHCR image, from `docker/runner/Dockerfile`), applied by Alex from the task's patch since agents cannot push `.github/workflows/`. `config/runner_release.yml` read through `Settings.runners.release` and checked by `Runners::Release` at boot. The `/runner/v1/releases` redirect and checksums endpoints, public and with `schemas/v1/releases.params.json`. The `min_version` refusal at `register` (`400 runner_version_unsupported`), strict SemVer 2.0 for `X-Aixle-Runner-Version` and `protocol_supported` for `X-Aixle-Runner-Protocol`. The "Runner compatibility" and "Releasing the runner" sections in `docs/operations/releasing.md` (§14.2). Self-update with the opt-out (`config.auto_update: false`, `configure --no-auto-update` as `runner_environments.auto_update`, §14.4), moved from task 6. **Decisions (Alex, 2026-11-09):** (1) the first runner version is `0.1.0`, and `1.0.0` comes with the extract or the first customer; (2) a runner learns of an update from the answer of `GET /runner/v1/ops` without ops, which carries `update: {version, sha256}` only while the machine holds no session and runs below `recommended_version`, unless it opted out, and 8c's `check-in` adds the same field; (3) the binary lives in `/var/lib/aixle-runner/bin`, owned by the `aixle-runner` user, `service install` installs it there and points `ExecStart` at it, and an update downloads there, verifies the SHA-256, switches atomically and exits for systemd to restart (`Restart=always`), with no root helper and no package manager; (4) `runner-release.yml` also runs by `workflow_dispatch` as a dry run that builds and checks the binaries and the image and pushes and releases nothing. As built: §14.2 "What v1 has", §14.4 "What v1 has", §6.3. Alex tags `runner-v0.1.0` after this merges, and a follow-up PR pins `0.1.0` and its digests. **Fix CR round 1 (Alex, 2026-11-10):** no update reservation, and `update.DownloadTimeout` is 2 minutes, so a `container.start` queued during an update outlives it (§14.4); the release requests carry neither protocol header, and the Go conformance harness checks each fixture header's presence or absence; a `download_url` template that `format` cannot fill in fails boot; a runner version over 255 characters is `invalid_registration` before the `min_version` refusal; the published image sets `AIXLE_RUNNER_NO_SELF_UPDATE=1` and does not update itself (§14.4); the parsed pins are memoized. **Fix CR round 2 (Alex, 2026-11-10):** every answer of the release endpoints, the `400` and `404` refusals included, has `Cache-Control: no-store`; the `update` offer drops `url` and is `{version, sha256}`, since the runner builds its release requests from its own configured platform URL (protocol 1 is unreleased, so nothing is kept for compatibility); `configure` treats `AIXLE_RUNNER_NO_SELF_UPDATE` as `--no-auto-update`, so a machine configured from the published image registers `auto_update: false`; the host runner computes its effective self-update setting once, for the start line and the updater. |
 | 11 | 3 | `Runners::Allocator` and environment state machine, including the self-registering entry path (§5.2): affinity, project binding, no step 4 on non-`provisionable` types, scrub and reset escalation without rebuild, Return to service, Release to company (§9.4), reconciliation pass. When `env.scrub` is first sent, the removal of its helper container in `runner/internal/docker/scrub.go` gets a bounded timeout under a fresh context, as `container.start`'s removal on failure did in 8a's Fix CR round 6; in 8a its code is unchanged, because `env.scrub` is not sent yet (Alex, Fix CR round 7). |
 | 12 | 3 | `manual` end to end: `ManualAdapter#check_health` derived from machine heartbeats (§2.5), heartbeat-based `observe`, the Machines table (online / idle / offline, facts, first-seen IP), "Add machine" with the GitHub-style instructions and the SHA-256 step, per-machine Revoke, `reuse_policy` per §7.1, the writable-mount acknowledgement, the §9.7 disclosure, and user docs for `manual` (dedicated machine recommended). The operator docs must say that a bind source can't be under the machine's `/tmp` or `/var/tmp` when the runner runs as the service: the unit has `PrivateTmp=true`, so the runner doesn't see those directories and refuses such a bind with `forbidden_mount` (verification round 1 of 6b; accepted as a known limitation, Alex 2026-11-06). |
 | 13 | 3 | Runner page actions (Reset, Force release), connection-lost banner, the revoke flow, Administrate dashboards. |

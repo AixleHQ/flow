@@ -16,7 +16,9 @@ module Runners
     # one token create one environment, and the runner is locked before it, so
     # a concurrent revocation either refuses this registration or revokes the
     # pair it issued (Credentials.lock_live_runner!).
-    def register!(credential, name:, os:, arch:, facts:, ephemeral:, runner_version:, protocol_version:)
+    # `auto_update` is false for a machine configured with `--no-auto-update`
+    # (DESIGN.md §14.4): it is never offered an update.
+    def register!(credential, name:, os:, arch:, facts:, ephemeral:, runner_version:, protocol_version:, auto_update: true)
       if ephemeral
         raise Credentials::Refused.new("ephemeral_not_supported", "Ephemeral registration is not supported yet.")
       end
@@ -31,7 +33,7 @@ module Runners
         environment = RunnerEnvironment.new(
           runner_id: credential.runner_id, company_id: credential.company_id, origin: :registered,
           state: :registered, key: "aixle-r#{credential.runner_id}-#{SecureRandom.hex(4)}",
-          display_name: name, os: os, arch: arch, facts: facts,
+          display_name: name, os: os, arch: arch, facts: facts, auto_update: auto_update,
           runner_version: runner_version, protocol_version: protocol_version
         )
         unless environment.save

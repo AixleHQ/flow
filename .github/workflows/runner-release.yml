@@ -1,0 +1,259 @@
+name: Runner Release
+
+# The `runner-v*` lane (docs/design/agent-runtimes/DESIGN.md §14.2): a pushed
+# runner-vX.Y.Z tag builds aixle-runner for linux/amd64 and linux/arm64 once,
+# attaches both binaries and their checksums.txt to a GitHub Release, and pushes
+# ghcr.io/aixlehq/aixle-runner:X.Y.Z with the same binaries. The runner version is
+# independent of the application's: the application lanes (`v*` in images.yml and
+# release.yml) are prefix-anchored globs that never match `runner-v*`, and this
+# lane's never matches `v*` or the chart's `runner-chart-v*`.
+#
+# Publishing a release changes nothing on the platform: the platform serves and
+# recommends only what config/runner_release.yml pins, which an application PR
+# edits with the digests of this run's checksums.txt (docs/operations/releasing.md,
+# "Releasing the runner").
+#
+# Run by hand (workflow_dispatch), it is a dry run: it builds and checks the
+# binaries and the image, and pushes and releases nothing.
+on:
+  push:
+    tags:
+      - "runner-v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version the dry run stamps into the binaries, e.g. 0.1.0-dryrun.1
+        required: true
+        default: 0.0.0-dryrun
+
+permissions:
+  contents: read
+
+# Serialise per ref rather than cancelling: a cancelled publish can leave a tag
+# pointing at a half-pushed manifest, so let an in-flight run finish.
+concurrency:
+  group: runner-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # GHCR rejects uppercase path segments.
+  IMAGE: ghcr.io/aixlehq/aixle-runner
+
+jobs:
+  build:
+    name: Build Runner
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.version.outputs.publish }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    defaults:
+      run:
+        working-directory: runner
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Resolve Version
+        id: version
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          # Strict SemVer 2.0, the grammar the gateway requires (runner/protocol/PROTOCOL.md §1).
+          semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?$'
+          if [ "$EVENT" = "push" ]; then
+            version="${GITHUB_REF_NAME#runner-v}"
+            publish=true
+            if ! [[ "$version" =~ $semver ]]; then
+              echo "::error::${GITHUB_REF_NAME} is not a runner-vX.Y.Z or runner-vX.Y.Z-pre release tag."
+              exit 1
+            fi
+            git fetch --no-tags origin +refs/heads/develop:refs/remotes/origin/develop
+            if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/develop; then
+              echo "::error::${GITHUB_REF_NAME} is not on develop; runner releases are tagged from develop."
+              exit 1
+            fi
+          else
+            version="$INPUT_VERSION"
+            publish=false
+            if ! [[ "$version" =~ $semver ]]; then
+              echo "::error::${version} is not a semantic version without a v prefix."
+              exit 1
+            fi
+          fi
+          prerelease=false
+          if [[ "$version" == *-* ]]; then prerelease=true; fi
+          { echo "version=${version}"; echo "publish=${publish}"; echo "prerelease=${prerelease}"; } >> "$GITHUB_OUTPUT"
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          # The version pinned in go.mod's `go` line.
+          go-version-file: runner/go.mod
+          cache: false
+
+      # The release ships only what passes the checks of CI's Runner (Go) job.
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test -race ./...
+
+      - name: Build linux/amd64 and linux/arm64
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath \
+              -ldflags "-s -w -X github.com/aixlehq/aixle-runner/internal/version.Version=${VERSION}" \
+              -o "dist/aixle-runner-linux-$arch" ./cmd/aixle-runner
+          done
+          cd dist
+          sha256sum aixle-runner-linux-amd64 aixle-runner-linux-arm64 > checksums.txt
+          cat checksums.txt
+
+      - name: Check The Binaries
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum --check --strict checksums.txt
+          # The runner reports the version it was stamped with.
+          reported="$(./aixle-runner-linux-amd64 version)"
+          if [ "$reported" != "$VERSION" ]; then
+            echo "::error::the amd64 binary reports ${reported}, not ${VERSION}."
+            exit 1
+          fi
+          for arch in amd64 arm64; do
+            file "aixle-runner-linux-$arch"
+            file "aixle-runner-linux-$arch" | grep -q "statically linked" || {
+              echo "::error::aixle-runner-linux-$arch is not statically linked."
+              exit 1
+            }
+          done
+          file aixle-runner-linux-arm64 | grep -q "ARM aarch64"
+
+      - name: Keep The Binaries
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: aixle-runner-${{ steps.version.outputs.version }}
+          path: runner/dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  image:
+    name: Build Runner Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: build
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Fetch The Binaries
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: aixle-runner-${{ needs.build.outputs.version }}
+          path: runner/dist/
+
+      # No QEMU: the Dockerfile only copies the cross-compiled binary in, and runs
+      # nothing at build time.
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
+
+      - name: Log in to GHCR
+        if: needs.build.outputs.publish == 'true'
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Both platforms, from the binaries the release attaches. A dry run loads the
+      # amd64 image locally to check it, and pushes nothing.
+      - name: Build The Image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ./runner
+          file: ./docker/runner/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ needs.build.outputs.publish == 'true' }}
+          tags: ${{ env.IMAGE }}:${{ needs.build.outputs.version }}
+          labels: |
+            org.opencontainers.image.title=aixle-runner
+            org.opencontainers.image.version=${{ needs.build.outputs.version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Check The Image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ./runner
+          file: ./docker/runner/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: aixle-runner:check
+
+      - name: The Image Runs The Released Binary
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          reported="$(docker run --rm aixle-runner:check version)"
+          if [ "$reported" != "$VERSION" ]; then
+            echo "::error::the image reports ${reported}, not ${VERSION}."
+            exit 1
+          fi
+          docker run --rm --entrypoint sha256sum aixle-runner:check /usr/local/bin/aixle-runner | cut -d' ' -f1 > image.sha256
+          grep -q "$(cat image.sha256)  aixle-runner-linux-amd64" runner/dist/checksums.txt
+
+  release:
+    name: Publish Runner Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [build, image]
+    if: needs.build.outputs.publish == 'true'
+    permissions:
+      contents: write
+    steps:
+      - name: Fetch The Binaries
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: aixle-runner-${{ needs.build.outputs.version }}
+          path: dist/
+
+      # --latest=false: the repository's "latest" release stays the application's.
+      - name: Create The GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.build.outputs.version }}
+          PRERELEASE: ${{ needs.build.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          cat > notes.md <<EOF
+          aixle-runner ${VERSION}, for linux/amd64 and linux/arm64, and the image \`${IMAGE}:${VERSION}\`.
+
+          The platform serves and recommends this version once \`config/runner_release.yml\` pins it, with these digests:
+
+          \`\`\`
+          $(cat dist/checksums.txt)
+          \`\`\`
+          EOF
+          flags=(--latest=false --title "aixle-runner ${VERSION}" --notes-file notes.md)
+          if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" "${flags[@]}" \
+            dist/aixle-runner-linux-amd64 dist/aixle-runner-linux-arm64 dist/checksums.txt

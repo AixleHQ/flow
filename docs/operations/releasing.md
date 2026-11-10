@@ -2,7 +2,8 @@
 
 Aixle Flow is released as `vX.Y.Z` tags on `develop`, following
 [Semantic Versioning](https://semver.org/) from **1.0.0**. A tag is the only thing that
-publishes images; a merge to `develop` publishes nothing.
+publishes images; a merge to `develop` publishes nothing. The runner, `aixle-runner`, is
+released on its own `runner-vX.Y.Z` tags ([Releasing the runner](#releasing-the-runner)).
 
 ## What a version number promises
 
@@ -55,6 +56,57 @@ Pushing `vX.Y.Z` runs two workflows:
 4. **Check both runs** (`Build Images`, `Release`) and the GitHub Release.
 
 `bin/changelog notes X.Y.Z` prints a section exactly as the release will show it.
+
+## Runner compatibility
+
+`aixle-runner`, the program a customer runs on their own machine, has versions of its own,
+independent of the application's (docs/design/agent-runtimes/DESIGN.md §14.2). What the platform
+accepts is pinned in a committed file, `config/runner_release.yml`:
+
+- **Platform `X.Y` supports runner protocol versions `[N-1, N]` and runners at or above
+  `min_version`, as `config/runner_release.yml` declares at that release.** Its
+  `protocol_supported` lists the protocol versions (`[1]` until the first protocol bump, the
+  current and the previous one after it), and a runner below `min_version` is refused when it
+  registers, with a message that names the minimum. A session is never stopped because a newer
+  runner came out.
+- **`recommended_version`** is what an idle machine below it is offered: it updates itself to
+  that version, unless its runner or the machine opted out (`config.auto_update: false`, or
+  `aixle-runner configure --no-auto-update`).
+- **`binaries`** pins the SHA-256 of every runner binary the platform serves. The platform
+  serves nothing else: `GET /runner/v1/releases/:version/:os-:arch` redirects only to a pinned
+  binary, with its pinned digest.
+
+Changing any of these is an application PR to that file, and the changelog entry of that PR says
+what changed, so the release notes state each release's runner compatibility. An invalid file
+fails the application's boot.
+
+## Releasing the runner
+
+A runner release is a `runner-vX.Y.Z` tag on `develop`, and nothing else publishes one: an
+application `vX.Y.Z` tag never builds a runner, and a `runner-v*` tag runs neither `images.yml`
+nor `release.yml`.
+
+1. **Dry run.** Run `Runner Release` (`.github/workflows/runner-release.yml`) by hand from the
+   Actions tab with a version such as `0.2.0-dryrun.1`. It runs the Go checks, builds both
+   binaries, writes `checksums.txt`, checks that the binaries are static and report that
+   version, and builds the image for both platforms, and it pushes and releases nothing.
+2. **Tag** the commit on `develop`, as a person, for the same reason as above:
+
+   ```bash
+   git fetch origin develop
+   git tag -a runner-vX.Y.Z -m "runner-vX.Y.Z" origin/develop
+   git push origin runner-vX.Y.Z
+   ```
+
+   The run attaches `aixle-runner-linux-amd64`, `aixle-runner-linux-arm64` and `checksums.txt`
+   to a GitHub Release, which is never marked the repository's latest, and pushes
+   `ghcr.io/aixlehq/aixle-runner:X.Y.Z`. A pre-release (`runner-vX.Y.Z-rc.1`) is marked as one.
+   The image does not update itself: it sets `AIXLE_RUNNER_NO_SELF_UPDATE=1`, because in a
+   container the image tag is the version (DESIGN.md §14.4).
+3. **Pin it.** Publishing changes nothing on the platform yet. An application PR adds the
+   version and the digests of the run's `checksums.txt` under `binaries` in
+   `config/runner_release.yml`, and moves `recommended_version` (and, when older runners must
+   go, `min_version`) with a changelog entry. Machines start updating once that PR is deployed.
 
 ## Writing the changelog
 

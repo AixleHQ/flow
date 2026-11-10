@@ -1,0 +1,102 @@
+{
+  "description": "A runner below the platform's min_version is refused at register with 400 runner_version_unsupported, whose message names the minimum. The registration token is not spent: the same token registers the updated runner.",
+  "steps": [
+    {
+      "given": "release_pins",
+      "min_version": "1.2.0",
+      "recommended_version": "1.5.0",
+      "binaries": {
+        "1.5.0": {
+          "linux-amd64": {
+            "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+          },
+          "linux-arm64": {
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        }
+      }
+    },
+    {
+      "given": "registration_token",
+      "as": "reg"
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg}}",
+        "headers": {
+          "X-Aixle-Runner-Version": "1.1.9"
+        },
+        "body": {
+          "name": "build-01",
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {
+            "docker": "27.1.0"
+          },
+          "ephemeral": false
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "error": "runner_version_unsupported",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg}}",
+        "headers": {
+          "X-Aixle-Runner-Version": "1.2.0-rc.1"
+        },
+        "body": {
+          "name": "build-01",
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {
+            "docker": "27.1.0"
+          },
+          "ephemeral": false
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "error": "runner_version_unsupported",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/register",
+        "token": "{{reg}}",
+        "headers": {
+          "X-Aixle-Runner-Version": "1.2.0"
+        },
+        "body": {
+          "name": "build-01",
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {
+            "docker": "27.1.0"
+          },
+          "ephemeral": false
+        }
+      },
+      "response": {
+        "status": 201
+      }
+    }
+  ]
+}
