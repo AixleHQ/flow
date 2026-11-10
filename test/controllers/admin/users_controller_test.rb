@@ -199,7 +199,7 @@ module Admin
 
       assert_equal @user.id, session[:user_id]
       assert_equal @super_admin.id, session["true_user_id"]
-      assert_redirected_to root_path
+      assert_redirected_to company_projects_path
     end
 
     test "sign out everywhere ends every session of the user" do
