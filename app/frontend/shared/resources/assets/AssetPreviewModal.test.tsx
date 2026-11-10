@@ -498,6 +498,41 @@ describe('AssetPreviewModal', () => {
       expect(onIndexChange).not.toHaveBeenCalled();
     });
 
+    it('keeps navigating with the latest inline callback without rebinding the key listener', async () => {
+      const calls: number[] = [];
+      function InlineHarness() {
+        const [index, setIndex] = useState(0);
+        const [renders, setRenders] = useState(0);
+        return (
+          <>
+            <button onClick={() => setRenders(renders + 1)}>rerender</button>
+            <AssetPreviewModal
+              items={three}
+              index={index}
+              onIndexChange={(next) => {
+                calls.push(next);
+                setIndex(next);
+              }}
+              onClose={() => {}}
+            />
+          </>
+        );
+      }
+      const addSpy = vi.spyOn(document, 'addEventListener');
+      renderPage(<InlineHarness />);
+      const keydownBinds = () => addSpy.mock.calls.filter(([type]) => type === 'keydown').length;
+      const before = keydownBinds();
+
+      await userEvent.click(screen.getByRole('button', { name: 'rerender' }));
+      await userEvent.click(screen.getByRole('button', { name: 'rerender' }));
+      expect(keydownBinds()).toBe(before);
+
+      await userEvent.keyboard('{ArrowRight}');
+      expect(screen.getByText('2 / 3')).toBeInTheDocument();
+      expect(calls).toEqual([1]);
+      addSpy.mockRestore();
+    });
+
     it('shows no navigation for a single item', () => {
       renderPage(<Harness items={three.slice(0, 1)} />);
 

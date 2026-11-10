@@ -98,6 +98,8 @@ const MAX_FILE_SIZE = 1024 * 1024 * 1024;
 // Api::V1::AssetsController#cache_key.
 const CACHE_PREFIX = 'cache/';
 
+const noop = () => {};
+
 // Mirrors Asset::FOLDER_MAX_LENGTH / Folder::PATH_FORMAT / Folder::RESERVED_SEGMENTS. Catching it
 // here keeps the file — already uploaded to cache storage by the time the folder is typed — from
 // being thrown away on a server-side 422.
@@ -901,7 +903,7 @@ export function AssetsContent({
       <AssetPreviewModal
         items={previewAsset ? [assetToPreviewItem(previewAsset, downloadUrl(previewAsset))] : []}
         index={previewAsset ? 0 : null}
-        onIndexChange={() => {}}
+        onIndexChange={noop}
         onClose={() => setPreviewAsset(null)}
         onUnshare={canExecute ? (asset) => assetMutations.unshare(asset.id) : undefined}
       />

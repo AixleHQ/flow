@@ -254,6 +254,11 @@ export function TaskDetailSidebar({
     [taskAssets, members],
   );
   const previewIndex = previewItems.findIndex((i) => i.key === previewKey);
+  const handlePreviewIndexChange = useCallback(
+    (next: number) => setPreviewKey(previewItems[next]?.key ?? null),
+    [previewItems],
+  );
+  const closePreview = useCallback(() => setPreviewKey(null), []);
   const [titleValue, setTitleValue] = useState('');
   const [pendingTitle, setPendingTitle] = useState<string | null>(null);
   const [editingDesc, setEditingDesc] = useState(false);
@@ -2131,8 +2136,8 @@ export function TaskDetailSidebar({
       <AssetPreviewModal
         items={previewItems}
         index={previewIndex >= 0 ? previewIndex : null}
-        onIndexChange={(next) => setPreviewKey(previewItems[next]?.key ?? null)}
-        onClose={() => setPreviewKey(null)}
+        onIndexChange={handlePreviewIndexChange}
+        onClose={closePreview}
       />
     </Drawer>
   );

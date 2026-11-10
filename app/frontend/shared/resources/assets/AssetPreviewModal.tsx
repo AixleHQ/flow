@@ -15,7 +15,7 @@ import {
   Text,
 } from '@mantine/core';
 import { IconChevronLeft, IconChevronRight, IconDownload, IconFile, IconWorld } from '@tabler/icons-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { Asset } from '@/types/generated';
 
@@ -54,6 +54,11 @@ export function AssetPreviewModal({ items, index, onIndexChange, onClose, onUnsh
   const tooLarge = needsTextFetch && fileSize > MAX_TEXT_SIZE;
   const open = item !== null;
   const canNavigate = count > 1;
+  // Callers often pass inline arrows; keep the latest in a ref so the keydown listener is not rebound on every render.
+  const onIndexChangeRef = useRef(onIndexChange);
+  useEffect(() => {
+    onIndexChangeRef.current = onIndexChange;
+  });
 
   useEffect(() => {
     if (!itemKey || !fileUrl || !needsTextFetch || tooLarge) return;
@@ -80,11 +85,11 @@ export function AssetPreviewModal({ items, index, onIndexChange, onClose, onUnsh
       if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
       if (isEditableTarget(event.target)) return;
       event.preventDefault();
-      onIndexChange(event.key === 'ArrowRight' ? (index + 1) % count : (index - 1 + count) % count);
+      onIndexChangeRef.current(event.key === 'ArrowRight' ? (index + 1) % count : (index - 1 + count) % count);
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [open, canNavigate, index, count, onIndexChange]);
+  }, [open, canNavigate, index, count]);
 
   useEffect(() => {
     if (!open || !canNavigate || index === null) return;
