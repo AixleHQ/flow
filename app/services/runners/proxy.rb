@@ -115,13 +115,13 @@ module Runners
 
     # The agent image's own ports, which the sidecar shares a network
     # namespace with.
-    IMAGE_PORTS = [7681, 7682, 4040, 4041, 8443, 8888].freeze
+    IMAGE_PORTS = [ 7681, 7682, 4040, 4041, 8443, 8888 ].freeze
 
     # What is wrong with Settings.runners.proxy: one message per broken rule,
     # each naming its variable. config/initializers/required_env.rb refuses
     # to boot on the first. Empty when the settings are usable.
     def settings_problems(settings = Settings.runners.proxy)
-      port, base, span = [settings.port, settings.host_port_base, settings.host_port_span].map do |value|
+      port, base, span = [ settings.port, settings.host_port_base, settings.host_port_span ].map do |value|
         Integer(value, exception: false)
       end
       [

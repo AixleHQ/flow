@@ -19,7 +19,7 @@ class RunnerProxySettingsTest < ActiveSupport::TestCase
   end
 
   test "the sidecar's port must be in 1024..65535" do
-    [nil, "", "x", 0, 1023, 65_536].each do |port|
+    [ nil, "", "x", 0, 1023, 65_536 ].each do |port|
       assert_match(/\ARUNNER_PROXY_PORT must be in 1024\.\.65535/, problems(port: port).sole, port.inspect)
     end
     assert_empty problems(port: 1024)
@@ -33,14 +33,14 @@ class RunnerProxySettingsTest < ActiveSupport::TestCase
   end
 
   test "the host port base must be at least 1024" do
-    [nil, "", 1023].each do |base|
+    [ nil, "", 1023 ].each do |base|
       assert_match(/\ARUNNER_PROXY_HOST_PORT_BASE must be at least 1024/, problems(base: base).sole, base.inspect)
     end
     assert_empty problems(base: 1024)
   end
 
   test "the host port span must be at least 1" do
-    [nil, "", 0, -1].each do |span|
+    [ nil, "", 0, -1 ].each do |span|
       assert_match(/\ARUNNER_PROXY_HOST_PORT_SPAN must be at least 1/, problems(span: span).sole, span.inspect)
     end
     assert_empty problems(span: 1)
@@ -48,7 +48,7 @@ class RunnerProxySettingsTest < ActiveSupport::TestCase
 
   test "the last host port must be at most 65535" do
     assert_empty problems(base: 60_000, span: 5536)
-    assert_equal ["RUNNER_PROXY_HOST_PORT_BASE + RUNNER_PROXY_HOST_PORT_SPAN - 1 must be at most 65535, not 65536"],
+    assert_equal [ "RUNNER_PROXY_HOST_PORT_BASE + RUNNER_PROXY_HOST_PORT_SPAN - 1 must be at most 65535, not 65536" ],
                  problems(base: 60_000, span: 5537)
   end
 
