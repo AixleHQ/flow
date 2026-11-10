@@ -126,7 +126,7 @@ func configure(ctx context.Context, args []string, stdout, stderr io.Writer) err
 		URL: *url, Token: *token, Name: *name, StateDir: *stateDir, NoAutoUpdate: *noAutoUpdate,
 		NoSelfUpdate: cli.SelfUpdateOff(os.Getenv(cli.NoSelfUpdateEnv)),
 		Preflight:    preflight.Env{Docker: api},
-		Out:       stdout,
+		Out:          stdout,
 	})
 }
 
