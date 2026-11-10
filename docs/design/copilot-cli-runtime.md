@@ -92,6 +92,17 @@ against a real Copilot Business seat, unless it says otherwise.
 - **Model-cache invalidation.** A picker opened before the catalogue was read
   cached the one-entry fallback for an hour; `persist_credential_metadata` now
   clears the model cache whenever it stores new metadata (all runtimes).
+- **Turn ends are reminded, as for Kiro.** `TurnEndDetector` knows Copilot's idle
+  screen: the `← open sidebar · Interactive` hint (`Interactive` and the model on
+  a narrow pane) four lines under `Session: … AIC used`; while working the hint
+  reads `● Working`, and with a draft it lists `@ files/sessions`. Measured at
+  30x20 to 220x50 and in the platform's web terminal, whose prompt box is drawn
+  differently. The reminder itself only submits with a pause before its `Enter`:
+  Copilot takes a reminder-length burst of text for a paste and drops an `Enter`
+  right behind it, so `Sessions::PaneInput` now waits 0.2 s (all runtimes). Live
+  check: a workflow step whose agent ended its turn without `finish_session` was
+  reminded once and finished. An idle Copilot TUI writes nothing to the pane (0
+  bytes in 30 s), so the no-output watchdog works on its log as for other runtimes.
 
 **Measured cost.** A one-file task with `finish_session`: 2.3–7.3 AI credits
 ($0.02–$0.07) on Claude Haiku 4.5 or Sonnet 5.5, 3.5 credits on GPT-5.3-Codex

@@ -1,0 +1,20 @@
+ [Current]  Sessions  →
+
+ │ I'll use bash with        ┃
+ │ mode="sync" and           ┃
+ │ initial_wait=30 to ensure ┃
+ │ I wait for the full 20    ┃
+ │ seconds of sleep to       ┃
+ │ complete.                 ┃
+                             ┃
+ $ Shell Sle… No Content 20s ┃
+   sleep 20                  ┃
+                             ┃
+ ● done                      ┃
+                             ┃
+ /workspace
+       Session: 2.38 AIC used
+──────────────────────────────
+❯
+──────────────────────────────
+ Interactive    Claude Haiku…

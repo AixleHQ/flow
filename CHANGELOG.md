@@ -29,6 +29,8 @@ governance, community health — carry none.
   Operators can change what one AI credit is reported as with
   `COPILOT_AI_CREDIT_USD` (default `0.01`) and override the image with
   `AGENT_IMAGE_COPILOT_CLI`.
+- **Sessions & Runs**: an automatic Copilot CLI step whose agent ends its turn
+  without finishing is reminded to finish or continue, as Kiro steps are.
 
 ### Changed
 - **Admin**: the dashboard's companies table splits its Billing column into
