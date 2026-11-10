@@ -585,6 +585,90 @@ describe('Projects/Board/BoardPage', () => {
     expect(drawer.getByText(/from ENG-1 · text\/plain/)).toBeInTheDocument();
   });
 
+  describe('previewing task files', () => {
+    const openAssetsTab = async (taskAssets: ReturnType<typeof buildTaskAsset>[]) => {
+      renderAuthedPage(<BoardPage />, {
+        props: {
+          ...populatedProps,
+          selectedTask: makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100 }),
+          taskComments: [],
+          taskAssets,
+          taskActivities: [],
+          taskWorkflowRuns: [],
+        },
+      });
+      const assetsDrawer = within(screen.getByRole('dialog'));
+      await userEvent.click(assetsDrawer.getByRole('tab', { name: /Assets/ }));
+      return assetsDrawer;
+    };
+
+    it('opens an image in a preview instead of downloading it', async () => {
+      const drawer = await openAssetsTab([
+        buildTaskAsset({ id: 31, name: 'shot.png', fileUrl: 'https://files.example.com/shot.png' }),
+      ]);
+
+      await userEvent.click(drawer.getByRole('button', { name: 'Preview shot.png' }));
+
+      const preview = within(await screen.findByRole('dialog', { name: /shot\.png/ }));
+      expect(preview.getByRole('img', { name: 'shot.png' })).toHaveAttribute(
+        'src',
+        'https://files.example.com/shot.png',
+      );
+      expect(preview.getByRole('link', { name: /download/i })).toHaveAttribute(
+        'href',
+        'https://files.example.com/shot.png',
+      );
+      expect(preview.queryByRole('button', { name: 'Next asset' })).not.toBeInTheDocument();
+    });
+
+    it('moves between previewable files only, in list order, and closes with Escape', async () => {
+      const drawer = await openAssetsTab([
+        buildTaskAsset({ id: 3, name: 'a.png', fileUrl: 'https://files.example.com/a.png' }),
+        buildTaskAsset({
+          id: 2,
+          name: 'bundle.zip',
+          contentType: 'application/zip',
+          fileUrl: 'https://files.example.com/bundle.zip',
+        }),
+        buildTaskAsset({
+          id: 1,
+          name: 'b.jpg',
+          contentType: 'image/jpeg',
+          fileUrl: 'https://files.example.com/b.jpg',
+        }),
+      ]);
+
+      await userEvent.click(drawer.getByRole('button', { name: 'Preview a.png' }));
+      const preview = within(await screen.findByRole('dialog', { name: /a\.png/ }));
+      expect(preview.getByText('1 / 2')).toBeInTheDocument();
+
+      await userEvent.keyboard('{ArrowRight}');
+      expect(await preview.findByRole('img', { name: 'b.jpg' })).toBeInTheDocument();
+      expect(preview.getByText('2 / 2')).toBeInTheDocument();
+
+      await userEvent.keyboard('{Escape}');
+      await waitFor(() => expect(screen.queryByRole('img', { name: 'b.jpg' })).not.toBeInTheDocument());
+    });
+
+    it('keeps Download as the only action for files that cannot be previewed', async () => {
+      const drawer = await openAssetsTab([
+        buildTaskAsset({
+          id: 2,
+          name: 'bundle.zip',
+          contentType: 'application/zip',
+          fileUrl: 'https://files.example.com/bundle.zip',
+        }),
+      ]);
+
+      expect(drawer.getByRole('link', { name: 'Download bundle.zip' })).toHaveAttribute(
+        'href',
+        'https://files.example.com/bundle.zip',
+      );
+      expect(drawer.queryByRole('button', { name: 'Preview bundle.zip' })).not.toBeInTheDocument();
+      expect(drawer.queryByRole('button', { name: 'Open preview of bundle.zip' })).not.toBeInTheDocument();
+    });
+  });
+
   it('opens description links safely without activating description edit mode', async () => {
     renderAuthedPage(<BoardPage />, {
       props: {

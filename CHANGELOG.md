@@ -13,6 +13,13 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Tasks**: clicking an image or Markdown file in a card's Assets tab now opens
+  it in a preview instead of downloading it. Markdown is rendered, and with
+  several previewable files you can move between them with ← / → or the
+  on-screen arrows. Download is still one click away. The Assets library page
+  previews Markdown the same way (rendered, not raw text).
+
 ### Changed
 - **Admin**: the dashboard's companies table splits its Billing column into
   three sortable ones: Account status (Active Customer, Trial – Active, Trial –
