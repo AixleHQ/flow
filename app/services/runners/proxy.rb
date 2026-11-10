@@ -96,8 +96,7 @@ module Runners
       host_network?(session) ? host_port(session) : sidecar_port
     end
 
-    # The sidecar's port, outside the agent image's own ports (7681, 7682,
-    # 4040, 4041, 8443, 8888).
+    # The sidecar's port, outside the agent image's own ports (IMAGE_PORTS).
     def sidecar_port
       Integer(Settings.runners.proxy.port)
     end
@@ -112,6 +111,42 @@ module Runners
     def host_port(session)
       settings = Settings.runners.proxy
       Integer(settings.host_port_base) + (session.id % Integer(settings.host_port_span))
+    end
+
+    # The agent image's own ports, which the sidecar shares a network
+    # namespace with.
+    IMAGE_PORTS = [7681, 7682, 4040, 4041, 8443, 8888].freeze
+
+    # What is wrong with Settings.runners.proxy: one message per broken rule,
+    # each naming its variable. config/initializers/required_env.rb refuses
+    # to boot on the first. Empty when the settings are usable.
+    def settings_problems(settings = Settings.runners.proxy)
+      port, base, span = [settings.port, settings.host_port_base, settings.host_port_span].map do |value|
+        Integer(value, exception: false)
+      end
+      [
+        port_problem(port, settings.port),
+        minimum_problem("RUNNER_PROXY_HOST_PORT_BASE", base, settings.host_port_base, 1024),
+        minimum_problem("RUNNER_PROXY_HOST_PORT_SPAN", span, settings.host_port_span, 1),
+        host_range_problem(base, span)
+      ].compact
+    end
+
+    def minimum_problem(variable, value, raw, minimum)
+      "#{variable} must be at least #{minimum}, not #{raw.inspect}" unless value && value >= minimum
+    end
+
+    def port_problem(port, raw)
+      return if port && (1024..65_535).cover?(port) && IMAGE_PORTS.exclude?(port)
+
+      "RUNNER_PROXY_PORT must be in 1024..65535 and outside the agent image's own ports " \
+        "(#{IMAGE_PORTS.join(', ')}), not #{raw.inspect}"
+    end
+
+    def host_range_problem(base, span)
+      return if base.nil? || span.nil? || span < 1 || base + span - 1 <= 65_535
+
+      "RUNNER_PROXY_HOST_PORT_BASE + RUNNER_PROXY_HOST_PORT_SPAN - 1 must be at most 65535, not #{base + span - 1}"
     end
 
     def host_network?(session)
