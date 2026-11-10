@@ -3,10 +3,10 @@
 # A nullable reference to the Runner a workflow declares, a run resolved to or
 # a session used (docs/design/agent-runtimes/DESIGN.md §2.4). Null means hosted.
 #
-# The write checks the tenant rule only (TenantScope, which calls
-# Runner.of_tenant): the runner is a company runner of the record's project's
-# company, or one of that project's own, deleted or not. A record with no
-# project, such as a System workflow, can only be hosted. A reference is never
+# The write checks the tenant rule only (TenantScope): the runner is a company
+# runner of the record's project's company, or one of that project's own,
+# deleted or not. A record with no project, such as a System workflow, can only
+# be hosted. A reference is never
 # cleared when its runner goes away (§3.4), so a version restore or a frozen run
 # keeps naming it, and the launch fails with that name. What a person may pick
 # (the flag, a live runner) is Runners::Selection, at the endpoints that take
@@ -22,7 +22,7 @@ module RunnerReference
   end
 
   # The referenced runner, only when it belongs to this record's tenant
-  # (Runner#of_tenant?, the rule of Runner.of_tenant); otherwise nil. What the "Runs on" badge reads: a
+  # (TenantScope's Runner rule); otherwise nil. What the "Runs on" badge reads: a
   # stale or bypassed runner_id that names another project's or company's runner
   # serializes no name or type. The check runs on the preloaded row, from the
   # record's own tenant columns, so a list that includes `:runner` adds no query.
@@ -32,7 +32,7 @@ module RunnerReference
     return if runner.nil?
 
     company_id, project_id = runner_tenant_ids
-    runner if runner.of_tenant?(company_id: company_id, project_id: project_id)
+    runner if TenantScope.owns_runner?(runner, company_id: company_id, project_id: project_id)
   end
 
   private
