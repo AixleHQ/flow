@@ -145,6 +145,18 @@ class McpControllerTest < ActionDispatch::IntegrationTest
 
   # ── tools/list ──
 
+  # A server built for one request cannot hold a `subscriptions/listen` stream open.
+  # Copilot CLI's client dropped the whole server on the stream that ended at once.
+  test "a modern client is offered no notification stream and asking for one is refused" do
+    capabilities = modern_rpc("server/discover").dig("result", "capabilities")
+    assert capabilities.present?
+    assert capabilities.values.none? { |capability| capability.is_a?(Hash) && capability["listChanged"] }
+
+    body = modern_rpc("subscriptions/listen", { notifications: { toolsListChanged: true } })
+    assert_equal(-32_601, body.dig("error", "code"))
+    refute_equal "text/event-stream", response.media_type
+  end
+
   test "tools/list serves available tools sorted with tags in _meta" do
     attach_platform_tool("mark_sub_step")
     attach_platform_tool("board_list_tasks")
