@@ -66,7 +66,9 @@ module Usage
     end
 
     def tenants(company_ids)
-      Company.where(id: company_ids).order(:name).pluck(:id, :name).map { |id, name| { id: id, name: name } }
+      Company.where(id: company_ids).order(:name).map do |company|
+        { id: company.id, name: company.name, **Billing::AccountClassification.of(company) }
+      end
     end
   end
 end

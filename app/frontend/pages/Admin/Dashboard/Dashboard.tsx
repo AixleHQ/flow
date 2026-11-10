@@ -18,12 +18,21 @@ import {
 } from './aggregate';
 import CompanyDetail from './CompanyDetail';
 import classes from './Dashboard.module.css';
-import { BILLING_LABELS, formatCount, formatHours, formatPercent, formatWait, formatWorkers } from './format';
+import {
+  ACCOUNT_STATUS_LABELS,
+  ACCOUNT_TYPE_LABELS,
+  BILLING_METHOD_LABELS,
+  formatCount,
+  formatHours,
+  formatPercent,
+  formatWait,
+  formatWorkers,
+} from './format';
 import Tiles from './Tiles';
 import type { BillingClass, DashboardData } from './types';
 import { useTenantP95 } from './useTenantP95';
 
-type SortKey = 'name' | 'billingClass' | DeltaField;
+type SortKey = 'name' | 'accountStatus' | 'accountType' | 'billingMethod' | DeltaField;
 type Direction = 'ascending' | 'descending';
 
 interface Column {
@@ -33,7 +42,9 @@ interface Column {
 
 const COLUMNS: Column[] = [
   { key: 'name', label: 'Company' },
-  { key: 'billingClass', label: 'Billing' },
+  { key: 'accountStatus', label: 'Account status' },
+  { key: 'accountType', label: 'Account type' },
+  { key: 'billingMethod', label: 'Billing method' },
   { key: 'workerHours', label: 'Worker hours' },
   { key: 'busyHours', label: 'Busy hours' },
   { key: 'minWorkers', label: 'Min workers' },
@@ -86,9 +97,15 @@ function periodLabel(grain: Grain, period: string, current: string) {
   return weekday.format(dateOf(period));
 }
 
+const accountStatusOf = (row: TenantSummary) => (row.accountStatus ? ACCOUNT_STATUS_LABELS[row.accountStatus] : null);
+const accountTypeOf = (row: TenantSummary) => (row.accountType ? ACCOUNT_TYPE_LABELS[row.accountType] : '—');
+const billingMethodOf = (row: TenantSummary) => (row.billingMethod ? BILLING_METHOD_LABELS[row.billingMethod] : '—');
+
 function sortValue(row: TenantSummary, key: SortKey): number | string {
   if (key === 'name') return row.name.toLowerCase();
-  if (key === 'billingClass') return BILLING_LABELS[row.billingClass].label;
+  if (key === 'accountStatus') return accountStatusOf(row)?.label ?? '—';
+  if (key === 'accountType') return accountTypeOf(row);
+  if (key === 'billingMethod') return billingMethodOf(row);
   // Missing values sort below every real one.
   return row[key] ?? -Infinity;
 }
@@ -368,7 +385,7 @@ export default function Dashboard({
             ) : (
               visible.map((row) => {
                 const previous = previousByTenant.get(row.tenantId);
-                const billing = BILLING_LABELS[row.billingClass];
+                const status = accountStatusOf(row);
                 return (
                   <tr key={row.tenantId}>
                     <th scope="row" className={classes.tenant}>
@@ -377,8 +394,14 @@ export default function Dashboard({
                       </button>
                     </th>
                     <td>
-                      <span className={`${classes.badge} ${classes[billing.tone]}`}>{billing.label}</span>
+                      {status ? (
+                        <span className={`${classes.badge} ${classes[status.tone]}`}>{status.label}</span>
+                      ) : (
+                        '—'
+                      )}
                     </td>
+                    <td>{accountTypeOf(row)}</td>
+                    <td>{billingMethodOf(row)}</td>
                     <td className={classes.number}>
                       {formatHours(row.workerHours)}
                       {delta('workerHours', row.workerHours, previous?.workerHours)}
@@ -437,6 +460,8 @@ export default function Dashboard({
               <tr>
                 <th scope="row">Total, all companies</th>
                 <td />
+                <td />
+                <td />
                 {totalCell(view.totals, 'workerHours')}
                 {totalCell(view.totals, 'busyHours')}
                 <td />
@@ -458,11 +483,12 @@ export default function Dashboard({
         is billed for; for the time a company has no limit they are its busy hours, so that time shows as fully used.
         Busy hours are the time its workers actually held a session; utilization is busy ÷ worker hours. Min and max
         workers are the limit (∞ when none was set); peak workers is the most held at once. Wait time is how long a
-        session queued before a worker took it; 95% of the period&apos;s sessions started within the p95 wait. Billing
-        shows whether the company pays, is on a trial, is blocked, or is managed by Aixle; “Not billed” marks a company
-        that runs free without being managed, which should never happen. Days are UTC and weeks run Monday to Sunday.
-        The small figure under each value is the change from the previous period; a period still in progress is compared
-        with the same number of days of the one before.
+        session queued before a worker took it; 95% of the period&apos;s sessions started within the p95 wait. Account
+        status, account type and billing method are each company&apos;s as it stands now, whatever the period; a company
+        with no billing method is one nobody invoices — managed by Aixle, not paying yet, or self-hosted. “Not billed”
+        in the Companies tile counts companies that run free without being managed, which should never happen. Days are
+        UTC and weeks run Monday to Sunday. The small figure under each value is the change from the previous period; a
+        period still in progress is compared with the same number of days of the one before.
         {data.measuredThrough && ` Measured through ${instant.format(new Date(data.measuredThrough))} UTC.`} Open a
         company for its queue in detail: wait percentiles, how many were already waiting, its projects and its hours.
       </p>
