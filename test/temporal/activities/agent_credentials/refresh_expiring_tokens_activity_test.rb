@@ -170,7 +170,8 @@ module Activities
 
       test "a holder that started a turn after the last pass blocks the rotation" do
         credential, session, _parked, refresh = kiro_holder_parked_on_the_last_pass
-        @runtime.set_terminal_pane(file_fixture("terminal_panes/kiro_cli/working.txt").read, last_output_at: 5.seconds.ago)
+        last_output_at = 5.seconds.ago
+        @runtime.set_terminal_pane(file_fixture("terminal_panes/kiro_cli/working.txt").read, last_output_at: last_output_at)
 
         result = run_activity(RefreshExpiringTokensActivity)
 
@@ -180,8 +181,11 @@ module Activities
         assert_equal "at-old", kiro_access_token(Base64.strict_decode64(credential.reload.config_data["state_b64"]))
         assert @runtime.execs.any? { |cmd| Array(cmd).join(" ").include?(Sessions::Snapshot::Command::MARKER_PREFIX) },
                "the holder was read through the monitor's snapshot"
-        assert_in_delta 5.seconds.ago, Time.zone.parse(session.reload.metadata["screen_changed_at"]), 1.second,
-                        "the read feeds the same record as the passes"
+        # The pane's mtime arrives in whole seconds (`stat`), and the record keeps exactly
+        # that, so the comparison is against the value the test set, not against the clock
+        # after the activity has run.
+        assert_equal last_output_at.to_i, Time.zone.parse(session.reload.metadata["screen_changed_at"]).to_i,
+                     "the read feeds the same record as the passes"
       end
 
       test "a holder still parked on the same screen lets the rotation go ahead" do
@@ -283,7 +287,8 @@ module Activities
         })
         assert_nil credential.expires_at, "precondition: nothing ever derived this expiry"
 
-        fresh = jwt_expiring(60.days.from_now)
+        fresh_exp = 60.days.from_now
+        fresh = jwt_expiring(fresh_exp)
         stub_request(:post, Agents::CursorCliAdapter::CURSOR_AUTH_URL).to_return(
           status: 200,
           body: { access_token: fresh, id_token: fresh, shouldLogout: false }.to_json,
@@ -295,7 +300,7 @@ module Activities
         assert_equal 1, result[:refreshed]
         credential.reload
         assert_equal fresh, credential.config_data["accessToken"]
-        assert_in_delta 60.days.from_now.to_i, credential.expires_at.to_i, 5
+        assert_equal fresh_exp.to_i, credential.expires_at.to_i
       end
 
       test "condemns an undetermined credential the vendor rejects" do
