@@ -210,7 +210,9 @@ module Agents
     end
 
     def fetch_available_models_with_source(_credentials, credential: nil)
+      # The CLI's catalogue can list `auto` twice (measured on a Business seat, 1.0.108).
       models = Array(credential&.metadata&.dig(MODELS_METADATA_KEY)).filter_map { |model| model_entry(model) }
+                                                                  .uniq { |model| model[:model_id] }
       return { models: models, source: :api } if models.any?
 
       { models: FALLBACK_MODELS.map(&:dup), source: :fallback }

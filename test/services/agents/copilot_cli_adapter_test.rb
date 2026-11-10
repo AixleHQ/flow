@@ -175,6 +175,21 @@ module Agents
       assert_equal "Claude Sonnet 5.5", result[:models].second[:display_name]
     end
 
+    # Read off a staging account (1.0.108): the ACP model option lists Auto twice.
+    test "a model the catalogue lists twice is offered once" do
+      credential = create(:agent_credential, :copilot_cli, user: @user, company: @company,
+                          metadata: { CopilotCliAdapter::MODELS_METADATA_KEY => [
+                            { "id" => "auto", "name" => "Auto", "description" => "Let Copilot pick the best model" },
+                            { "id" => "auto", "name" => "Auto", "description" => "Auto" },
+                            { "id" => "claude-sonnet-5.5", "name" => "Claude Sonnet 5.5" }
+                          ] })
+
+      models = @adapter.fetch_available_models(credential.config_data, credential: credential)
+
+      assert_equal %w[auto claude-sonnet-5.5], models.pluck(:model_id)
+      assert_equal "Let Copilot pick the best model", models.first[:description]
+    end
+
     test "a catalogue the CLI could not read leaves the stored one alone" do
       runtime = ContainerRuntime::FakeRuntime.new(agent_type: "copilot_cli")
       runtime.fail_exec(CopilotCliAdapter::MODELS_SCRIPT, stderr: "timed out waiting for the Copilot CLI", exit_code: 1)
