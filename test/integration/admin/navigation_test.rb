@@ -18,14 +18,26 @@ class Admin::NavigationTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "back to the app is offered only during an impersonation" do
+  test "back to the app is offered only during an impersonation, and leaves Turbo out of it" do
     get admin_companies_path
-    assert_select "nav.navigation a[href=?]", root_url, count: 0
+    assert_select "nav.navigation a[href=?]", company_projects_url, count: 0
 
     member = create(:user, :admin, :onboarding_completed)
     post impersonate_admin_user_path(member)
     get admin_companies_path
 
-    assert_select "nav.navigation a[href=?]", root_url, count: 1
+    assert_select "nav.navigation a[href=?][data-turbo=false]", company_projects_url, count: 1
+  end
+
+  # The landing page at / is full of inline handlers; a Turbo visit there parsed it under the
+  # admin page's CSP and every impersonation raised script-src-attr violations.
+  test "impersonating opens the app, not the landing page, outside Turbo" do
+    member = create(:user, :admin, :onboarding_completed)
+
+    get admin_users_path
+    assert_select "form[action=?][data-turbo=false]", impersonate_admin_user_path(member), count: 1
+
+    post impersonate_admin_user_path(member)
+    assert_redirected_to company_projects_path
   end
 end

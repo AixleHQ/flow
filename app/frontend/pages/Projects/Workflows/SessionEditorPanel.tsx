@@ -48,6 +48,7 @@ type SessionStep = Pick<
   | 'allowNonInteractive'
   | 'skipPolicy'
   | 'onFailure'
+  | 'maxRetries'
   | 'bmadEnabled'
   | 'dependsOnStepIds'
   | 'toolIds'
@@ -71,6 +72,9 @@ const ON_FAILURE_TEXTS: Record<string, string> = {
   retry: 'The session is retried automatically before failing.',
   skip: 'The workflow continues even if this session fails.',
 };
+
+// Step::MAX_RETRIES caps the count; the server refuses more.
+const RETRY_COUNTS = Array.from({ length: 10 }, (_, i) => String(i + 1));
 
 interface SectionLabelProps {
   icon: React.ReactNode;
@@ -741,7 +745,11 @@ export function SessionEditorPanel({
                 { value: 'skip', label: 'Skip' },
               ]}
               value={step.onFailure}
-              onChange={(v) => onFieldChange('onFailure', v ?? 'fail')}
+              onChange={(v) => {
+                const onFailure = v ?? 'fail';
+                onFieldChange('onFailure', onFailure);
+                if (onFailure === 'retry' && step.maxRetries < 1) onFieldChange('maxRetries', 1);
+              }}
               disabled={readOnly}
               allowDeselect={false}
               styles={{
@@ -756,6 +764,34 @@ export function SessionEditorPanel({
             />
             <div className={classes.consequence}>{ON_FAILURE_TEXTS[step.onFailure] ?? ''}</div>
           </div>
+
+          {step.onFailure === 'retry' && (
+            <div style={{ marginTop: 10 }}>
+              <label className={classes.fieldLabel} htmlFor={`max-retries-${step.id}`}>
+                Max retries
+              </label>
+              <Select
+                id={`max-retries-${step.id}`}
+                data={RETRY_COUNTS}
+                value={String(step.maxRetries)}
+                onChange={(v) => onFieldChange('maxRetries', Number(v ?? 1))}
+                disabled={readOnly}
+                allowDeselect={false}
+                styles={{
+                  input: {
+                    background: 'transparent',
+                    border: '1px solid var(--border)',
+                    borderRadius: 4,
+                    color: 'var(--text-1)',
+                    fontSize: 13,
+                  },
+                }}
+              />
+              <div className={classes.consequence}>
+                After the last failed attempt the workflow run stops, as with Fail.
+              </div>
+            </div>
+          )}
         </div>
 
         <div className={classes.behGroup}>

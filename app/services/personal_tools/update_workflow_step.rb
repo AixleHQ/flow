@@ -5,7 +5,8 @@ module PersonalTools
     tool do
       display_name "Update Workflow Step"
       description "Update a workflow step's fields (name, instructions, agent, runtime, preferred model, " \
-                  "reasoning effort, tools, skills, deps, BMAD). " \
+                  "reasoning effort, tools, skills, deps, BMAD, repositories, assets, input and output file specs, " \
+                  "failure action, retry count, skip policy). " \
                   "Read the step with get_workflow_step first — every id list here replaces the current one."
       audience :user
       tags :workflows
@@ -45,6 +46,30 @@ module PersonalTools
             description: "MCP server ids. Replaces the whole list — read the current value with " \
                          "get_workflow_step first.",
             items: { type: "integer" }
+      param :repository_ids, type: :array,
+            description: "Repository ids cloned for this step. Replaces the whole list.",
+            items: { type: "integer" }
+      param :asset_ids, type: :array,
+            description: "Asset ids mounted for this step. Replaces the whole list.",
+            items: { type: "integer" }
+      param :input_asset_specs, type: :array,
+            description: "Expected input files. Entries are required unless marked optional. Replaces the whole list.",
+            items: { type: "object", additionalProperties: false,
+                     properties: { name: { type: "string" }, required: { type: "boolean" },
+                                   asset_type: { type: "string" } } }
+      param :output_asset_specs, type: :array,
+            description: "Expected output files or globs under /workspace/outputs. Replaces the whole list.",
+            items: { type: "object", additionalProperties: false,
+                     properties: { name: { type: "string" }, required: { type: "boolean" },
+                                   asset_type: { type: "string" }, name_pattern: { type: "string" },
+                                   min_size: { type: "integer" },
+                                   required_sections: { type: "array", items: { type: "string" } } } }
+      param :on_failure, type: :string, description: "Action when the step fails.", enum: Step.on_failure.values
+      param(:max_retries, type: :integer,
+            description: "How many times a failed step starts again when on_failure is retry. " \
+                         "With retry, 0 is saved as 1.")
+        .merge!("minimum" => 0, "maximum" => Step::MAX_RETRIES)
+      param :skip_policy, type: :string, description: "When to skip this step.", enum: Step.skip_policy.values
       param :config_item_ids, type: :array,
             description: "Config item ids (secrets / environment variables) this step's agent may read with " \
                          "get_config_item. Attach a credential here instead of writing it into the " \
@@ -64,7 +89,8 @@ module PersonalTools
 
     UPDATABLE = %i[
       name instructions agent_id required_agent_runtime preferred_model reasoning_effort tool_ids skill_ids
-      mcp_server_ids config_item_ids depends_on_step_ids bmad_enabled allow_non_interactive
+      mcp_server_ids repository_ids asset_ids input_asset_specs output_asset_specs on_failure max_retries skip_policy
+      config_item_ids depends_on_step_ids bmad_enabled allow_non_interactive
     ].freeze
 
     def execute

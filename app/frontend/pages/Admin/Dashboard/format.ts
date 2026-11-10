@@ -1,4 +1,4 @@
-import type { BillingClass } from './types';
+import type { AccountStatus, AccountType, BillingClass, BillingMethod } from './types';
 
 const whole = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const tenths = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
@@ -31,4 +31,25 @@ export const BILLING_LABELS: Record<BillingClass, { label: string; tone: Tone }>
   blocked: { label: 'Blocked', tone: 'danger' },
   inactive: { label: 'Inactive', tone: 'warning' },
   not_metered: { label: 'Not metered', tone: 'info' },
+};
+
+export const ACCOUNT_STATUS_LABELS: Record<AccountStatus, { label: string; tone: Tone }> = {
+  active_customer: { label: 'Active Customer', tone: 'success' },
+  trial_active: { label: 'Trial – Active', tone: 'info' },
+  trial_expired: { label: 'Trial – Expired', tone: 'warning' },
+  canceled: { label: 'Canceled Customer', tone: 'warning' },
+  locked_nonpayment: { label: 'Account Locked – nonpayment', tone: 'danger' },
+  pending_activation: { label: 'Pending activation', tone: 'info' },
+  inactive: { label: 'Inactive', tone: 'warning' },
+};
+
+export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
+  paid: 'Paid Account',
+  managed: 'Managed by Aixle',
+};
+
+export const BILLING_METHOD_LABELS: Record<BillingMethod, string> = {
+  saas_stripe: 'SaaS – Stripe',
+  saas_aws_marketplace: 'SaaS – AWS Marketplace',
+  self_hosted_aws_marketplace: 'Self-Hosted – AWS Marketplace',
 };

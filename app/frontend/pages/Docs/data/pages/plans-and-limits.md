@@ -31,9 +31,9 @@ Your invoice is charged in **whole worker-hours**. A part hour left over at the 
 of a billing period is rounded down and not charged for — we never round a
 fraction up into a chargeable hour.
 
-## Your first 30 days are free
+## Your first 14 days are free
 
-Every new workspace starts with a **30-day free trial**, and nothing is charged
+Every new workspace starts with a **14-day free trial**, and nothing is charged
 for it.
 
 **The trial runs one worker**: one session at a time, the rest wait their turn.
