@@ -237,6 +237,8 @@ module Runners
       result["exit_code"] = result["exit_code"].to_i if result.key?("exit_code")
       result
     end
+    # record_result! is the only way to build a stored result.
+    private_class_method :outcome
 
     # Selects the deliverable ops and marks the pending ones `delivered` in one
     # transaction, with the rows locked FOR UPDATE, the lock record_result!

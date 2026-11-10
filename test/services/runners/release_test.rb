@@ -48,21 +48,14 @@ class Runners::ReleaseTest < ActiveSupport::TestCase
                  Runners::Release.binary("0.1.0", "linux-amd64").url
   end
 
-  # config/initializers/runner_release.rb checks the pins once the app is
-  # loaded, so an invalid block stops the boot.
-  test "an invalid runners.release block fails boot" do
+  # config/initializers/runner_release.rb calls Runners::Release.pins once the
+  # app is loaded, so an invalid block stops the boot with this error.
+  test "an invalid runners.release block makes the pins raise InvalidPins" do
     settings = Config.load_files({ "runners" => { "release" => PINS.merge("min_version" => "1.2") } })
     Settings.stubs(:runners).returns(settings.runners)
     Runners::Release.reset!
-    initializer = Rails.root.join("config/initializers/runner_release.rb").to_s
-    hook = nil
-    config = Object.new
-    config.define_singleton_method(:after_initialize) { |&block| hook = block }
-    Rails.application.stubs(:config).returns(config)
-    load initializer
-    Rails.application.unstub(:config)
 
-    error = assert_raises(Runners::Release::InvalidPins) { hook.call }
+    error = assert_raises(Runners::Release::InvalidPins) { Runners::Release.pins }
     assert_equal "config/settings.yml runners.release: min_version \"1.2\" is not a semantic version", error.message
   ensure
     Runners::Release.reset!

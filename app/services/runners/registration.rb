@@ -125,5 +125,7 @@ module Runners
     def string_or_nil(value)
       value if value.is_a?(String)
     end
+    # register! is the only way in, so it alone decides the order of the checks.
+    private_class_method :check!, :attributes, :string_or_nil
   end
 end
