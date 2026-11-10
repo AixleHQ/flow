@@ -2,7 +2,7 @@
 
 module Runners
   # The callback proxy (docs/design/agent-runtimes/DESIGN.md §6.6, §6.9.3;
-  # runner/protocol/PROTOCOL.md §5.6). An agent on a runner cannot reach the
+  # runner/protocol/PROTOCOL.md §5.8). An agent on a runner cannot reach the
   # platform's internal address, so it calls a proxy on 127.0.0.1 next to it:
   # the proxy sidecar of its container, or with `network: host` the host
   # runner's own listener. That proxy relays to the host runner, which adds

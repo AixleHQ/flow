@@ -5,7 +5,7 @@ require "socket"
 
 # The callback proxy's gateway route, `ANY /runner/v1/proxy/:route/*`
 # (docs/design/agent-runtimes/DESIGN.md §6.6; runner/protocol/PROTOCOL.md
-# §5.6): the allow-list, the session-key check against the session that holds
+# §5.8): the allow-list, the session-key check against the session that holds
 # the environment, and the forward to the internal endpoint with the answer
 # streamed back. The conformance fixtures (runner/protocol/fixtures/v1/proxy/)
 # pin the refusals as the runner sees them; this test covers what the fixtures

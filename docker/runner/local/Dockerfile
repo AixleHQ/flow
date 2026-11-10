@@ -19,7 +19,7 @@ FROM alpine:3.22
 COPY --from=build /out/aixle-runner /usr/local/bin/aixle-runner
 # The proxy sidecar bind-mounts the runner's own binary and its relay socket,
 # from the state directory, and the Docker daemon resolves those paths on this
-# machine, not in this container (PROTOCOL.md §5.6). So the binary runs from,
+# machine, not in this container (PROTOCOL.md §5.8). So the binary runs from,
 # and the state lives in, RUNNER_LOCAL_DIR: a directory of this machine mounted
 # at the same path (docker-compose.yml).
 COPY --chmod=755 <<'EOF' /usr/local/bin/runner-local-entrypoint

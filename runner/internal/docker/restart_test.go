@@ -28,7 +28,7 @@ type opsGateway struct {
 	idle    func()
 }
 
-func (g *opsGateway) PollOps(_ context.Context, _ string, after int64, _ time.Duration) ([]protocol.Op, error) {
+func (g *opsGateway) PollOps(_ context.Context, _ string, after int64, _ time.Duration) (protocol.Poll, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	var out []protocol.Op
@@ -40,7 +40,7 @@ func (g *opsGateway) PollOps(_ context.Context, _ string, after int64, _ time.Du
 	if len(out) == 0 && g.idle != nil {
 		g.idle()
 	}
-	return out, nil
+	return protocol.Poll{Ops: out}, nil
 }
 
 func (g *opsGateway) PostResult(_ context.Context, _ string, id int64, r protocol.Result) (protocol.ResultState, error) {

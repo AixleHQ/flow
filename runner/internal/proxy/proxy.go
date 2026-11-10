@@ -1,4 +1,4 @@
-// Package proxy is the callback proxy of runner/protocol/PROTOCOL.md §5.6
+// Package proxy is the callback proxy of runner/protocol/PROTOCOL.md §5.8
 // (DESIGN.md §6.6, §6.9.3). An agent on a runner cannot reach the platform's
 // internal address, so it calls `http://127.0.0.1:<port>/<route>/…` instead:
 //
@@ -42,7 +42,7 @@ type Tokens interface {
 }
 
 // The classes of the refusals the host runner answers itself, in the gateway's
-// refusal shape (PROTOCOL.md §3, §5.6).
+// refusal shape (PROTOCOL.md §3, §5.8).
 const (
 	// ClassRelayFailed: the host runner could not get an answer from the gateway.
 	ClassRelayFailed = "relay_failed"

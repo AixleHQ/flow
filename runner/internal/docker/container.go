@@ -347,7 +347,7 @@ func (e *Environment) ContainerStart(ctx context.Context, sessionID int64, raw j
 		}
 	}
 
-	// The callback proxy (PROTOCOL.md §5.6): the sidecar is created first and
+	// The callback proxy (PROTOCOL.md §5.8): the sidecar is created first and
 	// owns the network namespace the agent joins, so that it outlives the
 	// agent's last call; with `network: host` the host runner listens itself.
 	sidecar := ""

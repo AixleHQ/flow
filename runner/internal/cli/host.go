@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
-	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/aixlehq/aixle-runner/internal/credentials"
 	"github.com/aixlehq/aixle-runner/internal/docker"
@@ -16,6 +16,7 @@ import (
 	"github.com/aixlehq/aixle-runner/internal/protocol"
 	"github.com/aixlehq/aixle-runner/internal/proxy"
 	"github.com/aixlehq/aixle-runner/internal/tokens"
+	"github.com/aixlehq/aixle-runner/internal/update"
 	"github.com/aixlehq/aixle-runner/internal/version"
 )
 
@@ -25,15 +26,33 @@ type HostOptions struct {
 	HTTPClient *http.Client
 	Docker     docker.API
 	Logger     *slog.Logger
-	// Binary is the runner's own executable, which the proxy sidecar runs.
-	// Empty is this process's executable.
+	// Binary is the runner's own executable, symlinks resolved. It has two uses:
+	// it is the file a self-update replaces, and the one the callback proxy's
+	// sidecar runs, bind-mounted read-only (PROTOCOL.md §5.8). Empty is the
+	// running binary (update.BinaryPath).
 	Binary string
+	// NoSelfUpdate turns self-update off whatever the credentials say: the
+	// published image sets NoSelfUpdateEnv, since in a container the image tag is
+	// the version (DESIGN.md §14.4).
+	NoSelfUpdate bool
+}
+
+// NoSelfUpdateEnv, set to a true value (`1`, `true`), turns self-update off for
+// the host runner, and makes configure register the machine as
+// `--no-auto-update`. docker/runner/Dockerfile sets it.
+const NoSelfUpdateEnv = "AIXLE_RUNNER_NO_SELF_UPDATE"
+
+// SelfUpdateOff reads NoSelfUpdateEnv's value. Empty, or a value that is not a
+// boolean, leaves self-update to the credentials.
+func SelfUpdateOff(value string) bool {
+	off, err := strconv.ParseBool(strings.TrimSpace(value))
+	return err == nil && off
 }
 
 // RunHost runs the host runner until ctx is done. It holds the state directory's
 // lock while it runs, and refuses at once if another process holds it. A failure
 // that needs an operator, such as a refusal or missing credentials, satisfies
-// NeedsOperator.
+// NeedsOperator. A self-update that replaced the binary returns host.ErrUpdated.
 func RunHost(ctx context.Context, opts HostOptions) error {
 	lock, err := lockForHost(opts.StateDir)
 	if err != nil {
@@ -73,15 +92,24 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 		api = c
 	}
 
-	binary, err := ownBinary(opts.Binary)
-	if err != nil {
-		return err
+	// One path for the updater and the proxy sidecars. An update runs only while
+	// the machine holds no session (Busy), and a sidecar exists only with its
+	// session; the update renames the new file into place, so a sidecar that
+	// still runs keeps the old inode and the next one mounts the new file.
+	binary := opts.Binary
+	if binary == "" {
+		if binary, err = update.BinaryPath(); err != nil {
+			return fmt.Errorf("finding the running binary: %w", err)
+		}
 	}
 
+	// One value for the start line and the updater, so the line reports what the
+	// updater does.
+	selfUpdate := creds.AutoUpdateEnabled() && !opts.NoSelfUpdate
 	opts.Logger.Info("aixle-runner starting", "mode", "host", "version", version.Version,
-		"platform", creds.URL, "environment", creds.Environment.Key)
+		"platform", creds.URL, "environment", creds.Environment.Key, "auto_update", selfUpdate)
 	source := tokens.NewSource(store, client, creds)
-	// The callback proxy's relay (PROTOCOL.md §5.6): the sessions' sidecars, or
+	// The callback proxy's relay (PROTOCOL.md §5.8): the sessions' sidecars, or
 	// with `network: host` the agents themselves, reach the platform through it,
 	// with this machine's credential. It serves the proxy route only.
 	relay := &proxy.Relay{Gateway: client, Tokens: source, Logger: opts.Logger}
@@ -103,25 +131,15 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 		Tokens:   source,
 		Journal:  j,
 		Handlers: handlers,
-		Logger:   opts.Logger,
+		Updater: &update.Updater{
+			Releases: client,
+			Current:  version.Version,
+			Binary:   binary,
+			Disabled: !selfUpdate,
+			Busy:     env.HoldsSession,
+			Logger:   opts.Logger,
+		},
+		Logger: opts.Logger,
 	}
 	return loop.Run(ctx)
-}
-
-// ownBinary is the runner's own executable, symlinks resolved, as the Docker
-// daemon resolves a bind mount's source.
-func ownBinary(configured string) (string, error) {
-	path := configured
-	if path == "" {
-		exe, err := os.Executable()
-		if err != nil {
-			return "", fmt.Errorf("finding aixle-runner's own executable: %w", err)
-		}
-		path = exe
-	}
-	resolved, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		return "", fmt.Errorf("resolving aixle-runner's own executable %s: %w", path, err)
-	}
-	return resolved, nil
 }

@@ -1,7 +1,8 @@
 // Package host is `aixle-runner --mode host`: the ops loop of a machine's host
 // runner (DESIGN.md §6.4, §6.7, §6.8). It long-polls the machine's ops one poll at
 // a time, runs each op at most once through the journal, and posts each result
-// until the gateway accepts it.
+// until the gateway accepts it. An answer without ops may offer an update, which
+// the loop hands to its Updater (DESIGN.md §14.4).
 package host
 
 import (
@@ -44,9 +45,19 @@ type Handler func(ctx context.Context, sessionID *int64, payload json.RawMessage
 
 // Gateway is the part of the protocol client the loop uses.
 type Gateway interface {
-	PollOps(ctx context.Context, accessToken string, after int64, wait time.Duration) ([]protocol.Op, error)
+	PollOps(ctx context.Context, accessToken string, after int64, wait time.Duration) (protocol.Poll, error)
 	PostResult(ctx context.Context, accessToken string, opID int64, result protocol.Result) (protocol.ResultState, error)
 }
+
+// Updater takes an update the platform offers (internal/update). It says whether
+// it replaced the binary, after which the runner must restart on it.
+type Updater interface {
+	Apply(ctx context.Context, offer protocol.Update) bool
+}
+
+// ErrUpdated ends Run once the Updater has replaced the binary: the process exits,
+// and its supervisor (systemd) starts the new binary.
+var ErrUpdated = errors.New("aixle-runner was updated and restarts on the new version")
 
 // Loop is the host runner's ops loop.
 type Loop struct {
@@ -54,8 +65,11 @@ type Loop struct {
 	Tokens   *tokens.Source
 	Journal  *journal.Journal
 	Handlers map[string]Handler
-	Logger   *slog.Logger
-	Backoff  *backoff.Backoff
+	// Updater, when set, is offered the update of an answer without ops. The loop
+	// runs one thing at a time, so no op is running then.
+	Updater Updater
+	Logger  *slog.Logger
+	Backoff *backoff.Backoff
 	// Wait is the long-poll's wait. Zero means protocol.MaxWait.
 	Wait time.Duration
 	// Now and Sleep are replaced in tests.
@@ -82,7 +96,8 @@ func (l *Loop) defaults() {
 }
 
 // Run polls until ctx is done, which returns nil, or until a refusal stops the
-// runner, which returns a *tokens.StopError, or until the journal cannot be written.
+// runner, which returns a *tokens.StopError, or until the journal cannot be
+// written, or until an update replaced the binary, which returns ErrUpdated.
 func (l *Loop) Run(ctx context.Context) error {
 	l.defaults()
 	l.Logger.Info("polling for ops", "after", l.Journal.After())
@@ -90,12 +105,18 @@ func (l *Loop) Run(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return nil
 		}
-		ops, err := l.poll(ctx)
+		answer, err := l.poll(ctx)
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil
 			}
 			return err
+		}
+		ops := answer.Ops
+		if len(ops) == 0 && answer.Update != nil && l.Updater != nil && ctx.Err() == nil {
+			if l.Updater.Apply(ctx, *answer.Update) {
+				return ErrUpdated
+			}
 		}
 		for _, op := range ops {
 			if err := l.handle(ctx, op); err != nil {
@@ -110,32 +131,33 @@ func (l *Loop) Run(ctx context.Context) error {
 
 // poll makes one long-poll, retrying with backoff until it gets an answer. It is
 // the only request in flight while it waits: the loop never overlaps two polls.
-func (l *Loop) poll(ctx context.Context) ([]protocol.Op, error) {
+func (l *Loop) poll(ctx context.Context) (protocol.Poll, error) {
 	for {
 		after := l.Journal.After()
-		var ops []protocol.Op
+		var answer protocol.Poll
 		err := l.Tokens.Do(ctx, func(access string) error {
 			var err error
-			ops, err = l.Gateway.PollOps(ctx, access, after, l.Wait)
+			answer, err = l.Gateway.PollOps(ctx, access, after, l.Wait)
 			return err
 		})
 		if err == nil {
 			l.Backoff.Reset()
+			ops := answer.Ops
 			sort.Slice(ops, func(i, k int) bool { return ops[i].Sequence < ops[k].Sequence })
-			return ops, nil
+			return answer, nil
 		}
 		if ctx.Err() != nil {
-			return nil, ctx.Err()
+			return protocol.Poll{}, ctx.Err()
 		}
 		if _, stop := tokens.AsStop(err); stop {
-			return nil, err
+			return protocol.Poll{}, err
 		}
 		if protocol.Classify(err) == protocol.ActionBug {
 			// The same poll would be refused again: nothing the loop can change.
-			return nil, fmt.Errorf("the gateway refused the long-poll, which is a bug in aixle-runner: %w", err)
+			return protocol.Poll{}, fmt.Errorf("the gateway refused the long-poll, which is a bug in aixle-runner: %w", err)
 		}
 		if err := l.backoff(ctx, "polling for ops failed", err); err != nil {
-			return nil, err
+			return protocol.Poll{}, err
 		}
 	}
 }

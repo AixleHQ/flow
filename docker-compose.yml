@@ -230,7 +230,7 @@ services:
   # this machine's Docker daemon, where it starts the session containers.
   # Its binary and state live in RUNNER_LOCAL_DIR, a directory of this machine
   # mounted at the same path: the daemon resolves the proxy sidecar's bind
-  # mounts on this machine (runner/protocol/PROTOCOL.md §5.6).
+  # mounts on this machine (runner/protocol/PROTOCOL.md §5.8).
   runner-local:
     profiles: [ runners ]
     build:

@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-# Runners::Proxy (DESIGN.md §6.6, PROTOCOL.md §5.6): the address a runner
+# Runners::Proxy (DESIGN.md §6.6, PROTOCOL.md §5.8): the address a runner
 # session calls back on, the allow-list, the session-key check and the
 # internal endpoint a route forwards to.
 class Runners::ProxyTest < ActiveSupport::TestCase

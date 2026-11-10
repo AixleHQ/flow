@@ -24,6 +24,10 @@
     },
     "ephemeral": {
       "description": "Default false. `true` is refused with 422 ephemeral_not_supported, before this schema is checked."
+    },
+    "auto_update": {
+      "description": "Default true when absent. `false` is `aixle-runner configure --no-auto-update`: the machine is never offered an update. `null` is refused.",
+      "type": "boolean"
     }
   }
 }

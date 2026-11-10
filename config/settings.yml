@@ -673,7 +673,7 @@ runners:
   # answer reads as unknown, never as dead or idle, and costs the sweep no more.
   scan_op_timeout: 15
   # The callback proxy's ports (DESIGN.md §6.9.3, runner/protocol/PROTOCOL.md
-  # §5.6). Configured here alone: `container.start` carries the session's port
+  # §5.8). Configured here alone: `container.start` carries the session's port
   # as `proxy_port`, and the host runner listens where it says, so the two
   # sides cannot disagree. Unlike the values above, these are deployment
   # inputs, for a machine where the defaults are taken.

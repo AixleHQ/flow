@@ -20,7 +20,7 @@ import (
 )
 
 // The callback proxy's side of `container.start` and `container.stop`
-// (PROTOCOL.md §5.6, §6.2; DESIGN.md §6.9.3): the proxy sidecar, a second
+// (PROTOCOL.md §5.8, §6.2; DESIGN.md §6.9.3): the proxy sidecar, a second
 // container per session that owns the agent's network namespace, and with
 // `network: host` the host runner's own listener instead.
 

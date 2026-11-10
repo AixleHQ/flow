@@ -5,7 +5,7 @@ require "net/http"
 module RunnerGateway
   module V1
     # `ANY /runner/v1/proxy/:route/*` (docs/design/agent-runtimes/DESIGN.md
-    # §6.6, §6.9.3; runner/protocol/PROTOCOL.md §5.6): the callback proxy's
+    # §6.6, §6.9.3; runner/protocol/PROTOCOL.md §5.8): the callback proxy's
     # end at the platform. A runner session's agent calls its local proxy on
     # 127.0.0.1, which relays to the host runner, which adds the environment's
     # access token and calls this route. The gateway:
@@ -47,7 +47,7 @@ module RunnerGateway
       # MCP's streamable HTTP holds a tool call's response until the tool
       # ends, and a GET stream between events. Net::HTTP applies it to each
       # read, so it cuts an answer that sends no data for that long, not a
-      # long one that keeps sending (PROTOCOL.md §5.6). It stays finite: a
+      # long one that keeps sending (PROTOCOL.md §5.8). It stays finite: a
       # silent upstream would otherwise hold a gateway thread for good, even
       # after the runner has gone. A longer tool is asynchronous
       # (`read_tool_result`).

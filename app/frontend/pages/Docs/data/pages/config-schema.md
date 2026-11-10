@@ -170,7 +170,7 @@ per-project namespaces and network policies separate them.
 ### External runners' callback proxy
 
 An agent on an external runner calls the platform through a proxy on its own
-`127.0.0.1` (`runner/protocol/PROTOCOL.md` §5.6). The platform alone sets its
+`127.0.0.1` (`runner/protocol/PROTOCOL.md` §5.8). The platform alone sets its
 ports: `container.start` sends a session's port, and the runner listens there.
 
 | Variable                       | Required | Default | Purpose                                                          |

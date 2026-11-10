@@ -12,11 +12,15 @@ get. Both sides run them:
   from each fixture and drives `aixle-runner`'s client through every exchange the client can
   send. The fake checks that each request is exactly the fixture's request, and answers with the
   fixture's response, its matchers filled in with concrete values; the client must read that
-  answer as the protocol says. An exchange the client never sends (a protocol header other than
-  `1`, a malformed `after`, an invalid result body) is skipped, because it tests the gateway's
-  checks, which the Rails side runs. The test fails if no register, token, unregister, ops or proxy
-  exchange was driven, and for any fixture that drives no exchange at all, unless that fixture is
-  on the test's `gatewayOnly` list with the reason. It runs in the Go CI job. `runner/internal/docker/fixtures_test.go` also
+  answer as the protocol says. The fake checks the protocol headers both ways: a header the
+  fixture's request carries must be there with that value, and one it removes with `null` must
+  be absent. An exchange the client never sends (a protocol header other than `1`, a release
+  request that carries the protocol headers, a malformed `after`, an invalid result body) is
+  skipped, because it tests the gateway's
+  checks, which the Rails side runs. The test fails if no register, token, unregister, ops,
+  releases or proxy exchange was driven, and it fails for a fixture of which it drives no exchange
+  at all, unless the fixture is on its `gatewayOnly` list with the reason (empty today). It runs in
+  the Go CI job. `runner/internal/docker/fixtures_test.go` also
   ties the `ops/` fixtures to the runner's handlers: every payload a fixture enqueues for an op
   the runner implements passes that op's payload checks, and every error class a fixture posts
   for such an op is one the runner reports.
@@ -40,7 +44,7 @@ the table of §3 in `TestClassify`).
 | The `404` for a path the gateway does not serve (§1) | It comes from the gateway process's routing, not from an endpoint, and its body is the framework's not-found page, which is not part of the contract. | `test/integration/process_mode_routes_test.rb` ("inside the gateway, only /runner/v1/* and /up are routed") |
 | `401 runner_revoked` (§3) | Revoking a runner also revokes its tokens, so a scenario sees `invalid_token` first. `runner_revoked` needs only the runner's status to change, which no setup step does. | `test/integration/runner_gateway_test.rb` ("a revocation reaches the gateway within five seconds") |
 | The `400` for a body that is not valid JSON (§3) | A harness always serialises `body`, so it cannot send malformed JSON. | Not tested. It is the framework's own answer, documented as built. |
-| The callback proxy's forward (§5.6): the request as the platform's endpoint receives it (`X-Aixle-Runner-Environment` added, the bearer and the gateway's headers left out), an answer streamed as it comes, the key check of every credential route, and `502 upstream_unavailable` | The fixtures see only the gateway's side of the wire, one exchange at a time; the internal endpoint is behind it. | `test/integration/runner_gateway_proxy_test.rb`, and on the runner's side `runner/internal/proxy/proxy_test.go` |
+| The callback proxy's forward (§5.8): the request as the platform's endpoint receives it (`X-Aixle-Runner-Environment` added, the bearer and the gateway's headers left out), an answer streamed as it comes, the key check of every credential route, and `502 upstream_unavailable` | The fixtures see only the gateway's side of the wire, one exchange at a time; the internal endpoint is behind it. | `test/integration/runner_gateway_proxy_test.rb`, and on the runner's side `runner/internal/proxy/proxy_test.go` |
 
 ## Files
 
@@ -100,8 +104,10 @@ defined once per scenario.
 
 A setup step is `{"given": "<name>", ...arguments}`. A harness implements each with the real
 services it tests: the Rails harness calls `Runners::Credentials.mint_registration!`,
-`Runners::Registration.register!`, `Runners::Operations.enqueue!` and the runner's revoke, and
-creates a session of the machine for `session_on_machine`.
+`Runners::Registration.register!`, `Runners::Operations.enqueue!` and the runner's revoke,
+creates a session of the machine for `session_on_machine`, and gives `Runners::Release` the
+pins of `release_pins`. The Go fake replays the fixture's answers, so it only checks a setup
+step's arguments.
 
 | `given` | Arguments | What it does | Defines |
 | --- | --- | --- | --- |
@@ -109,12 +115,13 @@ creates a session of the machine for `session_on_machine`.
 | `registered_machine` | `as`, `name` (optional, default: the value of `as`) | Registers one machine of the runner with a fresh registration token, as a successful `POST /runner/v1/register` does, with protocol `1` and runner version `1.4.0`. | `<as>.access_token`, `<as>.refresh_token`, `<as>.environment_id` (an integer) |
 | `session_on_machine` | `machine` (a `registered_machine`'s `as`), `as` | Creates a session of the runner that runs on that machine, as the platform assigns one. It does not hold the machine yet. | `<as>.id` (an integer: the `session_id` its ops carry), `<as>.mcp_key` (the key its MCP calls carry in `X-Session-Key`) |
 | `session_holds_machine` | `machine` (a `registered_machine`'s `as`), `session` (a `session_on_machine`'s `as`) | Makes the session the one that holds the machine now, as the platform's allocation does. | nothing |
-| `upstream_answers` | `route` (a proxy route of PROTOCOL.md §5.6), `status` (an integer), `body` (optional, a JSON value) | The platform's endpoint behind that route answers every request with this status and JSON body. The runner's harness has nothing to set up: its fake gateway sends the fixture's response. | nothing |
+| `upstream_answers` | `route` (a proxy route of PROTOCOL.md §5.8), `status` (an integer), `body` (optional, a JSON value) | The platform's endpoint behind that route answers every request with this status and JSON body. The runner's harness has nothing to set up: its fake gateway sends the fixture's response. | nothing |
 | `op_enqueued` | `machine` (a `registered_machine`'s `as`), `session` (optional, a `session_on_machine`'s `as` of the same machine), `as`, `op` (an op name), `payload` (an object) | Puts an op on that machine's queue with a deadline 5 minutes ahead, in whole seconds. A session op (PROTOCOL.md §6) needs `session`, and its envelope then carries that session's `session_id`; an environment op takes none. The platform enqueues an op only while its session holds the machine, so the step first makes `session`, or for an environment op a session of the machine, its holder. | `<as>.id` and `<as>.sequence` (integers), `<as>.deadline_at` (the ISO 8601 string the gateway sends) |
 | `runner_revoked` | none | Revokes the runner, which revokes all of its credentials. | nothing |
 | `flag_off` | none | Turns `external_runners` off for the company. | nothing |
 | `flag_on` | none | Turns it back on. | nothing |
 | `time_passes` | `seconds` (an integer) | Moves the gateway's clock forward. | nothing |
+| `release_pins` | `min_version`, `recommended_version` (each optional, a version string; absent means null), `binaries` (optional, the `binaries` map of `config/runner_release.yml`: `{"1.5.0": {"linux-amd64": {"sha256": "<64 hex>"}}}`; absent means none) | Replaces the platform's runner pins for the rest of the scenario: the committed `config/runner_release.yml`, its `protocol_supported` and `download_url` kept, with these three keys in place of its own. Without this step a scenario runs on the committed pins, which pin no minimum, no recommendation and no binary yet. | nothing |
 
 ## Exchanges
 
@@ -133,7 +140,9 @@ creates a session of the machine for `session_on_machine`.
 | `body` | no | A JSON value, sent serialized with `Content-Type: application/json`. Without it, the request has no body. |
 
 Every request carries `X-Aixle-Runner-Protocol: 1` and `X-Aixle-Runner-Version: 1.4.0` unless
-`headers` replaces or removes them. Header names are case-insensitive.
+`headers` replaces or removes them. Header names are case-insensitive. A `302` (the release
+redirect, `PROTOCOL.md` §5.6) has no body to match: its `Location` and `X-Aixle-Runner-Sha256`
+are checked as `headers`, and the Go client must read them back.
 
 ### `response`
 

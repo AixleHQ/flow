@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -153,6 +154,67 @@ func TestConfigureRegistersAndStoresTheCredentials(t *testing.T) {
 	}
 }
 
+func TestConfigureWithoutTheOptOutSendsNoAutoUpdate(t *testing.T) {
+	p, url := newPlatform(t, map[string][]answer{"POST /runner/v1/register": {registered()}})
+	dir := t.TempDir()
+	if err := Configure(context.Background(), configureOpts(url, dir)); err != nil {
+		t.Fatal(err)
+	}
+	if _, sent := p.requests[0].body["auto_update"]; sent {
+		t.Fatalf("register sent %#v", p.requests[0].body)
+	}
+	creds, _ := credentials.NewStore(dir).Load()
+	if creds.AutoUpdate != nil || !creds.AutoUpdateEnabled() {
+		t.Fatalf("stored %#v", creds.AutoUpdate)
+	}
+}
+
+func TestConfigureNoAutoUpdateTellsThePlatformAndKeepsTheOptOut(t *testing.T) {
+	p, url := newPlatform(t, map[string][]answer{"POST /runner/v1/register": {registered()}})
+	dir := t.TempDir()
+	opts := configureOpts(url, dir)
+	opts.NoAutoUpdate = true
+	var out bytes.Buffer
+	opts.Out = &out
+	if err := Configure(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if v, sent := p.requests[0].body["auto_update"]; !sent || v != false {
+		t.Fatalf("register sent %#v", p.requests[0].body)
+	}
+	creds, err := credentials.NewStore(dir).Load()
+	if err != nil || creds.AutoUpdateEnabled() {
+		t.Fatalf("stored %#v, %v", creds.AutoUpdate, err)
+	}
+	if !strings.Contains(out.String(), "Self-update is off") {
+		t.Fatalf("printed %q", out.String())
+	}
+}
+
+// configure run from the published image, which sets NoSelfUpdateEnv, registers
+// the machine as one that does not update itself, as --no-auto-update does.
+func TestConfigureWithNoSelfUpdateRegistersAsNoAutoUpdate(t *testing.T) {
+	p, url := newPlatform(t, map[string][]answer{"POST /runner/v1/register": {registered()}})
+	dir := t.TempDir()
+	opts := configureOpts(url, dir)
+	opts.NoSelfUpdate = true
+	var out bytes.Buffer
+	opts.Out = &out
+	if err := Configure(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if v, sent := p.requests[0].body["auto_update"]; !sent || v != false {
+		t.Fatalf("register sent %#v", p.requests[0].body)
+	}
+	creds, err := credentials.NewStore(dir).Load()
+	if err != nil || creds.AutoUpdateEnabled() {
+		t.Fatalf("stored %#v, %v", creds.AutoUpdate, err)
+	}
+	if !strings.Contains(out.String(), "Self-update is off") {
+		t.Fatalf("printed %q", out.String())
+	}
+}
+
 func TestAFailedPreflightRegistersNothing(t *testing.T) {
 	p, url := newPlatform(t, map[string][]answer{"POST /runner/v1/register": {registered()}})
 	dir := t.TempDir()
@@ -180,7 +242,10 @@ func TestConfigureRefusals(t *testing.T) {
 		"ephemeral_not_supported": {refused(422, "ephemeral_not_supported"), "was not spent"},
 		"runners_disabled":        {refused(403, "runners_disabled"), "try again later with the same token"},
 		"unsupported_protocol":    {refused(400, "unsupported_protocol"), "update aixle-runner"},
-		"runner_revoked":          {refused(401, "runner_revoked"), "revoked or deleted"},
+		"runner_version_unsupported": {answer{400, map[string]any{
+			"error": "runner_version_unsupported", "message": "aixle-runner 0.0.0-dev is no longer supported (minimum 0.1.0)."}},
+			"is no longer supported (minimum 0.1.0). The registration token was not spent: update aixle-runner"},
+		"runner_revoked": {refused(401, "runner_revoked"), "revoked or deleted"},
 	}
 	for name, tc := range cases {
 		_, url := newPlatform(t, map[string][]answer{"POST /runner/v1/register": {tc.answer}})
@@ -535,5 +600,33 @@ func TestConfigureAsRootBeforeServiceInstallKeepsTheCredentials(t *testing.T) {
 	}
 	if len(p.requests) != 1 || !credsExist(t, dir) {
 		t.Fatalf("requests %v", p.requests)
+	}
+}
+
+func TestSelfUpdateOffReadsABoolean(t *testing.T) {
+	for value, want := range map[string]bool{"1": true, "true": true, " TRUE ": true, "": false, "0": false, "false": false, "off": false, "yes": false} {
+		if got := SelfUpdateOff(value); got != want {
+			t.Errorf("%q: got %v, want %v", value, got, want)
+		}
+	}
+}
+
+// The published image sets AIXLE_RUNNER_NO_SELF_UPDATE (docker/runner/Dockerfile):
+// a host runner started from it reports self-update as off, whatever its
+// credentials say.
+func TestAHostRunnerWithNoSelfUpdateStartsWithSelfUpdateOff(t *testing.T) {
+	for _, noSelfUpdate := range []bool{false, true} {
+		_, url := newPlatform(t, map[string][]answer{})
+		dir := t.TempDir()
+		storeCreds(t, dir, url)
+		var logs bytes.Buffer
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		_ = RunHost(ctx, HostOptions{StateDir: dir, Docker: hostDocker{}, NoSelfUpdate: noSelfUpdate,
+			Logger: slog.New(slog.NewTextHandler(&logs, nil))})
+		want := fmt.Sprintf("auto_update=%v", !noSelfUpdate)
+		if !strings.Contains(logs.String(), want) {
+			t.Errorf("NoSelfUpdate %v: the start line lacks %s:\n%s", noSelfUpdate, want, logs.String())
+		}
 	}
 }

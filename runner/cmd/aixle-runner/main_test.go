@@ -10,10 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aixlehq/aixle-runner/internal/cli"
 	"github.com/aixlehq/aixle-runner/internal/credentials"
 	"github.com/aixlehq/aixle-runner/internal/journal"
 	"github.com/aixlehq/aixle-runner/internal/protocol"
 	"github.com/aixlehq/aixle-runner/internal/service"
+	"github.com/aixlehq/aixle-runner/internal/version"
 )
 
 func TestServiceTakesNoStateDir(t *testing.T) {
@@ -70,5 +72,31 @@ func TestAHostRunnerWithACorruptJournalExitsSoSystemdDoesNotRestartIt(t *testing
 func TestTheUsageNamesTheBinaryTheServiceRuns(t *testing.T) {
 	if !strings.Contains(usage, service.BinaryPath) {
 		t.Fatalf("usage:\n%s", usage)
+	}
+}
+
+func TestTheServiceBinaryLivesInTheStateDirectory(t *testing.T) {
+	// The service user owns the state directory, so it can replace its own binary
+	// on a self-update (DESIGN.md §14.4).
+	if filepath.Dir(filepath.Dir(service.BinaryPath)) != cli.DefaultStateDir {
+		t.Fatalf("%s is not under %s", service.BinaryPath, cli.DefaultStateDir)
+	}
+}
+
+func TestVersionPrintsTheVersion(t *testing.T) {
+	for _, arg := range []string{"version", "--version"} {
+		var stdout bytes.Buffer
+		if code := run(context.Background(), []string{arg}, &stdout, io.Discard); code != 0 || stdout.String() != version.Version+"\n" {
+			t.Fatalf("%s: exit %d, %q", arg, code, stdout.String())
+		}
+	}
+	if code := run(context.Background(), []string{"version", "extra"}, io.Discard, io.Discard); code != 2 {
+		t.Fatalf("exit %d", code)
+	}
+}
+
+func TestAnUpdateExitsWithItsOwnCode(t *testing.T) {
+	if service.ExitUpdated == 0 || service.ExitUpdated == 1 || service.ExitUpdated == service.ExitStop {
+		t.Fatalf("ExitUpdated is %d", service.ExitUpdated)
 	}
 }

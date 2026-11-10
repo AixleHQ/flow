@@ -69,7 +69,7 @@ type Environment struct {
 	RemoveTimeout time.Duration
 	// Logger receives what an op cannot put in its answer. Nil is slog.Default().
 	Logger *slog.Logger
-	// Proxy is the host runner's callback-proxy relay (PROTOCOL.md §5.6).
+	// Proxy is the host runner's callback-proxy relay (PROTOCOL.md §5.8).
 	// `container.start` starts a session's proxy through it: a sidecar, or with
 	// `network: host` a listener. Nil starts none.
 	Proxy ProxyHost
@@ -161,6 +161,14 @@ func (e *Environment) sessionContainer(ctx context.Context) (*container.InspectR
 		return &inspected.Container, nil
 	}
 	return nil, nil
+}
+
+// HoldsSession says whether the environment has a session container, running or
+// not: the machine then holds a session, and the runner does not update itself
+// (DESIGN.md §14.4). `container.stop` removes the container when the session ends.
+func (e *Environment) HoldsSession(ctx context.Context) (bool, error) {
+	c, err := e.sessionContainer(ctx)
+	return c != nil, err
 }
 
 // requireSession is the session container a session op acts on. `running` asks

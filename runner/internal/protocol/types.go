@@ -1,5 +1,5 @@
 // Package protocol is the runner's client of the gateway's wire contract,
-// runner/protocol/PROTOCOL.md. It speaks the five endpoints of protocol 1 and turns
+// runner/protocol/PROTOCOL.md. It speaks the endpoints of protocol 1 and turns
 // every refusal into a *Refusal. What a runner does about a refusal is decided by
 // Classify, not here.
 package protocol
@@ -16,13 +16,13 @@ const ProtocolVersion = "1"
 // MaxWait is the longest long-poll the gateway holds (§5.4).
 const MaxWait = 25 * time.Second
 
-// ProxyPathPrefix is the gateway's path of the callback proxy (§5.6): a
+// ProxyPathPrefix is the gateway's path of the callback proxy (§5.8): a
 // request for `/<route>/…` of the local proxy goes to ProxyPathPrefix +
 // `<route>/…`.
 const ProxyPathPrefix = "/runner/v1/proxy/"
 
 // RefusalHeader marks the gateway's own refusal on the proxy route, so that it
-// is not taken for the internal endpoint's answer (§5.6).
+// is not taken for the internal endpoint's answer (§5.8).
 const RefusalHeader = "X-Aixle-Runner-Refusal"
 
 // MaxBodyBytes is the gateway's cap on a request body (§2). A larger body is
@@ -62,13 +62,15 @@ type TokenPair struct {
 	RefreshTokenExpiresAt time.Time `json:"refresh_token_expires_at"`
 }
 
-// RegisterRequest is the body of POST /runner/v1/register (§5.1).
+// RegisterRequest is the body of POST /runner/v1/register (§5.1). AutoUpdate is
+// sent only as false, by `configure --no-auto-update`; absent means true.
 type RegisterRequest struct {
-	Name      string         `json:"name"`
-	OS        string         `json:"os"`
-	Arch      string         `json:"arch"`
-	Facts     map[string]any `json:"facts"`
-	Ephemeral bool           `json:"ephemeral"`
+	Name       string         `json:"name"`
+	OS         string         `json:"os"`
+	Arch       string         `json:"arch"`
+	Facts      map[string]any `json:"facts"`
+	Ephemeral  bool           `json:"ephemeral"`
+	AutoUpdate *bool          `json:"auto_update,omitempty"`
 }
 
 // Registration is the 201 answer of register.
@@ -86,6 +88,40 @@ type Op struct {
 	SessionID  *int64          `json:"session_id,omitempty"`
 	DeadlineAt time.Time       `json:"deadline_at"`
 	Payload    json.RawMessage `json:"payload"`
+}
+
+// Poll is the answer of GET ops (§5.4). Update is set only on an answer without
+// ops, when the platform recommends a newer runner for this idle machine.
+type Poll struct {
+	Ops    []Op    `json:"ops"`
+	Update *Update `json:"update,omitempty"`
+}
+
+// Update is the `update` of an empty poll (§5.4): the version the platform
+// recommends, and the binary's SHA-256 for this machine's os and arch, from the
+// platform's pins. The runner asks its own platform URL for the release.
+type Update struct {
+	Version string `json:"version"`
+	SHA256  string `json:"sha256"`
+}
+
+// Checksums is the answer of GET releases/:version/checksums (§5.7): the pinned
+// SHA-256 of each binary of the version, by `<os>-<arch>`.
+type Checksums struct {
+	Version  string            `json:"version"`
+	Binaries map[string]Digest `json:"binaries"`
+}
+
+// Digest is one binary's pinned digest.
+type Digest struct {
+	SHA256 string `json:"sha256"`
+}
+
+// ReleaseLocation is the `302` of GET releases/:version/:os-:arch (§5.6): where
+// the binary is, and the digest it must have.
+type ReleaseLocation struct {
+	Location string
+	SHA256   string
 }
 
 // Result statuses (§5.5).
