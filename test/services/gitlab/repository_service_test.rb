@@ -49,6 +49,23 @@ module Gitlab
       assert_equal false, result[1][:is_private] # rubocop:disable Minitest/RefuteFalse
     end
 
+    test "list_available follows GitLab's next-page link past the first 100 projects" do
+      next_page = "#{GITLAB_API}/projects?membership=true&page=2&per_page=100"
+      stub_request(:get, "#{GITLAB_API}/projects")
+        .with(query: { "membership" => "true", "per_page" => "100" })
+        .to_return(status: 200,
+          headers: { "Content-Type" => "application/json", "Link" => %(<#{next_page}>; rel="next") },
+          body: [ gl_project(path: "group/new-app", branch: "main", visibility: "private", description: nil) ].to_json)
+      stub_request(:get, "#{GITLAB_API}/projects")
+        .with(query: { "membership" => "true", "page" => "2", "per_page" => "100" })
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+          body: [ gl_project(path: "group/old-app", branch: "master", visibility: "private", description: nil) ].to_json)
+
+      result = Gitlab::RepositoryService.new(@integration).list_available
+
+      assert_equal %w[group/new-app group/old-app], result.pluck(:full_name)
+    end
+
     test "list_available returns [] when GitLab rejects the token" do
       stub_request(:get, "#{GITLAB_API}/projects")
         .with(query: hash_including("membership" => "true"))

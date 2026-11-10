@@ -22,6 +22,8 @@ governance, community health — carry none.
   show each company as it stands now, whatever period is selected.
 
 ### Fixed
+- **Repositories**: adding a GitLab repository lists every project the
+  connection's user belongs to, not only the 100 most recently created.
 - **Admin**: impersonating a user, and "Back to app" during an impersonation, open
   the app's projects page instead of the marketing landing page.
 - **Workflows**: personal MCP can set a step's repositories, assets, expected
