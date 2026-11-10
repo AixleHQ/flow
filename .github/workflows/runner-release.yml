@@ -9,9 +9,9 @@ name: Runner Release
 # lane's never matches `v*` or the chart's `runner-chart-v*`.
 #
 # Publishing a release changes nothing on the platform: the platform serves and
-# recommends only what config/runner_release.yml pins, which an application PR
-# edits with the digests of this run's checksums.txt (docs/operations/releasing.md,
-# "Releasing the runner").
+# recommends only what the runners.release block of config/settings.yml pins,
+# which an application PR edits with the digests of this run's checksums.txt
+# (docs/operations/releasing.md, "Releasing the runner").
 #
 # Run by hand (workflow_dispatch), it is a dry run: it builds and checks the
 # binaries and the image, and pushes and releases nothing.
@@ -247,7 +247,7 @@ jobs:
           cat > notes.md <<EOF
           aixle-runner ${VERSION}, for linux/amd64 and linux/arm64, and the image \`${IMAGE}:${VERSION}\`.
 
-          The platform serves and recommends this version once \`config/runner_release.yml\` pins it, with these digests:
+          The platform serves and recommends this version once the \`runners.release\` block of \`config/settings.yml\` pins it, with these digests:
 
           \`\`\`
           $(cat dist/checksums.txt)
