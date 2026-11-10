@@ -155,6 +155,35 @@ class RunnerGatewayProxyTest < ActionDispatch::IntegrationTest
     server&.close
   end
 
+  test "headers that the Connection header nominates are not forwarded, in either direction" do
+    upstream = stub_request(:post, Settings.mcp.server_url)
+               .to_return(status: 200, body: "{}",
+                          headers: { "Connection" => "X-Hop", "X-Hop" => "upstream-only", "X-Kept" => "kept" })
+
+    post "/runner/v1/proxy/mcp", params: "{}",
+                                 headers: proxy_headers("X-Session-Key" => @session.mcp_key, "Connection" => "keep-alive, X-Hop",
+                                                        "X-Hop" => "runner-only", "X-Kept" => "kept")
+
+    assert_response :ok
+    assert_requested(upstream)
+    assert_requested(:post, Settings.mcp.server_url) do |request|
+      request.headers["X-Hop"].nil? && request.headers["X-Kept"] == "kept"
+    end
+    assert_nil response.headers["X-Hop"]
+    assert_nil response.headers["Connection"]
+    assert_equal "kept", response.headers["X-Kept"]
+  end
+
+  test "a runner that disconnects during the answer is logged, not raised" do
+    stub_request(:post, Settings.mcp.server_url).to_raise(ActionController::Live::ClientDisconnected)
+    Rails.logger.stubs(:info)
+    Rails.logger.expects(:info).with(regexp_matches(/the runner disconnected during the answer/)).once
+
+    post "/runner/v1/proxy/mcp", params: "{}", headers: proxy_headers("X-Session-Key" => @session.mcp_key)
+
+    assert_nil response.headers["X-Aixle-Runner-Refusal"]
+  end
+
   test "every refusal of the route carries the refusal header, the common ones included" do
     post "/runner/v1/proxy/mcp", params: "{}", headers: proxy_headers.merge("Authorization" => "Bearer aracc_unknown")
     assert_refused :unauthorized, "invalid_token"

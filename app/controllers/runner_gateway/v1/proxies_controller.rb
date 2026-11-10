@@ -94,16 +94,25 @@ module RunnerGateway
         body = request.body&.read
         outbound.body = body if body.present?
 
+        # The forward may stream for up to READ_TIMEOUT and needs no database:
+        # the connection goes back to the pool for it, as the ops long-poll
+        # does (Runners::Operations.poll).
+        ActiveRecord::Base.connection_pool.release_connection
         Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https",
                                             open_timeout: OPEN_TIMEOUT, read_timeout: READ_TIMEOUT) do |http|
           http.request(outbound) do |upstream|
             response.status = upstream.code.to_i
+            dropped = DROPPED_RESPONSE_HEADERS + connection_tokens(upstream["Connection"])
             upstream.each_header do |name, value|
-              response.headers[name] = value unless DROPPED_RESPONSE_HEADERS.include?(name.downcase)
+              response.headers[name] = value unless dropped.include?(name.downcase)
             end
             upstream.read_body { |chunk| response.stream.write(chunk) }
           end
         end
+        response.stream.close
+      rescue ActionController::Live::ClientDisconnected
+        # The host runner cut the call: its session stopped, or its relay closed.
+        Rails.logger.info("[RunnerGateway::Proxy] environment #{environment.id}: the runner disconnected during the answer")
         response.stream.close
       rescue *UPSTREAM_ERRORS => e
         Rails.logger.warn("[RunnerGateway::Proxy] environment #{environment.id}: #{uri.host}:#{uri.port}: #{e.class}: #{e.message}")
@@ -114,8 +123,10 @@ module RunnerGateway
         end
       end
 
-      # The request's headers as the agent sent them, less the dropped ones.
+      # The request's headers as the agent sent them, less the dropped ones
+      # and the ones its `Connection` header nominates (RFC 9110 §7.6.1).
       def forwarded_headers
+        nominated = connection_tokens(request.headers["Connection"])
         request.headers.env.each_with_object({}) do |(key, value), headers|
           name = if key.start_with?("HTTP_")
             key.delete_prefix("HTTP_").split("_").map(&:capitalize).join("-")
@@ -123,10 +134,17 @@ module RunnerGateway
             "Content-Type"
           end
           next if name.nil? || value.blank?
-          next if DROPPED_REQUEST_HEADERS.include?(name.downcase) || name.downcase.start_with?("x-aixle-runner-")
+          next if DROPPED_REQUEST_HEADERS.include?(name.downcase) || nominated.include?(name.downcase)
+          next if name.downcase.start_with?("x-aixle-runner-")
 
           headers[name] = value
         end
+      end
+
+      # The field names a `Connection` header nominates, lowercased: they are
+      # hop-by-hop, as the fixed ones are, and never forwarded.
+      def connection_tokens(value)
+        value.to_s.split(",").map { |token| token.strip.downcase }.compact_blank
       end
     end
   end

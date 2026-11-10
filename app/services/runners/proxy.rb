@@ -63,20 +63,22 @@ module Runners
       # Stored files on the filesystem storage, which Rails serves under
       # /store without a key: a presigned S3 URL is never rewritten
       # (ContainerAssetUrl), so only these reach the proxy. They carry no
-      # session key, so the route needs only a session on the environment.
+      # session key, so the route needs only a session on the environment,
+      # and it passes any path under /store: under the filesystem storage
+      # every company's stored files are there. That is safe only because
+      # Shrine uses the filesystem storage in development alone
+      # (config/initializers/shrine.rb). A deployment that serves stored files
+      # from the filesystem (self-hosted, say) must give this route a key
+      # check first, or a runner session could read another company's files.
       Route.new(name: "assets", callback: :container_assets, verbs: %w[GET HEAD], prefix: "store/", key: nil)
     ].index_by(&:name).freeze
 
-    # The header that carries each credential endpoint's key, next to
-    # `X-Session-Id` (the controllers of those endpoints read the same).
-    KEY_HEADERS = {
-      agent: "X-Agent-Key", git: "X-Git-Key", azure_git: "X-Azure-Git-Key", cloud: "X-Cloud-Key"
-    }.freeze
-    KEY_CHECKS = {
-      agent: ->(session, key) { Agents::SessionKey.valid?(session, key) },
-      git: ->(session, key) { GitCredentials::SessionKey.valid?(session, key) },
-      azure_git: ->(session, key) { AzureDevops::GitSessionKey.valid?(session, key) },
-      cloud: ->(session, key) { CloudAuth::SessionKey.valid?(session, key) }
+    # The module that checks each credential endpoint's key, and names the
+    # header it travels in next to `X-Session-Id`: the controllers of those
+    # endpoints read the same.
+    SESSION_KEYS = {
+      agent: Agents::SessionKey, git: GitCredentials::SessionKey,
+      azure_git: AzureDevops::GitSessionKey, cloud: CloudAuth::SessionKey
     }.freeze
 
     module_function
@@ -125,18 +127,12 @@ module Runners
     end
 
     def key_of?(kind, session, headers)
-      if kind == :mcp
-        key = headers["X-Session-Key"].to_s
-        return false if key.blank? || key.start_with?(User::MCP_TOKEN_PREFIX)
-
-        found = MCP::SessionKey.session_for(key) || TerminalSession.find_by(mcp_key: key)
-        return found&.id == session.id
-      end
-
+      return MCP::SessionKey.lookup(headers[MCP::SessionKey::HEADER])&.id == session.id if kind == :mcp
       return false unless headers["X-Session-Id"].to_s == session.id.to_s
 
-      key = headers[KEY_HEADERS.fetch(kind)].to_s
-      key.present? && KEY_CHECKS.fetch(kind).call(session, key)
+      key_module = SESSION_KEYS.fetch(kind)
+      key = headers[key_module::HEADER].to_s
+      key.present? && key_module.valid?(session, key)
     end
 
     # The internal endpoint a route forwards to: the hosted callback address,
