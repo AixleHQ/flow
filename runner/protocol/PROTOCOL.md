@@ -42,8 +42,8 @@ Every request carries these three headers, except a request to the release endpo
 | `X-Aixle-Runner-Version` | The runner's own version, a strict [Semantic Versioning 2.0](https://semver.org) version (`1.4.0`, `1.5.0-rc.1+build.7`; no `v` prefix) | `400 invalid_runner_version` |
 
 **The protocol versions the gateway accepts** are the platform's pins,
-`protocol_supported` in the platform's `config/runner_release.yml` (DESIGN.md §14.2), which lists
-`1` today. After the first protocol bump it lists the current and the previous version (§7).
+`protocol_supported` in the `runners.release` block of the platform's `config/settings.yml`
+(DESIGN.md §14.2), which lists `1` today. After the first protocol bump it lists the current and the previous version (§7).
 
 **The version grammar is strict SemVer 2.0.** `MAJOR.MINOR.PATCH`, each a number without leading
 zeros, then an optional `-PRERELEASE` of dot-separated identifiers (`0-9A-Za-z-`, none empty, a
@@ -237,18 +237,18 @@ machine, which the platform calls an environment.
 | Field | Type | Rule |
 | --- | --- | --- |
 | `name` | string | Required. Leading and trailing spaces are dropped, and it must not be blank then. At most 255 characters. |
-| `os` | string | Optional, at most 255 characters, e.g. `linux`. A value that is not a string is ignored. |
-| `arch` | string | Optional, at most 255 characters, e.g. `amd64`. A value that is not a string is ignored. |
+| `os` | string | Optional, a string, at most 255 characters, e.g. `linux`. Any other value, `null` included, is refused with `invalid_registration`. |
+| `arch` | string | Optional, a string, at most 255 characters, e.g. `amd64`. Any other value, `null` included, is refused with `invalid_registration`. |
 | `facts` | object | Optional, default `{}` when the key is absent. What the machine reports about itself, e.g. `{"docker": "27.1.0"}`. Omit it or send an object: `null` is refused with `invalid_registration`. |
-| `ephemeral` | boolean | Optional, default `false`. `true` is refused: ephemeral registration is not in protocol 1 yet. |
+| `ephemeral` | boolean | Optional, default `false`. A JSON boolean: any other value (`"true"`, `1`, `0.0`, `null`) is refused with `invalid_registration`. `true` is refused with `ephemeral_not_supported`: ephemeral registration is not in protocol 1 yet. |
 | `auto_update` | boolean | Optional, default `true`. `false` is `aixle-runner configure --no-auto-update`: the platform never offers the machine an update (§5.4). `null` is refused with `invalid_registration`. |
 
 The `X-Aixle-Runner-Version` and `X-Aixle-Runner-Protocol` of the request are recorded as the
 machine's runner and protocol versions.
 
 **The minimum version.** A runner whose `X-Aixle-Runner-Version` is below the platform's
-`min_version` (`config/runner_release.yml`) is refused with `400 runner_version_unsupported`, and
-the message names the minimum, e.g. `aixle-runner 1.1.9 is no longer supported (minimum 1.2.0).
+`min_version` (`runners.release` in `config/settings.yml`) is refused with
+`400 runner_version_unsupported`, and the message names the minimum, e.g. `aixle-runner 1.1.9 is no longer supported (minimum 1.2.0).
 Update aixle-runner.` The check comes after the token, the runner and the flag (§3, step 5), so a
 dead token learns nothing about the minimum, and it does not spend the registration token. The
 platform pins no minimum yet. A machine that registered before the minimum was raised is not
@@ -276,8 +276,9 @@ characters, then `400 runner_version_unsupported`, then `422 ephemeral_not_suppo
 refused the same way whatever `min_version` is. Two machines that race on one token create one environment; the other gets
 `invalid_token`.
 
-Schema: [`schemas/v1/register.request.json`](schemas/v1/register.request.json), checked after the
-`ephemeral` refusal; `name` blank once trimmed and a value over 255 characters are checked when
+Schema: [`schemas/v1/register.request.json`](schemas/v1/register.request.json). A body with
+`ephemeral: true` passes it whatever the rest of it holds, so the `ephemeral` refusal comes first;
+`name` blank once trimmed and a value over 255 characters are checked when
 the machine is recorded, with the same refusal.
 
 Fixtures: `register/` (`below_min_version`, `no_auto_update` among them), `headers/`.
@@ -445,8 +446,8 @@ the machine has either.
 | `Location` | Where the binary is: the `runner-v<version>` GitHub Release's asset `aixle-runner-<os>-<arch>`, or a mirror the platform's pins name |
 | `X-Aixle-Runner-Sha256` | The binary's SHA-256, lowercase hex, from the platform's pins |
 
-The digest comes from the platform's pins (`config/runner_release.yml`), not from the host the
-binary is on, so a binary changed there fails verification. A client checks the SHA-256 of what
+The digest comes from the platform's pins (`runners.release` in `config/settings.yml`), not from
+the host the binary is on, so a binary changed there fails verification. A client checks the SHA-256 of what
 it downloaded against it before it runs the binary.
 
 Its own refusals: `400 invalid_request`, for a version that is not a SemVer version or a platform

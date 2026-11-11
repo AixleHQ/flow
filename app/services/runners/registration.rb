@@ -6,6 +6,12 @@ module Runners
   # configure` spends a registration token on a new environment and its
   # access/refresh pair, and `aixle-runner unregister` marks the environment
   # `gone`, ends its hold on a session and revokes its credentials.
+  #
+  # `register!` takes named parameters, never the request: the gateway checks
+  # the headers and the body's shape and maps the body to them
+  # (RunnerGateway::V1::RegistrationsController). Its refusals are raised as
+  # Credentials::Refused, which the gateway maps to its status
+  # (RunnerGateway::V1::ApplicationController).
   module Registration
     Result = Data.define(:environment, :pair)
 
@@ -16,9 +22,18 @@ module Runners
     # one token create one environment, and the runner is locked before it, so
     # a concurrent revocation either refuses this registration or revokes the
     # pair it issued (Credentials.lock_live_runner!).
-    # `auto_update` is false for a machine configured with `--no-auto-update`
+    #
+    # The checks run after the gateway's, in the order of PROTOCOL.md §5.1,
+    # and the token is spent only by a registration that passes them all:
+    # `ephemeral: true` is `ephemeral_not_supported`, and then the machine is
+    # saved with its name stripped, whose validations refuse a name blank once
+    # stripped or a value over its column with `invalid_registration`.
+    # `runner_version` and `protocol_version` are the ones the machine runs
+    # and speaks.
+    #
+    # `auto_update: false` is a machine configured with `--no-auto-update`
     # (DESIGN.md §14.4): it is never offered an update.
-    def register!(credential, name:, os:, arch:, facts:, ephemeral:, runner_version:, protocol_version:, auto_update: true)
+    def register!(credential, name:, os:, arch:, facts:, ephemeral:, auto_update:, runner_version:, protocol_version:)
       if ephemeral
         raise Credentials::Refused.new("ephemeral_not_supported", "Ephemeral registration is not supported yet.")
       end
@@ -33,7 +48,7 @@ module Runners
         environment = RunnerEnvironment.new(
           runner_id: credential.runner_id, company_id: credential.company_id, origin: :registered,
           state: :registered, key: "aixle-r#{credential.runner_id}-#{SecureRandom.hex(4)}",
-          display_name: name, os: os, arch: arch, facts: facts, auto_update: auto_update,
+          display_name: name.to_s.strip, os: os, arch: arch, facts: facts, auto_update: auto_update,
           runner_version: runner_version, protocol_version: protocol_version
         )
         unless environment.save

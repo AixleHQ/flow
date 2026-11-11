@@ -195,24 +195,33 @@ module Runners
 
     # The session that holds the environment, when the forwarded request
     # carries that session's own key for the route (DESIGN.md §6.6, step 2).
+    # The caller reads the request and passes its values: `session_id` is the
+    # `X-Session-Id` header, `key` the value of the route's `key_header`.
     # Nil otherwise: the environment holds no session, the key is missing or
     # wrong, or it is another session's. The internal endpoint checks the key
     # again; this check is what ties it to the machine.
-    def holder(route, environment, headers)
+    def holder(route, environment, session_id: nil, key: nil)
       session = environment.current_session
       return nil if session.nil?
       return session if route.key.nil?
 
-      session if key_of?(route.key, session, headers)
+      session if key_of?(route.key, session, session_id, key)
     end
 
-    def key_of?(kind, session, headers)
-      return MCP::SessionKey.lookup(headers[MCP::SessionKey::HEADER])&.id == session.id if kind == :mcp
-      return false unless headers["X-Session-Id"].to_s == session.id.to_s
+    # The header that carries a route's session key, nil for a route without
+    # one.
+    def key_header(route)
+      return nil if route.key.nil?
 
-      key_module = SESSION_KEYS.fetch(kind)
-      key = headers[key_module::HEADER].to_s
-      key.present? && key_module.valid?(session, key)
+      route.key == :mcp ? MCP::SessionKey::HEADER : SESSION_KEYS.fetch(route.key)::HEADER
+    end
+
+    def key_of?(kind, session, session_id, key)
+      return MCP::SessionKey.lookup(key)&.id == session.id if kind == :mcp
+      return false unless session_id.to_s == session.id.to_s
+
+      key = key.to_s
+      key.present? && SESSION_KEYS.fetch(kind).valid?(session, key)
     end
 
     # The internal endpoint a route forwards to: the hosted callback address,

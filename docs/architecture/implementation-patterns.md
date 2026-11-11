@@ -205,6 +205,10 @@ What the controllers return — no envelope around the resource:
   `bin/temporal_worker`, which runs after `config/environment`).
 
 ### Error Handling
+- **A service takes named parameters, never the request, its body or its headers,** so another service, a CLI command or a controller can call it. E.g. `Runners::Registration.register!(credential, name:, os:, arch:, facts:, ephemeral:, auto_update:, runner_version:, protocol_version:)` and `Runners::Operations.record_result!(operation, status:, exit_code:, stdout:, stderr:, data:, error:)`.
+- **The controller turns the request into parameters.** It checks the headers (their presence, their form, and a rule on a header's value such as the runner gateway's version over 255 characters or below `min_version`), authentication, and the body's shape against its schema (`Runners::ProtocolSchema.valid?`), and refuses itself when one fails. It then maps the body to the service's parameters, defaults included.
+- **The service makes the domain checks and raises a named error.** Examples: `WorkflowAggregateSave::Invalid`, `Chat::ConnectCodes::Refused`, `Templates::Package` (checks `template.yaml` against its schema itself), and the runner gateway's `Runners::Credentials::Refused` (e.g. `ephemeral_not_supported`, or a machine whose validations fail).
+- **The controller maps a service's named error to a status,** through `rescue_from` (the runner gateway's `Runners::Credentials::Refused` → `REFUSAL_STATUS`, whose codes the controllers' own refusals use too) or a `rescue` in the action (`aggregates_controller.rb`, `chat_connect_codes_controller.rb`).
 - **Controllers:** `rescue_from` in the base controllers — `Api::V1::ApplicationController` (JSON 403, 404, and 422 for invalid records and CSRF failures) and `Web::Company::ApplicationController` (Pundit refusals)
 - **Services:** custom exceptions → `Temporalio::Error::ApplicationError`
 - **Temporal:** `TemporalExceptions.wrap(error, retryable:, benign:)`

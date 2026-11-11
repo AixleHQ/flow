@@ -4,8 +4,9 @@ require "test_helper"
 
 # The runner release endpoints, the version skew policy and the update offer
 # (docs/design/agent-runtimes/DESIGN.md §14.2 to §14.4, runner/protocol/PROTOCOL.md
-# §5.1, §5.4, §5.6, §5.7): the platform's pins, config/runner_release.yml, decide
-# what the gateway serves, whom it registers and what it recommends.
+# §5.1, §5.4, §5.6, §5.7): the platform's pins, the `runners.release` block of
+# config/settings.yml, decide what the gateway serves, whom it registers and
+# what it recommends.
 class RunnerGatewayReleasesTest < ActionDispatch::IntegrationTest
   include ProcessModeHelper::RunnerGateway
 
@@ -98,8 +99,19 @@ class RunnerGatewayReleasesTest < ActionDispatch::IntegrationTest
     assert_refused :not_found, "not_found"
   end
 
-  test "with the committed pins nothing is served yet" do
-    get "/runner/v1/releases/0.1.0/linux-amd64"
+  # The committed pins, not a stub: runner-v0.1.0 and the digests of its
+  # checksums.txt.
+  test "with the committed pins 0.1.0 is served with the released digests" do
+    { "linux-amd64" => "55af0ecb22c70f52ca4213f7f310c6321ba0e1d175545f663c1c948107caad44",
+      "linux-arm64" => "e27d43e8d29ec520f5868b4394d66c9e95ea7476ffc3ee3d0a85e6b259527441" }.each do |platform, digest|
+      get "/runner/v1/releases/0.1.0/#{platform}"
+
+      assert_response :found
+      assert_equal "https://github.com/AixleHQ/flow/releases/download/runner-v0.1.0/aixle-runner-#{platform}",
+                   response.headers["Location"]
+      assert_equal digest, response.headers["X-Aixle-Runner-Sha256"]
+    end
+    get "/runner/v1/releases/0.0.9/linux-amd64"
     assert_refused :not_found, "not_found"
   end
 
