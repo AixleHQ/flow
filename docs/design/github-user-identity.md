@@ -1,6 +1,12 @@
 # Agents act as the user on GitHub
 
-**Task:** #214 · **Status:** proposal, revised after review · **Date:** 2026-11-10
+**Task:** #214 · **Status:** proposal, revised after review · **Date:** 2026-11-11
+
+**Revision 3 (2026-11-11).** Alex's second review rejected D13: `TerminalSession`
+gets no `attr_readonly :user_id`, and nothing else enforces "set once". The design
+describes how `session.user` is set today and that every reader uses it, without a
+guard. D13, its sentence in §2.4, its implementation step and its test are removed.
+D14 and D15 are accepted.
 
 **Revision 2 (2026-11-10).** Alex's design review accepted §2.1–§2.3, the consent
 table, masking and the token-endpoint fix. It replaced the `Sessions::ActingUser`
@@ -137,8 +143,8 @@ and both already set `user` the way the task asks:
 - for a manual run without a card, whoever started it;
 - for a trigger, its run-as user (`WorkflowTriggers::RunAs`).
 
-No code changes `terminal_sessions.user_id` after creation today. The change makes
-that a rule: `TerminalSession` gets `attr_readonly :user_id` (D13).
+No code changes `terminal_sessions.user_id` after creation today. This design adds
+no mechanism to guard that.
 
 **One reader in the tools.** `InternalTools::Base` gets a private `session_user`
 that returns `session&.user`. Every internal tool that needs the session's user
@@ -475,7 +481,6 @@ here, so other providers are not affected.
      `return [] if ids.blank?` must not skip the issuances.
 4. **One current user: `session.user`** (§2.4). This step needs none of 1–3 and can
    be merged first.
-   - `TerminalSession`: add `attr_readonly :user_id` (D13).
    - `InternalTools::Base`: add the private `session_user` (`session&.user`).
    - `BoardMoveTask`, `BoardAddComment`, `BoardAttachAsset`: delete `resolve_actor` and
      use `session_user`. Add the missing nil guard to `BoardMoveTask`.
@@ -555,8 +560,6 @@ in adapter contract tests.
   company agreement) and `UserTokenIssuance` (encryption round trip; the token is
   never in `inspect` or `attributes`).
 - **`session.user` (step 4):**
-  - `test/models/terminal_session_test.rb`: changing `user_id` on a persisted session
-    does not change the stored value (`attr_readonly`).
   - `test/services/internal_tools/board_write_tools_test.rb`: replace "uses
     workflow_run user as fallback author" with tests where the card's assignee is
     someone other than the session's user. The comment, the asset and the move's
@@ -655,9 +658,8 @@ in adapter contract tests.
 | D10 | `user_id` is the only way to name a user. | Board tools expose member ids (`board_list_members`, `assignee_id`) |
 | D11 | No new environment variable. The existing `GITHUB_APP_CLIENT_ID` / `SECRET` gate the feature. | `config/settings.yml` `github.*` |
 | D12 | The platform does not set the commit identity, sign-off or `gh` credentials for the session. It returns the identity, and the instructions apply it. | Task: "a workflow's instructions decide how to use it" |
-| D13 | "Set once" is enforced: `TerminalSession` gets `attr_readonly :user_id`. No code updates it today, so nothing breaks. **Reviewer to confirm.** | Alex's review: "set when the session is created, and it doesn't change"; the §2.4 search |
-| D14 | The tools read the session's user through one private helper, `InternalTools::Base#session_user`, so a search for it finds every reader. Readers outside the tools (container strategies, `SessionService`, resources) keep reading `session.user` directly. | Alex's review: "nothing computes it again" |
-| D15 | `workflow_run.user` readers that describe the run, not a session (`WorkflowService` retry and run activity, `Chat::StatusCard`, `PersonalTools::Base`), stay on it. | It is the value every step session copies; §2.4 |
+| D14 | The tools read the session's user through one private helper, `InternalTools::Base#session_user`, so a search for it finds every reader. Readers outside the tools (container strategies, `SessionService`, resources) keep reading `session.user` directly. | Accepted in Alex's second review, 2026-11-11 |
+| D15 | `workflow_run.user` readers that describe the run, not a session (`WorkflowService` retry and run activity, `Chat::StatusCard`, `PersonalTools::Base`), stay on it. | Accepted in Alex's second review, 2026-11-11 |
 
 ## 9. Deferred questions
 
