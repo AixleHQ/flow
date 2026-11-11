@@ -233,7 +233,7 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     body = call_tool("update_board_task",
                      { project_id: @project.id, task_id: @task.id, assignee_id: member.id, unassign: true })
     assert tool_error?(body)
-    assert_match(/either assignee_id or unassign/i, body.dig("result", "content").map { |c| c["text"] }.join(" "))
+    assert_match(/one of assignee_id, assignee_team_id or unassign/i, body.dig("result", "content").map { |c| c["text"] }.join(" "))
     assert_equal member.id, @task.reload.assignee_id
   end
 

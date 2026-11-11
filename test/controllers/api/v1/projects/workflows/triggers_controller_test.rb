@@ -377,7 +377,62 @@ module Api
             sign_in collaborator
             get :index, params: { project_id: @project.id, workflow_id: @workflow.id }
 
-            assert_equal({ "editable" => false, "members" => [] }, json["run_as"])
+            assert_equal({ "editable" => false, "members" => [], "teams" => [] }, json["run_as"])
+          end
+
+          test "a trigger runs as a team, which index offers and lists; naming a person later clears it" do
+            team = create(:project_team, project: @project, name: "Planner")
+            binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+                                               event_type: "webhook.deploy")
+
+            patch :update, params: { project_id: @project.id, workflow_id: @workflow.id, id: binding.id,
+                                     trigger: { run_as_team_id: team.id } }, as: :json
+
+            assert_response :success
+            assert_equal({ "id" => team.id, "name" => "Planner" }, json["run_as_team"])
+            assert_equal team, binding.reload.run_as_team
+
+            get :index, params: { project_id: @project.id, workflow_id: @workflow.id }
+            assert_equal [ { "id" => team.id, "name" => "Planner" } ], json.dig("run_as", "teams")
+            assert_equal team.id, json["triggers"].find { |t| t["id"] == binding.id }.dig("run_as_team", "id")
+
+            patch :update, params: { project_id: @project.id, workflow_id: @workflow.id, id: binding.id,
+                                     trigger: { run_as_user_id: @user.id } }, as: :json
+            assert_nil binding.reload.run_as_team
+          end
+
+          test "creating a trigger that runs as a team takes the right to change Runs as" do
+            create(:step, :non_interactive, workflow: @workflow)
+            team = create(:project_team, project: @project)
+            collaborator = create(:user, :onboarding_completed, company: @company)
+            @project.add_collaborator(collaborator)
+            sign_in collaborator
+
+            post :create, params: { project_id: @project.id, workflow_id: @workflow.id,
+                                    trigger: { kind: "event", event_type: "custom.nightly", run_as_team_id: team.id } },
+                          as: :json
+
+            assert_response :forbidden
+            assert_equal 0, TriggerBinding.count
+
+            sign_in @user
+            post :create, params: { project_id: @project.id, workflow_id: @workflow.id,
+                                    trigger: { kind: "event", event_type: "custom.nightly", run_as_team_id: team.id } },
+                          as: :json
+            assert_response :created
+            assert_equal team, TriggerBinding.sole.run_as_team
+          end
+
+          test "a team from another project is refused" do
+            other = create(:project_team, project: create(:project, company: @company, owner: @user))
+            binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+                                               event_type: "webhook.deploy")
+
+            patch :update, params: { project_id: @project.id, workflow_id: @workflow.id, id: binding.id,
+                                     trigger: { run_as_team_id: other.id } }, as: :json
+
+            assert_response :unprocessable_entity
+            assert_nil binding.reload.run_as_team
           end
         end
       end

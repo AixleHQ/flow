@@ -18,7 +18,7 @@ module Api
 
             tasks = scope
               .with_card_counts
-              .includes(:assignee, :gates)
+              .includes(:assignee, :assignee_team, :gates)
               .then { |s| exact_number_search? ? s.reorder(exact_number_first, :position, :id) : s.in_board_order }
             tasks = tasks.limit(params[:limit]) if params[:limit].present?
             tasks = tasks.offset(params[:offset]) if params[:offset].present?
@@ -117,6 +117,7 @@ module Api
             extra_params = {
               priority: params[:priority],
               assignee_id: params[:assignee_id].present? ? params[:assignee_id].to_i : nil,
+              assignee_team_id: params[:assignee_team_id].present? ? params[:assignee_team_id].to_i : nil,
               tag: params[:tag]
             }
             result = TaskService.bulk_action(action: action, tasks: tasks, actor: current_user, to_column: to_column, extra_params: extra_params)
@@ -126,7 +127,7 @@ module Api
           # @summary List workflow runs for a board task
           def workflow_runs
             task = current_board.board_tasks.find(params[:id])
-            runs = task.workflow_runs.with_total_cost_cents.includes(:workflow, :runner, step_runs: %i[step terminal_session])
+            runs = task.workflow_runs.with_total_cost_cents.includes(:workflow, :runner, :user, :team, step_runs: %i[step terminal_session])
                        .order(created_at: :desc)
             render json: runs.map { |r| TaskWorkflowRunResource.new(r).to_h }
           end
@@ -202,7 +203,7 @@ module Api
           def task_params
             params.require(:board_task).permit(
               :title, :description, :task_type, :priority,
-              :assignee_id, :board_column_id, :parent_task_id,
+              :assignee_id, :assignee_team_id, :board_column_id, :parent_task_id,
               tags: []
             )
           end

@@ -34,6 +34,11 @@ module InternalTools
             type: "integer",
             description: "Optional user ID to assign the task to — must be a project member (see board_list_members)"
           },
+          assignee_team_id: {
+            type: "integer",
+            description: "Optional team ID to assign the task to instead (see board_list_members): each run of the " \
+                         "task goes to the member the team's strategy picks."
+          },
           description: {
             type: "string",
             description: "Task description"
@@ -60,6 +65,7 @@ module InternalTools
         description: params[:description],
         task_type: params[:task_type] || :not_specified,
         assignee_id: params[:assignee_id].presence,
+        assignee_team_id: params[:assignee_team_id].presence,
         tags: params[:tags] || []
       )
 
@@ -69,6 +75,7 @@ module InternalTools
         title: task.title,
         column: column.name,
         assignee_id: task.assignee_id,
+        assignee_team_id: task.assignee_team_id,
         position: task.position
       }.to_json)
     rescue ActiveRecord::RecordInvalid => e

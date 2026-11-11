@@ -20,6 +20,7 @@ class Web::ProfileController < Web::ApplicationController
                                        .includes(:company)
                                        .map { |m| MembershipResource.new(m).to_h },
       project_handovers: project_handovers,
+      project_teams: project_teams,
       language_options: CompanyMembership::AGENT_LANGUAGES,
       other_sessions_count: current_user.user_sessions.live.where.not(id: current_user_session&.id).count,
       agent_models: current_membership&.agent_models_for_props || [],
@@ -214,6 +215,13 @@ class Web::ProfileController < Web::ApplicationController
     end
   end
 
+  # The teams the user is in, in every company: leaving one is the member's own call.
+  def project_teams
+    current_user.project_team_memberships.includes(project_team: :project).map(&:project_team)
+                .sort_by { |team| [ team.project.name, team.name ] }
+                .map { |team| { id: team.id, name: team.name, project_id: team.project_id, project_name: team.project.name } }
+  end
+
   # Leaving a company you own projects in hands them over first.
   def project_handovers
     current_user.company_memberships.where.not(state: "revoked")
@@ -250,7 +258,7 @@ class Web::ProfileController < Web::ApplicationController
   # what the person is willing to let colleagues watch, which does not change
   # when they switch company.
   def profile_params
-    params.require(:profile).permit(:name, :share_active_sessions, :share_completed_sessions)
+    params.require(:profile).permit(:name, :share_active_sessions, :share_completed_sessions, :exclude_from_teams)
   end
 
   # Per-company answers editable from the profile. Super admins have no

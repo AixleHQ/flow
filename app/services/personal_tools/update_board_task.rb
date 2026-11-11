@@ -17,7 +17,11 @@ module PersonalTools
       param :tags, type: :array, description: "Replacement tag list.", items: { type: "string" }
       param :assignee_id, type: :integer,
             description: "User id to assign the task to — must be a project member (see list_project_members)."
-      param :unassign, type: :boolean, description: "Clear the current assignee. Cannot be combined with assignee_id."
+      param :assignee_team_id, type: :integer,
+            description: "Team id to assign the task to (see list_project_teams): each run of the task goes to the " \
+                         "member the team's strategy picks. Replaces a person assignee."
+      param :unassign, type: :boolean,
+            description: "Clear the current assignee, person or team. Cannot be combined with assignee_id or assignee_team_id."
     end
 
     UPDATABLE = %w[title description priority task_type tags].freeze
@@ -29,10 +33,14 @@ module PersonalTools
       return error(task_not_found) unless task
 
       updates = params.slice(*UPDATABLE).reject { |_, v| v.nil? }
-      if assign? && unassign?
-        return error("Pass either assignee_id or unassign, not both")
-      elsif assign? || unassign?
-        updates["assignee_id"] = unassign? ? nil : params[:assignee_id]
+      return error("Pass one of assignee_id, assignee_team_id or unassign") if [ assign?, assign_team?, unassign? ].count(true) > 1
+
+      if unassign?
+        updates.merge!("assignee_id" => nil, "assignee_team_id" => nil)
+      elsif assign?
+        updates["assignee_id"] = params[:assignee_id]
+      elsif assign_team?
+        updates["assignee_team_id"] = params[:assignee_team_id]
       end
       return error("No fields to update") if updates.empty?
 
@@ -41,12 +49,14 @@ module PersonalTools
       # assignee_id surfaces as a tool error rather than a silent no-op.
       return error("Update failed: #{task.errors.full_messages.to_sentence}") if task.errors.any?
 
-      success(id: task.id, number: task.number, title: task.title, assignee_id: task.assignee_id, updated_fields: updates.keys)
+      success(id: task.id, number: task.number, title: task.title, assignee_id: task.assignee_id,
+              assignee_team_id: task.assignee_team_id, updated_fields: updates.keys)
     end
 
     private
 
     def assign? = params[:assignee_id].present?
+    def assign_team? = params[:assignee_team_id].present?
     def unassign? = ActiveModel::Type::Boolean.new.cast(params[:unassign]).present?
   end
 end

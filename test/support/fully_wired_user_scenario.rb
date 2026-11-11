@@ -35,6 +35,9 @@ class FullyWiredUserScenario
     create(:company_membership, company: @company, invited_by: @user)
     create(:project_collaborator, project: @project, user: @user)
     create(:project_favorite, project: @project, user: @user)
+    team = create(:project_team, project: @project, created_by: @user)
+    create(:project_team_member, project_team: team, user: @user, added_by: @heir)
+    create(:project_team_member, project_team: team, user: @heir, added_by: @user)
     OauthCredential.create!(owner: @user, provider: "sentry", status: :active, access_token: "at-mine", oauth_client: oauth_client)
     OauthCredential.create!(owner: @project, connected_by: @user, provider: "sentry", status: :active,
                             access_token: "at-project", oauth_client: oauth_client)

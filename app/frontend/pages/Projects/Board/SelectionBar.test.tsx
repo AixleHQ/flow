@@ -5,7 +5,7 @@ import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage'
 
 import { SelectionBar } from './SelectionBar';
 
-const renderBar = (onBulkTag = vi.fn()) =>
+const renderBar = (onBulkTag = vi.fn(), onBulkAssign = vi.fn()) =>
   renderPage(
     <SelectionBar
       active
@@ -13,10 +13,11 @@ const renderBar = (onBulkTag = vi.fn()) =>
       selectedIds={new Set([1, 2])}
       columns={[buildBoardColumn()]}
       members={[{ id: 1, name: 'Dana Scout' }]}
+      teams={[{ id: 7, name: 'Planner' }]}
       canExecute
       onAction={vi.fn()}
       onBulkPriority={vi.fn()}
-      onBulkAssign={vi.fn()}
+      onBulkAssign={onBulkAssign}
       onBulkTag={onBulkTag}
       onClear={vi.fn()}
     />,
@@ -79,5 +80,20 @@ describe('SelectionBar Add tag prompt', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Add tag' })).not.toBeInTheDocument());
     expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+  });
+});
+
+describe('SelectionBar Assign menu', () => {
+  it('assigns the selection to a person or to a team', async () => {
+    const onBulkAssign = vi.fn();
+    renderBar(vi.fn(), onBulkAssign);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Assign' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Planner' }));
+    expect(onBulkAssign).toHaveBeenCalledWith({ kind: 'team', id: 7 });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Assign' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: /Dana Scout/ }));
+    expect(onBulkAssign).toHaveBeenCalledWith({ kind: 'user', id: 1 });
   });
 });

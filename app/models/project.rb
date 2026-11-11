@@ -14,6 +14,7 @@ class Project < ApplicationRecord
   has_many :project_collaborators, dependent: :destroy
   has_many :collaborators, through: :project_collaborators, source: :user
   has_many :project_favorites, dependent: :destroy
+  has_many :project_teams, -> { order(:name) }, inverse_of: :project, dependent: :destroy
   has_many :favorited_by_users, through: :project_favorites, source: :user
   has_many :terminal_sessions, dependent: :nullify
   has_many :oauth_credentials, as: :owner, dependent: :destroy

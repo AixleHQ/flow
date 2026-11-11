@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatCalendarDay, formatDate, formatExpiry, parseDate } from './formatDate';
+import { formatCalendarDay, formatDate, formatExpiry, formatMonthDay, parseDate } from './formatDate';
 
 describe('parseDate', () => {
   it('parses ISO8601', () => {
@@ -23,6 +23,18 @@ describe('parseDate', () => {
 describe('formatDate', () => {
   it('returns an em dash for null', () => {
     expect(formatDate(null)).toBe('—');
+  });
+});
+
+describe('formatMonthDay', () => {
+  it('names the day without the year', () => {
+    const text = formatMonthDay('2026-11-14T12:00:00Z');
+    expect(text).toContain('14');
+    expect(text).not.toContain('2026');
+  });
+
+  it('returns an em dash for nothing', () => {
+    expect(formatMonthDay(null)).toBe('—');
   });
 });
 

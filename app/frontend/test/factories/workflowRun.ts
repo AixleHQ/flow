@@ -27,6 +27,7 @@ export const buildWorkflowRun = (overrides: Partial<WorkflowRun> = {}): Workflow
   controllableByViewer: true,
   chatOrigin: null,
   authPause: null,
+  teamName: null,
   // optional (?) computed attributes — realistic values, no compile-time guarantee.
   // failedAccountName is `string | undefined` (not nullable): omit for "absent".
   workflowName: 'Nebula Pipeline',

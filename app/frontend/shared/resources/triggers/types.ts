@@ -40,6 +40,9 @@ export interface Trigger {
   // before the creator was recorded (or whose account was deleted), and those
   // are skipped instead of firing unattended.
   created_by?: { id: number; name: string } | null;
+  // Off-board kinds: the project team whose members run the trigger, one picked
+  // per run. Set, it takes over from created_by as who the trigger runs as.
+  run_as_team?: { id: number; name: string } | null;
 }
 
 export interface RunAsMember {
@@ -49,11 +52,17 @@ export interface RunAsMember {
   agent_connected: boolean;
 }
 
-// Whether the viewer may change who an off-board trigger runs as; members are
-// sent only to those who may.
+export interface RunAsTeam {
+  id: number;
+  name: string;
+}
+
+// Whether the viewer may change who an off-board trigger runs as; members and
+// teams are sent only to those who may.
 export interface RunAsOptions {
   editable: boolean;
   members: RunAsMember[];
+  teams?: RunAsTeam[];
 }
 
 export interface TriggerColumnOption {

@@ -46,6 +46,8 @@ class WorkflowRun < ApplicationRecord
   belongs_to :board_task, optional: true, touch: true
   belongs_to :failed_agent_credential, class_name: "AgentCredential", optional: true
   belongs_to :retried_from_run, class_name: "WorkflowRun", optional: true
+  # The team the run's owner was picked from (docs/design/project-teams.md).
+  belongs_to :team, class_name: "ProjectTeam", optional: true, inverse_of: :workflow_runs
 
   has_many :step_runs, dependent: :destroy
   has_many :workflow_run_assets, dependent: :destroy
@@ -207,6 +209,13 @@ class WorkflowRun < ApplicationRecord
     return true if user_id == viewer.id
 
     viewer.company_memberships.active.find_by(company_id: project&.company_id)&.admin? || false
+  end
+
+  # The team the owner was picked from. A run its team had nobody for belongs to
+  # whoever caused it, and naming the team next to that person would say they
+  # were picked.
+  def picked_from_team
+    team unless failure_reason == WorkflowService::TEAM_UNAVAILABLE
   end
 
   def mark_quota_failed!(credential_id:)

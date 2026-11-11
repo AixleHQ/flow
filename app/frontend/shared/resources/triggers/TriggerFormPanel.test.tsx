@@ -219,6 +219,109 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
       expect(screen.getByText('Ada Ruiz')).toBeInTheDocument();
       expect(screen.queryByRole('combobox', { name: 'Runs as' })).not.toBeInTheDocument();
     });
+
+    describe('with project teams', () => {
+      const withTeams: PanelProps['runAs'] = {
+        editable: true,
+        members: runAs?.members ?? [],
+        teams: [{ id: 3, name: 'Planners' }],
+      };
+
+      it('offers people and teams in separate groups, and sends the team picked', async () => {
+        const fetchSpy = installFetch();
+        renderPage(<TriggerFormPanel {...baseProps({ editing, runAs: withTeams })} />);
+
+        await userEvent.click(screen.getByRole('combobox', { name: 'Runs as' }));
+        const listbox = await screen.findByRole('listbox');
+        expect(within(listbox).getByText('People')).toBeInTheDocument();
+        expect(within(listbox).getByText('Teams')).toBeInTheDocument();
+        await userEvent.click(screen.getByRole('option', { name: 'Planners' }));
+
+        expect(
+          screen.getByText('Each run goes to one member of the team, picked by its strategy.'),
+        ).toBeInTheDocument();
+        await userEvent.click(screen.getByRole('button', { name: 'Update trigger' }));
+
+        await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+        const { trigger } = bodyOf(fetchSpy, 'PATCH');
+        expect(trigger.run_as_team_id).toBe(3);
+        expect(trigger).not.toHaveProperty('run_as_user_id');
+      });
+
+      it('shows the team a trigger runs as, and clears it when a person is picked', async () => {
+        const fetchSpy = installFetch();
+        const onTeam: Trigger = { ...editing, run_as_team: { id: 3, name: 'Planners' } };
+        renderPage(<TriggerFormPanel {...baseProps({ editing: onTeam, runAs: withTeams })} />);
+
+        expect(screen.getByRole('combobox', { name: 'Runs as' })).toHaveValue('Planners');
+        await userEvent.click(screen.getByRole('combobox', { name: 'Runs as' }));
+        await userEvent.click(await screen.findByRole('option', { name: 'Bo Lind' }));
+        await userEvent.click(screen.getByRole('button', { name: 'Update trigger' }));
+
+        await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+        const { trigger } = bodyOf(fetchSpy, 'PATCH');
+        expect(trigger.run_as_user_id).toBe(5);
+        expect(trigger.run_as_team_id).toBeNull();
+      });
+
+      it('clears the team alone when its creator is picked back', async () => {
+        const fetchSpy = installFetch();
+        const onTeam: Trigger = { ...editing, run_as_team: { id: 3, name: 'Planners' } };
+        renderPage(<TriggerFormPanel {...baseProps({ editing: onTeam, runAs: withTeams })} />);
+
+        await userEvent.click(screen.getByRole('combobox', { name: 'Runs as' }));
+        await userEvent.click(await screen.findByRole('option', { name: 'Ada Ruiz' }));
+        await userEvent.click(screen.getByRole('button', { name: 'Update trigger' }));
+
+        await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+        const { trigger } = bodyOf(fetchSpy, 'PATCH');
+        expect(trigger.run_as_team_id).toBeNull();
+        expect(trigger).not.toHaveProperty('run_as_user_id');
+      });
+
+      it('shows the team read-only to someone who may not change it', () => {
+        const onTeam: Trigger = { ...editing, run_as_team: { id: 3, name: 'Planners' } };
+        renderPage(<TriggerFormPanel {...baseProps({ editing: onTeam, runAs: { editable: false, members: [] } })} />);
+
+        expect(screen.getByText('Team Planners')).toBeInTheDocument();
+        expect(
+          screen.getByText('Each run goes to one member of the team, picked by its strategy.'),
+        ).toBeInTheDocument();
+        expect(screen.queryByRole('combobox', { name: 'Runs as' })).not.toBeInTheDocument();
+      });
+
+      it('lets a new off-board trigger run as a team instead of its creator', async () => {
+        const fetchSpy = installFetch();
+        renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'schedule', runAs: withTeams })} />, {
+          props: buildSharedProps({ currentUser: buildSharedUser({ id: 77, name: 'Nils Aker' }) }),
+        });
+
+        expect(screen.getByRole('combobox', { name: 'Runs as' })).toHaveValue('Nils Aker');
+        await userEvent.click(screen.getByRole('combobox', { name: 'Runs as' }));
+        const listbox = await screen.findByRole('listbox');
+        expect(within(listbox).queryByText('Bo Lind')).not.toBeInTheDocument();
+        await userEvent.click(within(listbox).getByRole('option', { name: 'Planners' }));
+        await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+        await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+        const { trigger } = bodyOf(fetchSpy, 'POST');
+        expect(trigger.run_as_team_id).toBe(3);
+      });
+
+      it('creates a trigger without a team field when its creator is kept', async () => {
+        const fetchSpy = installFetch();
+        renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'schedule', runAs: withTeams })} />, {
+          props: buildSharedProps({ currentUser: buildSharedUser({ id: 77, name: 'Nils Aker' }) }),
+        });
+
+        await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+        await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+        const { trigger } = bodyOf(fetchSpy, 'POST');
+        expect(trigger).not.toHaveProperty('run_as_team_id');
+        expect(trigger).not.toHaveProperty('run_as_user_id');
+      });
+    });
   });
 
   it('switches the rendered fields when the kind Select changes to chat', async () => {

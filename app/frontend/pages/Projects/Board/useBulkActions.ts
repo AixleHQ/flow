@@ -5,6 +5,7 @@ import { useCallback } from 'react';
 import { apiFetch } from 'shared/lib/apiFetch';
 import { apiV1ProjectTaskPath, bulkActionsApiV1ProjectTasksPath } from 'shared/routes';
 
+import { assigneeFields, type Assignee } from './assignee';
 import type { BulkAction } from './SelectionBar';
 
 interface BulkActionResult {
@@ -127,8 +128,12 @@ export function useBulkActions({ projectId, onSuccess }: UseBulkActionsOptions) 
 
   // Bulk assign: calls single-task PATCH for each selected task
   const bulkAssign = useCallback(
-    async (taskIds: number[], assigneeId: number | null) => {
-      const updated = await patchEach(projectId, taskIds, { assignee_id: assigneeId });
+    async (taskIds: number[], assignee: Assignee | null) => {
+      const { assigneeId, assigneeTeamId } = assigneeFields(assignee);
+      const updated = await patchEach(projectId, taskIds, {
+        assignee_id: assigneeId,
+        assignee_team_id: assigneeTeamId,
+      });
       reportEach('Updated assignee for', updated, taskIds.length, 'Failed to update assignee. Please try again.');
       router.reload({ only: ['tasks'] });
     },

@@ -19,6 +19,29 @@ class BoardTaskTest < ActiveSupport::TestCase
     assert task.valid?
   end
 
+  test "a task has a person or a team as its assignee, and naming one clears the other" do
+    member = create(:user, company: @company)
+    @project.add_collaborator(member)
+    team = create(:project_team, project: @project)
+    task = BoardTask.create!(title: "Plan", board: @board, board_column: @col1, assignee: member)
+
+    task.update!(assignee_team: team)
+    assert_equal [ nil, team.id ], task.reload.values_at(:assignee_id, :assignee_team_id)
+
+    task.update!(assignee: member)
+    assert_equal [ member.id, nil ], task.reload.values_at(:assignee_id, :assignee_team_id)
+
+    task.update!(assignee: nil)
+    task.assign_attributes(assignee_team: team, assignee: member)
+    assert_not task.valid?
+    assert_includes task.errors[:base], "A task is assigned to a person or a team, not both"
+
+    foreign = create(:project_team, project: create(:project, company: @company, owner: @owner))
+    task.assign_attributes(assignee: nil, assignee_team: foreign)
+    assert_not task.valid?
+    assert_includes task.errors[:assignee_team], "must be a team of this project"
+  end
+
   test "invalid without title" do
     task = BoardTask.new(board: @board, board_column: @col1)
     refute_predicate task, :valid?

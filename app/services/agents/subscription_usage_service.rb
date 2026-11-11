@@ -29,7 +29,7 @@ module Agents
     # @param membership [CompanyMembership, nil] nil for a super admin (no credentials)
     # @param force [Boolean] user asked for a refresh (still throttled)
     # @param adapter_resolver [#call] agent_type -> adapter (test seam)
-    def initialize(membership:, force: false, adapter_resolver: DEFAULT_ADAPTER_RESOLVER)
+    def initialize(membership: nil, force: false, adapter_resolver: DEFAULT_ADAPTER_RESOLVER)
       @membership = membership
       @force = force
       @adapter_resolver = adapter_resolver
@@ -43,11 +43,12 @@ module Agents
       @membership.credentials.filter_map { |credential| usage_for(credential) }
     end
 
-    private
-
-    def usage_for(credential)
+    # One credential's entry. `fetch: false` answers from the cache only and never
+    # calls the vendor — what a run launch can afford.
+    def usage_for(credential, fetch: true)
       cached = Rails.cache.read(cache_key(credential))
       return cached if cached && !refetch?(cached)
+      return nil unless fetch
 
       usage = adapter_for(credential).fetch_subscription_usage(credential.config_data)
       return nil if usage.nil? # not a subscription login — nothing to show
@@ -61,6 +62,8 @@ module Agents
       Rails.logger.warn("[SubscriptionUsageService] #{credential.agent_type} usage unavailable: #{e.class}: #{e.message}")
       nil
     end
+
+    private
 
     def refetch?(cached)
       @force && cached[:fetched_at].to_time <= MIN_REFRESH_INTERVAL.ago

@@ -21,6 +21,9 @@ class User < ApplicationRecord
   before_save :stamp_password_change, if: :will_save_change_to_password_digest?
   # A new password ends every browser signed in with the old one.
   after_update_commit :end_sessions_after_password_change, if: :saved_change_to_password_digest?
+  # docs/design/project-teams.md: asking to stay out of teams takes the user out
+  # of the ones they are in.
+  after_update_commit :leave_project_teams, if: -> { saved_change_to_exclude_from_teams? && exclude_from_teams? }
 
   # ── Personal MCP token ──
   # One opt-in token per user for the global MCP server (MCPController):
@@ -131,6 +134,7 @@ class User < ApplicationRecord
   has_many :oauth_credentials, as: :owner, dependent: :destroy
   has_many :companies, through: :company_memberships
   has_many :project_collaborators, dependent: :destroy
+  has_many :project_team_memberships, class_name: "ProjectTeamMember", dependent: :delete_all
   has_many :collaborated_projects, through: :project_collaborators, source: :project
   has_many :project_favorites, dependent: :destroy
   has_many :favorite_projects, through: :project_favorites, source: :project
@@ -316,6 +320,11 @@ class User < ApplicationRecord
     self.password_changed_at = password_digest.present? ? Time.current : nil
   end
   private :stamp_password_change
+
+  def leave_project_teams
+    ProjectTeams::Management.prune!(self, reason: "asked not to be added to teams")
+  end
+  private :leave_project_teams
 
   # Encryptable calls the first from a private context; the second is an
   # after_save callback. Neither is anyone else's business.

@@ -39,6 +39,11 @@ class RunListEntryResource < ApplicationResource
     run.user&.name || User::DELETED_DISPLAY_NAME
   end
 
+  typelize "string | null"
+  attribute :team_name do |run|
+    run.picked_from_team&.name
+  end
+
   # A run has no runtime of its own — it inherits the one its sessions used.
   # First step wins; a mixed-runtime run is rare and the row has no room to say
   # so, which is what the detail page is for.

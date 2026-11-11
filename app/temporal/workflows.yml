@@ -180,6 +180,8 @@ workflows:
         task_queue: aixle_ruby
       - name: workflow_create_step_run_activity
         task_queue: aixle_ruby
+      - name: workflow_reassign_run_owner_activity
+        task_queue: aixle_ruby
       - name: workflow_fetch_mode_activity
         task_queue: aixle_ruby
       - name: workflow_check_skip_activity
@@ -213,6 +215,8 @@ workflows:
       - name: workflow_prepare_step_list_activity
         task_queue: aixle_ruby
       - name: workflow_create_step_run_activity
+        task_queue: aixle_ruby
+      - name: workflow_reassign_run_owner_activity
         task_queue: aixle_ruby
       - name: workflow_fetch_mode_activity
         task_queue: aixle_ruby

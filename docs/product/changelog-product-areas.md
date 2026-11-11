@@ -68,6 +68,7 @@ they name a flow users would recognize.
 | --- | --- |
 | **Secrets & Variables** | Credentials and config values agents and connectors use |
 | **Members** | Who is on the project and with what access (roles: Admin, Employee, Viewer) |
+| **Teams** | Named groups of project members a card can be assigned to and a trigger can run as; each run goes to one member, picked by the team's strategy |
 | **Analytics** | Spend, sessions, tokens, success — by project, agent, and source |
 | **Settings** | Project name, language, archive, delete |
 
