@@ -105,6 +105,18 @@ class InternalTools::TrackerAttachmentToolsTest < ActiveSupport::TestCase
                  [ row.issue_id, row.content_sha256, row.tracker_operation_id ]
   end
 
+  test "the exporter and the importer receive the session's user" do
+    session_user = create(:user, company: @project.company)
+    @session.stubs(:user).returns(session_user)
+    task = linked_task
+    @youtrack.add_file(ISSUE_1, name: "log.txt", bytes: "boom", content_type: "text/plain")
+
+    run_tool(InternalTools::TrackerDownloadAttachments, issue: "APP-1")
+    run_tool(InternalTools::TrackerAttachFiles, issue: "APP-1", files: [ { content: "a", filename: "a.txt" } ])
+
+    assert_equal [ session_user.id ], task.task_assets.where(source: "tracker").pluck(:author_id).uniq
+  end
+
   test "an identical retry in the session replays the first result instead of writing again" do
     params = { issue: "APP-1", files: [ { content: "a", filename: "a.txt" } ] }
     run_tool(InternalTools::TrackerAttachFiles, **params)

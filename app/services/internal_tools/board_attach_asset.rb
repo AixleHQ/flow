@@ -49,7 +49,7 @@ module InternalTools
       file_data = resolve_file_data
       return file_data if file_data.is_a?(Hash) && file_data[:exit_code]
 
-      author = resolve_actor(task)
+      author = session_user
       return error("Cannot determine asset author") unless author
 
       filename = params[:name]
@@ -88,10 +88,6 @@ module InternalTools
       return error("File not found in container: #{path}") unless content
 
       content
-    end
-
-    def resolve_actor(task)
-      task.assignee || workflow_run&.user
     end
   end
 end

@@ -38,8 +38,10 @@ module InternalTools
       target_column = board.board_columns.find_by(name: params[:column_name])
       return error("Column '#{params[:column_name]}' not found") unless target_column
 
+      actor = session_user
+      return error("Cannot determine the acting user") unless actor
+
       from_column_name = task.board_column.name
-      actor = resolve_actor(task)
       TaskService.move(
         task: task,
         to_column: target_column,
@@ -54,12 +56,6 @@ module InternalTools
         from_column: from_column_name,
         to_column: target_column.name
       }.to_json)
-    end
-
-    private
-
-    def resolve_actor(task)
-      task.assignee || workflow_run&.user
     end
   end
 end

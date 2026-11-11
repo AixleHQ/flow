@@ -50,7 +50,7 @@ module InternalTools
                       files: files.map { |f| { name: f.filename, sha256: f.sha256 } } }.compact
           with_write(tracker, "attach_files", payload) do |operation|
             Trackers::AttachmentExporter.new(project_tracker: tracker, operation: operation, task: workflow_run&.board_task,
-                                             user: workflow_run&.user || session&.user)
+                                             user: session_user)
                                         .export(params[:issue], files, comment: params[:comment], force: params[:force] == true)
           end
         end

@@ -89,10 +89,13 @@ module InternalTools
       gate_type = params[:gate_type]
       return error("Unsupported gate_type: #{gate_type}") unless SUPPORTED_GATE_TYPES.include?(gate_type)
 
+      creator = session_user
+      return error("Cannot determine the gate creator") unless creator
+
       metadata = build_metadata(gate_type, task)
       return metadata if metadata.is_a?(Hash) && metadata.key?(:exit_code)
 
-      gate = task.gates.create!(gate_type: gate_type, metadata: metadata, creator: workflow_run.user)
+      gate = task.gates.create!(gate_type: gate_type, metadata: metadata, creator: creator)
 
       success({
         id:          gate.id,
