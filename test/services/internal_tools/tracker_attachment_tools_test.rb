@@ -105,16 +105,39 @@ class InternalTools::TrackerAttachmentToolsTest < ActiveSupport::TestCase
                  [ row.issue_id, row.content_sha256, row.tracker_operation_id ]
   end
 
-  test "the exporter and the importer receive the session's user" do
-    session_user = create(:user, company: @project.company)
-    @session.stubs(:user).returns(session_user)
+  # A run owned by someone else than the session's user, so that falling back to
+  # the run's owner would show up as a different author.
+  def attach_session_to_run_of_other_owner(task)
+    owner = create(:user, company: @project.company)
+    workflow = create(:workflow, scope: @project)
+    run = create(:workflow_run, workflow: workflow, project: @project, user: owner, board_task: task)
+    step_run = create(:step_run, workflow_run: run, step: create(:step, workflow: workflow))
+    step_run.update!(terminal_session: @session)
+    @session.reload
+    owner
+  end
+
+  test "the importer attributes the copy to the session's user, not the run's owner" do
     task = linked_task
+    owner = attach_session_to_run_of_other_owner(task)
     @youtrack.add_file(ISSUE_1, name: "log.txt", bytes: "boom", content_type: "text/plain")
 
     run_tool(InternalTools::TrackerDownloadAttachments, issue: "APP-1")
-    run_tool(InternalTools::TrackerAttachFiles, issue: "APP-1", files: [ { content: "a", filename: "a.txt" } ])
 
-    assert_equal [ session_user.id ], task.task_assets.where(source: "tracker").pluck(:author_id).uniq
+    assert_not_equal owner, @user
+    assert_equal [ [ "tracker", @user.id ] ], task.task_assets.pluck(:source, :author_id)
+  end
+
+  test "the exporter attributes a kept copy to the session's user, not the run's owner" do
+    task = linked_task
+    owner = attach_session_to_run_of_other_owner(task)
+    @tracker.update!(settings: @tracker.settings.to_h.merge("file_storage" => "aixle_link"))
+
+    result = run_tool(InternalTools::TrackerAttachFiles, issue: "APP-1", files: [ { content: "a", filename: "a.txt" } ])
+
+    assert_equal [ "linked" ], result["files"].pluck("status")
+    assert_not_equal owner, @user
+    assert_equal [ [ "agent", @user.id ] ], task.task_assets.pluck(:source, :author_id)
   end
 
   test "an identical retry in the session replays the first result instead of writing again" do
