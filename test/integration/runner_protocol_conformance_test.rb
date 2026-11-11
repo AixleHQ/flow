@@ -157,10 +157,10 @@ class RunnerProtocolConformanceTest < ActionDispatch::IntegrationTest
   end
 
   # The platform's pins for the rest of the scenario: the committed
-  # config/runner_release.yml with the step's keys in place of its own, a key
-  # the step leaves out being null (`binaries`: none).
+  # `runners.release` block of config/settings.yml with the step's keys in
+  # place of its own, a key the step leaves out being null (`binaries`: none).
   def pin_release(step, where)
-    committed = YAML.safe_load_file(Rails.root.join("config/runner_release.yml"))
+    committed = Settings.runners.release.to_h.deep_stringify_keys
     pins = committed.merge("min_version" => step["min_version"], "recommended_version" => step["recommended_version"],
                            "binaries" => step.fetch("binaries", {}))
     Runners::Release.stubs(:pins).returns(Runners::Release.parse(pins))
@@ -171,8 +171,8 @@ class RunnerProtocolConformanceTest < ActionDispatch::IntegrationTest
   def register_machine(as, name, where)
     credential = Runners::Credentials.usable(Runners::Credentials.mint_registration!(@runner), kind: :registration)
     result = Runners::Registration.register!(credential, name: name, os: "linux", arch: "amd64", facts: {},
-                                                         ephemeral: false, runner_version: RUNNER_VERSION,
-                                                         protocol_version: PROTOCOL_VERSION)
+                                                         ephemeral: false, auto_update: true,
+                                                         runner_version: RUNNER_VERSION, protocol_version: PROTOCOL_VERSION)
     define("#{as}.access_token", result.pair.access_token, where)
     define("#{as}.refresh_token", result.pair.refresh_token, where)
     define("#{as}.environment_id", result.environment.id, where)

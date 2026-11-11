@@ -692,6 +692,39 @@ runners:
     # host_port_base + (session id mod host_port_span).
     host_port_base: <%= ENV['RUNNER_PROXY_HOST_PORT_BASE'] || 20_000 %>
     host_port_span: <%= ENV['RUNNER_PROXY_HOST_PORT_SPAN'] || 10_000 %>
+  # The platform's runner pins (docs/design/agent-runtimes/DESIGN.md §14.2),
+  # read through Runners::Release. Plain values, no ENV: they are the same for
+  # every installation. Committed, not derived from a release: publishing
+  # `runner-vX.Y.Z` changes nothing until an application PR edits this block,
+  # and the application changelog mentions every such edit
+  # (docs/operations/releasing.md, "Runner compatibility"). An invalid block
+  # fails boot (config/initializers/runner_release.rb).
+  #
+  # - protocol_supported: the runner protocol versions the gateway accepts in
+  #   X-Aixle-Runner-Protocol. Only versions the gateway implements may be
+  #   listed; after the first bump it is [N-1, N].
+  # - min_version: `register` (and with task 8c `check-in`) refuses a runner
+  #   below it with `runner_version_unsupported`. null: no minimum.
+  # - recommended_version: an idle machine below it is offered an update in the
+  #   empty answer of its long-poll, unless it opted out. Its binaries must be
+  #   pinned below. null: nothing is recommended.
+  # - download_url: where `GET /runner/v1/releases/:version/:os-:arch`
+  #   redirects, with %{version} and %{platform} (`linux-amd64`) filled in: the
+  #   `runner-v*` release's asset (.github/workflows/runner-release.yml).
+  # - binaries: the SHA-256 of each binary, by version and `<os>-<arch>`, copied
+  #   from the release's checksums.txt. A version or platform not listed here is
+  #   never served: the digest a runner verifies comes from this block, not
+  #   from the asset host.
+  release:
+    protocol_supported: [1]
+    min_version: null
+    recommended_version: "0.1.0"
+    download_url: "https://github.com/AixleHQ/flow/releases/download/runner-v%{version}/aixle-runner-%{platform}"
+    binaries:
+      # runner-v0.1.0: https://github.com/AixleHQ/flow/releases/tag/runner-v0.1.0
+      "0.1.0":
+        linux-amd64: { sha256: "55af0ecb22c70f52ca4213f7f310c6321ba0e1d175545f663c1c948107caad44" }
+        linux-arm64: { sha256: "e27d43e8d29ec520f5868b4394d66c9e95ea7476ffc3ee3d0a85e6b259527441" }
 
 # Which product this installation is: `self_hosted`, `saas` or `aws_marketplace`.
 # It decides who may move a company's session limit and who is billed for it.

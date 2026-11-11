@@ -33,14 +33,34 @@ class Runners::ProtocolSchemaTest < ActiveSupport::TestCase
     invalid.each { |body| assert_not Runners::ProtocolSchema.valid?("op_result.request", body), body.inspect }
   end
 
-  test "a registration needs a string name and an object for facts; an os or arch that is not a string passes" do
-    valid = [ { "name" => "build-01" }, { "name" => " ", "facts" => {} }, { "name" => "b", "os" => 7, "arch" => true },
-              { "name" => "b", "os" => "o" * 255 } ]
+  test "a registration needs a string name and an object for facts; an os or arch is an optional string" do
+    valid = [ { "name" => "build-01" }, { "name" => " ", "facts" => {} },
+              { "name" => "b", "os" => "o" * 255, "arch" => "amd64" } ]
+    not_strings = [ 7, true, nil, {}, [ "linux" ] ].flat_map do |value|
+      [ { "name" => "b", "os" => value }, { "name" => "b", "arch" => value } ]
+    end
     invalid = [ {}, { "name" => 5 }, { "name" => nil }, { "name" => "b", "facts" => nil }, { "name" => "b", "facts" => "x" },
-                { "name" => "b", "os" => "o" * 256 }, { "name" => "b", "arch" => "a" * 256 } ]
+                { "name" => "b", "os" => "o" * 256 }, { "name" => "b", "arch" => "a" * 256 } ] + not_strings
 
     valid.each { |body| assert Runners::ProtocolSchema.valid?("register.request", body), body.inspect }
     invalid.each { |body| assert_not Runners::ProtocolSchema.valid?("register.request", body), body.inspect }
+  end
+
+  # PROTOCOL.md §5.1: the gateway refuses such a body as ephemeral_not_supported, before its other fields.
+  test "a registration with ephemeral true passes whatever the rest of it holds; one without, does not" do
+    asks = [ { "ephemeral" => true }, { "ephemeral" => true, "name" => 5, "facts" => nil } ]
+    does_not = [ false, nil, 0, 0.0, 1, "true", "" ].map { |value| { "ephemeral" => value, "name" => 5 } }
+
+    asks.each { |body| assert Runners::ProtocolSchema.valid?("register.request", body), body.inspect }
+    does_not.each { |body| assert_not Runners::ProtocolSchema.valid?("register.request", body), body.inspect }
+  end
+
+  test "a registration's ephemeral is a JSON boolean: any other value is refused, even with a valid body" do
+    assert Runners::ProtocolSchema.valid?("register.request", { "name" => "b" })
+    assert Runners::ProtocolSchema.valid?("register.request", { "name" => "b", "ephemeral" => false })
+    [ "true", "false", 1, 0, 0.0, 1.0, nil, "" ].each do |value|
+      assert_not Runners::ProtocolSchema.valid?("register.request", { "name" => "b", "ephemeral" => value }), value.inspect
+    end
   end
 
   test "the long-poll's after and wait are non-negative integers, after within the bigint range" do

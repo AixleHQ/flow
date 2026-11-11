@@ -7,10 +7,13 @@ module RunnerGateway
     #
     # Body: {status: ok|error|expired, exit_code?, stdout?, stderr?, data?,
     # error?: {class, message}}, checked against
-    # runner/protocol/schemas/v1/op_result.request.json. `ok` completes the op,
-    # `error` fails it, and `expired` (the runner got it after its deadline_at
-    # and did not run it) expires it. Idempotent on the op id: the first result
-    # wins, and a repeat answers 200 and changes nothing.
+    # runner/protocol/schemas/v1/op_result.request.json and mapped to the named
+    # parameters of Runners::Operations.record_result!, which stores it. JSON
+    # Schema counts 1.0 as an integer, so `exit_code` is passed as one. `ok`
+    # completes the op, `error` fails it, and `expired` (the runner got it
+    # after its deadline_at and did not run it) expires it. Idempotent on the
+    # op id: the first result wins, and a repeat answers 200 and changes
+    # nothing.
     class OperationResultsController < ApplicationController
       before_action { authenticate(:access) }
 
@@ -25,18 +28,12 @@ module RunnerGateway
                         "strings, `data` an object and `error` an object of `class` and `message` strings.")
         end
 
-        operation = Runners::Operations.record_result!(operation, status: body["status"], result: outcome(body))
+        operation = Runners::Operations.record_result!(
+          operation,
+          status: body["status"], exit_code: body["exit_code"]&.to_i, stdout: body["stdout"], stderr: body["stderr"],
+          data: body["data"], error: body["error"]
+        )
         render json: { id: operation.id, state: operation.state }
-      end
-
-      private
-
-      # What `result` stores: the body's known fields, a `null` one left out.
-      # JSON Schema counts 1.0 as an integer, so `exit_code` is stored as one.
-      def outcome(body)
-        result = body.slice("exit_code", "stdout", "stderr", "data", "error").to_h.compact
-        result["exit_code"] = result["exit_code"].to_i if result.key?("exit_code")
-        result
       end
     end
   end

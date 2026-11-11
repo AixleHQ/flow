@@ -1,8 +1,10 @@
 # frozen_string_literal: true
 
-# The platform's runner pins are a committed file of their own,
-# config/runner_release.yml, read as Settings.runners.release
-# (docs/design/agent-runtimes/DESIGN.md §14.2). Runners::Release validates them
-# once the app is loaded (config/initializers/runner_release.rb).
-Settings.add_source!({ "runners" => { "release" => YAML.safe_load_file(Rails.root.join("config/runner_release.yml")) } })
+# Re-reads config/settings.yml now that ENV is complete. The config gem loads
+# Settings before config/application.rb runs (which already reads it), but
+# `Dotenv.load` runs later, in config/environments/development.rb and test.rb.
+# Without this reload, values from `.env` never reach Settings in development
+# and test, so everything read at boot (OmniAuth, Sentry, required_env.rb, the
+# Temporal worker) would miss them. The leading underscore makes this run
+# before the other initializers.
 Settings.reload!

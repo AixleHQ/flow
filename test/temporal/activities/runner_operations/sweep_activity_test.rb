@@ -8,7 +8,7 @@ class Activities::RunnerOperations::SweepActivityTest < ActiveSupport::TestCase
     holder = create(:runner_session, :holding, environment: environment)
     overdue = Runners::Operations.enqueue!(environment, op: "env.reset", payload: {}, deadline_at: 1.hour.ago, session: holder)
     old = Runners::Operations.enqueue!(environment, op: "env.reset", payload: {}, deadline_at: 1.minute.from_now, session: holder)
-    Runners::Operations.record_result!(old, status: "ok", result: {})
+    Runners::Operations.record_result!(old, status: "ok")
     old.update_columns(completed_at: 8.days.ago)
     Runners::Operations.enqueue!(environment, op: "env.reset", payload: {}, deadline_at: 1.minute.from_now, session: holder)
 

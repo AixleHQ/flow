@@ -1172,14 +1172,31 @@ request is checked for the protocol and version headers (`PROTOCOL.md` §1 and �
 
 **Request schemas (task #209).** Each gateway request body, and the long-poll's query, has a
 JSON Schema in `runner/protocol/schemas/v1/`, next to the protocol it belongs to
-(`PROTOCOL.md` §5). The controllers check a request with one shared helper,
-`Runners::ProtocolSchema.valid?(name, document)`, through `json_schemer`, the way
-`Templates::Package` checks `template.yaml` against `config/templates/template.v1.json`, and
-answer the endpoint's own refusal (`invalid_registration`, `invalid_result`,
-`invalid_request`) when it fails. A rule that needs the value itself stays where it is: a
-`name` blank once trimmed, and a value over its column, are `RunnerEnvironment`'s
-validations, as is the shape of `facts`. Every new gateway endpoint that takes a body or
-parameters, in 8b and 8c, adds its schema there.
+(`PROTOCOL.md` §5). The gateway is layered as `docs/architecture/implementation-patterns.md`
+("Error Handling") says: transport in the controllers, the domain in the services, which take
+named parameters and never see the request.
+- **The controller** checks the headers (`X-Aixle-Runner-Protocol`, the form of
+  `X-Aixle-Runner-Version`, and for `register` a version over 255 characters or below
+  `min_version`), the token, and the shape of the body or query against its schema with one
+  shared helper, `Runners::ProtocolSchema.valid?(name, document)`, through `json_schemer`, the
+  way `Templates::Package` checks `template.yaml` against `config/templates/template.v1.json`.
+  A failure is the endpoint's own refusal (`invalid_registration`, `invalid_result`,
+  `invalid_request`). It then maps the body to the service's named parameters by the
+  protocol's wire rules (an absent `os` or `arch` `nil`, `facts` `{}` and `auto_update` true
+  when absent, `ephemeral` true only for the JSON boolean `true`, `exit_code` an Integer), and
+  maps a service's refusal, `Runners::Credentials::Refused`, to its status through
+  `REFUSAL_STATUS`. The schemas are strict about types: `os` and `arch` are strings and
+  `ephemeral` a JSON boolean, and any other value is the endpoint's refusal, not cast.
+- **The service** (`Runners::Registration.register!`, `Runners::Operations.record_result!`)
+  makes the domain refusals and raises `Runners::Credentials::Refused`: `ephemeral: true` is
+  `ephemeral_not_supported`, which is why `register.request.json` lets a body with
+  `ephemeral: true` pass whatever the rest of it holds, so that the refusal order of `PROTOCOL.md`
+  §5.1 stays the same.
+
+A rule that needs the value itself stays where it is: a `name` blank once trimmed, and a value
+over its column, are `RunnerEnvironment`'s validations, as is the shape of `facts`. Every new
+gateway endpoint that takes a body or parameters, in 8b and 8c, adds its schema there and
+follows the same layering.
 
 Rack::Attack throttles `/runner/v1/*` per bearer token (keyed on its digest) and per IP, so a
 client that sends a new bearer value on every request is still bounded, and `register` per IP
@@ -1203,7 +1220,7 @@ All requests are `Authorization: Bearer <token>`,
 | `POST /runner/v1/heartbeat` | both | Only when no poll is outstanding, e.g. while uploading. Includes the running-session summary. |
 | `ANY  /runner/v1/proxy/:route/*` | session runner | The callback proxy (§6.6). |
 | `GET  /runner/v1/releases/:version/:os-:arch` | both | The binary's documented, stable URL. It answers `302` to the GitHub Release asset and sends the expected SHA-256 in `X-Aixle-Runner-Sha256` (§14.3). |
-| `GET  /runner/v1/releases/:version/checksums` | both | The `sha256  file` list for that version, from `config/runner_release.yml`. |
+| `GET  /runner/v1/releases/:version/checksums` | both | The `sha256  file` list for that version, from the platform's pins (`runners.release` in `config/settings.yml`). |
 | `GET  /runner/v1/install.sh` | bootstrap | Install script used by `inject_bootstrap` (`coder`). `manual` operators download the binary directly (§6.3). |
 
 **What v1 has so far (§15 tasks 5a and 5b):** `register` for a `manual` machine,
@@ -1257,7 +1274,7 @@ ends as on hosted (§6.9.4).
   token (1 h) and shows a copy-paste sequence:
 
   ```sh
-  # 1. Download and verify (the digest is from config/runner_release.yml, §14.3)
+  # 1. Download and verify (the digest is from the platform's pins, §14.3)
   curl -fsSLo aixle-runner https://flow.aixle.com/runner/v1/releases/1.4.0/linux-amd64
   echo "<sha256>  aixle-runner" | sha256sum -c -
   chmod 0755 aixle-runner
@@ -1435,7 +1452,7 @@ are unchanged. With `network: host` the host runner listens itself.
   `azure-git-credentials`, `cloud-credentials` and `assets` (`GET` and `HEAD` under `store/`,
   the filesystem storage's files; a presigned S3 URL is never rewritten). Each route names the
   methods it takes, and only `assets` takes a path below it.
-- **The session check** (step 2) is `Runners::Proxy.holder`: the MCP key in `X-Session-Key`
+- **The session check** (step 2) is `Runners::Proxy.holder(route, environment, session_id:, key:)`; the controller reads the headers and passes their values, and the service never receives the request (§6.1): the MCP key in `X-Session-Key`
   must resolve to the session that holds the machine (`current_session_id`); a credential route
   needs that session's id in `X-Session-Id` and its own key for that endpoint (`X-Agent-Key`,
   `X-Git-Key`, `X-Azure-Git-Key`, `X-Cloud-Key`). `assets` carries no key, on the internal
@@ -3060,8 +3077,8 @@ external_runners_kubernetes:
 - **Ownership composes with §3.2 as it is.** The flag decides whether external runners
   exist for a company at all, a platform decision made from `/admin`. Inside a company where
   it is on, §3.2 decides who may create and edit a runner.
-- **`config/runner_release.yml` stays a `Settings` file** (§14.2). It holds the runner
-  version pins, which are a pin, not a toggle, and it never becomes a flag.
+- **The runner pins stay in `Settings`** (§14.2): the `runners.release` block of
+  `config/settings.yml`. They are a pin, not a toggle, and they never become a flag.
 
 ### 12.2 Delivery order, as flag states
 
@@ -3421,22 +3438,24 @@ There are **three distinct versions**, and none of them is the application versi
   `runner-v*` or `runner-chart-v*`. An application release never builds a runner, and the
   reverse is also true.
 
-**The platform's pins are a committed file, not derived from the release.**
-`config/runner_release.yml`, read through `Settings` (`Settings.runners.release`, per the
-`NoEnvInApp` cop), holds:
+**The platform's pins are committed configuration, not derived from the release.** The
+`runners.release` block of `config/settings.yml`, read through `Settings`
+(`Settings.runners.release`, per the `NoEnvInApp` cop), holds plain values, no ENV:
 
 ```yaml
 # Illustrative values.
-protocol_supported: [1]           # becomes [N-1, N] after the first bump
-min_version: "1.2.0"              # check-in / register refused below this
-recommended_version: "1.4.0"      # what new environments install; "update available" below this
-binaries:
-  "1.4.0":
-    linux-amd64: { sha256: "…" }
-    linux-arm64: { sha256: "…" }
+runners:
+  release:
+    protocol_supported: [1]           # becomes [N-1, N] after the first bump
+    min_version: "1.2.0"              # check-in / register refused below this
+    recommended_version: "1.4.0"      # what new environments install; "update available" below this
+    binaries:
+      "1.4.0":
+        linux-amd64: { sha256: "…" }
+        linux-arm64: { sha256: "…" }
 ```
 
-Changing what the platform recommends is an **application PR** that edits this file, and
+Changing what the platform recommends is an **application PR** that edits this block, and
 it is independent of a runner release. Publishing `runner-v1.5.0` changes nothing until a PR
 moves `recommended_version`. The "update available" banner on the runner page then compares
 against `recommended_version`, so it no longer fires on every application release.
@@ -3444,8 +3463,8 @@ against `recommended_version`, so it no longer fires on every application releas
 **Compatibility statement.** `docs/operations/releasing.md`, whose version contract only
 covers the application today, gains a "Runner compatibility" section: *platform `X.Y`
 supports runner protocol versions `[N-1, N]` and runners at or above `min_version`, both as
-declared in `config/runner_release.yml` at that release.* The application changelog
-mentions any change to that file.
+declared in the `runners.release` block of `config/settings.yml` at that release.* The
+application changelog mentions any change to that block.
 
 **What v1 has (§15 task 10).** The first runner version is `0.1.0` (`runner-v0.1.0`, decision 1,
 Alex 2026-11-09): `1.0.0` comes with the extract or the first customer (§14.1).
@@ -3460,15 +3479,18 @@ Alex 2026-11-09): `1.0.0` comes with the extract or the first customer (§14.1).
   latest, so `latest` stays the application's. Run by hand (`workflow_dispatch`, decision 4) it
   takes a version and does everything except push and release: the dry run the verification
   round uses, without a public tag.
-- **The pins** are `config/runner_release.yml`, loaded into `Settings.runners.release`
-  (`config/initializers/_config_settings.rb`) and read and checked by `Runners::Release`: an
-  invalid file fails boot. Besides the four keys above it holds `download_url`, the template
-  of the asset URL the release endpoint redirects to (`%{version}`, `%{platform}`), so a
-  mirror is one edit. As committed, it pins `protocol_supported: [1]` and no minimum, no
-  recommendation and no binary: Alex tags `runner-v0.1.0` after task 10 merges, and the PR
-  after it pins `0.1.0` and its digests. The gateway's `X-Aixle-Runner-Protocol` check reads
-  `protocol_supported`, and `X-Aixle-Runner-Version` is strict SemVer 2.0 from task 10 on, so
-  versions compare by SemVer precedence (`Runners::Version`).
+- **The pins** are the `runners.release` block of `config/settings.yml`, read as
+  `Settings.runners.release` and checked by `Runners::Release` once the app is loaded
+  (`config/initializers/runner_release.rb`): an invalid block fails boot. Task 10 kept them in a
+  YAML file of their own, loaded with `add_source!`; its follow-up (task #220) moved them into
+  `settings.yml`, the one loading mechanism, next to the other `runners:` settings. Besides the
+  four keys above the block holds `download_url`, the template of the asset URL the release
+  endpoint redirects to (`%{version}`, `%{platform}`), so a mirror is one edit. It pins
+  `protocol_supported: [1]`, no minimum, and `recommended_version: "0.1.0"` with the
+  `linux-amd64` and `linux-arm64` digests of `runner-v0.1.0`'s `checksums.txt` (task #220). The
+  gateway's `X-Aixle-Runner-Protocol` check reads `protocol_supported`, and
+  `X-Aixle-Runner-Version` is strict SemVer 2.0 from task 10 on, so versions compare by SemVer
+  precedence (`Runners::Version`).
 - **The endpoints** are `GET /runner/v1/releases/:version/:os-:arch`, a `302` to the pinned
   asset with `X-Aixle-Runner-Sha256`, and `GET /runner/v1/releases/:version/checksums`, the
   same digests as JSON. Both are public, take no protocol header, and answer `404 not_found`
@@ -3484,8 +3506,8 @@ Alex 2026-11-09): `1.0.0` comes with the extract or the first customer (§14.1).
   from a mirror, without changing the runner or the script.
 - **`install.sh` verifies SHA-256** against the digest the platform serves (the
   `X-Aixle-Runner-Sha256` header, and the checksums endpoint for the self-update path).
-  Both come from `config/runner_release.yml`, not from the asset host, so a tampered asset
-  fails verification. The script keeps a **`verify` hook**, a function called with the
+  Both come from the platform's pins (`runners.release` in `config/settings.yml`), not from
+  the asset host, so a tampered asset fails verification. The script keeps a **`verify` hook**, a function called with the
   file and its metadata, which today checks the digest only. Signature checking can be
   added there later without a contract change.
 - **cosign signing is deferred.** It is not part of the first iteration. Introducing it is
@@ -3604,7 +3626,7 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 8b | 2 | **Done.** The callback proxy (§6.6, §6.9.3; `PROTOCOL.md` §5.8). An agent on a `manual` runner reaches MCP, `finish_session` included, the agent credential sync and refresh, git credentials (GitHub, GitLab, Bitbucket, Azure DevOps), cloud credentials and stored files through a local proxy. **The Go side:** `aixle-runner --mode proxy`, the sidecar (`internal/proxy.RunSidecar`), a reverse proxy on `127.0.0.1:7690` to the host runner's relay socket; the relay (`proxy.Relay`), served by `proxy.Host` on a Unix socket per session under the state directory (mounted read-only into the sidecar only), or with `network: host` on the session's port of the machine's `127.0.0.1`, which serves `/runner/v1/proxy/*` only and adds the environment credential; `container.start` creates the sidecar first, from the agent image with the host runner's binary bind-mounted read-only as its entrypoint, and the agent joins its network namespace; `container.stop`, `env.scrub` and `env.reset` remove it with the agent's container and close the relay; a restarted host runner serves the running sidecars again (`Environment.Resume`). **Decision 10:** a sidecar that exits stops the agent's container, so the session fails through the dead-container path, and its exit code and log tail are logged. **Decision 4:** a daemon that refuses the sidecar's bind mount ("bind source path does not exist") gives `docker_files_not_visible`, naming the cause. **The platform:** the gateway route `ANY /runner/v1/proxy/:route/*` (`RunnerGateway::V1::ProxiesController`): the environment credential, the allow-list (`Runners::Proxy::ROUTES`, **decision 7**: no OTLP route, deferred, so a runner session gets no OTLP endpoint), the key of the session that holds the environment (`Runners::Proxy.holder`), then an HTTP forward to the internal endpoint with `X-Aixle-Runner-Environment`, streamed back (**decision 8**), with no body schema (**decision 9**), and `X-Aixle-Runner-Refusal` on every refusal of the route. **Decision 6:** the callback-URL seam, `runtime.callback_url(name, session)` (`ContainerRuntime::CallbackUrls`), the `Settings` value on hosted and `http://127.0.0.1:<port>/<route>` on a runner, read by the env vars, the MCP config, the asset URLs of the context and the instructions, `read_tool_result` and the OTLP endpoint of the agent configs; `RunnerRuntime` rewrites no string. **An implementation decision for review:** with `network: host` the port is per session (`20000 + id mod 10000`), sent as `container.start`'s `proxy_port`, not per environment, because the container's environment is built before the session takes a machine (§6.9.3). `PROTOCOL.md` §5.8 and §6.2 describe the proxy, the port, the socket, the headers, the refusals (`route_not_allowed`, `session_not_on_environment`, `upstream_unavailable`; on the runner `not_proxied`, `relay_failed`, `body_too_large`) and the changed `container.start` (`proxy_port`, `docker_files_not_visible`, `proxy_port_in_use`, `proxy_start_failed`), with the fixtures in `fixtures/v1/proxy/` and the setup steps `session_holds_machine` and `upstream_answers`. The Go conformance test fails for a fixture that drives no exchange unless it is on its `gatewayOnly` list (none is). The dev `local` adapter keeps its binary and state in `RUNNER_LOCAL_DIR`, a directory of the machine mounted at the same path, so the daemon sees them. Tests: `test/integration/runner_gateway_proxy_test.rb`, `test/services/runners/proxy_test.rb`, `test/services/container_runtime/callback_urls_test.rb`, the §12.3 test extended, and on the Go side `internal/proxy` and `internal/docker/proxy_test.go`. Fix CR round 1 (Alex, 2026-11-10) added: a re-opened relay socket keeps its directory and replaces only `relay.sock`, so a running sidecar's bind mount still reaches it after a restart; the relay refuses a path with an empty, `.` or `..` segment after percent-decoding, or an encoded `/` or a `\`, as `not_proxied`; a relay or a `network: host` listener that can't be served again after a restart stops the session's agent container (no retry); the gateway drops the headers a `Connection` header names, both ways, releases its database connection before the forward, and logs a runner that disconnects mid-answer at info; the sidecar and the relay read a request body within 30 s (`408 body_timeout`), with no limit on the answer or on concurrent calls; the adapters take the callback addresses only from the session's runtime (`callbacks:` and `otel_endpoint:` required, no hosted fallback); `MCP::SessionKey.lookup` resolves an MCP key for both `MCPController` and `Runners::Proxy`, and each key's header is its `SessionKey` module's `HEADER`. The `network: host` port per session is accepted (Alex, 2026-11-10). Fix CR round 2 (Alex, 2026-11-10) added: `ContainerRuntime.callback_url(name, session)`, one call for a callback address; the proxy's ports in `Settings.runners.proxy`, overridable by environment variables, with the sidecar's port sent in `container.start`'s `proxy_port` too, so the host runner has no port setting; the gateway's 900 s read timeout kept and stated in `PROTOCOL.md` §5.8 (an answer silent that long is cut); a sidecar watcher that re-subscribes to Docker's wait with a backoff from 1 s to 30 s after a broken stream, and inspects the sidecar in between; `Route#allows?` refuses a decoded `\` as the relay does; the relay passes one trailing slash (`/mcp/`), as hosted does; `CallbackUrls.hosted_all` removed, and no `workflow_config = {}` default on the paths that need `:otel_endpoint`. Fix CR round 4 (Alex, 2026-11-10) added: a host runner whose `Environment.Resume` can't list the containers exits before polling, with a failure the service manager restarts; a sidecar that exits stops the agent before its log tail is read, under `SidecarLogTimeout`, and a stopped sidecar found by `Resume` is logged with its real exit code; `Runners::Proxy` decodes path segments strictly, so a malformed `%` escape or octets that aren't UTF-8 are `route_not_allowed`, not a 500. Fix CR round 5 (Alex, 2026-11-11) added: a Docker wait result that carries an error is treated as a failed wait, not a sidecar exit, so the sidecar is inspected and waited for again; the host runner narrows its state directory to `0700` at start, and needs an operator when it can't; the relay takes the logged route before the query and logs a transport failure without its URL; `Runners::Proxy.settings_problems` refuses a `network: host` port range that includes an image port; a raw octet outside ASCII in the path is `route_not_allowed`. Go's transports adding `Accept-Encoding: gzip` and a `User-Agent` is kept: the agent gets the same content, and nothing breaks today. |
 | 8c | 2 | The live log and parity with hosted (§6.5, §6.9.4): the host runner's `check-in` and heartbeat, the live log followed from the container's own log (the `local` log driver set per container) and shipped as `session_live_log_chunks`, which `Sessions::LiveLogReader` and the session monitor's snapshot (`Sessions::Snapshot.source_for`, task #211) read instead of `exec` ops; the live text of a runner session for `get_session_log` and `AuthErrorDetector`; larger output and files through an upload to a signed URL in the result (decision 3, Alex 2026-11-07), until which the 1 MiB cap of 6b stays and a terminal log over 1 MiB is not collected whole: `read_file` refuses it, and the cleanup stores the tail the `logs` op returns (at most the output cap) as `terminal_output.log` instead (Alex, Fix CR round 7); 8c replaces that tail with the full log through a signed URL. The live log skipped after a restart past a rotation is a known limitation. When it adds endpoints, the Go conformance test (`runner/internal/protocol/conformance_test.go`) must fail for a fixture that drives no exchange, unless the fixture is on an explicit gateway-only list with a reason (from row 8). `check-in` writes the `X-Aixle-Runner-Version` it is sent to `runner_environments.runner_version`, which until then keeps the version the machine registered with, so a machine that updated itself (row 10) shows its new version; task 12's "update available" and `degraded` read the version from there (task 10, Fix CR round 1). |
 | 9 | 2 | Admission: `runner:<id>` pools, company ceiling exclusion, `runner_limit`/`runner_capacity` wait reasons, hosted scanners skip runner sessions; the §12.3 regression test extended to admission. |
-| 10 | 2 | **Done.** Runner release lane: `runner-release.yml` for `runner-v*` (binaries, `checksums.txt`, GHCR image, from `docker/runner/Dockerfile`), applied by Alex from the task's patch since agents cannot push `.github/workflows/`. `config/runner_release.yml` read through `Settings.runners.release` and checked by `Runners::Release` at boot. The `/runner/v1/releases` redirect and checksums endpoints, public and with `schemas/v1/releases.params.json`. The `min_version` refusal at `register` (`400 runner_version_unsupported`), strict SemVer 2.0 for `X-Aixle-Runner-Version` and `protocol_supported` for `X-Aixle-Runner-Protocol`. The "Runner compatibility" and "Releasing the runner" sections in `docs/operations/releasing.md` (§14.2). Self-update with the opt-out (`config.auto_update: false`, `configure --no-auto-update` as `runner_environments.auto_update`, §14.4), moved from task 6. **Decisions (Alex, 2026-11-09):** (1) the first runner version is `0.1.0`, and `1.0.0` comes with the extract or the first customer; (2) a runner learns of an update from the answer of `GET /runner/v1/ops` without ops, which carries `update: {version, sha256}` only while the machine holds no session and runs below `recommended_version`, unless it opted out, and 8c's `check-in` adds the same field; (3) the binary lives in `/var/lib/aixle-runner/bin`, owned by the `aixle-runner` user, `service install` installs it there and points `ExecStart` at it, and an update downloads there, verifies the SHA-256, switches atomically and exits for systemd to restart (`Restart=always`), with no root helper and no package manager; (4) `runner-release.yml` also runs by `workflow_dispatch` as a dry run that builds and checks the binaries and the image and pushes and releases nothing. As built: §14.2 "What v1 has", §14.4 "What v1 has", §6.3. Alex tags `runner-v0.1.0` after this merges, and a follow-up PR pins `0.1.0` and its digests. **Fix CR round 1 (Alex, 2026-11-10):** no update reservation, and `update.DownloadTimeout` is 2 minutes, so a `container.start` queued during an update outlives it (§14.4); the release requests carry neither protocol header, and the Go conformance harness checks each fixture header's presence or absence; a `download_url` template that `format` cannot fill in fails boot; a runner version over 255 characters is `invalid_registration` before the `min_version` refusal; the published image sets `AIXLE_RUNNER_NO_SELF_UPDATE=1` and does not update itself (§14.4); the parsed pins are memoized. **Fix CR round 2 (Alex, 2026-11-10):** every answer of the release endpoints, the `400` and `404` refusals included, has `Cache-Control: no-store`; the `update` offer drops `url` and is `{version, sha256}`, since the runner builds its release requests from its own configured platform URL (protocol 1 is unreleased, so nothing is kept for compatibility); `configure` treats `AIXLE_RUNNER_NO_SELF_UPDATE` as `--no-auto-update`, so a machine configured from the published image registers `auto_update: false`; the host runner computes its effective self-update setting once, for the start line and the updater. |
+| 10 | 2 | **Done.** Runner release lane: `runner-release.yml` for `runner-v*` (binaries, `checksums.txt`, GHCR image, from `docker/runner/Dockerfile`), applied by Alex from the task's patch since agents cannot push `.github/workflows/`. The pins file read through `Settings.runners.release` and checked by `Runners::Release` at boot (since task #220 the `runners.release` block of `config/settings.yml`). The `/runner/v1/releases` redirect and checksums endpoints, public and with `schemas/v1/releases.params.json`. The `min_version` refusal at `register` (`400 runner_version_unsupported`), strict SemVer 2.0 for `X-Aixle-Runner-Version` and `protocol_supported` for `X-Aixle-Runner-Protocol`. The "Runner compatibility" and "Releasing the runner" sections in `docs/operations/releasing.md` (§14.2). Self-update with the opt-out (`config.auto_update: false`, `configure --no-auto-update` as `runner_environments.auto_update`, §14.4), moved from task 6. **Decisions (Alex, 2026-11-09):** (1) the first runner version is `0.1.0`, and `1.0.0` comes with the extract or the first customer; (2) a runner learns of an update from the answer of `GET /runner/v1/ops` without ops, which carries `update: {version, sha256}` only while the machine holds no session and runs below `recommended_version`, unless it opted out, and 8c's `check-in` adds the same field; (3) the binary lives in `/var/lib/aixle-runner/bin`, owned by the `aixle-runner` user, `service install` installs it there and points `ExecStart` at it, and an update downloads there, verifies the SHA-256, switches atomically and exits for systemd to restart (`Restart=always`), with no root helper and no package manager; (4) `runner-release.yml` also runs by `workflow_dispatch` as a dry run that builds and checks the binaries and the image and pushes and releases nothing. As built: §14.2 "What v1 has", §14.4 "What v1 has", §6.3. Alex tags `runner-v0.1.0` after this merges, and a follow-up PR pins `0.1.0` and its digests (task #220: done, with the pins moved into `config/settings.yml`). **Fix CR round 1 (Alex, 2026-11-10):** no update reservation, and `update.DownloadTimeout` is 2 minutes, so a `container.start` queued during an update outlives it (§14.4); the release requests carry neither protocol header, and the Go conformance harness checks each fixture header's presence or absence; a `download_url` template that `format` cannot fill in fails boot; a runner version over 255 characters is `invalid_registration` before the `min_version` refusal; the published image sets `AIXLE_RUNNER_NO_SELF_UPDATE=1` and does not update itself (§14.4); the parsed pins are memoized. **Fix CR round 2 (Alex, 2026-11-10):** every answer of the release endpoints, the `400` and `404` refusals included, has `Cache-Control: no-store`; the `update` offer drops `url` and is `{version, sha256}`, since the runner builds its release requests from its own configured platform URL (protocol 1 is unreleased, so nothing is kept for compatibility); `configure` treats `AIXLE_RUNNER_NO_SELF_UPDATE` as `--no-auto-update`, so a machine configured from the published image registers `auto_update: false`; the host runner computes its effective self-update setting once, for the start line and the updater. |
 | 11 | 3 | `Runners::Allocator` and environment state machine, including the self-registering entry path (§5.2): affinity, project binding, no step 4 on non-`provisionable` types, scrub and reset escalation without rebuild, Return to service, Release to company (§9.4), reconciliation pass. When `env.scrub` is first sent, the removal of its helper container in `runner/internal/docker/scrub.go` gets a bounded timeout under a fresh context, as `container.start`'s removal on failure did in 8a's Fix CR round 6; in 8a its code is unchanged, because `env.scrub` is not sent yet (Alex, Fix CR round 7). |
 | 12 | 3 | `manual` end to end: `ManualAdapter#check_health` derived from machine heartbeats (§2.5), heartbeat-based `observe`, the Machines table (online / idle / offline, facts, first-seen IP), "Add machine" with the GitHub-style instructions and the SHA-256 step, per-machine Revoke, `reuse_policy` per §7.1, the writable-mount acknowledgement, the §9.7 disclosure, and user docs for `manual` (dedicated machine recommended). The operator docs must say that a bind source can't be under the machine's `/tmp` or `/var/tmp` when the runner runs as the service: the unit has `PrivateTmp=true`, so the runner doesn't see those directories and refuses such a bind with `forbidden_mount` (verification round 1 of 6b; accepted as a known limitation, Alex 2026-11-06). From 8b, for `network: host` (Alex, 2026-11-10): **port collisions**: a session's proxy port is `20000 + session id mod 10000`, so two sessions on one machine whose ids are congruent mod 10000, or any other service in 20000 to 29999, can take it, and the session then fails with `proxy_port_in_use`, which is not retryable on that machine; **local access**: the listener is on the machine's own `127.0.0.1`, so any local user or process can reach it, and the host runner adds the environment credential to what it sends. A session key is still required, but the exposure is wider than the sidecar's private network namespace. |
 | 13 | 3 | Runner page actions (Reset, Force release), connection-lost banner, the revoke flow, Administrate dashboards. |

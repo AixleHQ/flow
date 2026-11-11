@@ -68,6 +68,12 @@ governance, community health — carry none.
   card's assignee; reassigning a card mid-run no longer changes who the agent
   acts as. After an agent's move, the next run goes to the card's assignee if
   they can own runs, otherwise to the session's user.
+- Runner compatibility: the platform now serves and recommends `aixle-runner`
+  0.1.0. It pins the `linux-amd64` and `linux-arm64` binaries of
+  [runner-v0.1.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.1.0)
+  by their SHA-256, and an idle machine below 0.1.0 that has not opted out is
+  offered the update. Runner protocol 1 only, and no minimum runner version.
+  The pins now live in the `runners.release` block of `config/settings.yml`.
 - **Company settings**: the Billing tab lists every subscription the workspace has
   had. The one paying now — the card, or the AWS Marketplace subscription — shows its
   billing method, current period, next invoice and the usage so far; the ones that

@@ -1,11 +1,12 @@
 # frozen_string_literal: true
 
 module Runners
-  # The platform's runner pins, config/runner_release.yml read as
-  # Settings.runners.release (docs/design/agent-runtimes/DESIGN.md §14.2, §14.4):
-  # which protocol versions the gateway accepts, the lowest runner version it
-  # registers, the version it recommends, and the SHA-256 of every binary it
-  # serves. Changing any of them is an application PR to that file.
+  # The platform's runner pins, the `runners.release` block of
+  # config/settings.yml read as Settings.runners.release
+  # (docs/design/agent-runtimes/DESIGN.md §14.2, §14.4): which protocol versions
+  # the gateway accepts, the lowest runner version it registers, the version it
+  # recommends, and the SHA-256 of every binary it serves. Changing any of them
+  # is an application PR to that block.
   #
   #   Runners::Release.protocol_supported?("1")             # X-Aixle-Runner-Protocol
   #   Runners::Release.unsupported_version?("0.0.9")        # below min_version: register refuses it
@@ -14,8 +15,9 @@ module Runners
   #   Runners::Release.update_for(environment, runner_version: "0.1.0") # => Offer, or nil
   #
   # The pins are parsed and checked once, on first use, and kept for the life of
-  # the process: the file is committed and does not change under it. An invalid
-  # file fails boot (config/initializers/runner_release.rb), never a request.
+  # the process: the block is committed and does not change under it. An
+  # invalid block fails boot (config/initializers/runner_release.rb), never a
+  # request.
   # A test that changes Settings calls `reset!`.
   module Release
     # The runner protocol versions this gateway's code implements. The pins may
@@ -31,7 +33,7 @@ module Runners
     # One pinned binary: the URL of its release asset and its digest.
     Binary = Data.define(:version, :platform, :url, :sha256)
     # The update an idle machine below the recommended version is offered.
-    Offer = Data.define(:version, :platform, :sha256)
+    Offer = Data.define(:version, :sha256)
     # Every pinned digest of one version, by platform.
     Checksums = Data.define(:version, :binaries)
 
@@ -98,7 +100,7 @@ module Runners
 
       platform = "#{environment.os}-#{environment.arch}"
       digest = current.binaries.dig(recommended.to_s, platform)
-      digest && Offer.new(version: recommended.to_s, platform: platform, sha256: digest)
+      digest && Offer.new(version: recommended.to_s, sha256: digest)
     end
 
     # Whether the platform recommends a version above `runner_version`.
@@ -183,7 +185,7 @@ module Runners
     end
 
     def invalid!(message)
-      raise InvalidPins, "config/runner_release.yml: #{message}"
+      raise InvalidPins, "config/settings.yml runners.release: #{message}"
     end
   end
 end
