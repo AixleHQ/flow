@@ -5,7 +5,7 @@ require "test_helper"
 # The adapter and its fake have to stay the same shape, or every test below the
 # fake is testing something the application does not do.
 class Billing::MarketplaceSellerClientContractTest < ActiveSupport::TestCase
-  METHODS = %i[configured? resolve_customer batch_meter_usage].freeze
+  METHODS = %i[configured? resolve_customer describe_agreement agreement_pricing batch_meter_usage].freeze
 
   def configure!(product_code: "saasproduct", seller_role_arn: "arn:aws:iam::111122223333:role/seller")
     Settings.stubs(:aws_marketplace).returns(
@@ -33,6 +33,16 @@ class Billing::MarketplaceSellerClientContractTest < ActiveSupport::TestCase
     assert customer.aws_account_id.present?
     # Concurrent Agreements: AWS stops populating this, and nothing may key on it.
     assert_nil customer.customer_identifier
+  end
+
+  test "the fake refuses a customer with no licence, as the adapter does" do
+    client = FakeMarketplaceSellerClient.new
+    client.customer = Billing::MarketplaceSellerClient::Customer.new(
+      license_arn: nil, aws_account_id: "111122223333", product_code: FakeMarketplaceSellerClient::PRODUCT_CODE,
+      agreement_id: nil, customer_identifier: nil
+    )
+
+    assert_raises(Billing::MarketplaceSellerClient::Unlicensed) { client.resolve_customer(registration_token: "tok") }
   end
 
   test "one token resolves to one licence however often it is presented" do
@@ -70,6 +80,32 @@ class Billing::MarketplaceSellerClientContractTest < ActiveSupport::TestCase
 
     configure!
     assert_empty Billing::MarketplaceSellerClient.new.batch_meter_usage([])
+  end
+
+  # The rate card comes back as nested SDK structs; the prices this application
+  # keeps are the per-dimension ones, under the currency the term names.
+  test "the adapter reads a dimension's price off the agreement's accepted terms" do
+    rate = Struct.new(:dimension_key, :price)
+    card = Struct.new(:rate_card)
+    usage_term = Struct.new(:currency_code, :rate_cards)
+    term = Struct.new(:usage_based_pricing_term)
+    terms = [
+      term.new(nil), # a legal or support term, which carries no price
+      term.new(usage_term.new("USD", [ card.new([ rate.new("worker_minute", "0.07"), rate.new("other", "1.5") ]) ]))
+    ]
+
+    pricing = Billing::MarketplaceSellerClient::Pricing.from_terms("agmt-1", terms)
+
+    assert_equal "USD", pricing.currency
+    assert_equal BigDecimal("0.07"), pricing.rate_for("worker_minute")
+    assert_nil pricing.rate_for("unpriced")
+  end
+
+  test "the fake answers a Pricing the adapter could have built" do
+    pricing = FakeMarketplaceSellerClient.new.agreement_pricing(agreement_id: "agmt-1")
+
+    assert_instance_of Billing::MarketplaceSellerClient::Pricing, pricing
+    assert_equal FakeMarketplaceSellerClient::PUBLIC_RATE, pricing.rate_for(Billing::Meter::AwsMarketplaceSaas::DIMENSION)
   end
 
   # The error tree is the contract: a caller has to be able to tell a role it

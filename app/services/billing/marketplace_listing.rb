@@ -11,7 +11,13 @@ module Billing
     def self.subscriptions_url = SUBSCRIPTIONS_URL
 
     def self.listing_url
-      ::Settings.aws_marketplace&.saas&.listing_url.presence || SUBSCRIPTIONS_URL
+      listing_page_url || SUBSCRIPTIONS_URL
+    end
+
+    # The listing's page, or nil where none is configured: an offer to pay
+    # through AWS Marketplace cannot fall back to the library.
+    def self.listing_page_url
+      ::Settings.aws_marketplace&.saas&.listing_url.presence
     end
   end
 end
