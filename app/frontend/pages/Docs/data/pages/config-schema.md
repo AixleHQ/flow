@@ -177,7 +177,7 @@ ports: `container.start` sends a session's port, and the runner listens there.
 | ------------------------------ | -------- | ------- | ---------------------------------------------------------------- |
 | `RUNNER_PROXY_PORT`            | no       | `7690`  | The proxy sidecar's port in the session's network namespace. Keep it off the agent image's own ports (7681, 7682, 4040, 4041, 8443, 8888). |
 | `RUNNER_PROXY_HOST_PORT_BASE`  | no       | `20000` | With `network: host`, a session listens on the machine's `127.0.0.1` on this base plus its id mod `RUNNER_PROXY_HOST_PORT_SPAN`. |
-| `RUNNER_PROXY_HOST_PORT_SPAN`  | no       | `10000` | The size of that port range, at least 1. Base plus span must not pass 65536, and the base must be at least 1024. A deployed app refuses to boot on a proxy port outside these rules. |
+| `RUNNER_PROXY_HOST_PORT_SPAN`  | no       | `10000` | The size of that port range, at least 1. Base plus span must not pass 65536, the base must be at least 1024, and the range must not include any of the agent image's own ports (7681, 7682, 4040, 4041, 8443, 8888). A deployed app refuses to boot on a proxy port outside these rules. |
 
 ### Kubernetes runtime (when `CONTAINER_RUNTIME=kubernetes`)
 
