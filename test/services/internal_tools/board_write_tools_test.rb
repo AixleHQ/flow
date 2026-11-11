@@ -373,6 +373,9 @@ class InternalTools::BoardWriteToolsTest < ActiveSupport::TestCase
   test "board_attach_asset answers with an error when the session has no user" do
     @session.update!(container_id: "test-container-123")
     @session.stubs(:user).returns(nil)
+    runtime = mock("runtime")
+    runtime.expects(:read_file).returns("fake-png-binary-content")
+    ContainerRuntime.stubs(:build).returns(runtime)
 
     result = InternalTools::BoardAttachAsset.new(
       params: { task_id: @task.id, file_path: "/workspace/outputs/shot.png", name: "shot.png" },
