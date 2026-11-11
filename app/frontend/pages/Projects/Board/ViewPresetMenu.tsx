@@ -38,6 +38,7 @@ export function ViewPresetMenu({
 
   const hasActiveFilters = !!(
     filters.assigneeId ||
+    filters.assigneeTeamId ||
     filters.taskType ||
     filters.priority ||
     filters.tags.length > 0 ||
@@ -53,6 +54,7 @@ export function ViewPresetMenu({
         apply: () =>
           onApplyFilters({
             assigneeId: String(currentUserId),
+            assigneeTeamId: null,
             taskType: null,
             priority: null,
             tags: [],
@@ -67,6 +69,7 @@ export function ViewPresetMenu({
         apply: () =>
           onApplyFilters({
             assigneeId: null,
+            assigneeTeamId: null,
             taskType: 'bug',
             priority: null,
             tags: [],
@@ -81,6 +84,7 @@ export function ViewPresetMenu({
   const filtersToJson = (): Record<string, unknown> => {
     const result: Record<string, unknown> = {};
     if (filters.assigneeId) result.assignee_id = filters.assigneeId;
+    if (filters.assigneeTeamId) result.assignee_team_id = filters.assigneeTeamId;
     if (filters.taskType) result.task_type = filters.taskType;
     if (filters.priority) result.priority = filters.priority;
     if (filters.tags.length > 0) result.tags = filters.tags;
@@ -92,8 +96,10 @@ export function ViewPresetMenu({
   const applyViewPreset = (preset: BoardViewPreset) => {
     const f = preset.filters as Record<string, unknown>;
     const assigneeId = f.assigneeId ?? f.assignee_id;
+    const assigneeTeamId = f.assigneeTeamId ?? f.assignee_team_id;
     onApplyFilters({
       assigneeId: assigneeId ? String(assigneeId) : null,
+      assigneeTeamId: assigneeTeamId ? String(assigneeTeamId) : null,
       taskType: ((f.taskType ?? f.task_type) as string | undefined) ?? null,
       priority: (f.priority as string) ?? null,
       tags: (f.tags as string[]) ?? [],

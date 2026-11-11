@@ -36,6 +36,7 @@ module TemporalHistoryScenarios
 
     def completed(step_run_id) = { "step_run_id" => step_run_id, "valid" => true }
     def failed(step_run_id) = { "step_run_id" => step_run_id, "valid" => false, "failed" => true }
+    def quota_failed(step_run_id) = failed(step_run_id).merge("quota_error" => true)
 
     def signal_after_wait(name, *args, timer: 1)
       lambda do |driver|
@@ -59,7 +60,7 @@ module TemporalHistoryScenarios
 
     def launched(step_run_id) = { "terminal_session_id" => 5000 + step_run_id, "step_run_id" => step_run_id }
 
-    def execution_activities(steps:, mode:, complete: nil, launch: nil, skip: false, status: nil)
+    def execution_activities(steps:, mode:, complete: nil, launch: nil, skip: false, status: nil, reassign: nil)
       activities = {
         "workflow_prepare_step_list_activity" => ->(_input, _call) { steps },
         "workflow_fetch_mode_activity" => ->(_input, _call) { { "mode" => mode } },
@@ -80,6 +81,7 @@ module TemporalHistoryScenarios
         }
       }
       activities["workflow_step_session_status_activity"] = status if status
+      activities["workflow_reassign_run_owner_activity"] = reassign if reassign
       activities
     end
 
@@ -128,6 +130,14 @@ module TemporalHistoryScenarios
             launched(input["step_run_id"])
           },
           drive: signal_after_wait(:container_finished, 11)),
+        execution_scenario(workflow, "quota_failure_retried_by_policy",
+          steps: [ step(1, 11, on_failure: "retry", max_retries: 1) ], mode: "non_interactive",
+          complete: ->(input, call) { call.zero? ? quota_failed(input["step_run_id"]) : completed(input["step_run_id"]) },
+          reassign: ->(_input, _call) { { "reassigned" => true } },
+          drive: lambda { |driver|
+            signal_after_wait(:container_finished, 11).call(driver)
+            driver.signal(:container_finished, 900) if driver.await_timer_unless_closed(2)
+          }),
         execution_scenario(workflow, "failed_step_skipped_by_policy",
           steps: [ step(1, 11, on_failure: "skip") ], mode: "non_interactive",
           complete: ->(input, _call) { failed(input["step_run_id"]) },

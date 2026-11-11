@@ -12,7 +12,7 @@ class CurrentUserResource < ApplicationResource
   attributes :id, :email, :name, :state, :created_at, :updated_at,
              # Global (not per-membership): who may watch this person's sessions —
              # see TerminalSession#visible_to?.
-             :share_active_sessions, :share_completed_sessions
+             :share_active_sessions, :share_completed_sessions, :exclude_from_teams
 
   # Credentials, agents and every onboarding answer belong to the CURRENT
   # MEMBERSHIP, not the user: a person authenticates a separate agent account per

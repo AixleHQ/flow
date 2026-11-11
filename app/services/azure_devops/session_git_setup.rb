@@ -183,17 +183,9 @@ module AzureDevops
     # bookkeeping applies to it unchanged.
     def not_written(what) = [ [], [ "could not write #{what} into the container" ], 1 ]
 
-    # Microsoft documents `Authorization: Bearer <entra token>` for Entra and
-    # Basic for PATs. Reusing GitHub's `user:token@host` URL convention for
-    # Entra does not work and would also put the token in the remote.
     def authorization_header(credential)
-      case credential.scheme
-      when "bearer" then "Authorization: Bearer #{credential.token}"
-      when "basic"
-        "Authorization: Basic #{Base64.strict_encode64("#{credential.username}:#{credential.token}")}"
-      else
-        raise Error.new("Unknown Azure credential scheme", code: "credential_action_required")
-      end
+      credential.authorization_header ||
+        raise(Error.new("Unknown Azure credential scheme", code: "credential_action_required"))
     end
   end
 end

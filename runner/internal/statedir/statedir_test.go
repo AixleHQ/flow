@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -59,5 +60,50 @@ func TestCheckWritableRefusesADirectoryItCannotWrite(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
 	if err := CheckWritable(dir); !errors.Is(err, fs.ErrPermission) {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestRestrictNarrowsAWiderStateDirectory(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := Restrict(dir); err != nil {
+		t.Fatal(err)
+	}
+	info, _ := os.Stat(dir)
+	if info.Mode().Perm() != 0o700 {
+		t.Fatalf("mode %04o", info.Mode().Perm())
+	}
+}
+
+func TestRestrictLeavesAnOwnerOnlyStateDirectory(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	chmod = func(string, os.FileMode) error { called = true; return nil }
+	t.Cleanup(func() { chmod = os.Chmod })
+	if err := Restrict(dir); err != nil || called {
+		t.Fatalf("err %v, chmod called %v", err, called)
+	}
+}
+
+func TestRestrictNamesTheDirectoryAndItsModeWhenItCannotNarrowIt(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	chmod = func(string, os.FileMode) error { return fs.ErrPermission }
+	t.Cleanup(func() { chmod = os.Chmod })
+	err := Restrict(dir)
+	if err == nil || !errors.Is(err, fs.ErrPermission) {
+		t.Fatalf("got %v", err)
+	}
+	for _, want := range []string{dir, "0755", "0700"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the error lacks %q: %v", want, err)
+		}
 	}
 }

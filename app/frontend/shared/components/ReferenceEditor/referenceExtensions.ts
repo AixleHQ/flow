@@ -374,7 +374,7 @@ const theme = EditorView.theme({
   '.cm-ref-tip-name': { fontWeight: '600', wordBreak: 'break-all' },
   '.cm-ref-tip-hint': { color: 'var(--app-text-secondary)', fontSize: '12px' },
   '.cm-ref-tip-token': {
-    fontFamily: 'monospace',
+    fontFamily: 'var(--app-font-mono)',
     fontSize: '11px',
     color: 'var(--app-text-tertiary)',
     wordBreak: 'break-all',

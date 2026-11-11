@@ -104,6 +104,17 @@ against a real Copilot Business seat, unless it says otherwise.
   reminded once and finished. An idle Copilot TUI writes nothing to the pane (0
   bytes in 30 s), so the no-output watchdog works on its log as for other runtimes.
 
+- **Found on staging (2026-11-11).** Three things the local stack did not show:
+  the CLI defers MCP tools behind a tool search once a project has enough of them,
+  and a session that found `aixle-tools-finish_session` that way still called
+  `finish_session` and never finished — `toolSearch` and `dynamicRetrieval.mcp`
+  are now off; the catalogue listed `auto` twice, which crashed every page with a
+  model picker (Mantine refuses repeated values) — models are now de-duplicated
+  for every runtime; and the hosted deployment builds agent images into its own
+  registry, which needed a `copilot-cli` repository there. After those, an
+  automatic staging session wrote its file, called `finish_session` on its own
+  and was priced from OTLP traces (4¢, 43k tokens, Claude Haiku 4.5).
+
 **Measured cost.** A one-file task with `finish_session`: 2.3–7.3 AI credits
 ($0.02–$0.07) on Claude Haiku 4.5 or Sonnet 5.5, 3.5 credits on GPT-5.3-Codex
 at low effort. Most of it is the ~17k-token system prompt written to the cache

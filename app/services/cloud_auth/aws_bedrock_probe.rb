@@ -53,7 +53,10 @@ module CloudAuth
       @client ||= ::Aws::BedrockRuntime::Client.new(
         region: @region,
         credentials: ::Aws::Credentials.new(@access_key_id, @secret_access_key, @session_token),
-        retry_limit: 0
+        # Every attempt is a billed invoke_model. `max_attempts` is ignored in legacy mode,
+        # which AWS_RETRY_MODE could select, so the mode is set too.
+        retry_mode: "standard",
+        max_attempts: 1
       )
     end
   end

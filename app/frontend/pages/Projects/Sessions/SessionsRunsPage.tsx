@@ -463,6 +463,7 @@ function EntryRow({
   const childSessions = entry.sessions ?? [];
   const finishedAt = isRun ? entry.completedAt : entry.finishedAt;
   const executionStartedAt = isRun ? entry.executionStartedAt : entry.startedAt;
+  const teamName = 'teamName' in entry ? entry.teamName : null;
 
   return (
     <>
@@ -520,6 +521,7 @@ function EntryRow({
         </div>
 
         <span className={classes.user}>
+          {teamName && <>{teamName} → </>}
           {entry.userName && entry.userId != null ? (
             <Link href={userPath(entry.userId)} className={classes.userLink} onClick={(e) => e.stopPropagation()}>
               {entry.userName}

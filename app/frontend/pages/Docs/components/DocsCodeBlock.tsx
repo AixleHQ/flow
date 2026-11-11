@@ -141,7 +141,7 @@ export function DocsCodeBlock({ inline, className, children }: Props) {
           padding: '14px 16px',
         }}
         codeTagProps={{
-          style: { fontFamily: '"JetBrains Mono", monospace' },
+          style: { fontFamily: 'var(--app-font-mono)' },
         }}
       >
         {code}

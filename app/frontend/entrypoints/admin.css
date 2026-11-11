@@ -14,8 +14,8 @@
  */
 
 :root {
-  --app-font-body: Figtree, sans-serif;
-  --app-font-heading: 'Hanken Grotesk', sans-serif;
+  --app-font-body: Inter, "Inter Fallback", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --app-font-heading: Inter, "Inter Fallback", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --app-font-mono-label: 'Spline Sans Mono', monospace;
 
   --app-bg-default: #ffffff;
@@ -294,6 +294,7 @@
 
 :root .link:is(button, [type='button'], [type='submit'], [type='reset']) {
   color: var(--app-primary);
+  font-family: var(--app-font-body);
 }
 
 :root .link:is(button, [type='button'], [type='submit'], [type='reset']):hover {
@@ -368,6 +369,10 @@
 
 :root table .action-edit {
   color: var(--app-primary);
+}
+
+:root .cell-data--date-time {
+  white-space: nowrap;
 }
 
 :root tbody tr:hover {

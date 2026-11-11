@@ -34,12 +34,25 @@ describe('useBulkActions', () => {
     const { result } = renderHook(() => useBulkActions({ projectId: PROJECT_ID, onSuccess: vi.fn() }));
 
     await act(async () => {
-      await result.current.bulkAssign([1, 2], 42);
+      await result.current.bulkAssign([1, 2], { kind: 'user', id: 42 });
     });
 
     expect(show).toHaveBeenCalledWith(
       expect.objectContaining({ color: 'red', message: 'Failed to update assignee. Please try again.' }),
     );
+  });
+
+  it('assigns a team in place of a person, clearing the person', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(answer(200));
+    vi.spyOn(notifications, 'show').mockImplementation(() => '');
+    const { result } = renderHook(() => useBulkActions({ projectId: PROJECT_ID, onSuccess: vi.fn() }));
+
+    await act(async () => {
+      await result.current.bulkAssign([1], { kind: 'team', id: 7 });
+    });
+
+    const [, init] = fetchSpy.mock.calls[0];
+    expect(JSON.parse(String(init?.body))).toEqual({ board_task: { assignee_id: null, assignee_team_id: 7 } });
   });
 
   it('confirms the update when every task was saved', async () => {

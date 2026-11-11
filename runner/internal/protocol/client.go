@@ -216,7 +216,9 @@ func (c *Client) Proxy(ctx context.Context, accessToken, method, path string, he
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	resp, err := c.proxy.Do(req)
 	if err != nil {
-		// net/http names the URL in its error, never a header, so no key is in it.
+		// net/http names the URL in its error, never a header, so no key is in
+		// it. The URL carries the agent's query, so the relay logs only the
+		// error it wraps.
 		return nil, &NetworkError{Endpoint: EndpointProxy, Err: err}
 	}
 	if resp.Header.Get(RefusalHeader) == "" {

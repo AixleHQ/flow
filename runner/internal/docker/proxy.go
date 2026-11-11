@@ -55,6 +55,9 @@ const (
 	// SidecarLogTail is how many lines of a sidecar's log the host runner logs
 	// when it exits.
 	SidecarLogTail = 50
+	// SidecarLogTimeout bounds reading that tail: the log is a diagnostic, and
+	// a logs endpoint that stalls must not hold up the host runner.
+	SidecarLogTimeout = 10 * time.Second
 	// SidecarWaitRetry is the first pause before the host runner watches a
 	// sidecar again after Docker's wait stream failed; each failure in a row
 	// doubles it, up to SidecarWaitRetryMax.
@@ -252,8 +255,18 @@ func (e *Environment) watchSidecar(sessionID int64, id string) {
 			wait := e.API.ContainerWait(ctx, id, client.ContainerWaitOptions{Condition: container.WaitConditionNotRunning})
 			select {
 			case res := <-wait.Result:
-				e.sidecarExited(ctx, sessionID, id, res.StatusCode)
-				return
+				if res.Error == nil || res.Error.Message == "" {
+					e.sidecarExited(ctx, sessionID, id, res.StatusCode)
+					return
+				}
+				// A result that carries an error is the wait failing, not the
+				// sidecar exiting (scrub.go reads it the same way): look at
+				// the sidecar, as for an error on the stream.
+				if ctx.Err() != nil || e.isRetired(id) {
+					return
+				}
+				e.logger().Warn("watching the proxy sidecar failed; looking at it, then watching it again",
+					"environment", e.Key, "session", sessionID, "sidecar", id, "error", res.Error.Message, "retry_in", pause)
 			case err := <-wait.Error:
 				if ctx.Err() != nil || e.isRetired(id) {
 					return
@@ -303,14 +316,19 @@ func (e *Environment) sidecarStopped(ctx context.Context, id string) (int64, boo
 	return int64(inspected.Container.State.ExitCode), true
 }
 
+// sidecarExited fails the session of a sidecar that exited: it stops the
+// agent's container first, so that reading the sidecar's log, which goes
+// through Docker's logs endpoint and can stall, never holds up the session's
+// failure (decision 10). The exit is logged after, with its code and the tail
+// of the sidecar's log.
 func (e *Environment) sidecarExited(ctx context.Context, sessionID int64, id string, code int64) {
 	if e.isRetired(id) {
 		return
 	}
-	tail := e.logTail(ctx, id)
-	e.logger().Warn("the proxy sidecar exited during the session; stopping the agent's container, so the session fails",
-		"environment", e.Key, "session", sessionID, "sidecar", e.SidecarName(sessionID), "exit_code", code, "log_tail", tail)
 	e.stopAgent(ctx, sessionID, "its sidecar exited")
+	tail := e.logTail(ctx, id)
+	e.logger().Warn("the proxy sidecar exited during the session; stopped the agent's container, so the session fails",
+		"environment", e.Key, "session", sessionID, "sidecar", e.SidecarName(sessionID), "exit_code", code, "log_tail", tail)
 }
 
 // stopAgent stops the session's agent container, when it has the
@@ -341,8 +359,15 @@ func (e *Environment) stopAgent(ctx context.Context, sessionID int64, why string
 	}
 }
 
-// logTail is the end of a container's log, both streams, as text.
+// logTail is the end of a container's log, both streams, as text. It is read
+// under its own deadline, SidecarLogTimeout.
 func (e *Environment) logTail(ctx context.Context, id string) string {
+	timeout := e.SidecarLogTimeout
+	if timeout <= 0 {
+		timeout = SidecarLogTimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	logs, err := e.API.ContainerLogs(ctx, id, client.ContainerLogsOptions{ShowStdout: true, ShowStderr: true, Tail: strconv.Itoa(SidecarLogTail)})
 	if err != nil {
 		return "(the log could not be read: " + err.Error() + ")"
@@ -405,7 +430,13 @@ func (e *Environment) Resume(ctx context.Context) error {
 		switch {
 		case c.Labels[LabelRole] == RoleProxy:
 			if c.State != container.StateRunning {
-				e.sidecarExited(ctx, session, c.ID, -1)
+				// It is still there, so inspect gives its real exit code; -1 is
+				// left for one removed meanwhile, or one inspect cannot read.
+				code, known := e.sidecarStopped(ctx, c.ID)
+				if !known {
+					code = -1
+				}
+				e.sidecarExited(ctx, session, c.ID, code)
 				continue
 			}
 			if _, err := e.Proxy.OpenSocket(session); err != nil {

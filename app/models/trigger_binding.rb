@@ -10,6 +10,9 @@ class TriggerBinding < ApplicationRecord
   belongs_to :project
   belongs_to :workflow
   belongs_to :created_by, class_name: "User", optional: true
+  # Set: the trigger runs as one of this team's members, picked per run; created_by
+  # stays its author and becomes Runs as again when the team is cleared.
+  belongs_to :run_as_team, class_name: "ProjectTeam", optional: true, inverse_of: :trigger_bindings
   # subject_policy = create_task → the new card is created in this column.
   belongs_to :subject_column, class_name: "BoardColumn", optional: true
   # tracker.* events only: the tracker this binding listens to; none means any
@@ -37,6 +40,9 @@ class TriggerBinding < ApplicationRecord
   TRACKER_SOURCE = "tracker"
 
   WEBHOOK_EVENT_PREFIX = "webhook."
+  # Events Aixle raises about its own runs (ProjectTeams::QuotaEvent).
+  RUN_EVENT_PREFIX = "workflow_run."
+  RUN_EVENT_SOURCE = "aixle.workflow_run"
   SCHEDULE_EVENT_TYPE = "schedule.fired"
 
   # Where a chat message came from. The trigger's channel says that, so its
@@ -63,6 +69,7 @@ class TriggerBinding < ApplicationRecord
   # Only a reassignment is checked: a creator who later left the project must
   # not make every other save of the trigger fail.
   validate :run_as_can_own_runs, if: -> { persisted? && will_save_change_to_created_by_id? }
+  validate :run_as_team_in_project, if: -> { run_as_team_id.present? && will_save_change_to_run_as_team_id? }
   validate :tracker_event_type_known, if: :tracker_event?
   validate :tracker_binding_not_duplicated, if: -> {
     tracker_event? && (new_record? || will_save_change_to_filter_predicate? || will_save_change_to_project_tracker_id?)
@@ -77,6 +84,7 @@ class TriggerBinding < ApplicationRecord
     # A generic webhook names its own event type, so without this a sender could
     # present itself as a tracker or chat event.
     next none if event.event_type.to_s.start_with?(TRACKER_EVENT_PREFIX) && event.source != TRACKER_SOURCE
+    next none if event.event_type.to_s.start_with?(RUN_EVENT_PREFIX) && event.source != RUN_EVENT_SOURCE
     next none if Chat.event?(event) && Chat.provider_for(event).nil?
 
     rel = active.where(event_type: event.event_type)
@@ -220,6 +228,10 @@ class TriggerBinding < ApplicationRecord
   def run_as_can_own_runs
     problem = WorkflowTriggers::RunAs.ineligibility(project, created_by)
     errors.add(:base, "Run as #{problem}") if problem
+  end
+
+  def run_as_team_in_project
+    errors.add(:run_as_team, "must be a team of this project") unless run_as_team&.project_id == project_id
   end
 
   def chat_conditions_name_no_place
@@ -415,7 +427,8 @@ class TriggerBinding < ApplicationRecord
   end
 
   def only_run_as_changed?
-    !previously_new_record? && saved_change_to_created_by_id? && (saved_changes.keys - %w[created_by_id updated_at]).empty?
+    run_as_keys = %w[created_by_id run_as_team_id]
+    !previously_new_record? && (saved_changes.keys & run_as_keys).any? && (saved_changes.keys - run_as_keys - %w[updated_at]).empty?
   end
 
   def reconcile_schedule

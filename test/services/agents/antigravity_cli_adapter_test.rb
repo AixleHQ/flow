@@ -34,7 +34,7 @@ module Agents
       credentials = { "access_token" => "tok-123", "refresh_token" => "refresh-123", "auth_method" => "consumer" }
       files = @adapter.config_files(credentials)
       settings = JSON.parse(files["/home/antigravity/.gemini/antigravity-cli/settings.json"])
-      assert_equal({ "showTips" => false, "trustedWorkspaces" => [ "/workspace" ] }, settings)
+      assert_equal({ "showTips" => false, "trustedWorkspaces" => [ "/workspace" ], "altScreenMode" => "never" }, settings)
       assert_equal(
         { "token" => { "access_token" => "tok-123", "refresh_token" => "refresh-123" }, "auth_method" => "consumer" },
         JSON.parse(files[@adapter.config_path])
@@ -62,7 +62,7 @@ module Agents
     # backend-written script; only the pre-login settings file is seeded upfront.
     test "seeds only OAuth-compatible settings before login, no bespoke script" do
       files = @adapter.auth_setup_files
-      assert_equal({ "showTips" => false, "trustedWorkspaces" => [ "/workspace" ] },
+      assert_equal({ "showTips" => false, "trustedWorkspaces" => [ "/workspace" ], "altScreenMode" => "never" },
                    JSON.parse(files["/home/antigravity/.gemini/antigravity-cli/settings.json"]))
       assert_equal [ "/home/antigravity/.gemini/antigravity-cli/settings.json" ], files.keys
     end

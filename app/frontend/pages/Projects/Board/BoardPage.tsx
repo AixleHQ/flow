@@ -43,6 +43,7 @@ import {
   IconSearch,
   IconSettings,
   IconUser,
+  IconUsersGroup,
   IconX,
 } from '@tabler/icons-react';
 import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
@@ -81,6 +82,7 @@ import { PageHeader } from 'shared/ui/PageHeader';
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
 import { ActivityFeedPanel } from './ActivityFeedPanel';
+import { assigneeFields, assigneeSelectData, parseAssigneeKey, type BoardTeam } from './assignee';
 import { BoardColumn } from './BoardColumn';
 import styles from './BoardPage.module.css';
 import { BoardPresetPicker } from './BoardPresetPicker';
@@ -120,6 +122,7 @@ interface Props {
   boardTags?: string[];
   epics?: Array<{ id: number; number: number; title: string }>;
   members: BoardMember[];
+  teams?: BoardTeam[];
   workflows: BoardWorkflow[];
   viewPresets?: BoardViewPreset[];
   currentUserId?: number;
@@ -137,6 +140,7 @@ interface Props {
 
 const EMPTY_FILTERS: BoardFilters = {
   assigneeId: null,
+  assigneeTeamId: null,
   taskType: null,
   priority: null,
   tags: [],
@@ -190,6 +194,7 @@ const DEFAULT_TASKS_PAGE_SIZE = 25;
 const NO_TASKS: Task[] = [];
 const NO_COLUMNS: Column[] = [];
 const NO_EPICS: Array<{ id: number; number: number; title: string }> = [];
+const NO_TEAMS: BoardTeam[] = [];
 
 const BoardPage = () => {
   const {
@@ -202,6 +207,7 @@ const BoardPage = () => {
     boardTags,
     epics,
     members,
+    teams = NO_TEAMS,
     viewPresets,
     currentUserId,
     cableStream,
@@ -392,6 +398,7 @@ const BoardPage = () => {
 
   const hasActiveFilters = !!(
     filters.assigneeId ||
+    filters.assigneeTeamId ||
     filters.taskType ||
     filters.priority ||
     filters.tags.length > 0 ||
@@ -465,7 +472,7 @@ const BoardPage = () => {
               description: values.description,
               taskType: values.taskType || 'not_specified',
               priority: values.priority || null,
-              assigneeId: values.assigneeId ? Number(values.assigneeId) : null,
+              ...assigneeFields(parseAssigneeKey(values.assigneeId ?? null)),
               parentTaskId: !isEpic && values.parentTaskId ? Number(values.parentTaskId) : null,
               boardColumnId: Number(values.boardColumnId),
             },
@@ -672,27 +679,50 @@ const BoardPage = () => {
                 styles={{
                   root: {
                     fontWeight: 400,
-                    color: filters.assigneeId ? 'var(--mantine-color-text)' : 'var(--mantine-color-dimmed)',
+                    color:
+                      filters.assigneeId || filters.assigneeTeamId
+                        ? 'var(--mantine-color-text)'
+                        : 'var(--mantine-color-dimmed)',
                   },
                 }}
               >
                 Assignee:{' '}
-                {filters.assigneeId
-                  ? (members.find((m) => String(m.id) === filters.assigneeId)?.name ?? 'Unknown')
-                  : 'All'}
+                {filters.assigneeTeamId
+                  ? (teams.find((t) => String(t.id) === filters.assigneeTeamId)?.name ?? 'Unknown')
+                  : filters.assigneeId
+                    ? (members.find((m) => String(m.id) === filters.assigneeId)?.name ?? 'Unknown')
+                    : 'All'}
               </Button>
             </Menu.Target>
             <Menu.Dropdown>
-              <Menu.Item onClick={() => setFilters((f) => ({ ...f, assigneeId: null }))}>All</Menu.Item>
+              <Menu.Item onClick={() => setFilters((f) => ({ ...f, assigneeId: null, assigneeTeamId: null }))}>
+                All
+              </Menu.Item>
               {members.map((m) => (
                 <Menu.Item
                   key={m.id}
-                  onClick={() => setFilters((f) => ({ ...f, assigneeId: String(m.id) }))}
+                  onClick={() => setFilters((f) => ({ ...f, assigneeId: String(m.id), assigneeTeamId: null }))}
                   fw={filters.assigneeId === String(m.id) ? 600 : 400}
                 >
                   {m.name}
                 </Menu.Item>
               ))}
+              {teams.length > 0 && (
+                <>
+                  <Menu.Divider />
+                  <Menu.Label>Teams</Menu.Label>
+                  {teams.map((t) => (
+                    <Menu.Item
+                      key={`team-${t.id}`}
+                      leftSection={<IconUsersGroup size={12} />}
+                      onClick={() => setFilters((f) => ({ ...f, assigneeId: null, assigneeTeamId: String(t.id) }))}
+                      fw={filters.assigneeTeamId === String(t.id) ? 600 : 400}
+                    >
+                      {t.name}
+                    </Menu.Item>
+                  ))}
+                </>
+              )}
             </Menu.Dropdown>
           </Menu>
 
@@ -874,10 +904,11 @@ const BoardPage = () => {
           selectedIds={selectedIds}
           columns={localColumns}
           members={members}
+          teams={teams}
           canExecute={canExecute}
           onAction={(action, columnId) => executeBulkAction(action, [...selectedIds], columnId)}
           onBulkPriority={(priority) => bulkSetPriority([...selectedIds], priority)}
-          onBulkAssign={(assigneeId) => bulkAssign([...selectedIds], assigneeId)}
+          onBulkAssign={(assignee) => bulkAssign([...selectedIds], assignee)}
           onBulkTag={(tag) => bulkAddTag([...selectedIds], tag)}
           onClear={clearSelection}
         />
@@ -1047,6 +1078,7 @@ const BoardPage = () => {
         projectId={project.id}
         columns={columns}
         members={members}
+        teams={teams}
         comments={taskComments ?? []}
         activities={taskActivities ?? []}
         taskAssets={taskAssetsProp ?? []}
@@ -1224,7 +1256,8 @@ const BoardPage = () => {
                   Assignee
                 </Text>
                 <Select
-                  data={members.map((m) => ({ value: String(m.id), label: m.name }))}
+                  data={assigneeSelectData(members, teams)}
+                  aria-label="Assignee"
                   clearable
                   searchable
                   size="xs"

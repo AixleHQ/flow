@@ -14,8 +14,9 @@ module InternalTools
                   "filter whose fetches hang, unshallow). Run this once after coder_allocate_machine, before " \
                   "any git work on the box. Pass `ref` to also check out the exact branch, tag or commit under " \
                   "test. Returns a `job_id` — poll coder_job_status until it reports exited with exit_code 0; its " \
-                  "`result` carries the checked-out `head_sha` and the working-tree state. The GitHub credential " \
-                  "is short-lived and never written to the workspace disk."
+                  "`result` carries the checked-out `head_sha` and the working-tree state. Works for public " \
+                  "repositories and for GitHub, GitLab, Bitbucket and Azure DevOps ones; the credential is never " \
+                  "written to the workspace disk."
       tags :coder
       inject_when :coder_integration_connected
       requires_integration :coder
@@ -69,6 +70,7 @@ module InternalTools
       started = Coder::RepoBootstrap.new(coder_integration).prepare(
         workspace_name: workspace_name,
         repository:     repository,
+        session:        session,
         path:           params[:path].presence,
         ref:            params[:ref].presence
       )

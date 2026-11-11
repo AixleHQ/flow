@@ -254,7 +254,7 @@ export const ConnectChannelModal = ({
                 readOnly
                 aria-label="Message to post"
                 style={{ flex: 1 }}
-                styles={{ input: { fontFamily: 'JetBrains Mono, monospace' } }}
+                styles={{ input: { fontFamily: 'var(--app-font-mono)' } }}
               />
               <CopyButton value={code.command ?? ''}>
                 {({ copied, copy }) => (

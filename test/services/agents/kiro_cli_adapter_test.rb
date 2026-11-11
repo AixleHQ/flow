@@ -243,6 +243,12 @@ module Agents
       assert_equal false, settings["app.warnOnElevatedPrivileges"] # rubocop:disable Minitest/RefuteFalse
     end
 
+    test "config_files keeps the chat inline, off the alternate screen" do
+      settings = JSON.parse(@adapter.config_files({})["/home/kiro/.kiro/settings/cli.json"])
+
+      assert_equal false, settings["chat.startFullscreen"] # rubocop:disable Minitest/RefuteFalse
+    end
+
     # Turning the CLI's telemetry off would take the cost figures with it: measured, a
     # container with the setting false exported nothing but a daily heartbeat, losing
     # `kiro_cli_credits_consumed`. The export is redirected, not silenced.

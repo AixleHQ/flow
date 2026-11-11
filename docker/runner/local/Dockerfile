@@ -6,7 +6,7 @@
 # never offered as a runner type. Built with the context ./runner.
 
 # The Go version of runner/go.mod, which CI installs.
-ARG GO_VERSION=1.27.3
+ARG GO_VERSION=1.27.4
 
 FROM golang:${GO_VERSION}-alpine AS build
 WORKDIR /src

@@ -94,6 +94,14 @@ import { CHART_SERIES } from 'shared/theme/chartPalette';
 import { MarkdownLink } from 'shared/ui/MarkdownLink';
 
 import { ActivityAvatar } from './ActivityAvatar';
+import {
+  assigneeFields,
+  assigneeKey,
+  assigneeSelectData,
+  parseAssigneeKey,
+  taskAssignee,
+  type BoardTeam,
+} from './assignee';
 import { formatCostCents, formatDuration, formatRelativeTime, formatTokens } from './boardFormat';
 import styles from './BoardPage.module.css';
 import { canEditComment } from './canEditComment';
@@ -204,6 +212,7 @@ export function TaskDetailSidebar({
   projectId,
   columns,
   members,
+  teams = [],
   comments,
   activities,
   taskAssets,
@@ -228,6 +237,7 @@ export function TaskDetailSidebar({
   projectId: number;
   columns: Column[];
   members: BoardMember[];
+  teams?: BoardTeam[];
   comments: TaskComment[];
   activities: BoardActivity[];
   taskAssets: TaskAsset[];
@@ -410,6 +420,16 @@ export function TaskDetailSidebar({
       method: 'PATCH',
       headers: jsonHeaders,
       body: JSON.stringify({ boardTask: { [field]: value } }),
+    });
+    router.reload({ only: ['selected_task'] });
+  };
+
+  const saveAssignee = async (key: string | null) => {
+    if (!task) return;
+    await apiMutate(apiV1ProjectTaskPath(projectId, task.id), {
+      method: 'PATCH',
+      headers: jsonHeaders,
+      body: JSON.stringify({ boardTask: assigneeFields(parseAssigneeKey(key)) }),
     });
     router.reload({ only: ['selected_task'] });
   };
@@ -870,9 +890,10 @@ export function TaskDetailSidebar({
                 Assignee
               </Text>
               <Select
-                data={members.map((m) => ({ value: String(m.id), label: m.name }))}
-                value={task.assigneeId ? String(task.assigneeId) : null}
-                onChange={(v) => saveField('assigneeId', v)}
+                data={assigneeSelectData(members, teams)}
+                value={assigneeKey(taskAssignee(task))}
+                onChange={saveAssignee}
+                aria-label="Assignee"
                 clearable
                 searchable
                 size="xs"

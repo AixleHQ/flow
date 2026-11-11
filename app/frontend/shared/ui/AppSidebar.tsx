@@ -32,6 +32,7 @@ import {
   IconTool,
   IconUser,
   IconUsers,
+  IconUsersGroup,
   IconWand,
 } from '@tabler/icons-react';
 import { Fragment, useCallback, useMemo, useState } from 'react';
@@ -66,6 +67,7 @@ import {
   companyProjectSessionsPath,
   companyProjectSettingsPath,
   companyProjectSkillsPath,
+  companyProjectTeamsPath,
   companyProjectToolsPath,
   companyProjectWorkflowsPath,
   companyProjectsPath,
@@ -166,6 +168,7 @@ const buildProjectNavGroups = (projectId: string, { externalRunners }: { externa
         path: companyProjectConfigItemsPath(projectId),
       },
       { label: 'Members', icon: <IconUsers size={18} />, path: companyProjectMembersPath(projectId) },
+      { label: 'Teams', icon: <IconUsersGroup size={18} />, path: companyProjectTeamsPath(projectId) },
       { label: 'Analytics', icon: <IconChartBar size={18} />, path: companyProjectAnalyticsPath(projectId) },
       {
         label: 'Settings',

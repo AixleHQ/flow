@@ -11,7 +11,7 @@ import {
   Switch,
   TextInput,
 } from '@mantine/core';
-import { IconCheck, IconCopy, IconLock, IconPlus, IconUser, IconX } from '@tabler/icons-react';
+import { IconCheck, IconCopy, IconLock, IconPlus, IconUser, IconUsers, IconX } from '@tabler/icons-react';
 import cronstrue from 'cronstrue';
 import { useCallback, useState } from 'react';
 
@@ -36,6 +36,7 @@ import type {
   ChatConversationOption,
   ChatProviderOption,
   RunAsOptions,
+  RunAsTeam,
   Trigger,
   TriggerColumnOption,
   TriggerWorkflowOption,
@@ -187,7 +188,11 @@ export function TriggerFormPanel({
   const [mode, setMode] = useState(editing?.trigger_mode ?? 'auto');
   const [cooldown, setCooldown] = useState<number | string>(editing?.cooldown_seconds ?? 5);
   const [enabled, setEnabled] = useState(editing?.enabled ?? true);
-  const [runAsId, setRunAsId] = useState<string | null>(editing?.created_by?.id?.toString() ?? null);
+  const [runAsId, setRunAsId] = useState<string | null>(() => {
+    if (editing?.run_as_team) return teamValue(editing.run_as_team.id);
+    if (editing) return editing.created_by ? userValue(editing.created_by.id) : null;
+    return currentUser ? userValue(currentUser.id) : null;
+  });
 
   const [chatProvider, setChatProvider] = useState(editing?.chat_provider ?? chatProviders[0]?.key ?? 'slack');
   const [chatChannelId, setChatChannelId] = useState<number | null>(editing?.chat_channel?.id ?? null);
@@ -231,7 +236,10 @@ export function TriggerFormPanel({
   ];
   const cronDesc = describeCron(cron);
   const runsAsCreator = OFF_BOARD_KINDS.includes(kind);
-  const canPickRunAs = isEdit && runsAsCreator && Boolean(runAs?.editable);
+  const runAsTeams = runAs?.teams ?? [];
+  // A new trigger runs as whoever adds it, so creating one only offers a team instead.
+  const canPickRunAs = runsAsCreator && Boolean(runAs?.editable) && (isEdit || runAsTeams.length > 0);
+  const pickedTeamId = parseRunAs(runAsId, 'team');
   // A new trigger starts switched on, and a chat trigger is only on with a channel.
   const channelMissing = kind === 'chat' && chatChannelId === null && (!isEdit || enabled);
 
@@ -288,9 +296,7 @@ export function TriggerFormPanel({
       if (isEdit) trigger.enabled = enabled;
     }
 
-    if (canPickRunAs && runAsId && Number(runAsId) !== editing?.created_by?.id) {
-      trigger.run_as_user_id = Number(runAsId);
-    }
+    if (canPickRunAs) Object.assign(trigger, runAsPayload(runAsId, editing));
 
     try {
       let res: Response;
@@ -405,21 +411,23 @@ export function TriggerFormPanel({
   // On create the trigger is recorded as the signed-in user; on edit it keeps
   // the one it was given unless an admin picks another.
   const creatorName = isEdit ? (editing?.created_by?.name ?? null) : (currentUser?.name ?? null);
-  const runAsData = runAsSelectData(runAs?.members ?? [], editing?.created_by ?? null);
+  const runAsTeamName = runsAsCreator && isEdit ? (editing?.run_as_team?.name ?? null) : null;
+  const self = currentUser ? { id: currentUser.id, name: currentUser.name } : null;
+  const runAsData = runAsSelectData(
+    isEdit ? (runAs?.members ?? []) : [],
+    isEdit ? (editing?.created_by ?? null) : self,
+    runAsTeams,
+    editing?.run_as_team ?? null,
+  );
   // A missing creator only blocks the off-board kinds; on a column trigger it is
   // just an unknown, so it is not flagged red.
   const creatorTone = creatorName ? null : runsAsCreator ? 'var(--app-danger-fg)' : 'var(--app-text-tertiary)';
-  const creatorHint = canPickRunAs
-    ? runAsId
-      ? 'Unattended runs from this trigger belong to this user and use their agent and its limits. A change applies from the next run.'
-      : 'Without someone to run as this trigger cannot start a run. Pick who its runs belong to.'
-    : creatorName
-      ? runsAsCreator
-        ? 'Unattended runs from this trigger belong to this user and use their credentials.'
-        : 'Recorded when the trigger was added. The run itself belongs to whoever the card is on.'
-      : runsAsCreator
-        ? 'Without a creator this trigger cannot start a run. An admin can pick who it runs as, or re-create it.'
-        : 'This trigger was added before creators were recorded.';
+  const creatorHint = runAsHint({
+    team: canPickRunAs ? pickedTeamId !== null : runAsTeamName !== null,
+    picking: canPickRunAs && isEdit,
+    someone: canPickRunAs && isEdit ? Boolean(runAsId) : Boolean(creatorName),
+    runsAsCreator,
+  });
 
   const kindOptions = [
     { value: 'column', label: 'Task enters column' },
@@ -599,10 +607,10 @@ export function TriggerFormPanel({
                     data={runAsData}
                     value={runAsId}
                     onChange={(v) => v && setRunAsId(v)}
-                    placeholder="Pick a project member"
+                    placeholder={runAsTeams.length > 0 ? 'Pick a project member or team' : 'Pick a project member'}
                     searchable
                     allowDeselect={false}
-                    leftSection={<IconUser size={13} />}
+                    leftSection={pickedTeamId !== null ? <IconUsers size={13} /> : <IconUser size={13} />}
                     styles={{
                       input: {
                         background: 'var(--app-bg-paper)',
@@ -614,9 +622,18 @@ export function TriggerFormPanel({
                   />
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <IconUser size={13} style={{ color: creatorTone ?? 'var(--app-text-tertiary)' }} />
-                    <span style={{ fontSize: 13, color: creatorTone ?? 'var(--app-text-primary)' }}>
-                      {creatorName ?? 'Unknown'}
+                    {runAsTeamName ? (
+                      <IconUsers size={13} style={{ color: 'var(--app-text-tertiary)' }} />
+                    ) : (
+                      <IconUser size={13} style={{ color: creatorTone ?? 'var(--app-text-tertiary)' }} />
+                    )}
+                    <span
+                      style={{
+                        fontSize: 13,
+                        color: runAsTeamName ? 'var(--app-text-primary)' : (creatorTone ?? 'var(--app-text-primary)'),
+                      }}
+                    >
+                      {runAsTeamName ? `Team ${runAsTeamName}` : (creatorName ?? 'Unknown')}
                     </span>
                     <IconLock size={12} style={{ color: 'var(--app-text-tertiary)' }} />
                   </div>
@@ -1405,7 +1422,7 @@ function CopyRow({ label, value }: { label: string; value: string }) {
           style={{
             flex: 1,
             fontSize: 12,
-            fontFamily: 'monospace',
+            fontFamily: 'var(--app-font-mono)',
             color: 'var(--app-text-secondary)',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -1478,7 +1495,7 @@ function WebhookCreatedView({
           <pre
             style={{
               fontSize: 12,
-              fontFamily: 'monospace',
+              fontFamily: 'var(--app-font-mono)',
               whiteSpace: 'pre',
               overflowX: 'auto',
               background: 'var(--app-bg-paper)',
@@ -1527,21 +1544,89 @@ function WebhookCreatedView({
   );
 }
 
+const TEAM_HINT = 'Each run goes to one member of the team, picked by its strategy.';
+
+function runAsHint({
+  team,
+  picking,
+  someone,
+  runsAsCreator,
+}: {
+  team: boolean;
+  picking: boolean;
+  someone: boolean;
+  runsAsCreator: boolean;
+}): string {
+  if (team) return TEAM_HINT;
+  if (picking) {
+    return someone
+      ? 'Unattended runs from this trigger belong to this user and use their agent and its limits. A change applies from the next run.'
+      : 'Without someone to run as this trigger cannot start a run. Pick who its runs belong to.';
+  }
+  if (someone) {
+    return runsAsCreator
+      ? 'Unattended runs from this trigger belong to this user and use their credentials.'
+      : 'Recorded when the trigger was added. The run itself belongs to whoever the card is on.';
+  }
+  return runsAsCreator
+    ? 'Without a creator this trigger cannot start a run. An admin can pick who it runs as, or re-create it.'
+    : 'This trigger was added before creators were recorded.';
+}
+
+const userValue = (id: number) => `user:${id}`;
+const teamValue = (id: number) => `team:${id}`;
+
+function parseRunAs(value: string | null, kind: 'user' | 'team'): number | null {
+  const [prefix, id] = (value ?? '').split(':');
+  return prefix === kind && id ? Number(id) : null;
+}
+
+// Only what changed: a team id, or a person — who replaces the team. Clearing a
+// team without changing the person names the team as null.
+function runAsPayload(value: string | null, editing: Trigger | null | undefined): Record<string, unknown> {
+  const teamId = parseRunAs(value, 'team');
+  const userId = parseRunAs(value, 'user');
+  const currentTeamId = editing?.run_as_team?.id ?? null;
+  if (teamId !== null) return teamId === currentTeamId ? {} : { run_as_team_id: teamId };
+  if (userId === null || !editing) return {};
+
+  const payload: Record<string, unknown> = {};
+  if (userId !== editing.created_by?.id) payload.run_as_user_id = userId;
+  if (currentTeamId !== null) payload.run_as_team_id = null;
+  return payload;
+}
+
 // A member without an agent can't carry a run, so they are shown but can't be
 // picked; a current Run as who can no longer carry runs stays visible as the value.
 function runAsSelectData(
   members: RunAsOptions['members'],
   current: { id: number; name: string } | null,
-): ComboboxItem[] {
-  const items = members.map((m) => ({
-    value: m.id.toString(),
+  teams: RunAsTeam[],
+  currentTeam: RunAsTeam | null,
+): ComboboxData {
+  const people: ComboboxItem[] = members.map((m) => ({
+    value: userValue(m.id),
     label: m.agent_connected ? m.name : `${m.name} (no agent connected)`,
     disabled: !m.agent_connected,
   }));
   if (current && !members.some((m) => m.id === current.id)) {
-    items.unshift({ value: current.id.toString(), label: `${current.name} (can't run this trigger)`, disabled: true });
+    const usable = members.length === 0;
+    people.unshift({
+      value: userValue(current.id),
+      label: usable ? current.name : `${current.name} (can't run this trigger)`,
+      disabled: !usable,
+    });
   }
-  return items;
+  const teamItems: ComboboxItem[] = teams.map((t) => ({ value: teamValue(t.id), label: t.name }));
+  if (currentTeam && !teams.some((t) => t.id === currentTeam.id)) {
+    teamItems.unshift({ value: teamValue(currentTeam.id), label: currentTeam.name });
+  }
+  if (teamItems.length === 0) return people;
+
+  return [
+    { group: 'People', items: people },
+    { group: 'Teams', items: teamItems },
+  ];
 }
 
 interface ChatChannelFieldsProps {

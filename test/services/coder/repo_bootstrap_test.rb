@@ -30,18 +30,29 @@ module Coder
       @github      = create(:integration, :github, :active, company: @company, connected_by: @user)
       @repository  = create(:repository, full_name: "acme/app", source_branch: "develop",
                                          integration: @github, scope: @project)
+      @session     = create(:terminal_session, :running, project: @project, user: @user)
+      @session.repositories << @repository
       @runner      = FakeRunner.new
     end
 
-    def prepare(path: nil, repository: nil, ref: nil)
+    def prepare(path: nil, repository: nil, ref: nil, session: @session)
       Github::TokenService.stub(:new, ->(integration) { FakeTokenService.new(integration) }) do
         Coder::RepoBootstrap.new(@coder, ssh_runner: @runner).prepare(
           workspace_name: "ws-1",
           repository:     repository || @repository,
+          session:        session,
           path:           path,
           ref:            ref
         )
       end
+    end
+
+    # A session in the project an Azure or Bitbucket connection is scoped to,
+    # holding that connection's repository.
+    def session_holding(repository)
+      session = create(:terminal_session, :running, project: repository.scope, user: repository.scope.owner)
+      session.repositories << repository
+      session
     end
 
     test "clones into /root/<repo name> by default and reports the job handle" do
@@ -83,10 +94,11 @@ module Coder
     test "passes the token through the environment and never into the command" do
       prepare
 
-      assert_equal "ghs_faketoken_app", @runner.env["AIXLE_GH_TOKEN"]
+      assert_equal "x-access-token", @runner.env["AIXLE_GIT_USERNAME"]
+      assert_equal "ghs_faketoken_app", @runner.env["AIXLE_GIT_PASSWORD"]
       assert_no_match(/ghs_faketoken/, @runner.command)
-      assert_match(/credential\.helper/, @runner.command)
-      assert_match(/\$AIXLE_GH_TOKEN/, @runner.command)
+      assert_match(/git -c credential\.helper="\$HELPER" clone/, @runner.command)
+      assert_match(/password=\$AIXLE_GIT_PASSWORD/, @runner.command)
     end
 
     test "a public repository is cloned with no credential at all" do
@@ -94,7 +106,7 @@ module Coder
                                         clone_url: "https://github.com/torvalds/linux.git", scope: @project)
 
       result = Coder::RepoBootstrap.new(@coder, ssh_runner: @runner).prepare(
-        workspace_name: "ws-1", repository: public_repo
+        workspace_name: "ws-1", repository: public_repo, session: @session
       )
 
       assert_equal "/root/linux", result[:path]
@@ -189,13 +201,87 @@ module Coder
       assert_match(/no active integration/, error.message)
     end
 
-    test "says plainly that GitLab is not supported yet" do
+    test "refuses a repository the session does not hold" do
+      other = create(:repository, full_name: "acme/other", integration: @github, scope: @project)
+
+      error = assert_raises(Coder::RepoBootstrap::Error) { prepare(repository: other) }
+      assert_match(/no credential for acme\/other: repository is not attached to this session/, error.message)
+      assert_nil @runner.command
+    end
+
+    # ---------- other providers ----------
+
+    test "clones a GitLab repository with its token as the oauth2 user" do
       gitlab = create(:integration, :gitlab, :active, company: @company, connected_by: @user)
       repo   = create(:repository, full_name: "acme/gl", integration: gitlab, scope: @project,
                                    clone_url: "https://gitlab.com/acme/gl.git")
+      @session.repositories << repo
 
-      error = assert_raises(Coder::RepoBootstrap::Error) { prepare(repository: repo) }
-      assert_match(/gitlab repositories are not supported yet/i, error.message)
+      prepare(repository: repo)
+
+      token = gitlab.credentials_data["personal_access_token"]
+      assert_equal({ "AIXLE_GIT_USERNAME" => "oauth2", "AIXLE_GIT_PASSWORD" => token }, @runner.env)
+      assert_match(%r{^URL='https://gitlab\.com/acme/gl\.git'$}, @runner.command)
+      assert_match(/git -c credential\.helper="\$HELPER" clone/, @runner.command)
+      assert_no_match(/#{Regexp.escape(token)}/, @runner.command)
+    end
+
+    # Bitbucket refuses an access token under any user but x-token-auth.
+    test "clones a Bitbucket repository under the username its token kind needs" do
+      repo    = create(:repository, :bitbucket, full_name: "acme/service", source_branch: "main")
+      session = session_holding(repo)
+
+      prepare(repository: repo, session: session)
+
+      token = repo.integration.credentials_data["token"]
+      assert_equal({ "AIXLE_GIT_USERNAME" => "x-token-auth", "AIXLE_GIT_PASSWORD" => token }, @runner.env)
+      assert_match(%r{^URL='https://bitbucket\.org/acme/service\.git'$}, @runner.command)
+      assert_no_match(/#{Regexp.escape(token)}/, @runner.command)
+    end
+
+    # An Entra token is only accepted as a bearer header; the helper protocol
+    # cannot carry one on the gits these boxes run.
+    test "clones an Azure DevOps repository with a bearer header taken from the environment" do
+      with_azure_devops_enabled
+      integration = create(:integration, :azure_devops, :active, company: @company)
+      repo        = create(:repository, :azure_devops, integration: integration)
+      session     = session_holding(repo)
+      stub_azure_token(tenant_id: integration.azure_devops_installation.tenant_id, token: "entra-clone-token")
+
+      result = prepare(repository: repo, session: session)
+
+      assert_equal "/root/#{repo.repo_name}", result[:path]
+      assert_equal({ "AIXLE_GIT_AUTH_HEADER" => "Authorization: Bearer entra-clone-token" }, @runner.env)
+      assert_match(/git --config-env=http\.extraheader=AIXLE_GIT_AUTH_HEADER clone/, @runner.command)
+      assert_match(/git --config-env=http\.extraheader=AIXLE_GIT_AUTH_HEADER -C "\$TARGET" fetch/, @runner.command)
+      assert_no_match(/credential\.helper="\$HELPER"/, @runner.command)
+      assert_no_match(/entra-clone-token/, @runner.command)
+    end
+
+    test "clones an Azure DevOps repository connected with a PAT through a basic header" do
+      with_azure_devops_enabled(pat_mode: true)
+      integration = create(:integration, :azure_devops_pat, :active, company: @company)
+      repo        = create(:repository, :azure_devops, integration: integration)
+      session     = session_holding(repo)
+
+      prepare(repository: repo, session: session, ref: "main")
+
+      pat = integration.credentials_data["personal_access_token"]
+      assert_equal "Authorization: Basic #{Base64.strict_encode64(":#{pat}")}", @runner.env["AIXLE_GIT_AUTH_HEADER"]
+      assert_match(/--config-env=http\.extraheader=AIXLE_GIT_AUTH_HEADER -C "\$TARGET" fetch --force origin/,
+                   @runner.command)
+      assert_no_match(/#{Regexp.escape(pat)}/, @runner.command)
+    end
+
+    test "says why when Azure DevOps will not vend a credential" do
+      with_azure_devops_enabled
+      integration = create(:integration, :azure_devops, :active, company: @company)
+      repo        = create(:repository, :azure_devops, integration: integration)
+      stranger    = create(:terminal_session, :running, project: @project, user: @user)
+
+      error = assert_raises(Coder::RepoBootstrap::Error) { prepare(repository: repo, session: stranger) }
+      assert_match(/no Azure DevOps credential for .+: Repository \d+ is not attached to this session/, error.message)
+      assert_nil @runner.command
     end
   end
 end

@@ -14,6 +14,30 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
+- **Integrations**: Coder's `coder_prepare_repo` clones GitLab, Bitbucket and
+  Azure DevOps repositories onto a workspace, not only GitHub and public ones.
+  A personal access token from those connections is handed to the workspace
+  for the clone — the Coder guide's *Limits* says what that exposes.
+- **Teams**: a project can now have teams — named groups of its members, each
+  with a strategy for picking who takes a run: priority (the first member who
+  can), round robin, or the most agent quota left. Each run goes to one member
+  and runs on that member's own agent account. A member whose quota ran out is
+  passed over until it resets. When nobody in the team can take a run, the run
+  fails at once and lists why for each member. Project owners and company admins
+  manage teams on the project's Teams page.
+- **Tasks**: a card can be assigned to a team instead of a person — from the
+  card, from the board's bulk Assign menu, and by agents (`board_update_task`,
+  `update_board_task`). The board filters by team. Runs show which member of the
+  team they went to.
+- **Triggers & gates**: a schedule, chat, webhook, tracker or event trigger can
+  run as a team (Runs as → Teams, or `run_as_team_id` in the MCP trigger tools).
+  A step that stops on its owner's quota, and is set to retry on failure, is
+  retried as the team's next member. A new `workflow_run.quota_exceeded` event
+  lets an event trigger react to quota stops.
+- **Profile**: "Don't let anyone add me to a team" keeps you out of teams and
+  takes you out of the ones you are in; the profile lists your teams with a
+  Leave button. Members are emailed when they are added to or taken out of a
+  team.
 - **Tasks**: clicking an image or Markdown file in a card's Assets tab now opens
   it in a preview instead of downloading it. Markdown is rendered, and with
   several previewable files you can move between them with ← / → or the
@@ -31,6 +55,11 @@ governance, community health — carry none.
   `AGENT_IMAGE_COPILOT_CLI`.
 - **Sessions & Runs**: an automatic Copilot CLI step whose agent ends its turn
   without finishing is reminded to finish or continue, as Kiro steps are.
+- **Sessions & Runs**: a Copilot CLI session's logs (open to platform
+  administrators) include the CLI's own transcript — every message, tool call
+  and result — masked like Claude Code's. It is the only full record of a
+  Copilot conversation: the CLI always draws on the alternate screen, so the
+  terminal log keeps just its last screen.
 
 ### Changed
 - Runner compatibility: the platform now serves and recommends `aixle-runner`
@@ -39,6 +68,28 @@ governance, community health — carry none.
   by their SHA-256, and an idle machine below 0.1.0 that has not opted out is
   offered the update. Runner protocol 1 only, and no minimum runner version.
   The pins now live in the `runners.release` block of `config/settings.yml`.
+- **Company settings**: the Billing tab lists every subscription the workspace has
+  had. The one paying now — the card, or the AWS Marketplace subscription — shows its
+  billing method, current period, next invoice and the usage so far; the ones that
+  ended are listed beneath it with their active period, the day they were cancelled,
+  the usage their last bill covered, and a way to the invoices (Stripe's for a card,
+  the AWS Billing console for AWS Marketplace). A workspace not paying through AWS is
+  offered "Pay via AWS Marketplace" beside "Add a card", and everything that ended
+  reads "Cancelled". AWS Marketplace usage is priced at the rate the agreement was
+  accepted at, read from AWS when the subscription is registered, created or amended, so
+  a private offer shows its own price; a subscription whose price was never read shows
+  minutes and no sum. Operators: the offer points at `AWS_MARKETPLACE_SAAS_LISTING_URL`
+  and is not made where that is empty; the seller role needs
+  `aws-marketplace:GetAgreementTerms` beside `DescribeAgreement`, or prices stay unread;
+  a migration adds two columns each to `billing_cancellations` and `marketplace_licenses`.
+- The app, the admin, the public site and emails use Inter for text and
+  headings in place of Figtree and Hanken Grotesk; code keeps its monospace
+  faces. Emails show Inter in Apple Mail, Outlook for Mac, Thunderbird and
+  Samsung Mail, and the system font elsewhere.
+- **Tasks**: workflow steps listing the board (`board_list_tasks`) and agents
+  using personal access (`list_board_tasks`) no longer see archived tasks, the
+  same as on the board. Pass `include_archived: true` to list them as well.
+  `list_board_tasks` no longer takes `archived`; use `include_archived`.
 - **Admin**: the dashboard's companies table splits its Billing column into
   three sortable ones: Account status (Active Customer, Trial – Active, Trial –
   Expired, Canceled Customer, Account Locked – nonpayment, Pending activation,
@@ -47,18 +98,29 @@ governance, community health — carry none.
   show each company as it stands now, whatever period is selected.
 
 ### Fixed
+- **Sessions & Runs**: Kiro CLI, Copilot CLI and Grok show their own logo next to
+  the agent name wherever the other runtimes do — session lists, run cards, the
+  runtime picker, analytics and onboarding — and Antigravity CLI shows its own
+  mark instead of Gemini's.
 - **Repositories**: adding a GitLab repository lists every project the
   connection's user belongs to, not only the 100 most recently created.
 - **Admin**: impersonating a user, and "Back to app" during an impersonation, open
   the app's projects page instead of the marketing landing page.
 - **Workflows**: personal MCP can set a step's repositories, assets, expected
   input and output files, failure action, retry limit and skip policy.
+- **Sessions & Runs**: Grok and Antigravity CLI sessions keep their whole
+  conversation in the terminal: you can scroll back through it while the session
+  runs and in the log of a finished one, which used to show only the last screen.
 - **Workflows**: a session set to retry on failure now retries. The builder asks
   how many times (1–10), and sessions saved with Retry before this release retry
   once.
 - **Connectors**: the platform's MCP servers no longer advertise a
   notification stream they cannot hold open, which made clients on the
   2026-07-28 protocol (Copilot CLI) drop the server and its tools.
+- **Company settings**: a registration token that AWS Marketplace resolves to our product
+  but to no licence is refused the way an expired link is, and reported to us,
+  rather than answered with an error page. AWS posted one such token to the
+  fulfilment URL while the listing was being made public.
 
 ## [1.11.0] - 2026-11-09
 

@@ -42,7 +42,7 @@
   padding: 1px 4px;
   border-radius: 3px;
   font-size: 12px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--app-font-mono);
 }
 
 .commentMd pre {
@@ -51,7 +51,7 @@
   border-radius: 6px;
   overflow: auto;
   font-size: 12px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--app-font-mono);
   line-height: 1.5;
   margin: 4px 0;
 }

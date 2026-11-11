@@ -80,6 +80,7 @@ module WorkflowTriggers
         verification_strategy: endpoint&.verification_strategy&.to_s,
         webhook_url: endpoint && self.class.webhook_url(endpoint.slug),
         created_by: creator(binding.created_by),
+        run_as_team: binding.run_as_team && { id: binding.run_as_team.id, name: binding.run_as_team.name },
         enabled: binding.enabled,
         **workflow(binding.workflow)
       }

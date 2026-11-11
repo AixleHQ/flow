@@ -193,31 +193,31 @@ gem "shrine", "~> 3.10"
 # session logs and step outputs. Nothing else requires it: the app does not load
 # Active Storage, which would.
 gem "marcel", "~> 1.0"
-gem "aws-sdk-s3", "~> 1.237"
+gem "aws-sdk-s3", "~> 1.239"
 
 # Bedrock runtime, for the cloud-connection health check: the only way to tell a user
 # their permission set cannot actually invoke a model is to try. Claude Code hides
 # Bedrock errors, so without this the failure surfaces as an agent that never answers.
 # (STS, SSO and SSO-OIDC clients already ship inside aws-sdk-core.)
-gem "aws-sdk-bedrockruntime", "~> 1.90"
+gem "aws-sdk-bedrockruntime", "~> 1.92"
 
 # Bedrock control plane, for listing the inference profiles an account can actually invoke.
 # That list is the only truthful model catalogue for a Bedrock connection — it includes the
 # account's own application inference profiles, which is what enterprise deployments pin.
-gem "aws-sdk-bedrock", "~> 1.100"
+gem "aws-sdk-bedrock", "~> 1.102"
 
 # AWS Marketplace metering. Only an installation bought through Marketplace ever
 # calls it, and only from the pod whose service account carries the role.
-gem "aws-sdk-marketplacemetering", "~> 1.112"
+gem "aws-sdk-marketplacemetering", "~> 1.114"
 
 # Asked at registration what state the agreement is already in, because the
 # event that would say so races the buyer's arrival on the fulfilment page.
-gem "aws-sdk-marketplaceagreement", "~> 1.52"
+gem "aws-sdk-marketplaceagreement", "~> 1.54"
 
 # The queue a rule in the seller account delivers SaaS subscription events into.
 # Unlike the metering call above, that queue is in THIS account, so it is read
 # with the pod's own identity rather than the seller role.
-gem "aws-sdk-sqs", "~> 1.124"
+gem "aws-sdk-sqs", "~> 1.126"
 gem "image_processing", "~> 2.2"
 gem "ruby-vips", "~> 2.3" # image_processing 2.0 no longer declares it; shrine.rb requires image_processing/vips
 

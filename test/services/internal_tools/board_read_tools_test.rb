@@ -101,6 +101,21 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
     assert_equal [ "Test task" ], data["tasks"].map { |t| t["title"] }
   end
 
+  test "board_list_tasks leaves archived tasks out unless include_archived is set" do
+    archived = create(:board_task, board: @board, board_column: @col1, title: "Old task", archived_at: Time.current)
+
+    default = list_tasks
+    assert_equal 1, default["total"]
+    assert_equal [ @task.id ], default["tasks"].map { |t| t["id"] }
+
+    everything = list_tasks(include_archived: true)
+    assert_equal 2, everything["total"]
+    assert_equal({ @task.id => false, archived.id => true },
+                 everything["tasks"].to_h { |t| [ t["id"], t["archived"] ] })
+    assert_equal "boolean",
+                 InternalTools::BoardListTasks.tool_definition.input_schema.dig("properties", "include_archived", "type")
+  end
+
   test "board_list_tasks searches by title or by the #N people see on the board" do
     login = create(:board_task, board: @board, board_column: @col2, title: "Fix login")
 

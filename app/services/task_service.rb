@@ -139,7 +139,8 @@ class TaskService
         when :archive       then archive(task: task, actor: actor)
         when :move_to_column then move(task: task, to_column: to_column, actor: actor)
         when :set_priority  then task.update!(priority: extra_params[:priority])
-        when :set_assignee  then task.update!(assignee_id: extra_params[:assignee_id])
+        when :set_assignee  then task.update!(assignee_id: extra_params[:assignee_id],
+                                              assignee_team_id: extra_params[:assignee_team_id])
         when :add_tag       then task.with_lock { task.update!(tags: (task.tags + [ extra_params[:tag] ]).uniq) }
         end
 
@@ -212,7 +213,7 @@ class TaskService
       end
 
       data = { "workflow_id" => binding.workflow_id, "column_id" => task.board_column_id,
-               "requested_by_id" => actor&.id }
+               "requested_by_id" => actor&.id, "team_id" => task.assignee_team_id }.compact
       data["runner_id"] = runner_id unless runner_id.equal?(WorkflowService::RUNNER_NOT_PICKED)
 
       event = TriggerEngine.record_event(
@@ -491,7 +492,9 @@ class TaskService
     # a column auto-trigger) from having to get it right separately.
     #
     # `requested_by` remains the fallback for an unassigned card, and every
-    # caller records it in the event's data, so "who asked" is never lost.
+    # caller records it in the event's data, so "who asked" is never lost. A card
+    # assigned to a team has no assignee here: its callers record the team, and
+    # the run goes to the member ProjectTeams::Picker chooses at launch.
     def run_owner_for(task, requested_by:)
       assignee = task.assignee
       assignee && can_own_runs?(assignee, task) ? assignee : requested_by

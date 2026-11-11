@@ -6,6 +6,7 @@ import { buildBoardPreset } from './boardPreset';
 import { buildBoardTask } from './boardTask';
 import { buildIntegration } from './integration';
 import { buildProject } from './project';
+import { buildProjectTeam, buildTeamMember } from './projectTeam';
 import { buildRepository } from './repository';
 import { buildRunner, buildRunnerTypeOption } from './runner';
 import { buildSessionArtifact } from './sessionArtifact';
@@ -25,6 +26,14 @@ describe('typed factories', () => {
       name: 'X',
       state: 'archived',
       slug: 'acme',
+    });
+  });
+
+  it('buildProjectTeam applies overrides over typed defaults', () => {
+    expect(buildProjectTeam().strategy).toBe('priority');
+    expect(buildProjectTeam({ name: 'Night shift', members: [buildTeamMember({ name: 'Cy' })] })).toMatchObject({
+      name: 'Night shift',
+      members: [{ name: 'Cy', runtimes: [{ agentType: 'kiro_cli' }] }],
     });
   });
 

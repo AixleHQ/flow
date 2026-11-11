@@ -7,6 +7,15 @@
   <meta name="color-scheme" content="dark">
   <meta name="supported-color-schemes" content="dark">
   <title><%= message.subject %></title>
+  <%# Outlook for Windows (the Word engine) drops the whole font stack for Times New Roman
+      once it sees a web font it cannot load, so the font link is hidden from it and
+      its text is pinned to Segoe UI instead. -%>
+  <!--[if !mso]><!-->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!--<![endif]-->
+  <!--[if mso]>
+  <style>body, table, td, th, p, a, span, strong, b, div, h1, h2, h3 { font-family: 'Segoe UI', Arial, sans-serif !important; }</style>
+  <![endif]-->
   <style>
     /* Clients auto-link addresses, dates and domains in their own blue; keep the surrounding text colour. */
     a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !important; font-size: inherit !important; font-family: inherit !important; font-weight: inherit !important; line-height: inherit !important; }
@@ -18,11 +27,11 @@
     }
   </style>
 </head>
-<body id="body" style="margin:0; padding:0; background-color:#0a0908; -webkit-text-size-adjust:100%;">
+<body id="body" style="margin:0; padding:0; background-color:#0a0908; font-family:<%= email_font %>; -webkit-text-size-adjust:100%;">
 
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0a0908" style="background-color:#0a0908;">
     <tr>
-      <td align="center" style="padding:56px 16px 64px;">
+      <td align="center" style="font-family:<%= email_font %>; padding:56px 16px 64px;">
 
         <table role="presentation" width="520" cellpadding="0" cellspacing="0" border="0" style="width:520px; max-width:100%;">
 
@@ -36,7 +45,7 @@
                 </td>
                 <% end %>
                 <td style="vertical-align:middle;">
-                  <span style="display:inline-block; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:21px; font-weight:700; letter-spacing:-0.02em; line-height:1; color:#d1cfcd;">Flow</span>
+                  <span style="display:inline-block; font-family:<%= email_font %>; font-size:21px; font-weight:700; letter-spacing:-0.02em; line-height:1; color:#d1cfcd;">Flow</span>
                 </td>
               </tr></table>
             </td>
@@ -46,7 +55,7 @@
 
           <!-- Footer -->
           <tr>
-            <td align="left" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; line-height:18px; color:#5d5b5a; padding:28px 4px 0;">
+            <td align="left" style="font-family:<%= email_font %>; font-size:12px; line-height:18px; color:#5d5b5a; padding:28px 4px 0;">
               <% footer_url = "#{Settings.protocol}://#{Settings.domain}" %>
               Aixle Flow &nbsp;&middot;&nbsp; <a href="<%= footer_url %>" style="color:#5d5b5a; text-decoration:underline;"><%= Settings.domain %></a>
             </td>

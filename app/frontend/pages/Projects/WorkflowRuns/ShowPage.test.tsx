@@ -107,6 +107,12 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
     );
   });
 
+  it("names the team the run's owner was picked from", () => {
+    renderAuthedPage(<ShowPage />, { props: seed({ run: makeRun({ teamName: 'Planner' }) }) });
+
+    expect(screen.getByText('Planner → Dana Operator')).toBeInTheDocument();
+  });
+
   it('times the run from its first step leaving the queue', () => {
     renderAuthedPage(<ShowPage />, {
       props: seed({

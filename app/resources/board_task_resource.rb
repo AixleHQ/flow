@@ -51,12 +51,17 @@ class BoardTaskResource < ApplicationResource
   end
 
   attributes :task_type, :priority,
-             :assignee_id, :board_column_id, :position,
+             :assignee_id, :assignee_team_id, :board_column_id, :position,
              :parent_task_id, :tags, :created_at, :updated_at
 
   typelize "string | null"
   attribute :assignee_name do |task|
     task.assignee&.name
+  end
+
+  typelize "string | null"
+  attribute :assignee_team_name do |task|
+    task.assignee_team&.name
   end
 
   typelize :boolean

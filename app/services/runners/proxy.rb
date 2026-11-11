@@ -29,15 +29,25 @@ module Runners
       # it was sent, percent-encoded), passes. A route without a prefix takes
       # no path below it, and no segment may lead out of the prefix: none is
       # empty, `.` or `..` once decoded, or holds a decoded `/` or `\`, as the
-      # host runner's relay checks (runner/internal/proxy, `canonical`).
+      # host runner's relay checks (runner/internal/proxy, `canonical`). A
+      # raw octet outside ASCII does not pass: the path is the percent-encoded
+      # form, and the Go relay re-escapes such octets, so only another caller
+      # sends one. A segment that does not decode does not pass either: a `%`
+      # not followed by two hex digits, which the relay's `url.PathUnescape`
+      # refuses too, or decoded octets that are not UTF-8, which the relay
+      # forwards and only the gateway refuses.
       def allows?(method, path)
         return false unless verbs.include?(method.to_s.upcase)
 
-        path = path.to_s
+        path = path.to_s.b
+        return false unless path.ascii_only?
         return path.empty? if prefix.nil?
+        return false unless path.start_with?(prefix)
 
-        segments = path.split("/", -1).map { |segment| CGI.unescape(segment) }
-        path.start_with?(prefix) && segments.none? { |segment| segment.empty? || %w[. ..].include?(segment) || segment.match?(%r{[/\\]}) }
+        path.split("/", -1).all? do |raw|
+          segment = Proxy.decode_segment(raw)
+          !segment.nil? && !segment.empty? && %w[. ..].exclude?(segment) && !segment.match?(%r{[/\\]})
+        end
       end
     end
 
@@ -75,6 +85,20 @@ module Runners
 
     def route(name)
       ROUTES[name.to_s]
+    end
+
+    MALFORMED_ESCAPE = /%(?![0-9A-Fa-f]{2})/
+
+    # One path segment, percent-decoded strictly, as UTF-8. Nil when it does
+    # not decode: a `%` not followed by two hex digits, or decoded octets (or
+    # raw ones) that are not valid UTF-8. A `+` stays a `+`: in a path it is
+    # not a space.
+    def decode_segment(raw)
+      raw = raw.to_s.b
+      return nil if raw.match?(MALFORMED_ESCAPE)
+
+      decoded = raw.gsub(/%([0-9A-Fa-f]{2})/) { Regexp.last_match(1).hex.chr }.force_encoding(Encoding::UTF_8)
+      decoded if decoded.valid_encoding?
     end
 
     # The address a runner session calls a callback on: its proxy's route.
@@ -128,7 +152,8 @@ module Runners
         port_problem(port, settings.port),
         minimum_problem("RUNNER_PROXY_HOST_PORT_BASE", base, settings.host_port_base, 1024),
         minimum_problem("RUNNER_PROXY_HOST_PORT_SPAN", span, settings.host_port_span, 1),
-        host_range_problem(base, span)
+        host_range_problem(base, span),
+        host_range_image_ports_problem(base, span)
       ].compact
     end
 
@@ -147,6 +172,21 @@ module Runners
       return if base.nil? || span.nil? || span < 1 || base + span - 1 <= 65_535
 
       "RUNNER_PROXY_HOST_PORT_BASE + RUNNER_PROXY_HOST_PORT_SPAN - 1 must be at most 65535, not #{base + span - 1}"
+    end
+
+    # With `network: host` the agent image's own processes listen on the
+    # machine's network namespace too, so no session's port may be one of
+    # theirs.
+    def host_range_image_ports_problem(base, span)
+      return if base.nil? || span.nil? || span < 1
+
+      last = base + span - 1
+      taken = IMAGE_PORTS.select { |image_port| (base..last).cover?(image_port) }
+      return if taken.empty?
+
+      "RUNNER_PROXY_HOST_PORT_BASE..RUNNER_PROXY_HOST_PORT_BASE + RUNNER_PROXY_HOST_PORT_SPAN - 1 " \
+        "(#{base}..#{last}) must not include the agent image's own ports (#{IMAGE_PORTS.join(', ')}), " \
+        "but it includes #{taken.sort.join(', ')}"
     end
 
     def host_network?(session)

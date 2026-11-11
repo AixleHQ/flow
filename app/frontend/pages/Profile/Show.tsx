@@ -49,6 +49,7 @@ import {
   companyMembershipPath,
   finishApiV1TerminalSessionPath,
   healthApiV1CloudAwsConnectionPath,
+  leaveCompanyProjectTeamPath,
   resetApiV1TerminalSessionPath,
 } from 'shared/routes';
 import { AGENT_BRAND_COLORS } from 'shared/theme/vendorColors';
@@ -125,6 +126,7 @@ const profileSchema = z.object({
   preferredAgentLanguage: z.string().min(1, 'Language is required'),
   shareActiveSessions: z.boolean(),
   shareCompletedSessions: z.boolean(),
+  excludeFromTeams: z.boolean(),
 });
 
 type ProfileFormErrors = Partial<Record<keyof z.infer<typeof profileSchema>, string>>;
@@ -154,6 +156,14 @@ interface Props {
   cableStream?: string;
   // Deferred (group "limits"): absent until Inertia's follow-up request lands.
   usageLimits?: UsageLimitsEntry[];
+  projectTeams?: ProfileTeam[];
+}
+
+interface ProfileTeam {
+  id: number;
+  name: string;
+  projectId: number;
+  projectName: string;
 }
 
 function DefaultAgentSelector({ profile }: { profile: CurrentUser }) {
@@ -309,6 +319,63 @@ function AgentDefaultsSection({ profile, agentModels }: { profile: CurrentUser; 
         <DefaultAgentSelector profile={profile} />
         <DefaultModelSelector profile={profile} agentModels={agentModels} />
       </Stack>
+    </Card>
+  );
+}
+
+function TeamsSection({ teams }: { teams: ProfileTeam[] }) {
+  const leave = (team: ProfileTeam) => {
+    modals.openConfirmModal({
+      title: 'Leave team',
+      children: (
+        <Text size="sm">
+          Leave team <b>{team.name}</b> in {team.projectName}? Its runs will no longer be handed to you.
+        </Text>
+      ),
+      labels: { confirm: 'Leave', cancel: 'Cancel' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => router.delete(leaveCompanyProjectTeamPath(team.projectId, team.id), { preserveScroll: true }),
+    });
+  };
+
+  return (
+    <Card p={24}>
+      <Title order={4} mb={4}>
+        Teams
+      </Title>
+      <Text size="sm" c="dimmed" mb="md">
+        Runs assigned to a team you are in can be handed to you, on your own agent subscription.
+      </Text>
+      {teams.length === 0 ? (
+        <Text size="sm" c="dimmed">
+          You are not in any team.
+        </Text>
+      ) : (
+        <Stack gap="sm">
+          {teams.map((team) => (
+            <Group key={team.id} justify="space-between" wrap="nowrap">
+              <Box style={{ minWidth: 0 }}>
+                <Text size="sm" fw={500}>
+                  {team.name}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {team.projectName}
+                </Text>
+              </Box>
+              <Button
+                variant="subtle"
+                color="red"
+                size="xs"
+                aria-label={`Leave ${team.name}`}
+                leftSection={<IconDoorExit size={14} />}
+                onClick={() => leave(team)}
+              >
+                Leave
+              </Button>
+            </Group>
+          ))}
+        </Stack>
+      )}
     </Card>
   );
 }
@@ -1161,6 +1228,7 @@ function ProfilePage({
   agentModels,
   cableStream,
   usageLimits,
+  projectTeams,
 }: Props) {
   const currentCompanyName = profile.currentCompany?.name ?? null;
   useInertiaCableStream(cableStream, { only: ['profile', 'agent_models'] });
@@ -1171,6 +1239,7 @@ function ProfilePage({
       preferredAgentLanguage: profile.preferredAgentLanguage || 'en',
       shareActiveSessions: profile.shareActiveSessions,
       shareCompletedSessions: profile.shareCompletedSessions,
+      excludeFromTeams: profile.excludeFromTeams,
     },
   });
 
@@ -1327,6 +1396,19 @@ function ProfilePage({
                   </Stack>
                 </Box>
 
+                <Box mb="lg">
+                  <Text size="sm" fw={500} mb={4}>
+                    Teams
+                  </Text>
+                  <Switch
+                    label="Don't let anyone add me to a team"
+                    description="A team hands its runs to its members, on their own agent subscriptions. Turning this on takes you out of every team you are in."
+                    checked={data.profile.excludeFromTeams}
+                    onChange={(e) => setData('profile', { ...data.profile, excludeFromTeams: e.currentTarget.checked })}
+                    disabled={processing}
+                  />
+                </Box>
+
                 <Button type="submit" disabled={!isDirty || !isFormValid || processing} loading={processing}>
                   Save Changes
                 </Button>
@@ -1348,6 +1430,7 @@ function ProfilePage({
               projectHandovers={projectHandovers ?? []}
             />
             <AgentDefaultsSection profile={profile} agentModels={agentModels} />
+            <TeamsSection teams={projectTeams ?? []} />
             <SessionsSection otherSessionsCount={otherSessionsCount ?? 0} />
           </Box>
         </Box>

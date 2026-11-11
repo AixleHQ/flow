@@ -8,6 +8,7 @@ import {
   IconHourglass,
   IconMessage,
   IconRefresh,
+  IconUsersGroup,
   IconX,
 } from '@tabler/icons-react';
 
@@ -363,6 +364,16 @@ export function TaskCardUI({
               >
                 {avatarInitials(task.assigneeName)}
               </Avatar>
+            </Tooltip>
+          )}
+          {task.assigneeTeamName && (
+            <Tooltip label={`Team ${task.assigneeTeamName} — each run goes to one of its members`}>
+              <Group gap={4} wrap="nowrap">
+                <IconUsersGroup size={14} color="var(--mantine-color-dimmed)" />
+                <Text size="xs" c="dimmed" truncate maw={120}>
+                  {task.assigneeTeamName}
+                </Text>
+              </Group>
             </Tooltip>
           )}
         </Group>

@@ -5,8 +5,9 @@ module Coder
   # workspace, and repair one that is already there.
   #
   # This cannot live in the workspace template: cloning a private repository
-  # needs a short-lived GitHub App installation token, which the platform mints
-  # and the workspace's EC2 instance profile has no way to obtain. So the boxes
+  # needs a credential only the platform holds — a GitHub App installation
+  # token, a GitLab or Bitbucket token, an Azure DevOps token — which the
+  # workspace's EC2 instance profile has no way to obtain. So the boxes
   # in the field carry whatever an earlier manual session left behind, and every
   # session pays for it again:
   #
@@ -20,12 +21,23 @@ module Coder
   # box created from a fixed template) gets a full one.
   #
   # The credential never touches the workspace's disk. It travels in the
-  # detached launcher's environment (see `SshRunner#exec_detached`) and is read
-  # by a `credential.helper` shell function, so it is neither written into
-  # `remote.origin.url` nor into the job's command file — both of which outlive
-  # the session on a box that is shared and long-lived.
+  # detached launcher's environment (see `SshRunner#exec_detached`) and git reads
+  # it from there — through a `credential.helper` shell function, or for Azure
+  # DevOps as an `http.extraheader` taken with `--config-env` — so it is written
+  # neither into `remote.origin.url` nor into the job's command file, both of
+  # which outlive the session on a box that is shared and long-lived.
   class RepoBootstrap
     class Error < StandardError; end
+
+    # The git global options that authenticate every clone and fetch, and the
+    # environment that carries the secret they refer to. Neither option names
+    # the secret itself, so it stays out of argv and `ps` on a shared box.
+    GitAuth = Data.define(:git_option, :env)
+
+    HELPER_OPTION = %(-c credential.helper="$HELPER")
+    # Entra tokens only work as a bearer header, which the credential helper
+    # protocol cannot carry before git 2.46.
+    HEADER_OPTION = "--config-env=http.extraheader=AIXLE_GIT_AUTH_HEADER"
 
     DEFAULT_ROOT = "/root"
 
@@ -54,19 +66,19 @@ module Coder
     # commit, so a caller can prepare the exact revision under test in one
     # operation instead of hand-rolling fetch/checkout over SSH. Without it the
     # clone is left on the repository's source branch, as before.
-    def prepare(workspace_name:, repository:, path: nil, ref: nil)
+    def prepare(workspace_name:, repository:, session:, path: nil, ref: nil)
       target = path.presence || default_path_for(repository)
       raise Error, "path must be absolute" unless target.start_with?("/")
 
       ref = ref.to_s.strip.presence
       validate_ref!(ref) if ref
 
-      token = token_for(repository)
+      auth = auth_for(repository, session)
 
       started = @ssh_runner.exec_detached(
         workspace_name: workspace_name,
-        command:        script(repository: repository, path: target, authenticated: token.present?, ref: ref),
-        env:            token.present? ? { "AIXLE_GH_TOKEN" => token } : {}
+        command:        script(repository: repository, path: target, auth: auth&.git_option.to_s, ref: ref),
+        env:            auth&.env || {}
       )
 
       handle = started.merge(
@@ -92,33 +104,47 @@ module Coder
       File.join(DEFAULT_ROOT, repository.repo_name.to_s)
     end
 
-    # Scoped to the one repository, like the refresh path: an installation that
-    # can no longer reach some other repo does not take this one down with it.
-    def token_for(repository)
+    # Vended through the same services that answer a session container's git, so
+    # the session must still hold the repository. A GitHub token is narrowed to
+    # this one repository; GitLab, Bitbucket and Azure DevOps tokens cannot be
+    # (docs/user-guide/coder.md, Limits).
+    def auth_for(repository, session)
       return nil if repository.public_source?
 
       integration = repository.integration
       raise Error, "repository #{repository.full_name} has no active integration" unless integration&.active?
 
-      unless integration.github?
-        raise Error, "#{integration.provider} repositories are not supported yet — only GitHub and public clones"
-      end
-
-      Github::TokenService.new(integration).generate_installation_token(repositories: [ repository.repo_name ])
+      repository.azure_devops? ? azure_auth(repository, session) : helper_auth(repository, session)
     end
 
-    def script(repository:, path:, authenticated:, ref: nil)
+    def helper_auth(repository, session)
+      credential = GitCredentials::Vendor.new(session).vend!(repository_id: repository.id)
+      GitAuth.new(git_option: HELPER_OPTION,
+                  env: { "AIXLE_GIT_USERNAME" => credential.username, "AIXLE_GIT_PASSWORD" => credential.password })
+    rescue GitCredentials::Vendor::NotAuthorized => e
+      raise Error, "no credential for #{repository.full_name}: #{e.message}"
+    end
+
+    def azure_auth(repository, session)
+      header = AzureDevops::GitCredentialService.new(session).vend!(repository_id: repository.id).authorization_header
+      raise Error, "Azure DevOps returned a credential scheme git cannot use" if header.nil?
+
+      GitAuth.new(git_option: HEADER_OPTION, env: { "AIXLE_GIT_AUTH_HEADER" => header })
+    rescue AzureDevops::Error => e
+      raise Error, "no Azure DevOps credential for #{repository.full_name}: #{e.message}"
+    end
+
+    def script(repository:, path:, auth:, ref: nil)
       quoted_path   = shell_quote(path)
       quoted_url    = shell_quote(repository.clone_url.to_s)
       quoted_branch = shell_quote(repository.source_branch.to_s)
       quoted_ref    = shell_quote(ref.to_s)
-      auth          = authenticated ? %(-c credential.helper="$HELPER") : ""
 
       <<~SH
         set -eu
         export GIT_TERMINAL_PROMPT=0
         export GIT_ASKPASS=/bin/true
-        HELPER='!f(){ echo username=x-access-token; echo "password=$AIXLE_GH_TOKEN"; };f'
+        HELPER='!f(){ echo "username=$AIXLE_GIT_USERNAME"; echo "password=$AIXLE_GIT_PASSWORD"; };f'
         TARGET=#{quoted_path}
         URL=#{quoted_url}
         BRANCH=#{quoted_branch}

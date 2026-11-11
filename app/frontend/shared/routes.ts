@@ -1287,6 +1287,11 @@ export function waitsAdminDashboardPath(options?: object): string {
   return "/" + "admin" + "/" + "dashboard" + "/" + "waits" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /admin/dashboard/companies/:id/hours(.:format) */
+export function hoursAdminDashboardCompanyPath(id: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "dashboard" + "/" + "companies" + "/" + id + "/" + "hours" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
 /** /admin/dashboard/companies/:id(.:format) */
 export function adminDashboardCompanyPath(id: ScalarType, options?: object): string {
   return "/" + "admin" + "/" + "dashboard" + "/" + "companies" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
@@ -2195,6 +2200,21 @@ export function companyProjectMembersPath(project_id: ScalarType, options?: obje
 /** /company/projects/:project_id/members/:id(.:format) */
 export function companyProjectMemberPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "members" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /company/projects/:project_id/teams/:id/leave(.:format) */
+export function leaveCompanyProjectTeamPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "teams" + "/" + id + "/" + "leave" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /company/projects/:project_id/teams(.:format) */
+export function companyProjectTeamsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "teams" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /company/projects/:project_id/teams/:id(.:format) */
+export function companyProjectTeamPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "teams" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
 /** /company/projects/:project_id/settings(.:format) */

@@ -749,6 +749,10 @@ scope module: :web, defaults: { format: :html } do
         end
         resources :config_items, only: %i[index create update destroy]
         resources :members, only: %i[index create destroy]
+        # docs/design/project-teams.md. `leave` is a member taking themselves out.
+        resources :teams, only: %i[index create update destroy] do
+          delete :leave, on: :member
+        end
         resource :settings, only: %i[show update]
         resource :ownership, only: :update
       end

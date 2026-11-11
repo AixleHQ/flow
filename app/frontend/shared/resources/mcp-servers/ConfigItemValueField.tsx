@@ -43,7 +43,7 @@ export const ConfigItemValueField: FC<ConfigItemValueFieldProps> = ({
           onChange={(val) => onChange(val ? `${CONFIG_ITEM_PREFIX}${val}` : '')}
           label={label}
           placeholder="Select config item..."
-          styles={{ input: { fontFamily: 'monospace' } }}
+          styles={{ input: { fontFamily: 'var(--app-font-mono)' } }}
           style={{ flex: 1 }}
         />
         <Tooltip label="Switch to plain text">
@@ -71,7 +71,7 @@ export const ConfigItemValueField: FC<ConfigItemValueFieldProps> = ({
         value={value}
         onChange={(e) => onChange(e.currentTarget.value)}
         placeholder={placeholder}
-        styles={{ input: { fontFamily: 'monospace' } }}
+        styles={{ input: { fontFamily: 'var(--app-font-mono)' } }}
         style={{ flex: 1 }}
       />
       <Tooltip label="Use value from Secrets & Variables">

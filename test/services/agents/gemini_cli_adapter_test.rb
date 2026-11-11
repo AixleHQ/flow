@@ -76,6 +76,12 @@ module Agents
       refute settings.dig("tools").key?("autoAccept")
     end
 
+    test "config_files keeps the UI inline, off the alternate screen" do
+      settings = JSON.parse(@adapter.config_files({ "api_key" => "test-key" }, hosted_otel)["/home/gemini/.gemini/settings.json"])
+
+      assert_equal false, settings.dig("ui", "useAlternateBuffer") # rubocop:disable Minitest/RefuteFalse
+    end
+
     test "auth_setup_files selects API-key auth and pre-trusts the workspace" do
       files = @adapter.auth_setup_files
 

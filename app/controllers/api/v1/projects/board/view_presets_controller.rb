@@ -33,9 +33,9 @@ module Api
             p = params.require(:board_view_preset)
             filters = p[:filters]
             filters = if filters.is_a?(ActionController::Parameters)
-              filters.permit(:assignee_id, :task_type, :priority, :search, :status, tags: [], columns: []).to_h
+              filters.permit(:assignee_id, :assignee_team_id, :task_type, :priority, :search, :status, tags: [], columns: []).to_h
             else
-              (filters || {}).slice("assignee_id", "task_type", "priority", "search", "status", "tags", "columns")
+              (filters || {}).slice("assignee_id", "assignee_team_id", "task_type", "priority", "search", "status", "tags", "columns")
             end
             p.permit(:name, :shared).merge(filters: filters)
           end

@@ -46,7 +46,7 @@ export function ProviderCrashFallback() {
         alignItems: 'center',
         justifyContent: 'center',
         gap: 12,
-        fontFamily: 'system-ui, sans-serif',
+        fontFamily: 'Inter, system-ui, sans-serif',
         background: 'Canvas',
         color: 'CanvasText',
       }}

@@ -21,6 +21,7 @@ import { apiMutate } from 'shared/lib/apiFetch';
 import { useCanWrite } from 'shared/lib/hooks/useCanWrite';
 import { useElapsedTimer } from 'shared/lib/hooks/useElapsedTimer';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
+import { runOwnerLabel } from 'shared/lib/runOwner';
 import { costColor, formatCost, formatDuration, formatFileSize, formatTokens } from 'shared/lib/sessionFormat';
 import { RunsOnBadge } from 'shared/resources/runners/runnerChoice';
 import { useRunsOnMeta } from 'shared/resources/runners/useRunsOnMeta';
@@ -420,7 +421,7 @@ const WorkflowRunShowPage = () => {
           identifier={`Run #${run.id}`}
           description={run.workflowDescription}
           agentType={run.agentType}
-          userName={run.userName}
+          userName={runOwnerLabel(run.teamName, run.userName)}
           mode={run.mode}
           extraMeta={[...chatOriginMeta(run.chatOrigin), ...runsOnMeta]}
           stats={stats}

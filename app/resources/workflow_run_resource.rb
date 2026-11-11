@@ -78,6 +78,12 @@ class WorkflowRunResource < ApplicationResource
     run.user&.name || User::DELETED_DISPLAY_NAME
   end
 
+  # The team the run's owner was picked from, when it was.
+  typelize "string | null"
+  attribute :team_name do |run|
+    run.picked_from_team&.name
+  end
+
   # May the viewer steer this run (cancel / approve / retry / skip)? Mirrors
   # WorkflowRunsPolicy so the buttons match what the POST would actually do;
   # the policy is the enforcement, this is only what the page renders. Pass

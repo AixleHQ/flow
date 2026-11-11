@@ -1,0 +1,4 @@
+<%= @member.name %> turned on "Don't let anyone add me to a team", which took them out of <%= @teams.map(&:name).to_sentence %> in project <%= @project.name %>. Runs of <%= @teams.one? ? "that team" : "those teams" %> no longer go to them.
+
+Check that every team still has someone who can take its runs:
+<%= @teams_url %>

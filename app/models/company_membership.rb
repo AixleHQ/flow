@@ -194,6 +194,9 @@ class CompanyMembership < ApplicationRecord
   after_update_commit :notify_invitation_accepted, if: -> { saved_change_to_state? && state == "active" && state_before_last_save == "invited" }
   after_update_commit :notify_access_revoked, if: -> { saved_change_to_state? && state == "revoked" }
   after_update_commit :notify_role_changed, if: :saved_change_to_role?
+  after_update_commit :leave_project_teams, if: -> {
+    (saved_change_to_state? && state == "revoked") || (saved_change_to_role? && viewer?)
+  }
 
   # ── Onboarding (per company) ────────────────────────────────────────────────
 
@@ -506,6 +509,11 @@ class CompanyMembership < ApplicationRecord
 
   # Only when someone actually invited them: a domain auto-join has no inviter,
   # and self-accepted invites would mail the acceptor their own news.
+  def leave_project_teams
+    reason = revoked? ? "no longer a member of the company" : "now a viewer, and viewers can't start runs"
+    ProjectTeams::Management.prune!(user, company_id: company_id, reason: reason)
+  end
+
   def notify_invitation_accepted
     return if invited_by_id.blank? || invited_by_id == user_id
 

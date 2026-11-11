@@ -23,6 +23,7 @@ module Api
             unless WorkflowTriggers::Creator::KINDS.include?(kind)
               return render json: { errors: [ "Unsupported trigger kind: #{kind}" ] }, status: :unprocessable_entity
             end
+            authorize(policy_method_params, :change_run_as?) if kind != "column" && run_as_team_id.present?
 
             result = WorkflowTriggers::Creator.call(
               project: current_project, workflow: current_workflow, user: current_user,
@@ -43,10 +44,11 @@ module Api
 
           def update
             run_as_user_id = params.dig(:trigger, :run_as_user_id).presence
+            team_given = params[:trigger].respond_to?(:key?) && params[:trigger].key?(:run_as_team_id)
 
             case params[:kind].to_s
             when "column"
-              if run_as_user_id
+              if run_as_user_id || team_given
                 return render json: { errors: [ "A column trigger runs as the person the card is on — it has no Run as to change" ] },
                               status: :unprocessable_entity
               end
@@ -55,11 +57,13 @@ module Api
               binding.update!(column_binding_params)
               render json: serializer.column(binding)
             else
-              authorize(policy_method_params, :change_run_as?) if run_as_user_id
+              authorize(policy_method_params, :change_run_as?) if run_as_user_id || team_given
               binding = current_workflow.trigger_bindings.find(params[:id])
               binding.assign_attributes(trigger_binding_params)
               binding.assign_chat_provider(params.dig(:trigger, :chat_provider))
-              WorkflowTriggers::RunAs.save!(binding, actor: current_user, user_id: run_as_user_id, request: request) do
+              team_id = team_given ? run_as_team_id : WorkflowTriggers::RunAs::KEEP_TEAM
+              WorkflowTriggers::RunAs.save!(binding, actor: current_user, user_id: run_as_user_id, team_id: team_id,
+                                                     request: request) do
                 binding.save_checking_chat!
               end
               render json: serialize_binding(binding)
@@ -93,6 +97,11 @@ module Api
             return trigger.permit(:board_column_id, :trigger_mode, :cooldown_seconds).to_h if kind == "column"
 
             trigger_binding_params.to_h.merge(trigger.permit(:event_type, :chat_provider, :verification_strategy, :secret).to_h)
+                                  .merge(run_as_team_id: run_as_team_id)
+          end
+
+          def run_as_team_id
+            params.dig(:trigger, :run_as_team_id).presence
           end
 
           def serialize_result(result)
@@ -122,7 +131,7 @@ module Api
           # ---- serialization ----
 
           def serialized_triggers(workflow)
-            bindings = workflow.trigger_bindings.includes(:created_by, :workflow, :chat_conversation).order(:created_at).to_a
+            bindings = workflow.trigger_bindings.includes(:created_by, :run_as_team, :workflow, :chat_conversation).order(:created_at).to_a
             event_serializer = WorkflowTriggers::Serializer.new(webhook_endpoints: WorkflowTriggers::Serializer.endpoints_for(bindings))
             column_bindings(workflow).includes(:board_column, :created_by, :workflow).map { |b| serializer.column(b) } +
               bindings.map { |b| event_serializer.binding(b) }

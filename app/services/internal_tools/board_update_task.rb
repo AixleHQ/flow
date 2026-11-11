@@ -36,7 +36,7 @@ module InternalTools
           },
           unassign: {
             type: "boolean",
-            description: "Clear the current assignee. Cannot be combined with assignee_id."
+            description: "Clear the current assignee, person or team. Cannot be combined with assignee_id or assignee_team_id."
           },
           task_type: {
             type: "string",
@@ -45,6 +45,11 @@ module InternalTools
           assignee_id: {
             type: "integer",
             description: "User ID to assign the task to — must be a project member (see board_list_members)"
+          },
+          assignee_team_id: {
+            type: "integer",
+            description: "Team ID to assign the task to (see board_list_members): each run of the task goes to the " \
+                         "member the team's strategy picks. Replaces a person assignee."
           },
           description: {
             type: "string",
@@ -65,10 +70,14 @@ module InternalTools
       return error(task_not_found) unless task
 
       updates = params.slice(*UPDATABLE_FIELDS).reject { |_, v| v.nil? }
-      if assign? && unassign?
-        return error("Pass either assignee_id or unassign, not both")
-      elsif assign? || unassign?
-        updates["assignee_id"] = unassign? ? nil : params[:assignee_id]
+      return error("Pass one of assignee_id, assignee_team_id or unassign") if [ assign?, assign_team?, unassign? ].count(true) > 1
+
+      if unassign?
+        updates.merge!("assignee_id" => nil, "assignee_team_id" => nil)
+      elsif assign?
+        updates["assignee_id"] = params[:assignee_id]
+      elsif assign_team?
+        updates["assignee_team_id"] = params[:assignee_team_id]
       end
       return error("No valid fields to update") if updates.empty?
 
@@ -79,6 +88,7 @@ module InternalTools
         number: task.number,
         title: task.title,
         assignee_id: task.assignee_id,
+        assignee_team_id: task.assignee_team_id,
         updated_fields: updates.keys
       }.to_json)
     rescue ActiveRecord::RecordInvalid => e
@@ -90,6 +100,7 @@ module InternalTools
     private
 
     def assign? = params[:assignee_id].present?
+    def assign_team? = params[:assignee_team_id].present?
     def unassign? = ActiveModel::Type::Boolean.new.cast(params[:unassign]).present?
   end
 end
