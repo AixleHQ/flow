@@ -3,7 +3,7 @@
 A **runtime** is the actual LLM CLI that runs inside an agent's
 container. The persona decides *who* the agent is; the runtime decides
 *what model and tool it drives*. The same persona can run on any of the
-seven supported runtimes — pick the one whose model and credentials you
+eight supported runtimes — pick the one whose model and credentials you
 have.
 
 ## Supported runtimes
@@ -17,8 +17,9 @@ have.
 | `antigravity_cli` | Google       | `aixle/antigravity-cli` | Google Antigravity CLI; separate runtime, not a Gemini CLI replacement. |
 | `grok`            | xAI          | `aixle/grok`            | xAI Grok CLI.                                                           |
 | `kiro_cli`        | AWS          | `aixle/kiro-cli`        | AWS Kiro CLI, run on its V3 engine. Metered in credits, not tokens.     |
+| `copilot_cli`     | GitHub       | `aixle/copilot-cli`     | GitHub Copilot CLI; one Copilot plan, models from several vendors.     |
 
-All seven images are built locally with `make build-agents` and used by
+All eight images are built locally with `make build-agents` and used by
 the platform when starting a step's container; a deployed environment
 pulls them from its registry instead (`AGENT_IMAGE_PREFIX`,
 `AGENT_IMAGE_TAG`). Each runtime has an adapter under
@@ -43,6 +44,7 @@ injected only at container start — it never lives in the image.
 | `antigravity_cli` | A Google account, signed in through `agy`'s own interactive OAuth login.               |
 | `grok`            | An xAI account, signed in with the device-code flow (or an xAI API key).               |
 | `kiro_cli`        | A Kiro account, signed in with the device-code flow.                                   |
+| `copilot_cli`     | A GitHub account with a Copilot plan, signed in with the device-code flow.             |
 
 A step fails immediately with a "no credentials" error if the runtime's
 credentials aren't configured for the user who triggered the run.
@@ -61,6 +63,7 @@ the numbers come from depends on the runtime:
 | `antigravity_cli` | The cumulative usage in an automatic session's terminal `result` event, priced from the selected model's configured pricing. |
 | `grok`            | The session's MITM log, priced from the xAI model catalogue.                              |
 | `kiro_cli`        | Credits: the CLI's own credit telemetry, else the usage summaries in the MITM log, else the change in the account's credit counter. |
+| `copilot_cli`     | GitHub AI credits per model call, from the CLI's OpenTelemetry traces, streamed (`COPILOT_AI_CREDIT_USD` per credit). |
 
 If `cost_cents` is `null` on a finished session, the runtime didn't emit
 usage events; check **Admin → Session Logs**.
@@ -68,7 +71,7 @@ usage events; check **Admin → Session Logs**.
 ## MCP support
 
 Every runtime's adapter writes the CLI's own MCP configuration, so all
-seven reach the same MCP servers. The internal `aixle-tools` server
+eight reach the same MCP servers. The internal `aixle-tools` server
 (board tools, progress, session lifecycle) is always connected
 regardless of runtime — see [MCP servers](mcp.md).
 

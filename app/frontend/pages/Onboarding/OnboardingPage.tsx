@@ -20,6 +20,7 @@ import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import {
   IconBrandAws,
+  IconBrandGithubCopilot,
   IconBrandGoogleFilled,
   IconBrandOpenai,
   IconBrandX,
@@ -86,6 +87,7 @@ const AGENT_ICONS: Record<AgentType, typeof IconSparkles> = {
   antigravity_cli: IconBrandGoogleFilled,
   grok: IconBrandX,
   kiro_cli: IconBrandAws,
+  copilot_cli: IconBrandGithubCopilot,
 };
 
 const AVAILABLE_AGENTS = AGENT_TYPES.map((type) => ({

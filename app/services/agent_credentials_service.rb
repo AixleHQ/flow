@@ -19,7 +19,8 @@ class AgentCredentialsService
     "gemini_cli" => Agents::GeminiCliAdapter,
     "antigravity_cli" => Agents::AntigravityCliAdapter,
     "grok" => Agents::GrokAdapter,
-    "kiro_cli" => Agents::KiroCliAdapter
+    "kiro_cli" => Agents::KiroCliAdapter,
+    "copilot_cli" => Agents::CopilotCliAdapter
   }.freeze
 
   attr_reader :adapter, :agent_type

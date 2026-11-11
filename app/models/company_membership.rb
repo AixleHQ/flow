@@ -306,6 +306,9 @@ class CompanyMembership < ApplicationRecord
 
     agent_models_by_type.map do |agent_type, models|
       runtime = AgentRuntime.all.find { |r| r.id == agent_type }
+      # Every model picker is a Mantine Select, which throws on a repeated value and takes
+      # the whole page down with it; a vendor catalogue is not trusted to be unique.
+      models = models.uniq { |m| m[:model_id] }
       models = models.map { |m| m.merge(reasoning_effort_levels: runtime&.reasoning_effort_levels(m[:model_id]) || []) }
       { agent_type: agent_type, models: models, default_model: default_models[agent_type] }
     end

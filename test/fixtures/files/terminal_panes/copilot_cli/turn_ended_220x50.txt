@@ -1,0 +1,50 @@
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                                                                                                                                        │
+│  ╭─╮╭─╮                             │  Getting started                                                                                                                                                                 │
+│  ╰─╯╰─╯  Copilot v1.0.108 uses AI.  │  Use the tabs above to explore your sessions and pull requests                                                                                                                   │
+│  █ ▘▝ █  Check for mistakes.        │  /model — Switch models across providers, or use Copilot Fusion                                                                                                                  │
+│   ▔▔▔▔                              │                                                                                                                                                                                  │
+│                                                                                                                                                                                                                        │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Discover Copilot Fusion                                                                                                                                                                                                │
+│ Get 30% off Copilot Fusion usage through November 30, 2026.                                                                                                                                                            │
+│ Click here or enter /model fusion to switch                                                                                                                                                                            │
+│ ctrl+x → m switch for this session                                                                                                                                                                                     │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+ ! Connected Connectors could not be loaded; existing local and self-hosted MCP servers remain available.
+
+ ❯ Run the shell command `sleep 20` and wait for it, then reply with the single word done. Do not do anything else.                                                                                                  13:38
+
+ ⌄ Thought for 1s
+ │ The user is asking me to run `sleep 20` and wait for it to complete, then reply with just "done". This is a simple command that should take 20 seconds.
+ │
+ │ I'll use bash with mode="sync" and initial_wait=30 to ensure I wait for the full 20 seconds of sleep to complete.
+
+ $ Shell Sleep for 20 seconds No Content                                                                                                                                                                               20s
+   sleep 20
+
+ ● done
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ /workspace                                                                                                                                                                                          Session: 2.38 AIC used
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ← open sidebar · Interactive · Allow All · / commands · ? help · tab next tab                                                                                                                             Claude Haiku 4.5

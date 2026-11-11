@@ -37,9 +37,17 @@ module Tools
     # with implicit trust — this endpoint authenticates from an amcp_ token in
     # a header, never a cookie, so a rebound browser request arrives without a
     # credential and is answered with 401.
+    #
+    # `serve_subscriptions_listen: false`: a server built for one request cannot hold a
+    # `subscriptions/listen` stream open, so the SDK's default answered the method with
+    # an SSE stream that ended at once, and advertised `listChanged` in
+    # `server/discover` as if it could. A modern client whose transport treats that
+    # ended stream as a failed connection drops the whole server: Copilot CLI 1.0.108
+    # ("sse response ended before an event ID was received; cannot resume") listed no
+    # tools at all. Refused, the method is unimplemented and nothing advertises it.
     def call(request)
       transport = MCP::Server::Transports::StreamableHTTPTransport.new(
-        server, stateless: true, dns_rebinding_protection: false
+        server, stateless: true, dns_rebinding_protection: false, serve_subscriptions_listen: false
       )
       transport.handle_request(request)
     end

@@ -158,6 +158,7 @@ per-project namespaces and network policies separate them.
 | `AGENT_IMAGE_ANTIGRAVITY_CLI`  | no       | derived           | Per-runtime override.                                            |
 | `AGENT_IMAGE_GROK`             | no       | derived           | Per-runtime override.                                            |
 | `AGENT_IMAGE_KIRO_CLI`         | no       | derived           | Per-runtime override.                                            |
+| `AGENT_IMAGE_COPILOT_CLI`      | no       | derived           | Per-runtime override.                                            |
 | `AGENT_MCP_STARTUP_TIMEOUT_MS` | no       | `90000`           | How long an agent CLI waits for its MCP servers to hand shake.   |
 | `AGENT_CREDENTIAL_SYNC_URL`    | no       | derived from `INTERNAL_BASE_URL` | Where the in-container watcher reports a token the CLI rotated. Internal host only: the request carries a per-session write-back key. |
 | `AGENT_CREDENTIAL_REFRESH_URL` | no       | derived from `INTERNAL_BASE_URL` | Where the in-container proxy hands a CLI's OAuth refresh, so every container of one login refreshes under one lock instead of each spending the same single-use refresh token. Internal host only: the request carries the same per-session key as the write-back. |
@@ -166,6 +167,7 @@ per-project namespaces and network policies separate them.
 | `ANTIGRAVITY_OAUTH_CLIENT_ID`  | no       | —                 | Google OAuth client `agy` signs a consumer login in with. With the secret, Antigravity tokens are refreshed server-side; unset, only the CLI in the container renews them. |
 | `ANTIGRAVITY_OAUTH_CLIENT_SECRET` | no    | —                 | The matching secret. Never commit it: secret scanning reports it to Google, which revokes the client for every `agy` user. |
 | `KIRO_CREDIT_USD`              | no       | `0.10`            | What one Kiro credit is reported as in a session's cost, in USD: the API-equivalent price other runtimes report, not what the Kiro plan charges. |
+| `COPILOT_AI_CREDIT_USD`        | no       | `0.01`            | What one GitHub AI credit is reported as in a session's cost, in USD. GitHub prices a credit at $0.01 and charges each model call at that model's API rate, so the default is already the API-equivalent figure. |
 
 ### External runners' callback proxy
 

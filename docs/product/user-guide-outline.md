@@ -31,7 +31,7 @@ they know how agents, containers, or orchestration work.
 Open with the loop, not a feature list.
 
 - **What it is.** The team layer above personal AI coding agents — Claude Code,
-  Cursor CLI, Codex, Gemini CLI, Antigravity CLI, Grok, and Kiro CLI. Not a
+  Cursor CLI, Codex, Gemini CLI, Antigravity CLI, Grok, Kiro CLI, and Copilot CLI. Not a
   personal chat with an agent: team control of AI coding work.
 - **The loop.** A person moves a card on the board into a column that is bound
   to a workflow. Agents start working. When the run finishes, status, files,
@@ -51,7 +51,7 @@ The reader goes from an invite email to their first open project.
   for viewer-only users).
 - **Connect an agent.** During onboarding — or any time later in **Profile** —
   connect the account of the agent product you already use (Claude Code,
-  Cursor CLI, Codex, Gemini CLI, Antigravity CLI, Grok, or Kiro CLI).
+  Cursor CLI, Codex, Gemini CLI, Antigravity CLI, Grok, Kiro CLI, or Copilot CLI).
   Connecting happens in a terminal embedded in the page: the product starts a
   session, you complete the runtime's own login in it, and the credential is
   stored for you. Nothing can run on your behalf until this is done — say this
@@ -177,7 +177,7 @@ sessions can also run on their own). They share a single list.
 - **What it is.** Reusable personas: who the agent is, how it talks, what
   rules it follows. A persona is not a product choice — the same persona can
   run on any of the supported runtimes (Claude Code, Cursor CLI, Codex, Gemini
-  CLI, Antigravity CLI, Grok, Kiro CLI).
+  CLI, Antigravity CLI, Grok, Kiro CLI, Copilot CLI).
 - **When to use it.** To make agent behavior consistent across workflows —
   "our reviewer", "our implementer" — instead of re-writing instructions per
   step.

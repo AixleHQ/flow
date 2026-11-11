@@ -956,7 +956,8 @@
                     "gemini_cli",
                     "antigravity_cli",
                     "grok",
-                    "kiro_cli"
+                    "kiro_cli",
+                    "copilot_cli"
                   ]
                 },
                 "allow_non_interactive": {

@@ -75,6 +75,7 @@ updates:
       - "/docker/gemini-cli"
       - "/docker/grok"
       - "/docker/kiro-cli"
+      - "/docker/copilot-cli"
       - "/docker/otlp-ingest"
       - "/docker/remote"
     schedule:
