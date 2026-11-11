@@ -1452,7 +1452,7 @@ are unchanged. With `network: host` the host runner listens itself.
   `azure-git-credentials`, `cloud-credentials` and `assets` (`GET` and `HEAD` under `store/`,
   the filesystem storage's files; a presigned S3 URL is never rewritten). Each route names the
   methods it takes, and only `assets` takes a path below it.
-- **The session check** (step 2) is `Runners::Proxy.holder`: the MCP key in `X-Session-Key`
+- **The session check** (step 2) is `Runners::Proxy.holder(route, environment, session_id:, key:)`; the controller reads the headers and passes their values, and the service never receives the request (§6.1): the MCP key in `X-Session-Key`
   must resolve to the session that holds the machine (`current_session_id`); a credential route
   needs that session's id in `X-Session-Id` and its own key for that endpoint (`X-Agent-Key`,
   `X-Git-Key`, `X-Azure-Git-Key`, `X-Cloud-Key`). `assets` carries no key, on the internal
