@@ -89,6 +89,9 @@ module Agents
       settings = JSON.parse(files["/home/copilot/.copilot/settings.json"])
       assert_equal true, settings["continueOnAutoMode"] # rubocop:disable Minitest/AssertTruthy
       assert_equal false, settings["autoUpdate"] # rubocop:disable Minitest/RefuteFalse
+      # MCP tools stay in the model's own list instead of behind a tool search.
+      assert_equal false, settings["toolSearch"] # rubocop:disable Minitest/RefuteFalse
+      assert_equal({ "mcp" => false }, settings["dynamicRetrieval"])
     end
 
     test "a refreshed token is delivered as the token file alone" do

@@ -47,11 +47,18 @@ module Agents
     # token in plaintext?" question `copilot login` asks when there is no keychain, which
     # the image never has. `continueOnAutoMode` switches to Auto on a model's rate limit
     # instead of asking "Switch to …?", a question a non_interactive session cannot answer.
+    #
+    # `toolSearch` and `dynamicRetrieval.mcp` off keep the MCP tools in the model's own tool
+    # list. With a project's full tool set the CLI otherwise defers them behind a search
+    # tool: on staging an automatic session found `aixle-tools-finish_session` there, called
+    # `finish_session` instead, was told it does not exist, and never finished.
     SETTINGS = {
       "storeTokenPlaintext" => true,
       "autoUpdate" => false,
       "banner" => "never",
-      "continueOnAutoMode" => true
+      "continueOnAutoMode" => true,
+      "toolSearch" => false,
+      "dynamicRetrieval" => { "mcp" => false }
     }.freeze
 
     MODELS_METADATA_KEY = "copilot_models"
