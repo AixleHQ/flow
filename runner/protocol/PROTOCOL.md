@@ -237,10 +237,10 @@ machine, which the platform calls an environment.
 | Field | Type | Rule |
 | --- | --- | --- |
 | `name` | string | Required. Leading and trailing spaces are dropped, and it must not be blank then. At most 255 characters. |
-| `os` | string | Optional, at most 255 characters, e.g. `linux`. A value that is not a string is ignored. |
-| `arch` | string | Optional, at most 255 characters, e.g. `amd64`. A value that is not a string is ignored. |
+| `os` | string | Optional, a string, at most 255 characters, e.g. `linux`. Any other value, `null` included, is refused with `invalid_registration`. |
+| `arch` | string | Optional, a string, at most 255 characters, e.g. `amd64`. Any other value, `null` included, is refused with `invalid_registration`. |
 | `facts` | object | Optional, default `{}` when the key is absent. What the machine reports about itself, e.g. `{"docker": "27.1.0"}`. Omit it or send an object: `null` is refused with `invalid_registration`. |
-| `ephemeral` | boolean | Optional, default `false`. `true` is refused: ephemeral registration is not in protocol 1 yet. |
+| `ephemeral` | boolean | Optional, default `false`. A JSON boolean: any other value (`"true"`, `1`, `0.0`, `null`) is refused with `invalid_registration`. `true` is refused with `ephemeral_not_supported`: ephemeral registration is not in protocol 1 yet. |
 | `auto_update` | boolean | Optional, default `true`. `false` is `aixle-runner configure --no-auto-update`: the platform never offers the machine an update (§5.4). `null` is refused with `invalid_registration`. |
 
 The `X-Aixle-Runner-Version` and `X-Aixle-Runner-Protocol` of the request are recorded as the
@@ -276,8 +276,9 @@ characters, then `400 runner_version_unsupported`, then `422 ephemeral_not_suppo
 refused the same way whatever `min_version` is. Two machines that race on one token create one environment; the other gets
 `invalid_token`.
 
-Schema: [`schemas/v1/register.request.json`](schemas/v1/register.request.json), checked after the
-`ephemeral` refusal; `name` blank once trimmed and a value over 255 characters are checked when
+Schema: [`schemas/v1/register.request.json`](schemas/v1/register.request.json). A body with
+`ephemeral: true` passes it whatever the rest of it holds, so the `ephemeral` refusal comes first;
+`name` blank once trimmed and a value over 255 characters are checked when
 the machine is recorded, with the same refusal.
 
 Fixtures: `register/` (`below_min_version`, `no_auto_update` among them), `headers/`.

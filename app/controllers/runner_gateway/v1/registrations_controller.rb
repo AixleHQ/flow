@@ -7,15 +7,31 @@ module RunnerGateway
     # configure` and `aixle-runner unregister` on a `manual` machine.
     class RegistrationsController < ApplicationController
       before_action(only: :create) { authenticate(:registration) }
+      before_action :check_registration_version, only: :create
       before_action(only: :destroy) { authenticate(:access) }
 
-      # Body: {name, os, arch, facts, ephemeral, auto_update}.
-      # Runners::Registration.register! checks it, with the runner version,
-      # and raises each refusal in the order of PROTOCOL.md §5.1, which the
-      # base controller maps to its status.
+      # Body: {name, os, arch, facts, ephemeral, auto_update}, checked against
+      # runner/protocol/schemas/v1/register.request.json after the version
+      # refusals (PROTOCOL.md §5.1). The schema lets a body with
+      # `ephemeral: true` through whatever the rest of it holds, so that
+      # Runners::Registration.register! refuses it as such first. The body is
+      # then mapped by the protocol's wire rules: an absent `os` or `arch` is
+      # nil, `facts` is {} and `auto_update` true when absent.
       def create
-        result = Runners::Registration.register!(@credential, request.request_parameters,
-                                                 runner_version: runner_version, protocol_version: protocol_version)
+        body = request.request_parameters
+        unless Runners::ProtocolSchema.valid?("register.request", body)
+          return refuse(:unprocessable_entity, "invalid_registration",
+                        "`name` is required and must be a string, `facts` must be an object, `ephemeral` and " \
+                        "`auto_update` true or false, and `os` and `arch` strings of at most 255 characters.")
+        end
+
+        result = Runners::Registration.register!(
+          @credential,
+          name: body["name"], os: body["os"], arch: body["arch"],
+          facts: body.fetch("facts", {}), ephemeral: body["ephemeral"] == true,
+          auto_update: body.fetch("auto_update", true) != false,
+          runner_version: runner_version, protocol_version: protocol_version
+        )
         render_pair(result.pair, status: :created,
                                  environment: RunnerGatewayEnvironmentResource.new(result.environment).to_h)
       end
