@@ -1,0 +1,56 @@
+name: Model Prices
+
+# config/llm_prices.yml puts an estimated cost on calls whose runtime reports none. Vendor
+# prices move without notice, so once a week bin/llm-prices-report checks the table
+# against LiteLLM's public price list and keeps one issue up to date while a rate
+# differs or the last review is over 90 days old. Closed once both are clear.
+
+on:
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    name: Check Model Prices
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: |
+            config/llm_prices.yml
+            bin/llm-prices-report
+          sparse-checkout-cone-mode: false
+
+      # The runner's system Ruby: the script uses the standard library only.
+      - name: Write Report
+        run: |
+          bin/llm-prices-report > "$RUNNER_TEMP/report.md"
+          cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post Report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LABEL: llm-prices
+        run: |
+          set -euo pipefail
+          gh label create "$LABEL" --color 0e8a16 --description "Weekly check: model price table against LiteLLM" --force >/dev/null
+          number="$(gh issue list --label "$LABEL" --state open --json number --jq '.[0].number // empty')"
+          differences="$(sed -n 's/^<!-- differences: \([0-9]*\) -->$/\1/p' "$RUNNER_TEMP/report.md")"
+          overdue="$(sed -n 's/^<!-- review-overdue: \([0-9]*\) -->$/\1/p' "$RUNNER_TEMP/report.md")"
+          if [ "${differences:-0}" -eq 0 ] && [ "${overdue:-0}" -eq 0 ]; then
+            if [ -n "$number" ]; then
+              gh issue close "$number" --comment "Every rate matches LiteLLM's list and the table was reviewed recently."
+            fi
+          elif [ -n "$number" ]; then
+            gh issue edit "$number" --body-file "$RUNNER_TEMP/report.md"
+          else
+            gh issue create --title "Model price table needs a review" --label "$LABEL" --body-file "$RUNNER_TEMP/report.md"
+          fi

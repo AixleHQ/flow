@@ -1,0 +1,117 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Checks config/llm_prices.yml against LiteLLM's public price list and prints a Markdown
+# report: every rate that differs, every model the list does not carry, and how long ago
+# the table was last reviewed. The weekly workflow (.github/workflows/llm-prices.yml)
+# keeps it as one issue; locally: `docker compose exec -T web bin/llm-prices-report`.
+#
+# LiteLLM's list is a cross-check, not the source. A difference means "read the vendor's
+# pricing page", which is what the table cites; fix the table and its `reviewed_on`.
+#
+# Standard library only, so the workflow runs it without the bundle.
+# Environment: LLM_PRICES_SOURCE (path or URL of the list), LLM_PRICES_TABLE (the table).
+
+require "date"
+require "json"
+require "net/http"
+require "uri"
+require "yaml"
+
+SOURCE = ENV.fetch("LLM_PRICES_SOURCE",
+                   "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json")
+TABLE = ENV.fetch("LLM_PRICES_TABLE", File.expand_path("../config/llm_prices.yml", __dir__))
+# Where LiteLLM files a model it lists under a provider namespace rather than its bare id.
+NAMESPACES = [ "", "gemini/", "openai/", "xai/" ].freeze
+RATES = { "input" => "input_cost_per_token", "cache_read" => "cache_read_input_token_cost",
+          "cache_write" => "cache_creation_input_token_cost", "output" => "output_cost_per_token" }.freeze
+REVIEW_EVERY_DAYS = 90
+
+def read_source(source)
+  return File.read(source) unless source.match?(%r{\Ahttps?://})
+
+  response = Net::HTTP.get_response(URI(source))
+  raise "#{source}: HTTP #{response.code}" unless response.is_a?(Net::HTTPSuccess)
+
+  response.body
+end
+
+def rates_on(entry, date)
+  Array(entry["changes"]).sort_by { |change| change["from"] }.reduce(entry.slice(*RATES.keys)) do |rates, change|
+    change["from"] <= date ? rates.merge(change.slice(*RATES.keys)) : rates
+  end
+end
+
+def per_million(cost_per_token)
+  cost_per_token && (cost_per_token * 1_000_000).round(6)
+end
+
+def same?(ours, theirs)
+  return ours.nil? && theirs.nil? if ours.nil? || theirs.nil?
+
+  (ours.to_f - theirs).abs <= 1e-9 + (1e-6 * theirs.abs)
+end
+
+def format_rate(rate)
+  rate.nil? ? "—" : format("$%g", rate)
+end
+
+table = YAML.safe_load_file(TABLE, permitted_classes: [ Date ])
+listed = JSON.parse(read_source(SOURCE))
+today = Date.today
+
+differences = []
+unlisted = []
+table.fetch("models").each do |model, entry|
+  key = entry["source"] || NAMESPACES.map { |namespace| "#{namespace}#{model}" }.find { |name| listed.key?(name) }
+  theirs = key && listed[key]
+  if theirs.nil?
+    unlisted << model
+    next
+  end
+
+  current = rates_on(entry, today)
+  checks = RATES.map { |rate, field| [ rate, current[rate], per_million(theirs[field]) ] }
+  if (long = entry["long_context"])
+    suffix = "_above_#{long['above'].to_i / 1000}k_tokens"
+    checks += RATES.map { |rate, field| [ "#{rate} > #{long['above']}", long[rate], per_million(theirs["#{field}#{suffix}"]) ] }
+  end
+  checks.each do |rate, ours, their_rate|
+    next if same?(ours, their_rate)
+
+    differences << [ model, key, rate, ours, their_rate ]
+  end
+end
+
+reviewed_on = table["reviewed_on"]
+age = reviewed_on ? (today - reviewed_on).to_i : nil
+overdue = age.nil? || age > REVIEW_EVERY_DAYS
+
+puts "<!-- differences: #{differences.size} -->"
+puts "<!-- review-overdue: #{overdue ? 1 : 0} -->"
+puts "## Model price table"
+puts
+puts "`config/llm_prices.yml` prices calls whose runtime reports no cost — estimates from the"
+puts "vendors' list prices, not bills. Last reviewed: #{reviewed_on || 'never'}" \
+     "#{age ? " (#{age} days ago)" : ''}; review every #{REVIEW_EVERY_DAYS} days."
+puts
+if differences.any?
+  puts "### Rates that differ from LiteLLM's list"
+  puts
+  puts "USD per million tokens, in effect today. Confirm on the vendor's pricing page before changing the table."
+  puts
+  puts "| Model | LiteLLM key | Rate | Table | LiteLLM |"
+  puts "| --- | --- | --- | --- | --- |"
+  differences.each do |model, key, rate, ours, theirs|
+    puts "| `#{model}` | `#{key}` | #{rate} | #{format_rate(ours)} | #{format_rate(theirs)} |"
+  end
+  puts
+end
+if unlisted.any?
+  puts "### Not in LiteLLM's list — check by hand"
+  puts
+  unlisted.each { |model| puts "- `#{model}`" }
+  puts
+end
+puts "Every rate matches LiteLLM's list." if differences.empty?
+puts "The table is due for a review: check each vendor's page, then bump `reviewed_on`." if overdue
