@@ -3,10 +3,11 @@
 require "test_helper"
 
 module CloudAuth
-  # Pins FakeAwsBedrockProbe to the real probe's surface (docs/testing.md R4). Hits no
-  # network: signatures and return shapes only.
+  # Pins FakeAwsBedrockProbe to the real probe's surface (docs/testing.md R4), and the real
+  # probe to the InvokeModel API shape through WebMock.
   class AwsBedrockProbeContractTest < ActiveSupport::TestCase
     CONSTRUCTOR_KEYWORDS = %i[access_key_id region secret_access_key session_token].freeze
+    MODEL_ID = "us.anthropic.claude-sonnet-4-6"
 
     test "the fake implements the real probe's public surface" do
       assert_equal [ :probe ], AwsBedrockProbe.public_instance_methods(false)
@@ -49,7 +50,44 @@ module CloudAuth
       assert_equal 1, AwsBedrockProbe::PROBE_BODY[:max_tokens]
     end
 
+    # == the real probe against the real API shape (docs/testing.md R4) ==
+
+    # Each retry would be another billed invoke_model and another backoff before the user
+    # sees the answer. Since aws-sdk-core 3.267 the SDK's default is three attempts.
+    test "a throttled probe is not retried, and the provider code reaches the result" do
+      stub_request(:post, invoke_url).to_return(
+        status: 429,
+        headers: { "x-amzn-ErrorType" => "ThrottlingException" },
+        body: { "message" => "Too many requests, please wait before trying again." }.to_json
+      )
+
+      result = build_real.probe(model_id: MODEL_ID)
+
+      assert_requested :post, invoke_url, times: 1
+      assert_not_predicate result, :ok?
+      assert_equal "ThrottlingException", result.error_code
+    end
+
+    test "an answering model is a passing probe" do
+      stub_request(:post, invoke_url).to_return(
+        status: 200,
+        headers: { "Content-Type" => "application/json" },
+        body: { "type" => "message", "content" => [ { "type" => "text", "text" => "." } ] }.to_json
+      )
+
+      assert_predicate build_real.probe(model_id: MODEL_ID), :ok?
+    end
+
     private
+
+    def invoke_url
+      "https://bedrock-runtime.us-east-1.amazonaws.com/model/#{MODEL_ID}/invoke"
+    end
+
+    def build_real
+      AwsBedrockProbe.new(region: "us-east-1", access_key_id: "AKIAFAKE",
+                          secret_access_key: "secret", session_token: "token")
+    end
 
     def build_fake
       FakeAwsBedrockProbe.new(region: "us-east-1", access_key_id: "A", secret_access_key: "S", session_token: "T")
