@@ -122,6 +122,9 @@ on the first call.
 
 ### Microsoft Entra sign-in (not built)
 
+Follow-up research, with the Microsoft 365 Copilot (`loki`) path:
+`docs/research/technical-copilot-cli-entra-sign-in-research-2026-11-11.md`.
+
 `copilot` on macOS offers a third account at `/login`, "Your organization
 (Microsoft Entra)": a Copilot sign-in with a Microsoft work account rather than a
 GitHub one (the CLI's account kinds `entra`, `entraEmu`, and `loki` for
