@@ -100,6 +100,22 @@ module CloudAuth
       assert_raises(DeniedError) { build_real.inference_profiles }
     end
 
+    # The catalog sits behind a page load, so a failing list is retried once and then given
+    # up on. Since aws-sdk-core 3.267 the SDK's default is three attempts.
+    test "a failing list is retried once, not more" do
+      stub_request(:get, list_url("APPLICATION")).to_return(
+        status: 500,
+        headers: { "x-amzn-ErrorType" => "InternalServerException" },
+        body: { "message" => "Internal server error" }.to_json
+      )
+      stub_list("SYSTEM_DEFINED", [ system_summary ])
+
+      profiles = build_real.inference_profiles
+
+      assert_requested :get, list_url("APPLICATION"), times: 2
+      assert_equal [ "us.anthropic.claude-sonnet-4-6" ], profiles.map(&:model_id)
+    end
+
     private
 
     APP_ARN = "arn:aws:bedrock:us-east-1:111122223333:application-inference-profile/abc123"
