@@ -5,6 +5,7 @@
 # project feed this stays session-level: a workflow step is its own row, never
 # folded under a parent run — SessionsRunsFeed::LISTABLE_SESSION_TYPES.
 class Web::Company::SessionsController < Web::Company::ApplicationController
+  include LlmCallProps
   include SessionListQuery
 
   # In-flight states, for the visibility-scoped search below.
@@ -58,11 +59,9 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
 
     session_props = TerminalSessionResource.new(session, params: { viewer: current_user }).to_h
 
-    llm_calls = session.llm_calls.order(occurred_at: :desc).map { |c| LlmCallResource.new(c).to_h }
-
     render inertia: "Company/Sessions/Show", props: {
       session: session_props,
-      llm_calls: llm_calls,
+      llm_calls: -> { llm_call_props(session.llm_calls) },
       cable_stream: inertia_cable_stream(session)
     }
   end

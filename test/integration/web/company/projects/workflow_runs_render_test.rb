@@ -57,4 +57,33 @@ class Web::Company::Projects::WorkflowRunsRenderTest < ActionDispatch::Integrati
       props[:run][:workflowDescription] == "Ships the release" && props[:run][:totalTokens] == 350
     end
   end
+
+  test "show lists the run's LLM calls, and a live update of the run does not read them" do
+    run = create(:workflow_run, workflow: @workflow, project: @project, user: @user)
+    session = create(:terminal_session, session_type: "workflow_step", project: @project, user: @user)
+    create(:llm_call, terminal_session: session, workflow_run: run, model: "gpt-6-sol")
+
+    get company_project_workflow_run_path(@project, run)
+
+    assert_inertia_props { |props| props[:llmCalls].pluck(:model) == [ "gpt-6-sol" ] }
+
+    llm_call_queries = count_queries_on("llm_calls") do
+      get company_project_workflow_run_path(@project, run),
+          headers: { "X-Inertia" => "true", "X-Inertia-Partial-Component" => "Projects/WorkflowRuns/ShowPage",
+                     "X-Inertia-Partial-Data" => "run,assets" }
+    end
+    assert_response :success
+    assert_equal 0, llm_call_queries
+  end
+
+  private
+
+  def count_queries_on(table)
+    count = 0
+    counter = lambda do |*, payload|
+      count += 1 if payload[:sql].include?(%("#{table}")) && payload[:name] != "SCHEMA"
+    end
+    ActiveSupport::Notifications.subscribed(counter, "sql.active_record") { yield }
+    count
+  end
 end
