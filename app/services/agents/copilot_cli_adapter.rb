@@ -191,12 +191,17 @@ module Agents
     # it honours (measured on 1.0.108), routes a batch back to this session.
     # COPILOT_GH_HOST pins the host the token belongs to, so a GH_HOST a project sets for
     # its own tools cannot send the login elsewhere.
-    def default_env_vars(session)
+    #
+    # `callbacks` are the session's callback addresses where its runtime hands them over
+    # (external runners); without them the session is hosted and reports to the platform's
+    # collector. A session with no collector to reach exports nothing.
+    def default_env_vars(session, callbacks: nil)
       credential = session && SessionCompany.agent_credentials_for(session).find_by(agent_type: "copilot_cli")
+      otel = callbacks ? callbacks[:otel] : Settings.otel.endpoint.to_s
       {
-        "COPILOT_OTEL_ENABLED" => "true",
-        "OTEL_EXPORTER_OTLP_ENDPOINT" => Settings.otel.endpoint.to_s,
-        "OTEL_EXPORTER_OTLP_PROTOCOL" => "http/json",
+        "COPILOT_OTEL_ENABLED" => otel.present? ? "true" : nil,
+        "OTEL_EXPORTER_OTLP_ENDPOINT" => otel,
+        "OTEL_EXPORTER_OTLP_PROTOCOL" => otel.present? ? "http/json" : nil,
         "OTEL_RESOURCE_ATTRIBUTES" => session && UsageStatistics::SessionKey.resource_attributes(session),
         "COPILOT_GH_HOST" => gh_host(credential&.config_data)
       }.compact_blank
