@@ -18,13 +18,18 @@ module RunnerGateway
     # The protocol versions accepted are the platform's pins, the
     # `runners.release` block of config/settings.yml (Runners::Release, §14.2).
     #
-    # The controllers check transport only: the headers, the token and a
-    # parameter's type. A service checks a request body and raises each refusal
-    # as Runners::Credentials::Refused, which `rescue_from` maps to its status
-    # through REFUSAL_STATUS (docs/architecture/implementation-patterns.md,
-    # "Error Handling").
+    # The controllers handle transport: they check the headers, the token and
+    # the body's shape against its protocol schema, and map the body to the
+    # named parameters of a service, which never sees the request. A service
+    # makes the domain checks and raises each refusal as
+    # Runners::Credentials::Refused, which `rescue_from` maps to its status
+    # through REFUSAL_STATUS; the controllers' own refusals use the same codes
+    # (docs/architecture/implementation-patterns.md, "Error Handling").
     class ApplicationController < ActionController::API
       STATUS_TTL = 5.seconds
+
+      # runner_environments.runner_version (RunnerEnvironment's validation).
+      RUNNER_VERSION_MAX_LENGTH = 255
 
       REFUSAL_STATUS = {
         "invalid_token" => :unauthorized,
@@ -32,8 +37,7 @@ module RunnerGateway
         "runner_revoked" => :unauthorized,
         "runner_version_unsupported" => :bad_request,
         "ephemeral_not_supported" => :unprocessable_entity,
-        "invalid_registration" => :unprocessable_entity,
-        "invalid_result" => :unprocessable_entity
+        "invalid_registration" => :unprocessable_entity
       }.freeze
 
       wrap_parameters false
@@ -97,6 +101,23 @@ module RunnerGateway
         return if Runners::Version.valid?(runner_version)
 
         refuse(:bad_request, "invalid_runner_version", "X-Aixle-Runner-Version must be a semantic version (SemVer 2.0).")
+      end
+
+      # `register` only, after the token (PROTOCOL.md §5.1, steps 1 and 2): a
+      # runner version over 255 characters, which the machine could not
+      # record, is `invalid_registration` whatever the pins say, and then a
+      # runner below the platform's min_version is refused with the upgrade
+      # message.
+      def check_registration_version
+        if runner_version.length > RUNNER_VERSION_MAX_LENGTH
+          return refuse(:unprocessable_entity, "invalid_registration",
+                        "X-Aixle-Runner-Version must be at most #{RUNNER_VERSION_MAX_LENGTH} characters.")
+        end
+        return unless Runners::Release.unsupported_version?(runner_version)
+
+        refuse(:bad_request, "runner_version_unsupported",
+               "aixle-runner #{runner_version} is no longer supported (minimum #{Runners::Release.min_version}). " \
+               "Update aixle-runner.")
       end
 
       def refuse(status, error, message)

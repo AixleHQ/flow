@@ -1160,14 +1160,29 @@ request is checked for the protocol and version headers (`PROTOCOL.md` §1 and �
 
 **Request schemas (task #209).** Each gateway request body, and the long-poll's query, has a
 JSON Schema in `runner/protocol/schemas/v1/`, next to the protocol it belongs to
-(`PROTOCOL.md` §5). The controllers check a request with one shared helper,
-`Runners::ProtocolSchema.valid?(name, document)`, through `json_schemer`, the way
-`Templates::Package` checks `template.yaml` against `config/templates/template.v1.json`, and
-answer the endpoint's own refusal (`invalid_registration`, `invalid_result`,
-`invalid_request`) when it fails. A rule that needs the value itself stays where it is: a
-`name` blank once trimmed, and a value over its column, are `RunnerEnvironment`'s
-validations, as is the shape of `facts`. Every new gateway endpoint that takes a body or
-parameters, in 8b and 8c, adds its schema there.
+(`PROTOCOL.md` §5). The gateway is layered as `docs/architecture/implementation-patterns.md`
+("Error Handling") says: transport in the controllers, the domain in the services, which take
+named parameters and never see the request.
+- **The controller** checks the headers (`X-Aixle-Runner-Protocol`, the form of
+  `X-Aixle-Runner-Version`, and for `register` a version over 255 characters or below
+  `min_version`), the token, and the shape of the body or query against its schema with one
+  shared helper, `Runners::ProtocolSchema.valid?(name, document)`, through `json_schemer`, the
+  way `Templates::Package` checks `template.yaml` against `config/templates/template.v1.json`.
+  A failure is the endpoint's own refusal (`invalid_registration`, `invalid_result`,
+  `invalid_request`). It then maps the body to the service's named parameters by the
+  protocol's wire rules (an `os` or `arch` that is not a string ignored, `facts` `{}` and
+  `auto_update` true when absent, `exit_code` an Integer), and maps a service's refusal,
+  `Runners::Credentials::Refused`, to its status through `REFUSAL_STATUS`.
+- **The service** (`Runners::Registration.register!`, `Runners::Operations.record_result!`)
+  makes the domain refusals and raises `Runners::Credentials::Refused`: `ephemeral: true` is
+  `ephemeral_not_supported`, which is why `register.request.json` lets a body that asks for
+  `ephemeral` pass whatever the rest of it holds, so that the refusal order of `PROTOCOL.md`
+  §5.1 stays the same.
+
+A rule that needs the value itself stays where it is: a `name` blank once trimmed, and a value
+over its column, are `RunnerEnvironment`'s validations, as is the shape of `facts`. Every new
+gateway endpoint that takes a body or parameters, in 8b and 8c, adds its schema there and
+follows the same layering.
 
 Rack::Attack throttles `/runner/v1/*` per bearer token (keyed on its digest) and per IP, so a
 client that sends a new bearer value on every request is still bounded, and `register` per IP

@@ -43,6 +43,17 @@ class Runners::ProtocolSchemaTest < ActiveSupport::TestCase
     invalid.each { |body| assert_not Runners::ProtocolSchema.valid?("register.request", body), body.inspect }
   end
 
+  # PROTOCOL.md §5.1: the gateway refuses such a body as ephemeral_not_supported, before its other fields.
+  test "a registration that asks for ephemeral passes whatever the rest of it holds; one that does not, does not" do
+    asks = [ { "ephemeral" => true }, { "ephemeral" => true, "name" => 5, "facts" => nil }, { "ephemeral" => "true" },
+             { "ephemeral" => 1 } ]
+    does_not = [ false, nil, 0, "", "0", "f", "false", "off" ].map { |value| { "ephemeral" => value, "name" => 5 } }
+
+    asks.each { |body| assert Runners::ProtocolSchema.valid?("register.request", body), body.inspect }
+    does_not.each { |body| assert_not Runners::ProtocolSchema.valid?("register.request", body), body.inspect }
+    assert Runners::ProtocolSchema.valid?("register.request", { "ephemeral" => false, "name" => "b" })
+  end
+
   test "the long-poll's after and wait are non-negative integers, after within the bigint range" do
     valid = [ {}, { "after" => 0, "wait" => 0 }, { "after" => (2**63) - 1, "wait" => 600 } ]
     invalid = [ { "after" => -1 }, { "wait" => -1 }, { "after" => 2**63 }, { "after" => "1" }, { "wait" => "soon" } ]

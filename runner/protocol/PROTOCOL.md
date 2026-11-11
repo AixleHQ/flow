@@ -267,8 +267,9 @@ characters, then `400 runner_version_unsupported`, then `422 ephemeral_not_suppo
 refused the same way whatever `min_version` is. Two machines that race on one token create one environment; the other gets
 `invalid_token`.
 
-Schema: [`schemas/v1/register.request.json`](schemas/v1/register.request.json), checked after the
-`ephemeral` refusal; `name` blank once trimmed and a value over 255 characters are checked when
+Schema: [`schemas/v1/register.request.json`](schemas/v1/register.request.json). A body that asks
+for `ephemeral` passes it whatever the rest of it holds, so the `ephemeral` refusal comes first;
+`name` blank once trimmed and a value over 255 characters are checked when
 the machine is recorded, with the same refusal.
 
 Fixtures: `register/` (`below_min_version`, `no_auto_update` among them), `headers/`.

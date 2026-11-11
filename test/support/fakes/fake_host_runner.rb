@@ -72,7 +72,7 @@ module ContainerRuntime
       result = @overrides[operation.op]&.call(payload, session_id) || run(operation.op, payload, session_id)
       return if result == :none
 
-      Runners::Operations.record_result!(operation, result)
+      Runners::Operations.record_result!(operation, **result.symbolize_keys)
     end
 
     def run(op, payload, session_id)

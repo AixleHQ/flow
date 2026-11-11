@@ -38,7 +38,7 @@ class Runners::OperationsConcurrencyTest < ActiveSupport::TestCase
     operation = enqueue
 
     delivered = first_then_second(
-      -> { Runners::Operations.record_result!(RunnerOperation.find(operation.id), { "status" => "ok", "exit_code" => 0 }) },
+      -> { Runners::Operations.record_result!(RunnerOperation.find(operation.id), status: "ok", exit_code: 0) },
       -> { Runners::Operations.deliver!(@environment.id, after: 0) }
     )
 
@@ -54,7 +54,7 @@ class Runners::OperationsConcurrencyTest < ActiveSupport::TestCase
 
     first_then_second(
       -> { Runners::Operations.deliver!(@environment.id, after: 0).tap { |ops| assert_equal [ operation.id ], ops.map(&:id) } },
-      -> { Runners::Operations.record_result!(RunnerOperation.find(operation.id), { "status" => "ok", "exit_code" => 0 }) }
+      -> { Runners::Operations.record_result!(RunnerOperation.find(operation.id), status: "ok", exit_code: 0) }
     )
 
     operation.reload

@@ -6,7 +6,7 @@ module Runners
   #
   #   Runners::Operations.enqueue!(environment, op: "exec", payload: {...}, deadline_at: 5.minutes.from_now, session:)  # nil unless session holds it
   #   ops = Runners::Operations.poll(environment, after: 41, wait: 25)   # GET /runner/v1/ops
-  #   Runners::Operations.record_result!(operation, { "status" => "ok", "exit_code" => 0 })
+  #   Runners::Operations.record_result!(operation, status: "ok", exit_code: 0)
   #   Runners::Operations.await(operation)                               # ContainerRuntime::RunnerRuntime
   #   Runners::Operations.expire_overdue! / prune!                       # RunnerOperationsSweepWorkflow
   #
@@ -200,26 +200,18 @@ module Runners
       pubsub.unsubscribe(channel, on_message) if on_message
     end
 
-    # The runner's outcome of an op: `body` is the request body of
-    # `POST /runner/v1/ops/:id/result`, {status: ok|error|expired, exit_code?,
-    # stdout?, stderr?, data?, error?: {class, message}}, checked here against
-    # runner/protocol/schemas/v1/op_result.request.json. A body that fails it
-    # raises Credentials::Refused `invalid_result` and changes nothing.
+    # The runner's outcome of an op: `status` is ok, error or expired, and the
+    # other fields are what the runner reported, each optional
+    # (PROTOCOL.md §5.5). The gateway checks the request body's shape and maps
+    # it to these parameters (RunnerGateway::V1::OperationResultsController).
     #
     # The first result wins: an op that is already completed, failed or
-    # expired is returned unchanged. The same update stores the result
-    # (#outcome), encrypted like the payload, and nulls the payload (§2.3).
-    def record_result!(operation, body)
-      body = body.to_h.deep_stringify_keys
-      unless ProtocolSchema.valid?("op_result.request", body)
-        raise Credentials::Refused.new("invalid_result",
-                                       "`status` must be ok, error or expired, `exit_code` an integer, `stdout` and " \
-                                       "`stderr` strings, `data` an object and `error` an object of `class` and " \
-                                       "`message` strings.")
-      end
-
-      state = RESULT_STATES.fetch(body["status"])
-      result = outcome(body)
+    # expired is returned unchanged. The same update stores the result, the
+    # known fields with a `nil` one left out, encrypted like the payload, and
+    # nulls the payload (§2.3).
+    def record_result!(operation, status:, exit_code: nil, stdout: nil, stderr: nil, data: nil, error: nil)
+      state = RESULT_STATES.fetch(status)
+      result = { "exit_code" => exit_code, "stdout" => stdout, "stderr" => stderr, "data" => data, "error" => error }.compact
       RunnerOperation.transaction do
         operation.lock!
         if operation.deliverable?
@@ -229,16 +221,6 @@ module Runners
       end
       operation
     end
-
-    # What `result` stores: the body's known fields, a `null` one left out.
-    # JSON Schema counts 1.0 as an integer, so `exit_code` is stored as one.
-    def outcome(body)
-      result = body.slice("exit_code", "stdout", "stderr", "data", "error").compact
-      result["exit_code"] = result["exit_code"].to_i if result.key?("exit_code")
-      result
-    end
-    # record_result! is the only way to build a stored result.
-    private_class_method :outcome
 
     # Selects the deliverable ops and marks the pending ones `delivered` in one
     # transaction, with the rows locked FOR UPDATE, the lock record_result!

@@ -7,14 +7,13 @@ module Runners
   # access/refresh pair, and `aixle-runner unregister` marks the environment
   # `gone`, ends its hold on a session and revokes its credentials.
   #
-  # The gateway hands `register!` the request body as it arrived, and every
-  # refusal of a registration is raised here, as Credentials::Refused, which
-  # the gateway maps to its status (RunnerGateway::V1::ApplicationController).
+  # `register!` takes named parameters, never the request: the gateway checks
+  # the headers and the body's shape and maps the body to them
+  # (RunnerGateway::V1::RegistrationsController). Its refusals are raised as
+  # Credentials::Refused, which the gateway maps to its status
+  # (RunnerGateway::V1::ApplicationController).
   module Registration
     Result = Data.define(:environment, :pair)
-
-    # runner_environments.runner_version (RunnerEnvironment's validation).
-    RUNNER_VERSION_MAX_LENGTH = 255
 
     module_function
 
@@ -24,28 +23,20 @@ module Runners
     # a concurrent revocation either refuses this registration or revokes the
     # pair it issued (Credentials.lock_live_runner!).
     #
-    # `body` is {name, os, arch, facts, ephemeral, auto_update}, and
-    # `runner_version` and `protocol_version` are the request's headers, which
-    # the gateway has checked for form (PROTOCOL.md §1). The checks run in the
-    # order of PROTOCOL.md §5.1, and the token is spent only by a registration
-    # that passes them all:
-    #
-    # 1. a runner version over 255 characters, which the machine could not
-    #    record, is `invalid_registration` whatever the pins say;
-    # 2. a runner below the platform's min_version (the `runners.release`
-    #    block of config/settings.yml) is `runner_version_unsupported`;
-    # 3. `ephemeral: true` is `ephemeral_not_supported`, before the schema;
-    # 4. the body is checked against
-    #    runner/protocol/schemas/v1/register.request.json;
-    # 5. the body is normalized (#attributes) and the machine saved, whose
-    #    validation refuses what the schema cannot see, e.g. a blank name.
+    # The checks run after the gateway's, in the order of PROTOCOL.md §5.1,
+    # and the token is spent only by a registration that passes them all:
+    # `ephemeral: true` is `ephemeral_not_supported`, and then the machine is
+    # saved with its name stripped, whose validations refuse a name blank once
+    # stripped or a value over its column with `invalid_registration`.
+    # `runner_version` and `protocol_version` are the ones the machine runs
+    # and speaks.
     #
     # `auto_update: false` is a machine configured with `--no-auto-update`
     # (DESIGN.md §14.4): it is never offered an update.
-    def register!(credential, body, runner_version:, protocol_version:)
-      body = body.to_h.deep_stringify_keys
-      check!(body, runner_version)
-      fields = attributes(body)
+    def register!(credential, name:, os:, arch:, facts:, ephemeral:, auto_update:, runner_version:, protocol_version:)
+      if ephemeral
+        raise Credentials::Refused.new("ephemeral_not_supported", "Ephemeral registration is not supported yet.")
+      end
 
       RunnerCredential.transaction do
         Credentials.lock_live_runner!(credential.runner_id)
@@ -57,7 +48,8 @@ module Runners
         environment = RunnerEnvironment.new(
           runner_id: credential.runner_id, company_id: credential.company_id, origin: :registered,
           state: :registered, key: "aixle-r#{credential.runner_id}-#{SecureRandom.hex(4)}",
-          **fields, runner_version: runner_version, protocol_version: protocol_version
+          display_name: name.to_s.strip, os: os, arch: arch, facts: facts, auto_update: auto_update,
+          runner_version: runner_version, protocol_version: protocol_version
         )
         unless environment.save
           raise Credentials::Refused.new("invalid_registration", environment.errors.full_messages.to_sentence)
@@ -88,44 +80,5 @@ module Runners
         environment.credentials.unrevoked.update_all(revoked_at: now, updated_at: now)
       end
     end
-
-    # Steps 1 to 4 of #register!.
-    def check!(body, runner_version)
-      if runner_version.length > RUNNER_VERSION_MAX_LENGTH
-        raise Credentials::Refused.new("invalid_registration",
-                                       "X-Aixle-Runner-Version must be at most #{RUNNER_VERSION_MAX_LENGTH} characters.")
-      end
-
-      if Release.unsupported_version?(runner_version)
-        raise Credentials::Refused.new("runner_version_unsupported",
-                                       "aixle-runner #{runner_version} is no longer supported " \
-                                       "(minimum #{Release.min_version}). Update aixle-runner.")
-      end
-
-      if ActiveModel::Type::Boolean.new.cast(body["ephemeral"]) == true
-        raise Credentials::Refused.new("ephemeral_not_supported", "Ephemeral registration is not supported yet.")
-      end
-
-      return if ProtocolSchema.valid?("register.request", body)
-
-      raise Credentials::Refused.new("invalid_registration",
-                                     "`name` is required and must be a string, `facts` must be an object, " \
-                                     "`auto_update` true or false, and `os` and `arch` at most 255 characters.")
-    end
-
-    # The environment's attributes from a body that passed the schema: the
-    # name without its surrounding spaces, an `os` or `arch` that is not a
-    # string ignored (the schema lets one through, and the protocol says it is
-    # ignored), `facts` {} and `auto_update` true when absent.
-    def attributes(body)
-      { display_name: body["name"].strip, os: string_or_nil(body["os"]), arch: string_or_nil(body["arch"]),
-        facts: body.fetch("facts", {}), auto_update: body.fetch("auto_update", true) != false }
-    end
-
-    def string_or_nil(value)
-      value if value.is_a?(String)
-    end
-    # register! is the only way in, so it alone decides the order of the checks.
-    private_class_method :check!, :attributes, :string_or_nil
   end
 end
