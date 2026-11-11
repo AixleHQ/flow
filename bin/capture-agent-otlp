@@ -71,17 +71,20 @@ env_key = "CAPTURE_API_KEY"
 
 [otel]
 exporter = { otlp-http = { endpoint = "$MOCK/v1/logs", protocol = "binary" } }
+log_user_prompt = true
 EOF
-codex exec --skip-git-repo-check "say hi"; sleep 4' ;;
+echo capture > capture.txt
+codex exec --skip-git-repo-check "Show capture.txt, then say hi. CAPTURE_TOOL"; sleep 4' ;;
   gemini_cli)
     "${run[@]}" -u gemini -e HOME=/home/gemini -e GEMINI_API_KEY=capture -e GOOGLE_GEMINI_BASE_URL="$mock" -e MOCK="$mock" \
       "$image" sh -c 'mkdir -p ~/.gemini && cat > ~/.gemini/settings.json <<EOF
 {"security": {"auth": {"selectedType": "gemini-api-key"}, "folderTrust": {"enabled": false}},
  "privacy": {"usageStatisticsEnabled": true},
- "telemetry": {"enabled": true, "target": "local", "otlpEndpoint": "$MOCK", "otlpProtocol": "http", "logPrompts": false},
+ "telemetry": {"enabled": true, "target": "local", "otlpEndpoint": "$MOCK", "otlpProtocol": "http", "logPrompts": true},
  "tools": {"sandbox": false}}
 EOF
-gemini -m gemini-2.5-pro -p "say hi"; sleep 8' ;;
+echo capture > /tmp/capture.txt
+gemini -m gemini-2.5-pro -p "Read /tmp/capture.txt, then say hi. CAPTURE_TOOL"; sleep 8' ;;
   copilot_cli)
     # Offline with a custom provider (BYOK), the only way to point the CLI at the mock: the
     # spans and token counts are the ones a Copilot session exports, but the AI-credit

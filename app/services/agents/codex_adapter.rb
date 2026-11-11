@@ -14,6 +14,9 @@ module Agents
                           legacy_input_includes_cache: true },
       "mitm" => { source: "mitm", granularity: "request", cost_basis: "priced", legacy_input_includes_cache: true }
     }.freeze
+    REPORTS_PROMPTS = true
+    LOG_USER_PROMPT = "codex.user_prompt"
+    LOG_TOOL_RESULT = "codex.tool_result"
 
     # Startup model-migration dialog suppression.
     #
@@ -404,6 +407,7 @@ module Agents
     # Parse OTLP payload (logs) and persist usage statistics incrementally.
     # Called by UsageStatisticsService on each incoming OTLP batch.
     def ingest_usage(payload, terminal_session)
+      record_activity(payload, terminal_session)
       new_events = extract_events_from_otlp_logs(payload, terminal_session.route_token)
 
       UsageStatistics::Accumulator.record(terminal_session: terminal_session, events: new_events)
@@ -609,6 +613,70 @@ module Agents
     # =========================================================================
     # OTLP Log Events (real-time — Codex OTEL exporter → otlp-ingest)
     # =========================================================================
+
+    # Codex names no prompt id, so a prompt is keyed by its conversation and time. Its
+    # tool_result carries the command's output; that is dropped here, never stored.
+    def record_activity(payload, terminal_session)
+      return unless AgentActivity::Recorder.enabled_for?(terminal_session)
+
+      prompts = []
+      tool_calls = []
+      codex_log_records(payload, terminal_session.route_token).each do |attrs, nanos|
+        occurred_at = nanos.positive? ? Time.zone.at(nanos / 1_000_000_000.0) : nil
+        case otlp_attr(attrs, "event.name")
+        when LOG_USER_PROMPT
+          text = otlp_attr(attrs, "prompt")
+          next if text.blank?
+
+          prompts << AgentActivity::Recorder::Prompt.new(
+            key: "prompt:#{otlp_attr(attrs, 'conversation.id')}:#{nanos}", occurred_at: occurred_at, text: text,
+            source: "otlp_log"
+          )
+        when LOG_TOOL_RESULT
+          call_id = otlp_attr(attrs, "call_id")
+          next if call_id.blank?
+
+          tool_calls << AgentActivity::Recorder::ToolCall.new(
+            key: "tool:#{call_id}", occurred_at: occurred_at, tool_name: codex_tool_name(attrs),
+            arguments: parse_arguments(otlp_attr(attrs, "arguments")), success: otlp_attr(attrs, "success") == "true",
+            duration_ms: otlp_number(attrs, "duration_ms"), source: "otlp_log"
+          )
+        end
+      end
+      AgentActivity::Recorder.record(terminal_session, prompts: prompts, tool_calls: tool_calls)
+    end
+
+    def codex_log_records(payload, terminal_session_token)
+      return [] if terminal_session_token.blank?
+
+      Array(payload["resourceLogs"]).flat_map do |rl|
+        resource_attrs = rl.dig("resource", "attributes") || []
+        Array(rl["scopeLogs"]).flat_map do |sl|
+          Array(sl["logRecords"]).filter_map do |lr|
+            attrs = lr["attributes"] || []
+            token = otlp_attr(attrs, "terminal_session_token") || otlp_attr(resource_attrs, "terminal_session_token")
+            next unless token == terminal_session_token
+
+            [ attrs, lr["timeUnixNano"].to_i ]
+          end
+        end
+      end
+    end
+
+    # An MCP tool is named after its server the way Claude Code names one, so both read alike.
+    def codex_tool_name(attrs)
+      name = otlp_attr(attrs, "tool_name").to_s
+      server = otlp_attr(attrs, "mcp_server").presence
+      server ? "mcp__#{server}__#{name}" : name
+    end
+
+    def parse_arguments(raw)
+      return nil if raw.blank?
+
+      JSON.parse(raw)
+    rescue JSON::ParserError
+      { "raw" => raw.to_s }
+    end
 
     # Extract usage events from OTLP log payloads sent by Codex CLI.
     # Codex emits `codex.sse_event` logs with token counts per completion.
@@ -845,6 +913,8 @@ module Agents
           [otel]
           exporter = { otlp-http = { endpoint = "#{otel_endpoint}/v1/logs", protocol = "binary" } }
         TOML
+        # Prompt text only for a project that shares prompts (AgentActivity::Recorder).
+        toml << "log_user_prompt = true\n" if workflow_config[:share_prompts]
       end
 
       toml

@@ -82,6 +82,15 @@ module Agents
       assert_equal false, settings.dig("ui", "useAlternateBuffer") # rubocop:disable Minitest/RefuteFalse
     end
 
+    test "Gemini CLI logs prompt text only for a project that shares prompts" do
+      path = "/home/gemini/.gemini/settings.json"
+
+      settings = JSON.parse(@adapter.config_files({ "api_key" => "test-key" }, hosted_otel)[path])
+      assert_equal false, settings.dig("telemetry", "logPrompts") # rubocop:disable Minitest/RefuteFalse
+      settings = JSON.parse(@adapter.config_files({ "api_key" => "test-key" }, hosted_otel(share_prompts: true))[path])
+      assert_equal true, settings.dig("telemetry", "logPrompts") # rubocop:disable Minitest/AssertTruthy
+    end
+
     test "auth_setup_files selects API-key auth and pre-trusts the workspace" do
       files = @adapter.auth_setup_files
 

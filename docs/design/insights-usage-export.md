@@ -180,9 +180,9 @@ Where it comes from (to confirm per runtime when its fixture is captured):
 | Runtime | Prompts | Tool calls | Set in the container, only when sharing is on |
 | --- | --- | --- | --- |
 | Claude Code | OTLP log `user_prompt` (confirmed, 2.1.318) | OTLP log `tool_result`: name, `tool_use_id`, input, success, duration — the output only as a size (confirmed) | `OTEL_LOG_USER_PROMPTS=1`, `OTEL_LOG_TOOL_DETAILS=1` |
-| Codex | OTLP log `codex.user_prompt` | OTLP log `codex.tool_result`, its `output` dropped | `[otel] log_user_prompt = true` |
-| Gemini CLI | OTLP log `gemini_cli.user_prompt` | OTLP log `gemini_cli.tool_call` | `telemetry.logPrompts: true` |
-| Copilot CLI | the transcript `events.jsonl` Flow already collects | the same transcript | — |
+| Codex | OTLP log `codex.user_prompt` (confirmed, 0.166.0); no prompt id, so keyed by conversation and time and not joined to calls | OTLP log `codex.tool_result`: name, `call_id`, arguments, success, duration; its `output` dropped (confirmed) | `[otel] log_user_prompt = true` |
+| Gemini CLI | OTLP log `gemini_cli.user_prompt` with `prompt_id`, which `api_response` carries too (confirmed, 0.60.0) | OTLP log `gemini_cli.tool_call`: name, arguments, success, duration, `prompt_id`; no call id, so keyed by prompt and time (confirmed) | `telemetry.logPrompts: true` |
+| Copilot CLI | `user.message` in the transcript `events.jsonl` Flow already collects, read at cleanup (confirmed, 1.0.108) | `tool.execution_start` / `_complete` in the same transcript, the result dropped; `assistant.message` ties a call to its prompt (confirmed) | — |
 | Kiro, Cursor, Grok, Antigravity | the session's initial prompt — a workflow step's instructions — recorded by Flow | — | — |
 
 Rules:

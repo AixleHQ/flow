@@ -73,6 +73,8 @@ module Agents
     USAGE_EVENT_TRAITS = {
       OTEL_SOURCE => { source: "otlp_span", granularity: "request", cost_basis: "credits" }
     }.freeze
+    REPORTS_PROMPTS = true
+    TRANSCRIPT_LOG = /\Alogs\/.+\.events\.jsonl\z/
     CHAT_OPERATION = "chat"
     NANO_AIU_PER_CREDIT = 1_000_000_000.0
 
@@ -259,6 +261,19 @@ module Agents
       UsageStatistics::Accumulator.record(terminal_session: terminal_session, events: events, source: OTEL_SOURCE)
     end
 
+    # Prompts and tool calls come from the transcript, read at cleanup: the CLI's spans name
+    # the tools it ran but carry neither the prompt nor the arguments.
+    def collect_usage(terminal_session, artifacts = {})
+      return unless AgentActivity::Recorder.enabled_for?(terminal_session)
+
+      artifacts.each do |key, log|
+        next unless key.match?(TRANSCRIPT_LOG)
+
+        prompts, tool_calls = transcript_activity(log)
+        AgentActivity::Recorder.record(terminal_session, prompts: prompts, tool_calls: tool_calls)
+      end
+    end
+
     # The CLI's own transcript: every user and assistant message, tool call and result
     # (1.0.108). It is the only full record of a Copilot session, because the TUI always
     # draws on the alternate screen and the terminal log keeps just its last frame.
@@ -275,6 +290,49 @@ module Agents
     end
 
     private
+
+    # user.message is a prompt; tool.execution_start/_complete bracket a call, whose result
+    # is dropped here; assistant.message's toolRequests tie a call to the prompt behind it.
+    def transcript_activity(log)
+      prompts = []
+      starts = {}
+      tool_calls = []
+      prompt_of_call = {}
+      log.each_line do |line|
+        event = parse_json(line)
+        data = event["data"].is_a?(Hash) ? event["data"] : {}
+        at = transcript_time(event["timestamp"])
+        case event["type"]
+        when "user.message"
+          next if data["content"].blank? || data["messageId"].blank?
+
+          prompts << AgentActivity::Recorder::Prompt.new(key: "prompt:#{data['messageId']}", occurred_at: at,
+                                                         text: data["content"], prompt_ref: data["messageId"],
+                                                         source: "transcript")
+        when "assistant.message"
+          Array(data["toolRequests"]).each { |request| prompt_of_call[request["toolCallId"]] = data["originatingMessageId"] }
+        when "tool.execution_start"
+          starts[data["toolCallId"]] = data.merge("at" => at) if data["toolCallId"].present?
+        when "tool.execution_complete"
+          start = starts.delete(data["toolCallId"])
+          next unless start
+
+          tool_calls << AgentActivity::Recorder::ToolCall.new(
+            key: "tool:#{data['toolCallId']}", occurred_at: start["at"], tool_name: start["toolName"],
+            arguments: start["arguments"], success: data["success"], error: data.dig("error", "message"),
+            duration_ms: start["at"] && at && ((at - start["at"]) * 1000).round,
+            prompt_ref: prompt_of_call[data["toolCallId"]], source: "transcript"
+          )
+        end
+      end
+      [ prompts, tool_calls ]
+    end
+
+    def transcript_time(raw)
+      Time.zone.parse(raw.to_s)
+    rescue ArgumentError
+      nil
+    end
 
     # config.json opens with `//` comment lines, which JSON.parse refuses.
     def parse_config(content)

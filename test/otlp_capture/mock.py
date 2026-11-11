@@ -88,11 +88,11 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/v1/messages"):
             return self._anthropic(body)
         if path.startswith("/v1/responses"):
-            return self._openai_responses()
+            return self._openai_responses(body)
         if ":streamGenerateContent" in path:
-            return self._gemini_stream()
+            return self._gemini_stream(body)
         if ":generateContent" in path:
-            return self._json(self._gemini_chunk(final=True))
+            return self._json(self._gemini_chunk(final=True, call=self._gemini_tool_turn(body)))
         if ":countTokens" in path:
             return self._json({"totalTokens": 12})
         return self._json({})
@@ -140,9 +140,10 @@ class Handler(BaseHTTPRequestHandler):
             ev("message_stop", {"type": "message_stop"}),
         ])
 
-    # A prompt carrying CAPTURE_TOOL gets one tool call first (Read of a file the capture
-    # writes), and the plain reply once the tool's result comes back, so the CLI's tool
-    # telemetry is captured too. Every other prompt gets the plain reply straight away.
+    # A prompt carrying CAPTURE_TOOL gets one tool call first (a read of the file the
+    # capture writes, with Claude Code's Read or Copilot's view), and the plain reply once
+    # the tool's result comes back, so the CLI's tool telemetry is captured too. Every
+    # other prompt gets the plain reply straight away.
     def _anthropic_tool_turn(self, req):
         messages = req.get("messages") or []
         if "CAPTURE_TOOL" not in json.dumps(messages[:1]):
@@ -150,11 +151,17 @@ class Handler(BaseHTTPRequestHandler):
         last = messages[-1].get("content") if messages else None
         if isinstance(last, list) and any(isinstance(b, dict) and b.get("type") == "tool_result" for b in last):
             return None
+        names = [t.get("name") for t in req.get("tools") or [] if isinstance(t, dict)]
+        if "view" in names:
+            return {"type": "tool_use", "id": "toolu_capture", "name": "view", "input": {"path": "/tmp/capture.txt"}}
         return {"type": "tool_use", "id": "toolu_capture", "name": "Read",
                 "input": {"file_path": "/tmp/capture.txt"}}
 
-    def _openai_responses(self):
+    def _openai_responses(self, body):
         rid = "resp_mock"
+        call = self._openai_tool_turn(body)
+        if call:
+            return self._openai_function_call(rid, call)
         item = {"id": "msg_mock", "type": "message", "role": "assistant", "status": "completed",
                 "content": [{"type": "output_text", "text": "hi", "annotations": []}]}
         usage = {"input_tokens": 120, "input_tokens_details": {"cached_tokens": 30},
@@ -172,8 +179,58 @@ class Handler(BaseHTTPRequestHandler):
                                                            "usage": usage}}),
         ])
 
-    def _gemini_chunk(self, final):
-        chunk = {"candidates": [{"content": {"role": "model", "parts": [{"text": "hi"}]}, "index": 0}],
+    # CAPTURE_TOOL: one shell call first, named and shaped after the tool the CLI declared.
+    def _openai_tool_turn(self, body):
+        try:
+            req = json.loads(body or b"{}")
+        except ValueError:
+            return None
+        items = req.get("input") or []
+        if "CAPTURE_TOOL" not in json.dumps(items) or any(
+                isinstance(i, dict) and i.get("type") == "function_call_output" for i in items):
+            return None
+        names = [t.get("name") for t in req.get("tools") or [] if isinstance(t, dict)]
+        if "exec_command" in names:
+            return {"name": "exec_command", "arguments": json.dumps({"cmd": "cat capture.txt"})}
+        if "shell" in names:
+            return {"name": "shell", "arguments": json.dumps({"command": ["cat", "capture.txt"]})}
+        return None
+
+    def _openai_function_call(self, rid, call):
+        item = {"id": "fc_capture", "type": "function_call", "status": "completed", "call_id": "call_capture",
+                "name": call["name"], "arguments": call["arguments"]}
+        usage = {"input_tokens": 120, "input_tokens_details": {"cached_tokens": 30},
+                 "output_tokens": 7, "output_tokens_details": {"reasoning_tokens": 2}, "total_tokens": 127}
+        ev = lambda d: f"event: {d['type']}\ndata: {json.dumps(d)}\n\n"
+        base = {"id": rid, "object": "response", "model": "gpt-5", "output": []}
+        self._sse([
+            ev({"type": "response.created", "response": {**base, "status": "in_progress"}}),
+            ev({"type": "response.output_item.added", "output_index": 0, "item": {**item, "status": "in_progress"}}),
+            ev({"type": "response.output_item.done", "output_index": 0, "item": item}),
+            ev({"type": "response.completed", "response": {**base, "status": "completed", "output": [item],
+                                                           "usage": usage}}),
+        ])
+
+    # CAPTURE_TOOL: one read_file call first, with the path parameter the CLI declared.
+    def _gemini_tool_turn(self, body):
+        try:
+            req = json.loads(body or b"{}")
+        except ValueError:
+            return None
+        contents = req.get("contents") or []
+        if "CAPTURE_TOOL" not in json.dumps(contents[:1]) or "functionResponse" in json.dumps(contents):
+            return None
+        for tool in req.get("tools") or []:
+            for decl in tool.get("functionDeclarations") or []:
+                if decl.get("name") == "read_file":
+                    schema = decl.get("parameters") or decl.get("parametersJsonSchema") or {}
+                    param = (schema.get("required") or ["absolute_path"])[0]
+                    return {"name": "read_file", "args": {param: "/tmp/capture.txt"}}
+        return None
+
+    def _gemini_chunk(self, final, call=None):
+        parts = [{"functionCall": call}] if call else [{"text": "hi"}]
+        chunk = {"candidates": [{"content": {"role": "model", "parts": parts}, "index": 0}],
                  "modelVersion": "gemini-2.5-pro"}
         if final:
             chunk["candidates"][0]["finishReason"] = "STOP"
@@ -182,8 +239,9 @@ class Handler(BaseHTTPRequestHandler):
                                       "totalTokenCount": 129}
         return chunk
 
-    def _gemini_stream(self):
-        self._sse([f"data: {json.dumps(self._gemini_chunk(final=True))}\n\n"])
+    def _gemini_stream(self, body):
+        chunk = self._gemini_chunk(final=True, call=self._gemini_tool_turn(body))
+        self._sse([f"data: {json.dumps(chunk)}\n\n"])
 
 
 if __name__ == "__main__":

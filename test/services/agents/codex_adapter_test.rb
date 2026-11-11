@@ -107,6 +107,15 @@ module Agents
       end
     end
 
+    test "Codex logs prompt text only for a project that shares prompts" do
+      stub_codex_models([])
+      path = "/home/codex/.codex/config.toml"
+
+      assert_not_includes @adapter.config_files({}, hosted_otel)[path], "log_user_prompt"
+      shared = @adapter.config_files({}, hosted_otel(share_prompts: true))[path]
+      assert_operator shared.index("log_user_prompt = true"), :>, shared.index("[otel]"), "the key belongs to [otel]"
+    end
+
     test "config_files uses default workspace when not provided" do
       credentials = {}
       files = @adapter.config_files(credentials, hosted_otel)

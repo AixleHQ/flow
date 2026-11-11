@@ -48,7 +48,7 @@ module Agents
     end
 
     test "Claude Code's prompt and tool call, recorded for a project that shares prompts" do
-      @session.project.update!(settings: { "insights" => { "share_prompts" => true } })
+      share_prompts!
 
       ingest(ClaudeCodeAdapter.new, "claude_code", only: "resourceLogs")
 
@@ -66,30 +66,57 @@ module Agents
       assert_not AgentToolCall.exists?(terminal_session: @session)
     end
 
-    test "Codex's response.completed event" do
+    # Two requests: the mock answers the first with one shell call (bin/capture-agent-otlp).
+    test "Codex's response.completed events, one call per request" do
       stat = ingest(CodexAdapter.new, "codex")
 
-      assert_equal INPUT - CACHE_READ, stat.input_tokens
-      assert_equal OUTPUT, stat.output_tokens
-      assert_equal CACHE_READ, stat.cache_read_tokens
+      assert_equal 2 * (INPUT - CACHE_READ), stat.input_tokens
+      assert_equal 2 * OUTPUT, stat.output_tokens
+      assert_equal 2 * CACHE_READ, stat.cache_read_tokens
       assert_equal [ "gpt-5" ], stat.models
 
-      assert_calls [ { model: "gpt-5", provider: "openai", source: "otlp_log", granularity: "request",
-                       cost_basis: "priced", input_tokens: INPUT - CACHE_READ, output_tokens: OUTPUT,
-                       cache_read_tokens: CACHE_READ, cache_write_tokens: 0 } ]
+      row = { model: "gpt-5", provider: "openai", source: "otlp_log", granularity: "request", cost_basis: "priced",
+              input_tokens: INPUT - CACHE_READ, output_tokens: OUTPUT, cache_read_tokens: CACHE_READ,
+              cache_write_tokens: 0 }
+      assert_calls [ row, row ]
+    end
+
+    test "Codex's prompt and tool call, without the tool's output" do
+      share_prompts!
+
+      ingest(CodexAdapter.new, "codex")
+
+      assert_equal "Show capture.txt, then say hi. CAPTURE_TOOL", AgentPrompt.find_by!(terminal_session: @session).text
+      call = AgentToolCall.find_by!(terminal_session: @session)
+      assert_equal [ "exec_command", { "cmd" => "cat capture.txt" } ], [ call.tool_name, call.arguments ]
+      assert_not_includes call.attributes.to_json, "Process exited"
     end
 
     test "Gemini CLI's api_response events, counted once beside its cumulative metric" do
       stat = ingest(GeminiCliAdapter.new, "gemini_cli")
 
-      assert_equal INPUT - CACHE_READ, stat.input_tokens
-      assert_equal OUTPUT + 2, stat.output_tokens, "thought tokens count as output"
-      assert_equal CACHE_READ, stat.cache_read_tokens
+      assert_equal 2 * (INPUT - CACHE_READ), stat.input_tokens
+      assert_equal 2 * (OUTPUT + 2), stat.output_tokens, "thought tokens count as output"
+      assert_equal 2 * CACHE_READ, stat.cache_read_tokens
       assert_equal [ "gemini-2.5-pro" ], stat.models
 
-      assert_calls [ { model: "gemini-2.5-pro", provider: "google", source: "otlp_log", granularity: "request",
-                       cost_basis: "priced", input_tokens: INPUT - CACHE_READ, output_tokens: OUTPUT + 2,
-                       cache_read_tokens: CACHE_READ, cache_write_tokens: 0, duration_ms: 93 } ]
+      row = { model: "gemini-2.5-pro", provider: "google", source: "otlp_log", granularity: "request",
+              cost_basis: "priced", input_tokens: INPUT - CACHE_READ, output_tokens: OUTPUT + 2,
+              cache_read_tokens: CACHE_READ, cache_write_tokens: 0 }
+      assert_calls [ row, row ]
+      assert_equal 1, LlmCall.where(terminal_session: @session).distinct.count(:prompt_ref)
+    end
+
+    test "Gemini CLI's prompt and tool call, joined by the prompt's id" do
+      share_prompts!
+
+      ingest(GeminiCliAdapter.new, "gemini_cli")
+
+      prompt = AgentPrompt.find_by!(terminal_session: @session)
+      assert_equal "Read /tmp/capture.txt, then say hi. CAPTURE_TOOL", prompt.text
+      call = AgentToolCall.find_by!(terminal_session: @session)
+      assert_equal [ "read_file", { "file_path" => "/tmp/capture.txt" }, true ], [ call.tool_name, call.arguments, call.success ]
+      assert_equal prompt.prompt_ref, call.prompt_ref
     end
 
     # Captured offline against the mock (a custom provider), so the span carries the token
@@ -112,6 +139,10 @@ module Agents
 
     def create_session
       create(:terminal_session, :running, user: @user, project: @project)
+    end
+
+    def share_prompts!
+      @project.update!(settings: { "insights" => { "share_prompts" => true } })
     end
 
     # only: the payload kind to replay ("resourceLogs", "resourceMetrics"), all when nil.

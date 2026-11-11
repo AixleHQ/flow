@@ -13,6 +13,9 @@ module Agents
     USAGE_EVENT_TRAITS = {
       "otlp" => { source: "otlp_log", granularity: "request", cost_basis: "reported", legacy_input_includes_cache: true }
     }.freeze
+    REPORTS_PROMPTS = true
+    LOG_USER_PROMPT = "gemini_cli.user_prompt"
+    LOG_TOOL_CALL = "gemini_cli.tool_call"
 
     LOG_EVENT_NAME = "gemini_cli.api_response"
 
@@ -91,7 +94,7 @@ module Agents
       {
         "#{home_dir}/.gemini/settings.json" => generate_settings(
           model: workflow_config[:model], effort: workflow_config[:reasoning_effort], auth_type: "gemini-api-key",
-          otel_endpoint: workflow_config.fetch(:otel_endpoint)
+          otel_endpoint: workflow_config.fetch(:otel_endpoint), share_prompts: workflow_config[:share_prompts] == true
         ).to_json
       }.merge(trusted_folders_files(workspace))
     end
@@ -274,6 +277,7 @@ module Agents
 
     # Parse OTLP payload and persist usage statistics for a terminal session.
     def ingest_usage(payload, terminal_session)
+      record_activity(payload, terminal_session)
       new_events = extract_events_from_otlp(payload, terminal_session.route_token)
 
       UsageStatistics::Accumulator.record(terminal_session: terminal_session, events: new_events)
@@ -283,7 +287,7 @@ module Agents
 
     # `otel_endpoint` is the session's OTLP endpoint; nil (a runner session, which has
     # none yet) turns the CLI's telemetry off.
-    def generate_settings(otel_endpoint:, model: nil, auth_type: "gemini-api-key", effort: nil)
+    def generate_settings(otel_endpoint:, model: nil, auth_type: "gemini-api-key", effort: nil, share_prompts: false)
       settings = {
         "security" => {
           "auth" => { "selectedType" => auth_type },
@@ -323,7 +327,8 @@ module Agents
                            "target" => "local",
                            "otlpEndpoint" => otel_endpoint.to_s,
                            "otlpProtocol" => "http",
-                           "logPrompts" => false
+                           # Prompt text only for a project that shares prompts.
+                           "logPrompts" => share_prompts
                          }
                        end,
         # Tools - auto approve all operations (container is the sandbox)
@@ -400,7 +405,8 @@ module Agents
               cache_read_tokens: cache_read_tokens,
               cache_write_tokens: 0,
               total_cents: total_cents,
-              duration_ms: attribute_number(attrs, "duration_ms")&.to_i
+              duration_ms: attribute_number(attrs, "duration_ms")&.to_i,
+              prompt_ref: attribute_string(attrs, "prompt_id")
             )
           end
         end
@@ -410,7 +416,7 @@ module Agents
     end
 
     def build_usage_event(model:, timestamp_ns:, input_tokens:, output_tokens:, cache_read_tokens:, cache_write_tokens:,
-                          total_cents:, duration_ms: nil)
+                          total_cents:, duration_ms: nil, prompt_ref: nil)
       event = {
         "model" => model,
         "timestamp" => timestamp_ns ? (timestamp_ns.to_i / 1_000_000).to_s : nil,
@@ -423,9 +429,72 @@ module Agents
         },
         "costBasis" => "reported",
         "durationMs" => duration_ms,
+        "promptRef" => prompt_ref,
         "source" => "otlp"
       }.compact
       total_cents.nil? ? LlmCalls::Pricing.price_event!(event) : event
+    end
+
+    # tool_call names no call id, so a call is keyed by its prompt and time.
+    def record_activity(payload, terminal_session)
+      token = terminal_session.route_token
+      return if token.blank? || !AgentActivity::Recorder.enabled_for?(terminal_session)
+
+      prompts = []
+      tool_calls = []
+      Array(payload["resourceLogs"]).each do |resource_log|
+        resource_attrs = resource_log.dig("resource", "attributes") || []
+        Array(resource_log["scopeLogs"]).each do |scope_log|
+          Array(scope_log["logRecords"]).each do |log_record|
+            attrs = log_record["attributes"] || []
+            next unless extract_terminal_session_token(attrs, resource_attrs) == token
+
+            nanos = log_record["timeUnixNano"].to_i
+            occurred_at = nanos.positive? ? Time.zone.at(nanos / 1_000_000_000.0) : nil
+            prompt_id = attribute_string(attrs, "prompt_id")
+            case attribute_string(attrs, "event.name")
+            when LOG_USER_PROMPT
+              text = attribute_string(attrs, "prompt")
+              next if text.blank? || prompt_id.blank?
+
+              prompts << AgentActivity::Recorder::Prompt.new(key: "prompt:#{prompt_id}", occurred_at: occurred_at,
+                                                             text: text, prompt_ref: prompt_id, source: "otlp_log")
+            when LOG_TOOL_CALL
+              tool_calls << AgentActivity::Recorder::ToolCall.new(
+                key: "tool:#{prompt_id}:#{nanos}", occurred_at: occurred_at, tool_name: gemini_tool_name(attrs),
+                arguments: parse_function_args(attribute_string(attrs, "function_args")),
+                success: attribute_boolean(attrs, "success"), error: attribute_string(attrs, "error"),
+                duration_ms: attribute_number(attrs, "duration_ms"), prompt_ref: prompt_id, source: "otlp_log"
+              )
+            end
+          end
+        end
+      end
+      AgentActivity::Recorder.record(terminal_session, prompts: prompts, tool_calls: tool_calls)
+    end
+
+    # An MCP tool is named after its server the way Claude Code names one, so both read alike.
+    def gemini_tool_name(attrs)
+      name = attribute_string(attrs, "function_name").to_s
+      server = attribute_string(attrs, "mcp_server_name").presence
+      server ? "mcp__#{server}__#{name}" : name
+    end
+
+    def parse_function_args(raw)
+      return nil if raw.blank?
+
+      JSON.parse(raw)
+    rescue JSON::ParserError
+      { "raw" => raw.to_s }
+    end
+
+    def attribute_boolean(attrs, key)
+      entry = attrs.find { |kv| kv["key"] == key }
+      value = entry&.dig("value") || {}
+      return value["boolValue"] if value.key?("boolValue")
+      return value["stringValue"].to_s.casecmp?("true") if value.key?("stringValue")
+
+      nil
     end
 
     def extract_model(attrs)

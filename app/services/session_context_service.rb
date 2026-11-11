@@ -208,7 +208,9 @@ class SessionContextService
     # `otel_endpoint` is kept when nil: a runner session has no OTLP endpoint, and the
     # adapters that write one into a config file then write none.
     { enabled_mcp_servers: mcp_server_names, model: resolve_session_model(credential), mode: session.mode,
-      reasoning_effort: session.reasoning_effort }.compact.merge(otel_endpoint: runtime.callback_url(:otel, session))
+      reasoning_effort: session.reasoning_effort }.compact
+      .merge(otel_endpoint: runtime.callback_url(:otel, session),
+             share_prompts: AgentActivity::Recorder.enabled_for?(session))
   end
 
   # == Story 9.2: Config File Injection ==

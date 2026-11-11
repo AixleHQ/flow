@@ -266,6 +266,31 @@ module Agents
       assert_equal 1_250, stat.events_data.first["durationMs"]
     end
 
+    # A transcript captured from 1.0.108 against test/otlp_capture/mock.py, with one tool call.
+    def transcript
+      Rails.root.join("test/fixtures/files/transcripts/copilot_cli-1.0.108.events.jsonl").read
+    end
+
+    test "the transcript's prompt and tool call are kept for a project that shares prompts, its result is not" do
+      @session.project.update!(settings: { "insights" => { "share_prompts" => true } })
+
+      @adapter.collect_usage(@session, { "logs/22268fec.events.jsonl" => transcript, "logs/http.log" => "" })
+
+      prompt = AgentPrompt.find_by!(terminal_session: @session)
+      assert_equal [ "Read /tmp/capture.txt, then say hi. CAPTURE_TOOL", "transcript" ], [ prompt.text, prompt.source ]
+      call = AgentToolCall.find_by!(terminal_session: @session)
+      assert_equal [ "view", { "path" => "/tmp/capture.txt" }, true, prompt.prompt_ref ],
+                   [ call.tool_name, call.arguments, call.success, call.prompt_ref ]
+      assert_operator call.duration_ms, :>=, 0
+      assert_not_includes call.attributes.to_json, "diff --git"
+    end
+
+    test "the transcript is not read for a project that does not share prompts" do
+      @adapter.collect_usage(@session, { "logs/22268fec.events.jsonl" => transcript })
+
+      assert_not AgentPrompt.exists?(terminal_session: @session)
+    end
+
     test "a batch for another session is ignored" do
       assert_equal :accepted, @adapter.ingest_usage(real_session_payload("someone-else"), @session)
       assert_nil @session.reload.usage_statistic
