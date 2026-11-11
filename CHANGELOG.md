@@ -92,6 +92,9 @@ governance, community health — carry none.
   show each company as it stands now, whatever period is selected.
 
 ### Fixed
+- **Sign-in & onboarding**: the email confirming a new workspace and the sign-in link
+  email are readable again — their text was near-black on the emails' dark background.
+  Both now use the same card and button as every other Aixle Flow email.
 - **Sessions & Runs**: Kiro CLI, Copilot CLI and Grok show their own logo next to
   the agent name wherever the other runtimes do — session lists, run cards, the
   runtime picker, analytics and onboarding — and Antigravity CLI shows its own
