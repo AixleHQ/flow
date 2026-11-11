@@ -299,7 +299,11 @@ module Agents
           "hideTips" => true,
           "hideWindowTitle" => true,
           "dynamicWindowTitle" => false,
-          "showHomeDirectoryWarning" => false
+          "showHomeDirectoryWarning" => false,
+          # Off by default in 0.60, pinned so a flipped default cannot move the UI onto
+          # the alternate screen, where the tmux scrollback and the stored log replay
+          # would hold a single frame (Codex flipped its own in 0.157).
+          "useAlternateBuffer" => false
         },
         # Privacy
         "privacy" => {

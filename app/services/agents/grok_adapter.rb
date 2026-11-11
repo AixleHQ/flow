@@ -118,8 +118,14 @@ module Agents
     #
     # `--reasoning-effort` takes low|medium|high|xhigh and works in the TUI as well as
     # headless (1.0.70); a model without reasoning effort ignores it.
+    #
+    # The default TUI (1.0.70) draws on the alternate screen, which leaves the tmux
+    # scrollback, the live log tail and the stored log replay a single frame with nothing
+    # to scroll back to. `--no-alt-screen` alone is not enough: it still repaints one
+    # viewport-sized frame, so earlier turns never reach the scrollback. `--minimal` (the
+    # CLI calls it experimental) prints the conversation into the scrollback.
     def session_command(mode:, model: nil, effort: nil)
-      parts = [ "grok", "--yolo" ]
+      parts = [ "grok", "--yolo", "--minimal" ]
       parts += [ "--model", Shellwords.shellescape(model) ] if model
       parts += [ "--reasoning-effort", Shellwords.shellescape(effort) ] if effort.present?
       parts.join(" ")

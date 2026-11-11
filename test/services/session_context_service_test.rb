@@ -738,10 +738,10 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal "gemini --yolo", result
   end
 
-  test "Grok adapter session_command returns grok --yolo for both modes" do
+  test "Grok adapter session_command returns grok --yolo --minimal for both modes" do
     adapter = Agents::GrokAdapter.new
-    assert_equal "grok --yolo", adapter.session_command(mode: "interactive")
-    assert_equal "grok --yolo", adapter.session_command(mode: "non_interactive")
+    assert_equal "grok --yolo --minimal", adapter.session_command(mode: "interactive")
+    assert_equal "grok --yolo --minimal", adapter.session_command(mode: "non_interactive")
   end
 
   test "Cursor adapter session_command returns agent --force for interactive mode" do
