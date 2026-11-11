@@ -14,6 +14,10 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
+- **Integrations**: Coder's `coder_prepare_repo` clones GitLab, Bitbucket and
+  Azure DevOps repositories onto a workspace, not only GitHub and public ones.
+  A personal access token from those connections is handed to the workspace
+  for the clone — the Coder guide's *Limits* says what that exposes.
 - **Teams**: a project can now have teams — named groups of its members, each
   with a strategy for picking who takes a run: priority (the first member who
   can), round robin, or the most agent quota left. Each run goes to one member

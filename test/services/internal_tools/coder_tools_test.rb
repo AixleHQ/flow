@@ -247,8 +247,9 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
 
     def initialize(_integration) = nil
 
-    def prepare(workspace_name:, repository:, path: nil, ref: nil)
-      self.class.last_call = { workspace_name: workspace_name, repository: repository, path: path, ref: ref }
+    def prepare(workspace_name:, repository:, session:, path: nil, ref: nil)
+      self.class.last_call = { workspace_name: workspace_name, repository: repository, session: session,
+                               path: path, ref: ref }
       handle = { job_id: "j9", job_dir: "/var/lib/aixle-jobs", log_path: "/var/lib/aixle-jobs/j9.log",
                  repository: repository.full_name, path: path || "/root/#{repository.repo_name}" }
       ref ? handle.merge(ref: ref) : handle
@@ -279,6 +280,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
     assert_equal "/root/app", payload["path"]
     assert_match(/coder_job_status/, payload["next_step"])
     assert_equal "acme/app", FakeRepoBootstrap.last_call[:repository].full_name
+    assert_same @session, FakeRepoBootstrap.last_call[:session]
     assert_nil FakeRepoBootstrap.last_call[:ref]
     assert_not payload.key?("ref")
   end

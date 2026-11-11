@@ -17,6 +17,17 @@ module AzureDevops
         { scheme: scheme, username: username, password: token, expires_in: expires_in,
           url: clone_url, repository_id: repository_id }.compact
       end
+
+      # Microsoft documents `Authorization: Bearer <entra token>` for Entra and
+      # Basic for PATs. Reusing GitHub's `user:token@host` URL convention for
+      # Entra does not work and would also put the token in the remote. nil for
+      # a scheme neither covers.
+      def authorization_header
+        case scheme
+        when "bearer" then "Authorization: Bearer #{token}"
+        when "basic" then "Authorization: Basic #{Base64.strict_encode64("#{username}:#{token}")}"
+        end
+      end
     end
 
     def initialize(session)
