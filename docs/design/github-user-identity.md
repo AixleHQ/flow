@@ -193,6 +193,9 @@ tracker rows change in code only. The three `resolve_actor` tools change behavio
 read the run's owner. They are about the run, not about one of its sessions, and
 `workflow_run.user` is the value every step session copies.
 
+*Found by the step 4 search.* `Trackers::CopyAttachmentsJob` (`AttachmentImporter user: run.user`)
+runs from a job with no session, so it reads the run's owner like the readers above.
+
 *No user recorded.* `board_create_task`, `board_update_task` and `board_manage_tags`
 record no actor today. They stay that way.
 

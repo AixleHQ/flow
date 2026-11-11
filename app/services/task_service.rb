@@ -481,15 +481,18 @@ class TaskService
     # simply have been tidying the board. Moving somebody else's card is an act of
     # housekeeping; the work it kicks off is still theirs.
     #
-    # This also has to hold because the agent side already assumes it: every
-    # session tool resolves its own actor as `task.assignee || workflow_run&.user`
-    # (InternalTools::BoardMoveTask and friends), where `workflow_run` is the run
-    # of the session doing the work. A run owned by the wrong account therefore
-    # has an agent that moves every unassigned card as that account, firing more
-    # runs owned by it, whose agents do the same — so one wrong owner does not
-    # stay one wrong run, it walks the board. Resolving ownership in ONE place is
-    # what keeps every entry point (the card's Run button, the personal MCP tool,
-    # a column auto-trigger) from having to get it right separately.
+    # This also has to hold because the agent side acts as the run's owner: the
+    # session tools record their actor as `session.user`
+    # (InternalTools::Base#session_user), a copy of the run's user made when the
+    # step's session was created. A run owned by the wrong account therefore has
+    # an agent that moves cards as that account, firing more runs owned by it,
+    # whose agents do the same — so one wrong owner does not stay one wrong run,
+    # it walks the board. A move by the agent passes `session.user` as
+    # `requested_by`, so the fallback below is the session's user.
+    #
+    # Resolving ownership in ONE place is what keeps every entry point (the
+    # card's Run button, the personal MCP tool, a column auto-trigger) from
+    # having to get it right separately.
     #
     # `requested_by` remains the fallback for an unassigned card, and every
     # caller records it in the event's data, so "who asked" is never lost. A card

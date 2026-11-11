@@ -33,7 +33,7 @@ module InternalTools
         task = issue_task(tracker, issue)
         workspace = Trackers::Workspace.for_session(session)
         paths = {}
-        importer = Trackers::AttachmentImporter.new(project_tracker: tracker, task: task, user: workflow_run&.user || session&.user,
+        importer = Trackers::AttachmentImporter.new(project_tracker: tracker, task: task, user: session_user,
                                                     provider: provider)
         ids = params[:attachment_ids].presence
         results = importer.import(issue.id, ids: ids, issue_key: issue.key) do |result, source|

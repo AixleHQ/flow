@@ -62,6 +62,12 @@ governance, community health — carry none.
   terminal log keeps just its last screen.
 
 ### Changed
+- **Tasks**: a session acts as one person, the user it runs as. The agent's board
+  comments, attachments, moves and gates, and its tracker uploads, are recorded
+  under that person. On a card assigned to someone else they used to name the
+  card's assignee; reassigning a card mid-run no longer changes who the agent
+  acts as. After an agent's move, the next run goes to the card's assignee if
+  they can own runs, otherwise to the session's user.
 - Runner compatibility: the platform now serves and recommends `aixle-runner`
   0.1.0. It pins the `linux-amd64` and `linux-arm64` binaries of
   [runner-v0.1.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.1.0)

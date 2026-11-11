@@ -42,7 +42,7 @@ module InternalTools
       task = find_task(board.board_tasks)
       return error(task_not_found) unless task
 
-      author = resolve_actor(task)
+      author = session_user
       return error("Cannot determine comment author") unless author
 
       comment = task.task_comments.create!(
@@ -59,12 +59,6 @@ module InternalTools
         body: comment.body.truncate(200),
         tags: comment.tags
       }.to_json)
-    end
-
-    private
-
-    def resolve_actor(task)
-      task.assignee || workflow_run&.user
     end
   end
 end

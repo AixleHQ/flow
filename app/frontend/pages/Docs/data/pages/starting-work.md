@@ -35,6 +35,9 @@ message, a webhook or a tracker belongs to whoever created the trigger, because
 nobody is at the keyboard when it fires — so the creator needs a connected
 credential for every runtime the workflow uses.
 
+The session also acts as that person: the agent's board comments, attachments,
+moves and gates, and its tracker uploads, are recorded under their name.
+
 ## Gates
 
 A **gate** is a check a card waits on before work moves on — usually CI. The

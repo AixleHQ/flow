@@ -31,6 +31,13 @@ module InternalTools
       step_run&.workflow_run
     end
 
+    # The session's one current user (design github-user-identity §2.4): set when
+    # the session is created, never computed again. Tools that record who acted
+    # read it here rather than deriving it from the card or the run.
+    def session_user
+      session&.user
+    end
+
     def require_workflow_context!
       raise WorkflowContextError, "This tool requires a workflow context (no step_run on session)" unless step_run
     end
