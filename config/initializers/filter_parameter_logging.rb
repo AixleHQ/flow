@@ -16,5 +16,5 @@ Rails.application.config.filter_parameters += [
   # /api/v1/internal/usage_statistics every couple of seconds per live session, and
   # Rails logs the whole parsed structure on every one of them. In production that
   # was the single largest thing in the web logs, at tens of kilobytes a line.
-  :resourceMetrics, :resourceLogs
+  :resourceMetrics, :resourceLogs, :resourceSpans
 ]
