@@ -2,7 +2,7 @@
 
 FactoryBot.define do
   factory :oauth_credential do
-    association :owner, factory: :user
+    owner factory: :user
     oauth_client
     provider { "sentry" }
     status { :active }

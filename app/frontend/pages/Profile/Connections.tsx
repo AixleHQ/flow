@@ -4,15 +4,20 @@ import { modals } from '@mantine/modals';
 import { IconBrandGithub } from '@tabler/icons-react';
 import { useState } from 'react';
 
+import type { ActAsConsent, UserConnection } from '@/types/generated';
+
 import { AuthLayout } from 'layouts/AuthLayout';
 
 import { apiMutate } from 'shared/lib/apiFetch';
 import { postNavigate } from 'shared/lib/postNavigate';
-import { actAsConsentsProfilePath, connectionsProfilePath, disconnectProfilePath, oauthAuthorizePath } from 'shared/routes';
+import {
+  actAsConsentsProfilePath,
+  connectionsProfilePath,
+  disconnectProfilePath,
+  oauthAuthorizePath,
+} from 'shared/routes';
 import { type SharedProps } from 'shared/ui';
 import { StatusBadge } from 'shared/ui/StatusBadge';
-
-import type { ActAsConsent, UserConnection } from '@/types/generated';
 
 import { ProfileTabs } from './ProfileTabs';
 
@@ -28,7 +33,15 @@ type Switchable = 'inOwnTasks' | 'inOthersTasks';
 
 const GITHUB = 'github';
 
-function GithubCard({ available, github, userId }: { available: boolean; github: UserConnection | null; userId: number }) {
+function GithubCard({
+  available,
+  github,
+  userId,
+}: {
+  available: boolean;
+  github: UserConnection | null;
+  userId: number;
+}) {
   const [connecting, setConnecting] = useState(false);
 
   const connect = () => {

@@ -1,7 +1,13 @@
 import { router } from '@inertiajs/react';
 import { Tabs } from '@mantine/core';
 
-import { connectionsProfilePath, mcpProfilePath, profilePath, securityProfilePath, usageProfilePath } from 'shared/routes';
+import {
+  connectionsProfilePath,
+  mcpProfilePath,
+  profilePath,
+  securityProfilePath,
+  usageProfilePath,
+} from 'shared/routes';
 
 export type ProfileTab = 'account' | 'usage' | 'mcp' | 'security' | 'connections';
 
