@@ -1,0 +1,59 @@
+{
+  "description": "A request that carries the key of the session holding the machine, sent with that machine's access token, is forwarded to the platform's endpoint, and the endpoint's answer comes back as it is, without the refusal header.",
+  "steps": [
+    {
+      "given": "registered_machine",
+      "as": "m"
+    },
+    {
+      "given": "session_on_machine",
+      "machine": "m",
+      "as": "s"
+    },
+    {
+      "given": "session_holds_machine",
+      "machine": "m",
+      "session": "s"
+    },
+    {
+      "given": "upstream_answers",
+      "route": "mcp",
+      "status": 200,
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "tools": []
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/proxy/mcp",
+        "token": "{{m.access_token}}",
+        "headers": {
+          "X-Session-Key": "{{s.mcp_key}}"
+        },
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/list"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "X-Aixle-Runner-Refusal": null
+        },
+        "body": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "result": {
+            "tools": []
+          }
+        }
+      }
+    }
+  ]
+}

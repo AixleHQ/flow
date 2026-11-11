@@ -15,4 +15,8 @@ scope "/runner/v1", module: "runner_gateway/v1", as: :runner_gateway_v1, default
                                      constraints: { version: %r{[^/]+} }, format: false
   get "releases/:version/:platform", to: "releases#show", as: :release,
                                      constraints: { version: %r{[^/]+}, platform: %r{[^/]+} }, format: false
+  # The callback proxy (PROTOCOL.md §5.8): any method reaches the controller,
+  # which passes only the allow-listed ones. `format: false` keeps a path such
+  # as `store/report.json` whole.
+  match "proxy/:route(/*path)", to: "proxies#forward", via: :all, as: :proxy, format: false
 end

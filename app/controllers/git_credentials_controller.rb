@@ -13,7 +13,7 @@ class GitCredentialsController < ActionController::API
   def create
     session = TerminalSession.find_by(id: request.headers["X-Session-Id"])
     return unauthorized unless session&.active?
-    return unauthorized unless GitCredentials::SessionKey.valid?(session, request.headers["X-Git-Key"])
+    return unauthorized unless GitCredentials::SessionKey.valid?(session, request.headers[GitCredentials::SessionKey::HEADER])
     return unauthorized unless session.owner_entitled?
 
     credential = GitCredentials::Vendor.new(session).vend!(repository_id: params[:repository_id], requested_url: params[:url])

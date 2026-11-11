@@ -14,6 +14,8 @@ module CloudAuth
   # in URLs.
   module SessionKey
     PURPOSE = "cloud-credential-vending"
+    # The request header the key travels in (CloudCredentialsController).
+    HEADER = "X-Cloud-Key"
 
     module_function
 

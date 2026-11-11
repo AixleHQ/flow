@@ -66,6 +66,26 @@ type fakeEngine struct {
 	removeBlocks bool
 	// removeError refuses every container removal with a 500.
 	removeError string
+	// bindsNotVisible refuses every bind mount, as a daemon that does not see
+	// the client's files does.
+	bindsNotVisible bool
+	// startErrorFor refuses the start of the containers with these names.
+	startErrorFor map[string]string
+	// waitFailures breaks that many container waits, the next ones first, as
+	// a daemon whose wait stream fails does: the headers, then no body.
+	waitFailures int
+	// waitErrorResults answers that many container waits, after the broken
+	// ones, at once with a result that carries an error, as a daemon whose
+	// wait was cancelled (a dockerd restart with live-restore, say) does,
+	// while the container still runs.
+	waitErrorResults int
+	// waits counts every container wait.
+	waits int
+	// logsBlock keeps every container log read from answering until the
+	// client gives up, as a stalled logs endpoint or log driver does.
+	logsBlock bool
+	// logReads counts every container log read.
+	logReads int
 }
 
 type fakeContainer struct {
@@ -75,6 +95,8 @@ type fakeContainer struct {
 	Host   container.HostConfig
 	State  container.State
 	Files  map[string]*fakeFile
+	// Logs is the container's log, served as stdout.
+	Logs   []byte
 	exited chan struct{}
 }
 
@@ -244,6 +266,31 @@ func (f *fakeEngine) serveContainers(w http.ResponseWriter, r *http.Request, p s
 		f.waitContainer(w, r, ref)
 		return
 	}
+	if action == "logs" && r.Method == http.MethodGet {
+		f.mu.Lock()
+		c := f.lookup(ref)
+		var logs []byte
+		if c != nil {
+			logs = append(logs, c.Logs...)
+		}
+		f.logReads++
+		blocks := f.logsBlock
+		f.mu.Unlock()
+		if blocks {
+			<-r.Context().Done()
+			return
+		}
+		if c == nil {
+			writeJSON(w, http.StatusNotFound, map[string]any{"message": "No such container: " + ref})
+			return
+		}
+		w.Header().Set("Content-Type", "application/vnd.docker.multiplexed-stream")
+		w.WriteHeader(http.StatusOK)
+		if len(logs) > 0 {
+			writeFrames(w, 1, logs)
+		}
+		return
+	}
 	if action == "" && r.Method == http.MethodDelete {
 		f.mu.Lock()
 		blocks := f.removeBlocks
@@ -264,6 +311,10 @@ func (f *fakeEngine) serveContainers(w http.ResponseWriter, r *http.Request, p s
 	case action == "start" && r.Method == http.MethodPost:
 		if f.startError != "" {
 			writeJSON(w, http.StatusInternalServerError, map[string]any{"message": f.startError})
+			return
+		}
+		if message, ok := f.startErrorFor[c.Name]; ok {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"message": message})
 			return
 		}
 		c.State = container.State{Status: container.StateRunning, Running: true, Pid: 4242}
@@ -367,6 +418,10 @@ func (f *fakeEngine) createContainer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, m := range req.HostConfig.Mounts {
+		if m.Type == "bind" && f.bindsNotVisible {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"message": "invalid mount config for type \"bind\": bind source path does not exist: " + m.Source})
+			return
+		}
 		if m.Type == "volume" {
 			if _, ok := f.volumes[m.Source]; !ok {
 				f.volumes[m.Source] = &fakeVolume{Name: m.Source, Labels: map[string]string{}, Files: map[string][]byte{}}
@@ -419,6 +474,25 @@ func (f *fakeEngine) waitContainer(w http.ResponseWriter, r *http.Request, ref s
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.(http.Flusher).Flush()
+	f.mu.Lock()
+	f.waits++
+	broken := f.waitFailures > 0
+	if broken {
+		f.waitFailures--
+	}
+	errorResult := !broken && f.waitErrorResults > 0
+	if errorResult {
+		f.waitErrorResults--
+	}
+	f.mu.Unlock()
+	if broken {
+		_, _ = w.Write([]byte("{\"StatusCo"))
+		return
+	}
+	if errorResult {
+		_ = json.NewEncoder(w).Encode(container.WaitResponse{StatusCode: -1, Error: &container.WaitExitError{Message: "context canceled"}})
+		return
+	}
 	select {
 	case <-c.exited:
 	case <-r.Context().Done():

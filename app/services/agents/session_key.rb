@@ -15,6 +15,8 @@ module Agents
   # lost-rotation problem this endpoint exists to fix.
   module SessionKey
     PURPOSE = "agent-credential-writeback"
+    # The request header the key travels in (AgentCredentialSyncController).
+    HEADER = "X-Agent-Key"
 
     module_function
 

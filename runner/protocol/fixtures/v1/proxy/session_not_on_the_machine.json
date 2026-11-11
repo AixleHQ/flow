@@ -1,0 +1,56 @@
+{
+  "description": "A machine that holds no session forwards nothing: the key of a session that ran on it, or that never held it, is refused with session_not_on_environment, and so is a request for stored files, which carries no key.",
+  "steps": [
+    {
+      "given": "registered_machine",
+      "as": "m"
+    },
+    {
+      "given": "session_on_machine",
+      "machine": "m",
+      "as": "s"
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/proxy/mcp",
+        "token": "{{m.access_token}}",
+        "headers": {
+          "X-Session-Key": "{{s.mcp_key}}"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "X-Aixle-Runner-Refusal": "session_not_on_environment"
+        },
+        "body": {
+          "error": "session_not_on_environment",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/proxy/assets/store/report.pdf",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "X-Aixle-Runner-Refusal": "session_not_on_environment"
+        },
+        "body": {
+          "error": "session_not_on_environment",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -47,19 +47,23 @@ module AzureDevops
     attr_reader :runtime, :container_id, :session
 
     # Env for the agent process, mirroring cloud_credential_env: only a session
-    # that actually holds Azure repositories gets a vending key.
-    def self.container_env(session)
+    # that actually holds Azure repositories gets a vending key. `url` is the
+    # session's address of the vending endpoint, from its runtime
+    # (`callback_url(:azure_git_credentials)`): on hosted
+    # `Settings.azure_devops.git_credentials_url`, unchanged.
+    def self.container_env(session, url:)
       return {} unless AppConfig.enabled?
       return {} unless Array(session.repositories).any? { |r| r.azure_devops? }
 
       {
-        # One source for this URL: config/settings.yml derives it from the
-        # deployment's internal base (INTERNAL_BASE_URL), like mcp.server_url and
+        # One source for this URL: the session's runtime, which on hosted
+        # answers config/settings.yml's, derived from the deployment's
+        # internal base (INTERNAL_BASE_URL) like mcp.server_url and
         # cloud.credentials_url. The literal that used to sit here was a fourth
         # copy of a host that is only right under compose, where one container
         # runs both pumas — in the cluster port 4002 belongs to the `mcp`
         # service (and the NetworkPolicy admits only 4000 to `web`).
-        "AIXLE_AZURE_GIT_URL" => Settings.azure_devops.git_credentials_url,
+        "AIXLE_AZURE_GIT_URL" => url,
         "AIXLE_AZURE_GIT_KEY" => GitSessionKey.generate(session),
         # The host the helper will answer for. Configurable because api_host is
         # (sovereign clouds), and a helper hardcoded to dev.azure.com would

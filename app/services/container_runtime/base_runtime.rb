@@ -123,6 +123,19 @@ module ContainerRuntime
       true
     end
 
+    # The address the session's container calls the platform back on, by
+    # name (ContainerRuntime::CallbackUrls). A hosted runtime answers the
+    # Settings value unchanged; RunnerRuntime answers the session's local
+    # callback proxy. Nil means the session gets no such address.
+    def callback_url(name, _session)
+      CallbackUrls.hosted(name)
+    end
+
+    # Every callback address of the session, by name.
+    def callback_urls(session)
+      CallbackUrls::NAMES.index_with { |name| callback_url(name, session) }
+    end
+
     # -- Execution ------------------------------------------------------------
 
     def exec(_id, _cmd, _opts = {})

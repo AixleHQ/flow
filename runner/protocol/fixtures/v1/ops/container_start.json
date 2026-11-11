@@ -63,7 +63,8 @@
           "memory_bytes": 8589934592,
           "pids_limit": 4096
         },
-        "privilege_escalation": false
+        "privilege_escalation": false,
+        "proxy_port": 7690
       }
     },
     {
@@ -164,7 +165,8 @@
                   "memory_bytes": 8589934592,
                   "pids_limit": 4096
                 },
-                "privilege_escalation": false
+                "privilege_escalation": false,
+                "proxy_port": 7690
               }
             },
             {

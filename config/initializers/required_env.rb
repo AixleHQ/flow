@@ -38,5 +38,13 @@ unless Rails.env.local?
             "STRIPE_PRICE_ID, or close registration. A workspace that signs itself up spends its free " \
             "capacity and then has nowhere to pay."
     end
+
+    # The callback proxy's ports (Settings.runners.proxy). A bad one fails only
+    # later, and only some sessions: a span of 0 divides by zero while a
+    # `network: host` session's env is built, a base + span past 65535 gives
+    # the host runner a port it refuses, a sidecar on one of the image's ports
+    # fights the agent for it. The rules live with the ports, in app/.
+    proxy_problem = Runners::Proxy.settings_problems.first
+    raise proxy_problem if proxy_problem
   end
 end

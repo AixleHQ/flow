@@ -190,7 +190,7 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
 
     credentials = { api_key: "test-key", account_id: "user-123" }
 
-    service.write_to_container("container123", credentials)
+    service.write_to_container("container123", credentials, {})
 
     assert runtime.fs.key?(service.config_path)
   end
@@ -205,7 +205,7 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
 
     service.write_to_container("container123", {
       "platformOauth" => { "accessToken" => "sk-ant-oat01-x", "refreshToken" => "sk-ant-ort01-x", "expiresAt" => 1_790_679_907_000 }
-    })
+    }, {})
 
     [ adapter.platform_credentials_path, adapter.platform_config_path ].each do |path|
       assert_equal({ mode: 0o600, uid: 1001, gid: 1001 }, runtime.file_attributes(path), path)
@@ -222,7 +222,7 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
     runtime_mock.expects(:write_file).raises(StandardError.new("Write failed"))
 
     assert_raises(StandardError) do
-      service.write_to_container("container123", { api_key: "test" })
+      service.write_to_container("container123", { api_key: "test" }, {})
     end
   end
 
@@ -274,7 +274,7 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
       config_data: { api_key: "existing-key", account_id: "user-123" }
     )
 
-    service.load_credentials_to_container(@user, @company, "container123")
+    service.load_credentials_to_container(@user, @company, "container123", {})
 
     credential.reload
     assert credential.last_used_at.present?
@@ -286,7 +286,7 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
     credential = create(:agent_credential, user: @user, company: @company, agent_type: "claude_code", last_used_at: nil)
 
     error = assert_raises(AgentCredentialsService::CredentialWriteError) do
-      credential.write_to_container("container123", runtime: runtime)
+      credential.write_to_container("container123", {}, runtime: runtime)
     end
 
     refute error.details[:exists]
@@ -297,7 +297,7 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
     service = AgentCredentialsService.new("claude_code")
 
     assert_raises(RuntimeError, "No credentials found for claude_code") do
-      service.load_credentials_to_container(@user, @company, "container123")
+      service.load_credentials_to_container(@user, @company, "container123", {})
     end
   end
 
@@ -310,7 +310,7 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
     create(:agent_credential, user: @user, company: other_company, agent_type: "claude_code")
 
     assert_raises(RuntimeError, "No credentials found for claude_code") do
-      service.load_credentials_to_container(@user, @company, "container123")
+      service.load_credentials_to_container(@user, @company, "container123", {})
     end
   end
 end

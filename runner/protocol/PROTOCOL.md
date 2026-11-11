@@ -16,7 +16,8 @@ that builds them (§8).
 - **The request schemas** in [`schemas/v1/`](schemas/v1/) are the JSON Schemas (draft 2020-12)
   of the bodies and parameters the endpoints take (§5). The gateway checks every request against
   its schema, and a request that fails it gets the endpoint's own refusal. A new endpoint that
-  takes a body or parameters adds its schema there.
+  takes a body or parameters adds its schema there. The one exception is the callback proxy
+  (§5.8): it forwards the agent's request unchanged, so its body is not the gateway's to check.
 - **Self-contained.** Nothing here needs the Rails code. The protocol lives with the runner,
   under `runner/`, and the runner's code is written against this directory, never against
   the gateway's code (DESIGN.md §14.1).
@@ -25,6 +26,7 @@ that builds them (§8).
 
 - **HTTPS**, to the platform's host on port 443. Every path is under `/runner/v1/`.
 - **JSON bodies** in UTF-8, sent with `Content-Type: application/json`. Keys are `snake_case`.
+  The callback proxy (§5.8) carries the agent's own requests and answers, whatever they are.
 - **Timestamps** are ISO 8601 strings in UTC with a `Z` offset, to the second:
   `2026-10-31T14:00:00Z`.
 - **No cookie session and no CSRF token.** The gateway sets no cookie.
@@ -66,7 +68,8 @@ platform's minimum and recommended versions compare that way (§5.1, §5.4).
   A request over a limit is answered `429` with a plain-text body, not the JSON refusal shape,
   and no `Retry-After` header. The release endpoints carry no token, so only the per-IP limit
   counts them. A runner at rest makes one request every 25 s (the long-poll), so
-  it stays far below these limits.
+  it stays far below these limits. The callback proxy's requests (§5.8) count against the same
+  limits as the machine's own.
 - **Caching.** Every response that carries a token (`register` and `token`), every `GET ops`
   response and every answer of the release endpoints has `Cache-Control: no-store`.
 
@@ -79,7 +82,8 @@ A refusal is a JSON object of two strings:
 ```
 
 `error` is the machine-readable code and the contract. `message` is for people and may change.
-These are the only refusals without this shape:
+These are the only refusals without this shape (an answer the callback proxy forwards, §5.8, is
+the platform endpoint's own, not a refusal):
 
 - `413`, for a body over the cap (§2);
 - `429`, for a request over a rate limit (§2);
@@ -101,6 +105,9 @@ These are the only refusals without this shape:
 | `credential_reuse_detected` | 401 | `token` | A spent refresh token was presented again, and it was not a retry after a lost response. Its whole family is now revoked (§4). |
 | `runners_disabled` | 403 | all | External runners are turned off for the runner's company. The credentials stay valid. |
 | `not_found` | 404 | `ops/:id/result`, releases | The op does not exist, or belongs to another machine; or the platform pins no such release (§5.6, §5.7). |
+| `route_not_allowed` | 404 | `proxy` | The route, its method or the path below it is not on the proxy's allow-list (§5.8). |
+| `session_not_on_environment` | 403 | `proxy` | The request carries no key of the session that holds this machine now: the key is missing or wrong, it is another session's, or the machine holds no session (§5.8). |
+| `upstream_unavailable` | 502 | `proxy` | The platform's endpoint for the route did not answer (§5.8). |
 | `ephemeral_not_supported` | 422 | `register` | The body asked for `ephemeral: true`. |
 | `invalid_registration` | 422 | `register` | The body is invalid: a blank or missing `name`, `facts` that is not an object (`null` included), or a field over 255 characters. An `X-Aixle-Runner-Version` over 255 characters is refused this way too, since it is recorded with the machine, and before the `min_version` check, so the answer does not depend on the pins. |
 | `invalid_result` | 422 | `ops/:id/result` | The result body is invalid (§5.5). |
@@ -145,6 +152,7 @@ then gets the refusal, not the ops (§5.4).
 | `400` without the JSON refusal shape | A bug in the runner, which sent a body that is not valid JSON: it reports it and does not resend the same body. |
 | `422 ephemeral_not_supported`, `422 invalid_registration` | Reports the problem with its configuration. The registration token is not spent, so `configure` can be run again with the same token once the input is fixed. |
 | `404 not_found` from a result | Drops that result: the op is not this machine's. |
+| A refusal of the proxy route (§5.8) | Passes it on to the agent as it is, with its `X-Aixle-Runner-Refusal` header, after the one refresh and retry of an `invalid_token`. The agent's own client decides what to do. |
 
 "Backs off" means retrying with increasing delays, with jitter, so that a fleet of machines does
 not retry in step.
@@ -213,6 +221,7 @@ A runner keeps its tokens in a file only its own user can read, and never logs t
 | `POST /runner/v1/ops/:id/result` | access | `200` with the op's state |
 | `GET /runner/v1/releases/:version/:os-:arch` | none | `302` to the binary, with its pinned SHA-256 |
 | `GET /runner/v1/releases/:version/checksums` | none | `200` with the pinned SHA-256 of each binary |
+| `ANY /runner/v1/proxy/:route/*` | access | The platform endpoint's own answer (§5.8) |
 
 Each endpoint that takes a token can also answer the refusals of §3 for every endpoint
 (`unsupported_protocol`, `invalid_runner_version`, `invalid_token`, `runner_revoked`,
@@ -469,6 +478,107 @@ malformed version, and `404 not_found`, for a version the platform does not pin.
 [`schemas/v1/releases.params.json`](schemas/v1/releases.params.json).
 
 Fixtures: `releases/`.
+### 5.8 `ANY /runner/v1/proxy/:route/*`: the callback proxy
+
+An agent calls the platform back: its MCP server, `finish_session` included, the agent credential
+write-back and refresh, git and cloud credentials, and stored files. On hosted it calls the
+platform's internal address, which a customer's network cannot reach. On a runner it calls a
+proxy on `127.0.0.1` next to it, which relays to the host runner, which calls this route with the
+machine's access token. The gateway forwards the request to the internal endpoint.
+
+**The local proxy.** The platform gives a runner session its callback addresses as
+`http://127.0.0.1:<port>/<route>`, and the agent calls `http://127.0.0.1:<port>/<route>/<path>`:
+
+- **The sidecar**, by default. `container.start` (§6.2) starts a second container per session,
+  the proxy sidecar, before the agent's: `aixle-runner --mode proxy` from the agent image, with
+  the host runner's own binary bind-mounted read-only as its entrypoint. It owns the session's
+  network namespace, which the agent container joins, and listens on `127.0.0.1:<proxy_port>`,
+  the **proxy port** that `container.start`'s payload names. The platform configures it, `7690`
+  by default, outside the agent image's own ports (7681, 7682, 4040, 4041, 8443, 8888); the host
+  runner has no port setting of its own, so the two sides cannot disagree. It holds no credential. It relays every request, as it came, to the host runner over a
+  Unix socket in a directory of the host runner's state directory that is bind-mounted, read-only,
+  into the sidecar only, and streams the answer back.
+- **The host runner's own listener**, with `network: host`. The agent shares the machine's
+  network namespace, so there is no sidecar: the host runner listens on `127.0.0.1:<proxy_port>`
+  of the machine, the session's own port, which `container.start`'s payload names (the platform
+  gives a session `20000 + session id mod 10000` by default, both numbers configurable). Every process
+  on the machine can then reach it, with the agent's own keys and no more.
+
+On that socket, and on that listener, the host runner serves the proxy route only, for the
+session's requests: never ops, results, `token` or another endpoint. A request for any other path
+is answered `404 not_proxied` by the host runner itself, and so is a path that could lead out of
+the proxy route once normalized: an empty, `.` or `..` segment after percent-decoding, or a
+segment with an encoded `/` or a `\` (`/runner/v1/proxy/../ops`, `/mcp/%2e%2e/ops`, `//ops`).
+One trailing slash is not an empty segment: `/mcp/` passes, as it does on hosted.
+The host runner adds the machine's credential, so it does not rely on the gateway's router, or on
+a proxy in front of it, to refuse such a path.
+
+**The relay.** For `/<route>/<path>?<query>` the host runner sends
+`<method> /runner/v1/proxy/<route>/<path>?<query>` to the gateway, with the agent's body and
+headers unchanged, except that:
+
+- `Authorization` is the machine's access token (the agent's own `Authorization` is not
+  forwarded: the platform's endpoints take their keys in headers of their own);
+- `X-Aixle-Runner-Protocol` and `X-Aixle-Runner-Version` are the host runner's, and any other
+  `X-Aixle-Runner-*` header of the agent's is dropped;
+- the hop-by-hop headers (`Connection`, `Keep-Alive`, `Transfer-Encoding`, `Upgrade`, …), and the
+  headers that `Connection` names, are not forwarded.
+
+A body over the 2 MiB cap (§2) is answered `413 body_too_large` by the host runner, and a body
+that does not arrive within 30 s `408 body_timeout`, by the sidecar and by the host runner. The
+answer has no total time limit, so that an MCP stream stays open as long as it sends data, but
+the gateway cuts an answer that sends no data for 900 s: before the answer has started it is
+`502 upstream_unavailable`, after it the stream ends. Without that limit a silent upstream would
+hold a gateway thread for good, even after the runner has gone. A tool that runs longer is
+asynchronous (`read_tool_result`). When the
+gateway answers `401 invalid_token`, the host runner refreshes once and sends the request again,
+as for every endpoint (§3). When it cannot reach the gateway at all, it answers
+`502 relay_failed`. Refusals of the host runner have the JSON refusal shape and carry
+`X-Aixle-Runner-Refusal`.
+
+**The gateway's checks**, in this order, after the common ones of §3:
+
+1. **The route.** Only these routes, methods and paths pass; anything else is
+   `404 route_not_allowed`, a path below the route that doesn't percent-decode strictly
+   included: a raw octet outside ASCII, a `%` not followed by two hex digits, or decoded
+   octets that aren't UTF-8. The host runner's relay refuses the malformed `%` too; the
+   other two rules are the gateway's alone.
+
+   | `:route` | Methods | Path below the route | The platform's endpoint | Session key |
+   | --- | --- | --- | --- | --- |
+   | `mcp` | `GET`, `POST`, `DELETE` | none | the session's MCP server | `X-Session-Key` |
+   | `agent-credentials` | `POST` | none | the agent credential write-back | `X-Session-Id` and `X-Agent-Key` |
+   | `agent-credentials-refresh` | `POST` | none | the agent credential refresh | `X-Session-Id` and `X-Agent-Key` |
+   | `git-credentials` | `POST` | none | git credentials for GitHub, GitLab and Bitbucket | `X-Session-Id` and `X-Git-Key` |
+   | `azure-git-credentials` | `POST` | none | git credentials for Azure DevOps | `X-Session-Id` and `X-Azure-Git-Key` |
+   | `cloud-credentials` | `POST` | none | cloud credentials | `X-Session-Id` and `X-Cloud-Key` |
+   | `assets` | `GET`, `HEAD` | `store/…`, with no empty, `.` or `..` segment, and none with a `/` or `\` once decoded | stored files | none |
+
+   There is no OTLP route in protocol 1 yet: a runner session gets no telemetry endpoint.
+2. **The session.** The request must carry the route's key of the session that holds this
+   machine now; anything else is `403 session_not_on_environment`. So a session key copied out of
+   a machine is useless anywhere but through that machine's credential, and only while its
+   session runs there. Stored files carry no key, on the internal address either, so `assets`
+   needs only a session on the machine.
+3. **No body schema.** The body is the agent's, forwarded unchanged, so the gateway does not check
+   it, and `schemas/v1/` has no schema for this route.
+
+**The forward.** The gateway sends the request to the platform's endpoint over HTTP inside the
+platform, unchanged, with `X-Aixle-Runner-Environment: <environment id>` added and the gateway's
+own headers left out, and streams the answer back as it arrives: MCP's streamable HTTP can hold a
+response open for as long as a tool runs. The answer is the endpoint's own, status, headers and
+body, whatever they are; the gateway adds nothing to it, and drops only the hop-by-hop headers
+and the ones the endpoint's `Connection` header names, as it does for the request. An endpoint
+that does not answer is `502 upstream_unavailable`.
+
+**Telling the two apart.** Every refusal of the gateway on this route, the common ones of §3
+included, carries `X-Aixle-Runner-Refusal: <error>`. An answer without it is the endpoint's, and
+the runner passes it on as it is: a `401` of the MCP server is the MCP server's. A redirect is
+an answer like any other: the runner passes the `3xx` on and never follows it, so neither its
+access token nor the agent's session-key headers go anywhere but this route.
+
+Fixtures: `proxy/`. The streamed answer, the forwarded headers and the key of each credential
+route are tested by the gateway's own tests (fixtures README).
 
 ## 6. Ops
 
@@ -588,7 +698,8 @@ Host-runner ops (`manual`). An environment has at most one session container at 
 
 | What | Name | Label |
 | --- | --- | --- |
-| The session container | `aixle-<key>-<session_id>`, with the envelope's `session_id` | `aixle.com/environment=<key>` and `aixle.com/session=<session_id>` |
+| The session container | `aixle-<key>-<session_id>`, with the envelope's `session_id` | `aixle.com/environment=<key>` and `aixle.com/session=<session_id>`; with `network: host` also `aixle.com/proxy-port=<proxy_port>` |
+| The session's proxy sidecar (§5.8) | `aixle-<key>-<session_id>-proxy` | `aixle.com/environment=<key>`, `aixle.com/session=<session_id>` and `aixle.com/role=proxy` |
 | The workspace volume | `aixle-ws-<key>` | `aixle.com/environment=<key>` |
 | A cache volume | `aixle-cache-<key>-<name>` | `aixle.com/environment=<key>` |
 
@@ -603,6 +714,20 @@ command, unchanged, as a hosted pod does. The
 runner puts nothing of its own into it: no binary, no socket, no token and nothing of its state
 directory.
 
+**The proxy sidecar** (§5.8). Unless `network` is `host`, the op creates and starts the session's
+proxy sidecar after the volumes and before the agent container, from the same image: its
+entrypoint is the host runner's own binary, bind-mounted read-only, in proxy mode on
+`127.0.0.1:<proxy_port>`, and the session's relay socket directory is bind-mounted read-only beside it. It
+runs as `65534:65534` with every capability dropped, `no-new-privileges`, a read-only root
+filesystem, the restart policy `no`, no environment of the session's and the `network` of the
+payload. The agent container is then created in its network namespace
+(`NetworkMode: container:<sidecar>`), so the proxy outlives the agent's last call. With
+`network: host` there is no sidecar: the host runner listens on `127.0.0.1:<proxy_port>` of the
+machine. A sidecar that exits during the session takes the agent's network with it: the host
+runner stops the agent container, which then reports `terminated` (§6.3), and logs the sidecar's
+exit code and the tail of its log. It stops the agent first and reads the log after, under a
+deadline of its own, so a log that can't be read never keeps the agent running.
+
 Payload:
 
 | Field | Type | Rule |
@@ -612,6 +737,7 @@ Payload:
 | `workspace_volume` | boolean | Optional, default `true`: the workspace volume is mounted at `/workspace`. `false` mounts nothing there. |
 | `mounts` | array | Optional, default `[]`. Each entry is one of the two below. |
 | `network` | string | Optional: `bridge` (the default) or `host`. |
+| `proxy_port` | integer | Required, from `1024` to `65535`: the session's port of the callback proxy on `127.0.0.1` (§5.8). The sidecar listens on it in the session's network namespace, or with `network: host` the host runner on the machine. |
 | `pid` | string | Optional: `private` (the default) or `host`. |
 | `resources` | object | Optional: `{"cpus": <number>, "memory_bytes": <integer>, "pids_limit": <integer>}`, each optional and not negative. An absent or `0` field sets no limit. `memory_bytes` also caps swap. |
 | `privilege_escalation` | boolean | Optional, default `false`. `false` starts the container with `no-new-privileges`, as the hosted pod is started for a runtime that needs no `sudo`. |
@@ -652,7 +778,10 @@ Results:
 | The pull failed, even with an older copy of the image on the daemon | `error` | | `image_pull_failed`; the message carries the registry's or the daemon's own words (§6.1). Nothing is created. |
 | A bind would expose the state directory | `error` | | `forbidden_mount` |
 | A workspace or cache volume with the environment's name exists without its label | `error` | | `volume_not_owned`; the message names the volume. No container is created. |
-| The daemon refused to create or start the container | `error` | | `container_start_failed`, with the daemon's words. A container that was created but did not start is removed, under the removal's own timeout of 30 seconds, not the op's. A removal that fails or times out is logged and named in the message, and the answer stays `container_start_failed`: the session's cleanup sends `env.reset`, which removes what is left. |
+| The daemon refused to mount the host runner's binary or socket into the sidecar because it does not see this machine's files ("bind source path does not exist"): a remote `DOCKER_HOST`, or a daemon that runs elsewhere | `error` | | `docker_files_not_visible`; the message names the paths and the cause. Nothing is left. |
+| With `network: host`, the session's `proxy_port` is in use on the machine | `error` | | `proxy_port_in_use`. Nothing is created. |
+| The relay or the sidecar could not be started for another reason | `error` | | `proxy_start_failed`, with the cause. Nothing is left. |
+| The daemon refused to create or start the container | `error` | | `container_start_failed`, with the daemon's words. The proxy sidecar is removed with it. A container that was created but did not start is removed, under the removal's own timeout of 30 seconds, not the op's. A removal that fails or times out is logged and named in the message, and the answer stays `container_start_failed`: the session's cleanup sends `env.reset`, which removes what is left. |
 | The payload is not the one above | `error` | | `invalid_payload` |
 
 ```json
@@ -662,7 +791,9 @@ Results:
 #### `container.stop`
 
 Stops the container of the envelope's session, sending SIGTERM and SIGKILL 10 seconds later, and
-removes it with its anonymous volumes. The workspace and cache volumes stay. The name alone is
+removes it with its anonymous volumes, then removes the session's proxy sidecar, when it has one
+with the three labels of the table above, and stops the session's relay. The workspace and cache
+volumes stay. The name alone is
 not proof: a container named `aixle-<key>-<session_id>` that does not carry both
 `aixle.com/environment=<key>` and `aixle.com/session=<session_id>` is refused with
 `container_not_owned`, and is neither stopped nor removed. Without a container of this session
@@ -826,7 +957,8 @@ wrote through a writable bind mount is outside the guarantee.
 
 #### `env.scrub`
 
-1. Removes every container of the environment with `docker rm -f` and its anonymous volumes.
+1. Removes every container of the environment with `docker rm -f` and its anonymous volumes, the
+   proxy sidecars included, and stops every relay of the environment (§5.8).
 2. Checks by label that none is left.
 3. If the workspace volume exists, empties `/workspace/outputs` on it: a short-lived container
    of the agent image, labelled with the environment and `aixle.com/role=scrub`, running as root
@@ -884,8 +1016,9 @@ Fixtures: `ops/env_scrub_and_reset.json`.
 
 Each of these is designed in DESIGN.md §6 and comes with its own section and fixtures:
 
-- The callback proxy `/runner/v1/proxy/:route/*`: task 8b. `POST /runner/v1/check-in`,
-  `POST /runner/v1/heartbeat` and `POST /runner/v1/sessions/:id/log`: task 8c.
+- An OTLP route of the callback proxy (§5.8): a runner session gets no telemetry endpoint until it
+  comes. `POST /runner/v1/check-in`, `POST /runner/v1/heartbeat` and
+  `POST /runner/v1/sessions/:id/log`: task 8c.
   `POST /runner/v1/sessions/:id/events`: later.
 - Output and files over the 1 MiB output cap (§6): `exec` returns the first 1 MiB of each stream
   and `read_file` refuses a larger file. They come back through an upload to a signed URL with

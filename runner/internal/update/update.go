@@ -235,7 +235,7 @@ func (u *Updater) install(ctx context.Context, offer protocol.Update) error {
 }
 
 // BinaryPath is the running binary, with links resolved: the file an update
-// replaces.
+// replaces, and the one the callback proxy's sidecar runs (cli.HostOptions.Binary).
 func BinaryPath() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {

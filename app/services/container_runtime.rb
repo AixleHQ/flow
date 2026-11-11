@@ -23,6 +23,14 @@ module ContainerRuntime
     session&.runner_id ? RunnerRuntime.new(op_timeout: op_timeout) : ContainerRuntime.build
   end
 
+  # The address a session's container calls the platform back on, by name
+  # (ContainerRuntime::CallbackUrls): its runtime's answer, the Settings
+  # value on hosted and the session's callback proxy on a runner. A nil
+  # session gets the hosted runtime, so the Settings value.
+  def self.callback_url(name, session)
+    for_session(session).callback_url(name, session)
+  end
+
   def self.from_settings
     return "docker" unless defined?(Settings) && Settings.respond_to?(:container_runtime)
 
