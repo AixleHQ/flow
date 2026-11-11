@@ -10,8 +10,14 @@ module Agents
     METRIC_COST_NAME = "claude_code.cost.usage"
     LLM_PROVIDER = "anthropic"
     USAGE_EVENT_TRAITS = {
+      "otlp_log" => { source: "otlp_log", granularity: "request", cost_basis: "reported" },
+      # Containers started before usage moved to logs keep exporting metrics until they end.
       "otlp" => { source: "otlp_metric", granularity: "batch", cost_basis: "reported" }
     }.freeze
+    REPORTS_PROMPTS = true
+    LOG_API_REQUEST = "claude_code.api_request"
+    LOG_USER_PROMPT = "claude_code.user_prompt"
+    LOG_TOOL_RESULT = "claude_code.tool_result"
     LEGACY_METRIC_NAMES = {
       "terminal.session.tokens" => METRIC_TOKENS_NAME,
       "terminal.session.cost" => METRIC_COST_NAME
@@ -1097,14 +1103,19 @@ module Agents
     def telemetry_env(session, endpoint)
       return {} if endpoint.nil?
 
-      {
+      env = {
         "CLAUDE_CODE_ENABLE_TELEMETRY" => "1",
         "OTEL_EXPORTER_OTLP_ENDPOINT" => endpoint,
         "OTEL_EXPORTER_OTLP_PROTOCOL" => "http/protobuf",
-        "OTEL_METRICS_EXPORTER" => "otlp",
-        "OTEL_METRIC_EXPORT_INTERVAL" => "2000",
+        # One api_request record per model request (docs/design/insights-usage-export.md §4).
+        # A short interval, so the last requests land before the container stops.
+        "OTEL_LOGS_EXPORTER" => "otlp",
+        "OTEL_LOGS_EXPORT_INTERVAL" => "2000",
         "OTEL_RESOURCE_ATTRIBUTES" => UsageStatistics::SessionKey.resource_attributes(session)
       }
+      return env unless AgentActivity::Recorder.enabled_for?(session)
+
+      env.merge("OTEL_LOG_USER_PROMPTS" => "1", "OTEL_LOG_TOOL_DETAILS" => "1")
     end
 
     # Only a session that actually vends gets a vending key. These go in process env
@@ -1126,8 +1137,12 @@ module Agents
     # Parse OTLP payload, collect events, and persist usage statistics.
     # Each OTLP batch (delta) becomes one event with token breakdown.
     def ingest_usage(payload, terminal_session)
-      new_events = extract_events_from_otlp(payload, terminal_session.route_token)
+      token = terminal_session.route_token
+      logs = log_records(payload, token)
+      AgentActivity::Recorder.record(terminal_session, prompts: logs.filter_map { |record| prompt_from_log(record) },
+                                                       tool_calls: logs.filter_map { |record| tool_call_from_log(record) })
 
+      new_events = extract_events_from_otlp(payload, token) + logs.filter_map { |record| usage_from_log(record) }
       UsageStatistics::Accumulator.record(terminal_session: terminal_session, events: new_events)
     end
 
@@ -1309,6 +1324,102 @@ module Agents
     end
 
     # Build normalized events from OTLP payload (same format as Cursor API events).
+    # This session's log records, each as { body:, time_ms:, attrs: } with the OTLP values
+    # unwrapped. The CLI also logs replies, settings and plugin events; callers pick by body.
+    def log_records(payload, terminal_session_token)
+      return [] if terminal_session_token.blank?
+
+      Array(payload["resourceLogs"]).flat_map do |resource_log|
+        resource_attrs = resource_log.dig("resource", "attributes") || []
+        Array(resource_log["scopeLogs"]).flat_map do |scope_log|
+          Array(scope_log["logRecords"]).filter_map do |record|
+            attrs = record["attributes"] || []
+            next unless extract_terminal_session_token(attrs, resource_attrs) == terminal_session_token
+
+            nanos = record["timeUnixNano"].to_i
+            { body: record.dig("body", "stringValue"), time_ms: nanos.positive? ? nanos / 1_000_000 : nil,
+              attrs: attrs.to_h { |kv| [ kv["key"], otlp_value(kv["value"]) ] } }
+          end
+        end
+      end
+    end
+
+    def usage_from_log(record)
+      return nil unless record[:body] == LOG_API_REQUEST
+
+      attrs = record[:attrs]
+      cost = attrs["cost_usd"]
+      {
+        "model" => attrs["model"],
+        "timestamp" => record[:time_ms]&.to_s,
+        "tokenUsage" => {
+          "inputTokens" => attrs["input_tokens"]&.to_i,
+          "outputTokens" => attrs["output_tokens"]&.to_i,
+          "cacheReadTokens" => attrs["cache_read_tokens"]&.to_i,
+          "cacheWriteTokens" => attrs["cache_creation_tokens"]&.to_i,
+          "totalCents" => cost.nil? ? nil : (cost.to_f * 100).round(6)
+        },
+        "costBasis" => cost.nil? ? "unknown" : "reported",
+        "durationMs" => attrs["duration_ms"]&.to_i,
+        "promptRef" => attrs["prompt.id"],
+        "source" => "otlp_log"
+      }.compact
+    end
+
+    def prompt_from_log(record)
+      return nil unless record[:body] == LOG_USER_PROMPT
+
+      attrs = record[:attrs]
+      text = attrs["prompt"]
+      return nil if text.blank? || attrs["prompt.id"].blank?
+
+      AgentActivity::Recorder::Prompt.new(key: "prompt:#{attrs['prompt.id']}", occurred_at: log_time(record),
+                                          text: text, prompt_ref: attrs["prompt.id"], source: "otlp_log")
+    end
+
+    # tool_result carries the call's input but not its output (only the output's size).
+    def tool_call_from_log(record)
+      return nil unless record[:body] == LOG_TOOL_RESULT
+
+      attrs = record[:attrs]
+      return nil if attrs["tool_use_id"].blank?
+
+      AgentActivity::Recorder::ToolCall.new(
+        key: "tool:#{attrs['tool_use_id']}", occurred_at: log_time(record), tool_name: attrs["tool_name"],
+        arguments: parse_tool_input(attrs["tool_input"]), success: boolean(attrs["success"]),
+        error: attrs["error"], duration_ms: attrs["duration_ms"], prompt_ref: attrs["prompt.id"], source: "otlp_log"
+      )
+    end
+
+    def log_time(record)
+      record[:time_ms] && Time.zone.at(record[:time_ms] / 1000.0)
+    end
+
+    def parse_tool_input(raw)
+      return nil if raw.blank?
+
+      JSON.parse(raw)
+    rescue JSON::ParserError
+      { "raw" => raw.to_s }
+    end
+
+    def boolean(value)
+      return value if [ true, false ].include?(value)
+      return nil if value.nil?
+
+      value.to_s == "true"
+    end
+
+    def otlp_value(value)
+      return nil unless value.is_a?(Hash)
+
+      if value.key?("intValue") then value["intValue"].to_i
+      elsif value.key?("doubleValue") then value["doubleValue"].to_f
+      elsif value.key?("boolValue") then value["boolValue"]
+      else value["stringValue"]
+      end
+    end
+
     def extract_events_from_otlp(payload, terminal_session_token)
       events = []
       return events if terminal_session_token.blank?

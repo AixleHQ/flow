@@ -403,6 +403,10 @@ module Agents
     # Who bills the calls: the model vendor, or the reseller the runtime goes through.
     LLM_PROVIDER = nil
 
+    # Whether the adapter records the prompts its runtime reports (AgentActivity::Recorder).
+    # Where it does not, Flow records the session's initial prompt itself.
+    REPORTS_PROMPTS = false
+
     def llm_call_traits(event)
       self.class::USAGE_EVENT_TRAITS[event["source"]]
     end

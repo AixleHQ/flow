@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_11_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_11_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -36,6 +36,47 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_120000) do
     t.index ["status", "expires_at"], name: "index_agent_credentials_on_status_and_expires_at"
     t.index ["user_id", "company_id", "agent_type"], name: "index_agent_credentials_on_user_company_agent", unique: true
     t.index ["user_id"], name: "index_agent_credentials_on_user_id"
+  end
+
+  create_table "agent_prompts", force: :cascade do |t|
+    t.uuid "uid", default: -> { "gen_random_uuid()" }, null: false
+    t.bigint "terminal_session_id", null: false
+    t.bigint "workflow_run_id"
+    t.bigint "step_run_id"
+    t.string "source_key", null: false
+    t.string "source", null: false
+    t.datetime "occurred_at", null: false
+    t.text "text", null: false
+    t.integer "text_length", null: false
+    t.boolean "truncated", default: false, null: false
+    t.string "prompt_ref"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["terminal_session_id", "source_key"], name: "index_agent_prompts_on_terminal_session_id_and_source_key", unique: true
+    t.index ["uid"], name: "index_agent_prompts_on_uid", unique: true
+    t.index ["workflow_run_id", "occurred_at"], name: "index_agent_prompts_on_workflow_run_id_and_occurred_at"
+  end
+
+  create_table "agent_tool_calls", force: :cascade do |t|
+    t.uuid "uid", default: -> { "gen_random_uuid()" }, null: false
+    t.bigint "terminal_session_id", null: false
+    t.bigint "workflow_run_id"
+    t.bigint "step_run_id"
+    t.string "source_key", null: false
+    t.string "source", null: false
+    t.datetime "occurred_at", null: false
+    t.string "tool_name", null: false
+    t.string "mcp_server"
+    t.jsonb "arguments"
+    t.boolean "success"
+    t.string "error"
+    t.integer "duration_ms"
+    t.string "prompt_ref"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["terminal_session_id", "source_key"], name: "index_agent_tool_calls_on_terminal_session_id_and_source_key", unique: true
+    t.index ["uid"], name: "index_agent_tool_calls_on_uid", unique: true
+    t.index ["workflow_run_id", "occurred_at"], name: "index_agent_tool_calls_on_workflow_run_id_and_occurred_at"
   end
 
   create_table "agents", force: :cascade do |t|
@@ -971,6 +1012,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_120000) do
     t.string "cost_basis", null: false
     t.string "granularity", null: false
     t.integer "duration_ms"
+    t.string "prompt_ref"
     t.index ["terminal_session_id", "event_index"], name: "index_llm_calls_on_terminal_session_id_and_event_index", unique: true
     t.index ["terminal_session_id", "occurred_at"], name: "index_llm_calls_on_terminal_session_id_and_occurred_at"
     t.index ["uid"], name: "index_llm_calls_on_uid", unique: true
@@ -2336,6 +2378,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_120000) do
 
   add_foreign_key "agent_credentials", "companies"
   add_foreign_key "agent_credentials", "users"
+  add_foreign_key "agent_prompts", "step_runs"
+  add_foreign_key "agent_prompts", "terminal_sessions"
+  add_foreign_key "agent_prompts", "workflow_runs"
+  add_foreign_key "agent_tool_calls", "step_runs"
+  add_foreign_key "agent_tool_calls", "terminal_sessions"
+  add_foreign_key "agent_tool_calls", "workflow_runs"
   add_foreign_key "agents", "companies", on_delete: :cascade, validate: false
   add_foreign_key "agents", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_agents_project_company", on_delete: :cascade, validate: false
   add_foreign_key "agents", "projects", on_delete: :cascade, validate: false

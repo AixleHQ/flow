@@ -105,27 +105,53 @@ class Handler(BaseHTTPRequestHandler):
         model = req.get("model", "claude-sonnet-4-5")
         usage = {"input_tokens": 120, "output_tokens": 7, "cache_read_input_tokens": 30,
                  "cache_creation_input_tokens": 5}
+        tool = self._anthropic_tool_turn(req)
+        stop = "tool_use" if tool else "end_turn"
         if not req.get("stream"):
+            content = [tool] if tool else [{"type": "text", "text": "hi"}]
             return self._json({"id": "msg_mock", "type": "message", "role": "assistant", "model": model,
-                               "content": [{"type": "text", "text": "hi"}], "stop_reason": "end_turn",
-                               "stop_sequence": None, "usage": usage})
+                               "content": content, "stop_reason": stop, "stop_sequence": None, "usage": usage})
         ev = lambda t, d: f"event: {t}\ndata: {json.dumps(d)}\n\n"
+        if tool:
+            block = [
+                ev("content_block_start", {"type": "content_block_start", "index": 0,
+                                           "content_block": {**tool, "input": {}}}),
+                ev("content_block_delta", {"type": "content_block_delta", "index": 0, "delta": {
+                    "type": "input_json_delta", "partial_json": json.dumps(tool["input"])}}),
+            ]
+        else:
+            block = [
+                ev("content_block_start", {"type": "content_block_start", "index": 0,
+                                           "content_block": {"type": "text", "text": ""}}),
+                ev("content_block_delta", {"type": "content_block_delta", "index": 0,
+                                           "delta": {"type": "text_delta", "text": "hi"}}),
+            ]
         self._sse([
             ev("message_start", {"type": "message_start", "message": {
                 "id": "msg_mock", "type": "message", "role": "assistant", "model": model, "content": [],
                 "stop_reason": None, "stop_sequence": None,
                 "usage": {"input_tokens": 120, "output_tokens": 1, "cache_read_input_tokens": 30,
                           "cache_creation_input_tokens": 5}}}),
-            ev("content_block_start", {"type": "content_block_start", "index": 0,
-                                       "content_block": {"type": "text", "text": ""}}),
-            ev("content_block_delta", {"type": "content_block_delta", "index": 0,
-                                       "delta": {"type": "text_delta", "text": "hi"}}),
+            *block,
             ev("content_block_stop", {"type": "content_block_stop", "index": 0}),
-            ev("message_delta", {"type": "message_delta", "delta": {"stop_reason": "end_turn",
+            ev("message_delta", {"type": "message_delta", "delta": {"stop_reason": stop,
                                                                     "stop_sequence": None},
                                  "usage": {"output_tokens": 7}}),
             ev("message_stop", {"type": "message_stop"}),
         ])
+
+    # A prompt carrying CAPTURE_TOOL gets one tool call first (Read of a file the capture
+    # writes), and the plain reply once the tool's result comes back, so the CLI's tool
+    # telemetry is captured too. Every other prompt gets the plain reply straight away.
+    def _anthropic_tool_turn(self, req):
+        messages = req.get("messages") or []
+        if "CAPTURE_TOOL" not in json.dumps(messages[:1]):
+            return None
+        last = messages[-1].get("content") if messages else None
+        if isinstance(last, list) and any(isinstance(b, dict) and b.get("type") == "tool_result" for b in last):
+            return None
+        return {"type": "tool_use", "id": "toolu_capture", "name": "Read",
+                "input": {"file_path": "/tmp/capture.txt"}}
 
     def _openai_responses(self):
         rid = "resp_mock"

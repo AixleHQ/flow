@@ -75,6 +75,7 @@ module LlmCalls
         granularity: traits.fetch(:granularity),
         source: traits.fetch(:source),
         duration_ms: event["durationMs"]&.to_i,
+        prompt_ref: event["promptRef"],
         created_at: now,
         updated_at: now
       }

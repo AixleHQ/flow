@@ -70,6 +70,8 @@ class TerminalSession < ApplicationRecord
   validate :runner_environment_is_the_runners, if: -> { runner_environment_id && will_save_change_to_runner_environment_id? }
   has_one :usage_statistic, dependent: :destroy
   has_many :llm_calls, dependent: :destroy
+  has_many :agent_prompts, dependent: :delete_all
+  has_many :agent_tool_calls, dependent: :delete_all
   has_many :session_logs, dependent: :destroy
   has_many :output_assets, class_name: "Asset", foreign_key: :terminal_session_id
   has_one :step_run, dependent: :nullify
@@ -455,6 +457,8 @@ class TerminalSession < ApplicationRecord
   # this runs at every ending and again from the backfill task; it only ever adds rows.
   def materialize_llm_calls
     LlmCalls::Materializer.call(self)
+    adapter = AgentCredentialsService::ADAPTERS[agent_type]
+    AgentActivity::Recorder.record_initial_prompt(self) if adapter && !adapter::REPORTS_PROMPTS
   rescue StandardError => e
     Rails.logger.error("[TerminalSession] Failed to materialize llm_calls for #{id}: #{e.message}")
   end

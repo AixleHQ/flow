@@ -65,13 +65,13 @@
                         {
                           "key": "user.id",
                           "value": {
-                            "stringValue": "025485fc7dde34d0b59e1ac7c17bc68ab83b93149fe8ca7ee48a35440f852dd0"
+                            "stringValue": "64825bfb26edee61e303b3f8492d963c0bf82ff559d9a6b997f938e8e9ff1c11"
                           }
                         },
                         {
                           "key": "session.id",
                           "value": {
-                            "stringValue": "02ed0a0b-a615-4765-9546-b5c8b1b10eea"
+                            "stringValue": "388fcdcb-32ef-4184-883f-21d85a4b1ef5"
                           }
                         },
                         {
@@ -99,8 +99,8 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1793796971831000000",
-                      "timeUnixNano": "1793796972495000000",
+                      "startTimeUnixNano": "1794403504041000000",
+                      "timeUnixNano": "1794403504919000000",
                       "asDouble": 1
                     }
                   ],
@@ -125,13 +125,13 @@
                         {
                           "key": "user.id",
                           "value": {
-                            "stringValue": "025485fc7dde34d0b59e1ac7c17bc68ab83b93149fe8ca7ee48a35440f852dd0"
+                            "stringValue": "64825bfb26edee61e303b3f8492d963c0bf82ff559d9a6b997f938e8e9ff1c11"
                           }
                         },
                         {
                           "key": "session.id",
                           "value": {
-                            "stringValue": "02ed0a0b-a615-4765-9546-b5c8b1b10eea"
+                            "stringValue": "388fcdcb-32ef-4184-883f-21d85a4b1ef5"
                           }
                         },
                         {
@@ -165,9 +165,9 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1793796972469000000",
-                      "timeUnixNano": "1793796972495000000",
-                      "asDouble": 0.00049275
+                      "startTimeUnixNano": "1794403504840000000",
+                      "timeUnixNano": "1794403504919000000",
+                      "asDouble": 0.0009855
                     }
                   ],
                   "aggregationTemporality": "AGGREGATION_TEMPORALITY_DELTA",
@@ -191,13 +191,13 @@
                         {
                           "key": "user.id",
                           "value": {
-                            "stringValue": "025485fc7dde34d0b59e1ac7c17bc68ab83b93149fe8ca7ee48a35440f852dd0"
+                            "stringValue": "64825bfb26edee61e303b3f8492d963c0bf82ff559d9a6b997f938e8e9ff1c11"
                           }
                         },
                         {
                           "key": "session.id",
                           "value": {
-                            "stringValue": "02ed0a0b-a615-4765-9546-b5c8b1b10eea"
+                            "stringValue": "388fcdcb-32ef-4184-883f-21d85a4b1ef5"
                           }
                         },
                         {
@@ -237,9 +237,9 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1793796972469000000",
-                      "timeUnixNano": "1793796972495000000",
-                      "asDouble": 120
+                      "startTimeUnixNano": "1794403504841000000",
+                      "timeUnixNano": "1794403504919000000",
+                      "asDouble": 240
                     },
                     {
                       "attributes": [
@@ -252,13 +252,13 @@
                         {
                           "key": "user.id",
                           "value": {
-                            "stringValue": "025485fc7dde34d0b59e1ac7c17bc68ab83b93149fe8ca7ee48a35440f852dd0"
+                            "stringValue": "64825bfb26edee61e303b3f8492d963c0bf82ff559d9a6b997f938e8e9ff1c11"
                           }
                         },
                         {
                           "key": "session.id",
                           "value": {
-                            "stringValue": "02ed0a0b-a615-4765-9546-b5c8b1b10eea"
+                            "stringValue": "388fcdcb-32ef-4184-883f-21d85a4b1ef5"
                           }
                         },
                         {
@@ -298,9 +298,9 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1793796972469000000",
-                      "timeUnixNano": "1793796972495000000",
-                      "asDouble": 7
+                      "startTimeUnixNano": "1794403504841000000",
+                      "timeUnixNano": "1794403504919000000",
+                      "asDouble": 14
                     },
                     {
                       "attributes": [
@@ -313,13 +313,13 @@
                         {
                           "key": "user.id",
                           "value": {
-                            "stringValue": "025485fc7dde34d0b59e1ac7c17bc68ab83b93149fe8ca7ee48a35440f852dd0"
+                            "stringValue": "64825bfb26edee61e303b3f8492d963c0bf82ff559d9a6b997f938e8e9ff1c11"
                           }
                         },
                         {
                           "key": "session.id",
                           "value": {
-                            "stringValue": "02ed0a0b-a615-4765-9546-b5c8b1b10eea"
+                            "stringValue": "388fcdcb-32ef-4184-883f-21d85a4b1ef5"
                           }
                         },
                         {
@@ -359,9 +359,9 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1793796972469000000",
-                      "timeUnixNano": "1793796972495000000",
-                      "asDouble": 30
+                      "startTimeUnixNano": "1794403504841000000",
+                      "timeUnixNano": "1794403504919000000",
+                      "asDouble": 60
                     },
                     {
                       "attributes": [
@@ -374,13 +374,13 @@
                         {
                           "key": "user.id",
                           "value": {
-                            "stringValue": "025485fc7dde34d0b59e1ac7c17bc68ab83b93149fe8ca7ee48a35440f852dd0"
+                            "stringValue": "64825bfb26edee61e303b3f8492d963c0bf82ff559d9a6b997f938e8e9ff1c11"
                           }
                         },
                         {
                           "key": "session.id",
                           "value": {
-                            "stringValue": "02ed0a0b-a615-4765-9546-b5c8b1b10eea"
+                            "stringValue": "388fcdcb-32ef-4184-883f-21d85a4b1ef5"
                           }
                         },
                         {
@@ -420,9 +420,9 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1793796972470000000",
-                      "timeUnixNano": "1793796972495000000",
-                      "asDouble": 5
+                      "startTimeUnixNano": "1794403504841000000",
+                      "timeUnixNano": "1794403504919000000",
+                      "asDouble": 10
                     }
                   ],
                   "aggregationTemporality": "AGGREGATION_TEMPORALITY_DELTA",
@@ -446,13 +446,13 @@
                         {
                           "key": "user.id",
                           "value": {
-                            "stringValue": "025485fc7dde34d0b59e1ac7c17bc68ab83b93149fe8ca7ee48a35440f852dd0"
+                            "stringValue": "64825bfb26edee61e303b3f8492d963c0bf82ff559d9a6b997f938e8e9ff1c11"
                           }
                         },
                         {
                           "key": "session.id",
                           "value": {
-                            "stringValue": "02ed0a0b-a615-4765-9546-b5c8b1b10eea"
+                            "stringValue": "388fcdcb-32ef-4184-883f-21d85a4b1ef5"
                           }
                         },
                         {
@@ -480,14 +480,1405 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1793796972489000000",
-                      "timeUnixNano": "1793796972495000000",
-                      "asDouble": 0.619
+                      "startTimeUnixNano": "1794403504911000000",
+                      "timeUnixNano": "1794403504919000000",
+                      "asDouble": 0.819
                     }
                   ],
                   "aggregationTemporality": "AGGREGATION_TEMPORALITY_DELTA",
                   "isMonotonic": true
                 }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "resourceLogs": [
+      {
+        "resource": {
+          "attributes": [
+            {
+              "key": "terminal_session_token",
+              "value": {
+                "stringValue": "OTLP_CAPTURE_TOKEN"
+              }
+            },
+            {
+              "key": "host.arch",
+              "value": {
+                "stringValue": "amd64"
+              }
+            },
+            {
+              "key": "os.type",
+              "value": {
+                "stringValue": "linux"
+              }
+            },
+            {
+              "key": "os.version",
+              "value": {
+                "stringValue": "7.0.11-orbstack-00360-gc9bc4d96ac70"
+              }
+            },
+            {
+              "key": "service.name",
+              "value": {
+                "stringValue": "claude-code"
+              }
+            },
+            {
+              "key": "service.version",
+              "value": {
+                "stringValue": "2.1.318"
+              }
+            }
+          ]
+        },
+        "scopeLogs": [
+          {
+            "scope": {
+              "name": "com.anthropic.claude_code.events",
+              "version": "2.1.318"
+            },
+            "logRecords": [
+              {
+                "timeUnixNano": "1794403503900000000",
+                "observedTimeUnixNano": "1794403503900000000",
+                "body": {
+                  "stringValue": "claude_code.managed_settings_resolved"
+                },
+                "attributes": [
+                  {
+                    "key": "terminal_session_token",
+                    "value": {
+                      "stringValue": "OTLP_CAPTURE_TOKEN"
+                    }
+                  },
+                  {
+                    "key": "user.id",
+                    "value": {
+                      "stringValue": "64825bfb26edee61e303b3f8492d963c0bf82ff559d9a6b997f938e8e9ff1c11"
+                    }
+                  },
+                  {
+                    "key": "session.id",
+                    "value": {
+                      "stringValue": "388fcdcb-32ef-4184-883f-21d85a4b1ef5"
+                    }
+                  },
+                  {
+                    "key": "anthropic.provider",
+                    "value": {
+                      "stringValue": "firstParty"
+                    }
+                  },
+                  {
+                    "key": "anthropic.custom_base_url",
+                    "value": {
+                      "boolValue": true
+                    }
+                  },
+                  {
+                    "key": "terminal.type",
+                    "value": {
+                      "stringValue": "non-interactive"
+                    }
+                  },
+                  {
+                    "key": "event.name",
+                    "value": {
+                      "stringValue": "managed_settings_resolved"
+                    }
+                  },
+                  {
+                    "key": "event.timestamp",
+                    "value": {
+                      "stringValue": "2026-11-11T13:25:03.900Z"
+                    }
+                  },
+                  {
+                    "key": "event.sequence",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "managed_settings.trigger",
+                    "value": {
+                      "stringValue": "startup"
+                    }
+                  },
+                  {
+                    "key": "managed_settings.sources",
+                    "value": {
+                      "arrayValue": {}
+                    }
+                  },
+                  {
+                    "key": "managed_settings.source_behavior",
+                    "value": {
+                      "stringValue": "first-wins"
+                    }
+                  },
+                  {
+                    "key": "managed_settings.helper.state",
+                    "value": {
+                      "stringValue": "none"
+                    }
+                  },
+                  {
+                    "key": "managed_settings.helper.applied",
+                    "value": {
+                      "stringValue": "none"
+                    }
+                  }
+                ]
+              },
+              {
+                "timeUnixNano": "1794403504026000000",
+                "observedTimeUnixNano": "1794403504026000000",
+                "body": {
+                  "stringValue": "claude_code.plugin_loaded"
+                },
+                "attributes": [
+                  {
+                    "key": "terminal_session_token",
+                    "value": {
+                      "stringValue": "OTLP_CAPTURE_TOKEN"
+                    }
+                  },
+                  {
+                    "key": "user.id",
+                    "value": {
+                      "stringValue": "64825bfb26edee61e303b3f8492d963c0bf82ff559d9a6b997f938e8e9ff1c11"
+                    }
+                  },
+                  {
+                    "key": "session.id",
+                    "value": {
+                      "stringValue": "388fcdcb-32ef-4184-883f-21d85a4b1ef5"
+                    }
+                  },
+                  {
+                    "key": "anthropic.provider",
+                    "value": {
+                      "stringValue": "firstParty"
+                    }
+                  },
+                  {
+                    "key": "anthropic.custom_base_url",
+                    "value": {
+                      "boolValue": true
+                    }
+                  },
+                  {
+                    "key": "terminal.type",
+                    "value": {
+                      "stringValue": "non-interactive"
+                    }
+                  },
+                  {
+                    "key": "event.name",
+                    "value": {
+                      "stringValue": "plugin_loaded"
+                    }
+                  },
+                  {
+                    "key": "event.timestamp",
+                    "value": {
+                      "stringValue": "2026-11-11T13:25:04.026Z"
+                    }
+                  },
+                  {
+                    "key": "event.sequence",
+                    "value": {
+                      "intValue": "1"
+                    }
+                  },
+                  {
+                    "key": "plugin.name",
+                    "value": {
+                      "stringValue": "cc-plugin-agents-md"
+                    }
+                  },
+                  {
+                    "key": "marketplace.name",
+                    "value": {
+                      "stringValue": "builtin"
+                    }
+                  },
+                  {
+                    "key": "plugin.scope",
+                    "value": {
+                      "stringValue": "default-bundle"
+                    }
+                  },
+                  {
+                    "key": "enabled_via",
+                    "value": {
+                      "stringValue": "default-enable"
+                    }
+                  },
+                  {
+                    "key": "plugin_id_hash",
+                    "value": {
+                      "stringValue": "da63145d0acbb62d"
+                    }
+                  },
+                  {
+                    "key": "has_hooks",
+                    "value": {
+                      "boolValue": true
+                    }
+                  },
+                  {
+                    "key": "has_mcp",
+                    "value": {
+                      "boolValue": false
+                    }
+                  },
+                  {
+                    "key": "host_owned_mcp",
+                    "value": {
+                      "boolValue": false
+                    }
+                  },
+                  {
+                    "key": "skill_path_count",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "command_path_count",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "agent_path_count",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "safe_mode",
+                    "value": {
+                      "stringValue": "false"
+                    }
+                  }
+                ]
+              },
+              {
+                "timeUnixNano": "1794403504027000000",
+                "observedTimeUnixNano": "1794403504027000000",
+                "body": {
+                  "stringValue": "claude_code.plugin_loaded"
+                },
+                "attributes": [
+                  {
+                    "key": "terminal_session_token",
+                    "value": {
+                      "stringValue": "OTLP_CAPTURE_TOKEN"
+                    }
+                  },
+                  {
+                    "key": "user.id",
+                    "value": {
+                      "stringValue": "64825bfb26edee61e303b3f8492d963c0bf82ff559d9a6b997f938e8e9ff1c11"
+                    }
+                  },
+                  {
+                    "key": "session.id",
+                    "value": {
+                      "stringValue": "388fcdcb-32ef-4184-883f-21d85a4b1ef5"
+                    }
+                  },
+                  {
+                    "key": "anthropic.provider",
+                    "value": {
+                      "stringValue": "firstParty"
+                    }
+                  },
+                  {
+                    "key": "anthropic.custom_base_url",
+                    "value": {
+                      "boolValue": true
+                    }
+                  },
+                  {
+                    "key": "terminal.type",
+                    "value": {
+                      "stringValue": "non-interactive"
+                    }
+                  },
+                  {
+                    "key": "event.name",
+                    "value": {
+                      "stringValue": "plugin_loaded"
+                    }
+                  },
+                  {
+                    "key": "event.timestamp",
+                    "value": {
+                      "stringValue": "2026-11-11T13:25:04.027Z"
+                    }
+                  },
+                  {
+                    "key": "event.sequence",
+                    "value": {
+                      "intValue": "2"
+                    }
+                  },
+                  {
+                    "key": "plugin.name",
+                    "value": {
+                      "stringValue": "cc-plugin-telemetry"
+                    }
+                  },
+                  {
+                    "key": "marketplace.name",
+                    "value": {
+                      "stringValue": "builtin"
+                    }
+                  },
+                  {
+                    "key": "plugin.scope",
+                    "value": {
+                      "stringValue": "default-bundle"
+                    }
+                  },
+                  {
+                    "key": "enabled_via",
+                    "value": {
+                      "stringValue": "default-enable"
+                    }
+                  },
+                  {
+                    "key": "plugin_id_hash",
+                    "value": {
+                      "stringValue": "0452636910a73fd4"
+                    }
+                  },
+                  {
+                    "key": "has_hooks",
+                    "value": {
+                      "boolValue": true
+                    }
+                  },
+                  {
+                    "key": "has_mcp",
+                    "value": {
+                      "boolValue": false
+                    }
+                  },
+                  {
+                    "key": "host_owned_mcp",
+                    "value": {
+                      "boolValue": false
+                    }
+                  },
+                  {
+                    "key": "skill_path_count",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "command_path_count",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "agent_path_count",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "safe_mode",
+                    "value": {
+                      "stringValue": "false"
+                    }
+                  }
+                ]
+              },
+              {
+                "timeUnixNano": "1794403504027000000",
+                "observedTimeUnixNano": "1794403504027000000",
+                "body": {
+                  "stringValue": "claude_code.plugin_loaded"
+                },
+                "attributes": [
+                  {
+                    "key": "terminal_session_token",
+                    "value": {
+                      "stringValue": "OTLP_CAPTURE_TOKEN"
+                    }
+                  },
+                  {
+                    "key": "user.id",
+                    "value": {
+                      "stringValue": "64825bfb26edee61e303b3f8492d963c0bf82ff559d9a6b997f938e8e9ff1c11"
+                    }
+                  },
+                  {
+                    "key": "session.id",
+                    "value": {
+                      "stringValue": "388fcdcb-32ef-4184-883f-21d85a4b1ef5"
+                    }
+                  },
+                  {
+                    "key": "anthropic.provider",
+                    "value": {
+                      "stringValue": "firstParty"
+                    }
+                  },
+                  {
+                    "key": "anthropic.custom_base_url",
+                    "value": {
+                      "boolValue": true
+                    }
+                  },
+                  {
+                    "key": "terminal.type",
+                    "value": {
+                      "stringValue": "non-interactive"
+                    }
+                  },
+                  {
+                    "key": "event.name",
+                    "value": {
+                      "stringValue": "plugin_loaded"
+                    }
+                  },
+                  {
+                    "key": "event.timestamp",
+                    "value": {
+                      "stringValue": "2026-11-11T13:25:04.027Z"
+                    }
+                  },
+                  {
+                    "key": "event.sequence",
+                    "value": {
+                      "intValue": "3"
+                    }
+                  },
+                  {
+                    "key": "plugin.name",
+                    "value": {
+                      "stringValue": "cc-plugin-privacy"
+                    }
+                  },
+                  {
+                    "key": "marketplace.name",
+                    "value": {
+                      "stringValue": "builtin"
+                    }
+                  },
+                  {
+                    "key": "plugin.scope",
+                    "value": {
+                      "stringValue": "default-bundle"
+                    }
+                  },
+                  {
+                    "key": "enabled_via",
+                    "value": {
+                      "stringValue": "default-enable"
+                    }
+                  },
+                  {
+                    "key": "plugin_id_hash",
+                    "value": {
+                      "stringValue": "a2f27f067781660d"
+                    }
+                  },
+                  {
+                    "key": "has_hooks",
+                    "value": {
+                      "boolValue": true
+                    }
+                  },
+                  {
+                    "key": "has_mcp",
+                    "value": {
+                      "boolValue": false
+                    }
+                  },
+                  {
+                    "key": "host_owned_mcp",
+                    "value": {
+                      "boolValue": false
+                    }
+                  },
+                  {
+                    "key": "skill_path_count",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "command_path_count",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "agent_path_count",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "safe_mode",
+                    "value": {
+                      "stringValue": "false"
+                    }
+                  }
+                ]
+              },
+              {
+                "timeUnixNano": "1794403504028000000",
+                "observedTimeUnixNano": "1794403504028000000",
+                "body": {
+                  "stringValue": "claude_code.plugin_loaded"
+                },
+                "attributes": [
+                  {
+                    "key": "terminal_session_token",
+                    "value": {
+                      "stringValue": "OTLP_CAPTURE_TOKEN"
+                    }
+                  },
+                  {
+                    "key": "user.id",
+                    "value": {
+                      "stringValue": "64825bfb26edee61e303b3f8492d963c0bf82ff559d9a6b997f938e8e9ff1c11"
+                    }
+                  },
+                  {
+                    "key": "session.id",
+                    "value": {
+                      "stringValue": "388fcdcb-32ef-4184-883f-21d85a4b1ef5"
+                    }
+                  },
+                  {
+                    "key": "anthropic.provider",
+                    "value": {
+                      "stringValue": "firstParty"
+                    }
+                  },
+                  {
+                    "key": "anthropic.custom_base_url",
+                    "value": {
+                      "boolValue": true
+                    }
+                  },
+                  {
+                    "key": "terminal.type",
+                    "value": {
+                      "stringValue": "non-interactive"
+                    }
+                  },
+                  {
+                    "key": "event.name",
+                    "value": {
+                      "stringValue": "plugin_loaded"
+                    }
+                  },
+                  {
+                    "key": "event.timestamp",
+                    "value": {
+                      "stringValue": "2026-11-11T13:25:04.028Z"
+                    }
+                  },
+                  {
+                    "key": "event.sequence",
+                    "value": {
+                      "intValue": "4"
+                    }
+                  },
+                  {
+                    "key": "plugin.name",
+                    "value": {
+                      "stringValue": "cc-plugin-plugin-authoring"
+                    }
+                  },
+                  {
+                    "key": "marketplace.name",
+                    "value": {
+                      "stringValue": "builtin"
+                    }
+                  },
+                  {
+                    "key": "plugin.scope",
+                    "value": {
+                      "stringValue": "default-bundle"
+                    }
+                  },
+                  {
+                    "key": "enabled_via",
+                    "value": {
+                      "stringValue": "default-enable"
+                    }
+                  },
+                  {
+                    "key": "plugin_id_hash",
+                    "value": {
+                      "stringValue": "559932fe5f722b82"
+                    }
+                  },
+                  {
+                    "key": "has_hooks",
+                    "value": {
+                      "boolValue": true
+                    }
+                  },
+                  {
+                    "key": "has_mcp",
+                    "value": {
+                      "boolValue": false
+                    }
+                  },
+                  {
+                    "key": "host_owned_mcp",
+                    "value": {
+                      "boolValue": false
+                    }
+                  },
+                  {
+                    "key": "skill_path_count",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "command_path_count",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "agent_path_count",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "safe_mode",
+                    "value": {
+                      "stringValue": "false"
+                    }
+                  }
+                ]
+              },
+              {
+                "timeUnixNano": "1794403504699000000",
+                "observedTimeUnixNano": "1794403504699000000",
+                "body": {
+                  "stringValue": "claude_code.user_prompt"
+                },
+                "attributes": [
+                  {
+                    "key": "terminal_session_token",
+                    "value": {
+                      "stringValue": "OTLP_CAPTURE_TOKEN"
+                    }
+                  },
+                  {
+                    "key": "user.id",
+                    "value": {
+                      "stringValue": "64825bfb26edee61e303b3f8492d963c0bf82ff559d9a6b997f938e8e9ff1c11"
+                    }
+                  },
+                  {
+                    "key": "session.id",
+                    "value": {
+                      "stringValue": "388fcdcb-32ef-4184-883f-21d85a4b1ef5"
+                    }
+                  },
+                  {
+                    "key": "anthropic.provider",
+                    "value": {
+                      "stringValue": "firstParty"
+                    }
+                  },
+                  {
+                    "key": "anthropic.custom_base_url",
+                    "value": {
+                      "boolValue": true
+                    }
+                  },
+                  {
+                    "key": "terminal.type",
+                    "value": {
+                      "stringValue": "non-interactive"
+                    }
+                  },
+                  {
+                    "key": "event.name",
+                    "value": {
+                      "stringValue": "user_prompt"
+                    }
+                  },
+                  {
+                    "key": "event.timestamp",
+                    "value": {
+                      "stringValue": "2026-11-11T13:25:04.699Z"
+                    }
+                  },
+                  {
+                    "key": "event.sequence",
+                    "value": {
+                      "intValue": "5"
+                    }
+                  },
+                  {
+                    "key": "prompt.id",
+                    "value": {
+                      "stringValue": "d3b41f18-f87f-4c2f-a5b9-24bb8c8ea779"
+                    }
+                  },
+                  {
+                    "key": "prompt_length",
+                    "value": {
+                      "stringValue": "43"
+                    }
+                  },
+                  {
+                    "key": "prompt",
+                    "value": {
+                      "stringValue": "Read capture.txt, then say hi. CAPTURE_TOOL"
+                    }
+                  },
+                  {
+                    "key": "prompt_text",
+                    "value": {
+                      "stringValue": "Read capture.txt, then say hi. CAPTURE_TOOL"
+                    }
+                  },
+                  {
+                    "key": "message.uuid",
+                    "value": {
+                      "stringValue": "38a653ed-9116-448c-a384-754ceb53f6cb"
+                    }
+                  }
+                ]
+              },
+              {
+                "timeUnixNano": "1794403504835000000",
+                "observedTimeUnixNano": "1794403504835000000",
+                "body": {
+                  "stringValue": "claude_code.tool_decision"
+                },
+                "attributes": [
+                  {
+                    "key": "terminal_session_token",
+                    "value": {
+                      "stringValue": "OTLP_CAPTURE_TOKEN"
+                    }
+                  },
+                  {
+                    "key": "user.id",
+                    "value": {
+                      "stringValue": "64825bfb26edee61e303b3f8492d963c0bf82ff559d9a6b997f938e8e9ff1c11"
+                    }
+                  },
+                  {
+                    "key": "session.id",
+                    "value": {
+                      "stringValue": "388fcdcb-32ef-4184-883f-21d85a4b1ef5"
+                    }
+                  },
+                  {
+                    "key": "anthropic.provider",
+                    "value": {
+                      "stringValue": "firstParty"
+                    }
+                  },
+                  {
+                    "key": "anthropic.custom_base_url",
+                    "value": {
+                      "boolValue": true
+                    }
+                  },
+                  {
+                    "key": "terminal.type",
+                    "value": {
+                      "stringValue": "non-interactive"
+                    }
+                  },
+                  {
+                    "key": "event.name",
+                    "value": {
+                      "stringValue": "tool_decision"
+                    }
+                  },
+                  {
+                    "key": "event.timestamp",
+                    "value": {
+                      "stringValue": "2026-11-11T13:25:04.835Z"
+                    }
+                  },
+                  {
+                    "key": "event.sequence",
+                    "value": {
+                      "intValue": "6"
+                    }
+                  },
+                  {
+                    "key": "prompt.id",
+                    "value": {
+                      "stringValue": "d3b41f18-f87f-4c2f-a5b9-24bb8c8ea779"
+                    }
+                  },
+                  {
+                    "key": "decision",
+                    "value": {
+                      "stringValue": "accept"
+                    }
+                  },
+                  {
+                    "key": "source",
+                    "value": {
+                      "stringValue": "config"
+                    }
+                  },
+                  {
+                    "key": "tool_name",
+                    "value": {
+                      "stringValue": "Read"
+                    }
+                  },
+                  {
+                    "key": "tool_use_id",
+                    "value": {
+                      "stringValue": "toolu_capture"
+                    }
+                  },
+                  {
+                    "key": "tool_source",
+                    "value": {
+                      "stringValue": "builtin"
+                    }
+                  },
+                  {
+                    "key": "permission_mode",
+                    "value": {
+                      "stringValue": "default"
+                    }
+                  }
+                ]
+              },
+              {
+                "timeUnixNano": "1794403504848000000",
+                "observedTimeUnixNano": "1794403504848000000",
+                "body": {
+                  "stringValue": "claude_code.api_request"
+                },
+                "attributes": [
+                  {
+                    "key": "terminal_session_token",
+                    "value": {
+                      "stringValue": "OTLP_CAPTURE_TOKEN"
+                    }
+                  },
+                  {
+                    "key": "user.id",
+                    "value": {
+                      "stringValue": "64825bfb26edee61e303b3f8492d963c0bf82ff559d9a6b997f938e8e9ff1c11"
+                    }
+                  },
+                  {
+                    "key": "session.id",
+                    "value": {
+                      "stringValue": "388fcdcb-32ef-4184-883f-21d85a4b1ef5"
+                    }
+                  },
+                  {
+                    "key": "anthropic.provider",
+                    "value": {
+                      "stringValue": "firstParty"
+                    }
+                  },
+                  {
+                    "key": "anthropic.custom_base_url",
+                    "value": {
+                      "boolValue": true
+                    }
+                  },
+                  {
+                    "key": "terminal.type",
+                    "value": {
+                      "stringValue": "non-interactive"
+                    }
+                  },
+                  {
+                    "key": "event.name",
+                    "value": {
+                      "stringValue": "api_request"
+                    }
+                  },
+                  {
+                    "key": "event.timestamp",
+                    "value": {
+                      "stringValue": "2026-11-11T13:25:04.848Z"
+                    }
+                  },
+                  {
+                    "key": "event.sequence",
+                    "value": {
+                      "intValue": "7"
+                    }
+                  },
+                  {
+                    "key": "prompt.id",
+                    "value": {
+                      "stringValue": "d3b41f18-f87f-4c2f-a5b9-24bb8c8ea779"
+                    }
+                  },
+                  {
+                    "key": "model",
+                    "value": {
+                      "stringValue": "claude-sonnet-4-5"
+                    }
+                  },
+                  {
+                    "key": "input_tokens",
+                    "value": {
+                      "intValue": "120"
+                    }
+                  },
+                  {
+                    "key": "output_tokens",
+                    "value": {
+                      "intValue": "7"
+                    }
+                  },
+                  {
+                    "key": "cache_read_tokens",
+                    "value": {
+                      "intValue": "30"
+                    }
+                  },
+                  {
+                    "key": "cache_creation_tokens",
+                    "value": {
+                      "intValue": "5"
+                    }
+                  },
+                  {
+                    "key": "cache_creation_5m_tokens",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "cache_creation_1h_tokens",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "cost_usd",
+                    "value": {
+                      "doubleValue": 0.00049275
+                    }
+                  },
+                  {
+                    "key": "cost_usd_micros",
+                    "value": {
+                      "intValue": "493"
+                    }
+                  },
+                  {
+                    "key": "duration_ms",
+                    "value": {
+                      "intValue": "54"
+                    }
+                  },
+                  {
+                    "key": "ttft_ms",
+                    "value": {
+                      "intValue": "26"
+                    }
+                  },
+                  {
+                    "key": "speed",
+                    "value": {
+                      "stringValue": "normal"
+                    }
+                  },
+                  {
+                    "key": "query_source",
+                    "value": {
+                      "stringValue": "sdk"
+                    }
+                  }
+                ]
+              },
+              {
+                "timeUnixNano": "1794403504856000000",
+                "observedTimeUnixNano": "1794403504856000000",
+                "body": {
+                  "stringValue": "claude_code.tool_result"
+                },
+                "attributes": [
+                  {
+                    "key": "terminal_session_token",
+                    "value": {
+                      "stringValue": "OTLP_CAPTURE_TOKEN"
+                    }
+                  },
+                  {
+                    "key": "user.id",
+                    "value": {
+                      "stringValue": "64825bfb26edee61e303b3f8492d963c0bf82ff559d9a6b997f938e8e9ff1c11"
+                    }
+                  },
+                  {
+                    "key": "session.id",
+                    "value": {
+                      "stringValue": "388fcdcb-32ef-4184-883f-21d85a4b1ef5"
+                    }
+                  },
+                  {
+                    "key": "anthropic.provider",
+                    "value": {
+                      "stringValue": "firstParty"
+                    }
+                  },
+                  {
+                    "key": "anthropic.custom_base_url",
+                    "value": {
+                      "boolValue": true
+                    }
+                  },
+                  {
+                    "key": "terminal.type",
+                    "value": {
+                      "stringValue": "non-interactive"
+                    }
+                  },
+                  {
+                    "key": "event.name",
+                    "value": {
+                      "stringValue": "tool_result"
+                    }
+                  },
+                  {
+                    "key": "event.timestamp",
+                    "value": {
+                      "stringValue": "2026-11-11T13:25:04.856Z"
+                    }
+                  },
+                  {
+                    "key": "event.sequence",
+                    "value": {
+                      "intValue": "8"
+                    }
+                  },
+                  {
+                    "key": "prompt.id",
+                    "value": {
+                      "stringValue": "d3b41f18-f87f-4c2f-a5b9-24bb8c8ea779"
+                    }
+                  },
+                  {
+                    "key": "tool_name",
+                    "value": {
+                      "stringValue": "Read"
+                    }
+                  },
+                  {
+                    "key": "tool_use_id",
+                    "value": {
+                      "stringValue": "toolu_capture"
+                    }
+                  },
+                  {
+                    "key": "success",
+                    "value": {
+                      "stringValue": "true"
+                    }
+                  },
+                  {
+                    "key": "duration_ms",
+                    "value": {
+                      "stringValue": "20"
+                    }
+                  },
+                  {
+                    "key": "tool_input",
+                    "value": {
+                      "stringValue": "{\"file_path\":\"/tmp/capture.txt\"}"
+                    }
+                  },
+                  {
+                    "key": "tool_input_size_bytes",
+                    "value": {
+                      "stringValue": "32"
+                    }
+                  },
+                  {
+                    "key": "tool_result_size_bytes",
+                    "value": {
+                      "stringValue": "12"
+                    }
+                  }
+                ]
+              },
+              {
+                "timeUnixNano": "1794403504899000000",
+                "observedTimeUnixNano": "1794403504899000000",
+                "body": {
+                  "stringValue": "claude_code.api_request"
+                },
+                "attributes": [
+                  {
+                    "key": "terminal_session_token",
+                    "value": {
+                      "stringValue": "OTLP_CAPTURE_TOKEN"
+                    }
+                  },
+                  {
+                    "key": "user.id",
+                    "value": {
+                      "stringValue": "64825bfb26edee61e303b3f8492d963c0bf82ff559d9a6b997f938e8e9ff1c11"
+                    }
+                  },
+                  {
+                    "key": "session.id",
+                    "value": {
+                      "stringValue": "388fcdcb-32ef-4184-883f-21d85a4b1ef5"
+                    }
+                  },
+                  {
+                    "key": "anthropic.provider",
+                    "value": {
+                      "stringValue": "firstParty"
+                    }
+                  },
+                  {
+                    "key": "anthropic.custom_base_url",
+                    "value": {
+                      "boolValue": true
+                    }
+                  },
+                  {
+                    "key": "terminal.type",
+                    "value": {
+                      "stringValue": "non-interactive"
+                    }
+                  },
+                  {
+                    "key": "event.name",
+                    "value": {
+                      "stringValue": "api_request"
+                    }
+                  },
+                  {
+                    "key": "event.timestamp",
+                    "value": {
+                      "stringValue": "2026-11-11T13:25:04.899Z"
+                    }
+                  },
+                  {
+                    "key": "event.sequence",
+                    "value": {
+                      "intValue": "9"
+                    }
+                  },
+                  {
+                    "key": "prompt.id",
+                    "value": {
+                      "stringValue": "d3b41f18-f87f-4c2f-a5b9-24bb8c8ea779"
+                    }
+                  },
+                  {
+                    "key": "model",
+                    "value": {
+                      "stringValue": "claude-sonnet-4-5"
+                    }
+                  },
+                  {
+                    "key": "input_tokens",
+                    "value": {
+                      "intValue": "120"
+                    }
+                  },
+                  {
+                    "key": "output_tokens",
+                    "value": {
+                      "intValue": "7"
+                    }
+                  },
+                  {
+                    "key": "cache_read_tokens",
+                    "value": {
+                      "intValue": "30"
+                    }
+                  },
+                  {
+                    "key": "cache_creation_tokens",
+                    "value": {
+                      "intValue": "5"
+                    }
+                  },
+                  {
+                    "key": "cache_creation_5m_tokens",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "cache_creation_1h_tokens",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "cost_usd",
+                    "value": {
+                      "doubleValue": 0.00049275
+                    }
+                  },
+                  {
+                    "key": "cost_usd_micros",
+                    "value": {
+                      "intValue": "493"
+                    }
+                  },
+                  {
+                    "key": "duration_ms",
+                    "value": {
+                      "intValue": "14"
+                    }
+                  },
+                  {
+                    "key": "ttft_ms",
+                    "value": {
+                      "intValue": "10"
+                    }
+                  },
+                  {
+                    "key": "speed",
+                    "value": {
+                      "stringValue": "normal"
+                    }
+                  },
+                  {
+                    "key": "query_source",
+                    "value": {
+                      "stringValue": "sdk"
+                    }
+                  }
+                ]
+              },
+              {
+                "timeUnixNano": "1794403504900000000",
+                "observedTimeUnixNano": "1794403504900000000",
+                "body": {
+                  "stringValue": "claude_code.assistant_response"
+                },
+                "attributes": [
+                  {
+                    "key": "terminal_session_token",
+                    "value": {
+                      "stringValue": "OTLP_CAPTURE_TOKEN"
+                    }
+                  },
+                  {
+                    "key": "user.id",
+                    "value": {
+                      "stringValue": "64825bfb26edee61e303b3f8492d963c0bf82ff559d9a6b997f938e8e9ff1c11"
+                    }
+                  },
+                  {
+                    "key": "session.id",
+                    "value": {
+                      "stringValue": "388fcdcb-32ef-4184-883f-21d85a4b1ef5"
+                    }
+                  },
+                  {
+                    "key": "anthropic.provider",
+                    "value": {
+                      "stringValue": "firstParty"
+                    }
+                  },
+                  {
+                    "key": "anthropic.custom_base_url",
+                    "value": {
+                      "boolValue": true
+                    }
+                  },
+                  {
+                    "key": "terminal.type",
+                    "value": {
+                      "stringValue": "non-interactive"
+                    }
+                  },
+                  {
+                    "key": "event.name",
+                    "value": {
+                      "stringValue": "assistant_response"
+                    }
+                  },
+                  {
+                    "key": "event.timestamp",
+                    "value": {
+                      "stringValue": "2026-11-11T13:25:04.900Z"
+                    }
+                  },
+                  {
+                    "key": "event.sequence",
+                    "value": {
+                      "intValue": "10"
+                    }
+                  },
+                  {
+                    "key": "prompt.id",
+                    "value": {
+                      "stringValue": "d3b41f18-f87f-4c2f-a5b9-24bb8c8ea779"
+                    }
+                  },
+                  {
+                    "key": "response_length",
+                    "value": {
+                      "intValue": "2"
+                    }
+                  },
+                  {
+                    "key": "response",
+                    "value": {
+                      "stringValue": "hi"
+                    }
+                  },
+                  {
+                    "key": "message.uuid",
+                    "value": {
+                      "stringValue": "e0820e1e-4157-4250-b618-c8360b3ba2d7"
+                    }
+                  },
+                  {
+                    "key": "model",
+                    "value": {
+                      "stringValue": "claude-sonnet-4-5"
+                    }
+                  },
+                  {
+                    "key": "query_source",
+                    "value": {
+                      "stringValue": "sdk"
+                    }
+                  }
+                ]
               }
             ]
           }

@@ -48,11 +48,15 @@ run=(docker run --rm ${platform[@]+"${platform[@]}"} --network "$net" --entrypoi
 # and replayed into otlp-ingest afterwards, independent of how fast the CLI exits.
 case "$runtime" in
   claude_code)
+    # Logs as a session exports them, with prompt sharing on (Agents::ClaudeCodeAdapter),
+    # plus the metrics older containers export, so the contract test can compare the two on
+    # one run. The prompt makes the mock ask for one Read first, for the tool events.
     "${run[@]}" -u claude -e HOME=/home/claude \
       -e ANTHROPIC_BASE_URL="$mock" -e ANTHROPIC_API_KEY=sk-ant-api03-capture \
       -e CLAUDE_CODE_ENABLE_TELEMETRY=1 -e OTEL_EXPORTER_OTLP_ENDPOINT="$mock" \
       -e OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf -e OTEL_METRICS_EXPORTER=otlp -e OTEL_METRIC_EXPORT_INTERVAL=2000 \
-      "$image" sh -c '/home/claude/.local/bin/claude -p "say hi" --model claude-sonnet-4-5; sleep 4' ;;
+      -e OTEL_LOGS_EXPORTER=otlp -e OTEL_LOGS_EXPORT_INTERVAL=2000 -e OTEL_LOG_USER_PROMPTS=1 -e OTEL_LOG_TOOL_DETAILS=1 \
+      "$image" sh -c 'echo capture > /tmp/capture.txt; /home/claude/.local/bin/claude -p "Read capture.txt, then say hi. CAPTURE_TOOL" --model claude-sonnet-4-5 --allowedTools Read; sleep 4' ;;
   codex)
     "${run[@]}" -u codex -e HOME=/home/codex -e CAPTURE_API_KEY=capture -e MOCK="$mock" \
       "$image" sh -c 'mkdir -p ~/.codex && cat > ~/.codex/config.toml <<EOF

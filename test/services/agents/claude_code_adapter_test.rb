@@ -579,6 +579,23 @@ module Agents
       assert_equal "90000", env["MCP_TIMEOUT"]
     end
 
+    # Usage comes from api_request logs; a container that also exported metrics would
+    # count every request twice.
+    test "default_env_vars exports logs, not metrics, and prompt content only where it is shared" do
+      callbacks = hosted_callbacks.merge(otel: "http://collector:4318")
+
+      env = @adapter.default_env_vars(@session, callbacks: callbacks)
+      assert_equal "otlp", env["OTEL_LOGS_EXPORTER"]
+      assert_nil env["OTEL_METRICS_EXPORTER"]
+      assert_nil env["OTEL_LOG_USER_PROMPTS"]
+      assert_nil env["OTEL_LOG_TOOL_DETAILS"]
+
+      @project.update!(settings: { "insights" => { "share_prompts" => true } })
+      env = @adapter.default_env_vars(@session.reload, callbacks: callbacks)
+      assert_equal "1", env["OTEL_LOG_USER_PROMPTS"]
+      assert_equal "1", env["OTEL_LOG_TOOL_DETAILS"]
+    end
+
     test "default_env_vars keeps the CLI off the alternate screen so the session log scrolls" do
       env = @adapter.default_env_vars(@session, callbacks: hosted_callbacks)
 

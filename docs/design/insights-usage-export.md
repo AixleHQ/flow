@@ -144,10 +144,10 @@ Rules that keep it uniform:
 
 ## 3a. Agent activity: prompts and tool calls
 
-Two more canonical records, written the way `llm_calls` is — adapters turn what the runtime
-reports into activity events, the materializer turns those into rows at the session's end,
-keyed by their position and never rewritten — and exported beside the calls. They exist
-only for sessions of projects with prompt sharing on.
+Two more canonical records, exported beside the calls. Adapters write them as the runtime's
+telemetry arrives (`AgentActivity::Recorder`), keyed by the runtime's own id for the prompt
+or the tool call, so a batch delivered twice is written once and a row never changes. They
+exist only for sessions of projects with prompt sharing on.
 
 `agent_prompts`, one per prompt an agent received:
 
@@ -155,19 +155,19 @@ only for sessions of projects with prompt sharing on.
 | --- | --- | --- |
 | `uid` | uuid, not null | Id outside Flow; the export's idempotency key. |
 | `terminal_session_id`, `workflow_run_id`, `step_run_id` | bigint | As on `llm_calls`. |
-| `event_index` | integer, not null | Position in the session's activity events; unique with the session. |
+| `source_key` | string, not null | The runtime's id for the prompt (`prompt:<prompt.id>`), or `initial_prompt`; unique with the session. |
 | `occurred_at` | datetime, not null | |
-| `origin` | string, not null | `step_instructions` (what Flow sent a workflow step) or `user` (typed into a session). |
 | `text` | text, not null | Masked (§8), at most 64 KB. |
 | `text_length`, `truncated` | integer, boolean | The length before masking and the cap; whether the cap cut it. |
-| `prompt_ref` | string, null | The runtime's own prompt id (Claude Code's `prompt.id`), which joins a prompt to the calls and tool calls it led to. |
-| `source` | string, not null | `flow`, `otlp_log`, `transcript`. |
+| `prompt_ref` | string, null | The runtime's own prompt id (Claude Code's `prompt.id`), which joins a prompt to the calls and tool calls it led to; `llm_calls.prompt_ref` carries it too. |
+| `source` | string, not null | `otlp_log` or `transcript` (the runtime reported it), `flow` (the session's initial prompt as Flow rendered it — a workflow step's instructions — for a runtime that reports no prompts). |
 
 `agent_tool_calls`, one per tool call:
 
 | Column | Type | Meaning |
 | --- | --- | --- |
-| `uid`, `terminal_session_id`, `workflow_run_id`, `step_run_id`, `event_index`, `occurred_at`, `prompt_ref`, `source` | | As above. |
+| `uid`, `terminal_session_id`, `workflow_run_id`, `step_run_id`, `occurred_at`, `prompt_ref`, `source` | | As above. |
+| `source_key` | string, not null | The runtime's id for the call (`tool:<tool_use_id>`); unique with the session. |
 | `tool_name` | string, not null | As the runtime names it: `Bash`, `Edit`, `mcp__github__create_issue`. |
 | `mcp_server` | string, null | For a tool an MCP server provides. |
 | `arguments` | jsonb, null | Masked; each string at most 8 KB, the whole at most 32 KB. |
@@ -179,12 +179,11 @@ Where it comes from (to confirm per runtime when its fixture is captured):
 
 | Runtime | Prompts | Tool calls | Set in the container, only when sharing is on |
 | --- | --- | --- | --- |
-| Claude Code | OTLP log `user_prompt` | OTLP log `tool_result` | `OTEL_LOG_USER_PROMPTS=1`, `OTEL_LOG_TOOL_DETAILS=1` |
+| Claude Code | OTLP log `user_prompt` (confirmed, 2.1.318) | OTLP log `tool_result`: name, `tool_use_id`, input, success, duration — the output only as a size (confirmed) | `OTEL_LOG_USER_PROMPTS=1`, `OTEL_LOG_TOOL_DETAILS=1` |
 | Codex | OTLP log `codex.user_prompt` | OTLP log `codex.tool_result`, its `output` dropped | `[otel] log_user_prompt = true` |
 | Gemini CLI | OTLP log `gemini_cli.user_prompt` | OTLP log `gemini_cli.tool_call` | `telemetry.logPrompts: true` |
 | Copilot CLI | the transcript `events.jsonl` Flow already collects | the same transcript | — |
-| Kiro, Cursor, Grok, Antigravity | a workflow step's instructions only | — | — |
-| Every workflow step | the instructions Flow rendered for it | — | — |
+| Kiro, Cursor, Grok, Antigravity | the session's initial prompt — a workflow step's instructions — recorded by Flow | — | — |
 
 Rules:
 
@@ -192,8 +191,9 @@ Rules:
   only for sessions of projects with prompt sharing on, so elsewhere no prompt reaches Flow
   beyond what it already keeps in session logs.
 - **Replies and tool outputs are dropped in the adapter**, never stored. They still travel
-  through `otlp-ingest` where a runtime puts them in the same record (Codex's tool output);
-  the relay may strip them later if that traffic matters.
+  through `otlp-ingest` where a runtime sends them: Claude Code logs an `assistant_response`
+  record with the reply once prompts are on, Codex puts a tool's output in its
+  `tool_result`. The relay may strip them later if that traffic matters.
 - **Masked before it is stored**, with `Sessions::SecretRedactor` and the session's known
   secrets — the values it was handed through config items.
 

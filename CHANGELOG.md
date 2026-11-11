@@ -64,6 +64,9 @@ governance, community health — carry none.
   `bin/rails llm_calls:backfill`.
 
 ### Changed
+- **Sessions & Runs**: a Claude Code session lists one LLM call per model request,
+  with its duration, instead of a call per two-second batch of usage. Its tokens
+  and cost are the same as before.
 - **Company settings**: the Billing tab lists every subscription the workspace has
   had. The one paying now — the card, or the AWS Marketplace subscription — shows its
   billing method, current period, next invoice and the usage so far; the ones that

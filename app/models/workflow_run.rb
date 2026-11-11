@@ -51,6 +51,8 @@ class WorkflowRun < ApplicationRecord
 
   has_many :step_runs, dependent: :destroy
   has_many :llm_calls, dependent: :destroy
+  has_many :agent_prompts, dependent: :delete_all
+  has_many :agent_tool_calls, dependent: :delete_all
   has_many :workflow_run_assets, dependent: :destroy
   has_many :column_transitions, dependent: :nullify
 

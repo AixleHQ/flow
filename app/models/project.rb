@@ -173,6 +173,12 @@ class Project < ApplicationRecord
     member_users.where(id: CompanyMembership.active.where(company_id: company_id).select(:user_id))
   end
 
+  # Prompt sharing with Aixle Insights (docs/design/insights-usage-export.md §5): only then
+  # do agents report prompts and tool calls, and does Flow keep them.
+  def shares_prompts_with_insights?
+    settings.is_a?(Hash) && settings.dig("insights", "share_prompts") == true
+  end
+
   private
 
   def generate_slug
