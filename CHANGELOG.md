@@ -88,6 +88,10 @@ governance, community health — carry none.
   show each company as it stands now, whatever period is selected.
 
 ### Fixed
+- **Sessions & Runs**: Kiro CLI, Copilot CLI and Grok show their own logo next to
+  the agent name wherever the other runtimes do — session lists, run cards, the
+  runtime picker, analytics and onboarding — and Antigravity CLI shows its own
+  mark instead of Gemini's.
 - **Repositories**: adding a GitLab repository lists every project the
   connection's user belongs to, not only the 100 most recently created.
 - **Admin**: impersonating a user, and "Back to app" during an impersonation, open
