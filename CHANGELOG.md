@@ -33,6 +33,20 @@ governance, community health — carry none.
   without finishing is reminded to finish or continue, as Kiro steps are.
 
 ### Changed
+- **Company settings**: the Billing tab lists every subscription the workspace has
+  had. The one paying now — the card, or the AWS Marketplace subscription — shows its
+  billing method, current period, next invoice and the usage so far; the ones that
+  ended are listed beneath it with their active period, the day they were cancelled,
+  the usage their last bill covered, and a way to the invoices (Stripe's for a card,
+  the AWS Billing console for AWS Marketplace). A workspace not paying through AWS is
+  offered "Pay via AWS Marketplace" beside "Add a card", and everything that ended
+  reads "Cancelled". AWS Marketplace usage is priced at the rate the agreement was
+  accepted at, read from AWS when the subscription is registered, created or amended, so
+  a private offer shows its own price; a subscription whose price was never read shows
+  minutes and no sum. Operators: the offer points at `AWS_MARKETPLACE_SAAS_LISTING_URL`
+  and is not made where that is empty; the seller role needs
+  `aws-marketplace:GetAgreementTerms` beside `DescribeAgreement`, or prices stay unread;
+  a migration adds two columns each to `billing_cancellations` and `marketplace_licenses`.
 - The app, the admin, the public site and emails use Inter for text and
   headings in place of Figtree and Hanken Grotesk; code keeps its monospace
   faces. Emails show Inter in Apple Mail, Outlook for Mac, Thunderbird and
@@ -61,6 +75,10 @@ governance, community health — carry none.
 - **Connectors**: the platform's MCP servers no longer advertise a
   notification stream they cannot hold open, which made clients on the
   2026-07-28 protocol (Copilot CLI) drop the server and its tools.
+- **Company settings**: a registration token that AWS Marketplace resolves to our product
+  but to no licence is refused the way an expired link is, and reported to us,
+  rather than answered with an error page. AWS posted one such token to the
+  fulfilment URL while the listing was being made public.
 
 ## [1.11.0] - 2026-11-09
 
@@ -81,20 +99,6 @@ governance, community health — carry none.
   later.
 
 ### Changed
-- **Company settings**: the Billing tab lists every subscription the workspace has
-  had. The one paying now — the card, or the AWS Marketplace subscription — shows its
-  billing method, current period, next invoice and the usage so far; the ones that
-  ended are listed beneath it with their active period, the day they were cancelled,
-  the usage their last bill covered, and a way to the invoices (Stripe's for a card,
-  the AWS Billing console for AWS Marketplace). A workspace not paying through AWS is
-  offered "Pay via AWS Marketplace" beside "Add a card", and everything that ended
-  reads "Cancelled". AWS Marketplace usage is priced at the rate the agreement was
-  accepted at, read from AWS when the subscription is registered, created or amended, so
-  a private offer shows its own price; a subscription whose price was never read shows
-  minutes and no sum. Operators: the offer points at `AWS_MARKETPLACE_SAAS_LISTING_URL`
-  and is not made where that is empty; the seller role needs
-  `aws-marketplace:GetAgreementTerms` beside `DescribeAgreement`, or prices stay unread;
-  a migration adds two columns each to `billing_cancellations` and `marketplace_licenses`.
 - **Sign-in & onboarding**: leaving the "Connect your agents" step — Back, Skip,
   Get started, or closing the tab — ends any agent login still in progress there.
   An agent login left unfinished anywhere else now closes after an hour instead
@@ -168,10 +172,6 @@ governance, community health — carry none.
   there connects a channel in that workspace only. The trigger form groups the
   channels by workspace, and an agent names a channel two workspaces share as
   `Workspace/#channel`.
-- **Company settings**: a registration token that AWS Marketplace resolves to our product
-  but to no licence is refused the way an expired link is, and reported to us,
-  rather than answered with an error page. AWS posted one such token to the
-  fulfilment URL while the listing was being made public.
 
 ## [1.10.0] - 2026-11-03
 
