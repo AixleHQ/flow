@@ -79,7 +79,7 @@ module RunnerGateway
         end
 
         environment = @credential.runner_environment
-        if Runners::Proxy.holder(route, environment, request.headers).nil?
+        if session_holder(route, environment).nil?
           return refuse(:forbidden, "session_not_on_environment",
                         "The request carries no key of the session this machine runs now.")
         end
@@ -88,6 +88,15 @@ module RunnerGateway
       end
 
       private
+
+      # The service takes values, not the request: the session id and the
+      # route's key are read from the headers here.
+      def session_holder(route, environment)
+        header = Runners::Proxy.key_header(route)
+        Runners::Proxy.holder(route, environment,
+                              session_id: request.headers["X-Session-Id"],
+                              key: header && request.headers[header])
+      end
 
       def refuse(status, error, message)
         response.set_header(REFUSAL_HEADER, error)

@@ -108,32 +108,38 @@ class Runners::ProxyTest < ActiveSupport::TestCase
     mcp = Runners::Proxy.route("mcp")
     other = create(:runner_session, environment: create(:runner_environment, runner: @runner))
 
-    assert_equal @session, Runners::Proxy.holder(mcp, @environment, { "X-Session-Key" => @session.mcp_key })
-    assert_nil Runners::Proxy.holder(mcp, @environment, { "X-Session-Key" => other.mcp_key })
-    assert_nil Runners::Proxy.holder(mcp, @environment, { "X-Session-Key" => "#{@session.id}.forged" })
-    assert_nil Runners::Proxy.holder(mcp, @environment, {})
+    assert_equal @session, Runners::Proxy.holder(mcp, @environment, key: @session.mcp_key)
+    assert_nil Runners::Proxy.holder(mcp, @environment, key: other.mcp_key)
+    assert_nil Runners::Proxy.holder(mcp, @environment, key: "#{@session.id}.forged")
+    assert_nil Runners::Proxy.holder(mcp, @environment)
 
     @environment.update!(current_session: nil)
-    assert_nil Runners::Proxy.holder(mcp, @environment.reload, { "X-Session-Key" => @session.mcp_key })
+    assert_nil Runners::Proxy.holder(mcp, @environment.reload, key: @session.mcp_key)
   end
 
   test "a credential route takes the session's id and its own key, not another route's" do
     git = Runners::Proxy.route("git-credentials")
     key = GitCredentials::SessionKey.generate(@session)
 
-    assert_equal @session, Runners::Proxy.holder(git, @environment, { "X-Session-Id" => @session.id.to_s, "X-Git-Key" => key })
-    assert_nil Runners::Proxy.holder(git, @environment, { "X-Session-Id" => @session.id.to_s, "X-Git-Key" => "#{key}0" })
-    assert_nil Runners::Proxy.holder(git, @environment, { "X-Session-Id" => (@session.id + 1).to_s, "X-Git-Key" => key })
-    assert_nil Runners::Proxy.holder(git, @environment, { "X-Session-Id" => @session.id.to_s,
-                                                          "X-Git-Key" => Agents::SessionKey.generate(@session) })
+    assert_equal @session, Runners::Proxy.holder(git, @environment, session_id: @session.id.to_s, key: key)
+    assert_nil Runners::Proxy.holder(git, @environment, session_id: @session.id.to_s, key: "#{key}0")
+    assert_nil Runners::Proxy.holder(git, @environment, session_id: (@session.id + 1).to_s, key: key)
+    assert_nil Runners::Proxy.holder(git, @environment, session_id: @session.id.to_s,
+                                                        key: Agents::SessionKey.generate(@session))
+  end
+
+  test "key_header names the header of each route's key" do
+    assert_equal MCP::SessionKey::HEADER, Runners::Proxy.key_header(Runners::Proxy.route("mcp"))
+    assert_equal GitCredentials::SessionKey::HEADER, Runners::Proxy.key_header(Runners::Proxy.route("git-credentials"))
+    assert_nil Runners::Proxy.key_header(Runners::Proxy.route("assets"))
   end
 
   test "stored files need only a session on the machine" do
     assets = Runners::Proxy.route("assets")
 
-    assert_equal @session, Runners::Proxy.holder(assets, @environment, {})
+    assert_equal @session, Runners::Proxy.holder(assets, @environment)
     @environment.update!(current_session: nil)
-    assert_nil Runners::Proxy.holder(assets, @environment.reload, {})
+    assert_nil Runners::Proxy.holder(assets, @environment.reload)
   end
 
   test "a route forwards to the hosted address of its callback" do

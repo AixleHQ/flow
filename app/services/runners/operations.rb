@@ -6,7 +6,7 @@ module Runners
   #
   #   Runners::Operations.enqueue!(environment, op: "exec", payload: {...}, deadline_at: 5.minutes.from_now, session:)  # nil unless session holds it
   #   ops = Runners::Operations.poll(environment, after: 41, wait: 25)   # GET /runner/v1/ops
-  #   Runners::Operations.record_result!(operation, status: "ok", result: {...})
+  #   Runners::Operations.record_result!(operation, status: "ok", exit_code: 0)
   #   Runners::Operations.await(operation)                               # ContainerRuntime::RunnerRuntime
   #   Runners::Operations.expire_overdue! / prune!                       # RunnerOperationsSweepWorkflow
   #
@@ -200,12 +200,18 @@ module Runners
       pubsub.unsubscribe(channel, on_message) if on_message
     end
 
-    # The runner's outcome of an op. The first result wins: an op that is
-    # already completed, failed or expired is returned unchanged. The same
-    # update stores the result, encrypted like the payload, and nulls the
-    # payload (§2.3).
-    def record_result!(operation, status:, result:)
+    # The runner's outcome of an op: `status` is ok, error or expired, and the
+    # other fields are what the runner reported, each optional
+    # (PROTOCOL.md §5.5). The gateway checks the request body's shape and maps
+    # it to these parameters (RunnerGateway::V1::OperationResultsController).
+    #
+    # The first result wins: an op that is already completed, failed or
+    # expired is returned unchanged. The same update stores the result, the
+    # known fields with a `nil` one left out, encrypted like the payload, and
+    # nulls the payload (§2.3).
+    def record_result!(operation, status:, exit_code: nil, stdout: nil, stderr: nil, data: nil, error: nil)
       state = RESULT_STATES.fetch(status)
+      result = { "exit_code" => exit_code, "stdout" => stdout, "stderr" => stderr, "data" => data, "error" => error }.compact
       RunnerOperation.transaction do
         operation.lock!
         if operation.deliverable?

@@ -80,6 +80,42 @@ class RunnerGatewayTest < ActionDispatch::IntegrationTest
     assert_equal 0, RunnerEnvironment.count
   end
 
+  # PROTOCOL.md §5.1: `ephemeral` is a JSON boolean, and only `true` asks for it.
+  test "an ephemeral that is not a JSON boolean is invalid_registration; false or absent registers" do
+    token = Runners::Credentials.mint_registration!(@runner)
+
+    [ "true", 1, 0.0 ].each do |value|
+      register(token, REGISTRATION.merge(ephemeral: value))
+      assert_refused :unprocessable_entity, "invalid_registration"
+      register(token, { ephemeral: value, name: 5 })
+      assert_refused :unprocessable_entity, "invalid_registration"
+    end
+    assert_equal 0, RunnerEnvironment.count
+
+    register(token, REGISTRATION.except(:ephemeral))
+    assert_response :created
+    register(Runners::Credentials.mint_registration!(@runner), REGISTRATION.merge(name: "build-02", ephemeral: false))
+    assert_response :created
+    assert_equal [ false, false ], RunnerEnvironment.order(:id).pluck(:ephemeral)
+  end
+
+  # PROTOCOL.md §5.1: `os` and `arch` are optional strings.
+  test "an os or arch that is not a string is invalid_registration; an absent one registers as nil" do
+    token = Runners::Credentials.mint_registration!(@runner)
+
+    [ 7, true, nil, { "name" => "linux" } ].each do |value|
+      register(token, REGISTRATION.merge(os: value))
+      assert_refused :unprocessable_entity, "invalid_registration"
+      register(token, REGISTRATION.merge(arch: value))
+      assert_refused :unprocessable_entity, "invalid_registration"
+    end
+    assert_equal 0, RunnerEnvironment.count
+
+    register(token, REGISTRATION.except(:os, :arch))
+    assert_response :created
+    assert_equal [ nil, nil ], [ RunnerEnvironment.sole.os, RunnerEnvironment.sole.arch ]
+  end
+
   # == POST /runner/v1/token ==
 
   test "a refresh token rotates once, and reusing it after the new pair is used revokes the family" do
