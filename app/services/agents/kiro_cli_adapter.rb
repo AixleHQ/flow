@@ -95,7 +95,11 @@ module Agents
       "chat.disableTrustAllConfirmation" => true,
       "app.disableAutoupdates" => true,
       "chat.enableAutoAgentUpgrade" => false,
-      "app.warnOnElevatedPrivileges" => false
+      "app.warnOnElevatedPrivileges" => false,
+      # Off by default in 3.0.0, pinned so a flipped default cannot move the chat onto
+      # the alternate screen, where the tmux scrollback and the stored log replay would
+      # hold a single frame (Codex flipped its own in 0.157).
+      "chat.startFullscreen" => false
     }.freeze
 
     # Kiro's current engine, the default since CLI 3.0. The flag still outranks a saved

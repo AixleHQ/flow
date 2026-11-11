@@ -51,6 +51,9 @@ governance, community health — carry none.
   the app's projects page instead of the marketing landing page.
 - **Workflows**: personal MCP can set a step's repositories, assets, expected
   input and output files, failure action, retry limit and skip policy.
+- **Sessions & Runs**: Grok and Antigravity CLI sessions keep their whole
+  conversation in the terminal: you can scroll back through it while the session
+  runs and in the log of a finished one, which used to show only the last screen.
 - **Workflows**: a session set to retry on failure now retries. The builder asks
   how many times (1–10), and sessions saved with Retry before this release retry
   once.

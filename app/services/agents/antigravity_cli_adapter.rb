@@ -433,7 +433,10 @@ module Agents
       # No telemetry key: since 1.1.28 telemetry follows the Google account's own
       # setting, and agy drops `enableTelemetry` from this file when it rewrites it.
       # The trusted workspace answers "Do you trust the contents of this project?".
-      { "showTips" => false, "trustedWorkspaces" => [ WORKSPACE ] }
+      # `altScreenMode: never` keeps the TUI off the alternate screen (its default in
+      # 1.5.0), where the tmux scrollback, the live log tail and the stored log replay
+      # would hold a single frame with nothing to scroll back to.
+      { "showTips" => false, "trustedWorkspaces" => [ WORKSPACE ], "altScreenMode" => "never" }
     end
   end
 end
