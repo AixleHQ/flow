@@ -5,7 +5,6 @@ import { IconBrandGithub } from '@tabler/icons-react';
 import { useState } from 'react';
 
 import type { ActAsConsent, UserConnection } from '@/types/generated';
-
 import { AuthLayout } from 'layouts/AuthLayout';
 
 import { apiMutate } from 'shared/lib/apiFetch';
@@ -40,11 +39,12 @@ function GithubCard({
 }: {
   available: boolean;
   github: UserConnection | null;
-  userId: number;
+  userId: number | undefined;
 }) {
   const [connecting, setConnecting] = useState(false);
 
   const connect = () => {
+    if (userId === undefined) return;
     setConnecting(true);
     // The connect hands the browser over to github.com, so it is a top-level POST.
     postNavigate(oauthAuthorizePath(GITHUB), {
@@ -173,7 +173,7 @@ export default function Connections({ available, github, consents }: PageProps) 
       <Stack gap="lg">
         <Head title="Connected accounts" />
         <ProfileTabs active="connections" />
-        <GithubCard available={available} github={github} userId={currentUser.id} />
+        <GithubCard available={available} github={github} userId={currentUser?.id} />
         {github && <ConsentsCard consents={consents} />}
       </Stack>
     </AuthLayout>
