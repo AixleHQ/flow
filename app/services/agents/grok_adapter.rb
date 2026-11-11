@@ -27,6 +27,11 @@ module Agents
   # An API key (`XAI_API_KEY`) is honoured too, but only as a credential we already
   # hold — see #default_env_vars.
   class GrokAdapter < BaseAdapter
+    LLM_PROVIDER = "xai"
+    USAGE_EVENT_TRAITS = {
+      "mitm" => { source: "mitm", granularity: "request", cost_basis: "priced", legacy_input_includes_cache: true }
+    }.freeze
+
     # The OAuth/session-token scope the CLI writes for a grok.com / accounts.x.ai login,
     # and the pseudo-scope it writes for an API-key login. Both live in the same file.
     OAUTH_SCOPE = "https://accounts.x.ai/sign-in"
@@ -494,18 +499,19 @@ module Agents
       return nil if counts[:input_tokens].nil? && counts[:output_tokens].nil?
 
       output_tokens = counts[:output_tokens].to_i
+      cached = counts[:cache_read_tokens].to_i
       # Reasoning tokens are billed as completion tokens but the API also reports them
-      # inside completion_tokens, so they are recorded, not added.
+      # inside completion_tokens, so they are recorded, not added. The prompt count
+      # includes the cached tokens; llm_calls keeps them apart.
       {
         "model" => text[/"model"\s*:\s*"([^"]+)"/, 1],
         "timestamp" => timestamp,
         "tokenUsage" => {
-          "inputTokens" => counts[:input_tokens].to_i,
+          "inputTokens" => [ counts[:input_tokens].to_i - cached, 0 ].max,
           "outputTokens" => output_tokens,
-          "cacheReadTokens" => counts[:cache_read_tokens].to_i,
+          "cacheReadTokens" => cached,
           "cacheWriteTokens" => 0,
-          "reasoningTokens" => counts[:reasoning_tokens].to_i,
-          "totalCents" => 0.0
+          "reasoningTokens" => counts[:reasoning_tokens].to_i
         },
         "source" => "mitm"
       }
@@ -528,27 +534,16 @@ module Agents
     # Cost
     # =========================================================================
 
-    # xAI quotes per-token prices in cents per 10^8 tokens, so cents = tokens * price
-    # / 1e8. Uncached input, cached input and output are priced separately.
-    PRICE_SCALE = 100_000_000.0
+    # xAI quotes per-token prices in cents per 10^8 tokens; LlmCalls::Pricing takes USD
+    # per million, which is that figure / 10^4.
+    PRICE_TO_USD_PER_MILLION = 10_000.0
 
     def apply_costs!(events, terminal_session)
-      prices = price_sheet(terminal_session)
-      return if prices.blank?
-
-      events.each do |event|
-        price = prices[event["model"]]
-        next if price.blank?
-
-        usage = event["tokenUsage"]
-        cached = usage["cacheReadTokens"].to_i
-        uncached_input = [ usage["inputTokens"].to_i - cached, 0 ].max
-        cents = ((uncached_input * price[:prompt]) + (cached * price[:cached]) + (usage["outputTokens"].to_i * price[:completion])) / PRICE_SCALE
-        usage["totalCents"] = cents.round(6)
-      end
+      sheet = price_sheet(terminal_session)
+      events.each { |event| LlmCalls::Pricing.price_event!(event, sheet: sheet) }
     end
 
-    # model id (and every alias it answers to) => per-token prices, from the xAI
+    # model id (and every alias it answers to) => USD per million tokens, from the xAI
     # catalogue. Fetched with the session's company credential, because that is the
     # account whose price list applies.
     def price_sheet(terminal_session)
@@ -558,9 +553,9 @@ module Agents
 
       catalog.each_with_object({}) do |model, sheet|
         prices = {
-          prompt: model["prompt_text_token_price"].to_f,
-          cached: model["cached_prompt_text_token_price"].to_f,
-          completion: model["completion_text_token_price"].to_f
+          "input" => model["prompt_text_token_price"].to_f / PRICE_TO_USD_PER_MILLION,
+          "cache_read" => model["cached_prompt_text_token_price"].to_f / PRICE_TO_USD_PER_MILLION,
+          "output" => model["completion_text_token_price"].to_f / PRICE_TO_USD_PER_MILLION
         }
         next if prices.values.all?(&:zero?)
 

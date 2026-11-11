@@ -11,6 +11,10 @@ module Agents
   #   - ~/.cursor/cli-config.json (settings)
   # Auth: OAuth via Cursor (agent login)
   class CursorCliAdapter < BaseAdapter
+    LLM_PROVIDER = "cursor"
+    USAGE_EVENT_TRAITS = {
+      "cursor_api" => { source: "vendor_api", granularity: "request", cost_basis: "reported" }
+    }.freeze
     def self.default_config_paths
       [ "~/.cursor/cli-config.json", ".cursorrules" ]
     end
@@ -294,6 +298,12 @@ module Agents
       persist_usage_statistic(terminal_session, correlation)
     end
 
+    # Usage events are the dashboard API's own records, stored as they came, so none
+    # carries a source tag of its own.
+    def llm_call_traits(_event)
+      USAGE_EVENT_TRAITS.fetch("cursor_api")
+    end
+
     private
 
     def request_models(access_token)
@@ -517,7 +527,9 @@ module Agents
     # =========================================================================
 
     def persist_usage_statistic(terminal_session, correlation)
-      events = correlation[:matched_events]
+      events = correlation[:matched_events].map do |event|
+        event.merge("costBasis" => event.dig("tokenUsage", "totalCents").nil? ? "unknown" : "reported")
+      end
 
       if events.empty?
         Rails.logger.info("[CursorCliAdapter] No usage events for session #{terminal_session.id}")

@@ -22,14 +22,13 @@ class LlmCallResourceTest < ActiveSupport::TestCase
                         cache_read_tokens: 100,
                         cache_write_tokens: 50,
                         total_cents_precise: "0.04512300",
-                        source: "otlp",
                         occurred_at: Time.utc(2026, 8, 28, 10, 0, 0))
   end
 
   test "serializes all expected keys" do
     hash = LlmCallResource.new(@call).to_h
-    expected_keys = %w[id model inputTokens outputTokens cacheReadTokens cacheWriteTokens
-                       costCents occurredAt stepRunId stepName source]
+    expected_keys = %w[id model provider inputTokens outputTokens cacheReadTokens cacheWriteTokens
+                       costCents costBasis occurredAt stepRunId stepName source granularity]
     assert_equal expected_keys.sort, hash.keys.sort
   end
 
@@ -44,10 +43,19 @@ class LlmCallResourceTest < ActiveSupport::TestCase
   end
 
   test "stepName is nil when step_run is absent" do
-    call = create(:llm_call, terminal_session: @session, model: "claude-sonnet-4-5",
-                              source: "otlp", occurred_at: Time.current)
+    call = create(:llm_call, terminal_session: @session, model: "claude-sonnet-4-5", occurred_at: Time.current)
     hash = LlmCallResource.new(call).to_h
     assert_nil hash["stepName"]
+  end
+
+  test "an unknown cost and unreported tokens stay null rather than zero" do
+    call = create(:llm_call, :unknown_cost, terminal_session: @session, input_tokens: nil, cache_write_tokens: nil)
+    hash = LlmCallResource.new(call).to_h
+
+    assert_nil hash["costCents"]
+    assert_equal "unknown", hash["costBasis"]
+    assert_nil hash["inputTokens"]
+    assert_nil hash["cacheWriteTokens"]
   end
 
   test "occurredAt is an ISO8601 string" do

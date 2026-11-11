@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_11_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_11_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -952,20 +952,28 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_100000) do
   end
 
   create_table "llm_calls", force: :cascade do |t|
-    t.integer "cache_read_tokens", default: 0, null: false
-    t.integer "cache_write_tokens", default: 0, null: false
+    t.integer "cache_read_tokens"
+    t.integer "cache_write_tokens"
     t.datetime "created_at", null: false
-    t.integer "input_tokens", default: 0, null: false
+    t.integer "input_tokens"
     t.string "model", null: false
     t.datetime "occurred_at", null: false
-    t.integer "output_tokens", default: 0, null: false
+    t.integer "output_tokens"
     t.string "source", null: false
     t.bigint "step_run_id"
     t.bigint "terminal_session_id", null: false
-    t.decimal "total_cents_precise", precision: 12, scale: 8, default: "0.0", null: false
+    t.decimal "total_cents_precise", precision: 12, scale: 8
     t.datetime "updated_at", null: false
     t.bigint "workflow_run_id"
+    t.uuid "uid", default: -> { "gen_random_uuid()" }, null: false
+    t.integer "event_index", null: false
+    t.string "provider", null: false
+    t.string "cost_basis", null: false
+    t.string "granularity", null: false
+    t.integer "duration_ms"
+    t.index ["terminal_session_id", "event_index"], name: "index_llm_calls_on_terminal_session_id_and_event_index", unique: true
     t.index ["terminal_session_id", "occurred_at"], name: "index_llm_calls_on_terminal_session_id_and_occurred_at"
+    t.index ["uid"], name: "index_llm_calls_on_uid", unique: true
     t.index ["workflow_run_id", "occurred_at"], name: "index_llm_calls_on_workflow_run_id_and_occurred_at"
     t.index ["workflow_run_id", "step_run_id"], name: "index_llm_calls_on_workflow_run_id_and_step_run_id"
   end

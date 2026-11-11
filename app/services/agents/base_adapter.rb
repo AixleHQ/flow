@@ -393,6 +393,24 @@ module Agents
       :accepted
     end
 
+    # What the usage events this adapter writes mean on llm_calls, keyed by the event's
+    # own "source" tag: { source:, granularity:, cost_basis: } in LlmCall's vocabulary.
+    # cost_basis is what an event written before adapters stamped "costBasis" had;
+    # legacy_input_includes_cache marks a source whose old events counted cached input
+    # inside inputTokens.
+    USAGE_EVENT_TRAITS = {}.freeze
+
+    # Who bills the calls: the model vendor, or the reseller the runtime goes through.
+    LLM_PROVIDER = nil
+
+    def llm_call_traits(event)
+      self.class::USAGE_EVENT_TRAITS[event["source"]]
+    end
+
+    def llm_provider(_model)
+      self.class::LLM_PROVIDER
+    end
+
     # =================================================================
     # Available Models (fetched from provider API)
     # =================================================================

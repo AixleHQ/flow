@@ -429,6 +429,7 @@ class TerminalSession < ApplicationRecord
   def sync_usage
     assign_usage_totals
     save! if changed?
+    materialize_llm_calls
   rescue StandardError => e
     Rails.logger.error("[TerminalSession] Failed to sync usage for #{id}: #{e.message}")
   end
@@ -450,45 +451,10 @@ class TerminalSession < ApplicationRecord
     Rails.logger.error("[TerminalSession] Failed to read usage for #{id}: #{e.message}")
   end
 
+  # Usage is final once the session ends, but telemetry can still land after that, so
+  # this runs at every ending and again from the backfill task; it only ever adds rows.
   def materialize_llm_calls
-    stat = reload_usage_statistic
-    events = stat&.events_data.presence
-    return if events.nil?
-    return if LlmCall.where(terminal_session_id: id).exists?
-
-    run_id  = step_run&.workflow_run_id
-    step_id = step_run&.id
-
-    rows = events.filter_map do |event|
-      usage = event["tokenUsage"] || {}
-      ts_raw = event["timestamp"]
-      occurred =
-        if ts_raw.blank?
-          created_at
-        elsif ts_raw.is_a?(String) && ts_raw.match?(/[T:\-]/)
-          Time.zone.parse(ts_raw)
-        else
-          Time.at(ts_raw.to_i / 1000.0).utc
-        end
-
-      {
-        terminal_session_id: id,
-        workflow_run_id:     run_id,
-        step_run_id:         step_id,
-        model:               event["model"].presence || "unknown",
-        input_tokens:        usage["inputTokens"].to_i,
-        output_tokens:       usage["outputTokens"].to_i,
-        cache_read_tokens:   usage["cacheReadTokens"].to_i,
-        cache_write_tokens:  usage["cacheWriteTokens"].to_i,
-        total_cents_precise: usage["totalCents"].to_f,
-        source:              event["source"].to_s,
-        occurred_at:         occurred,
-        created_at:          Time.current,
-        updated_at:          Time.current
-      }
-    end
-
-    LlmCall.insert_all(rows) if rows.any?
+    LlmCalls::Materializer.call(self)
   rescue StandardError => e
     Rails.logger.error("[TerminalSession] Failed to materialize llm_calls for #{id}: #{e.message}")
   end

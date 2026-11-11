@@ -1,12 +1,30 @@
 import { Badge, Table, Text, Tooltip } from '@mantine/core';
 
 import { formatDateTime } from '@/shared/lib/formatDate';
-function formatCallCost(cents: number): string {
-  const d = (cents ?? 0) / 100;
+import type LlmCall from '@/types/generated/LlmCall';
+
+const COST_BASIS_LABELS: Record<LlmCall['costBasis'], string> = {
+  reported: 'Reported by the runtime',
+  priced: 'Estimate from the vendor’s list price, not a bill',
+  credits: 'Credits converted at the configured rate',
+  unknown: 'Cost unknown',
+};
+
+function formatCallCost(cents: number | null): string {
+  if (cents === null) return '—';
+  const d = cents / 100;
   if (d >= 1) return `$${d.toFixed(2)}`;
   return `$${d.toFixed(3)}`;
 }
-import type LlmCall from '@/types/generated/LlmCall';
+
+function formatTokens(count: number | null): string {
+  return count === null ? '—' : count.toLocaleString();
+}
+
+function cacheTokens(call: LlmCall): number | null {
+  if (call.cacheReadTokens === null && call.cacheWriteTokens === null) return null;
+  return (call.cacheReadTokens ?? 0) + (call.cacheWriteTokens ?? 0);
+}
 
 interface Props {
   calls: LlmCall[];
@@ -54,20 +72,22 @@ export default function LlmCallsTable({ calls, showSessionColumn }: Props) {
               </Badge>
             </Table.Td>
             <Table.Td ta="right">
-              <Text size="sm">{call.inputTokens.toLocaleString()}</Text>
+              <Text size="sm">{formatTokens(call.inputTokens)}</Text>
             </Table.Td>
             <Table.Td ta="right">
-              <Text size="sm">{call.outputTokens.toLocaleString()}</Text>
+              <Text size="sm">{formatTokens(call.outputTokens)}</Text>
             </Table.Td>
             <Table.Td ta="right">
               <Tooltip
-                label={`Read: ${call.cacheReadTokens.toLocaleString()} · Write: ${call.cacheWriteTokens.toLocaleString()}`}
+                label={`Read: ${formatTokens(call.cacheReadTokens)} · Write: ${formatTokens(call.cacheWriteTokens)}`}
               >
-                <Text size="sm">{(call.cacheReadTokens + call.cacheWriteTokens).toLocaleString()}</Text>
+                <Text size="sm">{formatTokens(cacheTokens(call))}</Text>
               </Tooltip>
             </Table.Td>
             <Table.Td ta="right">
-              <Text size="sm">{formatCallCost(call.costCents)}</Text>
+              <Tooltip label={COST_BASIS_LABELS[call.costBasis]}>
+                <Text size="sm">{formatCallCost(call.costCents)}</Text>
+              </Tooltip>
             </Table.Td>
           </Table.Tr>
         ))}

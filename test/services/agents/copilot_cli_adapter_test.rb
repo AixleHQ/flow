@@ -233,7 +233,8 @@ module Agents
     # invoke_agent span around it both carry the call's AI credits.
     def real_session_payload(token)
       span = lambda do |name, parent, attrs|
-        { "name" => name, "spanId" => SecureRandom.hex(8), "parentSpanId" => parent, "endTimeUnixNano" => "1762752052000000000",
+        { "name" => name, "spanId" => SecureRandom.hex(8), "parentSpanId" => parent,
+          "startTimeUnixNano" => "1762752050750000000", "endTimeUnixNano" => "1762752052000000000",
           "attributes" => attrs.map { |k, v| { "key" => k, "value" => v.is_a?(Float) ? { "doubleValue" => v } : { "stringValue" => v.to_s } } } }
       end
       usage = { "gen_ai.usage.input_tokens" => "16746", "gen_ai.usage.output_tokens" => "55",
@@ -261,6 +262,8 @@ module Agents
       assert_in_delta 2.1205, stat.total_cents_precise.to_f, 0.0001
       assert_equal [ "claude-haiku-4.5" ], stat.models
       assert_equal "otlp_copilot", stat.source
+      assert_equal "credits", stat.events_data.first["costBasis"]
+      assert_equal 1_250, stat.events_data.first["durationMs"]
     end
 
     test "a batch for another session is ignored" do

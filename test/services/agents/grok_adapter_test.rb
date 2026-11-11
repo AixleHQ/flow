@@ -447,8 +447,9 @@ module Agents
 
       @adapter.collect_usage(@session, { "logs/http.log" => "#{mitm_line(chat_completion_body)}\n" })
 
+      # xAI's prompt count includes the cached tokens; the platform counts them apart.
       stat = @session.reload.usage_statistic
-      assert_equal 1_000, stat.input_tokens
+      assert_equal 600, stat.input_tokens
       assert_equal 200, stat.output_tokens
       assert_equal 400, stat.cache_read_tokens
       assert_equal 0, stat.cache_write_tokens
@@ -474,7 +475,7 @@ module Agents
       })
 
       stat = @session.reload.usage_statistic
-      assert_equal 1_000, stat.input_tokens
+      assert_equal 600, stat.input_tokens
       assert_equal 200, stat.output_tokens
       assert_equal [ "grok-4.5" ], stat.models
     end
@@ -506,7 +507,7 @@ module Agents
       @adapter.collect_usage(@session, { "logs/http.log" => "#{log}\n" })
 
       stat = @session.reload.usage_statistic
-      assert_equal 2_048, stat.input_tokens
+      assert_equal 1_024, stat.input_tokens
       assert_equal 512, stat.output_tokens
       assert_equal 1_024, stat.cache_read_tokens
       assert_equal [ "grok-4.5" ], stat.models
@@ -581,6 +582,7 @@ module Agents
       stat = @session.reload.usage_statistic
       assert_equal BigDecimal(expected_cents.to_s), stat.total_cents_precise
       assert_equal expected_cents.ceil, stat.cost_cents
+      assert_equal "priced", stat.events_data.first["costBasis"]
     end
 
     test "collect_usage still records tokens when the price sheet is unavailable" do
@@ -589,8 +591,10 @@ module Agents
       @adapter.collect_usage(@session, { "logs/http.log" => "#{mitm_line(chat_completion_body)}\n" })
 
       stat = @session.reload.usage_statistic
-      assert_equal 1_000, stat.input_tokens
+      assert_equal 600, stat.input_tokens
       assert_equal 0, stat.cost_cents
+      assert_nil stat.events_data.first.dig("tokenUsage", "totalCents"), "an unpriced call is unknown, not free"
+      assert_equal "unknown", stat.events_data.first["costBasis"]
     end
 
     # == Misc contract ==

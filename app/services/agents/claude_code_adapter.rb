@@ -8,6 +8,10 @@ module Agents
     CONFIG_VERSION = "2.1.14"
     METRIC_TOKENS_NAME = "claude_code.token.usage"
     METRIC_COST_NAME = "claude_code.cost.usage"
+    LLM_PROVIDER = "anthropic"
+    USAGE_EVENT_TRAITS = {
+      "otlp" => { source: "otlp_metric", granularity: "batch", cost_basis: "reported" }
+    }.freeze
     LEGACY_METRIC_NAMES = {
       "terminal.session.tokens" => METRIC_TOKENS_NAME,
       "terminal.session.cost" => METRIC_COST_NAME
@@ -1127,6 +1131,11 @@ module Agents
       UsageStatistics::Accumulator.record(terminal_session: terminal_session, events: new_events)
     end
 
+    # Through a Bedrock connection the CLI reports the inference profile it called.
+    def llm_provider(model)
+      LlmCalls::ModelName.bedrock?(model) ? "aws_bedrock" : LLM_PROVIDER
+    end
+
     private
 
     # Base-login client id. Anthropic publishes one public client id for this
@@ -1310,6 +1319,7 @@ module Agents
         (rm["scopeMetrics"] || []).each do |sm|
           token_breakdown = {}
           cost_usd = 0.0
+          cost_reported = false
           model = nil
           timestamp_ns = nil
 
@@ -1334,6 +1344,7 @@ module Agents
                 token_breakdown[type] = (token_breakdown[type] || 0) + value.to_i
               when METRIC_COST_NAME
                 cost_usd += value.to_f
+                cost_reported = true
               end
             end
           end
@@ -1348,8 +1359,9 @@ module Agents
               "outputTokens" => token_breakdown["output"] || 0,
               "cacheReadTokens" => token_breakdown["cacheRead"] || 0,
               "cacheWriteTokens" => token_breakdown["cacheCreation"] || 0,
-              "totalCents" => (cost_usd * 100).round(6)
+              "totalCents" => (cost_reported ? (cost_usd * 100).round(6) : nil)
             },
+            "costBasis" => cost_reported ? "reported" : "unknown",
             "source" => "otlp"
           }
         end

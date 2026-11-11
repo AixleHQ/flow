@@ -69,6 +69,10 @@ module Agents
     ].freeze
 
     OTEL_SOURCE = "otlp_copilot"
+    LLM_PROVIDER = "github_copilot"
+    USAGE_EVENT_TRAITS = {
+      OTEL_SOURCE => { source: "otlp_span", granularity: "request", cost_basis: "credits" }
+    }.freeze
     CHAT_OPERATION = "chat"
     NANO_AIU_PER_CREDIT = 1_000_000_000.0
 
@@ -347,7 +351,8 @@ module Agents
       input = otlp_value(attrs, "gen_ai.usage.input_tokens").to_i
       cache_read = otlp_value(attrs, "gen_ai.usage.cache_read.input_tokens").to_i
       cache_write = otlp_value(attrs, "gen_ai.usage.cache_write.input_tokens").to_i
-      credits = otlp_value(attrs, "github.copilot.nano_aiu").to_f / NANO_AIU_PER_CREDIT
+      nano_aiu = otlp_value(attrs, "github.copilot.nano_aiu")
+      credits = nano_aiu.to_f / NANO_AIU_PER_CREDIT
       rate = Settings.agents.copilot.ai_credit_usd.to_f
 
       {
@@ -359,14 +364,26 @@ module Agents
           "outputTokens" => otlp_value(attrs, "gen_ai.usage.output_tokens").to_i,
           "cacheReadTokens" => cache_read,
           "cacheWriteTokens" => cache_write,
-          "totalCents" => (credits * rate * 100).round(6)
+          # A span with no charge on it went to a model GitHub does not bill through
+          # credits (a custom provider): its cost is unknown, not zero.
+          "totalCents" => (nano_aiu.nil? ? nil : (credits * rate * 100).round(6))
         },
+        "costBasis" => nano_aiu.nil? ? "unknown" : "credits",
+        "durationMs" => span_duration_ms(span),
         "creditsUsed" => credits.round(6),
         "creditRateUsd" => rate,
         "conversationId" => otlp_value(attrs, "gen_ai.conversation.id"),
         "spanId" => span["spanId"],
         "source" => OTEL_SOURCE
       }.compact
+    end
+
+    def span_duration_ms(span)
+      started = span["startTimeUnixNano"].presence
+      ended = span["endTimeUnixNano"].presence
+      return nil unless started && ended
+
+      (ended.to_i - started.to_i) / 1_000_000
     end
 
     # OTLP/JSON carries a value as stringValue, intValue (a string), doubleValue or boolValue.

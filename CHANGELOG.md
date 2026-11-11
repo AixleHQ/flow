@@ -56,6 +56,12 @@ governance, community health — carry none.
   and result — masked like Claude Code's. It is the only full record of a
   Copilot conversation: the CLI always draws on the alternate screen, so the
   terminal log keeps just its last screen.
+- **Sessions & Runs**: a session and a workflow run list every model call they
+  made — time, model, tokens and cost — with a tooltip saying whether the cost
+  was reported by the runtime, estimated from the vendor's list price, or
+  converted from credits. A call whose cost is not known shows a dash, not $0.
+  Operators can fill the list for past sessions with
+  `bin/rails llm_calls:backfill`.
 
 ### Changed
 - **Company settings**: the Billing tab lists every subscription the workspace has
@@ -76,6 +82,13 @@ governance, community health — carry none.
   headings in place of Figtree and Hanken Grotesk; code keeps its monospace
   faces. Emails show Inter in Apple Mail, Outlook for Mac, Thunderbird and
   Samsung Mail, and the system font elsewhere.
+- **Sessions & Runs**: Codex and Gemini CLI sessions now show an estimated
+  cost — the vendor's public list price for the tokens, not what the account
+  was billed — when the CLI reports none; Antigravity, and Grok when the xAI
+  catalogue is unreachable, are estimated from the same table
+  (`config/llm_prices.yml`). Input tokens no longer include
+  cached input for Codex, Gemini CLI, Grok and Antigravity — cached tokens are
+  counted once, under cache, as they already were for Claude Code and Copilot.
 - **Tasks**: workflow steps listing the board (`board_list_tasks`) and agents
   using personal access (`list_board_tasks`) no longer see archived tasks, the
   same as on the board. Pass `include_archived: true` to list them as well.

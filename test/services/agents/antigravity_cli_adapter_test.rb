@@ -161,24 +161,27 @@ module Agents
       ]
 
       assert_empty observed_model_ids - AntigravityCliAdapter::FALLBACK_MODELS.pluck(:model_id)
-      assert_empty observed_model_ids - AntigravityCliAdapter::MODEL_PRICING.keys
+      assert_empty observed_model_ids.reject { |id| LlmCalls::Pricing.priced?(id) }
     end
 
     test "prices the Gemini 4 Argon and Claude 5.5 models the CLI offers since 1.4.7" do
       model_ids = %w[gemini-4-argon-high gemini-4-argon-medium gemini-4-argon-low] +
                   %w[opus sonnet].product(%w[max high medium low]).map { |family, effort| "claude-#{family}-5-5-#{effort}" }
 
-      assert_empty model_ids - AntigravityCliAdapter::MODEL_PRICING.keys
-      assert_in_delta 300.0, @adapter.send(:usage_cost_cents, "claude-sonnet-5-5-high", 1_000_000, 100_000, 0)
+      assert_empty model_ids.reject { |id| LlmCalls::Pricing.priced?(id) }
+      assert_in_delta 300.0, LlmCalls::Pricing.cents(model: "claude-sonnet-5-5-high", input: 1_000_000, output: 100_000)
     end
 
-    test "warns when a catalogue model has no configured pricing" do
-      Rails.logger.expects(:warn)
-                  .with('[AntigravityCliAdapter] no configured pricing for model "new-unpriced-model"')
+    test "a run on a model with no price records its tokens and an unknown cost" do
+      @session.update!(agent_type: "antigravity_cli", requested_model: "new-unpriced-model")
+      stream = { event: "result", result: { status: "SUCCESS", usage: { input_tokens: 100, output_tokens: 20 } } }.to_json
 
-      cost = @adapter.send(:usage_cost_cents, "new-unpriced-model", 100, 20, 0)
+      @adapter.collect_usage(@session, { "logs/terminal_output.log" => stream })
 
-      assert_in_delta 0.0, cost
+      event = @session.reload.usage_statistic.events_data.first
+      assert_equal 100, event.dig("tokenUsage", "inputTokens")
+      assert_nil event.dig("tokenUsage", "totalCents")
+      assert_equal "unknown", event["costBasis"]
     end
 
     test "falls back when the Antigravity catalogue request fails" do
@@ -236,8 +239,9 @@ module Agents
 
       @adapter.collect_usage(@session, { "logs/terminal_output.log" => stream })
 
+      # Cache reads arrive inside the input count; the platform counts them apart.
       stat = @session.reload.usage_statistic
-      assert_equal 1_000_000, stat.input_tokens
+      assert_equal 800_000, stat.input_tokens
       assert_equal 100_000, stat.output_tokens
       assert_equal 200_000, stat.cache_read_tokens
       assert_equal 0, stat.cache_write_tokens
@@ -258,7 +262,7 @@ module Agents
       @adapter.collect_usage(@session, { "logs/terminal_output.log" => output })
 
       stat = @session.reload.usage_statistic
-      assert_equal 1000, stat.input_tokens
+      assert_equal 900, stat.input_tokens
       assert_equal 200, stat.output_tokens
       assert_equal 100, stat.cache_read_tokens
       assert_equal 1, stat.events_count
@@ -290,7 +294,7 @@ module Agents
       @adapter.collect_usage(TerminalSession.find(@session.id), artifacts)
 
       stat = @session.reload.usage_statistic
-      assert_equal 1_000_000, stat.input_tokens
+      assert_equal 800_000, stat.input_tokens
       assert_equal 100_000, stat.output_tokens
       assert_equal 200_000, stat.cache_read_tokens
       assert_equal 396, stat.cost_cents
@@ -309,7 +313,7 @@ module Agents
       @adapter.collect_usage(@session, {})
 
       stat = @session.reload.usage_statistic
-      assert_equal 1_000_000, stat.input_tokens
+      assert_equal 800_000, stat.input_tokens
       assert_equal 100_000, stat.output_tokens
       assert_equal 200_000, stat.cache_read_tokens
     end

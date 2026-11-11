@@ -443,11 +443,15 @@ module Agents
 
       @adapter.collect_usage(session, { "logs/http.log" => mitm_log })
 
+      # OpenAI counts cached input inside input; the platform counts it apart and prices
+      # the rest: gpt-5.1-codex-mini at $0.25 input, $0.025 cached, $2 output per million.
       stat = session.reload.usage_statistic
       assert stat, "UsageStatistic should be created"
-      assert_equal 1000, stat.input_tokens
+      assert_equal 200, stat.input_tokens
       assert_equal 200, stat.output_tokens
       assert_equal 800, stat.cache_read_tokens
+      assert_in_delta 0.047, stat.total_cents_precise.to_f
+      assert_equal "priced", stat.events_data.first["costBasis"]
       assert_equal "otlp_metrics", stat.source
       assert_equal [ "gpt-5.1-codex-mini" ], stat.models
     end
@@ -538,9 +542,11 @@ module Agents
       assert_equal :ok, result
       stat = session.reload.usage_statistic
       assert stat, "UsageStatistic should be created"
-      assert_equal 1000, stat.input_tokens
+      assert_equal 200, stat.input_tokens
       assert_equal 200, stat.output_tokens
       assert_equal 800, stat.cache_read_tokens
+      assert_in_delta 0.047, stat.total_cents_precise.to_f
+      assert_equal "priced", stat.events_data.first["costBasis"]
       assert_equal "otlp", stat.source
       assert_equal [ "gpt-5.1-codex-mini" ], stat.models
     end

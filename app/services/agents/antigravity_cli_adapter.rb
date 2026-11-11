@@ -40,37 +40,10 @@ module Agents
                             "onboardingComplete" => true }.freeze
     WORKSPACE = "/workspace"
 
-    # API-equivalent prices in USD per million tokens. Antigravity's result event
-    # reports cache reads as a subset of input tokens, so cached input is removed
-    # from the regular input bucket before pricing. Keep this table beside the
-    # runtime's model catalogue: model ids are Antigravity ids, not provider ids.
-    MODEL_PRICING = {
-      "gemini-3.8-flash-high" => { input: 0.75, output: 3.75, cache_read: 0.075 },
-      "gemini-3.8-flash-medium" => { input: 0.75, output: 3.75, cache_read: 0.075 },
-      "gemini-3.8-flash-low" => { input: 0.75, output: 3.75, cache_read: 0.075 },
-      "gemini-3.7-flash-high" => { input: 0.75, output: 3.75, cache_read: 0.075 },
-      "gemini-3.7-flash-medium" => { input: 0.75, output: 3.75, cache_read: 0.075 },
-      "gemini-3.7-flash-low" => { input: 0.75, output: 3.75, cache_read: 0.075 },
-      "gemini-3.6-flash-high" => { input: 1.50, output: 9.00, cache_read: 0.15 },
-      "gemini-3.6-flash-medium" => { input: 1.50, output: 9.00, cache_read: 0.15 },
-      "gemini-3.6-flash-low" => { input: 1.50, output: 9.00, cache_read: 0.15 },
-      "gemini-pro-agent" => { input: 2.50, output: 15.00, cache_read: 0.25 },
-      "gemini-3.1-pro-low" => { input: 2.50, output: 15.00, cache_read: 0.25 },
-      "claude-sonnet-4-6" => { input: 3.00, output: 15.00, cache_read: 0.30 },
-      "claude-opus-4-6-thinking" => { input: 5.00, output: 25.00, cache_read: 0.50 },
-      "gpt-oss-120b-medium" => { input: 0.15, output: 0.60, cache_read: 0.015 },
-      # Google's standard rate from 2026-12-01; through 2026-11-30 it bills half of this.
-      "gemini-4-argon-high" => { input: 4.00, output: 20.00, cache_read: 0.20 },
-      "gemini-4-argon-medium" => { input: 4.00, output: 20.00, cache_read: 0.20 },
-      "gemini-4-argon-low" => { input: 4.00, output: 20.00, cache_read: 0.20 },
-      "claude-opus-5-5-max" => { input: 4.00, output: 20.00, cache_read: 0.20 },
-      "claude-opus-5-5-high" => { input: 4.00, output: 20.00, cache_read: 0.20 },
-      "claude-opus-5-5-medium" => { input: 4.00, output: 20.00, cache_read: 0.20 },
-      "claude-opus-5-5-low" => { input: 4.00, output: 20.00, cache_read: 0.20 },
-      "claude-sonnet-5-5-max" => { input: 2.00, output: 10.00, cache_read: 0.20 },
-      "claude-sonnet-5-5-high" => { input: 2.00, output: 10.00, cache_read: 0.20 },
-      "claude-sonnet-5-5-medium" => { input: 2.00, output: 10.00, cache_read: 0.20 },
-      "claude-sonnet-5-5-low" => { input: 2.00, output: 10.00, cache_read: 0.20 }
+    LLM_PROVIDER = "google"
+    USAGE_EVENT_TRAITS = {
+      "antigravity_stream_json" => { source: "cli_result", granularity: "turn", cost_basis: "priced",
+                                     legacy_input_includes_cache: true }
     }.freeze
 
     # Used only when the live catalogue is unavailable or no access token was
@@ -362,24 +335,24 @@ module Agents
 
         input = usage["input_tokens"].to_i
         output_tokens = usage["output_tokens"].to_i
-        cached = usage["cache_read_tokens"].to_i
+        # Cache reads arrive as a subset of the input count; llm_calls keeps them apart.
+        cached = [ usage["cache_read_tokens"].to_i, input ].min
         next if input.zero? && output_tokens.zero? && cached.zero?
 
         model = result["model"].presence || stream_model.presence || terminal_session.requested_model.presence ||
           default_model_for(terminal_session)
-        {
+        LlmCalls::Pricing.price_event!({
           "model" => model,
-          "timestamp" => terminal_session.finished_at&.to_i&.to_s,
+          "timestamp" => (Time.current.to_f * 1000).to_i.to_s,
           "tokenUsage" => {
-            "inputTokens" => input,
+            "inputTokens" => input - cached,
             "outputTokens" => output_tokens,
             "cacheReadTokens" => cached,
             "cacheWriteTokens" => 0,
-            "reasoningTokens" => usage["thinking_tokens"].to_i,
-            "totalCents" => usage_cost_cents(model, input, output_tokens, cached)
+            "reasoningTokens" => usage["thinking_tokens"].to_i
           },
           "source" => "antigravity_stream_json"
-        }
+        }, single_request: false)
       end
     end
 
@@ -397,19 +370,6 @@ module Agents
     def default_model_for(terminal_session)
       SessionCompany.agent_credentials_for(terminal_session)
                     .find_by(agent_type: "antigravity_cli")&.default_model
-    end
-
-    def usage_cost_cents(model, input_tokens, output_tokens, cache_read_tokens)
-      pricing = MODEL_PRICING[model]
-      unless pricing
-        Rails.logger.warn("[AntigravityCliAdapter] no configured pricing for model #{model.inspect}")
-        return 0.0
-      end
-
-      cached = [ cache_read_tokens, input_tokens ].min
-      uncached = input_tokens - cached
-      ((uncached * pricing[:input]) + (cached * pricing[:cache_read]) +
-        (output_tokens * pricing[:output])) / 10_000.0
     end
 
     def fallback_models

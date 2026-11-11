@@ -1,21 +1,23 @@
 # frozen_string_literal: true
 
 namespace :llm_calls do
-  desc "Backfill llm_calls rows from existing usage_statistics.events_data"
+  desc "Materialize llm_calls for finished sessions from usage_statistics.events_data; only adds missing rows"
   task backfill: :environment do
-    scope = UsageStatistic.where("events_data != '[]'::jsonb AND events_data IS NOT NULL")
+    scope = TerminalSession.where(state: TerminalSession::TERMINAL_STATES)
+                           .where(id: UsageStatistic.where("events_data <> '[]'::jsonb").select(:terminal_session_id))
     total = scope.count
-    puts "Backfilling llm_calls for #{total} usage_statistics records..."
+    puts "Materializing llm_calls for #{total} sessions..."
 
     done = 0
-    scope.find_each do |stat|
-      stat.terminal_session&.send(:materialize_llm_calls)
+    added = 0
+    scope.find_each do |session|
+      added += LlmCalls::Materializer.call(session)
       done += 1
       print "\r#{done}/#{total}" if (done % 100).zero?
     rescue StandardError => e
-      puts "\nSkipping terminal_session #{stat.terminal_session_id}: #{e.message}"
+      puts "\nSkipping terminal_session #{session.id}: #{e.message}"
     end
 
-    puts "\nDone. #{LlmCall.count} llm_calls rows total."
+    puts "\nDone. #{added} rows added, #{LlmCall.count} llm_calls rows total."
   end
 end

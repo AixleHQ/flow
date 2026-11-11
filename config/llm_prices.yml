@@ -1,0 +1,93 @@
+# Estimates only. LlmCalls::Pricing uses this table to put a rough cost on a call whose
+# runtime reports tokens but no cost (Codex, Gemini CLI, Antigravity; Grok when the xAI
+# catalogue is unreachable). It is the vendor's public list price at the standard tier —
+# not what any account was billed: subscriptions, committed-use discounts, batch or
+# priority tiers and regional endpoints all differ. Calls priced from it carry
+# cost_basis "priced", never "reported" (docs/design/insights-usage-export.md §3).
+#
+# USD per million tokens. A key matches the canonical model id itself or the id followed
+# by "-…" (a dated snapshot, an effort or variant suffix): "gpt-5.1" prices
+# "gpt-5.1-codex-max" but not "gpt-5.4"; the longest matching key wins. A model with no
+# key stays unpriced — its cost is unknown, never zero.
+#
+# cache_read / cache_write default to the input rate (cache_write is the shortest
+# cache duration the vendor sells). long_context applies to a single request whose
+# prompt exceeds `above` tokens. `changes` are later rates, by the date they take effect.
+#
+# Upkeep: .github/workflows/llm-prices.yml runs bin/llm-prices-report every week and
+# keeps one issue open while a rate differs from LiteLLM's public list or the last
+# review is over 90 days old. `source` names the LiteLLM entry where its key differs.
+# Confirm a change on the vendor's page, then bump `reviewed_on`:
+#   OpenAI     https://developers.openai.com/api/docs/pricing
+#   Google     https://aistudio.google.com/docs/pricing
+#   Anthropic  https://platform.claude.com/docs/en/about-claude/pricing
+reviewed_on: 2026-11-11
+models:
+  # --- OpenAI
+  gpt-6-astra: { input: 10.00, cache_read: 1.00, cache_write: 12.50, output: 50.00, long_context: { above: 272000, input: 20.00, cache_read: 2.00, cache_write: 25.00, output: 75.00 } }
+  gpt-6.1-sol: { input: 2.00, cache_read: 0.10, cache_write: 2.50, output: 10.00, long_context: { above: 272000, input: 4.00, cache_read: 0.20, cache_write: 5.00, output: 15.00 } }
+  gpt-6.1-terra: { input: 1.00, cache_read: 0.05, cache_write: 1.25, output: 5.00, long_context: { above: 272000, input: 2.00, cache_read: 0.10, cache_write: 2.50, output: 7.50 } }
+  gpt-6-sol: { input: 2.00, cache_read: 0.20, cache_write: 2.50, output: 10.00, long_context: { above: 272000, input: 4.00, cache_read: 0.40, cache_write: 5.00, output: 15.00 } }
+  gpt-6-luna: { input: 0.10, cache_read: 0.01, cache_write: 0.125, output: 0.50, long_context: { above: 272000, input: 0.20, cache_read: 0.02, cache_write: 0.25, output: 0.75 } }
+  gpt-6-cyber: { input: 20.00, cache_read: 2.00, cache_write: 25.00, output: 100.00, long_context: { above: 272000, input: 40.00, cache_read: 4.00, output: 150.00 } }
+  gpt-6-rosalind: { input: 15.00, cache_read: 1.50, cache_write: 18.75, output: 75.00, long_context: { above: 272000, input: 30.00, cache_read: 3.00, cache_write: 37.50, output: 112.50 } }
+  gpt-5.6-sol: { input: 4.00, cache_read: 0.40, cache_write: 5.00, output: 20.00, long_context: { above: 272000, input: 8.00, cache_read: 0.80, cache_write: 10.00, output: 30.00 } }
+  gpt-5.6-terra: { input: 2.00, cache_read: 0.20, cache_write: 2.50, output: 12.00, long_context: { above: 272000, input: 4.00, cache_read: 0.40, cache_write: 5.00, output: 18.00 } }
+  gpt-5.6-luna: { input: 0.20, cache_read: 0.02, cache_write: 0.25, output: 1.20, long_context: { above: 272000, input: 0.40, cache_read: 0.04, cache_write: 0.50, output: 1.80 } }
+  gpt-5.6-cyber: { input: 12.50, cache_read: 1.25, cache_write: 15.625, output: 75.00 }
+  gpt-5.5: { input: 5.00, cache_read: 0.50, output: 30.00, long_context: { above: 272000, input: 10.00, cache_read: 1.00, output: 45.00 } }
+  gpt-5.5-pro: { input: 30.00, output: 180.00, long_context: { above: 272000, input: 60.00, output: 270.00 } }
+  gpt-5.5-cyber: { input: 12.50, cache_read: 1.25, output: 75.00 }
+  gpt-5.4: { input: 2.50, cache_read: 0.25, output: 15.00, long_context: { above: 272000, input: 5.00, cache_read: 0.50, output: 22.50 } }
+  gpt-5.4-pro: { input: 30.00, output: 180.00, long_context: { above: 272000, input: 60.00, output: 270.00 } }
+  gpt-5.4-mini: { input: 0.75, cache_read: 0.075, output: 4.50 }
+  gpt-5.4-nano: { input: 0.20, cache_read: 0.02, output: 1.25 }
+  gpt-5.3-codex: { input: 1.75, cache_read: 0.175, output: 14.00 }
+  gpt-5.2: { input: 1.75, cache_read: 0.175, output: 14.00 }
+  gpt-5.2-pro: { input: 21.00, output: 168.00 }
+  gpt-5.1: { input: 1.25, cache_read: 0.125, output: 10.00 }
+  gpt-5.1-codex-mini: { input: 0.25, cache_read: 0.025, output: 2.00 }
+  gpt-5: { input: 1.25, cache_read: 0.125, output: 10.00 }
+  gpt-5-mini: { input: 0.25, cache_read: 0.025, output: 2.00 }
+  gpt-5-nano: { input: 0.05, cache_read: 0.005, output: 0.40 }
+  gpt-5-pro: { input: 15.00, output: 120.00 }
+
+  # --- Google
+  gemini-2.0-flash: { input: 0.10, cache_read: 0.025, output: 0.40 }
+  gemini-2.0-flash-lite: { input: 0.075, output: 0.30 }
+  gemini-2.5-flash-lite: { input: 0.10, cache_read: 0.01, output: 0.40 }
+  gemini-2.5-flash: { input: 0.30, cache_read: 0.03, output: 2.50 }
+  gemini-2.5-pro: { input: 1.25, cache_read: 0.125, output: 10.00, long_context: { above: 200000, input: 2.50, cache_read: 0.25, output: 15.00 } }
+  gemini-3-flash: { source: gemini-3-flash-preview, input: 0.50, cache_read: 0.05, output: 3.00 }
+  gemini-3.1-flash-lite: { input: 0.25, cache_read: 0.025, output: 1.50 }
+  gemini-3.1-pro: { source: gemini-3.1-pro-preview, input: 2.00, cache_read: 0.20, output: 12.00, long_context: { above: 200000, input: 4.00, cache_read: 0.40, output: 18.00 } }
+  gemini-3.5-flash-lite: { input: 0.30, cache_read: 0.03, output: 2.50 }
+  gemini-3.6-flash:
+    input: 0.75
+    cache_read: 0.075
+    output: 3.75
+    changes: [ { from: 2027-01-01, input: 1.50, cache_read: 0.15, output: 7.50 } ]
+  gemini-3.8-flash:
+    input: 0.75
+    cache_read: 0.075
+    output: 3.75
+    changes: [ { from: 2027-01-01, input: 1.50, cache_read: 0.15, output: 7.50 } ]
+  gemini-4-carbon:
+    input: 2.00
+    cache_read: 0.10
+    output: 10.00
+    changes: [ { from: 2026-12-01, input: 4.00, cache_read: 0.20, output: 20.00 } ]
+  gemini-4-argon:
+    input: 2.00
+    cache_read: 0.10
+    output: 10.00
+    changes: [ { from: 2026-12-01, input: 4.00, cache_read: 0.20, output: 20.00 } ]
+
+  # --- Served through Antigravity only, at the model vendor's API rate
+  gemini-3.7-flash: { input: 0.75, cache_read: 0.075, output: 3.75 }
+  gemini-pro-agent: { input: 2.50, cache_read: 0.25, output: 15.00 }
+  claude-sonnet-4-6: { input: 3.00, cache_read: 0.30, cache_write: 3.75, output: 15.00 }
+  claude-opus-4-6: { input: 5.00, cache_read: 0.50, cache_write: 6.25, output: 25.00 }
+  claude-opus-5-5: { input: 4.00, cache_read: 0.20, cache_write: 5.00, output: 20.00 }
+  claude-sonnet-5-5: { input: 2.00, cache_read: 0.10, cache_write: 2.50, output: 10.00 }
+  gpt-oss-120b: { input: 0.15, cache_read: 0.015, output: 0.60 }

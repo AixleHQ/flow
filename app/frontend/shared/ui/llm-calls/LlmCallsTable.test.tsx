@@ -38,6 +38,22 @@ describe('LlmCallsTable', () => {
     expect(screen.getByText('$1.50')).toBeInTheDocument();
   });
 
+  it('shows a dash, not zero, for an unknown cost and unreported tokens', () => {
+    const call = buildLlmCall({
+      costCents: null,
+      costBasis: 'unknown',
+      inputTokens: null,
+      outputTokens: null,
+      cacheReadTokens: null,
+      cacheWriteTokens: null,
+    });
+    renderPage(<LlmCallsTable calls={[call]} showSessionColumn={false} />);
+
+    const cells = screen.getAllByRole('cell').slice(2);
+    expect(cells.map((cell) => cell.textContent)).toEqual(['—', '—', '—', '—']);
+    expect(screen.queryByText('$0.000')).not.toBeInTheDocument();
+  });
+
   it('renders empty state when no calls', () => {
     renderPage(<LlmCallsTable calls={[]} showSessionColumn />);
     expect(screen.getByText('No LLM calls recorded')).toBeInTheDocument();

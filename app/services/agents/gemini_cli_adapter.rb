@@ -9,6 +9,11 @@ module Agents
   #   ~/.gemini/settings.json - Auth settings (selectedType: oauth-personal | gemini-api-key)
   #   ~/.gemini/google_accounts.json - Account info
   class GeminiCliAdapter < BaseAdapter
+    LLM_PROVIDER = "google"
+    USAGE_EVENT_TRAITS = {
+      "otlp" => { source: "otlp_log", granularity: "request", cost_basis: "reported", legacy_input_includes_cache: true }
+    }.freeze
+
     LOG_EVENT_NAME = "gemini_cli.api_response"
 
     API_KEY_CREDS_PATH = "gemini-credentials.json"
@@ -384,16 +389,18 @@ module Agents
             output_tokens += attribute_number(attrs, "tool_token_count").to_i
             total_cents = log_cost_cents(attrs)
 
-            next if input_tokens.zero? && output_tokens.zero? && cache_read_tokens.zero? && total_cents.zero?
+            next if input_tokens.zero? && output_tokens.zero? && cache_read_tokens.zero? && total_cents.to_f.zero?
 
             events << build_usage_event(
               model: extract_model(attrs),
               timestamp_ns: log_record["timeUnixNano"],
-              input_tokens: input_tokens,
+              # The prompt count includes the cached content; llm_calls keeps it apart.
+              input_tokens: [ input_tokens - cache_read_tokens, 0 ].max,
               output_tokens: output_tokens,
               cache_read_tokens: cache_read_tokens,
               cache_write_tokens: 0,
-              total_cents: total_cents
+              total_cents: total_cents,
+              duration_ms: attribute_number(attrs, "duration_ms")&.to_i
             )
           end
         end
@@ -402,8 +409,9 @@ module Agents
       events
     end
 
-    def build_usage_event(model:, timestamp_ns:, input_tokens:, output_tokens:, cache_read_tokens:, cache_write_tokens:, total_cents:)
-      {
+    def build_usage_event(model:, timestamp_ns:, input_tokens:, output_tokens:, cache_read_tokens:, cache_write_tokens:,
+                          total_cents:, duration_ms: nil)
+      event = {
         "model" => model,
         "timestamp" => timestamp_ns ? (timestamp_ns.to_i / 1_000_000).to_s : nil,
         "tokenUsage" => {
@@ -411,10 +419,13 @@ module Agents
           "outputTokens" => output_tokens,
           "cacheReadTokens" => cache_read_tokens,
           "cacheWriteTokens" => cache_write_tokens,
-          "totalCents" => total_cents.to_f
+          "totalCents" => total_cents&.to_f
         },
+        "costBasis" => "reported",
+        "durationMs" => duration_ms,
         "source" => "otlp"
-      }
+      }.compact
+      total_cents.nil? ? LlmCalls::Pricing.price_event!(event) : event
     end
 
     def extract_model(attrs)
@@ -428,7 +439,7 @@ module Agents
       usd = attribute_number(attrs, "cost_usd")
       return (usd * 100).round(6) if usd.present?
 
-      0.0
+      nil
     end
 
     def extract_terminal_session_token(attrs, resource_attrs)

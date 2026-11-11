@@ -209,13 +209,46 @@ module Agents
       @session.reload
       stat = @session.usage_statistic
 
-      assert_equal 11, stat.input_tokens
+      # The prompt count includes the cached content; the platform counts it apart.
+      assert_equal 6, stat.input_tokens
       assert_equal 12, stat.output_tokens
       assert_equal 5, stat.cache_read_tokens
       assert_equal 1, stat.cost_cents
       assert_equal BigDecimal("1.0"), stat.total_cents_precise
       assert_equal [ "gemini-2.5-flash" ], stat.models
       assert_equal 1, stat.events_count
+      assert_equal "reported", stat.events_data.first["costBasis"]
+    end
+
+    test "ingest_usage prices a response whose log carries no cost" do
+      payload = {
+        "resourceLogs" => [ {
+          "resource" => { "attributes" => [
+            { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } }
+          ] },
+          "scopeLogs" => [ {
+            "logRecords" => [ {
+              "timeUnixNano" => "1700000000000001000",
+              "attributes" => [
+                { "key" => "event.name", "value" => { "stringValue" => "gemini_cli.api_response" } },
+                { "key" => "model", "value" => { "stringValue" => "gemini-2.5-flash" } },
+                { "key" => "input_token_count", "value" => { "intValue" => "1000000" } },
+                { "key" => "output_token_count", "value" => { "intValue" => "0" } },
+                { "key" => "cached_content_token_count", "value" => { "intValue" => "0" } },
+                { "key" => "duration_ms", "value" => { "intValue" => "812" } }
+              ]
+            } ]
+          } ]
+        } ]
+      }
+
+      @adapter.ingest_usage(payload, @session)
+
+      event = @session.reload.usage_statistic.events_data.first
+      # gemini-2.5-flash: $0.30 per million input tokens.
+      assert_in_delta 30.0, event.dig("tokenUsage", "totalCents")
+      assert_equal "priced", event["costBasis"]
+      assert_equal 812, event["durationMs"]
     end
 
     test "ingest_usage appends new events to existing usage statistic" do

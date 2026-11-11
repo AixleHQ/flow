@@ -182,6 +182,13 @@ module Agents
     # Marks a usage row as already priced from the telemetry stream, so cleanup's
     # coarser fallbacks know to leave it alone.
     OTEL_EVENT_SOURCE = "otlp_credits_consumed"
+    LLM_PROVIDER = "kiro"
+    USAGE_EVENT_TRAITS = {
+      OTEL_EVENT_SOURCE => { source: "otlp_credits", granularity: "turn", cost_basis: "credits" },
+      "mitm_response_credits" => { source: "mitm", granularity: "request", cost_basis: "credits" },
+      "agent_activity_usage_summary" => { source: "mitm", granularity: "turn", cost_basis: "credits" },
+      "get_usage_limits_delta" => { source: "vendor_api", granularity: "session", cost_basis: "credits" }
+    }.freeze
 
     # The `state` row holding the CodeWhisperer profile the CLI selected at the end of
     # the login. Its ARN is required on every API call and carries the region they go
@@ -1202,6 +1209,7 @@ module Agents
         "model" => (model if model.present? && model != "unknown"),
         "timestamp" => timestamp_ns.presence && (timestamp_ns.to_i / 1_000_000).to_s,
         "tokenUsage" => { "totalCents" => (credits * rate * 100).round(6) },
+        "costBasis" => "credits",
         "creditsUsed" => credits.round(6),
         "creditRateUsd" => rate,
         "kiroSessionId" => otlp_attribute(attrs, "session_id"),
@@ -1318,7 +1326,8 @@ module Agents
 
       events.map do |event|
         credit_event(event[:credits], rate, usage, source).merge(
-          "status" => event[:status], "elapsedMs" => event[:elapsed_ms], "usedTools" => event[:tools],
+          "status" => event[:status], "elapsedMs" => event[:elapsed_ms], "durationMs" => event[:elapsed_ms],
+          "usedTools" => event[:tools],
           "model" => event[:model], "responseId" => event[:response_id]
         ).compact
       end
@@ -1326,6 +1335,8 @@ module Agents
 
     def credit_event(credits, rate, usage, source)
       {
+        "tokenUsage" => { "totalCents" => (credits * rate * 100).round(6) },
+        "costBasis" => "credits",
         "creditsUsed" => credits.round(6),
         "creditRateUsd" => rate,
         "planLimitCredits" => usage&.dig(:limit),

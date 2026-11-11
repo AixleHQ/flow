@@ -7,6 +7,14 @@ module Agents
   # Config: ~/.codex/auth.json + ~/.codex/config.toml
   # Auth: OAuth via OpenAI (Google login)
   class CodexAdapter < BaseAdapter
+    LLM_PROVIDER = "openai"
+    USAGE_EVENT_TRAITS = {
+      "otlp" => { source: "otlp_log", granularity: "request", cost_basis: "priced", legacy_input_includes_cache: true },
+      "otlp_metrics" => { source: "otlp_metric", granularity: "session", cost_basis: "priced",
+                          legacy_input_includes_cache: true },
+      "mitm" => { source: "mitm", granularity: "request", cost_basis: "priced", legacy_input_includes_cache: true }
+    }.freeze
+
     # Startup model-migration dialog suppression.
     #
     # Codex CLI shows the "try the new model" dialog when the model it is about to
@@ -530,19 +538,19 @@ module Agents
         "model=#{model}"
       )
 
-      [ {
+      event = {
         "model" => model,
         "timestamp" => timestamp,
         "tokenUsage" => {
-          "inputTokens" => totals["input"].to_i,
+          "inputTokens" => [ totals["input"].to_i - totals["cached_input"].to_i, 0 ].max,
           "outputTokens" => totals["output"].to_i,
           "cacheReadTokens" => totals["cached_input"].to_i,
           "cacheWriteTokens" => 0,
-          "reasoningTokens" => totals["reasoning_output"].to_i,
-          "totalCents" => 0.0
+          "reasoningTokens" => totals["reasoning_output"].to_i
         },
         "source" => "otlp_metrics"
-      } ]
+      }
+      [ LlmCalls::Pricing.price_event!(event, single_request: false) ]
     end
 
     # Sum histogram dataPoint sums for codex.turn.token_usage.
@@ -624,24 +632,25 @@ module Agents
             input_tokens = otlp_number(attrs, "input_token_count").to_i
             output_tokens = otlp_number(attrs, "output_token_count").to_i
             cached_tokens = otlp_number(attrs, "cached_token_count").to_i
+            cache_write_tokens = otlp_number(attrs, "cache_write_token_count").to_i
             reasoning_tokens = otlp_number(attrs, "reasoning_token_count").to_i
             model = otlp_attr(attrs, "model")
 
             next if input_tokens.zero? && output_tokens.zero?
 
-            events << {
+            events << LlmCalls::Pricing.price_event!({
               "model" => model,
               "timestamp" => lr["timeUnixNano"] ? (lr["timeUnixNano"].to_i / 1_000_000).to_s : nil,
               "tokenUsage" => {
-                "inputTokens" => input_tokens,
+                # The count includes the cached tokens; llm_calls keeps them apart.
+                "inputTokens" => [ input_tokens - cached_tokens - cache_write_tokens, 0 ].max,
                 "outputTokens" => output_tokens,
                 "cacheReadTokens" => cached_tokens,
-                "cacheWriteTokens" => 0,
-                "reasoningTokens" => reasoning_tokens,
-                "totalCents" => 0.0
+                "cacheWriteTokens" => cache_write_tokens,
+                "reasoningTokens" => reasoning_tokens
               },
               "source" => "otlp"
-            }
+            })
           end
         end
       end
@@ -714,19 +723,18 @@ module Agents
       model_match = text.match(/"model"\s*:\s*"([^"]+)"/)
       model = model_match ? model_match[1] : nil
 
-      {
+      LlmCalls::Pricing.price_event!({
         "model" => model,
         "timestamp" => timestamp,
         "tokenUsage" => {
-          "inputTokens" => input_tokens,
+          "inputTokens" => [ input_tokens - cached_tokens, 0 ].max,
           "outputTokens" => output_tokens,
           "cacheReadTokens" => cached_tokens,
           "cacheWriteTokens" => 0,
-          "reasoningTokens" => reasoning_tokens,
-          "totalCents" => 0.0
+          "reasoningTokens" => reasoning_tokens
         },
         "source" => "mitm"
-      }
+      })
     end
 
     # =========================================================================
