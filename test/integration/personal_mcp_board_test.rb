@@ -58,14 +58,16 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     assert_empty filtered
   end
 
-  test "list_board_tasks filters by archive state and lists both when the filter is omitted" do
+  test "list_board_tasks leaves archived tasks out unless include_archived is set" do
     archived = create(:board_task, board: @board, board_column: @todo,
                       title: "Archived task", archived_at: Time.current)
 
-    assert_equal [ "First task" ], listed_titles(archived: false)
-    assert_equal [ archived.title ], listed_titles(archived: true)
-    # An existing call carries no filter and keeps seeing everything.
-    assert_equal [ "First task", archived.title ].sort, listed_titles.sort
+    assert_equal [ "First task" ], listed_titles
+    assert_equal [ "First task" ], listed_titles(include_archived: false)
+
+    rows = payload(call_tool("list_board_tasks", { project_id: @project.id, include_archived: true }))["tasks"]
+    assert_equal({ "First task" => false, archived.title => true },
+                 rows.to_h { |t| [ t["title"], t["archived"] ] })
   end
 
   test "list_board_tasks pages the board and reports the unpaginated total" do

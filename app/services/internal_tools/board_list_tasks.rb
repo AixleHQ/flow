@@ -7,7 +7,8 @@ module InternalTools
       description "List tasks on the current board one page at a time, with optional filters for " \
                   "search text, parent epic, column, tag, task type, or assignee. Each row carries the task's " \
                   "`number`, the #N people see on the board. Rows carry no description — read a task's " \
-                  "description with board_get_task."
+                  "description with board_get_task. Archived tasks are left out, as on the board, " \
+                  "unless include_archived is true."
       tags :board
       inject_when :workflow_step_session
       input_schema({
@@ -37,6 +38,10 @@ module InternalTools
           column_name: {
             type: "string",
             description: "Filter tasks to a board column by name"
+          },
+          include_archived: {
+            type: "boolean",
+            description: "Also list archived tasks (default false). Each row's `archived` tells them apart"
           },
           limit: {
             type: "integer",
@@ -85,6 +90,7 @@ module InternalTools
     private
 
     def filtered(scope)
+      scope = scope.active unless ActiveModel::Type::Boolean.new.cast(params[:include_archived])
       scope = scope.matching(params[:query]) if params[:query].present?
       scope = scope.where(parent_task_id: params[:parent_task_id]) if params[:parent_task_id].present?
       scope = scope.joins(:board_column).where(board_columns: { name: params[:column_name] }) if params[:column_name].present?

@@ -21,6 +21,10 @@ governance, community health — carry none.
   previews Markdown the same way (rendered, not raw text).
 
 ### Changed
+- **Tasks**: workflow steps listing the board (`board_list_tasks`) and agents
+  using personal access (`list_board_tasks`) no longer see archived tasks, the
+  same as on the board. Pass `include_archived: true` to list them as well.
+  `list_board_tasks` no longer takes `archived`; use `include_archived`.
 - **Admin**: the dashboard's companies table splits its Billing column into
   three sortable ones: Account status (Active Customer, Trial – Active, Trial –
   Expired, Canceled Customer, Account Locked – nonpayment, Pending activation,
