@@ -590,7 +590,7 @@ module Agents
       assert_nil env["OTEL_LOG_USER_PROMPTS"]
       assert_nil env["OTEL_LOG_TOOL_DETAILS"]
 
-      @project.update!(settings: { "insights" => { "share_prompts" => true } })
+      connect_to_insights!(@project)
       env = @adapter.default_env_vars(@session.reload, callbacks: callbacks)
       assert_equal "1", env["OTEL_LOG_USER_PROMPTS"]
       assert_equal "1", env["OTEL_LOG_TOOL_DETAILS"]

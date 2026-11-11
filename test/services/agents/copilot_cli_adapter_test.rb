@@ -272,7 +272,7 @@ module Agents
     end
 
     test "the transcript's prompt and tool call are kept for a project that shares prompts, its result is not" do
-      @session.project.update!(settings: { "insights" => { "share_prompts" => true } })
+      connect_to_insights!(@session.project)
 
       @adapter.collect_usage(@session, { "logs/22268fec.events.jsonl" => transcript, "logs/http.log" => "" })
 

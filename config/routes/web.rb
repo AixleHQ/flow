@@ -709,6 +709,13 @@ scope module: :web, defaults: { format: :html } do
             get :jira_webhook
           end
         end
+        # Aixle Insights: the company's connection, and this project's switches and mapping.
+        resource :insights, only: %i[update], controller: "insights" do
+          post :connect
+          post :rotate
+          delete :disconnect
+          get :projects
+        end
         resources :agents, only: %i[index create update destroy]
         # The project's runners and the company's; only the project's own are
         # managed here. `destroy` is the soft delete that revokes.

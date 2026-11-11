@@ -173,10 +173,26 @@ class Project < ApplicationRecord
     member_users.where(id: CompanyMembership.active.where(company_id: company_id).select(:user_id))
   end
 
-  # Prompt sharing with Aixle Insights (docs/design/insights-usage-export.md §5): only then
-  # do agents report prompts and tool calls, and does Flow keep them.
+  INSIGHTS_DEFAULTS = { "export" => false, "share_prompts" => false, "project_id" => nil }.freeze
+
+  # The two switches and the mapping of docs/design/insights-usage-export.md §5.
+  def insights_settings
+    stored = settings.is_a?(Hash) && settings["insights"].is_a?(Hash) ? settings["insights"] : {}
+    INSIGHTS_DEFAULTS.merge(stored.slice(*INSIGHTS_DEFAULTS.keys))
+  end
+
+  def insights_connection
+    Integration.active.find_by(company_id: company_id, project_id: nil, provider: "insights")
+  end
+
+  def exports_to_insights?
+    insights_settings["export"] == true && insights_connection.present?
+  end
+
+  # Prompt sharing is the second switch, on an exported project: only then do agents report
+  # prompts and tool calls, and does Flow keep them.
   def shares_prompts_with_insights?
-    settings.is_a?(Hash) && settings.dig("insights", "share_prompts") == true
+    insights_settings["share_prompts"] == true && exports_to_insights?
   end
 
   private

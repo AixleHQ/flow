@@ -76,6 +76,14 @@ schedules:
     overlap: skip
     enabled: true
 
+  # Aixle Insights export (docs/design/insights-usage-export.md §6): a session is sent
+  # inline when its records are committed; this sends what is still due — a send that
+  # never ran, a retry whose time has come. SKIP: two sweeps must not race a lease.
+  - workflow: insights_export_workflow
+    cron: "*/5 * * * *"
+    overlap: skip
+    enabled: true
+
   # Recovery path for CI gates whose resolving webhook never arrived: asks the CI
   # provider what happened to each pending gate's run and resolves it with the
   # provider's own verdict, or marks it stale when the run/repository cannot be

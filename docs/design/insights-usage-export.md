@@ -278,7 +278,10 @@ servers.
 
 ### Projects
 
-- A project is exported only after a project owner or company admin enables it.
+- A project is exported only after a project owner or company admin enables it. The two
+  switches and the mapping live in `projects.settings.insights` (`export`, `share_prompts`,
+  `project_id`); `Project#exports_to_insights?` also requires the company's connection to
+  be active.
 - **Prompt sharing** is a second switch on an enabled project, off by default. Its help text
   says that prompts and tool arguments leave Flow for Insights, and that only the session's
   known secrets are masked.
@@ -310,11 +313,13 @@ servers.
 | `record_count` | records in the whole session — calls, prompts, tool calls — across chunks |
 | `rejected_count`, `delivered_at` | |
 
-The row is written in the transaction that materializes the session's `llm_calls`, and only
-when the project is enabled and the connection active. After commit the send is enqueued at
-once; `insights_export_workflow` in `app/temporal/schedules.yml` (every five minutes,
-`overlap: skip`) sends whatever is due — the shape `TriggerEngine`'s outbox and
-`OutboxRelay` already use: dispatch inline, sweep on a cron.
+The row is written when the session's `llm_calls` are materialized, and only when the
+project is enabled and the connection active. After commit `Insights::ExportSessionJob`
+sends it at once; `insights_export_workflow` in `app/temporal/schedules.yml` (every five
+minutes, `overlap: skip`) sends whatever is due — the shape `TriggerEngine`'s outbox and
+`OutboxRelay` already use: dispatch inline, sweep on a cron. A sender claims a row with a
+ten-minute lease (`claimed_until`) instead of a row lock, so no lock is held while Insights
+is called and a sender that dies is picked up when the lease ends.
 
 ### Sending
 

@@ -8,7 +8,8 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   }.freeze
 
   def index
-    integrations = Integration.visible_for_project(current_project).includes(:connected_by).order(created_at: :desc).to_a
+    integrations = Integration.visible_for_project(current_project).where.not(provider: "insights")
+                              .includes(:connected_by).order(created_at: :desc).to_a
     preload_provider_associations(integrations)
 
     render inertia: "Projects/Integrations/IntegrationsPage", props: {
@@ -22,7 +23,8 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
       linear: { oauth_enabled: Linear::AppConfig.oauth_enabled? },
       youtrack: { enabled: true, marketplace_url: Youtrack::Config::MARKETPLACE_URL },
       slack: { enabled: Slack::Oauth.enabled? },
-      teams: { enabled: Teams::Config.enabled? }
+      teams: { enabled: Teams::Config.enabled? },
+      insights: insights_props
     }
   end
 
@@ -372,6 +374,39 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   end
 
   private
+
+  # Aixle Insights has a card of its own (Web::Company::Projects::InsightsController): the
+  # company's connection, never its secret, and this project's switches and mapping.
+  def insights_props
+    return { enabled: false } unless Insights::Config.enabled?
+
+    connection = Integration.find_by(company_id: current_project.company_id, project_id: nil, provider: "insights")
+    policy = Web::Company::Projects::InsightsPolicy.new(policy_context, current_project)
+    settings = current_project.insights_settings
+    {
+      enabled: true,
+      connection: connection && {
+        status: connection.status,
+        organization_name: connection.credentials_data_for_display["organization_name"],
+        connected_at: connection.created_at.iso8601
+      },
+      project: { export: settings["export"], share_prompts: settings["share_prompts"],
+                 insights_project_id: settings["project_id"] },
+      can_connect: policy.connect?,
+      can_manage: policy.update?,
+      delivery: insights_delivery
+    }
+  end
+
+  # This project's sessions on their way to Insights, by state, and why the last one that
+  # did not arrive did not.
+  def insights_delivery
+    exports = InsightsSessionExport.joins(:terminal_session).where(terminal_sessions: { project_id: current_project.id })
+    counts = exports.group(:state).count
+    problem = exports.where(state: %w[rejected failed]).or(exports.where(state: "pending").where.not(last_error: nil))
+                     .order(updated_at: :desc).pick(:last_error)
+    InsightsSessionExport::STATES.index_with { |state| counts.fetch(state, 0) }.merge(last_error: problem)
+  end
 
   # A Slack or Teams connection serves the whole company unless it is asked for
   # this project only.

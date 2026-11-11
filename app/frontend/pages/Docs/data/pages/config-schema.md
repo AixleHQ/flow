@@ -348,6 +348,20 @@ origin without credentials, because the app calls them from a sandboxed widget.
 | `YOUTRACK_WEBHOOK_BASE_URL` | no       | `<protocol>://<domain>` | The base of the event addresses Flow hands to the Aixle Flow app. Set it only when the deployment's domain is not reachable from the YouTrack server (a private zone, a tunnel in development). |
 | `YOUTRACK_TRUSTED_HOSTS`    | no       | unset                   | Self-hosted YouTrack hosts that resolve to a private address and may still be called, comma-separated. Every other host must resolve to a public address. |
 
+## Aixle Insights
+
+Exports agent usage — and, for projects that share them, prompts and tool calls — to an
+Aixle Insights organization (`docs/design/insights-usage-export.md`). Insights registers
+the deployment and hands over its id and secret out of band; the integration is hidden
+until all three variables are set. The secret is accepted by Insights only to redeem an
+owner's pairing code; each connection then gets its own secret, stored encrypted.
+
+| Variable                     | Required | Default | Purpose |
+| ---------------------------- | -------- | ------- | ------- |
+| `INSIGHTS_URL`               | no       | unset   | The Insights API host (not its OTLP collector). |
+| `INSIGHTS_DEPLOYMENT_ID`     | no       | unset   | This deployment's id, issued by Insights. |
+| `INSIGHTS_DEPLOYMENT_SECRET` | no       | unset   | This deployment's secret, issued by Insights. Rotated by Insights on request; two are valid for a day during the switch. |
+
 ## Auth & OAuth providers
 
 | Variable                     | Required | Default            | Purpose                                                      |

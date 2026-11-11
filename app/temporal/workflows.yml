@@ -35,6 +35,12 @@ workflows:
       - name: outbox_relay_drain_activity
         task_queue: aixle_ruby
 
+  - name: insights_export_workflow
+    owner: aixle_ruby
+    activities:
+      - name: insights_export_drain_activity
+        task_queue: aixle_ruby
+
   - name: gate_reconciliation_workflow
     owner: aixle_ruby
     activities:

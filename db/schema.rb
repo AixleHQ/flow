@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_11_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_11_140000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -933,6 +933,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_130000) do
     t.index ["company_id"], name: "index_identity_providers_on_company_id"
     t.index ["kind"], name: "index_identity_providers_unique_deployment_kind", unique: true, where: "((scope)::text = 'deployment'::text)"
     t.check_constraint "scope::text = 'deployment'::text AND company_id IS NULL OR scope::text = 'company'::text AND company_id IS NOT NULL", name: "identity_providers_scope_company_consistency"
+  end
+
+  create_table "insights_session_exports", force: :cascade do |t|
+    t.bigint "terminal_session_id", null: false
+    t.bigint "integration_id"
+    t.string "state", default: "pending", null: false
+    t.integer "attempts", default: 0, null: false
+    t.datetime "next_attempt_at"
+    t.datetime "claimed_until"
+    t.string "last_error"
+    t.integer "record_count", default: 0, null: false
+    t.integer "rejected_count", default: 0, null: false
+    t.datetime "delivered_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["integration_id"], name: "index_insights_session_exports_on_integration_id"
+    t.index ["state", "next_attempt_at"], name: "index_insights_session_exports_on_state_and_next_attempt_at"
+    t.index ["terminal_session_id"], name: "index_insights_session_exports_on_terminal_session_id", unique: true
   end
 
   create_table "integration_data", force: :cascade do |t|
@@ -2474,6 +2492,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_130000) do
   add_foreign_key "gates", "board_tasks", on_delete: :cascade
   add_foreign_key "gates", "users", column: "creator_id", on_delete: :nullify
   add_foreign_key "identity_providers", "companies"
+  add_foreign_key "insights_session_exports", "integrations", on_delete: :nullify
+  add_foreign_key "insights_session_exports", "terminal_sessions", on_delete: :cascade
   add_foreign_key "integration_data", "integrations", on_delete: :cascade
   add_foreign_key "integrations", "azure_devops_installations", on_delete: :restrict
   add_foreign_key "integrations", "bitbucket_installations", on_delete: :restrict

@@ -142,7 +142,7 @@ module Agents
     end
 
     def share_prompts!
-      @project.update!(settings: { "insights" => { "share_prompts" => true } })
+      connect_to_insights!(@project)
     end
 
     # only: the payload kind to replay ("resourceLogs", "resourceMetrics"), all when nil.

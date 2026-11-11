@@ -7,7 +7,8 @@ module AgentActivity
     setup do
       @company = create(:company)
       @user = create(:user, company: @company)
-      @project = create(:project, company: @company, owner: @user, settings: { "insights" => { "share_prompts" => true } })
+      @project = create(:project, company: @company, owner: @user)
+      connect_to_insights!(@project)
       @session = create(:terminal_session, :running, user: @user, project: @project, agent_type: "claude_code")
     end
 
@@ -22,8 +23,12 @@ module AgentActivity
       assert call.uid.present?
     end
 
-    test "records nothing for a project that does not share prompts" do
-      @project.update!(settings: {})
+    test "records nothing for a project that does not share prompts, or whose company is not connected" do
+      @project.update!(settings: { "insights" => { "export" => true, "share_prompts" => false } })
+      assert_equal 0, Recorder.record(@session.reload, prompts: [ prompt("p1", "hello") ])
+
+      connect_to_insights!(@project)
+      Integration.where(provider: "insights").update_all(status: "error")
 
       assert_equal 0, Recorder.record(@session, prompts: [ prompt("p1", "hello") ], tool_calls: [ tool_call("t1") ])
       assert_not AgentPrompt.exists?(terminal_session: @session)

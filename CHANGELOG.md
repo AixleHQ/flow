@@ -14,6 +14,14 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
+- **Integrations**: connect the company to an Aixle Insights organization with
+  the one-time pairing code an Insights owner creates. Each project then chooses
+  to send its usage — model calls, tokens and cost — and, as a separate switch,
+  its prompts and tool calls (names and arguments; never replies or tool
+  outputs). Sessions are sent when they end and retried for a week; the card
+  shows what was sent and the last problem. Operators: set `INSIGHTS_URL`,
+  `INSIGHTS_DEPLOYMENT_ID` and `INSIGHTS_DEPLOYMENT_SECRET` (issued by Insights);
+  the integration stays hidden until all three are set.
 - **Teams**: a project can now have teams — named groups of its members, each
   with a strategy for picking who takes a run: priority (the first member who
   can), round robin, or the most agent quota left. Each run goes to one member

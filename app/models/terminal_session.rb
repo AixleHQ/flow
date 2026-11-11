@@ -72,6 +72,7 @@ class TerminalSession < ApplicationRecord
   has_many :llm_calls, dependent: :destroy
   has_many :agent_prompts, dependent: :delete_all
   has_many :agent_tool_calls, dependent: :delete_all
+  has_one :insights_session_export, dependent: :delete
   has_many :session_logs, dependent: :destroy
   has_many :output_assets, class_name: "Asset", foreign_key: :terminal_session_id
   has_one :step_run, dependent: :nullify
@@ -459,6 +460,7 @@ class TerminalSession < ApplicationRecord
     LlmCalls::Materializer.call(self)
     adapter = AgentCredentialsService::ADAPTERS[agent_type]
     AgentActivity::Recorder.record_initial_prompt(self) if adapter && !adapter::REPORTS_PROMPTS
+    Insights::Export.enqueue(self)
   rescue StandardError => e
     Rails.logger.error("[TerminalSession] Failed to materialize llm_calls for #{id}: #{e.message}")
   end
