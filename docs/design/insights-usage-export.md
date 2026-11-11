@@ -33,12 +33,17 @@ Proposed decisions:
 6. **A connection is made by an Insights organization owner** through a one-time pairing
    code that only a registered Flow deployment can redeem for the connection's credential —
    never by pasting a long-lived identifier or token (§5).
-7. **Usage only.** No prompt or response text, no tool input or output, no file paths or
-   commands (§7).
+7. **Usage, prompts and tool calls — never replies or outputs.** Every prompt an agent
+   receives (a person's, or a workflow step's instructions) and every tool call — name,
+   arguments, success, duration — is recorded and exported, so prompts can be analyzed in
+   Insights. Assistant replies and tool outputs are not collected. Content is collected only
+   in projects that share it, masked against the session's known secrets and size-capped
+   (§3a, §8). Insights is not connected on client projects.
 8. **At-least-once delivery, idempotent on the call.** A transactional outbox row per
    finished session, sent right after commit with a Temporal schedule as the safety net;
    Insights upserts on the call's id (§6).
-9. **Opt-in per project.** A company connects once; each project is enabled explicitly.
+9. **Opt-in per project, twice.** A company connects once; each project is enabled
+   explicitly for usage, and prompt sharing is a second switch of its own (§5).
 
 ## 2. What exists
 
@@ -137,17 +142,78 @@ Rules that keep it uniform:
   already parses each captured CLI fixture with the real adapter; it gains the expected
   `llm_calls` rows, so a vendor's format change breaks CI rather than numbers downstream.
 
+## 3a. Agent activity: prompts and tool calls
+
+Two more canonical records, written the way `llm_calls` is — adapters turn what the runtime
+reports into activity events, the materializer turns those into rows at the session's end,
+keyed by their position and never rewritten — and exported beside the calls. They exist
+only for sessions of projects with prompt sharing on.
+
+`agent_prompts`, one per prompt an agent received:
+
+| Column | Type | Meaning |
+| --- | --- | --- |
+| `uid` | uuid, not null | Id outside Flow; the export's idempotency key. |
+| `terminal_session_id`, `workflow_run_id`, `step_run_id` | bigint | As on `llm_calls`. |
+| `event_index` | integer, not null | Position in the session's activity events; unique with the session. |
+| `occurred_at` | datetime, not null | |
+| `origin` | string, not null | `step_instructions` (what Flow sent a workflow step) or `user` (typed into a session). |
+| `text` | text, not null | Masked (§8), at most 64 KB. |
+| `text_length`, `truncated` | integer, boolean | The length before masking and the cap; whether the cap cut it. |
+| `prompt_ref` | string, null | The runtime's own prompt id (Claude Code's `prompt.id`), which joins a prompt to the calls and tool calls it led to. |
+| `source` | string, not null | `flow`, `otlp_log`, `transcript`. |
+
+`agent_tool_calls`, one per tool call:
+
+| Column | Type | Meaning |
+| --- | --- | --- |
+| `uid`, `terminal_session_id`, `workflow_run_id`, `step_run_id`, `event_index`, `occurred_at`, `prompt_ref`, `source` | | As above. |
+| `tool_name` | string, not null | As the runtime names it: `Bash`, `Edit`, `mcp__github__create_issue`. |
+| `mcp_server` | string, null | For a tool an MCP server provides. |
+| `arguments` | jsonb, null | Masked; each string at most 8 KB, the whole at most 32 KB. |
+| `success` | boolean, null | |
+| `error` | string, null | The first 500 characters of an error. |
+| `duration_ms` | integer, null | |
+
+Where it comes from (to confirm per runtime when its fixture is captured):
+
+| Runtime | Prompts | Tool calls | Set in the container, only when sharing is on |
+| --- | --- | --- | --- |
+| Claude Code | OTLP log `user_prompt` | OTLP log `tool_result` | `OTEL_LOG_USER_PROMPTS=1`, `OTEL_LOG_TOOL_DETAILS=1` |
+| Codex | OTLP log `codex.user_prompt` | OTLP log `codex.tool_result`, its `output` dropped | `[otel] log_user_prompt = true` |
+| Gemini CLI | OTLP log `gemini_cli.user_prompt` | OTLP log `gemini_cli.tool_call` | `telemetry.logPrompts: true` |
+| Copilot CLI | the transcript `events.jsonl` Flow already collects | the same transcript | — |
+| Kiro, Cursor, Grok, Antigravity | a workflow step's instructions only | — | — |
+| Every workflow step | the instructions Flow rendered for it | — | — |
+
+Rules:
+
+- **Nothing is collected where nothing is shared.** The container switches above are set
+  only for sessions of projects with prompt sharing on, so elsewhere no prompt reaches Flow
+  beyond what it already keeps in session logs.
+- **Replies and tool outputs are dropped in the adapter**, never stored. They still travel
+  through `otlp-ingest` where a runtime puts them in the same record (Codex's tool output);
+  the relay may strip them later if that traffic matters.
+- **Masked before it is stored**, with `Sessions::SecretRedactor` and the session's known
+  secrets — the values it was handed through config items.
+
 ## 4. Claude Code: logs instead of metrics
 
 - The container gets `OTEL_LOGS_EXPORTER=otlp` with the existing endpoint and protocol, and a
   short `OTEL_LOGS_EXPORT_INTERVAL` (2 s, as metrics today) so usage lands before the
-  container stops. `OTEL_LOG_USER_PROMPTS` and `OTEL_LOG_ASSISTANT_RESPONSES` stay unset.
+  container stops. `OTEL_LOG_USER_PROMPTS` and `OTEL_LOG_TOOL_DETAILS` are set only for a
+  project with prompt sharing on (§3a); the same records then also carry `user_prompt` and
+  `tool_result` events.
 - `Agents::ClaudeCodeAdapter` reads `api_request` log records — `model`, `input_tokens`,
   `output_tokens`, `cache_read_tokens`, `cache_creation_tokens`, `cost_usd`, `duration_ms` —
   one usage event per record, `source: otlp_log`, `granularity: request`. The Codex adapter's
   log path is the precedent.
-- **Metrics stop counting.** Counting both doubles the usage. One release exports both, uses
-  logs, and logs the difference against metrics; the next drops `OTEL_METRICS_EXPORTER`.
+- **Metrics stop counting.** Counting both doubles the usage, and exporting both from every
+  container in production would double Claude Code's telemetry traffic. New containers
+  export logs only. The two are compared offline instead: the fixture is captured with both
+  exporters on, and the contract test asserts the log-derived totals equal the metric-derived
+  ones. The metric parser stays one release for containers started before the deploy — each
+  container sends one or the other, never both — and is removed after.
 - The session-key check is unchanged: logs carry the same resource attributes.
 - `bin/capture-agent-otlp claude_code` re-captures the fixture with logs.
 
@@ -213,6 +279,9 @@ servers.
 ### Projects
 
 - A project is exported only after a project owner or company admin enables it.
+- **Prompt sharing** is a second switch on an enabled project, off by default. Its help text
+  says that prompts and tool arguments leave Flow for Insights, and that only the session's
+  known secrets are masked.
 - The project can be mapped to one Insights project, picked from
   `GET /partner/v1/connection/projects` (active projects only). Without a mapping, Flow
   sends the remote of the project's repository when it has exactly one, and Insights matches
@@ -238,7 +307,7 @@ servers.
 | `integration_id` | the company connection |
 | `state` | `pending`, `delivered`, `rejected`, `failed`, `skipped` |
 | `attempts`, `next_attempt_at`, `last_error` | `last_error` names the chunk (`chunk 3/5: 503 …`) |
-| `record_count` | calls in the whole session, across chunks |
+| `record_count` | records in the whole session — calls, prompts, tool calls — across chunks |
 | `rejected_count`, `delivered_at` | |
 
 The row is written in the transaction that materializes the session's `llm_calls`, and only
@@ -249,9 +318,12 @@ once; `insights_export_workflow` in `app/temporal/schedules.yml` (every five min
 
 ### Sending
 
-- **A session is the unit of delivery.** Its calls go in chunks of at most 1,000, one
+- **A session is the unit of delivery.** Its records go in chunks of at most 1,000, one
   request each, every chunk carrying the same session context (person, project,
   repository), so nothing on the receiving side has to join requests.
+- **Late rows are sent too.** Telemetry can land after a session ended; when the
+  materializer adds rows to a session already delivered, its outbox row goes back to
+  `pending` and the session is sent again — upserts make the repeat harmless.
 - **`delivered` only when every chunk was accepted in full.** A failed attempt re-sends every
   chunk; upserts make that safe, and it keeps the outbox free of per-chunk progress.
 - gzip, 10-second timeout.
@@ -311,8 +383,16 @@ Token counts use Flow's own names rather than `gen_ai.usage.*`: whether the sema
 convention's input count includes cached tokens differs between producers, and the receiver
 must not have to guess. Provider and model use the convention.
 
-Nothing else is sent: no prompt or response text, no tool names with arguments, no paths,
-commands or repository contents.
+Two more record kinds, from projects with prompt sharing on (§3a), carry the same resource
+attributes:
+
+| `event.name` | Body | Attributes |
+| --- | --- | --- |
+| `aixle_flow.prompt` | the prompt text | `aixle_flow.prompt.id` (`uid`), `aixle_flow.prompt.origin`, `aixle_flow.prompt.length`, `aixle_flow.prompt.truncated`, `aixle_flow.prompt.ref`, `aixle_flow.step_run.id` |
+| `aixle_flow.tool_call` | none | `aixle_flow.tool_call.id` (`uid`), `gen_ai.tool.name`, `aixle_flow.tool.mcp_server`, `aixle_flow.tool.arguments` (a JSON string), `aixle_flow.tool.success`, `aixle_flow.tool.error`, `aixle_flow.duration_ms`, `aixle_flow.prompt.ref`, `aixle_flow.step_run.id` |
+
+Never sent: assistant replies, tool outputs, and any repository or file content beyond what a
+prompt or a tool's arguments carry.
 
 ## 8. Security and privacy
 
@@ -337,6 +417,11 @@ commands or repository contents.
   — a log line, an environment dump, a support ticket — not a compromise of the server.
 - **Personal data.** The user's email and usage leave Flow. The project switch's help text
   says so.
+- **Prompts and tool arguments** leave Flow only for projects with prompt sharing on. They
+  can hold code, customer data and credentials Flow never handed out — a token read from a
+  file, pasted into a prompt, passed to `curl` — which masking cannot catch: it knows only
+  the session's own secrets. That is why sharing is its own switch and why Insights is not
+  connected on client projects. Insights holds them as sensitive content (§9).
 
 ## 9. What Insights builds
 
@@ -369,7 +454,11 @@ commands or repository contents.
 7. **Reconciliation with provider-synced usage.** When an organization also syncs usage from
    a provider account whose key a Flow agent used, the same calls arrive twice. Insights
    decides which source wins; `aixle_flow.credential.kind` is there to help.
-8. **Limits.** How Flow's traffic counts against an organization's ingest quota, and a
+8. **Prompts and tool calls.** Accept `aixle_flow.prompt` and `aixle_flow.tool_call`
+   records (the contract accepts `aixle_flow.llm_call` only), upserted on their ids like
+   calls; store them as sensitive content — who in the organization may read them, how long
+   they are kept, and their deletion when a connection is revoked (§12).
+9. **Limits.** How Flow's traffic counts against an organization's ingest quota, and a
    per-connection rate limit.
 
 Of the stronger credentials proposed on the Insights side, request signing fits behind
@@ -383,9 +472,10 @@ organization.
 | --- | --- |
 | 0 — canonical record | Land PR #217 without its OTLP forwarder or the extra resource attribute; the §3 column changes; one pricing service and model normalizer; immutable rows; contract test rows. |
 | 1 — Claude Code logs | §4. |
-| 2 — connection | `Integration` provider `insights`, the pairing screen, the project switch and mapping, deployment settings (`INSIGHTS_URL`, deployment id and secret). |
-| 3 — export | `insights_session_exports`, the sender, `insights_export_workflow`, delivery state on the integration page. |
-| 4 — backfill | Optional export of a project's past sessions when it is enabled (§12). |
+| 2 — agent activity | §3a: `agent_prompts` and `agent_tool_calls`, the activity events of Claude Code, Codex, Gemini CLI and Copilot CLI, step instructions, the container switches, masking, the prompt-sharing project setting. |
+| 3 — connection | `Integration` provider `insights`, the pairing screen, the project switches and mapping, deployment settings (`INSIGHTS_URL`, deployment id and secret). |
+| 4 — export | `insights_session_exports`, the sender, `insights_export_workflow`, delivery state on the integration page. |
+| 5 — backfill | Optional export of a project's past sessions when it is enabled (§12). |
 
 Phases 0 and 1 stand on their own: they fix cost and per-call detail in Flow itself.
 
@@ -411,6 +501,11 @@ Phases 0 and 1 stand on their own: they fix cost and per-call detail in Flow its
   people who want it.
 - **Plain JSON instead of OTLP.** Equally workable; OTLP reuses Insights' existing parsing.
   Insights may choose.
+- **Usage only** (this document's first draft). The safest export, but prompt analysis is a
+  goal of the integration.
+- **Full transcripts** — replies and tool outputs as well. The largest and most sensitive
+  content (file contents, command output), and complete only where a runtime keeps a
+  transcript (Claude Code, Copilot CLI).
 
 ## 12. Open questions
 
@@ -425,3 +520,6 @@ Phases 0 and 1 stand on their own: they fix cost and per-call detail in Flow its
 7. How a self-hosted Flow registers its deployment with Insights: self-serve in Insights,
    or on request. Until it does, it cannot connect.
 8. A person deleted in Flow: does anything propagate, or do Insights' retention rules govern?
+9. How long Flow keeps `agent_prompts` and `agent_tool_calls` — as long as session logs, or
+   only until they are delivered?
+10. Who in an Insights organization may read prompts: every member, or owners only?
