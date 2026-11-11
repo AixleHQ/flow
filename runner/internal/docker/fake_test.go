@@ -74,6 +74,11 @@ type fakeEngine struct {
 	// waitFailures breaks that many container waits, the next ones first, as
 	// a daemon whose wait stream fails does: the headers, then no body.
 	waitFailures int
+	// waitErrorResults answers that many container waits, after the broken
+	// ones, at once with a result that carries an error, as a daemon whose
+	// wait was cancelled (a dockerd restart with live-restore, say) does,
+	// while the container still runs.
+	waitErrorResults int
 	// waits counts every container wait.
 	waits int
 	// logsBlock keeps every container log read from answering until the
@@ -475,9 +480,17 @@ func (f *fakeEngine) waitContainer(w http.ResponseWriter, r *http.Request, ref s
 	if broken {
 		f.waitFailures--
 	}
+	errorResult := !broken && f.waitErrorResults > 0
+	if errorResult {
+		f.waitErrorResults--
+	}
 	f.mu.Unlock()
 	if broken {
 		_, _ = w.Write([]byte("{\"StatusCo"))
+		return
+	}
+	if errorResult {
+		_ = json.NewEncoder(w).Encode(container.WaitResponse{StatusCode: -1, Error: &container.WaitExitError{Message: "context canceled"}})
 		return
 	}
 	select {

@@ -89,6 +89,11 @@ class Runners::ProxyTest < ActiveSupport::TestCase
     [ "store/%FF", "store/a%C3", "store/%C0%AF", "store/\xFF".b ].each do |path|
       assert_not assets.allows?("GET", path), path.inspect
     end
+    # Raw octets outside ASCII, even valid UTF-8: the path is the encoded form.
+    [ "store/\xC3\xA9".b, "store/caf\xC3\xA9.pdf".b, "store/é" ].each do |path|
+      assert_not assets.allows?("GET", path), path.inspect
+    end
+    assert_not Runners::Proxy.route("mcp").allows?("POST", "\xC3\xA9".b)
   end
 
   test "decode_segment decodes strictly" do

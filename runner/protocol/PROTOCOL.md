@@ -540,7 +540,9 @@ as for every endpoint (§3). When it cannot reach the gateway at all, it answers
 
 1. **The route.** Only these routes, methods and paths pass; anything else is
    `404 route_not_allowed`, a path below the route that doesn't percent-decode strictly
-   included: a `%` not followed by two hex digits, or decoded octets that aren't UTF-8.
+   included: a raw octet outside ASCII, a `%` not followed by two hex digits, or decoded
+   octets that aren't UTF-8. The host runner's relay refuses the malformed `%` too; the
+   other two rules are the gateway's alone.
 
    | `:route` | Methods | Path below the route | The platform's endpoint | Session key |
    | --- | --- | --- | --- | --- |

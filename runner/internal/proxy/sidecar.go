@@ -110,7 +110,7 @@ func sidecarProxy(socket string, logger *slog.Logger) *httputil.ReverseProxy {
 		FlushInterval: -1,
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			if r.Context().Err() == nil {
-				logger.Warn("relaying to the host runner failed", "method", r.Method, "error", err)
+				logger.Warn("relaying to the host runner failed", "method", r.Method, "error", withoutURL(err))
 			}
 			WriteRefusal(w, http.StatusBadGateway, ClassRelayFailed, "the host runner does not answer on its socket")
 		},

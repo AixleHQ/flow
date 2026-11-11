@@ -109,6 +109,13 @@ class RunnerGatewayProxyTest < ActionDispatch::IntegrationTest
       get "/runner/v1/proxy/assets/store/x", headers: proxy_headers, env: { "PATH_INFO" => "/runner/v1/proxy/assets/#{path}" }
       assert_refused :not_found, "route_not_allowed", path
     end
+    # Raw octets outside ASCII, valid UTF-8 or not: the path is the
+    # percent-encoded form, so they are refused before they are decoded.
+    [ "store/\xC3\xA9".b, "store/caf\xC3\xA9.pdf".b, "store/\xFF".b ].each do |path|
+      get "/runner/v1/proxy/assets/store/x", headers: proxy_headers,
+                                             env: { "PATH_INFO" => "/runner/v1/proxy/assets/".b + path }
+      assert_refused :not_found, "route_not_allowed", path.inspect
+    end
 
     @environment.update!(current_session: nil)
     get "/runner/v1/proxy/assets/store/ab/report%20one.pdf?v=1", headers: proxy_headers

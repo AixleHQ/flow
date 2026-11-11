@@ -108,6 +108,9 @@ func (r *Relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	below := strings.TrimPrefix(escaped, protocol.ProxyPathPrefix)
+	// The route is taken before the query is added: a query is part of the
+	// agent's opaque request and is never logged.
+	route, _, _ := strings.Cut(below, "/")
 	if req.URL.RawQuery != "" {
 		below += "?" + req.URL.RawQuery
 	}
@@ -132,7 +135,6 @@ func (r *Relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return err
 	})
 	if err != nil {
-		route, _, _ := strings.Cut(below, "/")
 		if refusal, ok := protocol.AsRefusal(err); ok {
 			r.logger().Warn("the gateway refused a proxied request", "method", req.Method, "route", route,
 				"status", refusal.Status, "error", refusal.Code)
@@ -144,7 +146,7 @@ func (r *Relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		if req.Context().Err() == nil {
-			r.logger().Warn("relaying a proxied request failed", "method", req.Method, "route", route, "error", err)
+			r.logger().Warn("relaying a proxied request failed", "method", req.Method, "route", route, "error", withoutURL(err))
 		}
 		WriteRefusal(w, http.StatusBadGateway, ClassRelayFailed, "the host runner could not reach the platform")
 		return
@@ -159,6 +161,16 @@ func (r *Relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	w.WriteHeader(resp.StatusCode)
 	Stream(w, resp.Body)
+}
+
+// withoutURL is a relay failure fit for the log: net/http's *url.Error names
+// the request's whole URL, query included, so only the error it wraps is kept.
+func withoutURL(err error) error {
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		return urlErr.Err
+	}
+	return err
 }
 
 // canonical says whether the path below the proxy route's prefix, as it was

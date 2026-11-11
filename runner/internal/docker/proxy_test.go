@@ -401,6 +401,52 @@ func TestASidecarIsWatchedAgainWhenTheWaitStreamFails(t *testing.T) {
 	}
 }
 
+// A wait result that carries an error is the wait failing, not the sidecar
+// exiting: the sidecar is looked at, and one that still runs is waited for
+// again, with the agent left running.
+func TestAWaitResultWithAnErrorDoesNotStopTheAgentWhileTheSidecarRuns(t *testing.T) {
+	h := newEnvironment(t)
+	_, log := h.withProxy()
+	h.env.SidecarWaitRetry = 10 * time.Millisecond
+	h.engine.mu.Lock()
+	h.engine.waitErrorResults = 2
+	h.engine.mu.Unlock()
+	h.start(h.env, nil)
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		h.engine.mu.Lock()
+		waits := h.engine.waits
+		h.engine.mu.Unlock()
+		if waits >= 3 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the watcher stopped after %d waits: %s", waits, log)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !h.running(h.env.ContainerName(sessionID)) {
+		t.Fatalf("a wait result with an error stopped the agent, but its sidecar still runs: %s", log)
+	}
+	out := log.String()
+	if strings.Contains(out, "the proxy sidecar exited") {
+		t.Errorf("a wait result with an error was logged as a sidecar exit: %s", out)
+	}
+	if !strings.Contains(out, "context canceled") {
+		t.Errorf("the log lacks the wait's error: %s", out)
+	}
+
+	sidecar := h.byName(h.env.SidecarName(sessionID))
+	h.engine.mu.Lock()
+	h.engine.exit(sidecar, 3)
+	h.engine.mu.Unlock()
+	h.waitForTheAgentToStop(log)
+	if !strings.Contains(log.String(), "exit_code=3") {
+		t.Errorf("the log lacks the sidecar's real exit code: %s", log)
+	}
+}
+
 // breakEveryWait breaks every container wait from now on, so the watcher sees
 // the sidecar only through ContainerInspect after each broken wait.
 func (h *harness) breakEveryWait() {

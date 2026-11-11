@@ -34,9 +34,10 @@ class RunnerProxySettingsTest < ActiveSupport::TestCase
 
   test "the host port base must be at least 1024" do
     [ nil, "", 1023 ].each do |base|
-      assert_match(/\ARUNNER_PROXY_HOST_PORT_BASE must be at least 1024/, problems(base: base).sole, base.inspect)
+      assert_match(/\ARUNNER_PROXY_HOST_PORT_BASE must be at least 1024/, problems(base: base, span: 1).sole,
+                   base.inspect)
     end
-    assert_empty problems(base: 1024)
+    assert_empty problems(base: 1024, span: 1)
   end
 
   test "the host port span must be at least 1" do
@@ -50,6 +51,24 @@ class RunnerProxySettingsTest < ActiveSupport::TestCase
     assert_empty problems(base: 60_000, span: 5536)
     assert_equal [ "RUNNER_PROXY_HOST_PORT_BASE + RUNNER_PROXY_HOST_PORT_SPAN - 1 must be at most 65535, not 65536" ],
                  problems(base: 60_000, span: 5537)
+  end
+
+  test "the host port range must not include any of the agent image's ports" do
+    assert_equal [ "RUNNER_PROXY_HOST_PORT_BASE..RUNNER_PROXY_HOST_PORT_BASE + RUNNER_PROXY_HOST_PORT_SPAN - 1 " \
+                   "(7681..7681) must not include the agent image's own ports (7681, 7682, 4040, 4041, 8443, 8888), " \
+                   "but it includes 7681" ],
+                 problems(base: 7681, span: 1)
+    assert_match(/\(4000\.\.8999\) .* includes 4040, 4041, 7681, 7682, 8443, 8888\z/,
+                 problems(base: 4000, span: 5000).sole)
+    Runners::Proxy::IMAGE_PORTS.each do |port|
+      assert_match(/includes #{port}\z/, problems(base: port, span: 1).sole, port.to_s)
+      assert_match(/includes (\d+, )*#{port}\z/, problems(base: port - 1, span: 2).sole, port.to_s)
+    end
+    # The ranges next to an image port, below and above it.
+    assert_empty problems(base: 7683, span: 760)
+    assert_empty problems(base: 4042, span: 3639)
+    assert_empty problems(base: 8889, span: 1)
+    assert_empty problems(base: 8444, span: 444)
   end
 
   test "the initializer refuses to boot on the first problem, after initialization" do

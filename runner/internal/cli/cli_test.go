@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -393,6 +394,49 @@ func TestAHostRunnerThatCannotResumeItsSessionsExitsBeforePolling(t *testing.T) 
 		if r.method == http.MethodGet && r.path == "/runner/v1/ops" {
 			t.Fatalf("the host runner polled with its sessions not served again: %v", p.requests)
 		}
+	}
+}
+
+// The relay's sockets are 0666 below the state directory, so the host runner
+// narrows a wider state directory to 0700 when it starts.
+func TestAHostRunnerNarrowsAWiderStateDirectory(t *testing.T) {
+	_, url := newPlatform(t, map[string][]answer{})
+	dir := t.TempDir()
+	storeCreds(t, dir, url)
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = RunHost(ctx, HostOptions{StateDir: dir, Docker: unlistableDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	info, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o700 {
+		t.Fatalf("the state directory is still %04o", info.Mode().Perm())
+	}
+}
+
+// A state directory the host runner cannot narrow stops it until an operator
+// acts, with an error that names the directory and its mode, before it serves
+// any relay or polls.
+func TestAHostRunnerThatCannotNarrowItsStateDirectoryNeedsAnOperator(t *testing.T) {
+	p, url := newPlatform(t, map[string][]answer{})
+	dir := t.TempDir()
+	storeCreds(t, dir, url)
+	restrictStateDir = func(dir string) error {
+		return fmt.Errorf("the state directory %s is mode 0755, and the runner could not narrow it to 0700: %w", dir, fs.ErrPermission)
+	}
+	t.Cleanup(func() { restrictStateDir = statedir.Restrict })
+	err := RunHost(context.Background(), HostOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	if err == nil || !NeedsOperator(err) || !strings.Contains(err.Error(), dir) || !strings.Contains(err.Error(), "0755") {
+		t.Fatalf("got %v", err)
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(p.requests) != 0 {
+		t.Fatalf("the host runner called the platform: %v", p.requests)
 	}
 }
 

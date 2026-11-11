@@ -255,8 +255,18 @@ func (e *Environment) watchSidecar(sessionID int64, id string) {
 			wait := e.API.ContainerWait(ctx, id, client.ContainerWaitOptions{Condition: container.WaitConditionNotRunning})
 			select {
 			case res := <-wait.Result:
-				e.sidecarExited(ctx, sessionID, id, res.StatusCode)
-				return
+				if res.Error == nil || res.Error.Message == "" {
+					e.sidecarExited(ctx, sessionID, id, res.StatusCode)
+					return
+				}
+				// A result that carries an error is the wait failing, not the
+				// sidecar exiting (scrub.go reads it the same way): look at
+				// the sidecar, as for an error on the stream.
+				if ctx.Err() != nil || e.isRetired(id) {
+					return
+				}
+				e.logger().Warn("watching the proxy sidecar failed; looking at it, then watching it again",
+					"environment", e.Key, "session", sessionID, "sidecar", id, "error", res.Error.Message, "retry_in", pause)
 			case err := <-wait.Error:
 				if ctx.Err() != nil || e.isRetired(id) {
 					return

@@ -239,6 +239,61 @@ func TestTheRelayAnswersRelayFailedWhenTheGatewayIsDown(t *testing.T) {
 	}
 }
 
+// logBuffer is a log that the relay's goroutines write and a test reads.
+type logBuffer struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+func (b *logBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *logBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+// The query is part of the agent's opaque request, and can carry a secret: the
+// relay logs a refusal and a failure with the route only, and a failure with
+// the transport's error but not the URL it names.
+func TestTheRelayLogsNoQuery(t *testing.T) {
+	refusing := &gateway{answer: func(w http.ResponseWriter, _ *http.Request) {
+		WriteRefusal(w, http.StatusForbidden, "session_not_on_environment", "The request carries no key of the session this machine runs now.")
+	}}
+	refusingRelay := newRelay(t, refusing)
+	downRelay := newRelay(t, &gateway{})
+	down, _ := protocol.NewClient("http://127.0.0.1:1", "1.4.0", nil)
+	downRelay.Gateway = down
+
+	for name, r := range map[string]*Relay{"a refusal": refusingRelay, "a transport failure": downRelay} {
+		log := &logBuffer{}
+		r.Logger = slog.New(slog.NewTextHandler(log, nil))
+		relay := httptest.NewServer(r)
+		for _, path := range []string{"/runner/v1/proxy/mcp?token=s3cret-query", "/runner/v1/proxy/assets/store/a.json?token=s3cret-query"} {
+			resp, err := http.Get(relay.URL + path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resp.Body.Close()
+		}
+		relay.Close()
+		out := log.String()
+		if !strings.Contains(out, "route=mcp") || !strings.Contains(out, "route=assets") {
+			t.Errorf("%s: the log lacks the routes: %s", name, out)
+		}
+		if strings.Contains(out, "s3cret-query") || strings.Contains(out, "token=") {
+			t.Errorf("%s: the log carries the query: %s", name, out)
+		}
+		if r == downRelay && !strings.Contains(out, "connection refused") {
+			t.Errorf("%s: the log lacks the transport's error: %s", name, out)
+		}
+	}
+}
+
 // startSidecar runs the sidecar against the session's socket of a Host.
 func startSidecar(t *testing.T, socket string) string {
 	t.Helper()

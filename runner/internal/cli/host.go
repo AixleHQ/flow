@@ -59,6 +59,12 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 		return err
 	}
 	defer lock.Release()
+	// The relay's sockets below the state directory are 0666: only the
+	// directory's 0700 keeps other local users from the relay (§6.9.3). A
+	// directory the runner cannot narrow needs an operator, not a restart.
+	if err := restrictStateDir(opts.StateDir); err != nil {
+		return operatorError{err}
+	}
 
 	store := credentials.NewStore(opts.StateDir)
 	creds, err := store.Load()
