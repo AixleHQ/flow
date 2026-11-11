@@ -1170,13 +1170,15 @@ named parameters and never see the request.
   way `Templates::Package` checks `template.yaml` against `config/templates/template.v1.json`.
   A failure is the endpoint's own refusal (`invalid_registration`, `invalid_result`,
   `invalid_request`). It then maps the body to the service's named parameters by the
-  protocol's wire rules (an `os` or `arch` that is not a string ignored, `facts` `{}` and
-  `auto_update` true when absent, `exit_code` an Integer), and maps a service's refusal,
-  `Runners::Credentials::Refused`, to its status through `REFUSAL_STATUS`.
+  protocol's wire rules (an absent `os` or `arch` `nil`, `facts` `{}` and `auto_update` true
+  when absent, `ephemeral` true only for the JSON boolean `true`, `exit_code` an Integer), and
+  maps a service's refusal, `Runners::Credentials::Refused`, to its status through
+  `REFUSAL_STATUS`. The schemas are strict about types: `os` and `arch` are strings and
+  `ephemeral` a JSON boolean, and any other value is the endpoint's refusal, not cast.
 - **The service** (`Runners::Registration.register!`, `Runners::Operations.record_result!`)
   makes the domain refusals and raises `Runners::Credentials::Refused`: `ephemeral: true` is
-  `ephemeral_not_supported`, which is why `register.request.json` lets a body that asks for
-  `ephemeral` pass whatever the rest of it holds, so that the refusal order of `PROTOCOL.md`
+  `ephemeral_not_supported`, which is why `register.request.json` lets a body with
+  `ephemeral: true` pass whatever the rest of it holds, so that the refusal order of `PROTOCOL.md`
   §5.1 stays the same.
 
 A rule that needs the value itself stays where it is: a `name` blank once trimmed, and a value
