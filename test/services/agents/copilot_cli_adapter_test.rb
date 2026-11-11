@@ -105,6 +105,21 @@ module Agents
       assert_equal "/home/copilot/.copilot/skills", @adapter.skills_install_path
     end
 
+    # == Logs ==
+
+    test "session_log_paths collects the CLI's own transcript" do
+      assert_equal [ "/var/log/context.log", "/home/copilot/.copilot/session-state/*/events.jsonl" ],
+                   @adapter.session_log_paths
+    end
+
+    test "session_log_name folds the CLI's session id into the transcript's name" do
+      assert_equal "33383f06-3dcf-40ee-b06a-d56671b4760d.events.jsonl",
+                   @adapter.session_log_name(
+                     "/home/copilot/.copilot/session-state/33383f06-3dcf-40ee-b06a-d56671b4760d/events.jsonl"
+                   )
+      assert_equal "context.log", @adapter.session_log_name("/var/log/context.log")
+    end
+
     # == Launch ==
 
     test "the CLI gets its token from the file, in the shell that starts it" do
