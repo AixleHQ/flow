@@ -34,11 +34,13 @@ module GitCredentials
         "GIT_COMMITTER_NAME" => COMMIT_NAME, "GIT_COMMITTER_EMAIL" => email }
     end
 
-    def self.container_env(session)
+    # `url` is the session's address of the vending endpoint, from its runtime
+    # (`callback_url(:git_credentials)`): on hosted `Settings.git.credentials_url`.
+    def self.container_env(session, url:)
       return {} unless Array(session.repositories).any? { |r| Vendor::PROVIDERS.include?(r.integration&.provider.to_s) }
 
       {
-        "AIXLE_GIT_CREDENTIALS_URL" => Settings.git.credentials_url,
+        "AIXLE_GIT_CREDENTIALS_URL" => url,
         "AIXLE_GIT_KEY" => SessionKey.generate(session)
       }
     end

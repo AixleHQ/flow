@@ -1,0 +1,3 @@
+<% if @reason %>You are no longer in team <%= @team.name %> in project <%= @project.name %>: you are <%= @reason %>.<% else %><%= @actor&.name || "An administrator" %> took you out of team <%= @team.name %> in project <%= @project.name %>.<% end %> Its runs no longer use your agent subscription.
+
+Teams are managed by the project's owner and the company's administrators.

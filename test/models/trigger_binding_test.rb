@@ -361,6 +361,18 @@ class TriggerBindingTest < ActiveSupport::TestCase
     binding.update!(created_by: member)
   end
 
+  test "pointing a schedule at a team leaves its Temporal schedule alone, and the team must be the project's" do
+    binding = schedule_binding(enabled: false)
+    TemporalService.stubs(:enabled?).returns(true)
+    ScheduleReconciler.expects(:reconcile).never
+
+    binding.update!(run_as_team: create(:project_team, project: @project))
+
+    other = create(:project_team, project: create(:project, owner: @user, company: @company))
+    assert_not binding.update(run_as_team: other)
+    assert_includes binding.errors[:run_as_team], "must be a team of this project"
+  end
+
   test "a chat message reaches only the triggers bound to its channel, and only where the channel is connected" do
     here = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, chat_channel: "C0HERE0001")
     create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, chat_channel: "C0ELSEWHR1")

@@ -1,0 +1,68 @@
+{
+  "description": "The common refusals of the proxy route carry X-Aixle-Runner-Refusal too, so a runner tells them from an answer of the platform's endpoint: an unknown token, and the flag turned off.",
+  "steps": [
+    {
+      "given": "registered_machine",
+      "as": "m"
+    },
+    {
+      "given": "session_on_machine",
+      "machine": "m",
+      "as": "s"
+    },
+    {
+      "given": "session_holds_machine",
+      "machine": "m",
+      "session": "s"
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/proxy/mcp",
+        "token": "aracc_unknown",
+        "headers": {
+          "X-Session-Key": "{{s.mcp_key}}"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 401,
+        "headers": {
+          "X-Aixle-Runner-Refusal": "invalid_token"
+        },
+        "body": {
+          "error": "invalid_token",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "given": "flag_off"
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/proxy/mcp",
+        "token": "{{m.access_token}}",
+        "headers": {
+          "X-Session-Key": "{{s.mcp_key}}"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "X-Aixle-Runner-Refusal": "runners_disabled"
+        },
+        "body": {
+          "error": "runners_disabled",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -12,6 +12,8 @@ export const buildTaskWorkflowRun = (overrides: Partial<TaskWorkflowRun> = {}): 
   runnerId: null,
   runner: null,
   workflowName: 'Implement Feature',
+  userName: null,
+  teamName: null,
   totalCostCents: null,
   durationSeconds: null,
   steps: [],

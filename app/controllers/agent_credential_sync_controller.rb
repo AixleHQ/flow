@@ -50,7 +50,7 @@ class AgentCredentialSyncController < ActionController::API
 
     @session = TerminalSession.find_by(id: request.headers["X-Session-Id"])
     return unauthorized unless @session&.active?
-    return unauthorized unless Agents::SessionKey.valid?(@session, request.headers["X-Agent-Key"])
+    return unauthorized unless Agents::SessionKey.valid?(@session, request.headers[Agents::SessionKey::HEADER])
     return unauthorized unless @session.owner_entitled?
 
     # An auth_setup session is a login in progress: AgentAuthStrategy owns what it captures

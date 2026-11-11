@@ -594,7 +594,7 @@
   background: var(--bg-card);
   padding: 1px 5px;
   border-radius: 3px;
-  font-family: monospace;
+  font-family: var(--app-font-mono);
 }
 
 .fieldHelp a {
@@ -1021,7 +1021,7 @@
 
 .availableList code {
   font-size: 12px;
-  font-family: monospace;
+  font-family: var(--app-font-mono);
   color: var(--text-1);
 }
 

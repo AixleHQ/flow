@@ -154,7 +154,10 @@ export function TrackerTriggerFields({ projectId, trackers, columns, value, isEd
         <div style={{ marginBottom: 12 }}>
           <FieldLabel>Other conditions</FieldLabel>
           {otherConditions.map(([field, condition]) => (
-            <div key={field} style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--app-text-secondary)' }}>
+            <div
+              key={field}
+              style={{ fontSize: 12, fontFamily: 'var(--app-font-mono)', color: 'var(--app-text-secondary)' }}
+            >
               {describeCondition(field, condition)}
             </div>
           ))}

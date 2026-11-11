@@ -156,8 +156,26 @@ class InternalTools::BoardWriteToolsTest < ActiveSupport::TestCase
     ).execute
 
     assert_equal 1, result[:exit_code]
-    assert_match(/either assignee_id or unassign/i, result[:stderr])
+    assert_match(/one of assignee_id, assignee_team_id or unassign/i, result[:stderr])
     assert_equal member.id, @task.reload.assignee_id
+  end
+
+  test "board_update_task hands a task to a team, and board_list_members names the project's teams" do
+    member = create(:user, company: @company)
+    @project.add_collaborator(member)
+    team = create(:project_team, project: @project, name: "Planner")
+    create(:project_team_member, project_team: team, user: member)
+    @task.update!(assignee: member)
+
+    result = InternalTools::BoardUpdateTask.new(params: { task_id: @task.id, assignee_team_id: team.id }, session: @session).execute
+
+    assert_equal 0, result[:exit_code], result[:stderr]
+    assert_equal [ nil, team.id ], @task.reload.values_at(:assignee_id, :assignee_team_id)
+    listed = JSON.parse(InternalTools::BoardListMembers.new(params: {}, session: @session).execute[:stdout])["teams"]
+    assert_equal [ { "id" => team.id, "name" => "Planner", "strategy" => "priority", "member_ids" => [ member.id ] } ], listed
+
+    created = InternalTools::BoardCreateTask.new(params: { title: "Plan", assignee_team_id: team.id }, session: @session).execute
+    assert_equal team.id, JSON.parse(created[:stdout])["assignee_team_id"]
   end
 
   # === board_list_members ===

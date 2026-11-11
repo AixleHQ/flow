@@ -45,6 +45,22 @@ module StubSupport
 
   # The current fake installs no monkeypatch, so there is nothing to undo beyond
   # restoring the timeout constants. Kept as a named teardown hook for callers.
+  # A Mocha double of a hosted runtime answers its callback addresses as every
+  # hosted runtime does: the Settings values (ContainerRuntime::CallbackUrls).
+  def stub_hosted_callbacks(runtime)
+    ContainerRuntime::CallbackUrls::NAMES.each do |name|
+      runtime.stubs(:callback_url).with(name, anything).returns(ContainerRuntime::CallbackUrls.hosted(name))
+    end
+    runtime
+  end
+
+  # Every hosted callback address, by name: the Settings values. Adapters
+  # take their callbacks from the session's runtime, so a test that calls
+  # one directly passes these.
+  def hosted_callbacks
+    ContainerRuntime::CallbackUrls::NAMES.index_with { |name| ContainerRuntime::CallbackUrls.hosted(name) }
+  end
+
   def cleanup_runtime_overrides
     restore_runtime_timeouts
   end

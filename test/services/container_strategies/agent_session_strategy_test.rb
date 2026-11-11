@@ -108,6 +108,20 @@ module ContainerStrategies
 
     # The proxy hands the CLI's OAuth refresh to the platform (Agents::RefreshBroker), with
     # the same key the watcher uses.
+    test "a runner session is given its callback proxy's addresses, and no OTLP endpoint" do
+      runner = create(:runner, :manual, company: @company)
+      @session.update_columns(runner_id: runner.id)
+
+      env_vars = build_strategy.build_env_vars
+
+      assert_includes env_vars, "CREDENTIAL_SYNC_URL=http://127.0.0.1:7690/agent-credentials"
+      assert_includes env_vars, "CREDENTIAL_REFRESH_URL=http://127.0.0.1:7690/agent-credentials-refresh"
+      assert_empty env_vars.grep(/\AOTEL_EXPORTER_OTLP_ENDPOINT=|\ACLAUDE_CODE_ENABLE_TELEMETRY=/)
+      assert_empty env_vars.grep(Regexp.new(Regexp.escape(Settings.agents.credential_sync_url)))
+    end
+
+    # The proxy hands the CLI's OAuth refresh to the platform (Agents::RefreshBroker), with
+    # the same key the watcher uses.
     test "builds env vars telling the proxy where to hand the CLI's refreshes" do
       env_vars = build_strategy.build_env_vars
 

@@ -194,6 +194,9 @@ class CompanyMembership < ApplicationRecord
   after_update_commit :notify_invitation_accepted, if: -> { saved_change_to_state? && state == "active" && state_before_last_save == "invited" }
   after_update_commit :notify_access_revoked, if: -> { saved_change_to_state? && state == "revoked" }
   after_update_commit :notify_role_changed, if: :saved_change_to_role?
+  after_update_commit :leave_project_teams, if: -> {
+    (saved_change_to_state? && state == "revoked") || (saved_change_to_role? && viewer?)
+  }
 
   # ── Onboarding (per company) ────────────────────────────────────────────────
 
@@ -306,6 +309,9 @@ class CompanyMembership < ApplicationRecord
 
     agent_models_by_type.map do |agent_type, models|
       runtime = AgentRuntime.all.find { |r| r.id == agent_type }
+      # Every model picker is a Mantine Select, which throws on a repeated value and takes
+      # the whole page down with it; a vendor catalogue is not trusted to be unique.
+      models = models.uniq { |m| m[:model_id] }
       models = models.map { |m| m.merge(reasoning_effort_levels: runtime&.reasoning_effort_levels(m[:model_id]) || []) }
       { agent_type: agent_type, models: models, default_model: default_models[agent_type] }
     end
@@ -503,6 +509,11 @@ class CompanyMembership < ApplicationRecord
 
   # Only when someone actually invited them: a domain auto-join has no inviter,
   # and self-accepted invites would mail the acceptor their own news.
+  def leave_project_teams
+    reason = revoked? ? "no longer a member of the company" : "now a viewer, and viewers can't start runs"
+    ProjectTeams::Management.prune!(user, company_id: company_id, reason: reason)
+  end
+
   def notify_invitation_accepted
     return if invited_by_id.blank? || invited_by_id == user_id
 

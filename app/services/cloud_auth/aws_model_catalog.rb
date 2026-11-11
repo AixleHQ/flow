@@ -127,7 +127,9 @@ module CloudAuth
       @client ||= ::Aws::Bedrock::Client.new(
         region: @region,
         credentials: ::Aws::Credentials.new(@access_key_id, @secret_access_key, @session_token),
-        retry_limit: 1
+        # `max_attempts` is ignored in legacy mode, which AWS_RETRY_MODE could select.
+        retry_mode: "standard",
+        max_attempts: 2
       )
     end
 

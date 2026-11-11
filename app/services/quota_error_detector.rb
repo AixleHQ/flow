@@ -91,6 +91,15 @@ class QuotaErrorDetector
       /reached your overage limit/i,
       /Kiro rate limit reached/i,
       /Request quota exceeded/i
+    ],
+    # Copilot CLI 1.0.108's own limit messages, read from its bundle. A model's rate limit
+    # is not here: `continueOnAutoMode` (Agents::CopilotCliAdapter::SETTINGS) switches the
+    # session to Auto and carries on.
+    github_copilot: [
+      /You'?ve hit your (?:session )?rate limit\./i,
+      /You'?ve reached your weekly rate limit/i,
+      /AI[- ]credit limit reached/i,
+      /Increase or remove the session limit to continue/i
     ]
   }.freeze
 
@@ -103,7 +112,8 @@ class QuotaErrorDetector
     "antigravity_cli" => :gemini,
     "cursor_cli" => :cursor,
     "grok" => :xai,
-    "kiro_cli" => :kiro
+    "kiro_cli" => :kiro,
+    "copilot_cli" => :github_copilot
   }.freeze
 
   Result = Struct.new(:quota_error, :provider, :message, keyword_init: true) do

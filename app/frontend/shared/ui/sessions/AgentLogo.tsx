@@ -2,18 +2,7 @@ import { useComputedColorScheme } from '@mantine/core';
 
 import { LOGO_TILE_BG } from 'shared/theme/vendorColors';
 
-import claudeLogo from '../agent-logos/claude.png';
-import codexLogo from '../agent-logos/codex.png';
-import cursorLogo from '../agent-logos/cursor.png';
-import geminiLogo from '../agent-logos/gemini.png';
-
-const LOGOS: Record<string, string> = {
-  claude_code: claudeLogo,
-  cursor_cli: cursorLogo,
-  codex: codexLogo,
-  gemini_cli: geminiLogo,
-  antigravity_cli: geminiLogo,
-};
+import { agentLogoSrc } from '../agentLogos';
 
 interface AgentLogoProps {
   agentType: string | null | undefined;
@@ -21,12 +10,12 @@ interface AgentLogoProps {
 }
 
 /**
- * The runtime mark that precedes an agent name. Renders nothing for a runtime
- * we have no artwork for, so the label carries identity on its own.
+ * The runtime mark that precedes an agent name. Renders nothing for an agent type
+ * outside the registry, so the label carries identity on its own.
  */
 export function AgentLogo({ agentType, size = 18 }: AgentLogoProps) {
   const scheme = useComputedColorScheme('dark');
-  const src = LOGOS[agentType ?? ''];
+  const src = agentLogoSrc(agentType);
   if (!src) return null;
 
   return (

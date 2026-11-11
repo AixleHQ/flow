@@ -39,12 +39,11 @@ const dark: MantineColorsTuple = [
   '#040302', // 9 — deepest
 ];
 
-const FONT_BODY = 'Figtree, sans-serif';
-const FONT_HEADING = '"Hanken Grotesk", sans-serif';
+const FONT_SANS = 'Inter, "Inter Fallback", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 const FONT_MONO = '"JetBrains Mono", monospace';
 
 export const mantineTheme = createTheme({
-  fontFamily: FONT_BODY,
+  fontFamily: FONT_SANS,
   fontFamilyMonospace: FONT_MONO,
 
   primaryColor: 'brand',
@@ -62,9 +61,8 @@ export const mantineTheme = createTheme({
   luminanceThreshold: 0.2,
 
   headings: {
-    // Aixle uses Lab Grotesque (→ Hanken Grotesk) at regular-ish weight; size and
-    // tight tracking carry the headlines rather than heavy bold.
-    fontFamily: FONT_HEADING,
+    // Size and tight tracking carry the headlines rather than heavy bold.
+    fontFamily: FONT_SANS,
     fontWeight: '500',
   },
 
@@ -128,10 +126,10 @@ export const mantineTheme = createTheme({
  */
 export const cssVariablesResolver: CSSVariablesResolver = () => ({
   variables: {
-    /* Aixle typography — body Figtree, headings Hanken Grotesk, code JetBrains Mono,
+    /* Aixle typography — body and headings Inter, code JetBrains Mono,
        small decorative mono labels Spline Sans Mono. */
-    '--app-font-body': FONT_BODY,
-    '--app-font-heading': FONT_HEADING,
+    '--app-font-body': FONT_SANS,
+    '--app-font-heading': FONT_SANS,
     '--app-font-mono': FONT_MONO,
     '--app-font-mono-label': '"Spline Sans Mono", monospace',
     /* The logo's own orange, the same in both schemes. UI accents use the calmer

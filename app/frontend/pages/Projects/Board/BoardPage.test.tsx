@@ -738,7 +738,7 @@ describe('Projects/Board/BoardPage', () => {
         taskComments: [],
         taskAssets: [],
         taskActivities: [],
-        taskWorkflowRuns: [buildTaskWorkflowRun()],
+        taskWorkflowRuns: [buildTaskWorkflowRun({ userName: 'Anna Lee', teamName: 'Planner' })],
       },
     });
 
@@ -753,6 +753,7 @@ describe('Projects/Board/BoardPage', () => {
     // The launched workflow name is shown for each run (regression: #338).
     const link = within(runsPanel).getByRole('link', { name: /Implement Feature/ });
     expect(link).toHaveAttribute('href', '/company/projects/7/workflow_runs/55');
+    expect(within(runsPanel).getByText('by Planner → Anna Lee')).toBeInTheDocument();
   });
 
   // --- jump into a run's terminal session from the drawer (task #541) ---
@@ -1967,6 +1968,31 @@ describe('Projects/Board/BoardPage', () => {
     fetchSpy.mockRestore();
   });
 
+  it('creates a task assigned to a team picked in the create-task form', async () => {
+    const created = makeTask({ id: 99, title: 'Plan the sprint', boardColumnId: 100, assigneeTeamId: 7 });
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify(created), { status: 200 }));
+
+    renderAuthedPage(<BoardPage />, { props: { ...populatedProps, teams: [{ id: 7, name: 'Planner' }] } });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add task to Backlog' }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.type(within(dialog).getByPlaceholderText('Task title'), 'Plan the sprint');
+    await userEvent.click(within(dialog).getByRole('combobox', { name: 'Assignee' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Planner' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create task' }));
+
+    await waitFor(() => {
+      const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/tasks');
+      expect(call).toBeTruthy();
+      const body = JSON.parse((call![1] as RequestInit).body as string);
+      expect(body.boardTask).toMatchObject({ assigneeId: null, assigneeTeamId: 7 });
+    });
+
+    fetchSpy.mockRestore();
+  });
+
   it('offers no Parent Epic field in the create-task form when the new task is itself an epic', async () => {
     renderAuthedPage(<BoardPage />, { props: epicProps });
 
@@ -2136,6 +2162,63 @@ describe('Projects/Board/BoardPage', () => {
     );
     expect(await screen.findByText('Assigned task')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText('Unassigned task')).not.toBeInTheDocument());
+
+    fetchSpy.mockRestore();
+  });
+
+  it('filters tasks by the team they are assigned to', async () => {
+    const teamTask = makeTask({ id: 1, title: 'Team task', boardColumnId: 100, assigneeTeamId: 7 });
+    const other = makeTask({ id: 2, title: 'Personal task', boardColumnId: 200, assigneeId: 1 });
+    const fetchSpy = stubColumnTasks([teamTask]);
+
+    renderAuthedPage(<BoardPage />, {
+      props: { ...populatedProps, teams: [{ id: 7, name: 'Planner' }], tasks: [teamTask, other] },
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /Assignee: All/ }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Planner' }));
+
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('q%5Bassignee_team_id_eq%5D=7'), expect.anything()),
+    );
+    expect(screen.getByRole('button', { name: /Assignee: Planner/ })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Personal task')).not.toBeInTheDocument());
+
+    fetchSpy.mockRestore();
+  });
+
+  it('shows the team a card is assigned to', () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        tasks: [makeTask({ id: 1, title: 'Plan the sprint', boardColumnId: 100, assigneeTeamName: 'Planner' })],
+      },
+    });
+
+    const card = screen.getByText('Plan the sprint').closest('[class*="Paper-root"]') as HTMLElement;
+    expect(within(card).getByText('Planner')).toBeInTheDocument();
+  });
+
+  it('assigns the task to a team from the task detail Assignee select', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 200 }));
+    const task = makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100, assigneeId: 1 });
+
+    renderAuthedPage(<BoardPage />, {
+      props: { ...populatedProps, teams: [{ id: 7, name: 'Planner' }], tasks: [task], selectedTask: task },
+    });
+
+    const drawer = screen.getAllByRole('dialog')[0];
+    await userEvent.click(within(drawer).getByRole('combobox', { name: 'Assignee' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Planner' }));
+
+    await waitFor(() => {
+      const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/tasks/1');
+      expect(call).toBeTruthy();
+      expect(JSON.parse((call![1] as RequestInit).body as string).boardTask).toEqual({
+        assigneeId: null,
+        assigneeTeamId: 7,
+      });
+    });
 
     fetchSpy.mockRestore();
   });
@@ -2392,6 +2475,40 @@ describe('Projects/Board/BoardPage', () => {
 
     expect(await screen.findByText('Fix login crash')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText('Build settings page')).not.toBeInTheDocument());
+
+    fetchSpy.mockRestore();
+  });
+
+  it('applies a saved view preset that filters by team', async () => {
+    const teamTask = makeTask({ id: 1, title: 'Team task', boardColumnId: 100, assigneeTeamId: 7 });
+    const fetchSpy = stubColumnTasks([teamTask]);
+
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        currentUserId: 1,
+        teams: [{ id: 7, name: 'Planner' }],
+        viewPresets: [
+          {
+            id: 1,
+            name: 'Planner work',
+            filters: { assigneeTeamId: '7' },
+            shared: false,
+            userId: 1,
+            createdAt: '2026-01-01T00:00:00Z',
+          },
+        ],
+        tasks: [teamTask],
+      },
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Presets' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: /Planner work/ }));
+
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('q%5Bassignee_team_id_eq%5D=7'), expect.anything()),
+    );
+    expect(screen.getByRole('button', { name: /Assignee: Planner/ })).toBeInTheDocument();
 
     fetchSpy.mockRestore();
   });

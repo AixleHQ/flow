@@ -31,7 +31,10 @@ module ContainerStrategies
       # itself for the token payload's field names and the selected profile instead
       # (Agents::KiroCliAdapter::AUTH_MARKERS), which appear only once the login has
       # actually completed, so no marker file is needed.
-      "kiro_cli" => "kiro-cli login --use-device-flow"
+      "kiro_cli" => "kiro-cli login --use-device-flow",
+      # Device-code, like Grok: the CLI's own default in a container, forced so a desktop
+      # check inside it can never pick the browser flow, whose callback cannot arrive here.
+      "copilot_cli" => "copilot login --device-code"
     }.freeze
 
     SESSION_COMMANDS = {
@@ -44,7 +47,10 @@ module ContainerStrategies
       # --v3 skips Kiro 3.0's first-launch engine choice (V3 is the default since 3.0).
       # Overridden by Agents::KiroCliAdapter#session_command; this entry is the
       # fallback the base strategy reads when no adapter command is resolved.
-      "kiro_cli" => "kiro-cli --v3 chat --trust-all-tools --trust-workspace"
+      "kiro_cli" => "kiro-cli --v3 chat --trust-all-tools --trust-workspace",
+      # Overridden by Agents::CopilotCliAdapter#session_command, which also hands the CLI
+      # its token.
+      "copilot_cli" => "copilot --allow-all"
     }.freeze
 
     # == before_create_container ==
@@ -135,16 +141,20 @@ module ContainerStrategies
         "TMUX_TMPDIR" => "/dev/shm/tmux"
       }
 
-      env_vars.merge!(credential_sync_env(session, agent_service))
+      # The addresses the container calls the platform back on, from the
+      # session's runtime: the Settings values on hosted, the session's local
+      # callback proxy on a runner (ContainerRuntime::CallbackUrls).
+      callbacks = runtime.callback_urls(session)
+      env_vars.merge!(credential_sync_env(session, agent_service, callbacks))
 
       # Azure DevOps git credential vending. Here rather than in one agent's
       # adapter because every agent clones, fetches and pushes; only a session
       # that actually holds Azure repositories gets a key.
-      env_vars.merge!(AzureDevops::SessionGitSetup.container_env(session))
-      env_vars.merge!(GitCredentials::SessionGitSetup.container_env(session))
+      env_vars.merge!(AzureDevops::SessionGitSetup.container_env(session, url: callbacks[:azure_git_credentials]))
+      env_vars.merge!(GitCredentials::SessionGitSetup.container_env(session, url: callbacks[:git_credentials]))
       env_vars.merge!(GitCredentials::SessionGitSetup.identity_env)
 
-      env_vars.merge!(agent_service.adapter.default_env_vars(session))
+      env_vars.merge!(agent_service.adapter.default_env_vars(session, callbacks: callbacks))
       env_vars.merge!(agent_service.adapter.env_vars_from_metadata(session.metadata)) if session.metadata.present?
       super + env_vars.compact.map { |k, v| "#{k}=#{v}" }
     end
@@ -159,7 +169,7 @@ module ContainerStrategies
     # Without this the rotation only reaches us at cleanup, so a container killed by an
     # OOM, an eviction or a lost node takes it with it and leaves the stored refresh token
     # one the vendor has already rotated out.
-    def credential_sync_env(session, agent_service)
+    def credential_sync_env(session, agent_service, callbacks)
       # The strategy's own session type, not the row's: the strategy is what decides
       # whether this container runs on a stored credential or is creating one.
       return {} if session_type == "auth_setup"
@@ -168,14 +178,14 @@ module ContainerStrategies
       return {} if paths.empty?
 
       env = {
-        "CREDENTIAL_SYNC_URL" => Settings.agents.credential_sync_url,
+        "CREDENTIAL_SYNC_URL" => callbacks[:agent_credential_sync],
         "CREDENTIAL_SYNC_KEY" => Agents::SessionKey.generate(session),
         "CREDENTIAL_SYNC_PATHS" => paths.join(",")
       }
       endpoints = agent_service.adapter.refresh_broker_endpoints
       return env if endpoints.empty?
 
-      env.merge("CREDENTIAL_REFRESH_URL" => Settings.agents.credential_refresh_url,
+      env.merge("CREDENTIAL_REFRESH_URL" => callbacks[:agent_credential_refresh],
                 "CREDENTIAL_REFRESH_TARGETS" => endpoints.join(","))
     end
 
@@ -309,6 +319,8 @@ module ContainerStrategies
         next if merged == credential.metadata
 
         credential.update_column(:metadata, merged)
+        # A picker opened before this ran cached the adapter's fallback list for an hour.
+        Rails.cache.delete(credential.models_cache_key)
         Rails.logger.info("[#{self.class.name.demodulize}] Stored #{extras.keys.join(', ')} on credential #{credential.id}")
       end
     rescue StandardError => e

@@ -29,6 +29,28 @@ class Billing::MarketplaceRegistrationTest < ActiveSupport::TestCase
     assert_equal "offer-#{license.agreement_id}", license.offer_identifier
   end
 
+  # A private offer carries its own price, so the listing's cannot stand in for
+  # it. Read with the agreement, kept on the licence.
+  test "the price the agreement was accepted at is kept on the licence" do
+    @client.rates = { Billing::Meter::AwsMarketplaceSaas::DIMENSION => BigDecimal("0.07") }
+    @client.currency = "USD"
+
+    license = @registration.call(registration_token: "tok")
+
+    assert_equal [ license.agreement_id ], @client.priced
+    assert_equal BigDecimal("0.07"), license.price_per_minute
+    assert_equal "USD", license.price_currency
+  end
+
+  test "a price that cannot be read leaves the licence unpriced, and still confirmed" do
+    @client.rates = nil
+
+    license = @registration.call(registration_token: "tok")
+
+    assert license.active?
+    assert_nil license.price_per_minute
+  end
+
   # Fail towards billing nobody: a licence that stays pending is not meterable,
   # and the company it belongs to stays blocked until something says otherwise.
   test "an agreement that is not live leaves the licence pending" do

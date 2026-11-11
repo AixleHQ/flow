@@ -9,11 +9,26 @@ module MCP
   # secret_key_base, like the other per-session keys (CloudAuth::SessionKey).
   module SessionKey
     PURPOSE = "session-mcp"
+    # The request header the key travels in (MCPController also takes it as a
+    # bearer).
+    HEADER = "X-Session-Key"
 
     module_function
 
     def generate(session)
       "#{session.id}.#{mac(session.id)}"
+    end
+
+    # The terminal session a presented MCP key names: a derived key, or a
+    # session's stored `mcp_key`. Nil for a blank key and for a personal MCP
+    # token (`amcp_`), which names a user, not a session. Says nothing about
+    # whether that session may still use it. MCPController and the runner
+    # gateway's callback proxy (Runners::Proxy) both resolve keys here.
+    def lookup(key)
+      key = key.to_s
+      return nil if key.blank? || key.start_with?(User::MCP_TOKEN_PREFIX)
+
+      session_for(key) || TerminalSession.find_by(mcp_key: key)
     end
 
     # The session a presented key belongs to, or nil. Says nothing about whether

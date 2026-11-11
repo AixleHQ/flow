@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_10_110000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_11_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -30,6 +30,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_10_110000) do
     t.string "status", default: "active", null: false
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
+    t.datetime "quota_exhausted_until"
     t.index ["agent_type"], name: "index_agent_credentials_on_agent_type"
     t.index ["company_id"], name: "index_agent_credentials_on_company_id"
     t.index ["status", "expires_at"], name: "index_agent_credentials_on_status_and_expires_at"
@@ -224,6 +225,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_10_110000) do
     t.datetime "settled_at"
     t.text "settlement_error"
     t.string "stripe_subscription_id"
+    t.datetime "started_at"
+    t.datetime "period_started_at"
     t.index ["company_id"], name: "index_billing_cancellations_on_company_id"
     t.index ["user_id"], name: "index_billing_cancellations_on_user_id"
   end
@@ -307,12 +310,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_10_110000) do
     t.string "task_type", default: "not_specified", null: false
     t.string "title", null: false
     t.datetime "updated_at", null: false
+    t.bigint "assignee_team_id"
     t.index ["assignee_id"], name: "index_board_tasks_on_assignee_id"
+    t.index ["assignee_team_id"], name: "index_board_tasks_on_assignee_team_id"
     t.index ["board_column_id"], name: "index_board_tasks_on_board_column_id"
     t.index ["board_id", "archived_at"], name: "index_board_tasks_on_board_id_and_archived_at"
     t.index ["board_id", "number"], name: "index_board_tasks_on_board_id_and_number", unique: true
     t.index ["board_id"], name: "index_board_tasks_on_board_id"
     t.index ["parent_task_id"], name: "index_board_tasks_on_parent_task_id"
+    t.check_constraint "num_nonnulls(assignee_id, assignee_team_id) <= 1", name: "board_tasks_one_assignee"
     t.check_constraint "number > 0", name: "board_tasks_number_positive"
   end
 
@@ -978,6 +984,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_10_110000) do
     t.datetime "proposal_decided_at"
     t.string "proposal_state"
     t.string "previous_agreement_id"
+    t.decimal "price_per_minute", precision: 12, scale: 8
+    t.string "price_currency"
     t.index ["agreement_id"], name: "index_marketplace_licenses_on_agreement_id"
     t.index ["company_id"], name: "index_marketplace_licenses_on_company_id", unique: true, where: "((company_id IS NOT NULL) AND ((subscription_state)::text <> 'ended'::text))"
     t.index ["customer_aws_account_id"], name: "index_marketplace_licenses_on_customer_aws_account_id"
@@ -1112,6 +1120,32 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_10_110000) do
     t.index ["project_id"], name: "index_project_favorites_on_project_id"
     t.index ["user_id", "project_id"], name: "index_project_favorites_on_user_id_and_project_id", unique: true
     t.index ["user_id"], name: "index_project_favorites_on_user_id"
+  end
+
+  create_table "project_team_members", force: :cascade do |t|
+    t.bigint "project_team_id", null: false
+    t.bigint "user_id", null: false
+    t.integer "position", default: 0, null: false
+    t.bigint "added_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["added_by_id"], name: "index_project_team_members_on_added_by_id"
+    t.index ["project_team_id", "user_id"], name: "index_project_team_members_on_project_team_id_and_user_id", unique: true
+    t.index ["project_team_id"], name: "index_project_team_members_on_project_team_id"
+    t.index ["user_id"], name: "index_project_team_members_on_user_id"
+  end
+
+  create_table "project_teams", force: :cascade do |t|
+    t.bigint "project_id", null: false
+    t.string "name", null: false
+    t.string "strategy", default: "priority", null: false
+    t.bigint "last_picked_user_id"
+    t.bigint "created_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_by_id"], name: "index_project_teams_on_created_by_id"
+    t.index ["project_id", "name"], name: "index_project_teams_on_project_id_and_name", unique: true
+    t.index ["project_id"], name: "index_project_teams_on_project_id"
   end
 
   create_table "project_trackers", force: :cascade do |t|
@@ -1983,11 +2017,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_10_110000) do
     t.bigint "workflow_id", null: false
     t.boolean "copy_attachments", default: false, null: false
     t.bigint "chat_conversation_id"
+    t.bigint "run_as_team_id"
     t.index ["chat_conversation_id"], name: "index_trigger_bindings_on_chat_conversation_id"
     t.index ["created_by_id"], name: "index_trigger_bindings_on_created_by_id"
     t.index ["project_id", "event_type", "enabled"], name: "idx_on_project_id_event_type_enabled_44a9c97a71"
     t.index ["project_id"], name: "index_trigger_bindings_on_project_id"
     t.index ["project_tracker_id"], name: "index_trigger_bindings_on_project_tracker_id"
+    t.index ["run_as_team_id"], name: "index_trigger_bindings_on_run_as_team_id"
     t.index ["subject_column_id"], name: "index_trigger_bindings_on_subject_column_id"
     t.index ["workflow_id"], name: "index_trigger_bindings_on_workflow_id"
   end
@@ -2114,6 +2150,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_10_110000) do
     t.string "uid"
     t.datetime "updated_at", null: false
     t.datetime "password_changed_at"
+    t.boolean "exclude_from_teams", default: false, null: false
     t.index ["deleted_at"], name: "index_users_on_deleted_at", where: "(deleted_at IS NOT NULL)"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["mcp_token_digest"], name: "index_users_on_mcp_token_digest", unique: true
@@ -2202,6 +2239,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_10_110000) do
     t.bigint "user_id"
     t.bigint "workflow_id", null: false
     t.bigint "runner_id"
+    t.bigint "team_id"
     t.index ["board_task_id"], name: "index_workflow_runs_on_board_task_id"
     t.index ["failed_agent_credential_id"], name: "index_workflow_runs_on_failed_agent_credential_id"
     t.index ["project_id"], name: "index_workflow_runs_on_project_id"
@@ -2209,6 +2247,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_10_110000) do
     t.index ["retried_from_run_id"], name: "index_workflow_runs_on_retried_from_run_id"
     t.index ["runner_id"], name: "index_workflow_runs_on_runner_id"
     t.index ["state"], name: "index_workflow_runs_on_state"
+    t.index ["team_id"], name: "index_workflow_runs_on_team_id"
     t.index ["user_id", "created_at"], name: "index_workflow_runs_on_user_id_and_created_at"
     t.index ["user_id", "idempotency_key"], name: "index_workflow_runs_on_user_id_and_idempotency_key", unique: true, where: "(idempotency_key IS NOT NULL)"
     t.index ["user_id"], name: "index_workflow_runs_on_user_id"
@@ -2300,6 +2339,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_10_110000) do
   add_foreign_key "board_tasks", "board_columns"
   add_foreign_key "board_tasks", "board_tasks", column: "parent_task_id", on_delete: :nullify
   add_foreign_key "board_tasks", "boards", on_delete: :cascade
+  add_foreign_key "board_tasks", "project_teams", column: "assignee_team_id", on_delete: :nullify
   add_foreign_key "board_tasks", "users", column: "assignee_id", on_delete: :nullify
   add_foreign_key "board_view_presets", "boards", on_delete: :cascade
   add_foreign_key "board_view_presets", "users"
@@ -2383,6 +2423,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_10_110000) do
   add_foreign_key "project_collaborators", "users"
   add_foreign_key "project_favorites", "projects", on_delete: :cascade
   add_foreign_key "project_favorites", "users"
+  add_foreign_key "project_team_members", "project_teams", on_delete: :cascade
+  add_foreign_key "project_team_members", "users", column: "added_by_id", on_delete: :nullify
+  add_foreign_key "project_team_members", "users", on_delete: :cascade
+  add_foreign_key "project_teams", "projects", on_delete: :cascade
+  add_foreign_key "project_teams", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "project_trackers", "integrations", on_delete: :cascade
   add_foreign_key "project_trackers", "projects", on_delete: :cascade
   add_foreign_key "projects", "companies"
@@ -2487,6 +2532,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_10_110000) do
   add_foreign_key "tracker_subscriptions", "integrations", on_delete: :cascade
   add_foreign_key "trigger_bindings", "board_columns", column: "subject_column_id", on_delete: :nullify
   add_foreign_key "trigger_bindings", "chat_conversations", on_delete: :nullify
+  add_foreign_key "trigger_bindings", "project_teams", column: "run_as_team_id", on_delete: :nullify
   add_foreign_key "trigger_bindings", "project_trackers", on_delete: :restrict
   add_foreign_key "trigger_bindings", "projects", on_delete: :cascade
   add_foreign_key "trigger_bindings", "users", column: "created_by_id", on_delete: :nullify
@@ -2516,6 +2562,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_10_110000) do
   add_foreign_key "workflow_run_assets", "workflow_runs", on_delete: :cascade
   add_foreign_key "workflow_runs", "agent_credentials", column: "failed_agent_credential_id", on_delete: :nullify
   add_foreign_key "workflow_runs", "board_tasks", on_delete: :nullify
+  add_foreign_key "workflow_runs", "project_teams", column: "team_id", on_delete: :nullify
   add_foreign_key "workflow_runs", "projects", on_delete: :cascade
   add_foreign_key "workflow_runs", "runners"
   add_foreign_key "workflow_runs", "users", on_delete: :nullify

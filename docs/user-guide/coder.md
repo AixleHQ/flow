@@ -140,9 +140,19 @@ the admin page shows the flag as locked by `CODER_REAP_ENABLED`.
 
 ## Limits
 
-- `coder_prepare_repo` clones GitHub repositories (see
-  [GitHub](/docs/github)) and public ones. GitLab and Azure DevOps
-  repositories are refused.
+- `coder_prepare_repo` clones public repositories and the repositories of
+  [GitHub](/docs/github), [GitLab](/docs/gitlab),
+  [Bitbucket](/docs/bitbucket) and [Azure DevOps](/docs/azure-devops)
+  connections. The credential reaches the workspace only in the clone's
+  environment, never on its disk, but anyone who can reach the workspace
+  while the clone runs can read it there. A GitHub token covers that one
+  repository and expires within an hour. A GitLab, Bitbucket or Azure DevOps
+  personal access token is the connection's own and reaches everything the
+  token reaches, for as long as the token lives — scope it to the
+  repositories agents need. The Bitbucket app and an Azure DevOps service
+  principal hand over short-lived tokens instead.
+- Cloning an Azure DevOps repository needs git 2.31 or newer on the
+  workspace.
 - A foreground `coder_ssh_exec` call ends after 60 seconds by default and
   120 seconds at most. A timeout ends the SSH connection, not the command on
   the workspace. For anything longer, use `detach: true` and poll
@@ -227,5 +237,11 @@ environment variables. The full list is in the
   `coder_job_status`.
 - **"coder ssh: command not found (the coder CLI is missing from the Rails
   image)"** — a self-hosted image without the CLI. See *Self-hosted* above.
-- **"coder_prepare_repo: gitlab repositories are not supported yet — only
-  GitHub and public clones"** — see *Limits*.
+- **"coder_prepare_repo: no credential for …"** or **"no Azure DevOps
+  credential for …"** — Flow would not hand
+  out the connection's token: the repository is not attached to the session,
+  or the connection has no usable token. Reconnect it on the project's
+  Integrations page.
+- **"unknown option: --config-env"** in a `coder_prepare_repo` job log —
+  the workspace's git is older than 2.31, which Azure DevOps clones need.
+  Update git in the workspace template.

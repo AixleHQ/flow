@@ -2,7 +2,7 @@ module github.com/aixlehq/aixle-runner
 
 // The Go version is pinned: CI (`.github/workflows/ci.yml`, the Runner job) installs
 // exactly this one from this file.
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/containerd/errdefs v1.0.0

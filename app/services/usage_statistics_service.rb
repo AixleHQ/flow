@@ -84,7 +84,23 @@ class UsageStatisticsService
       end
     end
 
+    each_span(payload) do |span, resource_attrs|
+      token = extract_terminal_session_token(span["attributes"] || [], resource_attrs)
+      tokens.add(token) if token.present?
+    end
+
     tokens.to_a
+  end
+
+  # Copilot CLI reports its AI credits on trace spans only, so traces are read like the
+  # other two signals.
+  def each_span(payload)
+    Array(payload["resourceSpans"]).each do |resource_span|
+      resource_attrs = resource_span.dig("resource", "attributes") || []
+      Array(resource_span["scopeSpans"]).each do |scope_span|
+        Array(scope_span["spans"]).each { |span| yield span, resource_attrs }
+      end
+    end
   end
 
   def authenticated_sessions(payload, sessions)
@@ -120,7 +136,13 @@ class UsageStatisticsService
       end
       [ resource_log.dig("resource", "attributes"), *records ]
     end
-    (metrics + logs).select { |attrs| attrs.is_a?(Array) }
+    spans = Array(payload["resourceSpans"]).flat_map do |resource_span|
+      span_attrs = Array(resource_span["scopeSpans"]).flat_map do |scope_span|
+        Array(scope_span["spans"]).map { |span| span["attributes"] }
+      end
+      [ resource_span.dig("resource", "attributes"), *span_attrs ]
+    end
+    (metrics + logs + spans).select { |attrs| attrs.is_a?(Array) }
   end
 
   def extract_data_points(metric)

@@ -51,7 +51,7 @@ class MCPController < ActionController::API
   # amcp_-prefixed personal token serves the user-level server; anything else
   # is a terminal session's mcp_key serving the session-scoped server.
   def resolve_handler
-    key = request.headers["X-Session-Key"].presence || bearer_token.presence
+    key = request.headers[MCP::SessionKey::HEADER].presence || bearer_token.presence
     return nil if key.blank?
 
     if key.start_with?(User::MCP_TOKEN_PREFIX)
@@ -62,7 +62,7 @@ class MCPController < ActionController::API
       @logged_user_id = user.id
       Tools::PersonalMCPRequestHandler.new(user)
     else
-      session = MCP::SessionKey.session_for(key) || TerminalSession.find_by(mcp_key: key)
+      session = MCP::SessionKey.lookup(key)
       return nil unless session&.active? && session.owner_entitled?
 
       @logged_session_id = session.id

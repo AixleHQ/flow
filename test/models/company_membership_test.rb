@@ -215,6 +215,19 @@ class CompanyMembershipTest < ActiveSupport::TestCase
                  models.to_h { |m| [ m[:model_id], m[:reasoning_effort_levels] ] })
   end
 
+  # Every model picker is a Mantine Select, which throws on a repeated value and takes the
+  # page down with it. Copilot CLI's catalogue listed `auto` twice on a staging account.
+  test "agent_models_for_props offers each model once" do
+    membership = create(:company_membership, user: @user, company: @company)
+    create(:agent_credential, :kiro_cli, user: @user, company: @company,
+           metadata: { "kiro_models" => [ { "model_id" => "auto" }, { "model_id" => "auto", "description" => "Auto" },
+                                          { "model_id" => "claude-opus-5.5" } ] })
+
+    models = membership.agent_models_for_props.first[:models]
+
+    assert_equal %w[auto claude-opus-5.5], models.pluck(:model_id)
+  end
+
   # AgentCredential validates agent_type against the registry, so a credential
   # for an unknown runtime only exists after that runtime is removed from it.
   test "agent_models_for_props gives no levels to the models of a runtime the registry no longer lists" do

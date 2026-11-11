@@ -155,7 +155,7 @@ Rules enforced on save:
 agent's system prompt.
 
 **Runtimes** — the CLI that executes a session: `claude_code`, `cursor_cli`,
-`codex`, `gemini_cli`, `antigravity_cli`, `grok`, `kiro_cli`. Each user connects
+`codex`, `gemini_cli`, `antigravity_cli`, `grok`, `kiro_cli`, `copilot_cli`. Each user connects
 their own credentials per runtime; a step can pin one with
 `required_agent_runtime` (`claude_code`, `cursor_cli`, `codex`, `gemini_cli`,
 `antigravity_cli`).

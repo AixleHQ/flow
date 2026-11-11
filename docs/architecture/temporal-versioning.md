@@ -88,6 +88,7 @@ Patches in use:
 | `keep-signals-delivered-during-launch` | `WorkflowExecutionWorkflow` | a retried step's decision is cleared before its launch, so a signal that arrives while the launch activity runs is kept |
 | `step-state-decides-without-signal` | `WorkflowExecutionWorkflowV2` | a Skip or Approve that is written to the step counts even if its signal is lost |
 | `mark-policy-skipped-step-runs` | `WorkflowExecutionWorkflow` (and V2) | a step its skip policy skips gets its step run marked `skipped`, with the reason, instead of left `pending` |
+| `team-quota-retry` | `WorkflowExecutionWorkflow` (and V2) | a step of a team's run that stopped on its owner's quota and is set to retry is handed to the team's next member (`workflow_reassign_run_owner_activity`) and retried, instead of failing the run |
 
 ## The replay test
 
@@ -109,6 +110,8 @@ The label says which code recorded the history:
 - `2026-09-23`: the code with those patches.
 - `2026-10-30`: the code with `mark-policy-skipped-step-runs`, recorded for the
   scenarios it changes.
+- `2026-11-11-before-team-quota-retry` and `2026-11-11`: the
+  `quota_failure_retried_by_policy` scenario before and after `team-quota-retry`.
 
 ### When you change workflow code
 

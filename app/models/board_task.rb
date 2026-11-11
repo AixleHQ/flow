@@ -7,6 +7,7 @@ class BoardTask < ApplicationRecord
   belongs_to :board
   belongs_to :board_column
   belongs_to :assignee, class_name: "User", optional: true
+  belongs_to :assignee_team, class_name: "ProjectTeam", optional: true, inverse_of: :assigned_tasks
   belongs_to :parent_task, class_name: "BoardTask", optional: true
   has_many :child_tasks, class_name: "BoardTask", foreign_key: :parent_task_id, dependent: :nullify
   has_many :task_comments, dependent: :destroy
@@ -30,8 +31,11 @@ class BoardTask < ApplicationRecord
   validate :parent_same_board, if: -> { parent_task_id.present? }
   validate :max_one_level_nesting, if: -> { parent_task_id.present? }
   validate :assignee_is_project_member, if: -> { assignee_id.present? }
+  validate :assignee_team_in_project, if: -> { assignee_team_id.present? }
+  validate :one_assignee
 
   before_validation :assign_next_position, on: :create
+  before_validation :keep_one_assignee
   before_create :assign_number
   after_commit :touch_board
   after_commit :broadcast_task_updates
@@ -96,11 +100,11 @@ class BoardTask < ApplicationRecord
   end
 
   def self.ransackable_attributes(_auth_object = nil)
-    %w[id number title task_type priority assignee_id board_column_id parent_task_id position created_at updated_at]
+    %w[id number title task_type priority assignee_id assignee_team_id board_column_id parent_task_id position created_at updated_at]
   end
 
   def self.ransackable_associations(_auth_object = nil)
-    %w[board board_column assignee parent_task child_tasks]
+    %w[board board_column assignee assignee_team parent_task child_tasks]
   end
 
   private
@@ -146,5 +150,27 @@ class BoardTask < ApplicationRecord
     return if assignee && board&.project&.accessible_by?(assignee)
 
     errors.add(:assignee, "must be a member of the project")
+  end
+
+  def assignee_team_in_project
+    return if assignee_team && assignee_team.project_id == board&.project_id
+
+    errors.add(:assignee_team, "must be a team of this project")
+  end
+
+  # Assigning a person unassigns the team, and the other way round; naming both at
+  # once is left for #one_assignee to refuse.
+  def keep_one_assignee
+    person = will_save_change_to_assignee_id? && assignee_id.present?
+    team = will_save_change_to_assignee_team_id? && assignee_team_id.present?
+    if person && !team
+      self.assignee_team_id = nil
+    elsif team && !person
+      self.assignee_id = nil
+    end
+  end
+
+  def one_assignee
+    errors.add(:base, "A task is assigned to a person or a team, not both") if assignee_id.present? && assignee_team_id.present?
   end
 end

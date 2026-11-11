@@ -18,8 +18,16 @@ http_content_length_limit 2 * 1024 * 1024
 # pool is sized from RAILS_MAX_THREADS (config/settings.yml), so a separate
 # default here silently oversubscribes the pool. A long-poll waiting for an op
 # holds a thread but no connection (Runners::Operations.poll), so a deployment
-# may set RUNNER_GATEWAY_MAX_THREADS above the pool to hold more machines'
-# polls at once (§6.1).
+# may set RUNNER_GATEWAY_MAX_THREADS above the pool to hold more machines' polls
+# at once (§6.1).
+#
+# A call through the callback proxy (`/runner/v1/proxy/*`, §6.6) also holds a
+# thread, and no connection, for as long as its answer streams: up to 900 s for
+# a long MCP tool call (RunnerGateway::V1::ProxiesController::READ_TIMEOUT).
+# Size the threads for one waiting poll per machine plus the proxied calls in
+# flight at once, about one per running runner session, more with parallel tool
+# calls or an open MCP stream. When they run out, the polls queue behind the
+# proxied calls and ops arrive late.
 max_threads_count = ENV.fetch("RUNNER_GATEWAY_MAX_THREADS") { ENV.fetch("RAILS_MAX_THREADS", 10) }
 min_threads_count = ENV.fetch("RUNNER_GATEWAY_MIN_THREADS") { max_threads_count }
 threads min_threads_count, max_threads_count

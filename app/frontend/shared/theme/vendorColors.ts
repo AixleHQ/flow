@@ -26,11 +26,11 @@ export const AGENT_BRAND_COLORS: Record<AgentType, string> = {
   // as the monochrome brand and stays visible on both light and dark surfaces,
   // which a literal #000 swatch would not.
   grok: '#71717a',
-  // Kiro's mark is purple, but the violet slot in this palette is already Cursor's.
-  // A darker purple step keeps the family right while staying distinguishable from
-  // #7c3aed at swatch size. Replace with the published brand value if one is ever
-  // sourced — no primary source states a hex today.
-  kiro_cli: '#7e22ce',
+  // The tile color of Kiro's own icon (kiro.dev/icon.svg).
+  kiro_cli: '#9046ff',
+  // GitHub's marks are monochrome, like xAI's, and the slate slot is Grok's: a darker
+  // neutral keeps the two apart at swatch size and stays visible on dark surfaces.
+  copilot_cli: '#3f3f46',
 };
 
 /** Google's four-color mark, for the "Sign in with Google" button only. */

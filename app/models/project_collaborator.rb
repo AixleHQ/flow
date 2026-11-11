@@ -10,7 +10,14 @@ class ProjectCollaborator < ApplicationRecord
   validate :user_belongs_to_same_company
   validate :user_is_not_owner
 
+  after_destroy_commit :leave_project_teams
+
   private
+
+  def leave_project_teams
+    ProjectTeams::Management.prune!(user, company_id: project.company_id,
+                                          reason: "no longer a member of project \"#{project.name}\"")
+  end
 
   def user_belongs_to_same_company
     return unless user && project

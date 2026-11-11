@@ -65,6 +65,11 @@ FactoryBot.define do
       agent_type { "kiro_cli" }
     end
 
+    trait :copilot_cli do
+      agent_type { "copilot_cli" }
+      config_data { { "token" => "gho_copilotplaceholdertoken0000000000", "host" => "https://github.com", "login" => "octocat", "kind" => "githubDotCom", "source" => "device_flow" } }
+    end
+
     # == State Traits ==
 
     trait :expired do

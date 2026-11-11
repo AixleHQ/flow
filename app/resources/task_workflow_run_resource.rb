@@ -18,6 +18,16 @@ class TaskWorkflowRunResource < ApplicationResource
     run.workflow&.name
   end
 
+  typelize "string | null"
+  attribute :user_name do |run|
+    run.user&.name
+  end
+
+  typelize "string | null"
+  attribute :team_name do |run|
+    run.picked_from_team&.name
+  end
+
   typelize "number | null"
   attribute :total_cost_cents do |run|
     run.respond_to?(:total_cost_cents) ? run.total_cost_cents : nil

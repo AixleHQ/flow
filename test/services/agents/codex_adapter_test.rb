@@ -79,7 +79,7 @@ module Agents
       credentials = { "tokens" => { "access_token" => "abc" } }
       stub_codex_models([])
 
-      files = @adapter.config_files(credentials, { workspace: "/project" })
+      files = @adapter.config_files(credentials, hosted_otel(workspace: "/project"))
 
       assert files.key?("/home/codex/.codex/auth.json")
       assert files.key?("/home/codex/.codex/config.toml")
@@ -98,7 +98,7 @@ module Agents
 
     test "Codex never offers to replace the version its image pins" do
       stub_codex_models([])
-      [ @adapter.config_files({}, { workspace: "/project" })["/home/codex/.codex/config.toml"],
+      [ @adapter.config_files({}, hosted_otel(workspace: "/project"))["/home/codex/.codex/config.toml"],
         @adapter.auth_setup_files["/home/codex/.codex/config.toml"] ].each do |toml|
         setting = toml.index("check_for_update_on_startup = false")
 
@@ -109,7 +109,7 @@ module Agents
 
     test "config_files uses default workspace when not provided" do
       credentials = {}
-      files = @adapter.config_files(credentials)
+      files = @adapter.config_files(credentials, hosted_otel)
 
       toml = files["/home/codex/.codex/config.toml"]
       assert_includes toml, "/workspace"
@@ -821,6 +821,12 @@ module Agents
 
     private
 
+    # A hosted session's workflow config: the hosted OTLP endpoint, which the
+    # adapter no longer falls back to.
+    def hosted_otel(workflow_config = {})
+      { otel_endpoint: ContainerRuntime::CallbackUrls.hosted(:otel) }.merge(workflow_config)
+    end
+
     def preflight_runtime(auth_content)
       filesystem = {}
       filesystem[@adapter.config_path] = auth_content unless auth_content.nil?
@@ -846,7 +852,7 @@ module Agents
     end
 
     def codex_toml(workflow_config, credentials = { "tokens" => { "access_token" => "tok" } })
-      @adapter.config_files(credentials, workflow_config)["/home/codex/.codex/config.toml"]
+      @adapter.config_files(credentials, hosted_otel(workflow_config))["/home/codex/.codex/config.toml"]
     end
 
     # Minimal unsigned JWT carrying an `exp` claim (seconds). Signature segment is

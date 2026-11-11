@@ -16,7 +16,7 @@ the language you want agents to write in — task summaries, review notes, and
 generated documents follow it. Continue stays disabled until both are set.
 
 **2. Connect agents.** One card per supported runtime: Claude Code, Cursor
-CLI, Codex, Gemini CLI, Antigravity CLI, Grok and Kiro CLI. Click **Connect**
+CLI, Codex, Gemini CLI, Antigravity CLI, Grok, Kiro CLI and GitHub Copilot CLI. Click **Connect**
 on the one whose
 account you already have. A terminal opens inline, the runtime's own login runs
 in it, and Flow keeps the resulting credential for you.

@@ -39,6 +39,7 @@ const buildProfile = (overrides: Partial<CurrentUser> = {}): CurrentUser => ({
   agentCredentials: [],
   shareActiveSessions: false,
   shareCompletedSessions: true,
+  excludeFromTeams: false,
   currentRole: 'admin',
   currentCompany: acmeCompany,
   memberships: [{ id: 5, role: 'admin', state: 'active', company: acmeCompany }],
@@ -73,7 +74,13 @@ const baseProps = (profile: CurrentUser) => ({
 // satisfies both ProfilePage (data.profile.*) and CreateProjectModal (data.name/description).
 const pinForm = (name: string, preferredAgentLanguage = 'en') => {
   const form = makeFormStub({
-    profile: { name, preferredAgentLanguage, shareActiveSessions: false, shareCompletedSessions: true },
+    profile: {
+      name,
+      preferredAgentLanguage,
+      shareActiveSessions: false,
+      shareCompletedSessions: true,
+      excludeFromTeams: false,
+    },
     name: '',
     description: '',
   });
@@ -433,14 +440,13 @@ describe('Profile/Show', () => {
   });
 
   it('renders Authenticate (not Re-authenticate) for an agent that has no credential', () => {
-    // Only claude_code is configured; the other five should show Authenticate.
+    // Only claude_code is configured; every other runtime shows Authenticate.
     const credential = buildCredential({ id: 300, agentType: 'claude_code' });
     const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });
     renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
 
     expect(screen.getByRole('button', { name: 'Re-authenticate' })).toBeInTheDocument();
-    // The five unconfigured agents each render an Authenticate button.
-    expect(screen.getAllByRole('button', { name: 'Authenticate' })).toHaveLength(6);
+    expect(screen.getAllByRole('button', { name: 'Authenticate' })).toHaveLength(7);
   });
 
   it('shows the session visibility switches in the state the profile reports', () => {
@@ -461,6 +467,44 @@ describe('Profile/Show', () => {
     expect(form.setData).toHaveBeenCalledWith('profile', expect.objectContaining({ shareActiveSessions: true }));
   });
 
+  it('shows the team opt-out in the state the profile reports and records a flip on the form', async () => {
+    const profile = buildProfile({ excludeFromTeams: false });
+    const form = pinForm('Maria Sokolova');
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile), form });
+
+    const optOut = screen.getByRole('switch', { name: /Don't let anyone add me to a team/ });
+    expect(optOut).not.toBeChecked();
+    await userEvent.click(optOut);
+
+    expect(form.setData).toHaveBeenCalledWith('profile', expect.objectContaining({ excludeFromTeams: true }));
+  });
+
+  it('lists the teams the user is in and leaves one after confirmation', async () => {
+    const profile = buildProfile();
+    const props = {
+      ...baseProps(profile),
+      projectTeams: [{ id: 11, name: 'Planner', projectId: 7, projectName: 'Apollo Project' }],
+    };
+    renderAuthedPage(<ProfilePage {...props} />, { props });
+
+    expect(screen.getByText('Planner')).toBeInTheDocument();
+    expect(screen.getByText('Apollo Project')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Leave Planner' }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Leave' }));
+
+    await waitFor(() =>
+      expect(router.delete).toHaveBeenCalledWith('/company/projects/7/teams/11/leave', { preserveScroll: true }),
+    );
+  });
+
+  it('says so when the user is in no team', () => {
+    const profile = buildProfile();
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    expect(screen.getByText('You are not in any team.')).toBeInTheDocument();
+  });
+
   it('keeps Save disabled when the form is not dirty even though data is valid', () => {
     // pinForm sets isDirty=true; here we want a clean (non-dirty) but valid form.
     const form = makeFormStub({
@@ -469,6 +513,7 @@ describe('Profile/Show', () => {
         preferredAgentLanguage: 'en',
         shareActiveSessions: false,
         shareCompletedSessions: true,
+        excludeFromTeams: false,
       },
       name: '',
       description: '',

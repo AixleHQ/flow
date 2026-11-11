@@ -135,7 +135,7 @@ Temporal Workflow → PhaseActivity → ContainerService → Strategy → Runtim
 - `BaseStrategy` → `AgentBaseStrategy` → `AgentAuthStrategy` / `AgentSessionStrategy`
 - `BaseStrategy` → `ToolStrategy` → `CustomToolStrategy` / `InternalToolStrategy`
 - `BaseRuntime` → `DockerRuntime` / `KubernetesRuntime`
-- `BaseAdapter` → `ClaudeCodeAdapter` / `CursorCliAdapter` / `CodexAdapter` / `GeminiCliAdapter` / `AntigravityCliAdapter` / `GrokAdapter` / `KiroCliAdapter`
+- `BaseAdapter` → `ClaudeCodeAdapter` / `CursorCliAdapter` / `CodexAdapter` / `GeminiCliAdapter` / `AntigravityCliAdapter` / `GrokAdapter` / `KiroCliAdapter` / `CopilotCliAdapter`
 
 **Phases:** `pull_image → create_container → start_container → exec → cleanup`
 
@@ -442,7 +442,7 @@ docs/                                   # Architecture & design docs (see docs/i
 
 | Term | Meaning | DB column | Examples |
 |------|---------|-----------|----------|
-| **Agent Runtime** | Which AI agent CLI to use | `workflow_runs.agent_runtime`, `terminal_sessions.agent_type` | `claude_code`, `cursor_cli`, `codex`, `gemini_cli`, `antigravity_cli`, `grok`, `kiro_cli` |
+| **Agent Runtime** | Which AI agent CLI to use | `workflow_runs.agent_runtime`, `terminal_sessions.agent_type` | `claude_code`, `cursor_cli`, `codex`, `gemini_cli`, `antigravity_cli`, `grok`, `kiro_cli`, `copilot_cli` |
 | **Container Runtime** | Infrastructure that runs containers | `ContainerRuntime.build` (code-level) | Docker (local development), Kubernetes (production) |
 | **Internal Tool** | Platform tool defined in code (`Tools::Registry`), runs in-process | `tools.source = 'code'`, `execution_mode = 'app'` | `list_sub_steps`, `chat_post_message`, `board_*`, `coder_*` |
 | **Workflow Tool** | Internal tool needing workflow context, auto-injected via code-only `inject_when` rules | `Tools::Registry` `inject_when` (no DB column) | `list_sub_steps`, `mark_sub_step`, `finish_session`, `fail_session` |

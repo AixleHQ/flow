@@ -19,10 +19,6 @@ import {
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import {
-  IconBrandAws,
-  IconBrandGoogleFilled,
-  IconBrandOpenai,
-  IconBrandX,
   IconBrush,
   IconBuilding,
   IconCheck,
@@ -31,11 +27,9 @@ import {
   IconClipboardList,
   IconClock,
   IconCode,
-  IconCursorText,
   IconDots,
   IconPlug,
   IconRefresh,
-  IconSparkles,
   IconTestPipe,
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -49,10 +43,9 @@ import {
   finishApiV1TerminalSessionPath,
   resetApiV1TerminalSessionPath,
 } from 'shared/routes';
-import { AGENT_BRAND_COLORS } from 'shared/theme/vendorColors';
 import { PageShell, type AgentType, type SharedProps } from 'shared/ui';
 import { AGENT_RUNTIMES, AGENT_TYPES } from 'shared/ui/agentRuntimes';
-import { LiveTerminal } from 'shared/ui/sessions';
+import { AgentLogo, LiveTerminal } from 'shared/ui/sessions';
 
 import classes from './OnboardingPage.module.css';
 
@@ -78,24 +71,11 @@ const LANGUAGE_OPTIONS = [
   { value: 'pl', label: 'Polish' },
 ];
 
-const AGENT_ICONS: Record<AgentType, typeof IconSparkles> = {
-  claude_code: IconSparkles,
-  cursor_cli: IconCursorText,
-  codex: IconBrandOpenai,
-  gemini_cli: IconBrandGoogleFilled,
-  antigravity_cli: IconBrandGoogleFilled,
-  grok: IconBrandX,
-  kiro_cli: IconBrandAws,
-};
-
 const AVAILABLE_AGENTS = AGENT_TYPES.map((type) => ({
   type,
   name: AGENT_RUNTIMES[type].productName,
   description: AGENT_RUNTIMES[type].description,
-  icon: AGENT_ICONS[type],
 }));
-
-const AGENT_COLORS = AGENT_BRAND_COLORS;
 
 interface ViewerWorkflowPreview {
   workflowName: string;
@@ -475,12 +455,7 @@ function ConnectAgentsStep({
               <Box key={agent.type} className={classes.authRow}>
                 <Group justify="space-between" wrap="nowrap">
                   <Group gap="sm" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
-                    <Box
-                      className={classes.agentLogo}
-                      style={{ backgroundColor: AGENT_COLORS[agent.type] ?? 'var(--app-text-tertiary)' }}
-                    >
-                      <agent.icon size={12} color="white" />
-                    </Box>
+                    <AgentLogo agentType={agent.type} size={20} />
                     <Box style={{ minWidth: 0 }}>
                       <Text size="sm" fw={500} truncate>
                         {agent.name}

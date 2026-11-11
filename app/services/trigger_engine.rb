@@ -146,7 +146,9 @@ class TriggerEngine
     def fire_for_binding(binding:, event:, task: nil, actor: nil)
       return nil unless binding.live?
 
-      actor ||= binding.created_by
+      team = binding.run_as_team
+      # With a team, `actor` only owns a run that no member could take.
+      actor ||= binding.created_by || team&.created_by
       return nil if actor.nil? # a run requires a user
 
       # Resolve the subject (which may CREATE a card for subject_policy:create_task)
@@ -158,7 +160,8 @@ class TriggerEngine
         actor: actor,
         event: event,
         source: "trigger_binding:#{binding.id}",
-        trigger_binding: binding
+        trigger_binding: binding,
+        team: team
       ) { resolve_subject(binding: binding, event: event, fallback_task: task) }
     end
 
@@ -176,7 +179,7 @@ class TriggerEngine
         source: "column_workflow_binding:#{binding.id}",
         subject: task.id,
         data: { "column_id" => binding.board_column_id, "workflow_id" => binding.workflow_id,
-                "requested_by_id" => (requested_by || actor)&.id },
+                "requested_by_id" => (requested_by || actor)&.id, "team_id" => task.assignee_team_id }.compact,
         project: task.board.project,
         board_task: task,
         actor: actor,
@@ -210,7 +213,7 @@ class TriggerEngine
     # event is replayed later, which would report a failure and then fire anyway,
     # or fire twice.
     def fire_workflow(workflow:, project:, actor:, event:, source:, trigger_binding: nil, task: nil,
-                      runner_id: WorkflowService::RUNNER_NOT_PICKED)
+                      runner_id: WorkflowService::RUNNER_NOT_PICKED, team: nil)
       dedup_key = dispatch_dedup_key(event, trigger_binding, source)
 
       dispatch = find_or_create_dispatch(
@@ -231,7 +234,7 @@ class TriggerEngine
           subject = block_given? ? yield : task     # resolve (and maybe create) inside the lock
           result = WorkflowService.enqueue(
             workflow: workflow, project: project, user: actor, source: :trigger,
-            task: subject, mode: :non_interactive, runner_id: runner_id,
+            task: subject, mode: :non_interactive, runner_id: runner_id, team: team,
             input_asset_ids: input_asset_ids_for(event, project),
             shared_context: Chat.run_context(event).merge(
               Trackers::TriggerSupport.run_context(event), Webhooks::TriggerSupport.run_context(event)
@@ -279,9 +282,12 @@ class TriggerEngine
       # Only a manual launch records a runner pick (TaskService.trigger_workflow);
       # a column binding carries none, so its run takes the workflow's runner.
       picked = event.data.to_h.key?("runner_id") ? { runner_id: event.data["runner_id"] } : {}
+      # A card assigned to a team records the team, and its run goes to the member
+      # picked at launch; the event's actor then only owns a run nobody could take.
+      team = event.data["team_id"] && event.project&.project_teams&.find_by(id: event.data["team_id"])
       [ fire_workflow(
         workflow: workflow, project: event.project, task: task,
-        actor: actor, event: event, source: source, **picked
+        actor: actor, event: event, source: source, team: team, **picked
       ) ].compact
     end
 

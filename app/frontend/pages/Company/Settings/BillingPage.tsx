@@ -3,22 +3,26 @@ import {
   Alert,
   Anchor,
   Badge,
+  Box,
   Button,
   Card,
+  Divider,
   Group,
   List,
   Loader,
   Modal,
   Select,
+  SimpleGrid,
   Stack,
   Text,
   Textarea,
 } from '@mantine/core';
+import { IconBrandAws, IconCreditCard, IconFileInvoice } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
-import { formatCalendarDay, formatDateMedium, formatDateTimeShort } from 'shared/lib/formatDate';
+import { formatCalendarDay, formatDateMedium, formatDateTimeShort, parseDate } from 'shared/lib/formatDate';
 import {
   companyBillingCancellationPath,
   companyBillingCheckoutPath,
@@ -36,12 +40,10 @@ interface Estimate {
   minutesPerUnit: number;
 }
 
-interface Usage {
-  workerMinutes: number;
-  /** The end of the last hour the meter has closed; the hour under way is not in yet. */
-  measuredUntil: string | null;
-  /** Null while the price cannot be read from Stripe. */
-  estimate: Estimate | null;
+interface Price {
+  unitAmountCents: number;
+  currency: string;
+  minutesPerUnit: number;
 }
 
 interface FinalInvoice {
@@ -51,18 +53,46 @@ interface FinalInvoice {
 }
 
 interface Billing {
-  status: BillingStatus;
+  status: BillingStatus | 'awaiting_subscription';
   periodStartsAt: string | null;
   periodEndsAt: string | null;
   cancelsAt: string | null;
-  usage: Usage | null;
   /** The free trial, while it runs or once it has ended. `lastDay` is `YYYY-MM-DD` (UTC). */
   trial: { days: number; daysLeft: number; lastDay: string } | null;
+  /** The rate the card is billed at. Null while the price cannot be read from Stripe. */
+  price: Price | null;
+  /** What bills the workspace: `stripe`, `aws_marketplace` or `none`. */
+  provider: string;
   canPay: boolean;
   hasSubscription: boolean;
   hasUnpaidInvoice: boolean;
-  finalInvoice: FinalInvoice | null;
   cancellationReasons: string[];
+}
+
+interface Usage {
+  since: string;
+  until: string;
+  workerMinutes: number;
+  /** The end of the last hour the meter has closed; the hour under way is not in yet. Null for usage AWS was sent. */
+  measuredUntil: string | null;
+  estimate: Estimate | null;
+}
+
+/** One subscription the workspace has had: the card or the AWS Marketplace licence, running or stopped. */
+interface Subscription {
+  kind: 'card' | 'aws_marketplace';
+  status: 'active' | 'cancelling' | 'payment_failed' | 'cancelled';
+  /** The period under way for a running subscription; the whole active period for a stopped one. */
+  periodStartsAt: string | null;
+  periodEndsAt: string | null;
+  nextInvoiceAt: string | null;
+  /** A cancellation scheduled for the end of the period, which only legacy card subscriptions have. */
+  cancelsAt: string | null;
+  cancelledAt: string | null;
+  usage: Usage | null;
+  invoicesUrl: string | null;
+  awsAccountId: string | null;
+  finalInvoice: FinalInvoice | null;
 }
 
 /** Somebody's AWS Marketplace subscription asking to be applied to this workspace. */
@@ -81,36 +111,28 @@ interface MarketplaceProposal {
   canDecide: boolean;
 }
 
-/** Set once AWS Marketplace bills this workspace: what this page shows instead of controls. */
-interface Marketplace {
-  awsAccountId: string | null;
-  subscribedAt: string | null;
-  /** The subscription has ended; the workspace is stopped until somebody renews it in AWS. */
-  ended: boolean;
-  /** AWS is the payer now. False once a card has taken over — the panel is then about this month, not an offer to renew. */
-  billsNow: boolean;
-  /** Worker-minutes reported towards the AWS bill so far this month. */
-  reportedMinutes: number;
-  /** The listing's page in AWS Marketplace, where an ended subscription is taken out again. */
-  listingUrl: string;
-}
-
 interface Props {
   company: { name: string };
   billing: Billing;
+  subscriptions: { active: Subscription | null; previous: Subscription[] };
+  /** The listing's page in AWS Marketplace, where a subscription is taken out. Null where none is configured. */
+  listingUrl: string | null;
   checkoutResult: 'done' | 'cancelled' | null;
   marketplaceProposal: MarketplaceProposal | null;
-  marketplaceBilling: Marketplace | null;
   [key: string]: unknown;
 }
 
-const STATUS_BADGE: Record<BillingStatus, { label: string; color: string }> = {
+const STATUS_BADGE: Record<
+  Subscription['status'] | 'trialing' | 'allowance' | 'none',
+  { label: string; color: string }
+> = {
   trialing: { label: 'Free trial', color: 'blue' },
   active: { label: 'Active', color: 'green' },
   cancelling: { label: 'Cancelling', color: 'yellow' },
   allowance: { label: 'Stopped', color: 'red' },
-  canceled: { label: 'Canceled', color: 'gray' },
+  cancelled: { label: 'Cancelled', color: 'gray' },
   payment_failed: { label: 'Payment failed', color: 'red' },
+  none: { label: 'None', color: 'gray' },
 };
 
 // Stripe's own cancellation feedback values, worded for the person choosing.
@@ -129,10 +151,281 @@ const COMMENT_MAX = 1000;
 
 const SETTLING_POLL_MS = 5000;
 
+const AWS_SUBSCRIPTIONS_URL = 'https://aws.amazon.com/marketplace/library';
+
 const formatMoney = (cents: number, currency: string) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: currency.toUpperCase() }).format(cents / 100);
 
 const formatMinutes = (minutes: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(minutes);
+
+/** "Oct 28 – Nov 28, 2026"; the end alone when the start is not known. */
+const formatDateRange = (from: string | null, to: string | null) => {
+  const start = parseDate(from);
+  const end = parseDate(to);
+  if (!end) return start ? `From ${formatDateMedium(from)}` : '—';
+  if (!start) return `Until ${formatDateMedium(to)}`;
+  return new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric' }).formatRange(
+    start,
+    end,
+  );
+};
+
+// A per-minute rate is fractions of a cent, so it is not rounded to two places.
+const formatRate = (cents: number, currency: string) =>
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency.toUpperCase(),
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  }).format(cents / 100);
+
+type QuotedPrice = Price & { via: Subscription['kind'] };
+
+const priceSentence = (price: QuotedPrice) => {
+  if (price.via === 'aws_marketplace') {
+    return `Billed at ${formatRate(price.unitAmountCents, price.currency)} per worker-minute through AWS Marketplace.`;
+  }
+  return price.minutesPerUnit > 1
+    ? `Billed at ${formatMoney(price.unitAmountCents, price.currency)} per ${price.minutesPerUnit} worker-minutes, in whole packs rounded down.`
+    : `Billed at ${formatRate(price.unitAmountCents, price.currency)} per worker-minute by card.`;
+};
+
+// What the page quotes: the agreement's rate while AWS bills, the card's
+// otherwise. A workspace AWS billed and nothing bills now is quoted nothing:
+// the card's price is not what it paid, and may never be.
+const quotedPrice = (active: Subscription | null, billing: Billing): QuotedPrice | null => {
+  const estimate = active?.kind === 'aws_marketplace' ? active.usage?.estimate : null;
+  if (estimate) {
+    return {
+      unitAmountCents: estimate.unitAmountCents,
+      currency: estimate.currency,
+      minutesPerUnit: 1,
+      via: 'aws_marketplace',
+    };
+  }
+  if (active?.kind === 'aws_marketplace') return null;
+  if (!active && billing.provider === 'aws_marketplace') return null;
+  return billing.price && { ...billing.price, via: 'card' };
+};
+
+function SectionHeader({ title, count }: { title: string; count?: number }) {
+  return (
+    <Group
+      component="header"
+      justify="space-between"
+      align="baseline"
+      pb={6}
+      style={{ borderBottom: '1px solid var(--app-border-default)' }}
+    >
+      <Text component="h2" fz={13} fw={700} tt="uppercase" m={0} style={{ letterSpacing: '0.06em' }}>
+        {title}
+      </Text>
+      {count !== undefined && (
+        <Text fz="sm" c="dimmed">
+          {count}
+        </Text>
+      )}
+    </Group>
+  );
+}
+
+function Label({ children }: { children: React.ReactNode }) {
+  return (
+    <Text fz={11} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: '0.06em' }}>
+      {children}
+    </Text>
+  );
+}
+
+function Field({ label, hint, children }: { label: string; hint?: string | null; children: React.ReactNode }) {
+  return (
+    <Stack gap={4}>
+      <Label>{label}</Label>
+      <Text fz="md">{children}</Text>
+      {hint && (
+        <Text fz="sm" c="dimmed">
+          {hint}
+        </Text>
+      )}
+    </Stack>
+  );
+}
+
+function Figure({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <Stack gap={4}>
+      <Label>{label}</Label>
+      <Text fz="lg" ff="monospace">
+        {children}
+      </Text>
+      {hint && (
+        <Text fz="xs" c="dimmed">
+          {hint}
+        </Text>
+      )}
+    </Stack>
+  );
+}
+
+// A sum of nothing for minutes that were used: the card bills in whole packs,
+// and these did not fill one.
+const underOnePack = (usage: Usage) =>
+  !!usage.estimate && usage.estimate.amountCents === 0 && usage.workerMinutes > 0 && usage.estimate.minutesPerUnit > 1;
+
+function StatusBadge({ status }: { status: keyof typeof STATUS_BADGE }) {
+  const badge = STATUS_BADGE[status];
+  return (
+    <Badge variant="dot" color={badge.color} size="md">
+      {badge.label}
+    </Badge>
+  );
+}
+
+function KindIcon({ kind }: { kind: Subscription['kind'] }) {
+  const Icon = kind === 'card' ? IconCreditCard : IconBrandAws;
+  return <Icon size={22} stroke={1.6} aria-hidden style={{ color: 'var(--mantine-color-dimmed)' }} />;
+}
+
+const KIND_TITLE: Record<Subscription['kind'], string> = { card: 'Card payment', aws_marketplace: 'AWS Marketplace' };
+const KIND_METHOD: Record<Subscription['kind'], string> = {
+  card: 'Card via Stripe',
+  aws_marketplace: 'AWS Marketplace',
+};
+
+/**
+ * The frame every subscription is drawn in: who is paid and how it stands at
+ * the top, the dates beneath, and the usage block under a rule.
+ */
+function SubscriptionPanel({
+  kind,
+  status,
+  action,
+  fields,
+  usage,
+  footer,
+}: {
+  kind: Subscription['kind'];
+  status: keyof typeof STATUS_BADGE;
+  action?: React.ReactNode;
+  fields: React.ReactNode;
+  usage?: React.ReactNode;
+  footer?: React.ReactNode;
+}) {
+  return (
+    <Card withBorder padding={0}>
+      <Box p="lg">
+        <Group justify="space-between" align="flex-start" wrap="nowrap">
+          <Group gap="sm" wrap="nowrap">
+            <KindIcon kind={kind} />
+            <Text component="h3" fz="xl" fw={600} m={0}>
+              {KIND_TITLE[kind]}
+            </Text>
+            <StatusBadge status={status} />
+          </Group>
+          {action && <Group gap="xs">{action}</Group>}
+        </Group>
+        <SimpleGrid cols={{ base: 1, xs: 3 }} mt="lg" spacing="lg">
+          {fields}
+        </SimpleGrid>
+      </Box>
+      {usage && (
+        <>
+          <Divider />
+          <Box p="lg">{usage}</Box>
+        </>
+      )}
+      {footer && (
+        <>
+          <Divider />
+          <Box px="lg" py="md">
+            {footer}
+          </Box>
+        </>
+      )}
+    </Card>
+  );
+}
+
+function UsageBlock({
+  title,
+  window,
+  usage,
+  costLabel,
+  note,
+}: {
+  title: string;
+  window: string;
+  usage: Usage;
+  costLabel: string;
+  note: React.ReactNode;
+}) {
+  return (
+    <Stack gap="md">
+      <Group gap="sm" align="baseline">
+        <Text fz={13} fw={700} tt="uppercase" style={{ letterSpacing: '0.06em' }}>
+          {title}
+        </Text>
+        <Text fz="sm" c="dimmed">
+          {window}
+        </Text>
+      </Group>
+      <SimpleGrid cols={{ base: 1, xs: 3 }} spacing="lg">
+        <Figure label="Worker-minutes">{formatMinutes(Math.round(usage.workerMinutes))}</Figure>
+        {usage.estimate && (
+          <Figure
+            label={costLabel}
+            hint={underOnePack(usage) ? `Under one pack of ${usage.estimate.minutesPerUnit} worker-minutes` : undefined}
+          >
+            {formatMoney(usage.estimate.amountCents, usage.estimate.currency)}
+          </Figure>
+        )}
+      </SimpleGrid>
+      <Note>{note}</Note>
+    </Stack>
+  );
+}
+
+// A string is set as dimmed text; a component (the final invoice status) draws its own.
+function Note({ children }: { children: React.ReactNode }) {
+  if (!children) return null;
+  return typeof children === 'string' ? (
+    <Text fz="sm" c="dimmed">
+      {children}
+    </Text>
+  ) : (
+    <>{children}</>
+  );
+}
+
+function InvoicesButton({ href }: { href: string }) {
+  return (
+    <Button
+      component="a"
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      variant="default"
+      leftSection={<IconFileInvoice size={16} />}
+    >
+      Invoices
+    </Button>
+  );
+}
+
+function PayViaMarketplaceButton({ href }: { href: string }) {
+  return (
+    <Button
+      component="a"
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      variant="default"
+      leftSection={<IconBrandAws size={16} />}
+    >
+      Pay via AWS Marketplace
+    </Button>
+  );
+}
 
 function CheckoutResult({ result, billing }: { result: Props['checkoutResult']; billing: Billing }) {
   if (result === 'cancelled') {
@@ -226,86 +519,52 @@ function FinalInvoiceStatus({ invoice }: { invoice: FinalInvoice }) {
         </Group>
       );
     case 'settled':
-      return (
-        invoice.url && (
-          <Anchor href={invoice.url} target="_blank" rel="noopener noreferrer" size="sm">
-            View the final invoice
-          </Anchor>
-        )
+      return invoice.url ? (
+        <Text size="sm" c="dimmed">
+          The final invoice has been issued.
+        </Text>
+      ) : (
+        <Text size="sm" c="dimmed">
+          The final invoice has been issued; Stripe sends it to the billing email.
+        </Text>
       );
     case 'failed':
       return <Text size="sm">Stripe issues the final invoice within the hour.</Text>;
   }
 }
 
-function SubscriptionCard({ billing, title = 'Subscription' }: { billing: Billing; title?: string }) {
+/** The card paying now, in whichever state it is in. */
+function RunningCard({
+  subscription,
+  billing,
+  listingUrl,
+}: {
+  subscription: Subscription;
+  billing: Billing;
+  listingUrl: string | null;
+}) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const badge = STATUS_BADGE[billing.status];
-  const endsOn = formatDateMedium(billing.cancelsAt ?? billing.periodEndsAt);
-  // Only a cancellation we recorded dates an ending. `periodEndsAt` stands in
-  // while the subscription is still running towards one, but it outlives the
-  // subscription: a workspace handed over to AWS Marketplace keeps the period
-  // end of the Stripe subscription it left, which is in the future.
-  const endedOn = billing.cancelsAt && formatDateMedium(billing.cancelsAt);
-  const ended = endedOn
-    ? `On ${endedOn} the subscription ended, so no new sessions start.`
-    : 'The subscription has ended, so no new sessions start.';
-
   const post = (path: string) => {
     setBusy(true);
     router.post(path, {}, { onFinish: () => setBusy(false) });
   };
-  const addCard = billing.canPay && (
-    <Button loading={busy} onClick={() => post(companyBillingCheckoutPath())}>
-      Add a card
-    </Button>
-  );
 
-  let body: React.ReactNode;
   let action: React.ReactNode = null;
-  switch (billing.status) {
-    case 'trialing':
-      body = billing.trial && (
-        <>
-          You are on the free trial, on one worker: {billing.trial.daysLeft} of {billing.trial.days} days left, the last
-          day is {formatCalendarDay(billing.trial.lastDay)}.{' '}
-          {billing.canPay
-            ? 'Add a card to keep going after it and choose how many workers to run.'
-            : 'Talk to us to keep going after it.'}
-        </>
-      );
-      action = addCard;
-      break;
-    case 'allowance':
-      body = `The free trial has ended, so no new sessions start. Anything already running finishes. ${
-        billing.canPay ? 'Add a card to carry on.' : 'Talk to us to carry on.'
-      }`;
-      action = addCard;
-      break;
+  let note: React.ReactNode = null;
+  switch (subscription.status) {
     case 'active':
-      if (!billing.hasSubscription) {
-        body = 'No card is on file, so nothing is billed yet. Add a card to pay for the worker-minutes you use.';
-        action = addCard;
-        break;
-      }
-      body = (
-        <>
-          Billed monthly by card for the worker-minutes you use. Current period:{' '}
-          {formatDateMedium(billing.periodStartsAt)} – {formatDateMedium(billing.periodEndsAt)}
-        </>
-      );
       action = (
-        <Button variant="default" color="red" onClick={() => setCancelOpen(true)}>
+        <Button variant="outline" color="red" onClick={() => setCancelOpen(true)}>
           Cancel subscription
         </Button>
       );
       break;
     case 'cancelling':
-      body = (
+      note = (
         <>
-          On {endsOn} the subscription ends and no new sessions start. Until then everything keeps working, and usage up
-          to that date is billed on the final invoice.
+          On {formatDateMedium(subscription.cancelsAt ?? subscription.periodEndsAt)} the subscription ends and no new
+          sessions start. Until then everything keeps working, and usage up to that date is billed on the final invoice.
         </>
       );
       action = (
@@ -321,21 +580,8 @@ function SubscriptionCard({ billing, title = 'Subscription' }: { billing: Billin
         </Button>
       );
       break;
-    case 'canceled':
-      if (billing.hasUnpaidInvoice) {
-        body = <>{ended} Your data is kept. The final invoice is unpaid: pay it to add a card again.</>;
-        action = (
-          <Button color="red" loading={busy} onClick={() => post(companyBillingInvoicePaymentPath())}>
-            Pay final invoice
-          </Button>
-        );
-        break;
-      }
-      body = <>{ended} Your data is kept. Add a card to restore access.</>;
-      action = addCard;
-      break;
     case 'payment_failed':
-      body = billing.hasUnpaidInvoice
+      note = billing.hasUnpaidInvoice
         ? 'Your last payment did not go through, so no new sessions start. Pay the open invoice to restore access.'
         : 'Your last payment did not go through, so no new sessions start. The invoice will appear here shortly.';
       action = billing.hasUnpaidInvoice && (
@@ -344,73 +590,263 @@ function SubscriptionCard({ billing, title = 'Subscription' }: { billing: Billin
         </Button>
       );
       break;
+    case 'cancelled':
+      break;
+  }
+
+  return (
+    <>
+      <SubscriptionPanel
+        kind="card"
+        status={subscription.status}
+        action={action}
+        fields={
+          <>
+            <Field label="Billing method">{KIND_METHOD.card}</Field>
+            <Field label="Current period">
+              {formatDateRange(subscription.periodStartsAt, subscription.periodEndsAt)}
+            </Field>
+            <Field label="Next invoice">{formatDateMedium(subscription.nextInvoiceAt)}</Field>
+          </>
+        }
+        usage={
+          subscription.usage && (
+            <UsageBlock
+              title="Usage this period"
+              window={`Since ${formatDateMedium(subscription.usage.since)}`}
+              usage={subscription.usage}
+              costLabel="Estimated cost"
+              note={
+                <>
+                  {subscription.usage.measuredUntil
+                    ? `Measured up to ${formatDateTimeShort(subscription.usage.measuredUntil)}; each hour is added once it closes.`
+                    : 'Each hour is added once it closes.'}{' '}
+                  The invoice has the final amount.
+                </>
+              }
+            />
+          )
+        }
+        footer={
+          (note || listingUrl) && (
+            <Stack gap="xs">
+              {note && <Text size="sm">{note}</Text>}
+              {listingUrl && (
+                <Text size="sm" c="dimmed">
+                  Prefer your AWS bill?{' '}
+                  <Anchor href={listingUrl} target="_blank" rel="noopener noreferrer" size="sm">
+                    Pay via AWS Marketplace
+                  </Anchor>
+                  . The card is stopped once the subscription is applied to this workspace, with a final invoice for the
+                  usage it has not been billed for yet.
+                </Text>
+              )}
+            </Stack>
+          )
+        }
+      />
+      <CancelModal opened={cancelOpen} onClose={() => setCancelOpen(false)} reasons={billing.cancellationReasons} />
+    </>
+  );
+}
+
+/** The AWS Marketplace subscription paying now. Nothing here is ours to change: the subscription is managed in AWS. */
+function RunningLicense({ subscription }: { subscription: Subscription }) {
+  return (
+    <SubscriptionPanel
+      kind="aws_marketplace"
+      status={subscription.status}
+      action={
+        <>
+          {subscription.invoicesUrl && <InvoicesButton href={subscription.invoicesUrl} />}
+          <Button
+            component="a"
+            href={AWS_SUBSCRIPTIONS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            variant="default"
+          >
+            Manage subscription
+          </Button>
+        </>
+      }
+      fields={
+        <>
+          <Field label="Billing method" hint={subscription.awsAccountId && `AWS account ${subscription.awsAccountId}`}>
+            {KIND_METHOD.aws_marketplace}
+          </Field>
+          <Field label="Current period">
+            {formatDateRange(subscription.periodStartsAt, subscription.periodEndsAt)}
+          </Field>
+          <Field label="Next invoice">{formatDateMedium(subscription.nextInvoiceAt)}</Field>
+        </>
+      }
+      usage={
+        subscription.usage && (
+          <UsageBlock
+            title="Usage this period"
+            window={`Since ${formatDateMedium(subscription.usage.since)}`}
+            usage={subscription.usage}
+            costLabel="Estimated cost"
+            note="Worker-minutes reported to AWS this calendar month, which the AWS bill for the month is counted from. The subscription is cancelled in AWS, not here."
+          />
+        )
+      }
+    />
+  );
+}
+
+/** A subscription that ended: what it was, when, and what its last bill covered. */
+function StoppedSubscription({ subscription }: { subscription: Subscription }) {
+  const usage = subscription.usage;
+  const window = usage ? formatDateRange(usage.since, usage.until) : '';
+  const note =
+    subscription.kind === 'card'
+      ? subscription.finalInvoice && <FinalInvoiceStatus invoice={subscription.finalInvoice} />
+      : 'Worker-minutes reported to AWS in the month the subscription ended, on that account’s AWS bill.';
+
+  return (
+    <SubscriptionPanel
+      kind={subscription.kind}
+      status="cancelled"
+      action={subscription.invoicesUrl && <InvoicesButton href={subscription.invoicesUrl} />}
+      fields={
+        <>
+          <Field label="Billing method">{KIND_METHOD[subscription.kind]}</Field>
+          <Field label="Active period">{formatDateRange(subscription.periodStartsAt, subscription.periodEndsAt)}</Field>
+          <Field label="Cancelled">{formatDateMedium(subscription.cancelledAt)}</Field>
+        </>
+      }
+      usage={
+        usage ? (
+          <UsageBlock title="Final usage" window={window} usage={usage} costLabel="Final cost" note={note} />
+        ) : (
+          <Note>{note}</Note>
+        )
+      }
+    />
+  );
+}
+
+/**
+ * The Active subscription section when nothing pays: the trial, a stopped
+ * workspace, or one that never had a card. The ways to pay are offered here.
+ */
+function NoSubscription({ billing, listingUrl }: { billing: Billing; listingUrl: string | null }) {
+  const [busy, setBusy] = useState(false);
+  const post = (path: string) => {
+    setBusy(true);
+    router.post(path, {}, { onFinish: () => setBusy(false) });
+  };
+  const payLater = billing.canPay ? 'Add a card to carry on.' : 'Talk to us to carry on.';
+  const endedOn = billing.cancelsAt && formatDateMedium(billing.cancelsAt);
+
+  let status: keyof typeof STATUS_BADGE = 'none';
+  let title = 'No active subscription';
+  let body: React.ReactNode;
+  let primary: React.ReactNode = null;
+  let offerPayment = true;
+  switch (billing.status) {
+    case 'trialing':
+      status = 'trialing';
+      title = 'Free trial';
+      body = billing.trial && (
+        <>
+          You are on the free trial, on one worker: {billing.trial.daysLeft} of {billing.trial.days} days left, the last
+          day is {formatCalendarDay(billing.trial.lastDay)}.{' '}
+          {billing.canPay
+            ? 'Add a card to keep going after it and choose how many workers to run.'
+            : 'Talk to us to keep going after it.'}
+        </>
+      );
+      break;
+    case 'allowance':
+      status = 'allowance';
+      title = 'Free trial';
+      body = `The free trial has ended, so no new sessions start. Anything already running finishes. ${payLater}`;
+      break;
+    case 'canceled':
+      status = 'cancelled';
+      body = (
+        <>
+          {endedOn
+            ? `On ${endedOn} the subscription ended, so no new sessions start.`
+            : 'The subscription has ended, so no new sessions start.'}{' '}
+          Your data is kept.{' '}
+          {billing.hasUnpaidInvoice ? 'The final invoice is unpaid: pay it to add a card again.' : payLater}
+        </>
+      );
+      if (billing.hasUnpaidInvoice) {
+        offerPayment = false;
+        primary = (
+          <Button color="red" loading={busy} onClick={() => post(companyBillingInvoicePaymentPath())}>
+            Pay final invoice
+          </Button>
+        );
+      }
+      break;
+    case 'payment_failed':
+      status = 'payment_failed';
+      body = billing.hasUnpaidInvoice
+        ? 'Your last payment did not go through, so no new sessions start. Pay the open invoice to restore access.'
+        : 'Your last payment did not go through, so no new sessions start. The invoice will appear here shortly.';
+      offerPayment = false;
+      primary = billing.hasUnpaidInvoice && (
+        <Button color="red" loading={busy} onClick={() => post(companyBillingInvoicePaymentPath())}>
+          Pay invoice
+        </Button>
+      );
+      break;
+    case 'awaiting_subscription':
+      body = 'AWS has not confirmed the subscription yet. The workspace starts as soon as it does.';
+      offerPayment = false;
+      break;
+    default:
+      body = 'No card is on file, so nothing is billed yet. Add a card to pay for the worker-minutes you use.';
   }
 
   return (
     <Card withBorder padding="lg">
-      <Stack gap="sm">
-        <Group justify="space-between">
-          <Text fw={600}>{title}</Text>
-          <Badge color={badge.color} variant="light">
-            {badge.label}
-          </Badge>
+      <Stack gap="md">
+        <Group gap="sm">
+          <Text component="h3" fz="xl" fw={600} m={0}>
+            {title}
+          </Text>
+          <StatusBadge status={status} />
         </Group>
         <Text size="sm" c="dimmed">
           {body}
         </Text>
-        {billing.finalInvoice && <FinalInvoiceStatus invoice={billing.finalInvoice} />}
-        {action && <Group>{action}</Group>}
-      </Stack>
-      <CancelModal opened={cancelOpen} onClose={() => setCancelOpen(false)} reasons={billing.cancellationReasons} />
-    </Card>
-  );
-}
-
-function UsageCard({ billing, usage }: { billing: Billing; usage: Usage }) {
-  const { estimate } = usage;
-
-  return (
-    <Card withBorder padding="lg">
-      <Stack gap="sm">
-        <Text fw={600}>This billing period</Text>
-        <Text size="sm">
-          Since {formatDateMedium(billing.periodStartsAt)}:{' '}
-          <Text span fw={600}>
-            {formatMinutes(usage.workerMinutes)}
-          </Text>{' '}
-          worker-minutes
-          {estimate && (
-            <>
-              , about{' '}
-              <Text span fw={600}>
-                {formatMoney(estimate.amountCents, estimate.currency)}
-              </Text>{' '}
-              so far
-            </>
+        <Group>
+          {primary}
+          {offerPayment && billing.canPay && (
+            <Button
+              leftSection={<IconCreditCard size={16} />}
+              loading={busy}
+              onClick={() => post(companyBillingCheckoutPath())}
+            >
+              Add a card
+            </Button>
           )}
-        </Text>
-        <Text size="xs" c="dimmed">
-          {estimate &&
-            `Billed at ${formatMoney(estimate.unitAmountCents, estimate.currency)} per ${estimate.minutesPerUnit} worker-minutes, in whole packs rounded down. `}
-          {usage.measuredUntil
-            ? `Measured up to ${formatDateTimeShort(usage.measuredUntil)}; each hour is added once it closes.`
-            : 'Each hour is added once it closes.'}{' '}
-          The invoice has the final amount.
-        </Text>
+          {offerPayment && listingUrl && <PayViaMarketplaceButton href={listingUrl} />}
+        </Group>
       </Stack>
     </Card>
   );
 }
 
 // The final invoice is settled by a background job a minute or two after the
-// cancellation; the page asks for the billing prop again until it is done.
+// cancellation; the page asks for its props again until it is done.
 function useRefreshWhileSettling(settling: boolean) {
   useEffect(() => {
     if (!settling) return;
-    const timer = setInterval(() => router.reload({ only: ['billing'] }), SETTLING_POLL_MS);
+    const timer = setInterval(() => router.reload({ only: ['billing', 'subscriptions'] }), SETTLING_POLL_MS);
     return () => clearInterval(timer);
   }, [settling]);
 }
+
+const settlingState = (invoice: FinalInvoice | null) =>
+  invoice?.state === 'cancelling' || invoice?.state === 'settling';
 
 function MarketplaceProposalCard({ proposal, companyName }: { proposal: MarketplaceProposal; companyName: string }) {
   const [applyOpen, setApplyOpen] = useState(false);
@@ -513,101 +949,48 @@ function ProposalConsequences({ proposal, companyName }: { proposal: Marketplace
   );
 }
 
-const AWS_SUBSCRIPTIONS_URL = 'https://aws.amazon.com/marketplace/library';
-
-// A workspace AWS bills has nothing to change here. Taken away from the page
-// entirely, its billing read as gone missing rather than kept somewhere else,
-// so the card says where the bill comes from and what has been reported
-// towards it -- the one figure not visible in AWS until the invoice exists.
-function MarketplaceCard({ marketplace, companyName }: { marketplace: Marketplace; companyName: string }) {
-  return (
-    <Card withBorder padding="lg">
-      <Stack gap="sm">
-        <Group justify="space-between" wrap="nowrap">
-          <Text fw={600}>Billed through AWS Marketplace</Text>
-          <Badge color={marketplace.ended ? 'red' : 'green'}>{marketplace.ended ? 'Ended' : 'Active'}</Badge>
-        </Group>
-        <Text size="sm" c="var(--app-text-secondary)">
-          {!marketplace.billsNow ? (
-            <>
-              A card pays for {companyName} now, so nothing more is reported to AWS. The minutes below ran through AWS
-              Marketplace earlier this month and are on that account&apos;s AWS bill for it.
-            </>
-          ) : marketplace.ended ? (
-            <>
-              The AWS Marketplace subscription for {companyName} has ended, so the workspace is stopped. Renewing it in
-              AWS starts it again.
-            </>
-          ) : (
-            <>
-              {companyName} is paid for through AWS Marketplace
-              {marketplace.awsAccountId && (
-                <>
-                  {' '}
-                  on AWS account <b>{marketplace.awsAccountId}</b>
-                </>
-              )}
-              . Your usage appears on that account&apos;s AWS bill, and the subscription is cancelled there rather than
-              here.
-            </>
-          )}
-        </Text>
-        <List size="sm" spacing={4}>
-          <List.Item>
-            <b>{formatMinutes(marketplace.reportedMinutes)}</b> worker-minutes reported to AWS this calendar month —
-            what the AWS bill for the month is counted from, including any earlier subscription in it.
-          </List.Item>
-          {marketplace.subscribedAt && (
-            <List.Item>Subscribed on {formatDateMedium(marketplace.subscribedAt)}.</List.Item>
-          )}
-        </List>
-        {/* The library manages a running subscription; an ended one is taken
-            out again on the listing's own page, which the library never leads
-            to. */}
-        {marketplace.billsNow && !marketplace.ended && (
-          <Anchor href={AWS_SUBSCRIPTIONS_URL} target="_blank" rel="noopener noreferrer" size="sm" fw={500}>
-            Manage the subscription in AWS Marketplace
-          </Anchor>
-        )}
-        {marketplace.billsNow && marketplace.ended && (
-          <Anchor href={marketplace.listingUrl} target="_blank" rel="noopener noreferrer" size="sm" fw={500}>
-            Subscribe again in AWS Marketplace
-          </Anchor>
-        )}
-      </Stack>
-    </Card>
-  );
-}
-
 const BillingPage = () => {
-  const { company, billing, checkoutResult, marketplaceProposal, marketplaceBilling } = usePage<Props>().props;
-  useRefreshWhileSettling(billing.finalInvoice?.state === 'cancelling' || billing.finalInvoice?.state === 'settling');
+  const { company, billing, subscriptions, listingUrl, checkoutResult, marketplaceProposal } = usePage<Props>().props;
+  const active = subscriptions.active;
+  const price = quotedPrice(active, billing);
+  useRefreshWhileSettling(subscriptions.previous.some((entry) => settlingState(entry.finalInvoice)));
 
   return (
     <AuthLayout>
       <Head title={`Billing — ${company.name}`} />
       <SettingsTabs active="billing" companyName={company.name}>
-        <Stack gap="lg" maw={720}>
+        <Stack gap="xl" maw={880}>
+          <Stack gap={4}>
+            <Text component="h1" fz={28} fw={700} m={0}>
+              Billing
+            </Text>
+            {price && (
+              <Text fz="md" c="dimmed">
+                {priceSentence(price)}
+              </Text>
+            )}
+          </Stack>
+
           <CheckoutResult result={checkoutResult} billing={billing} />
           {marketplaceProposal && <MarketplaceProposalCard proposal={marketplaceProposal} companyName={company.name} />}
-          {/* Whichever pays now comes first. Both are shown once the AWS
-              subscription has ended: the panel says what happened and where to
-              renew, and the card is the other way to carry on -- and once a
-              card has taken over, the AWS panel is a statement about this
-              month's bill, beneath the subscription that runs the workspace.
-              While the AWS subscription is live there is no card to offer: it
-              would be a second bill for the same capacity. */}
-          {marketplaceBilling?.billsNow && (
-            <MarketplaceCard marketplace={marketplaceBilling} companyName={company.name} />
-          )}
-          {(!marketplaceBilling || marketplaceBilling.ended) && (
-            <>
-              <SubscriptionCard billing={billing} title={marketplaceBilling ? 'Billed by card' : 'Subscription'} />
-              {billing.usage && <UsageCard billing={billing} usage={billing.usage} />}
-            </>
-          )}
-          {marketplaceBilling && !marketplaceBilling.billsNow && (
-            <MarketplaceCard marketplace={marketplaceBilling} companyName={company.name} />
+
+          <Stack gap="md">
+            <SectionHeader title="Active subscription" />
+            {active?.kind === 'card' && <RunningCard subscription={active} billing={billing} listingUrl={listingUrl} />}
+            {active?.kind === 'aws_marketplace' && <RunningLicense subscription={active} />}
+            {!active && <NoSubscription billing={billing} listingUrl={listingUrl} />}
+          </Stack>
+
+          {subscriptions.previous.length > 0 && (
+            <Stack gap="md">
+              <SectionHeader title="Previous subscriptions" count={subscriptions.previous.length} />
+              {subscriptions.previous.map((entry) => (
+                <StoppedSubscription
+                  key={`${entry.kind}-${entry.cancelledAt}-${entry.periodStartsAt}`}
+                  subscription={entry}
+                />
+              ))}
+            </Stack>
           )}
         </Stack>
       </SettingsTabs>

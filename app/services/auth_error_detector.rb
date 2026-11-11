@@ -41,7 +41,10 @@ class AuthErrorDetector
     %r{log out \(/logout\) and log back in \(/login\)}i,
     # Antigravity CLI 1.4.7–1.5.0 at startup with a dead access token that has not expired
     # yet. The status is required: the same prefix carries a transient outage.
-    /Eligibility check failed: UNAUTHENTICATED/
+    /Eligibility check failed: UNAUTHENTICATED/,
+    # Copilot CLI 1.0.108 with a revoked or invalid token, in the TUI and with -p.
+    /Authentication token found but could not be validated/,
+    /Classic Personal Access Tokens \(ghp_\) are not supported by Copilot/
   ].freeze
 
   Result = Struct.new(:auth_error, :message, keyword_init: true) do

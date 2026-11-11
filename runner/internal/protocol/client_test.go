@@ -114,3 +114,65 @@ func TestRefusalParsesTheJSONShape(t *testing.T) {
 		t.Fatalf("got %#v", r)
 	}
 }
+
+// A redirect from the endpoint comes back unchanged (§5.8): following it would
+// send the bearer outside the proxy prefix.
+func TestProxyReturnsARedirectUnchanged(t *testing.T) {
+	var requests []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests = append(requests, r.URL.Path)
+		w.Header().Set("Location", "/runner/v1/ops")
+		w.WriteHeader(http.StatusTemporaryRedirect)
+	}))
+	defer server.Close()
+	for _, injected := range []*http.Client{nil, {Timeout: 5 * time.Second}} {
+		requests = nil
+		c, err := NewClient(server.URL, "0.0.0-dev", injected)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := c.Proxy(context.Background(), "aracc_secret", http.MethodPost, "mcp", http.Header{}, []byte(`{}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusTemporaryRedirect || resp.Header.Get("Location") != "/runner/v1/ops" {
+			t.Errorf("got %d %q", resp.StatusCode, resp.Header.Get("Location"))
+		}
+		if len(requests) != 1 || requests[0] != "/runner/v1/proxy/mcp" {
+			t.Errorf("requests %v", requests)
+		}
+		if injected != nil && injected.CheckRedirect != nil {
+			t.Error("the injected client was changed")
+		}
+	}
+}
+
+// A cross-origin redirect is not followed, so no session key leaves the gateway.
+func TestProxyDoesNotFollowACrossOriginRedirect(t *testing.T) {
+	other := 0
+	elsewhere := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		other++
+		if r.Header.Get("X-Session-Key") != "" {
+			t.Error("the session key reached another origin")
+		}
+	}))
+	defer elsewhere.Close()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, elsewhere.URL+"/steal", http.StatusFound)
+	}))
+	defer server.Close()
+	c, err := NewClient(server.URL, "0.0.0-dev", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	header := http.Header{"X-Session-Key": []string{"sk_secret"}}
+	resp, err := c.Proxy(context.Background(), "aracc_secret", http.MethodGet, "assets/x", header, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusFound || other != 0 {
+		t.Errorf("got %d, %d requests elsewhere", resp.StatusCode, other)
+	}
+}

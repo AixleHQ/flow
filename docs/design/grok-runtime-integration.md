@@ -91,10 +91,14 @@ so the picker is never empty.
 
 ## 4. Session behaviour
 
-- **Session command:** `grok --yolo` (+ `--model <id>` when the session pins
+- **Session command:** `grok --yolo --minimal` (+ `--model <id>` when the session pins
   one). `--yolo` is xAI's documented alias for `--always-approve`, i.e.
   permission mode `bypassPermissions` — the direct equivalent of
   `codex --yolo` and `gemini --yolo`. The container is the sandbox.
+  `--minimal` prints the conversation into the terminal scrollback. The default
+  TUI draws on the alternate screen, and `--no-alt-screen` still repaints a
+  single frame. Either way the live terminal and the stored log replay would
+  have nothing to scroll back to (measured on 1.0.70).
 - **`~/.grok/config.toml`** is generated per session and pre-decides every
   prompt the CLI could otherwise block on: always-approve permission mode,
   folder trust **off** (which un-gates repo-local MCP/LSP/hooks so no session

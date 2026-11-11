@@ -35,7 +35,7 @@ class TaskWorkflowRunResourceTest < ActiveSupport::TestCase
     step = create(:step, workflow: @workflow, name: "Implementation")
     create(:step_run, workflow_run: @run, step: step)
 
-    preloaded = WorkflowRun.where(id: @run.id).includes(:workflow, step_runs: %i[step terminal_session]).first
+    preloaded = WorkflowRun.where(id: @run.id).includes(:workflow, :user, step_runs: %i[step terminal_session]).first
 
     assert_no_queries do
       assert_equal [ "Implementation" ], TaskWorkflowRunResource.new(preloaded).to_h["steps"].map { |s| s["name"] }
@@ -77,7 +77,7 @@ class TaskWorkflowRunResourceTest < ActiveSupport::TestCase
   test "the badge names the project's runner from the preloaded row, with no further query" do
     runner = create(:runner, company: @project.company, name: "Prod VPC")
     @run.update!(runner: runner)
-    preloaded = WorkflowRun.where(id: @run.id).includes(:workflow, :runner, step_runs: %i[step terminal_session]).first
+    preloaded = WorkflowRun.where(id: @run.id).includes(:workflow, :runner, :user, step_runs: %i[step terminal_session]).first
 
     resource = nil
     assert_no_queries { resource = TaskWorkflowRunResource.new(preloaded).to_h }

@@ -228,6 +228,10 @@ module Tools
             state.
           - `list_project_members` — who can reach the project; their ids are
             what a board task's assignee takes.
+          - `list_project_teams` / `create_project_team` — named groups of
+            members a task can be assigned to (`assignee_team_id`) and a
+            trigger can run as (`run_as_team_id`); each run goes to one member
+            the team's strategy picks.
 
           ## 2. Integrations, before anything that depends on them
           - `list_integrations` — GitHub / GitLab / Bitbucket / Slack / Coder and whether

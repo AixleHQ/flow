@@ -5,8 +5,9 @@ module PersonalTools
     tool do
       display_name "List Board Tasks"
       description "List tasks on a project's board one page at a time, optionally filtered by " \
-                  "search text, column, tag or archive state. Each row carries the task's `number`, the #N " \
-                  "people see on the board. Rows carry no description — read one with get_board_task."
+                  "search text, column or tag. Each row carries the task's `number`, the #N " \
+                  "people see on the board. Rows carry no description — read one with get_board_task. " \
+                  "Archived tasks are left out, as on the board, unless include_archived is true."
       audience :user
       tags :board
       read_only
@@ -15,9 +16,8 @@ module PersonalTools
             description: "Words from the task title, or a task number (`12` or `#12`) — the board's search box."
       param :column_id, type: :integer, description: "Filter to a board column id."
       param :tag, type: :string, description: "Filter by tag."
-      param :archived, type: :boolean,
-            description: "Filter by archive state: false returns only active tasks, " \
-                         "true only archived ones. Omit to return both."
+      param :include_archived, type: :boolean,
+            description: "Also list archived tasks (default false). Each row's `archived` tells them apart."
       param :limit, type: :integer, description: "Rows per page (default 50, cap 100)."
       param :offset, type: :integer,
             description: "Rows to skip before the page starts (default 0). The response " \
@@ -37,7 +37,7 @@ module PersonalTools
       tasks = tasks.matching(params[:query]) if params[:query].present?
       tasks = tasks.where(board_column_id: params[:column_id]) if params[:column_id].present?
       tasks = tasks.with_tag(params[:tag]) if params[:tag].present?
-      tasks = filter_by_archived(tasks)
+      tasks = tasks.active unless ActiveModel::Type::Boolean.new.cast(params[:include_archived])
 
       total = tasks.count
       limit = requested_limit
@@ -45,7 +45,7 @@ module PersonalTools
       rows = tasks.in_flat_board_order.limit(limit).offset(offset).map do |t|
         { id: t.id, number: t.number, title: t.title, task_type: t.task_type, priority: t.priority,
           column: t.board_column&.name, column_id: t.board_column_id,
-          assignee: t.assignee&.name, assignee_id: t.assignee_id, tags: t.tags }
+          assignee: t.assignee&.name, assignee_id: t.assignee_id, tags: t.tags, archived: t.archived? }
       end
       success(project_id: project.id, total: total, limit: limit, offset: offset,
               has_more: offset + rows.size < total, tasks: rows)
@@ -59,15 +59,6 @@ module PersonalTools
 
     def requested_offset
       [ params[:offset].to_i, 0 ].max
-    end
-
-    # Omitting the param lists both states, which is what callers written
-    # before this filter existed already get. Only an explicit value narrows
-    # the list — `false` to the active tasks, `true` to the archived ones.
-    def filter_by_archived(scope)
-      return scope if params[:archived].nil?
-
-      ActiveModel::Type::Boolean.new.cast(params[:archived]) ? scope.archived : scope.active
     end
   end
 end

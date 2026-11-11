@@ -74,6 +74,7 @@ class Web::Company::BillingCancellationsController < Web::Company::ApplicationCo
                             billing_cancels_at: ended_at, billing_event_at: ended_at)
     current_company.billing_cancellations.create!(
       user: current_user, reason: reason, comment: comment, cancels_at: ended_at,
+      started_at: subscription.started_at, period_started_at: current_company.billing_period_starts_at,
       settlement_state: "settling", final_usage: billed.transform_keys(&:iso8601),
       final_invoice_id: subscription.latest_invoice_id
     )

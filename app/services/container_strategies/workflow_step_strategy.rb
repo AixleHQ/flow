@@ -176,7 +176,8 @@ module ContainerStrategies
       return if copies.blank?
 
       uid = AgentCredentialsService.for(input[:agent_type]).adapter.container_uid
-      workspace = Trackers::Workspace.new(runtime: runtime, container: container, uid: uid)
+      workspace = Trackers::Workspace.new(runtime: runtime, container: container, uid: uid,
+                                          asset_host: runtime.callback_url(:container_assets, current_terminal_session))
       copies.each do |copy|
         path = Trackers::Workspace.path_for(copy.tracker_attachment&.issue_key || "issue", copy.name)
         next unless path && copy.file
@@ -219,7 +220,7 @@ module ContainerStrategies
     end
 
     def rewrite_url_for_container(url)
-      ContainerAssetUrl.call(url, host: Settings.container_asset_host)
+      ContainerAssetUrl.call(url, host: runtime.callback_url(:container_assets, current_terminal_session))
     end
 
     # Context from step_run (board task, run params) is injected by SessionContextConstructor,

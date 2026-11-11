@@ -56,6 +56,13 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
       skill_dir: "/workspace/.kiro/skills",
       context_path: "/home/kiro/.kiro/steering/aixle-session-context.md",
       home_dir: "/home/kiro"
+    },
+    # BMAD's github-copilot platform installs into .agents/skills, which Copilot CLI reads.
+    "copilot_cli" => {
+      tool_flag: "github-copilot",
+      skill_dir: "/workspace/.agents/skills",
+      context_path: "/home/copilot/.copilot/copilot-instructions.md",
+      home_dir: "/home/copilot"
     }
   }.freeze
 
@@ -71,6 +78,8 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
     Rails.logger.stubs(:debug)
 
     @runtime_mock = mock("runtime")
+
+    stub_hosted_callbacks(@runtime_mock)
     @runtime_mock.stubs(:write_file).returns(true)
     @runtime_mock.stubs(:exec).returns([ [], [], 0 ])
     @runtime_mock.stubs(:read_file).returns(nil)
@@ -123,6 +132,10 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
 
   test "E2E kiro_cli: install command, context, skill dir, vscode settings, config.yaml" do
     run_full_pipeline("kiro_cli")
+  end
+
+  test "E2E copilot_cli: install command, context, skill dir, vscode settings, config.yaml" do
+    run_full_pipeline("copilot_cli")
   end
 
   # ====================================================================
@@ -229,6 +242,7 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
     AGENT_RUNTIMES.each_key do |agent_type|
       session = create_bmad_session(agent_type)
       runtime = mock("runtime_#{agent_type}")
+      stub_hosted_callbacks(runtime)
       runtime.stubs(:exec).returns([ [], [], 0 ])
       runtime.stubs(:write_file).returns(true)
 
@@ -250,6 +264,7 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
     AGENT_RUNTIMES.each_key do |agent_type|
       session = create_bmad_session(agent_type)
       runtime = mock("runtime_#{agent_type}")
+      stub_hosted_callbacks(runtime)
       runtime.stubs(:exec).returns([ [], [ "npm ERR!" ], 1 ])
 
       assert_nothing_raised do
@@ -353,6 +368,8 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
       bmad_install_called = false
 
       runtime = mock("runtime_full_#{agent_type}")
+
+      stub_hosted_callbacks(runtime)
       runtime.stubs(:read_file).returns(nil)
 
       runtime.stubs(:write_file).with do |_ctr, path, content|
@@ -465,6 +482,7 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
     # 5. Verify successful install records status
     success_session = create_bmad_session(agent_type)
     success_runtime = mock("runtime_success_#{agent_type}")
+    stub_hosted_callbacks(success_runtime)
     success_runtime.stubs(:exec).returns([ [], [], 0 ])
     success_runtime.stubs(:write_file).returns(true)
     BmadMethodInjector.new("cid-ok", success_session, runtime: success_runtime).inject!

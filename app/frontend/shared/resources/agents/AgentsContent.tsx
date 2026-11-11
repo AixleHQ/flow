@@ -173,7 +173,7 @@ export function AgentsContent({
                         <Text fz={14} fw={500} c="var(--app-text-primary)">
                           {agent.title}
                         </Text>
-                        <Text fz={13} fw={500} c="dimmed" ff="JetBrains Mono, monospace">
+                        <Text fz={13} fw={500} c="dimmed" ff="monospace">
                           {agent.name}
                         </Text>
                       </Box>

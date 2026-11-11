@@ -141,20 +141,22 @@ module Agents
 
     # == Session command ==
 
-    test "session_command runs the CLI in always-approve mode" do
-      assert_equal "grok --yolo", @adapter.session_command(mode: "interactive")
-      assert_equal "grok --yolo", @adapter.session_command(mode: "non_interactive")
+    test "session_command runs the CLI in scrollback mode, always approving" do
+      assert_equal "grok --yolo --minimal", @adapter.session_command(mode: "interactive")
+      assert_equal "grok --yolo --minimal", @adapter.session_command(mode: "non_interactive")
     end
 
     test "session_command passes the reasoning effort as --reasoning-effort" do
-      assert_equal "grok --yolo --model grok-4.5 --reasoning-effort xhigh",
+      assert_equal "grok --yolo --minimal --model grok-4.5 --reasoning-effort xhigh",
                    @adapter.session_command(mode: "interactive", model: "grok-4.5", effort: "xhigh")
-      assert_equal "grok --yolo", @adapter.session_command(mode: "non_interactive", effort: nil)
+      assert_equal "grok --yolo --minimal", @adapter.session_command(mode: "non_interactive", effort: nil)
     end
 
     test "session_command shell-escapes the requested model" do
-      assert_equal "grok --yolo --model grok-4.5", @adapter.session_command(mode: "interactive", model: "grok-4.5")
-      assert_equal "grok --yolo --model grok\\ 4.5\\;rm", @adapter.session_command(mode: "interactive", model: "grok 4.5;rm")
+      assert_equal "grok --yolo --minimal --model grok-4.5",
+                   @adapter.session_command(mode: "interactive", model: "grok-4.5")
+      assert_equal "grok --yolo --minimal --model grok\\ 4.5\\;rm",
+                   @adapter.session_command(mode: "interactive", model: "grok 4.5;rm")
     end
 
     # == Environment ==
@@ -167,19 +169,19 @@ module Agents
       create(:agent_credential, user: @user, company: other_company, agent_type: "grok",
                                 config_data: { "api_key" => "other-tenant-key" })
 
-      assert_nil @adapter.default_env_vars(@session)["XAI_API_KEY"]
+      assert_nil @adapter.default_env_vars(@session, callbacks: hosted_callbacks)["XAI_API_KEY"]
 
       create(:agent_credential, user: @user, company: @company, agent_type: "grok",
                                 config_data: { "api_key" => "mine" })
 
-      assert_equal "mine", @adapter.default_env_vars(@session)["XAI_API_KEY"]
+      assert_equal "mine", @adapter.default_env_vars(@session, callbacks: hosted_callbacks)["XAI_API_KEY"]
     end
 
     # Both inference routes must be tracked: api.x.ai for an API-key login and
     # cli-chat-proxy.grok.com for the default signed-in (device-code/OAuth) login.
     # Tracking x.ai alone leaves every OAuth session with no usage at all.
     test "default_env_vars tracks both the x.ai and grok.com traffic through the MITM proxy" do
-      env = @adapter.default_env_vars(@session)
+      env = @adapter.default_env_vars(@session, callbacks: hosted_callbacks)
 
       assert_equal "x.ai,grok.com", env["MITM_TRACKED_DOMAINS"]
       assert_equal "/var/log/mitm/http.log", env["MITM_LOG_PATH"]

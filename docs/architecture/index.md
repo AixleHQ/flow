@@ -51,6 +51,7 @@ One adapter per runtime in `app/services/agents/`, registered in `AgentCredentia
 | `AntigravityCliAdapter` | `antigravity_cli` | The CLI's stream-json `result` event, at cleanup |
 | `GrokAdapter` | `grok` | The MITM log, at cleanup |
 | `KiroCliAdapter` | `kiro_cli` | OTLP credit telemetry, streamed; MITM-captured usage summaries, then the account's credit counter, as fallbacks |
+| `CopilotCliAdapter` | `copilot_cli` | OTLP traces, streamed: the AI credits on each model call's `chat` span |
 
 ### Container Lifecycle Phases
 

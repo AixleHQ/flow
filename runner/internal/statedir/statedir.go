@@ -57,3 +57,33 @@ func CheckWritable(dir string) error {
 	}
 	return closeErr
 }
+
+// Mode is the state directory's mode. It keeps the credentials, the journal and
+// the callback proxy's sockets to the runner's own user: the sockets are 0666
+// below it, and only this directory stops another local user from reaching the
+// relay, which adds the machine's credential (DESIGN.md §6.9.3).
+const Mode os.FileMode = 0o700
+
+// chmod is os.Chmod, replaced in tests.
+var chmod = os.Chmod
+
+// Restrict narrows dir to Mode when its mode is wider: when the group or others
+// have any permission on it. A directory that is already owner-only is left as it
+// is. When it cannot be narrowed, for example because the runner's user does not
+// own it, the error names the directory and its mode.
+func Restrict(dir string) error {
+	info, err := os.Stat(dir)
+	if err != nil {
+		return fmt.Errorf("checking the mode of the state directory: %w", err)
+	}
+	mode := info.Mode().Perm()
+	if mode&0o077 == 0 {
+		return nil
+	}
+	if err := chmod(dir, Mode); err != nil {
+		return fmt.Errorf("the state directory %s is mode %04o, and the runner could not narrow it to %04o: %w. "+
+			"Make it owned by the runner's user and mode %04o (`sudo chmod %o %s`), then start the runner again",
+			dir, mode, Mode, err, Mode, Mode, dir)
+	}
+	return nil
+}

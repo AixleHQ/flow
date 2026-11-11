@@ -483,7 +483,7 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
                 placeholder="npx package-name@1.2.3"
                 {...form.getInputProps('command')}
                 description="Full command to run, with the package pinned to an exact version (npx name@1.2.3, uvx name==1.2.3)"
-                styles={{ input: { fontFamily: 'monospace' } }}
+                styles={{ input: { fontFamily: 'var(--app-font-mono)' } }}
               />
 
               <Box>
@@ -516,7 +516,7 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
                         value={envVar.key}
                         onChange={(e) => updateKVList(envList, setEnvList, i, 'key', e.currentTarget.value)}
                         placeholder="WP_API_URL"
-                        styles={{ input: { fontFamily: 'monospace' } }}
+                        styles={{ input: { fontFamily: 'var(--app-font-mono)' } }}
                         style={{ flex: 1 }}
                       />
                       <ConfigItemValueField

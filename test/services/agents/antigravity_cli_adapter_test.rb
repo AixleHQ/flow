@@ -34,7 +34,7 @@ module Agents
       credentials = { "access_token" => "tok-123", "refresh_token" => "refresh-123", "auth_method" => "consumer" }
       files = @adapter.config_files(credentials)
       settings = JSON.parse(files["/home/antigravity/.gemini/antigravity-cli/settings.json"])
-      assert_equal({ "showTips" => false, "trustedWorkspaces" => [ "/workspace" ] }, settings)
+      assert_equal({ "showTips" => false, "trustedWorkspaces" => [ "/workspace" ], "altScreenMode" => "never" }, settings)
       assert_equal(
         { "token" => { "access_token" => "tok-123", "refresh_token" => "refresh-123" }, "auth_method" => "consumer" },
         JSON.parse(files[@adapter.config_path])
@@ -62,7 +62,7 @@ module Agents
     # backend-written script; only the pre-login settings file is seeded upfront.
     test "seeds only OAuth-compatible settings before login, no bespoke script" do
       files = @adapter.auth_setup_files
-      assert_equal({ "showTips" => false, "trustedWorkspaces" => [ "/workspace" ] },
+      assert_equal({ "showTips" => false, "trustedWorkspaces" => [ "/workspace" ], "altScreenMode" => "never" },
                    JSON.parse(files["/home/antigravity/.gemini/antigravity-cli/settings.json"]))
       assert_equal [ "/home/antigravity/.gemini/antigravity-cli/settings.json" ], files.keys
     end
@@ -204,7 +204,7 @@ module Agents
     end
 
     test "default_env_vars hides the CLI logo, keeps the pinned CLI, and points the proxy log at Google's hosts" do
-      env = @adapter.default_env_vars(@session)
+      env = @adapter.default_env_vars(@session, callbacks: hosted_callbacks)
 
       assert_equal "1", env["AGY_CLI_HIDE_LOGO"]
       assert_equal "true", env["AGY_CLI_DISABLE_AUTO_UPDATE"]

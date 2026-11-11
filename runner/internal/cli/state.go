@@ -59,3 +59,6 @@ func lockForHost(stateDir string) (*statedir.Lock, error) {
 	}
 	return nil, fmt.Errorf("%s: %w", stateDir, err)
 }
+
+// restrictStateDir is statedir.Restrict, replaced in tests.
+var restrictStateDir = statedir.Restrict

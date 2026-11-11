@@ -21,7 +21,7 @@ class WorkspaceSignupMailerTest < ActionMailer::TestCase
     token = WorkspaceSignupTicket.issue(name: "Acme", email: "dana@acme.example")
 
     mail = WorkspaceSignupMailer.confirm(email: "dana@acme.example", workspace_name: "Acme", token: token)
-    href = mail.body.encoded[/href="([^"]+)"/, 1]
+    href = mail.body.encoded[/<a [^>]*href="([^"]+)"/, 1]
 
     assert href.start_with?("http"), "expected an absolute URL, got #{href.inspect}"
     assert_includes CGI.unescapeHTML(href), "/workspace/confirm"

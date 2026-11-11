@@ -135,7 +135,7 @@ module Agents
     end
 
     # Override to write multiple config files
-    def config_files(credentials, workflow_config = {})
+    def config_files(credentials, workflow_config)
       {
         # Auth credentials
         config_path => generate_config(credentials, workflow_config).to_json,
@@ -144,9 +144,11 @@ module Agents
       }
     end
 
-    # Config files needed before auth starts (config.toml with file-based credential store)
+    # Config files needed before auth starts (config.toml with file-based credential store).
+    # An auth container is hosted, so it gets the hosted OTLP endpoint.
     def auth_setup_files
-      { "#{home_dir}/.codex/config.toml" => generate_config_toml({}) }
+      toml = generate_config_toml({ otel_endpoint: ContainerRuntime::CallbackUrls.hosted(:otel) })
+      { "#{home_dir}/.codex/config.toml" => toml }
     end
 
     # Session command: always codex --yolo, with workspace trust granted inline.
@@ -372,7 +374,7 @@ module Agents
 
     # Default environment variables for Codex CLI runtime.
     # MITM_TRACKED_DOMAINS limits logging to chatgpt.com (Codex API host).
-    def default_env_vars(session)
+    def default_env_vars(session, callbacks:)
       {
         "MITM_LOG_PATH" => "/var/log/mitm/http.log",
         # auth.openai.com is the token endpoint the CLI refreshes against; chatgpt.com
@@ -826,7 +828,9 @@ module Agents
         migrations.each { |from, to| toml << "\"#{from}\" = \"#{to}\"\n" }
       end
 
-      otel_endpoint = Settings.otel.endpoint
+      # The session's OTLP endpoint (SessionContextService#credential_workflow_config,
+      # from its runtime); nil for a runner session, which has none yet.
+      otel_endpoint = workflow_config.fetch(:otel_endpoint)
       if otel_endpoint.present?
         toml << <<~TOML
 

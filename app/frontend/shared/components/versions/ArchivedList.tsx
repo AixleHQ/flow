@@ -128,7 +128,7 @@ export function ArchivedList({ projectId, versionableType, items, noun, canResto
                     </Text>
                   )}
                   {item.detail && (
-                    <Text fz={12} c="dimmed" ff="JetBrains Mono, monospace">
+                    <Text fz={12} c="dimmed" ff="monospace">
                       {item.detail}
                     </Text>
                   )}

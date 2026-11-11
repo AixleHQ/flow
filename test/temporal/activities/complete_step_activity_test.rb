@@ -47,6 +47,23 @@ module Activities
         assert_equal @credential.id, @run.failed_agent_credential_id
       end
 
+      test "a quota stop holds the credential out of team picks and tells event triggers about the run" do
+        session = create(:terminal_session, :failed, user: @user, agent_type: "claude_code",
+          error_message: "Your credit balance is too low. You will regain access on 2026-11-20 09:00 UTC.")
+        step_run = create(:step_run, workflow_run: @run, step: @step, terminal_session: session)
+
+        travel_to Time.utc(2026, 11, 11, 12) do
+          run_activity(CompleteStepActivity, { "step_run_id" => step_run.id })
+        end
+
+        assert_equal Time.utc(2026, 11, 20, 9), @credential.reload.quota_exhausted_until
+        event = TriggerEvent.find_by!(event_type: ProjectTeams::QuotaEvent::EVENT_TYPE)
+        assert_equal @project.id, event.project_id
+        assert_equal({ "workflow_run_id" => @run.id, "workflow_id" => @workflow.id, "user_id" => @user.id,
+                       "agent_type" => "claude_code", "quota_exhausted_until" => "2026-11-20T09:00:00Z" },
+                     event.data)
+      end
+
       # --- auth error path ---
 
       test "fails the step when the session's terminal shows an expired login" do

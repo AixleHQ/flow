@@ -22,7 +22,7 @@ module Sessions
       assert PaneInput.type(@session, "Continue; then finish.", runtime: @runtime)
 
       assert_equal [ [ "tmux", "send-keys", "-t", "agent", "-l", "Continue; then finish.", ";",
-                       "send-keys", "-t", "agent", "Enter" ] ], @runtime.execs
+                       "run-shell", "sleep 0.2", ";", "send-keys", "-t", "agent", "Enter" ] ], @runtime.execs
     end
 
     test "answers false when tmux refuses the keys" do

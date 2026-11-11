@@ -19,7 +19,8 @@ class AgentCredentialsService
     "gemini_cli" => Agents::GeminiCliAdapter,
     "antigravity_cli" => Agents::AntigravityCliAdapter,
     "grok" => Agents::GrokAdapter,
-    "kiro_cli" => Agents::KiroCliAdapter
+    "kiro_cli" => Agents::KiroCliAdapter,
+    "copilot_cli" => Agents::CopilotCliAdapter
   }.freeze
 
   attr_reader :adapter, :agent_type
@@ -64,8 +65,10 @@ class AgentCredentialsService
   # Write credentials to a running container
   # @param container_id [String] Docker container ID
   # @param credentials [Hash] credentials to write
-  # @param workflow_config [Hash] optional workflow-specific settings
-  def write_to_container(container_id, credentials, workflow_config = {})
+  # @param workflow_config [Hash] the session's settings for the agent's
+  #   config (SessionContextService#credential_workflow_config); the adapters
+  #   that configure telemetry require its `:otel_endpoint`, nil for none
+  def write_to_container(container_id, credentials, workflow_config)
     files = config_files(credentials, workflow_config)
 
     files.all? do |path, content|
@@ -91,8 +94,9 @@ class AgentCredentialsService
   # @param company [Company] the company whose credential to write — credentials are
   #   per company, so the container must never receive another tenant's tokens
   # @param container_id [String] Docker container ID
-  # @param workflow_config [Hash] optional workflow-specific settings
-  def load_credentials_to_container(user, company, container_id, workflow_config = {})
+  # @param workflow_config [Hash] the session's settings for the agent's
+  #   config, as for write_to_container
+  def load_credentials_to_container(user, company, container_id, workflow_config)
     credential = AgentCredential.find_by(user_id: user.id, company_id: company&.id, agent_type: agent_type)
     raise "No credentials found for #{agent_type}" unless credential
 

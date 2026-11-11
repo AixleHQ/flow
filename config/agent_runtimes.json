@@ -106,6 +106,26 @@
           { "match": "^claude-sonnet-4\\.6$", "levels": ["low", "medium", "high", "max"] }
         ]
       }
+    },
+    {
+      "id": "copilot_cli",
+      "label": "Copilot CLI",
+      "product_name": "GitHub Copilot CLI",
+      "vendor": "GitHub",
+      "description": "GitHub's Copilot agent in the terminal, signed in with your GitHub account",
+      "image": "copilot-cli",
+      "dockerfile": "docker/copilot-cli/Dockerfile",
+      "cli_version": "1.0.108",
+      "cli_latest": { "npm": "@github/copilot" },
+      "cli_releases": { "github": "github/copilot-cli", "tag_prefix": "v" },
+      "reasoning_effort": {
+        "levels": ["low", "medium", "high", "xhigh", "max"],
+        "models": [
+          { "match": "^auto$|^claude-haiku-4\\.5$", "levels": [] },
+          { "match": "^gpt-5\\.3-codex$|^grok-", "levels": ["low", "medium", "high", "xhigh"] },
+          { "match": "^mai-|^gemini-", "levels": ["low", "medium", "high"] }
+        ]
+      }
     }
   ]
 }

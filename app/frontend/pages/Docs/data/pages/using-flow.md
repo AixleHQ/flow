@@ -64,6 +64,7 @@ use, each in an isolated container:
 - Antigravity CLI
 - Grok
 - Kiro CLI
+- GitHub Copilot CLI
 
 An agent runs under a credential *a person connected*, which is why
 [getting started](/docs/getting-started) begins with connecting one. A persona

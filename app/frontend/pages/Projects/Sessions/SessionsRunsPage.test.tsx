@@ -164,6 +164,15 @@ describe('Projects/Sessions/SessionsRunsPage', () => {
     expect(screen.queryByRole('link', { name: 'Deleted user' })).not.toBeInTheDocument();
   });
 
+  it("names the team a run's owner was picked from", () => {
+    renderWith(
+      seed({ entries: [buildRunEntry({ userId: 3, userName: 'Anna Lee', teamName: 'Planner', sessions: [] })] }),
+    );
+
+    expect(screen.getByText(/^Planner →/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Anna Lee' })).toHaveAttribute('href', '/user/3');
+  });
+
   it('navigates with the chosen type when a type tab is clicked', async () => {
     renderWith(seed());
 

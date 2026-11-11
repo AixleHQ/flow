@@ -49,8 +49,12 @@ func (h *harness) another(key string) *Environment {
 // sessionID is the session of the ops a test runs, unless it names another.
 const sessionID = int64(123)
 
+// testProxyPort is the `proxy_port` the platform sends by default: the
+// sidecar's port (PROTOCOL.md §6.2).
+const testProxyPort = 7690
+
 func startPayload(extra map[string]any) map[string]any {
-	p := map[string]any{"image": pinned}
+	p := map[string]any{"image": pinned, "proxy_port": testProxyPort}
 	for k, v := range extra {
 		p[k] = v
 	}
@@ -163,6 +167,7 @@ func TestContainerStartAppliesMountsNetworkPidAndResources(t *testing.T) {
 			{"type": "bind", "source": cache, "target": "/home/agent/.npm", "writable": true},
 		},
 		"network":              "host",
+		"proxy_port":           20123,
 		"pid":                  "host",
 		"resources":            map[string]any{"cpus": 1.5, "memory_bytes": 4 << 30, "pids_limit": 512},
 		"privilege_escalation": true,

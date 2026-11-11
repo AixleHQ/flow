@@ -3,10 +3,7 @@ import dayjs from 'dayjs';
 import { type CSSProperties, type ReactNode } from 'react';
 
 import { LOGO_TILE_BG } from 'shared/theme/vendorColors';
-import claudeLogo from 'shared/ui/agent-logos/claude.png';
-import codexLogo from 'shared/ui/agent-logos/codex.png';
-import cursorLogo from 'shared/ui/agent-logos/cursor.png';
-import geminiLogo from 'shared/ui/agent-logos/gemini.png';
+import { agentLogoSrc } from 'shared/ui/agentLogos';
 
 export type Period = '7d' | '30d' | '90d' | '1y' | 'custom';
 
@@ -50,24 +47,16 @@ const AGENT_COLOR: Record<string, string> = {
   gemini: 'var(--app-chart-warm-3)',
   gemini_cli: 'var(--app-chart-warm-3)',
   antigravity_cli: 'var(--app-chart-warm-3)',
-  // No xAI artwork ships in this repo, so a Grok row renders the neutral chip
-  // AgentLogo falls back to; naming it here keeps the runtime known, not unmapped.
   grok: CHART_NEUTRAL,
-  // Same as Grok: no Kiro artwork ships here, so the chip is neutral. Naming the
-  // runtime keeps it known rather than silently unmapped.
   kiro_cli: CHART_NEUTRAL,
+  copilot_cli: CHART_NEUTRAL,
 };
 
 export const getAgentColor = (agentType: string): string => AGENT_COLOR[agentType] ?? CHART_NEUTRAL;
 
-const AGENT_LOGO_SRC: Record<string, string> = {
-  claude_code: claudeLogo,
-  cursor: cursorLogo,
-  cursor_cli: cursorLogo,
-  codex: codexLogo,
-  gemini: geminiLogo,
-  gemini_cli: geminiLogo,
-  antigravity_cli: geminiLogo,
+const LEGACY_AGENT_TYPES: Record<string, string> = {
+  cursor: 'cursor_cli',
+  gemini: 'gemini_cli',
 };
 
 function agentLogoChipStyle(agentType: string, size: number): CSSProperties {
@@ -84,7 +73,7 @@ function agentLogoChipStyle(agentType: string, size: number): CSSProperties {
   if (agentType === 'codex') {
     return { ...base, backgroundColor: LOGO_TILE_BG.light };
   }
-  if (agentType === 'gemini' || agentType === 'gemini_cli' || agentType === 'antigravity_cli') {
+  if (agentType === 'gemini' || agentType === 'gemini_cli') {
     return { ...base, backgroundColor: LOGO_TILE_BG.dark, border: '1px solid var(--app-border-default)' };
   }
   return base;
@@ -92,14 +81,13 @@ function agentLogoChipStyle(agentType: string, size: number): CSSProperties {
 
 function agentLogoImageSize(agentType: string, chipSize: number): number {
   if (agentType === 'codex') return Math.round(chipSize * (13 / 18));
-  if (agentType === 'gemini' || agentType === 'gemini_cli' || agentType === 'antigravity_cli')
-    return Math.round(chipSize * (12 / 18));
+  if (agentType === 'gemini' || agentType === 'gemini_cli') return Math.round(chipSize * (12 / 18));
   return chipSize;
 }
 
 // Agent brand mark; falls back to a rounded color chip for unrecognized agent types.
 export function AgentLogo({ agentType, size = 18 }: { agentType: string; size?: number }) {
-  const src = AGENT_LOGO_SRC[agentType];
+  const src = agentLogoSrc(LEGACY_AGENT_TYPES[agentType] ?? agentType);
   if (src) {
     const imageSize = agentLogoImageSize(agentType, size);
     return (

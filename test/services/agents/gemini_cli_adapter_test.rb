@@ -62,7 +62,7 @@ module Agents
     test "config_files returns settings file with api-key auth type" do
       credentials = { "api_key" => "test-key" }
 
-      files = @adapter.config_files(credentials)
+      files = @adapter.config_files(credentials, hosted_otel)
 
       # Only settings file (API key is passed via env var)
       assert files.key?("/home/gemini/.gemini/settings.json")
@@ -74,6 +74,12 @@ module Agents
       refute settings.dig("general").key?("defaultApprovalMode")
       refute settings.dig("tools").key?("approvalMode")
       refute settings.dig("tools").key?("autoAccept")
+    end
+
+    test "config_files keeps the UI inline, off the alternate screen" do
+      settings = JSON.parse(@adapter.config_files({ "api_key" => "test-key" }, hosted_otel)["/home/gemini/.gemini/settings.json"])
+
+      assert_equal false, settings.dig("ui", "useAlternateBuffer") # rubocop:disable Minitest/RefuteFalse
     end
 
     test "auth_setup_files selects API-key auth and pre-trusts the workspace" do
@@ -88,7 +94,7 @@ module Agents
     end
 
     test "config_files pre-trusts the workspace for agent sessions" do
-      files = @adapter.config_files({ "api_key" => "test-key" })
+      files = @adapter.config_files({ "api_key" => "test-key" }, hosted_otel)
 
       assert files.key?("/home/gemini/.gemini/trustedFolders.json")
       trusted = JSON.parse(files["/home/gemini/.gemini/trustedFolders.json"])
@@ -96,7 +102,7 @@ module Agents
     end
 
     test "config_files trusts a custom workspace path when provided" do
-      files = @adapter.config_files({ "api_key" => "k" }, { workspace: "/srv/app" })
+      files = @adapter.config_files({ "api_key" => "k" }, hosted_otel(workspace: "/srv/app"))
 
       trusted = JSON.parse(files["/home/gemini/.gemini/trustedFolders.json"])
       assert_equal "TRUST_FOLDER", trusted["/srv/app"]
@@ -119,7 +125,7 @@ module Agents
     end
 
     test "config_files sets the thinking level of the Gemini 3 chat alias" do
-      files = @adapter.config_files({ "api_key" => "k" }, { reasoning_effort: "low" })
+      files = @adapter.config_files({ "api_key" => "k" }, hosted_otel(reasoning_effort: "low"))
       settings = JSON.parse(files["/home/gemini/.gemini/settings.json"])
 
       assert_equal [ { "match" => { "model" => "chat-base-3" },
@@ -128,7 +134,7 @@ module Agents
     end
 
     test "config_files writes no model config when no effort is set" do
-      settings = JSON.parse(@adapter.config_files({ "api_key" => "k" }, {})["/home/gemini/.gemini/settings.json"])
+      settings = JSON.parse(@adapter.config_files({ "api_key" => "k" }, hosted_otel)["/home/gemini/.gemini/settings.json"])
 
       refute settings.key?("modelConfigs")
     end
@@ -243,12 +249,12 @@ module Agents
       create(:agent_credential, user: @user, company: other_company, agent_type: "gemini_cli",
                                 config_data: { "api_key" => "other-tenant-key" })
 
-      assert_nil @adapter.default_env_vars(@session)["GEMINI_API_KEY"]
+      assert_nil @adapter.default_env_vars(@session, callbacks: hosted_callbacks)["GEMINI_API_KEY"]
 
       create(:agent_credential, user: @user, company: @company, agent_type: "gemini_cli",
                                 config_data: { "api_key" => "mine" })
 
-      assert_equal "mine", @adapter.default_env_vars(@session)["GEMINI_API_KEY"]
+      assert_equal "mine", @adapter.default_env_vars(@session, callbacks: hosted_callbacks)["GEMINI_API_KEY"]
     end
 
     test "mcp_config pins the Playwright MCP command to the baked version (task #340)" do
@@ -267,6 +273,12 @@ module Agents
     end
 
     private
+
+    # A hosted session's workflow config: the hosted OTLP endpoint, which the
+    # adapter no longer falls back to.
+    def hosted_otel(workflow_config = {})
+      { otel_endpoint: ContainerRuntime::CallbackUrls.hosted(:otel) }.merge(workflow_config)
+    end
 
     def session_token_attribute
       { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } }

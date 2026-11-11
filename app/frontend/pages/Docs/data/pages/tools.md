@@ -39,7 +39,7 @@ and lifecycle tools. Every board tool that acts on a task takes either its
 | Tool | Purpose |
 | --- | --- |
 | `board_get_board_info` | Return the current board with its columns. |
-| `board_list_tasks` | List a page of tasks (no descriptions), searched by title or `#N`, filtered by column / tag / type / assignee. |
+| `board_list_tasks` | List a page of tasks (no descriptions), searched by title or `#N`, filtered by column / tag / type / assignee. Archived tasks only with `include_archived`. |
 | `board_get_task` | Full details for a task. |
 | `board_create_task` | Create a task, optionally in a specific column. |
 | `board_update_task` | Update title, description, priority, tags, or type. |

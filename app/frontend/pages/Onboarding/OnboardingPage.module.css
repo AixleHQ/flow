@@ -62,18 +62,6 @@
   margin-bottom: 0;
 }
 
-/* ── Agent logo bubble ──────────────────────── */
-
-.agentLogo {
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
 /* ── Welcome card ──────────────────────────── */
 
 @keyframes fadeSlideUp {

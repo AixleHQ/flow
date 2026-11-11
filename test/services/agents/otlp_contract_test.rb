@@ -50,6 +50,18 @@ module Agents
       assert_equal [ "gemini-2.5-pro" ], stat.models
     end
 
+    # Captured offline against the mock (a custom provider), so the span carries the token
+    # counts but not the AI credits GitHub's routing adds; CopilotCliAdapterTest prices those.
+    test "Copilot CLI's chat span, with the cached tokens counted apart" do
+      stat = ingest(CopilotCliAdapter.new, "copilot_cli")
+
+      assert_equal INPUT, stat.input_tokens
+      assert_equal OUTPUT, stat.output_tokens
+      assert_equal CACHE_READ, stat.cache_read_tokens
+      assert_equal 5, stat.cache_write_tokens
+      assert_equal [ "claude-sonnet-4-5" ], stat.models
+    end
+
     private
 
     def ingest(adapter, runtime_id)

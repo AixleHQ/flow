@@ -1,0 +1,142 @@
+{
+  "description": "Only the allow-listed routes, methods and paths pass: a route that is not on the list, a method its route does not take, a path below a route that takes none, and an asset path outside store/ are refused with route_not_allowed, before the session is looked at.",
+  "steps": [
+    {
+      "given": "registered_machine",
+      "as": "m"
+    },
+    {
+      "given": "session_on_machine",
+      "machine": "m",
+      "as": "s"
+    },
+    {
+      "given": "session_holds_machine",
+      "machine": "m",
+      "session": "s"
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/proxy/ops",
+        "token": "{{m.access_token}}",
+        "headers": {
+          "X-Session-Key": "{{s.mcp_key}}"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "X-Aixle-Runner-Refusal": "route_not_allowed"
+        },
+        "body": {
+          "error": "route_not_allowed",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/proxy/otlp/v1/metrics",
+        "token": "{{m.access_token}}",
+        "body": {}
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "X-Aixle-Runner-Refusal": "route_not_allowed"
+        },
+        "body": {
+          "error": "route_not_allowed",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/proxy/git-credentials",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "X-Aixle-Runner-Refusal": "route_not_allowed"
+        },
+        "body": {
+          "error": "route_not_allowed",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/proxy/mcp/sessions",
+        "token": "{{m.access_token}}",
+        "headers": {
+          "X-Session-Key": "{{s.mcp_key}}"
+        },
+        "body": {}
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "X-Aixle-Runner-Refusal": "route_not_allowed"
+        },
+        "body": {
+          "error": "route_not_allowed",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/proxy/assets/cache/upload.bin",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "X-Aixle-Runner-Refusal": "route_not_allowed"
+        },
+        "body": {
+          "error": "route_not_allowed",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/proxy/assets/store/../config/master.key",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "X-Aixle-Runner-Refusal": "route_not_allowed"
+        },
+        "body": {
+          "error": "route_not_allowed",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    }
+  ]
+}

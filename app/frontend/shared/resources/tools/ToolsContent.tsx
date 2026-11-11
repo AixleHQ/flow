@@ -200,7 +200,7 @@ export function ToolsContent({
                         <Text fz={14} fw={500} c="var(--app-text-primary)">
                           {tool.displayName}
                         </Text>
-                        <Text fz={13} fw={500} c="dimmed" ff="JetBrains Mono, monospace">
+                        <Text fz={13} fw={500} c="dimmed" ff="monospace">
                           {tool.name}
                         </Text>
                       </Box>
@@ -212,7 +212,7 @@ export function ToolsContent({
                     </Table.Td>
                     <Table.Td>
                       {tool.dockerImage ? (
-                        <Text fz={12} ff="JetBrains Mono, monospace" c="dimmed">
+                        <Text fz={12} ff="monospace" c="dimmed">
                           {tool.dockerImage}
                         </Text>
                       ) : (
