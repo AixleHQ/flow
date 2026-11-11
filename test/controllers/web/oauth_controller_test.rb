@@ -120,7 +120,7 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "authorize rejects an unknown provider" do
-    post oauth_authorize_path("github"), params: { owner_type: "Company", owner_id: @company.id }
+    post oauth_authorize_path("gitlab"), params: { owner_type: "Company", owner_id: @company.id }
     assert_redirected_to root_path
     assert_equal "Unknown OAuth provider", flash[:alert]
   end

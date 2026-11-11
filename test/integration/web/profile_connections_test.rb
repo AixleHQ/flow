@@ -64,7 +64,8 @@ class Web::ProfileConnectionsTest < ActionDispatch::IntegrationTest
   end
 
   test "a consent update for a project outside the company answers 404" do
-    foreign = create(:project, company: create(:company))
+    other_company = create(:company)
+    foreign = create(:project, company: other_company, owner: create(:user, :admin, company: other_company))
 
     json_patch(project_id: foreign.id, provider: "github", in_own_tasks: true)
 

@@ -151,6 +151,7 @@ class InternalTools::GithubUserTokenTest < ActiveSupport::TestCase
 
   test "errors when the user is no longer a member of the project" do
     consent!(in_own_tasks: true)
+    create(:user, :admin, company: @company)
     @company.company_memberships.find_by(user: @user).update!(state: "suspended")
 
     assert_match(/is not a member of project/, run_tool[:stderr])
