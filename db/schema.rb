@@ -16,14 +16,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_200100) do
   enable_extension "pg_catalog.plpgsql"
 
   create_table "act_as_consents", force: :cascade do |t|
-    t.bigint "company_id", null: false
-    t.datetime "created_at", null: false
-    t.boolean "in_others_tasks", default: false, null: false
-    t.boolean "in_own_tasks", default: false, null: false
-    t.bigint "project_id", null: false
-    t.string "provider", null: false
-    t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
+    t.bigint "project_id", null: false
+    t.bigint "company_id", null: false
+    t.string "provider", null: false
+    t.boolean "in_own_tasks", default: false, null: false
+    t.boolean "in_others_tasks", default: false, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
     t.index ["company_id"], name: "index_act_as_consents_on_company_id"
     t.index ["project_id"], name: "index_act_as_consents_on_project_id"
     t.index ["user_id", "project_id", "provider"], name: "index_act_as_consents_on_user_project_provider", unique: true
@@ -2143,20 +2143,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_200100) do
   end
 
   create_table "user_token_issuances", force: :cascade do |t|
-    t.bigint "acting_for_user_id", null: false
-    t.bigint "company_id", null: false
-    t.datetime "created_at", null: false
-    t.text "encrypted_token", null: false
-    t.datetime "expires_at"
-    t.bigint "oauth_credential_id"
-    t.bigint "project_id", null: false
-    t.string "provider", null: false
-    t.string "repository_full_names", default: [], null: false, array: true
-    t.bigint "session_user_id"
-    t.string "target_login", null: false
     t.bigint "terminal_session_id", null: false
-    t.string "token_last_eight"
+    t.bigint "company_id", null: false
+    t.bigint "project_id", null: false
+    t.bigint "acting_for_user_id", null: false
+    t.bigint "session_user_id"
     t.string "tool_name", null: false
+    t.string "provider", null: false
+    t.bigint "oauth_credential_id"
+    t.text "encrypted_token", null: false
+    t.string "token_last_eight"
+    t.string "target_login", null: false
+    t.string "repository_full_names", default: [], null: false, array: true
+    t.datetime "expires_at"
+    t.datetime "created_at", null: false
     t.index ["acting_for_user_id", "created_at"], name: "index_user_token_issuances_on_user_and_created_at"
     t.index ["acting_for_user_id"], name: "index_user_token_issuances_on_acting_for_user_id"
     t.index ["company_id"], name: "index_user_token_issuances_on_company_id"

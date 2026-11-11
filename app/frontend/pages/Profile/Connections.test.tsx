@@ -2,9 +2,9 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { renderAuthedPage, screen, userEvent, waitFor } from 'test/renderPage';
-import { answerFetch } from 'test/fetchStub';
 import { buildActAsConsent, buildUserConnection } from 'test/factories/userConnection';
+import { answerFetch } from 'test/fetchStub';
+import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import ConnectionsPage from './Connections';
 
@@ -68,7 +68,8 @@ describe('Profile Connected accounts tab', () => {
     renderPageWith();
 
     await userEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
-    await userEvent.click(await screen.findByRole('button', { name: 'Disconnect', hidden: false }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Disconnect' }));
 
     expect(router.delete).toHaveBeenCalledWith('/profile/connections/github');
   });
