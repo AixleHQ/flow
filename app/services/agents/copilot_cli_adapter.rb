@@ -255,6 +255,21 @@ module Agents
       UsageStatistics::Accumulator.record(terminal_session: terminal_session, events: events, source: OTEL_SOURCE)
     end
 
+    # The CLI's own transcript: every user and assistant message, tool call and result
+    # (1.0.108). It is the only full record of a Copilot session, because the TUI always
+    # draws on the alternate screen and the terminal log keeps just its last frame.
+    def session_log_paths
+      super + [ "#{copilot_dir}/session-state/*/events.jsonl" ]
+    end
+
+    # Every transcript is named events.jsonl inside a directory named after the CLI's
+    # session id, so the id goes into the stored name:
+    #   session-state/<id>/events.jsonl → <id>.events.jsonl
+    def session_log_name(path)
+      match = %r{\A#{Regexp.escape(copilot_dir)}/session-state/([^/]+)/events\.jsonl\z}.match(path)
+      match ? "#{match[1]}.events.jsonl" : super
+    end
+
     private
 
     # config.json opens with `//` comment lines, which JSON.parse refuses.

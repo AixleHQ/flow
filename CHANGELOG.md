@@ -31,6 +31,11 @@ governance, community health — carry none.
   `AGENT_IMAGE_COPILOT_CLI`.
 - **Sessions & Runs**: an automatic Copilot CLI step whose agent ends its turn
   without finishing is reminded to finish or continue, as Kiro steps are.
+- **Sessions & Runs**: a Copilot CLI session's logs (open to platform
+  administrators) include the CLI's own transcript — every message, tool call
+  and result — masked like Claude Code's. It is the only full record of a
+  Copilot conversation: the CLI always draws on the alternate screen, so the
+  terminal log keeps just its last screen.
 
 ### Changed
 - The app, the admin, the public site and emails use Inter for text and
