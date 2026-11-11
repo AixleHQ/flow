@@ -56,6 +56,13 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
       skill_dir: "/workspace/.kiro/skills",
       context_path: "/home/kiro/.kiro/steering/aixle-session-context.md",
       home_dir: "/home/kiro"
+    },
+    # BMAD's github-copilot platform installs into .agents/skills, which Copilot CLI reads.
+    "copilot_cli" => {
+      tool_flag: "github-copilot",
+      skill_dir: "/workspace/.agents/skills",
+      context_path: "/home/copilot/.copilot/copilot-instructions.md",
+      home_dir: "/home/copilot"
     }
   }.freeze
 
@@ -125,6 +132,10 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
 
   test "E2E kiro_cli: install command, context, skill dir, vscode settings, config.yaml" do
     run_full_pipeline("kiro_cli")
+  end
+
+  test "E2E copilot_cli: install command, context, skill dir, vscode settings, config.yaml" do
+    run_full_pipeline("copilot_cli")
   end
 
   # ====================================================================

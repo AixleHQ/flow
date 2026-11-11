@@ -20,7 +20,10 @@ class BmadMethodInjector
     # BMAD ships a first-class `kiro` platform (verified against
     # `bmad-method@6.11.0 install --list-tools`), which installs into .kiro/skills —
     # exactly the workspace skills directory Kiro CLI reads.
-    "kiro_cli" => "kiro"
+    "kiro_cli" => "kiro",
+    # Installs into .agents/skills, one of the project skill directories Copilot CLI reads
+    # (verified against `bmad-method@6.11.0 install --list-tools`).
+    "copilot_cli" => "github-copilot"
   }.freeze
 
   BMAD_HIDDEN_PATHS = %w[

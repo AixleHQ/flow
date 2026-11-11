@@ -561,6 +561,7 @@ agents:
     antigravity_cli: <%= ENV['AGENT_IMAGE_ANTIGRAVITY_CLI'] %>
     grok: <%= ENV['AGENT_IMAGE_GROK'] %>
     kiro_cli: <%= ENV['AGENT_IMAGE_KIRO_CLI'] %>
+    copilot_cli: <%= ENV['AGENT_IMAGE_COPILOT_CLI'] %>
   mcp:
     startup_timeout_ms: <%= ENV['AGENT_MCP_STARTUP_TIMEOUT_MS'] || 90000 %>
   # The Google OAuth client `agy` logs a consumer ("Google OAuth") account in with,
@@ -577,6 +578,11 @@ agents:
   # Claude Sonnet 5.5 sessions measured at Anthropic's API prices on 2026-11-04.
   kiro:
     credit_usd: <%= (ENV['KIRO_CREDIT_USD'] || 0.10).to_f %>
+  # What one GitHub AI credit is reported as, in USD. GitHub prices a credit at $0.01 and
+  # charges each model call its tokens at that model's API rate, so the default already
+  # is the API-equivalent figure every other runtime reports.
+  copilot:
+    ai_credit_usd: <%= (ENV['COPILOT_AI_CREDIT_USD'] || 0.01).to_f %>
   # Where the in-container watcher reports a token the CLI rotated. Derived from
   # `internal_base` like mcp.server_url and cloud.credentials_url, so all three move
   # together when a deployment's internal host does — a hardcoded default here would

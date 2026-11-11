@@ -877,15 +877,17 @@ Automatic sessions run each CLI's TUI. When a turn ends, the TUI waits at its
 prompt for a person, whether the model forgot `finish_session` or a provider
 error ended the turn. Two sweeps cover that state:
 
-- **The reminder (Kiro).** `Sessions::Monitor` reads each session's pane once
-  a minute. When `TurnEndDetector` sees Kiro's idle prompt under a
-  `▸ Credits: turn …` summary on two reads of the same screen,
-  `Sessions::Checks::TurnEnd` types a reminder into the pane: call
+- **The reminder (Kiro, Copilot CLI).** `Sessions::Monitor` reads each session's
+  pane once a minute. When `TurnEndDetector` sees the runtime's idle prompt on two
+  reads of the same screen — Kiro's under a `▸ Credits: turn …` summary, Copilot's
+  `← open sidebar · Interactive` hint four lines under its `Session: … AIC used`
+  line — `Sessions::Checks::TurnEnd` types a reminder into the pane: call
   `finish_session` if the work is done, otherwise continue. The agent takes it
   as its next message. `Sessions::PaneInput` sends the text and `Enter` in one
-  `tmux send-keys -l … ; send-keys Enter` call, so a partial failure cannot
-  leave an unsent draft; `Sessions::AuthPause` types its resume prompt the same
-  way.
+  `tmux send-keys -l … ; run-shell "sleep 0.2" ; send-keys Enter` call, so a
+  partial failure cannot leave an unsent draft; the pause is what makes Copilot
+  CLI submit it (an `Enter` right behind a burst of text lands in what the CLI
+  takes for a paste). `Sessions::AuthPause` types its resume prompt the same way.
   - Only `ready`, `non_interactive` workflow-step sessions are reminded. A
     session paused on an expired login (`Sessions::AuthPause`) is not.
   - Nothing is typed while a writable terminal client

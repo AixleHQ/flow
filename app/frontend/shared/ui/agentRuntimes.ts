@@ -24,6 +24,7 @@ const MANTINE_COLORS: Record<AgentType, string> = {
   antigravity_cli: 'indigo',
   grok: 'gray',
   kiro_cli: 'grape',
+  copilot_cli: 'dark',
 };
 
 /**

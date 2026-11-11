@@ -56,6 +56,7 @@ class AgentCredentialDashboard < Administrate::BaseDashboard
     antigravity_cli: ->(resources) { resources.for_agent("antigravity_cli") },
     grok: ->(resources) { resources.for_agent("grok") },
     kiro_cli: ->(resources) { resources.for_agent("kiro_cli") },
+    copilot_cli: ->(resources) { resources.for_agent("copilot_cli") },
     active: ->(resources) { resources.where(status: :active) },
     error: ->(resources) { resources.where(status: :error) },
     expired: ->(resources) { resources.where("expires_at < ?", Time.current) }

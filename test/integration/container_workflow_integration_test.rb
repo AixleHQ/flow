@@ -21,7 +21,7 @@ class ContainerWorkflowIntegrationTest < ActiveSupport::TestCase
   # Agent strategy combinations (40 tests)
   # ===========================================================================
 
-  AGENT_TYPES = %w[claude_code cursor_cli codex gemini_cli grok kiro_cli].freeze
+  AGENT_TYPES = %w[claude_code cursor_cli codex gemini_cli grok kiro_cli copilot_cli].freeze
   CONTAINER_RUNTIMES = %w[docker kubernetes].freeze
   STRATEGIES = %w[auth_setup agent_session].freeze
   MODES = %w[interactive non_interactive].freeze
@@ -120,6 +120,23 @@ class ContainerWorkflowIntegrationTest < ActiveSupport::TestCase
 
   teardown do
     cleanup_runtime_overrides
+  end
+
+  # A picker opened before the catalogue was read caches the adapter's fallback list. A
+  # session's cleanup stores the catalogue without touching the login, so nothing else
+  # drops that list, and the picker would offer Auto alone for an hour.
+  test "a Copilot session stores the CLI's catalogue and drops a model list cached before it" do
+    Rails.stubs(:cache).returns(ActiveSupport::Cache::MemoryStore.new)
+    Settings.stubs(:container_runtime).returns("docker")
+    stub_container_runtime("docker", agent_type: "copilot_cli")
+    session = build_session("agent_session", "copilot_cli", "interactive")
+    credential = AgentCredential.find_by!(user: @user, agent_type: "copilot_cli")
+    Rails.cache.write(credential.models_cache_key, [ { model_id: "auto" } ])
+
+    run_phases_for_session(session)
+
+    assert_nil Rails.cache.read(credential.models_cache_key)
+    assert_equal "claude-sonnet-5.5", credential.reload.metadata[Agents::CopilotCliAdapter::DEFAULT_MODEL_METADATA_KEY]
   end
 
   private
@@ -226,6 +243,10 @@ class ContainerWorkflowIntegrationTest < ActiveSupport::TestCase
       assert data["state_b64"].present?, "Expected state_b64 in kiro_cli credential"
       assert Base64.strict_decode64(data["state_b64"]).start_with?(Agents::KiroCliAdapter::SQLITE_MAGIC),
         "Expected the stored kiro_cli blob to decode back to a SQLite database"
+    when "copilot_cli"
+      # Only the token and its account are kept out of config.json, never the CLI's state.
+      assert_equal %w[host kind login source token], data.keys.sort
+      assert_equal "octocat", data["login"]
     end
   end
 

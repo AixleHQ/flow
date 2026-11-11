@@ -62,6 +62,41 @@ class TurnEndDetectorTest < ActiveSupport::TestCase
     refute TurnEndDetector.idle?(moved_on, agent_type: "kiro_cli")
   end
 
+  # `tmux capture-pane` of Copilot CLI 1.0.108 (TUI, `--no-ask-user -i`) after the agent
+  # replied and ended its turn, at several pane sizes, plus:
+  #   turn_ended_web_terminal_112x16 — a platform session whose pane the web terminal sized,
+  #                                    where the prompt box is drawn as `╻▄▄▄` / `┃` / `╹▀▀▀`
+  #   working_80x24                  — mid-turn, while a shell tool runs
+  #   drafted_80x24                  — the turn has ended and a draft sits in the prompt box
+  def copilot_pane(name) = file_fixture("terminal_panes/copilot_cli/#{name}.txt").read
+
+  %w[turn_ended_80x24 turn_ended_40x20 turn_ended_30x20 turn_ended_220x50 turn_ended_web_terminal_112x16].each do |capture|
+    test "a Copilot turn end captured as #{capture} is a turn end" do
+      assert TurnEndDetector.idle?(copilot_pane(capture), agent_type: "copilot_cli")
+    end
+  end
+
+  test "a working Copilot is not at a turn end" do
+    refute TurnEndDetector.idle?(copilot_pane("working_80x24"), agent_type: "copilot_cli")
+  end
+
+  test "a draft in Copilot's prompt box is not a turn end" do
+    refute TurnEndDetector.idle?(copilot_pane("drafted_80x24"), agent_type: "copilot_cli")
+  end
+
+  test "Copilot's prompt before any AI credits are spent is not a turn end" do
+    started = copilot_pane("turn_ended_80x24").gsub(/Session: [\d.]+ AIC used/, "")
+
+    refute TurnEndDetector.idle?(started, agent_type: "copilot_cli")
+  end
+
+  test "a Copilot turn end does not count once the agent has moved on" do
+    moved_on = "#{copilot_pane('turn_ended_80x24')}#{copilot_pane('working_80x24')}"
+
+    refute TurnEndDetector.idle?(moved_on, agent_type: "copilot_cli")
+    refute TurnEndDetector.idle?(copilot_pane("turn_ended_80x24"), agent_type: "kiro_cli")
+  end
+
   test "runtimes without a measured signature are never at a turn end" do
     refute TurnEndDetector.idle?(pane("turn_ended"), agent_type: "claude_code")
     refute TurnEndDetector.idle?(pane("turn_ended"), agent_type: nil)

@@ -7,13 +7,13 @@
 # the JSON the app would receive is written to
 # test/fixtures/files/otlp/<runtime_id>-<cli_version from config/agent_runtimes.json>.json.
 #
-# Runtimes: claude_code, codex, gemini_cli. The image defaults to the local
+# Runtimes: claude_code, codex, gemini_cli, copilot_cli. The image defaults to the local
 # `make build-agents` build (aixle/<image>:${AGENT_IMAGE_TAG:-latest}); set PLATFORM=linux/amd64
 # to run a GHCR image on an arm64 host. Runs on the host: needs docker and jq.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-runtime="${1:?usage: bin/capture-agent-otlp <claude_code|codex|gemini_cli> [image]}"
+runtime="${1:?usage: bin/capture-agent-otlp <claude_code|codex|gemini_cli|copilot_cli> [image]}"
 entry="$(jq -c --arg id "$runtime" '.runtimes[] | select(.id == $id)' config/agent_runtimes.json)"
 [ -n "$entry" ] || { echo "unknown runtime: $runtime" >&2; exit 1; }
 version="$(jq -r .cli_version <<<"$entry")"
@@ -78,10 +78,18 @@ codex exec --skip-git-repo-check "say hi"; sleep 4' ;;
  "tools": {"sandbox": false}}
 EOF
 gemini -m gemini-2.5-pro -p "say hi"; sleep 8' ;;
+  copilot_cli)
+    # Offline with a custom provider (BYOK), the only way to point the CLI at the mock: the
+    # spans and token counts are the ones a Copilot session exports, but the AI-credit
+    # attribute GitHub's own routing adds is absent.
+    "${run[@]}" -e HOME=/home/copilot -e COPILOT_OFFLINE=true -e COPILOT_PROVIDER_TYPE=anthropic \
+      -e COPILOT_PROVIDER_BASE_URL="$mock" -e COPILOT_PROVIDER_API_KEY=capture -e COPILOT_MODEL=claude-sonnet-4-5 \
+      -e COPILOT_OTEL_ENABLED=true -e OTEL_EXPORTER_OTLP_ENDPOINT="$mock" -e OTEL_EXPORTER_OTLP_PROTOCOL=http/json \
+      "$image" sh -c 'copilot -p "say hi" --allow-all --no-ask-user --disable-builtin-mcps; sleep 4' ;;
   *) echo "no capture recipe for $runtime" >&2; exit 1 ;;
 esac
 
-for raw in "$work"/raw/*-metrics-* "$work"/raw/*-logs-*; do
+for raw in "$work"/raw/*-metrics-* "$work"/raw/*-logs-* "$work"/raw/*-traces-*; do
   [ -f "$raw" ] || continue
   name="$(basename "$raw" .bin)"; kind="$(cut -d- -f2 <<<"$name")"; ctype="$(cut -d- -f3- <<<"$name" | sed 's#_#/#')"
   docker run --rm --network "$net" -v "$raw:/body:ro" curlimages/curl:8.11.1 -sf -o /dev/null \
@@ -91,6 +99,6 @@ sleep 1
 
 shopt -s nullglob
 payloads=("$work"/*.json)
-[ "${#payloads[@]}" -gt 0 ] || { echo "ERROR: $runtime exported no metrics or logs" >&2; exit 1; }
+[ "${#payloads[@]}" -gt 0 ] || { echo "ERROR: $runtime exported no metrics, logs or traces" >&2; exit 1; }
 jq -s . "${payloads[@]}" > "$fixture"
 echo "$fixture: ${#payloads[@]} payload(s) from $image"

@@ -130,6 +130,30 @@ class InteractivePromptDetector
                "session cannot answer. Kiro asks on its own after a tool fails 7 times " \
                "in a row and waits for a person to choose Cancel or Keep Iterating; the " \
                "failing tool call is just above the dialog in the session's terminal."
+    },
+    {
+      # Copilot CLI 1.0.108 asks this for a working directory missing from trustedFolders,
+      # `--allow-all` notwithstanding. Its dialogs are drawn in a box, so the pane ends on
+      # the box's bottom edge, or on the key hint when captured mid-draw.
+      id: :copilot_folder_trust,
+      agent_types: %w[copilot_cli],
+      markers: [ /Confirm folder trust/, /Do you trust the files in this folder\?/ ],
+      footer: %r{\A\s*(?:╰─+╯|│?\s*↑/↓ to navigate · enter to select · esc to cancel\s*│?)\z},
+      message: 'Copilot CLI is blocked on its folder-trust prompt ("Do you trust the files ' \
+               'in this folder?"), which a non_interactive session cannot answer. /workspace ' \
+               "is supposed to be trusted by trustedFolders in ~/.copilot/config.json " \
+               "(Agents::CopilotCliAdapter#generate_config); the session worked somewhere else."
+    },
+    {
+      # Read from the 1.0.108 bundle: offered on a model's rate limit unless
+      # `continueOnAutoMode` is set, which Agents::CopilotCliAdapter::SETTINGS does.
+      id: :copilot_rate_limit_switch,
+      agent_types: %w[copilot_cli],
+      markers: [ /You've been rate limited on the current model\. Would you like to switch to/ ],
+      footer: %r{\A\s*(?:╰─+╯|│?\s*↑/↓ to navigate · enter to select · esc to cancel\s*│?)\z},
+      message: 'Copilot CLI is blocked on its "Switch to …?" question after a model rate ' \
+               "limit, which a non_interactive session cannot answer. continueOnAutoMode in " \
+               "~/.copilot/settings.json is supposed to switch to Auto without asking."
     }
   ].freeze
 

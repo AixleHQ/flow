@@ -56,6 +56,7 @@ const AGENT_COLOR: Record<string, string> = {
   // Same as Grok: no Kiro artwork ships here, so the chip is neutral. Naming the
   // runtime keeps it known rather than silently unmapped.
   kiro_cli: CHART_NEUTRAL,
+  copilot_cli: CHART_NEUTRAL,
 };
 
 export const getAgentColor = (agentType: string): string => AGENT_COLOR[agentType] ?? CHART_NEUTRAL;

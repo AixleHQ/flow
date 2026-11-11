@@ -1,0 +1,24 @@
+ [Current]  Sessions   Issues   Pull requests   Gists
+
+ ! Connected Connectors could not be loaded; existing local and self-hosted    ┃
+   MCP servers remain available.                                               ┃
+                                                                               ┃
+ ❯ Run the shell command `sleep 20` and wait for it, then reply with the 13:38 ┃
+   single word done. Do not do anything else.                                  ┃
+                                                                               ┃
+ ⌄ Thought for 1s                                                              ┃
+ │ The user is asking me to run `sleep 20` and wait for it to complete, then   ┃
+ │ reply with just "done". This is a simple command that should take 20        ┃
+ │ seconds.                                                                    ┃
+ │                                                                             ┃
+ │ I'll use bash with mode="sync" and initial_wait=30 to ensure I wait for the ┃
+ │ full 20 seconds of sleep to complete.                                       ┃
+                                                                               ┃
+ ○ Shell Sleep for 20 seconds                                                  ┃
+   sleep 20                                                                    ┃
+                                                                               ┃
+ /workspace                                              Session: 2.19 AIC used
+────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────
+ ● Working · 368 B ctrl+c interrupt                            Claude Haiku 4.5

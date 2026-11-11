@@ -13,7 +13,8 @@ import (
 	"time"
 
 	collectorlogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
-	collector "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
+	collectormetrics "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
+	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -39,10 +40,16 @@ func main() {
 		},
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/metrics", srv.handleMetrics)
-	mux.HandleFunc("/v1/metrics/", srv.handleMetrics)
-	mux.HandleFunc("/v1/logs", srv.handleLogs)
-	mux.HandleFunc("/v1/logs/", srv.handleLogs)
+	signals := map[string]func() proto.Message{
+		"metrics": func() proto.Message { return &collectormetrics.ExportMetricsServiceRequest{} },
+		"logs":    func() proto.Message { return &collectorlogs.ExportLogsServiceRequest{} },
+		"traces":  func() proto.Message { return &collectortrace.ExportTraceServiceRequest{} },
+	}
+	for signal, newRequest := range signals {
+		handler := srv.exportHandler(signal, newRequest)
+		mux.HandleFunc("/v1/"+signal, handler)
+		mux.HandleFunc("/v1/"+signal+"/", handler)
+	}
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
@@ -54,100 +61,56 @@ func main() {
 	}
 }
 
-func (s *server) handleMetrics(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	body, err := io.ReadAll(io.LimitReader(r.Body, 10<<20))
-	if err != nil {
-		http.Error(w, "failed to read request body", http.StatusBadRequest)
-		return
-	}
-	if len(body) == 0 {
-		http.Error(w, "empty request body", http.StatusBadRequest)
-		return
-	}
-
-	var req collector.ExportMetricsServiceRequest
-	contentType := r.Header.Get("Content-Type")
-	if strings.Contains(contentType, "application/json") {
-		if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(body, &req); err != nil {
-			log.Printf("metrics json parse error: %v", err)
-			http.Error(w, "invalid json payload", http.StatusBadRequest)
+// exportHandler accepts one OTLP/HTTP signal, in JSON or protobuf, and forwards it to
+// the web app as JSON. Every signal goes to the same endpoint: the app tells them apart
+// by their top-level key (resourceMetrics, resourceLogs, resourceSpans).
+func (s *server) exportHandler(signal string, newRequest func() proto.Message) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-	} else {
-		if err := proto.Unmarshal(body, &req); err != nil {
-			log.Printf("metrics protobuf parse error: %v", err)
-			http.Error(w, "invalid protobuf payload", http.StatusBadRequest)
+
+		body, err := io.ReadAll(io.LimitReader(r.Body, 10<<20))
+		if err != nil {
+			http.Error(w, "failed to read request body", http.StatusBadRequest)
 			return
 		}
-	}
-
-	jsonBody, err := protojson.Marshal(&req)
-	if err != nil {
-		log.Printf("metrics json marshal error: %v", err)
-		http.Error(w, "failed to marshal payload", http.StatusInternalServerError)
-		return
-	}
-
-	if err := s.postUsage(r.Context(), jsonBody); err != nil {
-		log.Printf("forward error: %v", err)
-		http.Error(w, "failed to forward metrics", http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-}
-
-func (s *server) handleLogs(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	body, err := io.ReadAll(io.LimitReader(r.Body, 10<<20))
-	if err != nil {
-		http.Error(w, "failed to read request body", http.StatusBadRequest)
-		return
-	}
-	if len(body) == 0 {
-		http.Error(w, "empty request body", http.StatusBadRequest)
-		return
-	}
-
-	var req collectorlogs.ExportLogsServiceRequest
-	contentType := r.Header.Get("Content-Type")
-	if strings.Contains(contentType, "application/json") {
-		if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(body, &req); err != nil {
-			log.Printf("logs json parse error: %v", err)
-			http.Error(w, "invalid json payload", http.StatusBadRequest)
+		if len(body) == 0 {
+			http.Error(w, "empty request body", http.StatusBadRequest)
 			return
 		}
-	} else {
-		if err := proto.Unmarshal(body, &req); err != nil {
-			log.Printf("logs protobuf parse error: %v", err)
-			http.Error(w, "invalid protobuf payload", http.StatusBadRequest)
+
+		req := newRequest()
+		if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+			if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(body, req); err != nil {
+				log.Printf("%s json parse error: %v", signal, err)
+				http.Error(w, "invalid json payload", http.StatusBadRequest)
+				return
+			}
+		} else {
+			if err := proto.Unmarshal(body, req); err != nil {
+				log.Printf("%s protobuf parse error: %v", signal, err)
+				http.Error(w, "invalid protobuf payload", http.StatusBadRequest)
+				return
+			}
+		}
+
+		jsonBody, err := protojson.Marshal(req)
+		if err != nil {
+			log.Printf("%s json marshal error: %v", signal, err)
+			http.Error(w, "failed to marshal payload", http.StatusInternalServerError)
 			return
 		}
-	}
 
-	jsonBody, err := protojson.Marshal(&req)
-	if err != nil {
-		log.Printf("logs json marshal error: %v", err)
-		http.Error(w, "failed to marshal payload", http.StatusInternalServerError)
-		return
-	}
+		if err := s.postUsage(r.Context(), jsonBody); err != nil {
+			log.Printf("forward error: %v", err)
+			http.Error(w, "failed to forward "+signal, http.StatusInternalServerError)
+			return
+		}
 
-	if err := s.postUsage(r.Context(), jsonBody); err != nil {
-		log.Printf("forward error: %v", err)
-		http.Error(w, "failed to forward logs", http.StatusInternalServerError)
-		return
+		w.WriteHeader(http.StatusOK)
 	}
-
-	w.WriteHeader(http.StatusOK)
 }
 
 func (s *server) postUsage(ctx context.Context, body []byte) error {

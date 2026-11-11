@@ -48,6 +48,23 @@ class TurnEndDetector
       # and root notices (up to four lines when the root warning is not shortened),
       # and the model line, each of which wraps on a narrow pane.
       summary_within: 12
+    },
+    # Copilot CLI 1.0.108 (TUI). The pane ends on a hint line under the prompt box. A
+    # finished turn leaves `← open sidebar · Interactive · …`, cut down to `Interactive`
+    # and the model on a narrow pane; while a turn runs the same line reads `● Working ·
+    # … ctrl+c interrupt`, and with a draft in the box it lists `@ files/sessions`. The
+    # session's `Session: 2.38 AIC used` line sits four lines above the hint, whether the
+    # box is drawn with rules (`❯` between two `───` lines) or, in the platform's web
+    # terminal, as `╻▄▄▄` / `┃` / `╹▀▀▀`.
+    #
+    # Measured at 30x20, 40x20, 80x24, 112x16 and 220x50. On a plan still billed in premium
+    # requests the CLI shows no usage figure, so no turn end is seen and
+    # Sessions::Checks::NoOutput ends the session instead.
+    "copilot_cli" => {
+      prompt: /\A\s*(?:← open sidebar · Interactive · |Interactive\s{2,})/,
+      lines_below_prompt: 0,
+      turn_summary: /Session: [\d.,]+ AIC used\z/,
+      summary_within: 6
     }
   }.freeze
 

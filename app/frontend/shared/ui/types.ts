@@ -1,6 +1,7 @@
 import type { CurrentUser, Features, Project } from '@/types/generated';
 
-export type AgentType = 'codex' | 'cursor_cli' | 'gemini_cli' | 'antigravity_cli' | 'claude_code' | 'grok' | 'kiro_cli';
+export type AgentType =
+  'codex' | 'cursor_cli' | 'gemini_cli' | 'antigravity_cli' | 'claude_code' | 'grok' | 'kiro_cli' | 'copilot_cli';
 export type UserRole = 'employee' | 'admin' | 'super_admin' | 'viewer';
 
 // Both lists are kept here by hand (agentRuntimes.ts and the role labels are keyed by them), while

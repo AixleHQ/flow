@@ -24,7 +24,7 @@ Read in any order:
 - **[Triggers and gates](triggers-and-gates.md)** — every way a run starts, who it runs as, and the CI gates that hold one back.
 - **[Prompt guide](prompt-guide.md)** — writing session instructions an agent can run.
 - **[Agents](agents.md)** — personas, the container, and how session context is built.
-- **[Runtimes](runtimes.md)** — the seven LLM CLIs (Claude Code, Cursor CLI, Codex, Gemini CLI, Antigravity CLI, Grok, Kiro CLI), their images, credentials, and cost tracking.
+- **[Runtimes](runtimes.md)** — the eight LLM CLIs (Claude Code, Cursor CLI, Codex, Gemini CLI, Antigravity CLI, Grok, Kiro CLI, Copilot CLI), their images, credentials, and cost tracking.
 - **[Tools](tools.md)** — tool kinds, execution modes, the built-in board tools, and resource resolution.
 - **[MCP servers](mcp.md)** — transports, the internal `aixle-tools` server, Config Items credentials, and the personal token that turns Aixle itself into an MCP server.
 - **[Integrations](integrations.md)** — GitHub, GitLab, Bitbucket, Azure DevOps, Jira, Linear, YouTrack, Slack, Microsoft Teams, Coder and the trackers they provide, and webhooks.
@@ -56,7 +56,7 @@ GitHub check, a GitLab pipeline, an Azure build or PR policies — does not set
 off its column's workflow until the check reports or goes stale.
 
 **A workflow is a DAG of steps.** Each step is one **Agent** session — a
-persona on one of the seven runtimes — in its own isolated container.
+persona on one of the eight runtimes — in its own isolated container.
 Sub-steps are a checklist inside that session, not sessions of their own. Steps
 run in parallel where nothing connects them, wait for the steps they depend on,
 retry or skip on failure, or pause until a person approves them.

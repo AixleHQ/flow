@@ -19,6 +19,18 @@ governance, community health — carry none.
   several previewable files you can move between them with ← / → or the
   on-screen arrows. Download is still one click away. The Assets library page
   previews Markdown the same way (rendered, not raw text).
+- **Profile**: connect GitHub Copilot CLI with your GitHub account (one-time
+  code) and run sessions and workflow steps on your Copilot plan, with any model
+  the plan offers and its reasoning effort. Each session's cost is the AI
+  credits GitHub charged for it.
+- **Sessions & Runs**: a Copilot CLI session's cost streams in from the CLI's
+  OpenTelemetry traces, which the OTLP collector now accepts at `/v1/traces`;
+  a deployment that routes the collector by path must route that one too.
+  Operators can change what one AI credit is reported as with
+  `COPILOT_AI_CREDIT_USD` (default `0.01`) and override the image with
+  `AGENT_IMAGE_COPILOT_CLI`.
+- **Sessions & Runs**: an automatic Copilot CLI step whose agent ends its turn
+  without finishing is reminded to finish or continue, as Kiro steps are.
 
 ### Changed
 - Runner compatibility: the platform now serves and recommends `aixle-runner`
@@ -44,6 +56,9 @@ governance, community health — carry none.
 - **Workflows**: a session set to retry on failure now retries. The builder asks
   how many times (1–10), and sessions saved with Retry before this release retry
   once.
+- **Connectors**: the platform's MCP servers no longer advertise a
+  notification stream they cannot hold open, which made clients on the
+  2026-07-28 protocol (Copilot CLI) drop the server and its tools.
 
 ## [1.11.0] - 2026-11-09
 

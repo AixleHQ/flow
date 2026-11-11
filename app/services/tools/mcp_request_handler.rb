@@ -41,10 +41,12 @@ module Tools
     # the SDK default accepts only a loopback `Host` and 403s every deployed
     # request, and this endpoint is header-token authenticated, so the browser
     # rebinding it defends against cannot present a credential.
+    #
+    # `serve_subscriptions_listen: false`: see PersonalMCPRequestHandler#call.
     def call(request)
       transport = MCP::Server::Transports::StreamableHTTPTransport.new(
         server(remedy_for: disconnected_call_target(request)),
-        stateless: true, dns_rebinding_protection: false
+        stateless: true, dns_rebinding_protection: false, serve_subscriptions_listen: false
       )
       transport.handle_request(request)
     end
