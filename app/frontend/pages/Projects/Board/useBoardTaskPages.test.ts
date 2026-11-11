@@ -18,6 +18,7 @@ const IN_PROGRESS = buildBoardColumn({ id: 200, name: 'In Progress', position: 1
 const NO_FILTERS: BoardTaskFilters = {
   search: '',
   assigneeId: null,
+  assigneeTeamId: null,
   taskType: null,
   priority: null,
   tags: [],
@@ -70,6 +71,7 @@ describe('boardFilterParams', () => {
     const params = boardFilterParams({
       search: 'auth',
       assigneeId: '3',
+      assigneeTeamId: null,
       taskType: 'bug',
       priority: 'high',
       tags: ['api', 'ui'],
@@ -88,6 +90,13 @@ describe('boardFilterParams', () => {
     expect(params.getAll('tags[]')).toEqual(['api', 'ui']);
     expect(params.get('tags_match')).toBe('all');
     expect(params.get('archived')).toBe('all');
+  });
+
+  it('filters by the team a task is assigned to', () => {
+    const params = boardFilterParams({ ...NO_FILTERS, assigneeTeamId: '7' });
+
+    expect(params.get('q[assignee_team_id_eq]')).toBe('7');
+    expect(params.get('q[assignee_id_eq]')).toBeNull();
   });
 });
 

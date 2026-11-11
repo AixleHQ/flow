@@ -11,6 +11,8 @@ class WorkflowService
   SignalLost = Class.new(StandardError)
   # The default of #enqueue's `runner_id:`, telling "no pick" apart from a pick of nil.
   RUNNER_NOT_PICKED = Object.new.freeze
+  # failure_reason of a run whose team had no member who could take it.
+  TEAM_UNAVAILABLE = "team_unavailable"
 
   class << self
     # Raises Versions::StaleVersion when `base_version` is behind.
@@ -42,10 +44,18 @@ class WorkflowService
     # tool): an id, or nil for hosted. Left out, the run takes the runner of the
     # run it retries, otherwise its workflow's (DESIGN.md §3.3). Either way it is
     # frozen on the run here; retries and later steps read it from the run.
+    #
+    # `team:` hands the run to the member ProjectTeams::Picker chooses. When no
+    # member can take it, the run is still created — owned by `user`, the person
+    # or trigger author who caused it — with every step failed on the reason, and
+    # #dispatch! ends it without an execution (docs/design/project-teams.md).
     def enqueue(workflow:, project:, user:, source:, task: nil, mode: :interactive, overrides: {}, input_asset_ids: [], repository_ids: [], agent_runtime: nil, requested_model: nil, shared_context: {},
-                retried_from: nil, idempotency_key: nil, runner_id: RUNNER_NOT_PICKED)
+                retried_from: nil, idempotency_key: nil, runner_id: RUNNER_NOT_PICKED, team: nil)
       runner_picked = !runner_id.equal?(RUNNER_NOT_PICKED)
+      pick = team && ProjectTeams::Picker.call(team: team, workflow: workflow, agent_runtime: agent_runtime)
+      user = pick.user if pick&.picked?
       run = project.workflow_runs.new(
+        team: team,
         runner_id: runner_picked ? runner_id.presence : (retried_from ? retried_from.runner_id : workflow.runner_id),
         workflow: workflow,
         user: user,
@@ -69,7 +79,7 @@ class WorkflowService
         return run
       end
 
-      validate_agent_credentials!(run, project, user)
+      validate_agent_credentials!(run, project, user) unless pick && !pick.picked?
       return run if run.errors.any?
 
       validate_mode!(run, workflow, overrides)
@@ -82,13 +92,18 @@ class WorkflowService
       # on a dispatch that never lands is a row the relay can find, instead of a
       # run indistinguishable from one the worker simply has not reached yet.
       run.relay_state = "pending"
+      run.failure_reason = TEAM_UNAVAILABLE if pick && !pick.picked?
       return run unless run.save
 
       workflow.steps.not_deleted.order(:position).each do |step|
         run.step_runs.find_or_create_by!(step: step)
       end
 
-      record_activity(run, :workflow_started)
+      if run.failure_reason == TEAM_UNAVAILABLE
+        run.step_runs.find_each { |step_run| step_run.mark_failed!(pick.message) }
+      else
+        record_activity(run, :workflow_started)
+      end
       broadcast_task_updated(run)
 
       run
@@ -124,6 +139,7 @@ class WorkflowService
     # A run on a runner is checked here, so every launch path and the relay pass
     # through Runners::Resolver before anything executes (DESIGN.md §3.4).
     def dispatch!(run)
+      return if fail_on_team_unavailable(run)
       return if fail_on_runner_refusal(run)
 
       run.increment!(:relay_attempts)
@@ -285,7 +301,8 @@ class WorkflowService
         agent_runtime: run.agent_runtime,
         shared_context: run.shared_context,
         source: :retry,
-        retried_from: run
+        retried_from: run,
+        team: run.team
       )
 
       unless new_run.persisted?
@@ -388,6 +405,37 @@ class WorkflowService
         broadcast_task_updated(run)
       end
       true
+    end
+
+    # A run whose team had nobody to take it (#enqueue) ends here, before an
+    # execution exists, the way a refused runner's does — after its dispatch is
+    # recorded, so the trigger that started it reports the failure.
+    def fail_on_team_unavailable(run)
+      return false unless run.failure_reason == TEAM_UNAVAILABLE
+
+      failed = run.with_lock do
+        next false unless run.pending?
+
+        run.fail_before_start!
+        run.update_columns(relay_state: "dispatched", relay_error: nil, updated_at: Time.current)
+        true
+      end
+      if failed
+        record_activity(run, :workflow_failed)
+        post_failure_comment(run, run.step_runs.where(state: "failed").pick(:error_message))
+        broadcast_task_updated(run)
+      end
+      true
+    end
+
+    def post_failure_comment(run, message)
+      return unless run.board_task_id.present? && message.present?
+
+      run.board_task.task_comments.create!(
+        author_type: :system, body: "Run ##{run.id} of workflow \"#{run.workflow.name}\" failed: #{message}"
+      )
+    rescue StandardError => e
+      Rails.logger.warn("[WorkflowService] failure comment for run ##{run.id} not posted: #{e.message}")
     end
 
     def post_runner_refusal_comment(run, refusal)

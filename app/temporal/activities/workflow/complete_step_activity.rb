@@ -150,12 +150,22 @@ module Activities
         credential = SessionCompany.agent_credentials_for(session).find_by(agent_type: session&.agent_type)
         step_run.mark_failed!(detection.message, error_category: :quota_exceeded)
         step_run.workflow_run.mark_quota_failed!(credential_id: credential&.id)
+        hold_credential(credential, detection)
+        ProjectTeams::QuotaEvent.publish(step_run.workflow_run, credential)
         {
           "step_run_id" => step_run.id,
           "valid" => false,
           "failed" => true,
           "quota_error" => true
         }
+      end
+
+      # Best effort: a hold that could not be worked out must not turn a quota
+      # failure into an activity failure that Temporal then retries.
+      def hold_credential(credential, detection)
+        QuotaHold.apply!(credential, detection.message) if credential
+      rescue StandardError => e
+        Rails.logger.warn("[CompleteStepActivity] quota hold not recorded for credential ##{credential&.id}: #{e.message}")
       end
 
       # No workflow-level side effect (unlike quota, which pauses the run against the

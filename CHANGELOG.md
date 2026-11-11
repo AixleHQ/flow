@@ -14,6 +14,26 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
+- **Teams**: a project can now have teams — named groups of its members, each
+  with a strategy for picking who takes a run: priority (the first member who
+  can), round robin, or the most agent quota left. Each run goes to one member
+  and runs on that member's own agent account. A member whose quota ran out is
+  passed over until it resets. When nobody in the team can take a run, the run
+  fails at once and lists why for each member. Project owners and company admins
+  manage teams on the project's Teams page.
+- **Tasks**: a card can be assigned to a team instead of a person — from the
+  card, from the board's bulk Assign menu, and by agents (`board_update_task`,
+  `update_board_task`). The board filters by team. Runs show which member of the
+  team they went to.
+- **Triggers & gates**: a schedule, chat, webhook, tracker or event trigger can
+  run as a team (Runs as → Teams, or `run_as_team_id` in the MCP trigger tools).
+  A step that stops on its owner's quota, and is set to retry on failure, is
+  retried as the team's next member. A new `workflow_run.quota_exceeded` event
+  lets an event trigger react to quota stops.
+- **Profile**: "Don't let anyone add me to a team" keeps you out of teams and
+  takes you out of the ones you are in; the profile lists your teams with a
+  Leave button. Members are emailed when they are added to or taken out of a
+  team.
 - **Tasks**: clicking an image or Markdown file in a card's Assets tab now opens
   it in a preview instead of downloading it. Markdown is rendered, and with
   several previewable files you can move between them with ← / → or the

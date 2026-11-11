@@ -75,6 +75,7 @@ const OFF_BOARD_SOURCES = new Set(['chat', 'schedule', 'webhook', 'event', 'trac
 export function creatorLabel(t: Trigger): string {
   const name = t.created_by?.name;
   const runsAsCreator = OFF_BOARD_SOURCES.has(triggerSource(t));
+  if (runsAsCreator && t.run_as_team) return `Runs as team ${t.run_as_team.name}`;
   if (!name) return runsAsCreator ? 'No creator — this trigger cannot start a run' : 'Created by Unknown';
   return runsAsCreator ? `Runs as ${name}` : `Created by ${name}`;
 }
@@ -82,7 +83,7 @@ export function creatorLabel(t: Trigger): string {
 // A missing creator only breaks the off-board kinds — a column trigger still runs
 // under the person the card is on, so an unknown creator there is just a blank.
 export function creatorTone(t: Trigger): string {
-  if (t.created_by) return 'var(--text-2)';
+  if (t.created_by || (t.run_as_team && OFF_BOARD_SOURCES.has(triggerSource(t)))) return 'var(--text-2)';
   return OFF_BOARD_SOURCES.has(triggerSource(t)) ? 'var(--err)' : 'var(--text-3)';
 }
 

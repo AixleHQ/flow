@@ -254,6 +254,8 @@ class AgentCredential < ApplicationRecord
     # collected_at moves on every refresh and write-back; this is the last time a person
     # actually signed in, which is what the profile has to show after a re-login.
     credential.metadata = credential.metadata.merge("signed_in_at" => Time.current) if new_authorization
+    # A new sign-in may well be another account, and a stale hold would keep it out of every team.
+    credential.quota_exhausted_until = nil if new_authorization
     credential.save!
     credential
   end
@@ -264,6 +266,10 @@ class AgentCredential < ApplicationRecord
   # the pin through here, so a default saved before a retirement keeps working
   # instead of 404ing at session start. The stored value is left untouched: the
   # mapping is a rescue for a dead id, not a rewrite of the user's choice.
+  def quota_exhausted?(at = Time.current)
+    quota_exhausted_until.present? && quota_exhausted_until > at
+  end
+
   def default_model
     stored = metadata&.dig("default_model")
     return nil if stored.blank?

@@ -48,7 +48,7 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
              .active
              .first_per_column(BoardTask::PAGE_SIZE)
              .with_card_counts
-             .includes(:assignee, :gates)
+             .includes(:assignee, :assignee_team, :gates)
              .in_board_order.then { |tasks| serialize_board_tasks(tasks) }
       },
       tasks_page_size: BoardTask::PAGE_SIZE,
@@ -60,6 +60,8 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
              .pluck(:id, :number, :title).map { |id, number, title| { id: id, number: number, title: title } }
       },
       members: -> { current_project.member_users.map { |u| BoardMemberResource.new(u).to_h } },
+      # docs/design/project-teams.md: a task can be assigned to a team instead of a person.
+      teams: -> { current_project.project_teams.map { |team| { id: team.id, name: team.name } } },
       workflows: -> { current_project.workflows.order(:name).map { |w| BoardWorkflowResource.new(w).to_h } },
       view_presets: -> {
         board.board_view_presets.visible_to(current_user).order(:name)
@@ -92,7 +94,7 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
         next [] unless task
         # The resource renders a row per step run, timed by its session; without the
         # preload a task with a run history costs queries per step run.
-        task.workflow_runs.with_total_cost_cents.includes(:workflow, :runner, step_runs: %i[step terminal_session])
+        task.workflow_runs.with_total_cost_cents.includes(:workflow, :runner, :user, :team, step_runs: %i[step terminal_session])
             .order(created_at: :desc)
             .map { |r| TaskWorkflowRunResource.new(r).to_h }
       },
@@ -113,6 +115,7 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
       board_tags: [],
       epics: [],
       members: [],
+      teams: [],
       workflows: [],
       view_presets: [],
       current_user_id: -> { current_user.id },
@@ -128,7 +131,7 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
 
   def find_task(board)
     board.board_tasks
-         .includes(:assignee, :parent_task, :child_tasks, :task_comments, :task_assets, :workflow_runs, :gates)
+         .includes(:assignee, :assignee_team, :parent_task, :child_tasks, :task_comments, :task_assets, :workflow_runs, :gates)
          .find_by(number: params[:n])
     # note: task_assets included here so TaskDetailResource.assets_count avoids N+1;
     # parent_task so TaskDetailResource.parent_task_title does not fire an extra query

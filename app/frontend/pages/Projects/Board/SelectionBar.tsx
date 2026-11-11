@@ -13,6 +13,7 @@ import {
   IconTrash,
   IconUser,
   IconUserOff,
+  IconUsersGroup,
   IconX,
 } from '@tabler/icons-react';
 import { useState } from 'react';
@@ -21,6 +22,8 @@ import type BoardColumn from 'types/generated/BoardColumn';
 import type BoardMember from 'types/generated/BoardMember';
 
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
+
+import type { Assignee, BoardTeam } from './assignee';
 
 export type BulkAction = 'delete' | 'archive' | 'move_to_column' | 'set_priority' | 'set_assignee' | 'add_tag';
 
@@ -33,10 +36,11 @@ export interface SelectionBarProps {
   selectedIds: Set<number>;
   columns: BulkColumn[];
   members: Pick<BoardMember, 'id' | 'name'>[];
+  teams?: BoardTeam[];
   canExecute: boolean;
   onAction: (action: BulkAction, columnId?: number) => void;
   onBulkPriority: (priority: string | null) => void;
-  onBulkAssign: (assigneeId: number | null) => void;
+  onBulkAssign: (assignee: Assignee | null) => void;
   onBulkTag: (tag: string) => void;
   onClear: () => void;
 }
@@ -166,6 +170,7 @@ export function SelectionBar({
   selectedCount,
   columns,
   members,
+  teams = [],
   canExecute,
   onAction,
   onBulkPriority,
@@ -348,11 +353,25 @@ export function SelectionBar({
                     {avatarInitials(m.name)}
                   </div>
                 }
-                onClick={() => onBulkAssign(m.id)}
+                onClick={() => onBulkAssign({ kind: 'user', id: m.id })}
               >
                 {m.name}
               </Menu.Item>
             ))}
+            {teams.length > 0 && (
+              <>
+                <Menu.Label>Teams</Menu.Label>
+                {teams.map((t) => (
+                  <Menu.Item
+                    key={`team-${t.id}`}
+                    leftSection={<IconUsersGroup size={13} color="var(--mantine-color-dimmed)" />}
+                    onClick={() => onBulkAssign({ kind: 'team', id: t.id })}
+                  >
+                    {t.name}
+                  </Menu.Item>
+                ))}
+              </>
+            )}
             <Menu.Divider />
             <Menu.Item
               leftSection={<IconUserOff size={13} color="var(--mantine-color-dimmed)" />}

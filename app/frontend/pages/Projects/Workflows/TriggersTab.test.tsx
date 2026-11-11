@@ -184,6 +184,19 @@ describe('Projects/Workflows/TriggersTab', () => {
     expect(screen.getByText('Created by Mara Osei')).toBeInTheDocument();
   });
 
+  it('names the team an off-board trigger runs as instead of its creator', async () => {
+    installFetch({
+      triggers: [
+        scheduleTrigger({ created_by: { id: 6, name: 'Ida Ferris' }, run_as_team: { id: 3, name: 'Planners' } }),
+      ],
+    });
+
+    renderPage(<TriggersTab {...baseProps()} />);
+
+    expect(await screen.findByText('Runs as team Planners')).toBeInTheDocument();
+    expect(screen.queryByText('Runs as Ida Ferris')).not.toBeInTheDocument();
+  });
+
   it('flags an off-board trigger with no creator as unable to start a run', async () => {
     installFetch({ triggers: [scheduleTrigger({ created_by: null }), columnTrigger({ created_by: null })] });
 

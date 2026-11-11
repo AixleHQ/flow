@@ -14,6 +14,21 @@ class Web::ProfileControllerTest < ActionDispatch::IntegrationTest
     assert_inertia_page "Profile/Show"
   end
 
+  test "the profile lists the user's teams, and asking to stay out of teams takes them out" do
+    project = create(:project, company: @company, owner: @user, name: "Ops")
+    team = create(:project_team, project: project, name: "Planner")
+    create(:project_team_member, project_team: team, user: @user)
+
+    get profile_path
+    assert_equal [ { "id" => team.id, "name" => "Planner", "projectId" => project.id, "projectName" => "Ops" } ],
+                 inertia.props[:projectTeams]
+
+    patch profile_path, params: { profile: { exclude_from_teams: "1" } }
+
+    assert @user.reload.exclude_from_teams?
+    assert_empty team.reload.members
+  end
+
   test "update redirects on success" do
     patch profile_path, params: { profile: { name: "Updated Name" } }
     assert_response :redirect

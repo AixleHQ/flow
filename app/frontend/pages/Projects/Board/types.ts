@@ -13,6 +13,7 @@ export type Task = BoardTask &
 
 export interface BoardFilters {
   assigneeId: string | null;
+  assigneeTeamId: string | null;
   taskType: string | null;
   priority: string | null;
   tags: string[];

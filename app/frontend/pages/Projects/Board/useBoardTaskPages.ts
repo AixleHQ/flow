@@ -24,6 +24,7 @@ interface PagedColumn {
 export interface BoardTaskFilters {
   search: string;
   assigneeId: string | null;
+  assigneeTeamId: string | null;
   taskType: string | null;
   priority: string | null;
   tags: string[];
@@ -78,6 +79,7 @@ export function boardFilterParams(filters: BoardTaskFilters): URLSearchParams {
     if (/^\d+$/.test(numberTerm)) params.set('q[g][0][number_eq]', numberTerm);
   }
   if (filters.assigneeId) params.set('q[assignee_id_eq]', filters.assigneeId);
+  if (filters.assigneeTeamId) params.set('q[assignee_team_id_eq]', filters.assigneeTeamId);
   if (filters.taskType) params.set('q[task_type_eq]', filters.taskType);
   if (filters.priority) params.set('q[priority_eq]', filters.priority);
   if (filters.tags.length > 0) {

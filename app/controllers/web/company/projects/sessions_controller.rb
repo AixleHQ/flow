@@ -40,7 +40,7 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
     run_ids = Array(params[:run_ids]).map(&:to_i).uniq.first(ROWS_LIMIT)
     sessions = current_project.terminal_sessions.includes(:user)
                               .where(id: session_ids, session_type: SessionsRunsFeed::TOP_LEVEL_SESSION_TYPES)
-    runs = current_project.workflow_runs.includes(:user, :workflow, step_runs: [ :step, { terminal_session: :user } ])
+    runs = current_project.workflow_runs.includes(:user, :team, :workflow, step_runs: [ :step, { terminal_session: :user } ])
                           .where(id: run_ids)
     entries = sessions.map { |s| SessionsRunsFeed::Entry.new(kind: "session", record: s) } +
               runs.map { |r| SessionsRunsFeed::Entry.new(kind: "run", record: r) }

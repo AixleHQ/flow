@@ -3,10 +3,10 @@
 # A built-in agent runtime as config/agent_runtimes.json declares it. CI builds the
 # images from the same file, so a runtime list kept anywhere else drifts from what
 # was actually published.
-AgentRuntime = Data.define(:id, :image, :cli_version, :reasoning_effort) do
+AgentRuntime = Data.define(:id, :label, :image, :cli_version, :reasoning_effort) do
   def self.all
     @all ||= JSON.parse(Rails.root.join("config/agent_runtimes.json").read).fetch("runtimes").map do |entry|
-      new(id: entry.fetch("id"), image: entry.fetch("image"), cli_version: entry.fetch("cli_version"),
+      new(id: entry.fetch("id"), label: entry.fetch("label"), image: entry.fetch("image"), cli_version: entry.fetch("cli_version"),
           reasoning_effort: entry["reasoning_effort"])
     end.freeze
   end
@@ -17,6 +17,10 @@ AgentRuntime = Data.define(:id, :image, :cli_version, :reasoning_effort) do
 
   def self.fetch(id)
     all.find { |runtime| runtime.id == id.to_s } || raise(KeyError, "unknown agent runtime: #{id}")
+  end
+
+  def self.label_for(id)
+    all.find { |runtime| runtime.id == id.to_s }&.label || id.to_s.humanize
   end
 
   # Every effort level any runtime takes for any model. Only the enum of the

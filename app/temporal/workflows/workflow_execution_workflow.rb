@@ -297,7 +297,7 @@ module Workflows
 
     def recover_from_step_completion_failure(step_data, step_run_id, failed_outcome)
       return failed_outcome if failed_outcome != :failed
-      return :failed if @quota_error_step_run_ids[step_run_id]
+      return :failed if @quota_error_step_run_ids[step_run_id] && !handed_to_next_team_member?(step_data, step_run_id)
 
       sid = step_data["step_id"]
       @step_failure_counts[sid] = (@step_failure_counts[sid] || 0) + 1
@@ -318,6 +318,23 @@ module Workflows
       else
         :failed
       end
+    end
+
+    # A step that stopped on its owner's quota is retried only when it is set to
+    # retry, has a retry left, and the run's team has another member to take it
+    # (docs/design/project-teams.md, "Retry on quota"). Without a team the same
+    # account would fail again. Code without this patch failed every quota stop,
+    # and its histories must replay that way.
+    def handed_to_next_team_member?(step_data, step_run_id)
+      return false unless step_data["on_failure"].to_s == "retry"
+
+      max = step_data["max_retries"].to_i
+      return false unless max.positive? && (@step_failure_counts[step_data["step_id"]] || 0) < max
+      return false unless Temporalio::Workflow.patched("team-quota-retry")
+
+      result = execute_activity(activities.workflow_reassign_run_owner_activity,
+        { workflow_run_id: @workflow_run_id, step_run_id: step_run_id }, start_to_close_timeout: 60)
+      result["reassigned"] == true
     end
 
     # --- Activity calls ---

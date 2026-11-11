@@ -4,6 +4,7 @@ import { IconRefresh } from '@tabler/icons-react';
 import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 
 import { formatDateTime } from 'shared/lib/formatDate';
+import { runOwnerLabel } from 'shared/lib/runOwner';
 
 import { formatCostCents } from './boardFormat';
 import { RunStepTimeline } from './RunStepTimeline';
@@ -68,41 +69,49 @@ export function TaskRunsPanel({
 
             {/* Run history */}
             <Stack gap={4}>
-              {runs.map((run) => (
-                <Box key={run.id} p="xs" style={{ border: '1px solid var(--app-border-default)', borderRadius: 8 }}>
-                  <RunTileRow
-                    run={run}
-                    projectId={projectId}
-                    trailing={
-                      <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
-                        {formatDateTime(run.createdAt)}
+              {runs.map((run) => {
+                const owner = runOwnerLabel(run.teamName, run.userName);
+                return (
+                  <Box key={run.id} p="xs" style={{ border: '1px solid var(--app-border-default)', borderRadius: 8 }}>
+                    <RunTileRow
+                      run={run}
+                      projectId={projectId}
+                      trailing={
+                        <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
+                          {formatDateTime(run.createdAt)}
+                        </Text>
+                      }
+                    />
+                    {owner && (
+                      <Text size="xs" c="dimmed" mt={2}>
+                        by {owner}
                       </Text>
-                    }
-                  />
+                    )}
 
-                  {/* Step timeline for first (latest) run */}
-                  {run.id === latestRunId && (run.steps ?? []).length > 0 && (
-                    <RunStepTimeline steps={run.steps ?? []} />
-                  )}
+                    {/* Step timeline for first (latest) run */}
+                    {run.id === latestRunId && (run.steps ?? []).length > 0 && (
+                      <RunStepTimeline steps={run.steps ?? []} />
+                    )}
 
-                  {/* Retry in Runs tab for failed run (AC-56) — retry runs the column's bound
+                    {/* Retry in Runs tab for failed run (AC-56) — retry runs the column's bound
                       workflow, so the caller hides it when the task's column has none */}
-                  {run.state === 'failed' && canRetry && (
-                    <Box mt="xs">
-                      <Button
-                        size="compact-xs"
-                        variant="outline"
-                        color="red"
-                        leftSection={<IconRefresh size={11} />}
-                        loading={retrying}
-                        onClick={onRetry}
-                      >
-                        Retry run
-                      </Button>
-                    </Box>
-                  )}
-                </Box>
-              ))}
+                    {run.state === 'failed' && canRetry && (
+                      <Box mt="xs">
+                        <Button
+                          size="compact-xs"
+                          variant="outline"
+                          color="red"
+                          leftSection={<IconRefresh size={11} />}
+                          loading={retrying}
+                          onClick={onRetry}
+                        >
+                          Retry run
+                        </Button>
+                      </Box>
+                    )}
+                  </Box>
+                );
+              })}
             </Stack>
           </>
         )}

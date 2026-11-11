@@ -77,6 +77,10 @@ module PersonalTools
                                                  "shared_token; none lets anyone who has the URL run the workflow."
       param :secret, type: :string, description: "Shared secret for the webhook's verification strategy (kind=webhook). " \
                                                  "Generated when omitted."
+      param :run_as_team_id, type: :integer,
+                             description: "Off-board kinds: the project team (from list_project_teams) whose members run the " \
+                                          "trigger, one picked per run by the team's strategy. Company admins and " \
+                                          "the project owner only."
     end
 
     def execute
@@ -86,6 +90,11 @@ module PersonalTools
       project = find_project!
       authorize!(project, :update?, policy: Web::Company::Projects::WorkflowsPolicy, project: project)
       workflow = find_workflow!(project)
+      if params[:run_as_team_id].present?
+        return error("A column trigger runs as the person the card is on — it has no Run as") if kind == "column"
+
+        authorize!(project, :change_run_as?, policy: Api::V1::Projects::Workflows::TriggersPolicy, project: project)
+      end
 
       result = WorkflowTriggers::Creator.call(
         project: project, workflow: workflow, user: user, kind: kind, attributes: creator_attributes(kind)
@@ -114,7 +123,8 @@ module PersonalTools
         event_type: params[:event_type],
         chat_provider: params[:chat_provider],
         verification_strategy: params[:verification_strategy],
-        secret: params[:secret]
+        secret: params[:secret],
+        run_as_team_id: params[:run_as_team_id]
       )
     end
 
