@@ -135,6 +135,17 @@ module Agents
       refute env.key?("COPILOT_GITHUB_TOKEN")
     end
 
+    test "a session with its own callback addresses reports to its own collector, or nowhere" do
+      create(:agent_credential, :copilot_cli, user: @user, company: @company)
+
+      assert_equal "http://otel.runner:4318",
+                   @adapter.default_env_vars(@session, callbacks: { otel: "http://otel.runner:4318" })["OTEL_EXPORTER_OTLP_ENDPOINT"]
+
+      env = @adapter.default_env_vars(@session, callbacks: { otel: nil })
+      refute env.key?("OTEL_EXPORTER_OTLP_ENDPOINT")
+      refute env.key?("COPILOT_OTEL_ENABLED")
+    end
+
     # == MCP ==
 
     test "MCP servers are written in the CLI's own mcp-config.json shape" do
