@@ -836,7 +836,7 @@ export const IntegrationsContent = ({
                           </Text>
                           {integration.provider === 'slack' && integration.slackRequestUrl && (
                             <Group gap={4} wrap="nowrap">
-                              <Text fz={11} c="dimmed" ff="JetBrains Mono, monospace" truncate maw={180}>
+                              <Text fz={11} c="dimmed" ff="monospace" truncate maw={180}>
                                 {integration.slackRequestUrl}
                               </Text>
                               <CopyButton value={integration.slackRequestUrl}>

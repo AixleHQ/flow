@@ -164,7 +164,7 @@ export const AgentFormModal: FC<AgentFormModalProps> = ({ opened, onClose, editA
               autoFocus
               disabled={isEditMode}
               styles={{
-                input: { fontFamily: '"JetBrains Mono", monospace' },
+                input: { fontFamily: 'var(--app-font-mono)' },
               }}
             />
           </Group>

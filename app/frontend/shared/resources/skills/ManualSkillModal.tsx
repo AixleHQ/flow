@@ -104,7 +104,7 @@ export const ManualSkillModal: FC<ManualSkillModalProps> = ({ opened, onClose, b
           autosize
           minRows={14}
           maxRows={24}
-          styles={{ input: { fontFamily: 'JetBrains Mono, monospace', fontSize: 12 } }}
+          styles={{ input: { fontFamily: 'var(--app-font-mono)', fontSize: 12 } }}
         />
 
         {/* Skills written here never reach the skills.sh CLI, which reports every

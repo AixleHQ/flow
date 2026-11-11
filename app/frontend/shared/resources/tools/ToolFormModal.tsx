@@ -337,7 +337,7 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
                 withAsterisk
                 autoFocus
                 disabled={isEditMode}
-                styles={{ input: { fontFamily: '"JetBrains Mono", monospace' } }}
+                styles={{ input: { fontFamily: 'var(--app-font-mono)' } }}
               />
 
               <TextInput
@@ -362,7 +362,7 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
                 placeholder="python:3.11-slim"
                 description="Docker image to run"
                 withAsterisk
-                styles={{ input: { fontFamily: '"JetBrains Mono", monospace' } }}
+                styles={{ input: { fontFamily: 'var(--app-font-mono)' } }}
               />
 
               <Textarea
@@ -372,7 +372,7 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
                 description="Command template with {{param}} placeholders"
                 minRows={2}
                 autosize
-                styles={{ input: { fontFamily: '"JetBrains Mono", monospace' } }}
+                styles={{ input: { fontFamily: 'var(--app-font-mono)' } }}
               />
             </Stack>
           </Tabs.Panel>
@@ -422,7 +422,7 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
                               size="sm"
                               style={{ flex: 1 }}
                               styles={{
-                                input: { fontFamily: '"JetBrains Mono", monospace' },
+                                input: { fontFamily: 'var(--app-font-mono)' },
                               }}
                               error={
                                 file.path && !file.path.startsWith('/workspace/')
