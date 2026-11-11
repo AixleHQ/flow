@@ -180,7 +180,7 @@ export function SkillsContent({
             >
               <Group justify="space-between" align="flex-start" wrap="nowrap" mb={8}>
                 <Group gap={8} align="center" style={{ minWidth: 0, flex: 1 }}>
-                  <Text fz={15} fw={600} c="var(--app-text-primary)" ff="JetBrains Mono, monospace" truncate>
+                  <Text fz={15} fw={600} c="var(--app-text-primary)" ff="monospace" truncate>
                     {skill.name}
                   </Text>
                   {skill.origin === 'manual' && (
@@ -248,7 +248,7 @@ export function SkillsContent({
                 style={{ borderTop: '1px solid var(--app-border-default)' }}
               >
                 <Group gap={4} align="center">
-                  <Text fz={11} c="dimmed" ff="JetBrains Mono, monospace">
+                  <Text fz={11} c="dimmed" ff="monospace">
                     {skill.source ?? 'written here'}
                   </Text>
                   {skill.registryUrl && (

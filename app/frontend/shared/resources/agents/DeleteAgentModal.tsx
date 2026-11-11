@@ -31,7 +31,7 @@ export const DeleteAgentModal: FC<DeleteAgentModalProps> = ({ opened, onClose, a
             <Text fw={500} c="var(--app-text-primary)">
               {agent.title}
             </Text>
-            <Text fz={12} ff="JetBrains Mono, monospace" c="dimmed">
+            <Text fz={12} ff="monospace" c="dimmed">
               {agent.name}
             </Text>
           </Box>

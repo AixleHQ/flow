@@ -291,7 +291,7 @@ export const SkillsCatalogModal: FC<SkillsCatalogModalProps> = ({
                         </Badge>
                       </Tooltip>
                     )}
-                    <Text fz={11} c="dimmed" ff="JetBrains Mono, monospace" truncate>
+                    <Text fz={11} c="dimmed" ff="monospace" truncate>
                       {skill.source}
                     </Text>
                   </Group>

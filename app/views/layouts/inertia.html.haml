@@ -24,9 +24,7 @@
           }
         })();
 
-    %link{rel: "preconnect", href: "https://fonts.googleapis.com"}/
-    %link{rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: true}/
-    %link{href: "https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Figtree:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Spline+Sans+Mono:wght@400;500&display=swap", rel: "stylesheet"}/
+    = render "shared/web_fonts", families: %w[Inter:wght@400..700 JetBrains+Mono:wght@400;500;700 Spline+Sans+Mono:wght@400;500]
 
     %link{rel: "icon", href: "/favicon.ico", sizes: "any"}
     %link{rel: "icon", type: "image/svg+xml", href: "/icon.svg"}

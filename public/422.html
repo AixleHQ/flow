@@ -10,7 +10,11 @@
     <meta name="viewport" content="initial-scale=1, width=device-width">
     <meta name="robots" content="noindex, nofollow">
 
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
     <style>
+    @font-face { font-family: "Inter Fallback"; src: local("Arial"), local("ArialMT"); ascent-override: 90.44%; descent-override: 22.52%; line-gap-override: 0%; size-adjust: 107.12%; }
 
       *, *::before, *::after {
         box-sizing: border-box;
@@ -28,7 +32,7 @@
         background: #FFF;
         color: #261B23;
         display: grid;
-        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Aptos, Roboto, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+        font-family: Inter, "Inter Fallback", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Aptos, Roboto, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
         font-size: clamp(1rem, 2.5vw, 2rem);
         -webkit-font-smoothing: antialiased;
         font-style: normal;

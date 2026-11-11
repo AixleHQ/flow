@@ -1405,7 +1405,7 @@ function CopyRow({ label, value }: { label: string; value: string }) {
           style={{
             flex: 1,
             fontSize: 12,
-            fontFamily: 'monospace',
+            fontFamily: 'var(--app-font-mono)',
             color: 'var(--app-text-secondary)',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -1478,7 +1478,7 @@ function WebhookCreatedView({
           <pre
             style={{
               fontSize: 12,
-              fontFamily: 'monospace',
+              fontFamily: 'var(--app-font-mono)',
               whiteSpace: 'pre',
               overflowX: 'auto',
               background: 'var(--app-bg-paper)',

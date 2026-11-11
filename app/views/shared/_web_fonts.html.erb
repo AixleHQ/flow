@@ -1,0 +1,8 @@
+<%# locals: (families:) -%>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?<%= families.map { |family| "family=#{family}" }.join("&") %>&display=swap" rel="stylesheet">
+<%# Arial resized to Inter's metrics (the values next/font ships for Inter), so text
+    drawn before Inter arrives already has Inter's line boxes and swapping does not
+    shift the layout. -%>
+<style>@font-face{font-family:"Inter Fallback";src:local("Arial"),local("ArialMT");ascent-override:90.44%;descent-override:22.52%;line-gap-override:0%;size-adjust:107.12%}</style>

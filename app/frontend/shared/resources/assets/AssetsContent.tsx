@@ -813,7 +813,7 @@ export function AssetsContent({
               >
                 <Stack gap={4}>
                   {uploadedFiles.map((f, i) => (
-                    <Text key={i} fz={13} ff="JetBrains Mono, monospace">
+                    <Text key={i} fz={13} ff="monospace">
                       {f.name}
                     </Text>
                   ))}
@@ -942,7 +942,7 @@ export function AssetsContent({
                 {assetVersions.map((v) => (
                   <Table.Tr key={v.id}>
                     <Table.Td>
-                      <Text fz={13} ff="JetBrains Mono, monospace">
+                      <Text fz={13} ff="monospace">
                         v{v.version}
                       </Text>
                     </Table.Td>
@@ -950,7 +950,7 @@ export function AssetsContent({
                       <Text fz={13}>{v.createdAt ? formatDateMedium(v.createdAt) : '—'}</Text>
                     </Table.Td>
                     <Table.Td>
-                      <Text fz={13} ff="JetBrains Mono, monospace" c="dimmed">
+                      <Text fz={13} ff="monospace" c="dimmed">
                         {formatFileSize(v.fileSize ?? null)}
                       </Text>
                     </Table.Td>
@@ -1275,12 +1275,12 @@ function FileRow({
         </Table.Td>
       )}
       <Table.Td>
-        <Text fz={13} ff="JetBrains Mono, monospace" c="dimmed">
+        <Text fz={13} ff="monospace" c="dimmed">
           {formatFileSize(asset.latestVersion?.fileSize ?? null)}
         </Text>
       </Table.Td>
       <Table.Td>
-        <Text fz={13} ff="JetBrains Mono, monospace">
+        <Text fz={13} ff="monospace">
           v{asset.latestVersion?.version ?? 1}
           {asset.versionsCount > 1 && (
             <Text component="span" fz={11} c="dimmed" ml={4}>

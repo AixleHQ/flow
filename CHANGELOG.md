@@ -33,6 +33,10 @@ governance, community health — carry none.
   without finishing is reminded to finish or continue, as Kiro steps are.
 
 ### Changed
+- The app, the admin, the public site and emails use Inter for text and
+  headings in place of Figtree and Hanken Grotesk; code keeps its monospace
+  faces. Emails show Inter in Apple Mail, Outlook for Mac, Thunderbird and
+  Samsung Mail, and the system font elsewhere.
 - **Tasks**: workflow steps listing the board (`board_list_tasks`) and agents
   using personal access (`list_board_tasks`) no longer see archived tasks, the
   same as on the board. Pass `include_archived: true` to list them as well.
