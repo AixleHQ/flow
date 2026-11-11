@@ -343,6 +343,65 @@ failed.
   their PDFs, archives and logs cannot be read through the API.
   [Files](/docs/trackers#github) has the details.
 
+## Acting as yourself
+
+By default an agent's commits are authored as *Aixle Flow* and its pull requests
+are opened by the GitHub App, so a squash merge lands on the base branch as the
+App's bot. To have work in your own name, connect your GitHub account and let
+agents use it.
+
+**Connect.** Open **Profile → Connected accounts** and press **Connect GitHub**.
+GitHub asks you to authorize the Aixle App; Flow keeps the connection fresh for
+you. **Disconnect** revokes the authorization on GitHub and clears your
+permissions below. If you revoke the App on GitHub instead, the card shows
+*Needs reconnect*.
+
+**Allow it, per project.** The same tab lists your projects, with two switches
+for each. Both start off.
+
+- **In my tasks:** agents may act as you in sessions you own.
+- **In tasks that aren't mine:** an agent working for someone else in that project
+  may take your token, when it names you.
+
+**Give the agent the tool.** Whoever configures a step, a workflow or a session
+adds the tool from the picker, under *GitHub as a user*. Flow never adds them on
+its own.
+
+| Tool | What it does |
+| --- | --- |
+| `github_user_token` | A token for the person the session runs for, and the identity to commit with |
+| `github_user_token_for` | The same for another member of the company, given their `user_id` (from `board_list_members` or a task's `assignee_id`) |
+
+Each tool returns the commit identity (`login`, `github_id`, `name` and the
+noreply `email`) and one token per repository owner among the session's GitHub
+App repositories. A token is limited to those repositories and to *Contents* and
+*Pull requests* write, so a push anywhere else is refused. It expires within
+hours; the agent asks again. Repositories connected with a personal access token
+are listed under `skipped`. The token is masked in session logs, but it does
+enter the agent's context, so tell the agent not to print it.
+
+The tool answers with a plain error when the person has not connected an account,
+has not allowed it in this project, is not a member of the project, or the
+session has no user. The session's user is the person whose credential the
+session runs on.
+
+Flow decides none of how the token is used. Your instructions do, for example:
+
+```bash
+# token, email and name come from github_user_token
+export GIT_AUTHOR_NAME="$NAME" GIT_AUTHOR_EMAIL="$EMAIL" \
+       GIT_COMMITTER_NAME="$NAME" GIT_COMMITTER_EMAIL="$EMAIL"
+git commit -s -m "feat: ..."
+git -c credential.helper= \
+    -c credential.helper='!f() { echo username=x-access-token; echo "password=$TOKEN"; }; f' \
+    push origin HEAD:feature/x
+GH_TOKEN="$TOKEN" gh pr create -R owner/repo --base develop --head feature/x --title "..." --body "..."
+```
+
+When the session's repositories belong to several owners, pick the token for the
+owner of the remote you push to. With the pull request opened by you, a squash
+merge in GitHub's UI is attributed to you.
+
 ## Tools
 
 | Tool | Who has it | What it is for |
@@ -350,6 +409,8 @@ failed.
 | `refresh_github_token` | Any session with a GitHub repository attached | Re-applies the credential helper to the session's GitHub checkouts. For a push or fetch that fails with a 403, *Invalid username or password* or *could not read Username*; retry afterwards, no re-clone needed |
 | `board_create_gate` | Workflow-step sessions | Creates a CI gate (above) |
 | `board_list_gates` | Workflow-step sessions | What a task is waiting on, its CI verdict so far and, for a stale gate, why |
+| `github_user_token` | Added by hand from the picker | A scoped token and the commit identity of the session's user ([Acting as yourself](#acting-as-yourself)) |
+| `github_user_token_for` | Added by hand from the picker | The same for a named member who allowed it |
 
 `refresh_github_token` is not in the tool picker; Flow adds it to every session
 that holds a GitHub checkout. The two board tools come with every workflow-step
@@ -381,6 +442,13 @@ the operator registers one GitHub App for the whole deployment:
    permissions from them. Flow ignores every other event.
 5. If organizations other than the app's owner will install it, make it
    installable on any account.
+   To let people connect their own accounts ([Acting as yourself](#acting-as-yourself)),
+   also add `https://<your domain>/oauth/callback` as a second callback URL,
+   **after** the setup URL above: install-time authorization goes to the first
+   one. Turn **Expire user authorization tokens** on, and set
+   `GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET`. GitHub sends the App
+   `github_app_authorization` events without a subscription; Flow follows a
+   revocation from them.
 6. Generate a private key, and configure Flow:
 
    ```bash

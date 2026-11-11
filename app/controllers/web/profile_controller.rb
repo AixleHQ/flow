@@ -63,6 +63,40 @@ class Web::ProfileController < Web::ApplicationController
     }
   end
 
+  # The accounts the person connected and what agents may do with them in each
+  # project of the current company (docs/design/github-user-identity.md §4.2).
+  def connections
+    github = Github::UserConnection::PROVIDER
+    credential = OauthCredential.for_owner(current_user).where(provider: github).order(updated_at: :desc).first
+    render inertia: "Profile/Connections", props: {
+      available: Github::UserConnection.configured?,
+      github: -> { credential && UserConnectionResource.new(credential).to_h },
+      consents: -> { consent_rows(github).map { |consent| ActAsConsentResource.new(consent).to_h } }
+    }
+  end
+
+  def disconnect
+    return head :not_found unless params[:provider] == Github::UserConnection::PROVIDER
+
+    Github::UserConnection.disconnect!(current_user)
+    redirect_to connections_profile_path, notice: "GitHub disconnected"
+  end
+
+  def update_act_as_consent
+    return head :not_found unless params[:provider] == Github::UserConnection::PROVIDER
+
+    project = current_company && Project.for_user(current_user).where(company: current_company)
+                                        .find_by(id: params[:project_id])
+    return head :not_found unless project
+
+    consent = ActAsConsent.find_or_initialize_by(user: current_user, project: project, company: project.company,
+                                                 provider: params[:provider])
+    consent.in_own_tasks = ActiveModel::Type::Boolean.new.cast(params[:in_own_tasks]) if params.key?(:in_own_tasks)
+    consent.in_others_tasks = ActiveModel::Type::Boolean.new.cast(params[:in_others_tasks]) if params.key?(:in_others_tasks)
+    consent.save!
+    render json: ActAsConsentResource.new(consent).to_h
+  end
+
   def mcp
     render inertia: "Profile/Mcp", props: {
       mcp: {
@@ -199,6 +233,19 @@ class Web::ProfileController < Web::ApplicationController
   end
 
   private
+
+  # One row per project of the current company the person can reach; a project
+  # without a stored row is shown with both switches off.
+  def consent_rows(provider)
+    return [] unless current_company
+
+    projects = Project.for_user(current_user).where(company: current_company).order(:name)
+    stored = ActAsConsent.where(user: current_user, provider: provider).index_by(&:project_id)
+    projects.map do |project|
+      stored[project.id] || ActAsConsent.new(user: current_user, project: project, company: project.company,
+                                             provider: provider)
+    end
+  end
 
   def sign_in_methods
     current_user.user_identities.includes(:identity_provider).order(:created_at).map do |identity|

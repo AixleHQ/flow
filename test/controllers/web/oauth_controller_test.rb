@@ -673,4 +673,85 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     assert_equal %w[authorization_code refresh_token], doc["grant_types"]
     assert_equal %w[code], doc["response_types"]
   end
+
+  # --- GitHub: a user's own account (docs/design/github-user-identity.md §4.1) ---
+
+  GITHUB_TOKEN_ENDPOINT = "https://github.com/login/oauth/access_token"
+
+  def stub_github!(token_body: { access_token: "ghu_live", refresh_token: "ghr_live", expires_in: 28_800 },
+                   profile: { id: 123, login: "octo-user", name: "Octo User", avatar_url: "https://a.test/123" })
+    Settings.stubs(:github).returns(OpenStruct.new(client_id: "Iv1.cid", client_secret: "gh-secret"))
+    stub_request(:post, GITHUB_TOKEN_ENDPOINT).to_return(status: 200, body: token_body.to_json,
+                                                          headers: { "Content-Type" => "application/json" })
+    stub_request(:get, "https://api.github.com/user")
+      .to_return(status: profile ? 200 : 401, body: profile.to_json, headers: { "Content-Type" => "application/json" })
+  end
+
+  test "connecting GitHub for a user stores the credential and the GitHub identity" do
+    stub_github!
+    state = build_state(owner: @user, provider: "github", return_to: "/profile/connections")
+
+    assert_difference("OauthCredential.count", 1) do
+      get oauth_callback_path, params: { code: "auth-code-1", state: state }
+    end
+
+    assert_redirected_to "/profile/connections"
+    credential = OauthCredential.find_by!(owner: @user, provider: "github")
+    assert_equal "ghu_live", credential.access_token
+    assert_equal "octo-user", credential.metadata.dig("github_user", "login")
+    assert_equal 123, credential.metadata.dig("github_user", "id")
+  end
+
+  test "a failed identity fetch leaves no GitHub credential behind" do
+    stub_github!(profile: nil)
+    state = build_state(owner: @user, provider: "github", return_to: "/profile/connections")
+
+    assert_no_difference("OauthCredential.count") do
+      get oauth_callback_path, params: { code: "auth-code-1", state: state }
+    end
+
+    assert_equal "Failed to complete connection", flash[:alert]
+  end
+
+  test "GitHub answering 200 with an error stores nothing" do
+    stub_github!(token_body: { error: "bad_verification_code", error_description: "expired" })
+    state = build_state(owner: @user, provider: "github", return_to: "/profile/connections")
+
+    assert_no_difference("OauthCredential.count") do
+      get oauth_callback_path, params: { code: "stale", state: state }
+    end
+
+    assert_equal "Failed to complete connection", flash[:alert]
+  end
+
+  test "a GitHub connection cannot belong to a company" do
+    stub_github!
+    state = build_state(owner: @company, provider: "github")
+
+    assert_no_difference("OauthCredential.count") do
+      get oauth_callback_path, params: { code: "auth-code-1", state: state }
+    end
+
+    assert_equal "Not permitted", flash[:alert]
+  end
+
+  test "authorize for GitHub refuses a company owner and redirects a user owner to github.com" do
+    stub_github!
+
+    post oauth_authorize_path("github"), params: { owner_type: "Company", owner_id: @company.id }
+    assert_redirected_to root_path
+
+    post oauth_authorize_path("github"), params: { owner_type: "User", owner_id: @user.id, return_to: "/profile/connections" }
+    assert_match(%r{\Ahttps://github\.com/login/oauth/authorize\?}, response.location)
+  end
+
+  test "the callback refuses another user's id as the GitHub owner" do
+    stub_github!
+    other = create(:user, :employee, company: @company)
+    state = build_state(owner: other, provider: "github")
+
+    assert_no_difference("OauthCredential.count") do
+      get oauth_callback_path, params: { code: "auth-code-1", state: state }
+    end
+  end
 end

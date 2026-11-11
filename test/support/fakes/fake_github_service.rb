@@ -214,4 +214,55 @@ module FakeGithub
       @calls.last
     end
   end
+
+  # Mirrors Github::UserTokenService — the calls made on a user's behalf. The
+  # canned shapes are the ones test/services/github/user_token_service_test.rb
+  # pins the real adapter to.
+  class UserTokenService
+    DEFAULT_PROFILE = { id: 123, login: "octo-user", name: "Octo User",
+                        avatar_url: "https://avatars.githubusercontent.com/u/123" }.freeze
+
+    attr_reader :calls
+
+    # @param tokens [Array<String>] handed out in order by #scoped_token; the last repeats
+    # @param scoped_error [Exception, nil] raised by #scoped_token when set
+    # @param profile [Hash] what #user returns
+    # @param profile_error [Exception, nil] raised by #user when set
+    def initialize(tokens: [ "ghu_fake_scoped_token" ], scoped_error: nil, profile: DEFAULT_PROFILE,
+                   profile_error: nil, revoke_error: nil)
+      @tokens = tokens.dup
+      @scoped_error = scoped_error
+      @profile = profile.dup
+      @profile_error = profile_error
+      @revoke_error = revoke_error
+      @calls = []
+    end
+
+    def scoped_token(user_token:, target:, repositories:, permissions:)
+      @calls << { method: :scoped_token, user_token: user_token, target: target, repositories: repositories,
+                  permissions: permissions }
+      raise @scoped_error if @scoped_error
+
+      token = @tokens.size > 1 ? @tokens.shift : @tokens.first
+      { token: token, expires_at: 8.hours.from_now, token_last_eight: token.last(8) }
+    end
+
+    def user(user_token)
+      @calls << { method: :user, user_token: user_token }
+      raise @profile_error if @profile_error
+
+      @profile.dup
+    end
+
+    def revoke_grant(user_token)
+      @calls << { method: :revoke_grant, user_token: user_token }
+      raise @revoke_error if @revoke_error
+
+      true
+    end
+
+    def called?(method_name) = @calls.any? { |call| call[:method] == method_name }
+
+    def calls_to(method_name) = @calls.select { |call| call[:method] == method_name }
+  end
 end

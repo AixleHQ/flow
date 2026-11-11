@@ -30,6 +30,18 @@ module Oauth
         token_endpoint: "https://backboard.railway.app/oauth/token",
         scopes: "read",
         settings_key: :railway_oauth
+      },
+      # The GitHub App's user OAuth flow (docs/design/github-user-identity.md §4.1).
+      # A GitHub App takes its permissions from the App, so no scopes are requested.
+      # A connection is a person's own account: only a User may own one.
+      "github" => {
+        issuer: "https://github.com",
+        authorization_endpoint: "https://github.com/login/oauth/authorize",
+        token_endpoint: "https://github.com/login/oauth/access_token",
+        scopes: "",
+        settings_key: :github,
+        owner_types: %w[User],
+        after_connect: "Github::UserConnection"
       }
     }.freeze
 
@@ -45,6 +57,22 @@ module Oauth
 
     def provider_names
       REGISTRY.keys
+    end
+
+    # Whether `owner` may hold a connection to this provider. Providers that do not
+    # restrict it (Sentry, Railway) take any owner the controller already authorized.
+    def owner_allowed?(provider, owner)
+      allowed = REGISTRY.dig(provider.to_s, :owner_types)
+      allowed.nil? || allowed.include?(owner.class.name)
+    end
+
+    # Runs the provider's hook, if it has one, once a credential is stored. The hook
+    # may raise Oauth::TokenExchangeError to fail the connection.
+    def after_connect(provider, credential)
+      hook = REGISTRY.dig(provider.to_s, :after_connect)
+      return unless hook
+
+      hook.constantize.record_identity!(credential)
     end
 
     # Reconcile and return the OauthClient for a static provider.

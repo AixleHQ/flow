@@ -1482,6 +1482,21 @@ export function securityProfilePath(options?: object): string {
   return "/" + "profile" + "/" + "security" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /profile/connections(.:format) */
+export function connectionsProfilePath(options?: object): string {
+  return "/" + "profile" + "/" + "connections" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /profile/connections/:provider(.:format) */
+export function disconnectProfilePath(provider: ScalarType, options?: object): string {
+  return "/" + "profile" + "/" + "connections" + "/" + provider + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["provider","format"]);
+}
+
+/** /profile/act_as_consents(.:format) */
+export function actAsConsentsProfilePath(options?: object): string {
+  return "/" + "profile" + "/" + "act_as_consents" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /profile(.:format) */
 export function profilePath(options?: object): string {
   return "/" + "profile" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);

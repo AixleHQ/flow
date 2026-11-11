@@ -47,6 +47,7 @@ class Web::OauthController < Web::ApplicationController
 
     owner = resolve_owner(params[:owner_type], params[:owner_id])
     return redirect_to(root_path, alert: "Not permitted") unless owner && may_connect?(owner)
+    return redirect_to(root_path, alert: "Not permitted") unless Oauth::Providers.owner_allowed?(provider, owner)
 
     client = Oauth::Providers.client_for(provider)
 
@@ -124,6 +125,7 @@ class Web::OauthController < Web::ApplicationController
       end
     else
       return redirect_to(return_to, alert: "Unknown OAuth provider") unless Oauth::Providers.known?(provider)
+      return redirect_to(return_to, alert: "Not permitted") unless Oauth::Providers.owner_allowed?(provider, owner)
 
       client = Oauth::Providers.client_for(provider)
     end
@@ -148,7 +150,7 @@ class Web::OauthController < Web::ApplicationController
     resp = exchange_code!(client, code: params[:code].to_s,
                           code_verifier: consumed["code_verifier"], resource: payload["resource"])
 
-    OauthCredential.upsert_from_token!(
+    credential = OauthCredential.upsert_from_token!(
       owner: owner,
       oauth_client: client,
       provider: provider,
@@ -157,6 +159,7 @@ class Web::OauthController < Web::ApplicationController
       connected_by: current_user,
       token_response: resp
     )
+    Oauth::Providers.after_connect(provider, credential) unless provider.start_with?("mcp:")
     redirect_to return_to, notice: "Connected"
   rescue Oauth::TokenExchangeError, Encryptable::DecryptionError => e
     # (7) never logs tokens or the code — only class name / HTTP status.
@@ -415,7 +418,11 @@ class Web::OauthController < Web::ApplicationController
     res = http.request(req)
     raise Oauth::TokenExchangeError, "status=#{res.code}" unless res.is_a?(Net::HTTPSuccess)
 
-    JSON.parse(res.body)
+    parsed = JSON.parse(res.body)
+    # GitHub answers a bad code with HTTP 200 and an `error` field.
+    raise Oauth::TokenExchangeError, "no access token in the response" unless Oauth::TokenService.token_granted?(parsed)
+
+    parsed
   rescue JSON::ParserError, SocketError, Net::OpenTimeout, Net::ReadTimeout, SafeHttp::UnsafeUrl => e
     raise Oauth::TokenExchangeError, e.class.name
   end

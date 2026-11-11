@@ -1,0 +1,67 @@
+# frozen_string_literal: true
+
+module Github
+  # A user's own GitHub account, connected through the App's user OAuth flow and
+  # stored as an OauthCredential owned by the user
+  # (docs/design/github-user-identity.md §2.1, §4.1).
+  module UserConnection
+    PROVIDER = "github"
+    IDENTITY_TTL = 24.hours
+
+    module_function
+
+    def configured?
+      Settings.github.client_id.present? && Settings.github.client_secret.present?
+    end
+
+    def credential_for(user)
+      OauthCredential.for_owner(user).where(provider: PROVIDER).where.not(status: :revoked).order(updated_at: :desc).first
+    end
+
+    # Called by the OAuth callback right after the token is stored. A connection
+    # without an identity is useless, so a failure here destroys the credential.
+    def record_identity!(credential)
+      profile = UserTokenService.new.user(credential.access_token)
+      store_identity!(credential, profile)
+    rescue UserTokenService::Error
+      credential.destroy!
+      raise Oauth::TokenExchangeError, "github identity unavailable"
+    end
+
+    # { "id", "login", "name", "avatar_url" } for a connected credential. Refetched
+    # when older than IDENTITY_TTL so a renamed account does not commit under its old login.
+    def identity_for(credential)
+      stored = credential.metadata.to_h["github_user"]
+      fetched_at = stored && Time.zone.parse(stored["fetched_at"].to_s)
+      return stored if stored && fetched_at && fetched_at > IDENTITY_TTL.ago
+
+      store_identity!(credential, UserTokenService.new.user(credential.access_token))
+    rescue UserTokenService::Error
+      stored
+    end
+
+    def disconnect!(user)
+      credentials = OauthCredential.for_owner(user).where(provider: PROVIDER)
+      credentials.each do |credential|
+        revoke_grant(credential)
+        credential.destroy!
+      end
+      ActAsConsent.where(user_id: user.id, provider: PROVIDER).delete_all
+    end
+
+    def store_identity!(credential, profile)
+      identity = {
+        "id" => profile[:id], "login" => profile[:login], "name" => profile[:name],
+        "avatar_url" => profile[:avatar_url], "fetched_at" => Time.current.iso8601
+      }
+      credential.update!(metadata: credential.metadata.to_h.merge("github_user" => identity))
+      identity
+    end
+
+    def revoke_grant(credential)
+      UserTokenService.new.revoke_grant(credential.access_token)
+    rescue UserTokenService::Error, Encryptable::DecryptionError => e
+      Rails.logger.warn("[Github::UserConnection] could not revoke the grant: #{e.class}")
+    end
+  end
+end
