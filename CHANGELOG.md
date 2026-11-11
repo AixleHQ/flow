@@ -18,7 +18,8 @@ governance, community health — carry none.
   the one-time pairing code an Insights owner creates. Each project then chooses
   to send its usage — model calls, tokens and cost — and, as a separate switch,
   its prompts and tool calls (names and arguments; never replies or tool
-  outputs). Sessions are sent when they end and retried for a week; the card
+  outputs). Sessions are sent when they end and retried for a week, and a
+  project switched on also sends its sessions of the last 30 days; the card
   shows what was sent and the last problem. Operators: set `INSIGHTS_URL`,
   `INSIGHTS_DEPLOYMENT_ID` and `INSIGHTS_DEPLOYMENT_SECRET` (issued by Insights);
   the integration stays hidden until all three are set.

@@ -35,6 +35,7 @@ class Web::Company::Projects::InsightsController < Web::Company::Projects::Appli
     current_project.update!(settings: current_project.settings.to_h.merge(
       "insights" => { "export" => export == true, "share_prompts" => export == true && share == true, "project_id" => mapped }
     ))
+    Insights::BackfillJob.perform_later(current_project.id) if export == true && current["export"] != true
     redirect_to integrations_page, notice: "Insights settings saved"
   end
 

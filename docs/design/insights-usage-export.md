@@ -480,7 +480,7 @@ organization.
 | 2 — agent activity | §3a: `agent_prompts` and `agent_tool_calls`, the activity events of Claude Code, Codex, Gemini CLI and Copilot CLI, step instructions, the container switches, masking, the prompt-sharing project setting. |
 | 3 — connection | `Integration` provider `insights`, the pairing screen, the project switches and mapping, deployment settings (`INSIGHTS_URL`, deployment id and secret). |
 | 4 — export | `insights_session_exports`, the sender, `insights_export_workflow`, delivery state on the integration page. |
-| 5 — backfill | Optional export of a project's past sessions when it is enabled (§12). |
+| 5 — backfill | When a project's export is switched on, its sessions that ended in the last 30 days are materialized and queued (`Insights::Backfill`), left to the cron so a long history drains at the sweep's pace. |
 
 Phases 0 and 1 stand on their own: they fix cost and per-call detail in Flow itself.
 
@@ -518,7 +518,7 @@ Phases 0 and 1 stand on their own: they fix cost and per-call detail in Flow its
    them incrementally instead?
 2. Usage of workflow runs lands on the person whose credential ran them. Should Insights
    show it apart from that person's own interactive use?
-3. Backfill when a project is enabled: none, or a window (30 days)?
+3. ~~Backfill when a project is enabled: none, or a window?~~ 30 days (phase 5); the contract accepts records up to 90 days old.
 4. Is an explicit project mapping required, or is the repository remote enough by default?
 5. Kiro reports credits, never tokens. Are cost-only rows acceptable in Insights?
 6. Which side owns reconciliation with provider-synced usage (§9, item 7)?

@@ -16,7 +16,8 @@ module Insights
     # Raised for a chunk Insights refused, so the report names what went wrong.
     class Rejected < StandardError; end
 
-    def self.enqueue(terminal_session)
+    # send_now: false leaves the row to the cron (Insights::Backfill).
+    def self.enqueue(terminal_session, send_now: true)
       project = terminal_session.project
       return unless project&.exports_to_insights?
 
@@ -28,7 +29,8 @@ module Insights
 
       export.update!(integration: project.insights_connection, state: "pending", record_count: total,
                      attempts: 0, next_attempt_at: nil, last_error: nil)
-      ActiveRecord.after_all_transactions_commit { ExportSessionJob.perform_later(export.id) }
+      ActiveRecord.after_all_transactions_commit { ExportSessionJob.perform_later(export.id) } if send_now
+      export
     end
 
     def self.record_count(terminal_session, project)

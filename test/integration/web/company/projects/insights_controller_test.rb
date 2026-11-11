@@ -47,6 +47,19 @@ class Web::Company::Projects::InsightsControllerTest < ActionDispatch::Integrati
     assert_equal false, @project.reload.insights_settings["share_prompts"] # rubocop:disable Minitest/RefuteFalse
   end
 
+  test "switching export on sends the project's recent past, once" do
+    connect_to_insights!(@project)
+    @project.update!(settings: { "insights" => { "export" => false } })
+    sign_in_as(@admin)
+
+    assert_enqueued_with(job: Insights::BackfillJob, args: [ @project.id ]) do
+      patch company_project_insights_path(@project), params: { export: true }
+    end
+    assert_no_enqueued_jobs(only: Insights::BackfillJob) do
+      patch company_project_insights_path(@project), params: { share_prompts: true }
+    end
+  end
+
   test "a refused code comes back against the field" do
     sign_in_as(@admin)
     @insights.fail_next(:claim, Insights::Client::Error.new("invalid_code", status: 422, code: "invalid_code"))
