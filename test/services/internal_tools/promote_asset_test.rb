@@ -16,9 +16,11 @@ class InternalTools::PromoteAssetTest < ActiveSupport::TestCase
 
     step_run = @step_run
     project = @project
+    user = @user
     @session = Object.new
     @session.define_singleton_method(:project) { project }
     @session.define_singleton_method(:step_run) { step_run }
+    @session.define_singleton_method(:user) { user }
   end
 
   def run_tool(params)
@@ -37,6 +39,27 @@ class InternalTools::PromoteAssetTest < ActiveSupport::TestCase
     assert_equal "project", payload["scope"]
     assert_equal 1, payload["version"]
     assert_equal 1, asset.versions.count
+  end
+
+  test "the promoter is the session's user, not the run's" do
+    session_user = create(:user, company: @company)
+    @session.define_singleton_method(:user) { session_user }
+
+    result = run_tool(name: "report.md")
+
+    assert_equal 0, result[:exit_code]
+    asset = Asset.find(JSON.parse(result[:stdout])["asset_id"])
+    assert_equal session_user, asset.created_by
+    assert_equal session_user, asset.versions.last.uploaded_by
+  end
+
+  test "answers with an error when the session has no user" do
+    @session.define_singleton_method(:user) { nil }
+
+    result = run_tool(name: "report.md")
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/promoting user/, result[:stderr])
   end
 
   test "appends a new version when the project asset already exists" do

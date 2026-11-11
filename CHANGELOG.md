@@ -62,6 +62,12 @@ governance, community health — carry none.
   terminal log keeps just its last screen.
 
 ### Changed
+- **Tasks**: a session acts as one person, the user it runs as. The agent's board
+  comments, attachments, moves and gates, and its tracker uploads, are recorded
+  under that person. On a card assigned to someone else they used to name the
+  card's assignee; reassigning a card mid-run no longer changes who the agent
+  acts as. After an agent's move, the next run goes to the card's assignee if
+  they can own runs, otherwise to the session's user.
 - **Company settings**: the Billing tab lists every subscription the workspace has
   had. The one paying now — the card, or the AWS Marketplace subscription — shows its
   billing method, current period, next invoice and the usage so far; the ones that

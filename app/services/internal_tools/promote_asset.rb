@@ -29,7 +29,7 @@ module InternalTools
       wra = find_workflow_run_asset
       return error("No workflow output asset named '#{params[:name]}' found in this run") unless wra
 
-      promoter = workflow_run&.user
+      promoter = session_user
       return error("Cannot determine the promoting user") unless promoter
 
       if Asset.invalid_folder?(params[:folder])

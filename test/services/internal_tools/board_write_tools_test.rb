@@ -14,6 +14,7 @@ class InternalTools::BoardWriteToolsTest < ActiveSupport::TestCase
     @task = create(:board_task, board: @board, board_column: @col1, title: "Test task")
 
     workflow = create(:workflow, scope: @project)
+    @workflow = workflow
     step = create(:step, workflow: workflow)
     @workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user, board_task: @task)
     @step_run = create(:step_run, workflow_run: @workflow_run, step: step)
@@ -22,6 +23,12 @@ class InternalTools::BoardWriteToolsTest < ActiveSupport::TestCase
       user: @user, project: @project, mode: "non_interactive", initial_prompt: "do work")
     @step_run.update!(terminal_session: @session)
     @session.reload
+  end
+
+  # A collaborator with no agent credential: they cannot own runs
+  # (TaskService#can_own_runs?), and they are not the session's user.
+  def assignee_on_card
+    @assignee_on_card ||= create(:user, company: @company).tap { |member| @project.add_collaborator(member) }
   end
 
   # === board_create_task ===
@@ -276,15 +283,55 @@ class InternalTools::BoardWriteToolsTest < ActiveSupport::TestCase
     assert_includes comment.tags, "change_log"
   end
 
-  test "board_add_comment uses workflow_run user as fallback author" do
+  test "board_add_comment records the session's user, not the card's assignee" do
+    @task.update!(assignee: assignee_on_card)
+
     result = InternalTools::BoardAddComment.new(
       params: { task_id: @task.id, body: "Note" },
       session: @session
     ).execute
 
     assert_equal 0, result[:exit_code]
-    comment = TaskComment.last
-    assert_equal @user.id, comment.author_id
+    assert_equal @user.id, TaskComment.last.author_id
+  end
+
+  test "board_add_comment answers with an error when the session has no user" do
+    @session.stubs(:user).returns(nil)
+
+    result = InternalTools::BoardAddComment.new(params: { task_id: @task.id, body: "Note" }, session: @session).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_equal 0, @task.task_comments.count
+  end
+
+  test "board_move_task records the move under the session's user, not the card's assignee" do
+    @task.update!(assignee: assignee_on_card)
+
+    result = InternalTools::BoardMoveTask.new(params: { task_id: @task.id, column_name: "In Dev" }, session: @session).execute
+
+    assert_equal 0, result[:exit_code]
+    activity = BoardActivity.where(board_task: @task, event_type: "task_moved").last
+    assert_equal @user.id, activity.actor_id
+  end
+
+  test "board_move_task fires the next run for the session's user when the assignee cannot own runs" do
+    @task.update!(assignee: assignee_on_card)
+    ColumnWorkflowBinding.create!(board_column: @col2, workflow: @workflow, trigger_mode: :auto, cooldown_seconds: 0)
+    WorkflowService.expects(:enqueue).once.with(has_entries(user: @user))
+                   .returns(create(:workflow_run, workflow: @workflow, project: @project, user: @user))
+
+    result = InternalTools::BoardMoveTask.new(params: { task_id: @task.id, column_name: "In Dev" }, session: @session).execute
+
+    assert_equal 0, result[:exit_code]
+  end
+
+  test "board_move_task answers with an error when the session has no user" do
+    @session.stubs(:user).returns(nil)
+
+    result = InternalTools::BoardMoveTask.new(params: { task_id: @task.id, column_name: "In Dev" }, session: @session).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_equal @col1.id, @task.reload.board_column_id
   end
 
   # === board_attach_asset ===
@@ -305,6 +352,35 @@ class InternalTools::BoardWriteToolsTest < ActiveSupport::TestCase
     assert_equal 0, result[:exit_code]
     data = JSON.parse(result[:stdout])
     assert_equal "qa-desktop.png", data["name"]
+  end
+
+  test "board_attach_asset records the session's user, not the card's assignee" do
+    @task.update!(assignee: assignee_on_card)
+    @session.update!(container_id: "test-container-123")
+    runtime = mock("runtime")
+    runtime.expects(:read_file).returns("fake-png-binary-content")
+    ContainerRuntime.stubs(:build).returns(runtime)
+
+    result = InternalTools::BoardAttachAsset.new(
+      params: { task_id: @task.id, file_path: "/workspace/outputs/shot.png", name: "shot.png" },
+      session: @session
+    ).execute
+
+    assert_equal 0, result[:exit_code]
+    assert_equal @user.id, TaskAsset.find(JSON.parse(result[:stdout])["id"]).author_id
+  end
+
+  test "board_attach_asset answers with an error when the session has no user" do
+    @session.update!(container_id: "test-container-123")
+    @session.stubs(:user).returns(nil)
+
+    result = InternalTools::BoardAttachAsset.new(
+      params: { task_id: @task.id, file_path: "/workspace/outputs/shot.png", name: "shot.png" },
+      session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_equal 0, @task.task_assets.count
   end
 
   test "board_attach_asset returns error when file not found in container" do

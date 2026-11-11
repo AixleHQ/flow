@@ -49,6 +49,32 @@ class InternalTools::BoardCreateGateTest < ActiveSupport::TestCase
     assert_equal 42, data["metadata"]["pr_number"]
   end
 
+  test "the gate's creator is the session's user, not the run's" do
+    session_user = create(:user, company: @company)
+    @session.stubs(:user).returns(session_user)
+
+    result = InternalTools::BoardCreateGate.new(
+      params: { task_id: @task.id, gate_type: "github_checks_completed", repo_full_name: @repo_name, pr_number: 9 },
+      session: @session
+    ).execute
+
+    assert_equal 0, result[:exit_code]
+    assert_equal session_user, Gate.find(JSON.parse(result[:stdout])["id"]).creator
+  end
+
+  test "answers with an error when the session has no user" do
+    @session.stubs(:user).returns(nil)
+
+    assert_no_difference -> { Gate.count } do
+      result = InternalTools::BoardCreateGate.new(
+        params: { task_id: @task.id, gate_type: "github_checks_completed", repo_full_name: @repo_name, pr_number: 9 },
+        session: @session
+      ).execute
+
+      assert_equal 1, result[:exit_code]
+    end
+  end
+
   test "creates a persisted Gate record" do
     assert_difference -> { Gate.count }, 1 do
       InternalTools::BoardCreateGate.new(
