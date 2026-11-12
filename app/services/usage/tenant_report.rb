@@ -67,7 +67,8 @@ module Usage
 
     def tenants(company_ids)
       Company.where(id: company_ids).order(:name).map do |company|
-        { id: company.id, name: company.name, **Billing::AccountClassification.of(company) }
+        { id: company.id, name: company.name, created_at: company.created_at.utc.iso8601,
+          **Billing::AccountClassification.of(company) }
       end
     end
   end

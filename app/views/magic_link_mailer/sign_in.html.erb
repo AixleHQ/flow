@@ -1,8 +1,57 @@
-<p>Hello <%= @user.name %>,</p>
+<%
+  font = "font-family:#{email_font};"
+%>
+<!-- Preheader (hidden preview text) -->
+<div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">
+  Your Aixle Flow sign-in link. It works once and expires in <%= @ttl_minutes %> minutes.&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+</div>
 
-<p>Use this link to sign in. It works once and expires in <%= @ttl_minutes %> minutes.</p>
+<!-- Card -->
+<tr>
+  <td style="background-color:#121110; border:1px solid #292726; border-radius:8px; padding:44px 44px 40px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 
-<p><%= link_to "Sign in", @url %></p>
+      <!-- Heading -->
+      <tr>
+        <td role="heading" aria-level="1" style="<%= font %> font-size:20px; line-height:28px; font-weight:600; letter-spacing:-0.01em; color:#d1cfcd; padding-bottom:16px;">
+          Sign in to Aixle Flow
+        </td>
+      </tr>
 
-<p>If you did not ask to sign in, you can ignore this message — the link is useless
-without your mailbox, and nobody has been let in.</p>
+      <!-- Body -->
+      <tr>
+        <td style="<%= font %> font-size:14px; line-height:22px; color:#9f9d9c; padding-bottom:28px;">
+          Hello <strong style="color:#d1cfcd; font-weight:600;"><%= @user.name %></strong>, use the button below to sign in.
+          The link works once and expires in <strong style="color:#d1cfcd; font-weight:600;"><%= @ttl_minutes %> minutes</strong>.
+        </td>
+      </tr>
+
+      <!-- CTA -->
+      <tr>
+        <td style="padding-bottom:28px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td bgcolor="#cf6b4a" style="background-color:#cf6b4a; border-radius:5px;">
+                <a href="<%= @url %>" target="_blank" role="button" aria-label="Sign in"
+                   style="display:inline-block; padding:11px 24px; <%= font %> font-size:14px; font-weight:600; line-height:20px; color:#0a0908; text-decoration:none; border-radius:5px;">
+                  Sign in
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+
+      <!-- Ignore note + fallback link -->
+      <tr>
+        <td style="<%= font %> font-size:12px; line-height:18px; color:#5d5b5a; border-top:1px solid #292726; padding-top:24px;">
+          If you did not ask to sign in, you can ignore this message — the link is useless without
+          your mailbox, and nobody has been let in.<br><br>
+          If the button doesn't work, paste this link into your browser:<br>
+          <a href="<%= @url %>" style="color:#cf6b4a; text-decoration:underline; overflow-wrap:break-word; word-break:break-word;"><%= @url %></a>
+        </td>
+      </tr>
+
+    </table>
+  </td>
+</tr>

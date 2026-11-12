@@ -13,7 +13,14 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-11-12
+
 ### Added
+- **Admin**: the dashboard's companies table shows when each account was created
+  and sorts by it, newest first. Compact filters above the table narrow it by
+  account status, account type, billing method and creation date; each opens as
+  a menu from its button. The filters and the name search also narrow the total
+  row and the tiles, all but People and Projects.
 - **Integrations**: Coder's `coder_prepare_repo` clones GitLab, Bitbucket and
   Azure DevOps repositories onto a workspace, not only GitHub and public ones.
   A personal access token from those connections is handed to the workspace
@@ -62,18 +69,18 @@ governance, community health — carry none.
   terminal log keeps just its last screen.
 
 ### Changed
-- Runner compatibility: the platform now serves and recommends `aixle-runner`
-  0.1.0. It pins the `linux-amd64` and `linux-arm64` binaries of
-  [runner-v0.1.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.1.0)
-  by their SHA-256, and an idle machine below 0.1.0 that has not opted out is
-  offered the update. Runner protocol 1 only, and no minimum runner version.
-  The pins now live in the `runners.release` block of `config/settings.yml`.
 - **Tasks**: a session acts as one person, the user it runs as. The agent's board
   comments, attachments, moves and gates, and its tracker uploads, are recorded
   under that person. On a card assigned to someone else they used to name the
   card's assignee; reassigning a card mid-run no longer changes who the agent
   acts as. After an agent's move, the next run goes to the card's assignee if
   they can own runs, otherwise to the session's user.
+- Runner compatibility: the platform now serves and recommends `aixle-runner`
+  0.1.0. It pins the `linux-amd64` and `linux-arm64` binaries of
+  [runner-v0.1.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.1.0)
+  by their SHA-256, and an idle machine below 0.1.0 that has not opted out is
+  offered the update. Runner protocol 1 only, and no minimum runner version.
+  The pins now live in the `runners.release` block of `config/settings.yml`.
 - **Company settings**: the Billing tab lists every subscription the workspace has
   had. The one paying now — the card, or the AWS Marketplace subscription — shows its
   billing method, current period, next invoice and the usage so far; the ones that
@@ -104,6 +111,9 @@ governance, community health — carry none.
   show each company as it stands now, whatever period is selected.
 
 ### Fixed
+- **Sign-in & onboarding**: the email confirming a new workspace and the sign-in link
+  email are readable again — their text was near-black on the emails' dark background.
+  Both now use the same card and button as every other Aixle Flow email.
 - **Sessions & Runs**: Kiro CLI, Copilot CLI and Grok show their own logo next to
   the agent name wherever the other runtimes do — session lists, run cards, the
   runtime picker, analytics and onboarding — and Antigravity CLI shows its own
@@ -1302,7 +1312,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.11.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.12.0...develop
+[1.12.0]: https://github.com/AixleHQ/flow/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/AixleHQ/flow/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/AixleHQ/flow/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/AixleHQ/flow/compare/v1.8.0...v1.9.0

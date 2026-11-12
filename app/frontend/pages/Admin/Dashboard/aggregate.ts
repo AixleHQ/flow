@@ -27,6 +27,7 @@ export interface TenantSummary {
   sessionsFailed: number;
   billingClass: BillingClass;
   /** Null for a company the report sent no tenant for. */
+  createdAt: string | null;
   accountStatus: AccountStatus | null;
   accountType: AccountType | null;
   billingMethod: BillingMethod | null;
@@ -149,6 +150,7 @@ export function summarize(days: UsageDay[], tenants: Tenant[], range: DayRange):
       sessionsSucceeded: sum((row) => row.sessionsSucceeded),
       sessionsFailed: sum((row) => row.sessionsFailed),
       billingClass: rows[rows.length - 1].billingClass,
+      createdAt: tenant?.createdAt ?? null,
       accountStatus: tenant?.accountStatus ?? null,
       accountType: tenant?.accountType ?? null,
       billingMethod: tenant?.billingMethod ?? null,
