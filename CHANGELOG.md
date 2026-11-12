@@ -14,6 +14,16 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
+- **Integrations**: you can connect your own GitHub account under Profile →
+  Connected accounts and allow agents to act as you, per project. An agent given
+  `github_user_token` gets a token limited to the session's repositories, plus
+  the identity to commit with, so it can push and open pull requests in your
+  name. Self-hosted: add `/oauth/callback` as a Redirect URI on the GitHub App,
+  opt in to user-to-server token expiration, and set `GITHUB_APP_CLIENT_ID` and
+  `GITHUB_APP_CLIENT_SECRET`. The installation check (a new installation connects
+  only for a user who can see it) now has its own setting,
+  `GITHUB_APP_VERIFY_INSTALLATION_OWNER`, off by default: a deployment that relied
+  on the client credentials for that check must set it to `true`.
 - **Tasks**: each file on a task's Assets tab shows when it was uploaded.
 
 ### Changed

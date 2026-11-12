@@ -10,8 +10,8 @@ module Sessions
   # inside the container (docker/base/logger/aixle_redact.py and its JS twin) clean at
   # the point of writing instead; this is what tells them what to look for.
   #
-  # The list is derived from `config_item_accesses`, so it holds exactly the values this
-  # session has already been handed and nothing else. That is what makes writing it into
+  # The list is derived from `config_item_accesses` and `user_token_issuances`, so it holds
+  # exactly the values this session has already been handed and nothing else. That is what makes writing it into
   # the container safe: it tells the container nothing the container did not ask for.
   # The file is written as root where the runtime can do that (Docker) — a Kubernetes
   # exec runs as the agent's own user, so there the agent owns it — and world-readable
@@ -89,11 +89,11 @@ module Sessions
     # rewritten whole, so deriving it from the audit trail makes a republish idempotent
     # and lets it heal a container that missed an earlier write.
     def values
-      ConfigItemAccess
-        .where(terminal_session_id: session.id, item_type: "secret")
-        .includes(:config_item)
-        .filter_map { |access| readable_value(access.config_item) }
-        .uniq
+      config_item_values = ConfigItemAccess
+                           .where(terminal_session_id: session.id, item_type: "secret")
+                           .includes(:config_item)
+                           .filter_map { |access| readable_value(access.config_item) }
+      (config_item_values + UserTokenIssuance.token_values_for(session)).uniq
     end
 
     def readable_value(item)

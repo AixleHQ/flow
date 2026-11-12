@@ -313,22 +313,27 @@ calls `Oauth::Providers.after_connect(provider, credential)` after
 call fails, the callback destroys the new row and shows "Failed to complete
 connection", so a connection never exists without an identity.
 
-No new environment variable. `GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET`
-already exist. The comment above them in `config/settings.yml` changes to say they
-are also required for user connections.
+`GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET` already exist and enable user
+connections. They no longer enable the installation check: that has its own setting,
+`GITHUB_APP_VERIFY_INSTALLATION_OWNER` (off by default), so setting the credentials
+for connections does not refuse installs made through the Setup URL.
 
 ### 4.2 Web routes (profile)
 
 | Route | Action | Purpose |
 |---|---|---|
-| `GET /profile/connections` | `ProfileController#connections` | Inertia page `Profile/Connections` |
-| `DELETE /profile/connections/:provider` | `ProfileController#disconnect` | disconnect |
-| `PATCH /profile/act_as_consents` | `ProfileController#update_act_as_consent` | body `{ projectId, provider, inOwnTasks?, inOthersTasks? }` |
+| `GET /profile/connections` | `Web::Profile::ConnectionsController#index` | Inertia page `Profile/Connections` |
+| `DELETE /profile/connections/:provider` | `Web::Profile::ConnectionsController#destroy` | disconnect |
+| `PATCH /profile/connections/:provider/act_as_consents/:project_id` | `Web::Profile::ActAsConsentsController#update` | body `{ inOwnTasks?, inOthersTasks? }`, JSON booleans only (`422` otherwise) |
 | `POST /oauth/github/authorize` | existing `Web::OauthController#authorize` | `owner_type=User&owner_id=<me>&return_to=/profile/connections` |
 
-These are `member` routes on `resource :profile`, like `update_mcp_tools`.
-`update_act_as_consent` resolves the project with `Project.for_user(current_user)`
-inside `current_company`, and answers 404 when the project is not found there.
+These are `resources` routes under `/profile`, like `sign_in_methods`. The controllers
+turn the request into parameters and call the `UserConnections` service (the page's
+data, disconnecting, updating a consent), then map its named errors to a status:
+`UnknownProvider` and `ProjectNotFound` answer 404. The service resolves the project
+with `Project.for_user_in_company(user, company)` and makes the first consent write
+race-safe. The controller checks the body's shape: a switch that is not a JSON boolean
+answers 422.
 
 **Disconnect** does three things:
 
@@ -338,6 +343,14 @@ inside `current_company`, and answers 404 when the project is not found there.
 3. It deletes the user's `act_as_consents` rows for `github`.
 
 Issuance rows stay, with `oauth_credential_id` nulled.
+
+**Impersonation.** An operator impersonating a person changes nothing about the
+person's GitHub connection, as with passwords, sign-in methods and the MCP token: it
+decides what agents may do as them, and the person never made the choice. While
+`impersonated?`, disconnecting (`ConnectionsController#destroy`) and connecting through
+the OAuth flow (`OauthController#authorize` and `#callback`, GitHub only) redirect with
+an alert, and a consent update answers `403` with an error message. The page itself
+stays readable. Existing per-user MCP connections are left as they are.
 
 Page props, through Alba resources:
 
@@ -508,7 +521,7 @@ here, so other providers are not affected.
      the `GithubUserTokenContext` concern.
    - Add the `:github_identity` entry to `Tools::TagCatalog`.
 6. **Profile UI.**
-   - Add the `connections`, `disconnect` and `update_act_as_consent` actions and their
+   - Add the connections and act-as-consents controllers, the `UserConnections` service and their
      routes, and the resources (run `rails typelizer:generate`).
    - Add `pages/Profile/ConnectionsPage.tsx` with a "Connected accounts" tab in
      `ProfileTabs`:
@@ -612,12 +625,15 @@ in adapter contract tests.
   equal the parent token's expiry. Refreshing first (step 6 of §4.3) makes it at least
   about an hour, and the tool tells the agent to ask again. A spike on staging
   confirms the value. If it turns out shorter, nothing changes except the docs.
-- **R3. Callback URLs on the App.** The user flow redirects to `/oauth/callback`. The
-  App must list it as a callback URL, and the existing
-  `/company/integrations/github_setup` must stay first, because install-time user
-  authorization goes to the first URL. If an operator puts them in the wrong order,
-  installing breaks. The docs and the staging checklist cover this. On aixle.com
-  this is a one-time App settings change before release.
+- **R3. Redirect URIs on the App.** The user flow redirects to `/oauth/callback`, which
+  the App lists as a **Redirect URI** under "Identifying and authorizing users"; token
+  expiration is on under **Optional Features → User-to-server token expiration → Opt-in**.
+  The installation check is a separate opt-in (`GITHUB_APP_VERIFY_INSTALLATION_OWNER`,
+  off by default): the client credentials alone enable only connecting accounts. With
+  the check on, "Request user authorization (OAuth) during installation" is on, and
+  `/company/integrations/github_setup` must be the **first** Redirect URI, because GitHub
+  then makes the Setup URL unavailable and sends installs to the first one. Staging and
+  aixle.com leave the check off, so installing through the Setup URL keeps working.
 - **R4. Refresh-token rotation.** GitHub refresh tokens are single use. `RefreshLease`
   and the "only mark an error if the stored refresh token was the one sent" rule in
   `refresh_leased!` already handle concurrent refreshes.
@@ -659,7 +675,7 @@ in adapter contract tests.
 | D8 | The tools are `user_attachable` with no auto-injection. They appear in the picker under "GitHub as a user". | Task §2: "whoever configures a workflow or a session decides which tool the agent gets" |
 | D9 | Only repositories on a GitHub **App** connection are covered. PAT-connected repositories are skipped with a reason. | The scoped endpoint needs the App installed on the target |
 | D10 | `user_id` is the only way to name a user. | Board tools expose member ids (`board_list_members`, `assignee_id`) |
-| D11 | No new environment variable. The existing `GITHUB_APP_CLIENT_ID` / `SECRET` gate the feature. | `config/settings.yml` `github.*` |
+| D11 | The existing `GITHUB_APP_CLIENT_ID` / `SECRET` gate the feature; the installation check has its own setting, `GITHUB_APP_VERIFY_INSTALLATION_OWNER`, off by default. | `config/settings.yml` `github.*` |
 | D12 | The platform does not set the commit identity, sign-off or `gh` credentials for the session. It returns the identity, and the instructions apply it. | Task: "a workflow's instructions decide how to use it" |
 | D14 | The tools read the session's user through one private helper, `InternalTools::Base#session_user`, so a search for it finds every reader. Readers outside the tools (container strategies, `SessionService`, resources) keep reading `session.user` directly. | Accepted in Alex's second review, 2026-11-11 |
 | D15 | `workflow_run.user` readers that describe the run, not a session (`WorkflowService` retry and run activity, `Chat::StatusCard`, `PersonalTools::Base`), stay on it. | Accepted in Alex's second review, 2026-11-11 |

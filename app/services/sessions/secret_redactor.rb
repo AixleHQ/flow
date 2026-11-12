@@ -13,7 +13,7 @@ module Sessions
   # sink, never as "do not log this tool".
   #
   # The set is KNOWN and enumerable — the `secret` config items attached to the
-  # session — so this is not a heuristic scan for secret-looking text.
+  # session and the tokens issued to it on a user's behalf — so this is not a heuristic scan for secret-looking text.
   #
   # The matching is the container's (docker/base/logger/aixle_redact.py), because
   # it has to find the same things: a terminal draws a value between colour codes
@@ -57,6 +57,16 @@ module Sessions
     def self.secret_values_for(session)
       return [] if session.nil?
 
+      config_item_secrets(session) + UserTokenIssuance.token_values_for(session)
+    rescue StandardError => e
+      # A redactor that raises would take the whole log-collection step with it
+      # and lose the log entirely. Failing closed here means "no redaction", so
+      # say so loudly rather than silently storing raw bytes.
+      Rails.logger.error("[SecretRedactor] Failed to resolve session secrets: #{e.message}")
+      []
+    end
+
+    def self.config_item_secrets(session)
       ids = SessionConfigResolver.new(session).resolve_config_item_ids
       return [] if ids.blank?
 
@@ -67,13 +77,8 @@ module Sessions
       rescue Encryptable::DecryptionError
         nil
       end
-    rescue StandardError => e
-      # A redactor that raises would take the whole log-collection step with it
-      # and lose the log entirely. Failing closed here means "no redaction", so
-      # say so loudly rather than silently storing raw bytes.
-      Rails.logger.error("[SecretRedactor] Failed to resolve session secrets: #{e.message}")
-      []
     end
+    private_class_method :config_item_secrets
 
     def initialize(values)
       @secrets = Array(values).map { |v| utf8(v.to_s) }.reject(&:blank?).uniq

@@ -143,6 +143,24 @@ module Oauth
       assert cred.active?
     end
 
+    test "treats an HTTP 200 answer carrying an error as a failed refresh, as GitHub sends it" do
+      cred = build_credential(owner: @user, access_token: "old-token",
+                              refresh_token: "bad", expires_at: 1.minute.ago)
+      stub_request(:post, TOKEN_ENDPOINT).to_return(
+        status: 200, headers: { "Content-Type" => "application/json" },
+        body: { error: "bad_refresh_token", error_description: "The refresh token passed is incorrect or expired." }.to_json
+      )
+
+      assert_raises(Oauth::ReauthRequired) do
+        Oauth::TokenService.access_token_for(owner: @user, provider: "sentry", user: @user)
+      end
+
+      cred.reload
+      assert_equal "old-token", cred.access_token
+      assert_equal 1, cred.refresh_failure_count
+      assert_not_includes cred.refresh_error, "passed is incorrect"
+    end
+
     test "escalates the credential to error after MAX_REFRESH_FAILURES consecutive rejections" do
       cred = build_credential(owner: @user, access_token: "old-token",
                               refresh_token: "r", expires_at: 1.minute.ago)

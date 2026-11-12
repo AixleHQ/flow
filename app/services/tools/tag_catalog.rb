@@ -27,6 +27,7 @@ module Tools
       Entry.new(tag: :tracker, label: "Task trackers", ui_visible: true),
       Entry.new(tag: :chat, label: "Chat (Slack and Teams)", ui_visible: true),
       Entry.new(tag: :coder, label: "Coder", ui_visible: true),
+      Entry.new(tag: :github_identity, label: "GitHub as a user", ui_visible: true),
       # Hidden because the Azure tools are not chosen — they auto-inject.
       # The repository ones arrive when an Azure repository is attached to the
       # session and the build ones when the project has an Azure connection, so

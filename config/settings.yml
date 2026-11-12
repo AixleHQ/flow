@@ -237,12 +237,16 @@ github:
   app_slug: <%= ENV['GITHUB_APP_SLUG'] %>
   private_key: "<%= ENV['GITHUB_APP_PRIVATE_KEY'] %>"
   webhook_secret: <%= ENV['GITHUB_WEBHOOK_SECRET'] %>
-  # The App's OAuth client. Optional; when both are set, connecting a NEW
+  # The App's OAuth client. Optional; when both are set, users can connect their
+  # own GitHub account (Profile → Connected accounts, Github::UserConnection),
+  # through the App's /oauth/callback URL. They do NOT turn on the installation check.
+  client_id: "<%= ENV['GITHUB_APP_CLIENT_ID'] %>"
+  client_secret: "<%= ENV['GITHUB_APP_CLIENT_SECRET'] %>"
+  # Off by default. When true (and the client above is set), connecting a NEW
   # installation also requires the installing user to be able to see it
   # (Github::InstallationOwnership) — enable "Request user authorization (OAuth)
   # during installation" on the App for GitHub to send the code.
-  client_id: "<%= ENV['GITHUB_APP_CLIENT_ID'] %>"
-  client_secret: "<%= ENV['GITHUB_APP_CLIENT_SECRET'] %>"
+  verify_installation_owner: <%= ENV['GITHUB_APP_VERIFY_INSTALLATION_OWNER'] == 'true' %>
   # Alternative to GITHUB_APP_PRIVATE_KEY for a deployment that mounts the PEM
   # as a file. Read only when the inline key is blank (Github::TokenService) —
   # which until now could never resolve to anything, because the service asked
