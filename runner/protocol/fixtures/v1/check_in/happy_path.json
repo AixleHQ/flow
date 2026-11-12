@@ -1,0 +1,86 @@
+{
+  "description": "A machine reports its os, arch and facts after a start, and the answer carries its environment and the config the runner needs (PROTOCOL.md \u00a75.9). The version it reports is the X-Aixle-Runner-Version of the request. Under the committed pins, which recommend a version below the one reported, there is no `update`.",
+  "steps": [
+    {
+      "given": "registered_machine",
+      "as": "m"
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/check-in",
+        "token": "{{m.access_token}}",
+        "body": {
+          "os": "linux",
+          "arch": "arm64",
+          "facts": {
+            "docker": "27.2.0",
+            "disk_free_bytes": 53687091200
+          }
+        },
+        "headers": {
+          "X-Aixle-Runner-Version": "1.5.0"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Cache-Control": "no-store"
+        },
+        "body": {
+          "environment": {
+            "id": {
+              "$type": "integer"
+            },
+            "key": {
+              "$type": "string"
+            },
+            "display_name": {
+              "$type": "string"
+            },
+            "state": "registered"
+          },
+          "config": {
+            "upload_max_bytes": {
+              "$type": "integer"
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/check-in",
+        "token": "{{m.access_token}}",
+        "body": {
+          "os": "linux",
+          "arch": "arm64",
+          "facts": {}
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "environment": {
+            "id": {
+              "$type": "integer"
+            },
+            "key": {
+              "$type": "string"
+            },
+            "display_name": {
+              "$type": "string"
+            },
+            "state": "registered"
+          },
+          "config": {
+            "upload_max_bytes": {
+              "$type": "integer"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

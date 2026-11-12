@@ -1,0 +1,177 @@
+{
+  "description": "A read_file of a file over the 1 MiB output cap, with a slot for `content` (PROTOCOL.md \u00a76.5), uploads the file and answers its size and the upload, with no inline `content`. A file the slot cannot take, or whose upload failed, is `file_too_large`, as a file is without a slot.",
+  "steps": [
+    {
+      "given": "registered_machine",
+      "as": "m"
+    },
+    {
+      "given": "session_on_machine",
+      "machine": "m",
+      "as": "s"
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "session": "s",
+      "as": "o",
+      "op": "read_file",
+      "payload": {
+        "path": "/tmp/terminal_output.log",
+        "uploads": {
+          "content": {
+            "id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "url": "https://uploads.example.test/cache/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc?expires=fixture",
+            "max_bytes": 33554432
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": [
+            {
+              "id": {
+                "$var": "o.id"
+              },
+              "sequence": {
+                "$var": "o.sequence"
+              },
+              "op": "read_file",
+              "session_id": {
+                "$var": "s.id"
+              },
+              "deadline_at": {
+                "$var": "o.deadline_at"
+              },
+              "payload": {
+                "path": "/tmp/terminal_output.log",
+                "uploads": {
+                  "content": {
+                    "id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                    "url": "https://uploads.example.test/cache/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc?expires=fixture",
+                    "max_bytes": 33554432
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{o.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "ok",
+          "data": {
+            "size": 5242880,
+            "uploads": {
+              "content": {
+                "id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                "size": 5242880
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "o.id"
+          },
+          "state": "completed"
+        }
+      }
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "session": "s",
+      "as": "p",
+      "op": "read_file",
+      "payload": {
+        "path": "/tmp/huge.bin",
+        "uploads": {
+          "content": {
+            "id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "url": "https://uploads.example.test/cache/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc?expires=fixture",
+            "max_bytes": 33554432
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": [
+            {
+              "id": {
+                "$var": "p.id"
+              },
+              "sequence": {
+                "$var": "p.sequence"
+              },
+              "op": "read_file",
+              "session_id": {
+                "$var": "s.id"
+              },
+              "deadline_at": {
+                "$var": "p.deadline_at"
+              },
+              "payload": {
+                "path": "/tmp/huge.bin",
+                "uploads": {
+                  "content": {
+                    "id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                    "url": "https://uploads.example.test/cache/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc?expires=fixture",
+                    "max_bytes": 33554432
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{p.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "error",
+          "error": {
+            "class": "file_too_large",
+            "message": "/tmp/huge.bin is 209715200 bytes, over the 33554432-byte limit of an upload"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "p.id"
+          },
+          "state": "failed"
+        }
+      }
+    }
+  ]
+}

@@ -9,9 +9,12 @@ require "test_helper"
 # argument. FakeHostRunner (test/support/fakes/fake_host_runner.rb) answers the
 # ops.
 class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
+  include PresigningCacheHelper
+
   IMAGE = "ghcr.io/aixlehq/flow-claude-code:latest"
 
   setup do
+    use_presigning_cache
     @runner = create(:runner, :manual, config: { "container" => { "network" => "host", "workspace_volume" => false,
                                                                   "resources" => { "cpus" => 2, "memory" => "8Gi" },
                                                                   "cache_mounts" => [ { "name" => "pip", "target" => "/home/agent/.cache/pip" } ] } })
@@ -23,7 +26,10 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     ContainerRuntime::FakeHostRunner.identify!(@session, @identity)
   end
 
-  teardown { @host_runner.stop }
+  teardown do
+    @host_runner.stop
+    restore_cache_storage
+  end
 
   test "pull_image does nothing, as on Kubernetes: the runner pulls in container.start" do
     result = @runtime.pull_image(IMAGE)
@@ -99,11 +105,11 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
 
     assert_equal %w[exec exec write_file read_file status logs], @host_runner.ops
     assert_equal [ @session.id ] * 6, @host_runner.operations.pluck(:session_id)
-    assert_equal({ "cmd" => [ "true" ], "timeout" => 30 }, @host_runner.operations.second[:payload])
+    assert_equal({ "cmd" => [ "true" ], "timeout" => 30 }, @host_runner.operations.second[:payload].except("uploads"))
     assert_equal({ "path" => "/tmp/x", "content" => Base64.strict_encode64("y"), "mode" => 0o600, "uid" => 1000, "gid" => 1000 },
                  @host_runner.operations.third[:payload])
     assert_equal "y", @runtime.read_file(handle, "/tmp/x")
-    assert RunnerOperation.where(op: "exec").all? { |op| op.deadline_at <= 61.seconds.from_now }
+    assert RunnerOperation.where(op: "exec").all? { |op| op.deadline_at <= (61 + Runners::ResultUploads.budget).seconds.from_now }
     assert RunnerOperation.where.not(state: %w[pending delivered]).all? { |op| op.encrypted_payload.nil? }
   end
 
@@ -339,12 +345,237 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert_operator RunnerOperation.order(:id).last.deadline_at, :<=, 16.seconds.from_now
   end
 
+  test "a scan-capped exec keeps its cap with upload slots offered: the cap applies after the upload budget" do
+    handle = start_session
+    @host_runner.operations.clear
+    capped = ContainerRuntime.for_session(@session, op_timeout: Settings.runners.scan_op_timeout)
+
+    capped.exec(handle, [ "true" ])
+
+    op = RunnerOperation.where(op: "exec").order(:id).last
+    assert @host_runner.operations.last[:payload].key?("uploads"), "the exec offers upload slots"
+    assert_in_delta Settings.runners.scan_op_timeout, op.deadline_at - op.created_at, 2
+  end
+
   test "an op's deadline is the end of the activity that sends it, less the margin" do
     handle = start_session
     finished = in_activity(20.0, DeadlineProbe, handle)
 
     assert_operator finished, :<=, (21 - ContainerRuntime::RunnerRuntime::ACTIVITY_MARGIN).seconds.from_now
     assert_operator finished, :>=, (14 - ContainerRuntime::RunnerRuntime::ACTIVITY_MARGIN).seconds.from_now
+  end
+
+  # == output and files over the 1 MiB output cap (PROTOCOL.md §6.5) ==
+
+  test "an exec and a read_file carry a signed upload slot for each output, valid past the op's deadline" do
+    handle = start_session
+    @host_runner.operations.clear
+
+    @runtime.exec(handle, [ "true" ], timeout: 30)
+    @runtime.read_file(handle, "/tmp/x")
+    @runtime.write_file(handle, "/tmp/x", "y")
+
+    exec, read, write = @host_runner.operations.pluck(:payload)
+    assert_equal %w[stdout stderr], exec["uploads"].keys
+    assert_equal %w[content], read["uploads"].keys
+    assert_not write.key?("uploads"), "only the ops that return output carry slots"
+    slot = exec["uploads"]["stdout"]
+    assert_equal %w[id max_bytes url], slot.keys.sort
+    assert_equal Settings.runners.upload_limit, slot["max_bytes"]
+    assert_match(/\A\h{60}\z/, slot["id"])
+    assert_includes slot["url"], "cache/#{slot['id']}", "the URL addresses the slot's own object"
+    assert_equal 3, [ exec["uploads"].values, read["uploads"].values ].flatten.pluck("id").uniq.size, "every slot is its own object"
+  end
+
+  test "a file over the output cap comes back whole through the upload, and the object is removed" do
+    handle = start_session
+    big = "log line\n".b * (ContainerRuntime::FakeHostRunner::OUTPUT_CAP / 4)
+    @host_runner.machine.container.files["/tmp/terminal_output.log"] = big
+
+    content = @runtime.read_file(handle, "/tmp/terminal_output.log")
+
+    assert_equal big, content
+    assert_operator content.bytesize, :>, ContainerRuntime::FakeHostRunner::OUTPUT_CAP
+    assert_equal Encoding::BINARY, content.encoding
+    id = @host_runner.operations.last[:payload].dig("uploads", "content", "id")
+    assert_not Shrine.storages[:cache].exists?(id), "the object is removed once it is read"
+    assert RunnerOperation.where(op: "read_file").all? { |op| op.encrypted_payload.nil? }, "the signed URLs leave the payload with the result"
+  end
+
+  test "exec output over the output cap comes back whole through the upload" do
+    handle = start_session
+    cap = ContainerRuntime::FakeHostRunner::OUTPUT_CAP
+    # Bytes that are not UTF-8 arrive as U+FFFD, as they do inline.
+    out = ("é".b * cap) + "\xFF\n".b + "last line\n".b
+    @host_runner.machine.on_exec { [ out, "warn\n", 3 ] }
+
+    stdout, stderr, code = @runtime.exec(handle, [ "cat", "/tmp/big" ])
+
+    assert_equal 3, code
+    assert_equal [ "warn\n" ], stderr
+    assert_equal "last line\n", stdout.last
+    expected = ("é" * cap) + "\uFFFD\n"
+    assert_equal expected, stdout.first
+    assert_equal Encoding::UTF_8, stdout.first.encoding
+    assert stdout.all?(&:valid_encoding?)
+    assert_equal 2, stdout.size
+  end
+
+  test "an op that carries slots gets a budget that fits an upload of the largest size, and one without them does not" do
+    handle = start_session
+    @host_runner.operations.clear
+    budget = Runners::ResultUploads.budget
+    assert_equal 62, budget, "32 MiB at 1 MiB/s, and 30 s for the last request and the result"
+
+    @runtime.exec(handle, [ "true" ], timeout: 30)
+    @runtime.write_file(handle, "/tmp/x", "y")
+
+    with_slots, without = RunnerOperation.where(op: %w[exec write_file]).order(:id).to_a
+    own_time = 30 + ContainerRuntime::RunnerRuntime::EXEC_GRACE
+    assert_in_delta own_time + budget, with_slots.deadline_at - with_slots.created_at, 2
+    assert_in_delta Settings.runners.op_timeout, without.deadline_at - without.created_at, 2
+  end
+
+  test "an upload that cannot finish before the deadline falls back to the first MiB, which the exec marks truncated" do
+    handle = start_session
+    cap = ContainerRuntime::FakeHostRunner::OUTPUT_CAP
+    @host_runner.answer_with("exec") do |_payload, _session|
+      { "status" => "ok", "exit_code" => 0, "stdout" => "x" * cap, "stderr" => "",
+        "data" => { "stdout_truncated" => true, "stderr_truncated" => false,
+                    "upload_errors" => { "stdout" => "uploading the stdout failed: the op's deadline has passed" } } }
+    end
+
+    log = StringIO.new
+    previous = Rails.logger
+    Rails.logger = ActiveSupport::Logger.new(log)
+    begin
+      stdout, _stderr, code = @runtime.exec(handle, [ "cat", "/tmp/big" ])
+    ensure
+      Rails.logger = previous
+    end
+
+    assert_equal 0, code
+    assert_equal cap, stdout.join.bytesize
+    assert_match(/stdout of `\/tmp\/big` was not collected whole.*cut to the first 1 MiB/, log.string)
+  end
+
+  test "where the storage cannot sign, no slot is issued, no time is added, and the cut output is reported with the reason" do
+    restore_cache_storage
+    handle = start_session
+    @host_runner.operations.clear
+    big = "x".b * (ContainerRuntime::FakeHostRunner::OUTPUT_CAP + 1)
+    @host_runner.machine.container.files["/tmp/big"] = big
+
+    assert_nil @runtime.read_file(handle, "/tmp/big")
+
+    op = RunnerOperation.where(op: "read_file").order(:id).last
+    assert_not @host_runner.operations.last[:payload].key?("uploads")
+    assert_in_delta Settings.runners.op_timeout, op.deadline_at - op.created_at, 2
+    result = @runtime.read_file_result(handle, "/tmp/big")
+    assert_nil result.content
+    assert_not result.whole?
+    assert_match(/S3-compatible storage/, result.reason)
+    assert_not_respond_to @runtime, :take_uncollected_whole, "the runtime keeps no notes of a session"
+  end
+
+  test "read_file_result says why a file that is too large did not come back, with a storage that presigns" do
+    handle = start_session
+    @host_runner.answer_with("read_file", "status" => "error",
+                                          "error" => { "class" => "file_too_large", "message" => "uploading it failed: 403" })
+
+    result = @runtime.read_file_result(handle, "/tmp/big")
+
+    assert_nil result.content
+    assert_not result.whole?
+    assert_match(/file_too_large.*uploading it failed: 403/, result.reason)
+    assert_no_match(/S3-compatible/, result.reason)
+  end
+
+  test "read_file_result answers a file read whole, and one that is just missing, as whole" do
+    handle = start_session
+    @host_runner.machine.container.files["/tmp/x"] = "y"
+
+    whole = @runtime.read_file_result(handle, "/tmp/x")
+    assert_equal "y", whole.content
+    assert whole.whole?
+    assert_nil whole.reason
+
+    @host_runner.answer_with("read_file", "status" => "error", "error" => { "class" => "file_not_found", "message" => "no" })
+    missing = @runtime.read_file_result(handle, "/tmp/missing")
+    assert_nil missing.content
+    assert missing.whole?, "a file that is not there was not cut"
+  end
+
+  test "a stream under the cap stays inline, and nothing is fetched or removed" do
+    handle = start_session
+    @host_runner.machine.on_exec { [ "out\n", "", 0 ] }
+    Runners::ResultUploads.expects(:claim).never
+    Runners::ResultUploads.expects(:discard).never
+
+    assert_equal [ [ "out\n" ], [], 0 ], @runtime.exec(handle, [ "true" ])
+  end
+
+  test "a file the runner could not send is nil, as an unreadable file is on hosted" do
+    handle = start_session
+    @host_runner.answer_with("read_file", "status" => "error",
+                                          "error" => { "class" => "file_too_large", "message" => "uploading it failed: 403" })
+
+    assert_nil @runtime.read_file(handle, "/tmp/big")
+  end
+
+  test "an upload the result names is claimed only as the slot the platform issued for it" do
+    handle = start_session
+    @host_runner.answer_with("read_file") do |_payload, _session|
+      Shrine.storages[:cache].upload(StringIO.new("other bytes"), "f" * 60)
+      { "status" => "ok", "data" => { "size" => 11, "uploads" => { "content" => { "id" => "f" * 60, "size" => 11 } } } }
+    end
+
+    assert_nil @runtime.read_file(handle, "/tmp/big"), "an object that is not the slot's own is never read"
+    assert Shrine.storages[:cache].exists?("f" * 60), "and never removed"
+  end
+
+  test "an upload that is missing, over the limit or of another size is no output, and the exec says so in stderr" do
+    handle = start_session
+    { "missing" => nil, "mismatch" => "x" * 10, "over the limit" => "x" * 40 }.each do |name, bytes|
+      Runners::ResultUploads.stubs(:limit).returns(20)
+      claimed_size = name == "mismatch" ? 11 : (bytes&.bytesize || 5)
+      @host_runner.answer_with("exec") do |payload, _session|
+        slot = payload.dig("uploads", "stdout")
+        Shrine.storages[:cache].upload(StringIO.new(bytes), slot["id"]) if bytes
+        { "status" => "ok", "exit_code" => 0, "stderr" => "",
+          "data" => { "uploads" => { "stdout" => { "id" => slot["id"], "size" => claimed_size } } } }
+      end
+
+      stdout, stderr, code = @runtime.exec(handle, [ "cat", "/big" ])
+
+      assert_equal 0, code, name
+      assert_empty stdout, name
+      assert_match(/upload for stdout/, stderr.join, name)
+    end
+  end
+
+  test "an op that expired removes the objects of its slots, since the runner may have uploaded before its result was lost" do
+    handle = start_session
+    uploaded = nil
+    @host_runner.answer_with("read_file") do |payload, _session|
+      uploaded = payload.dig("uploads", "content", "id")
+      Shrine.storages[:cache].upload(StringIO.new("late"), uploaded)
+      { "status" => "expired" }
+    end
+
+    assert_nil @runtime.read_file(handle, "/tmp/big")
+
+    assert_not_nil uploaded
+    assert_not Shrine.storages[:cache].exists?(uploaded)
+  end
+
+  test "a storage that cannot be read fails the one output, not the call" do
+    handle = start_session
+    big = "x".b * (ContainerRuntime::FakeHostRunner::OUTPUT_CAP + 1)
+    @host_runner.machine.container.files["/tmp/big"] = big
+    Runners::ResultUploads.stubs(:claim).raises(Errno::ECONNRESET)
+
+    assert_nil @runtime.read_file(handle, "/tmp/big")
   end
 
   # The wait for an op ends at its deadline, inside the activity, so an

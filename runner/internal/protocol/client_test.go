@@ -89,6 +89,9 @@ func TestClassify(t *testing.T) {
 		{"release not_found", refusal(EndpointReleases, 404, "not_found"), ActionBug},
 		{"invalid_request", refusal(EndpointOps, 400, "invalid_request"), ActionBug},
 		{"invalid_result", refusal(EndpointResult, 422, "invalid_result"), ActionBug},
+		{"invalid_check_in", refusal(EndpointCheckIn, 422, "invalid_check_in"), ActionBug},
+		{"check-in invalid_token", refusal(EndpointCheckIn, 401, "invalid_token"), ActionRefresh},
+		{"check-in below the minimum", refusal(EndpointCheckIn, 400, "runner_version_unsupported"), ActionUpdate},
 		{"400 without the JSON shape", refusal(EndpointResult, 400, ""), ActionBug},
 		{"ephemeral_not_supported", refusal(EndpointRegister, 422, "ephemeral_not_supported"), ActionFixConfiguration},
 		{"invalid_registration", refusal(EndpointRegister, 422, "invalid_registration"), ActionFixConfiguration},
@@ -174,5 +177,57 @@ func TestProxyDoesNotFollowACrossOriginRedirect(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusFound || other != 0 {
 		t.Errorf("got %d, %d requests elsewhere", resp.StatusCode, other)
+	}
+}
+
+// check-in sends the report as JSON with the access token as the bearer and
+// both protocol headers, and reads the environment, the config and the update.
+func TestCheckInSendsTheReportAndReadsTheAnswer(t *testing.T) {
+	var method, path, auth, version, proto, contentType, body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method, path, auth = r.Method, r.URL.Path, r.Header.Get("Authorization")
+		version, proto, contentType = r.Header.Get("X-Aixle-Runner-Version"), r.Header.Get("X-Aixle-Runner-Protocol"), r.Header.Get("Content-Type")
+		raw := make([]byte, 512)
+		n, _ := r.Body.Read(raw)
+		body = string(raw[:n])
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"environment":{"id":42,"key":"aixle-r7-x","display_name":"build-01","state":"registered"},` +
+			`"config":{"upload_max_bytes":104857600,"future":1},"update":{"version":"1.5.0","sha256":"abc"}}`))
+	}))
+	defer server.Close()
+	c, err := NewClient(server.URL, "1.4.0", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := c.CheckIn(context.Background(), "aracc_one", CheckInRequest{OS: "linux", Arch: "amd64", Facts: map[string]any{"docker": "27.2.0"}})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if method != http.MethodPost || path != "/runner/v1/check-in" || auth != "Bearer aracc_one" || version != "1.4.0" || proto != "1" || contentType != "application/json" {
+		t.Errorf("%s %s auth %q version %q protocol %q type %q", method, path, auth, version, proto, contentType)
+	}
+	if body != `{"os":"linux","arch":"amd64","facts":{"docker":"27.2.0"}}` {
+		t.Errorf("body %s", body)
+	}
+	if got.Environment.ID != 42 || got.Config.UploadMaxBytes != 104857600 || got.Update == nil || got.Update.Version != "1.5.0" {
+		t.Errorf("answer %+v", got)
+	}
+}
+
+func TestCheckInRefusalIsClassified(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"runner_version_unsupported","message":"aixle-runner 1.1.9 is no longer supported (minimum 1.2.0). Update aixle-runner."}`))
+	}))
+	defer server.Close()
+	c, _ := NewClient(server.URL, "1.1.9", nil)
+
+	_, err := c.CheckIn(context.Background(), "aracc_one", CheckInRequest{})
+
+	r, ok := AsRefusal(err)
+	if !ok || r.Endpoint != EndpointCheckIn || r.Code != "runner_version_unsupported" || Classify(err) != ActionUpdate {
+		t.Fatalf("%v", err)
 	}
 }

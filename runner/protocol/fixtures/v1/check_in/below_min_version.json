@@ -1,0 +1,98 @@
+{
+  "description": "A runner below the platform's minimum version is refused at check-in with `runner_version_unsupported`, as `register` refuses it (PROTOCOL.md \u00a75.9). The refusal comes after the token, the runner and the flag, so a dead token learns nothing about the minimum.",
+  "steps": [
+    {
+      "given": "release_pins",
+      "min_version": "1.2.0"
+    },
+    {
+      "given": "registered_machine",
+      "as": "m"
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/check-in",
+        "token": "{{m.access_token}}",
+        "body": {
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {}
+        },
+        "headers": {
+          "X-Aixle-Runner-Version": "1.1.9"
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "error": "runner_version_unsupported",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/check-in",
+        "token": "not-a-token",
+        "body": {
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {}
+        },
+        "headers": {
+          "X-Aixle-Runner-Version": "1.1.9"
+        }
+      },
+      "response": {
+        "status": 401,
+        "body": {
+          "error": "invalid_token",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/check-in",
+        "token": "{{m.access_token}}",
+        "body": {
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {}
+        },
+        "headers": {
+          "X-Aixle-Runner-Version": "1.2.0"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "environment": {
+            "id": {
+              "$type": "integer"
+            },
+            "key": {
+              "$type": "string"
+            },
+            "display_name": {
+              "$type": "string"
+            },
+            "state": "registered"
+          },
+          "config": {
+            "upload_max_bytes": {
+              "$type": "integer"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

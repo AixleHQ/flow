@@ -12,7 +12,7 @@ module Runners
   # that directory and names it in SCHEMAS.
   module ProtocolSchema
     DIRECTORY = Rails.root.join("runner/protocol/schemas/v1")
-    SCHEMAS = %w[register.request ops.query op_result.request releases.params].freeze
+    SCHEMAS = %w[register.request check_in.request ops.query op_result.request releases.params].freeze
 
     class << self
       def valid?(name, document)

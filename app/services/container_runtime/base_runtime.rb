@@ -22,6 +22,7 @@ module ContainerRuntime
   # == File I/O (tar-based, works on running containers)
   #   write_file(id, path, content, mode:, uid:, gid:) → true/false
   #   read_file(id, path)                              → String | nil
+  #   read_file_result(id, path)                       → ContainerRuntime::FileRead
   #
   # == Introspection
   #   resolve_container(id)                      → container handle
@@ -56,6 +57,13 @@ module ContainerRuntime
   #
   # Raised by #wait_container when `timeout` elapses with the workload still running.
   class WaitTimeout < StandardError; end
+
+  # What #read_file_result answers: the content (nil when none could be read),
+  # whether nothing of the file was left out, and when something was, why.
+  FileRead = Data.define(:content, :whole, :reason) do
+    def initialize(content:, whole: true, reason: nil) = super
+    alias_method :whole?, :whole
+  end
 
   class BaseRuntime
     # -- Lifecycle ------------------------------------------------------------
@@ -163,6 +171,15 @@ module ContainerRuntime
     # Read a single file from the container. Returns content string or nil.
     def read_file(_id, _path)
       raise NotImplementedError, "#{self.class.name} must implement #read_file"
+    end
+
+    # Same as #read_file, but says whether the file came back whole and, when it
+    # did not, why. The default is #read_file and "whole": a runtime that copies
+    # a file out entire has nothing to add. A caller that reports what it could
+    # not collect whole (the session cleanup) reads through this, so the report
+    # comes from the result of the call, not from state kept in the runtime.
+    def read_file_result(id, path)
+      FileRead.new(content: read_file(id, path))
     end
 
     # -- Introspection --------------------------------------------------------

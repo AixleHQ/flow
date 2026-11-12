@@ -69,6 +69,22 @@ module Sessions
       assert_includes report.file.read, "truncated"
     end
 
+    test "says in its report when a read came back cut, from the size its listing gave" do
+      @runtime.fs["/var/log/mitm/http.log"] = "z" * 50
+      # FakeRuntime answers `tail` whole; a runner's output cap is simulated by cutting it.
+      @runtime.extend(Module.new do
+        def exec(id, cmd, opts = {})
+          stdout, stderr, code = super
+          cmd.join(" ").include?("tail -c") ? [ [ stdout.join.first(10) ], stderr, code ] : [ stdout, stderr, code ]
+        end
+      end)
+
+      result = collect
+
+      assert_includes result.failures.join, "/var/log/mitm/http.log — cut: 10 of 50 bytes came back from the container"
+      assert_includes @session.session_logs.find_by!(name: LogCollector::REPORT_NAME).file.read, "cut: 10 of 50"
+    end
+
     test "reports a declared path the container does not have" do
       @runtime.fs.delete("/var/log/context.log")
 

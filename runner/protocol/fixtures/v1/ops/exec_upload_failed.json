@@ -1,0 +1,120 @@
+{
+  "description": "An exec whose upload failed answers with the first 1 MiB inline, marks the stream truncated and says why in `data.upload_errors` (PROTOCOL.md \u00a76.5): the op still has its one result. A stream cut at the slot's `max_bytes` is uploaded and marked truncated too.",
+  "steps": [
+    {
+      "given": "registered_machine",
+      "as": "m"
+    },
+    {
+      "given": "session_on_machine",
+      "machine": "m",
+      "as": "s"
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "session": "s",
+      "as": "o",
+      "op": "exec",
+      "payload": {
+        "cmd": [
+          "cat",
+          "/tmp/big.log"
+        ],
+        "uploads": {
+          "stdout": {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "url": "https://uploads.example.test/cache/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?expires=fixture",
+            "max_bytes": 33554432
+          },
+          "stderr": {
+            "id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "url": "https://uploads.example.test/cache/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb?expires=fixture",
+            "max_bytes": 33554432
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": [
+            {
+              "id": {
+                "$var": "o.id"
+              },
+              "sequence": {
+                "$var": "o.sequence"
+              },
+              "op": "exec",
+              "session_id": {
+                "$var": "s.id"
+              },
+              "deadline_at": {
+                "$var": "o.deadline_at"
+              },
+              "payload": {
+                "cmd": [
+                  "cat",
+                  "/tmp/big.log"
+                ],
+                "uploads": {
+                  "stdout": {
+                    "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "url": "https://uploads.example.test/cache/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?expires=fixture",
+                    "max_bytes": 33554432
+                  },
+                  "stderr": {
+                    "id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                    "url": "https://uploads.example.test/cache/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb?expires=fixture",
+                    "max_bytes": 33554432
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{o.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "ok",
+          "exit_code": 0,
+          "stdout": "first bytes\n",
+          "data": {
+            "stdout_truncated": true,
+            "stderr_truncated": true,
+            "uploads": {
+              "stderr": {
+                "id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "size": 33554432
+              }
+            },
+            "upload_errors": {
+              "stdout": "uploading the stdout failed: the upload was refused with status 403: expired"
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "o.id"
+          },
+          "state": "completed"
+        }
+      }
+    }
+  ]
+}

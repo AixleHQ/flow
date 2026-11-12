@@ -8,6 +8,23 @@ module ContainerRuntime
       @runtime = BaseRuntime.new
     end
 
+    test "read_file_result is read_file and whole, by default" do
+      runtime = Class.new(BaseRuntime) { def read_file(_id, path) = path == "/a" ? "content" : nil }.new
+
+      result = runtime.read_file_result("id", "/a")
+      assert_equal "content", result.content
+      assert result.whole?
+      assert_nil result.reason
+
+      missing = runtime.read_file_result("id", "/missing")
+      assert_nil missing.content
+      assert missing.whole?
+    end
+
+    test "read_file_result raises NotImplementedError where read_file does" do
+      assert_raises(NotImplementedError) { @runtime.read_file_result("id", "/a") }
+    end
+
     # -- Lifecycle --
 
     test "pull_image raises NotImplementedError" do
