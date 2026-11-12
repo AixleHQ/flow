@@ -396,7 +396,8 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert_equal 3, code
     assert_equal [ "warn\n" ], stderr
     assert_equal "last line\n", stdout.last
-    assert_equal "é" * cap + "\uFFFD\n", stdout.first
+    expected = ("é" * cap) + "\uFFFD\n"
+    assert_equal expected, stdout.first
     assert_equal Encoding::UTF_8, stdout.first.encoding
     assert stdout.all?(&:valid_encoding?)
     assert_equal 2, stdout.size

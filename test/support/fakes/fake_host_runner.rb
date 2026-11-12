@@ -23,6 +23,11 @@ module ContainerRuntime
   # `answer_with` replaces the answer of one op name, to simulate a runner that
   # expires an op, a reset that fails, or one that never answers (`:none`).
   class FakeHostRunner
+    # The runner's output cap (PROTOCOL.md §6): a stream or file over it comes
+    # back through the upload the payload offers (§6.5), and without one a
+    # stream is cut and a file refused.
+    OUTPUT_CAP = 1 << 20
+
     attr_reader :machine, :operations
 
     def initialize(*environments, machine: nil)
@@ -142,11 +147,6 @@ module ContainerRuntime
         error("unsupported_op", "the fake runner does not implement #{op}")
       end
     end
-
-    # The runner's output cap (PROTOCOL.md §6): a stream or file over it comes
-    # back through the upload the payload offers (§6.5), and without one a
-    # stream is cut and a file refused.
-    OUTPUT_CAP = 1 << 20
 
     def exec_result(payload, code, streams)
       result = { "exit_code" => code, "data" => { "stdout_truncated" => false, "stderr_truncated" => false } }
