@@ -27,7 +27,7 @@ module Runners
   # platform issues no slots (`available?` is false): the runner then returns what
   # fits the 1 MiB cap, as it did before uploads, and the cleanup's
   # `log-collection-report.txt` says which files were not collected whole and why
-  # (RunnerRuntime#take_uncollected_whole).
+  # (RunnerRuntime#read_file_result).
   #
   # Lifetime. A slot's URL is valid until the op's `deadline_at` plus
   # URL_GRACE, which is only a margin for clocks that differ: there is one

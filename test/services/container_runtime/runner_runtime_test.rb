@@ -445,11 +445,18 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
                     "upload_errors" => { "stdout" => "uploading the stdout failed: the op's deadline has passed" } } }
     end
 
-    stdout, _stderr, code = @runtime.exec(handle, [ "cat", "/tmp/big" ])
+    log = StringIO.new
+    previous = Rails.logger
+    Rails.logger = ActiveSupport::Logger.new(log)
+    begin
+      stdout, _stderr, code = @runtime.exec(handle, [ "cat", "/tmp/big" ])
+    ensure
+      Rails.logger = previous
+    end
 
     assert_equal 0, code
     assert_equal cap, stdout.join.bytesize
-    assert_match(/cut to the first 1 MiB/, @runtime.take_uncollected_whole.join)
+    assert_match(/stdout of `\/tmp\/big` was not collected whole.*cut to the first 1 MiB/, log.string)
   end
 
   test "where the storage cannot sign, no slot is issued, no time is added, and the cut output is reported with the reason" do
@@ -464,10 +471,39 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     op = RunnerOperation.where(op: "read_file").order(:id).last
     assert_not @host_runner.operations.last[:payload].key?("uploads")
     assert_in_delta Settings.runners.op_timeout, op.deadline_at - op.created_at, 2
-    notes = @runtime.take_uncollected_whole
-    assert_equal 1, notes.size
-    assert_match %r{/tmp/big.*not collected whole.*S3-compatible storage}, notes.first
-    assert_empty @runtime.take_uncollected_whole, "the notes are taken once"
+    result = @runtime.read_file_result(handle, "/tmp/big")
+    assert_nil result.content
+    assert_not result.whole?
+    assert_match(/S3-compatible storage/, result.reason)
+    assert_not_respond_to @runtime, :take_uncollected_whole, "the runtime keeps no notes of a session"
+  end
+
+  test "read_file_result says why a file that is too large did not come back, with a storage that presigns" do
+    handle = start_session
+    @host_runner.answer_with("read_file", "status" => "error",
+                                          "error" => { "class" => "file_too_large", "message" => "uploading it failed: 403" })
+
+    result = @runtime.read_file_result(handle, "/tmp/big")
+
+    assert_nil result.content
+    assert_not result.whole?
+    assert_match(/file_too_large.*uploading it failed: 403/, result.reason)
+    assert_no_match(/S3-compatible/, result.reason)
+  end
+
+  test "read_file_result answers a file read whole, and one that is just missing, as whole" do
+    handle = start_session
+    @host_runner.machine.container.files["/tmp/x"] = "y"
+
+    whole = @runtime.read_file_result(handle, "/tmp/x")
+    assert_equal "y", whole.content
+    assert whole.whole?
+    assert_nil whole.reason
+
+    @host_runner.answer_with("read_file", "status" => "error", "error" => { "class" => "file_not_found", "message" => "no" })
+    missing = @runtime.read_file_result(handle, "/tmp/missing")
+    assert_nil missing.content
+    assert missing.whole?, "a file that is not there was not cut"
   end
 
   test "a stream under the cap stays inline, and nothing is fetched or removed" do

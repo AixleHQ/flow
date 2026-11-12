@@ -1422,8 +1422,13 @@ The decisions:
   back as it did before 8c: an `exec` answers the first 1 MiB of a stream, marked truncated, and
   `read_file` answers `file_too_large`. The reason is stated where it shows: the cleanup's
   `log-collection-report.txt` names the files and outputs that were not collected whole and says
-  that uploads over 1 MiB need S3-compatible storage (`RunnerRuntime#take_uncollected_whole`,
-  `AgentSessionStrategy#report_uncollected_whole`), and the log has a warning.
+  that uploads over 1 MiB need S3-compatible storage, and the log has a warning. The runtime says
+  it at the call: `ContainerRuntime::BaseRuntime#read_file_result` answers the content, whether
+  it came back whole and why not (the base default is `read_file` and "whole"; `RunnerRuntime`
+  fills it from the op's outcome). The cleanup (`AgentSessionStrategy#before_cleanup`) collects
+  the answers of its own reads and `Sessions::LogCollector` reports what its read brought back
+  cut, from the sizes its listing gives; the runtime keeps no state of a session for it. An
+  `exec` cut at 1 MiB outside the cleanup is logged and nothing collects it.
 - **One deadline.** The runner never uploads past the op's `deadline_at`, and the platform
   settles the op there. So an op that carries slots is given, on top of its own time, a budget
   that fits an upload of the largest size (`Runners::ResultUploads.budget`: 32 MiB at 1 MiB/s,

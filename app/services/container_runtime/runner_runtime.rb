@@ -251,25 +251,37 @@ module ContainerRuntime
     end
 
     def read_file(id, path)
-      return nil if path.blank?
+      read_file_result(id, path).content
+    end
+
+    # A file over the output cap comes back through an upload (PROTOCOL.md §6.5).
+    # Where that is not possible the file is not read at all, and the answer
+    # says why: output over 1 MiB needs S3-compatible storage (DESIGN.md §6.4,
+    # a known limitation).
+    def read_file_result(id, path)
+      return FileRead.new(content: nil) if path.blank?
 
       outcome = call(session_for(id), "read_file", { "path" => path.to_s }, uploads: %w[content])
-      note_uncollected_whole("read_file #{path}", outcome.message) if outcome.error_class == "file_too_large"
       unless outcome.ok?
+        if outcome.error_class == "file_too_large"
+          reason = not_whole_reason(outcome.message)
+          Rails.logger.warn("[RunnerRuntime] read_file #{path} was not collected whole: #{reason}")
+          return FileRead.new(content: nil, whole: false, reason: reason)
+        end
         Rails.logger.debug { "[RunnerRuntime] read_file #{path}: #{outcome.message}" }
-        return nil
+        return FileRead.new(content: nil)
       end
-      # A file over the output cap came back through an upload (PROTOCOL.md §6.5).
-      return outcome.uploaded["content"] if outcome.uploaded.key?("content")
+      return FileRead.new(content: outcome.uploaded["content"]) if outcome.uploaded.key?("content")
       if outcome.upload_errors.key?("content")
-        Rails.logger.warn("[RunnerRuntime] read_file #{path}: #{outcome.upload_errors['content']}")
-        return nil
+        reason = outcome.upload_errors["content"]
+        Rails.logger.warn("[RunnerRuntime] read_file #{path}: #{reason}")
+        return FileRead.new(content: nil, whole: false, reason: reason)
       end
 
-      Base64.strict_decode64(outcome.data["content"].to_s)
+      FileRead.new(content: Base64.strict_decode64(outcome.data["content"].to_s))
     rescue ArgumentError => e
       Rails.logger.warn("[RunnerRuntime] read_file #{path}: the runner sent content that is not base64: #{e.message}")
-      nil
+      FileRead.new(content: nil)
     end
 
     # -- Introspection --------------------------------------------------------
@@ -316,16 +328,6 @@ module ContainerRuntime
 
     # -- Garbage collection ---------------------------------------------------
 
-    # The files and outputs a cleanup could not read whole since the last call,
-    # one line each, and forgets them. The cleanup puts them in its
-    # `log-collection-report.txt` (ContainerStrategies::AgentSessionStrategy), so
-    # that a log cut at 1 MiB is not taken for a whole one.
-    def take_uncollected_whole
-      notes = @uncollected_whole || []
-      @uncollected_whole = []
-      notes
-    end
-
     # A runner session's objects are the runner's to remove, by label
     # (`env.scrub`, `env.reset`), not the hosted sweep's.
     def list_session_resources(*)
@@ -335,9 +337,6 @@ module ContainerRuntime
     def delete_session_resource(_resource)
       true
     end
-
-    # At most this many lines are kept for the cleanup's report.
-    MAX_UNCOLLECTED_NOTES = 50
 
     private
 
@@ -364,17 +363,13 @@ module ContainerRuntime
       [ [], [ "#{outcome.message}\n" ], 1 ]
     end
 
-    # Records that an output or a file did not come back whole, and why. Where the
-    # platform's storage cannot sign an upload, that is the reason: output over
-    # 1 MiB needs S3-compatible storage (DESIGN.md §6.4, a known limitation).
-    def note_uncollected_whole(what, reason)
-      unless Runners::ResultUploads.available?
-        reason = "#{reason.to_s.chomp('.')}. Output over 1 MiB needs S3-compatible storage; " \
-                 "this platform's storage cannot sign an upload, so none was offered"
-      end
-      Rails.logger.warn("[RunnerRuntime] #{what} was not collected whole: #{reason}")
-      @uncollected_whole ||= []
-      @uncollected_whole << "#{what} — not collected whole: #{reason}" if @uncollected_whole.size < MAX_UNCOLLECTED_NOTES
+    # Why a file did not come back whole. Where the platform's storage cannot
+    # sign an upload, that is the reason: no upload was offered.
+    def not_whole_reason(reason)
+      return reason if Runners::ResultUploads.available?
+
+      "#{reason.to_s.chomp('.')}. Output over 1 MiB needs S3-compatible storage; " \
+        "this platform's storage cannot sign an upload, so none was offered"
     end
 
     def lines(text)
@@ -396,7 +391,8 @@ module ContainerRuntime
         Rails.logger.warn("[RunnerRuntime] exec #{name}: #{outcome.upload_errors[name]}")
       end
       if outcome.data["#{name}_truncated"]
-        note_uncollected_whole("the #{name} of `#{Array(cmd).last.to_s.truncate(120)}`", "it was cut to the first 1 MiB")
+        Rails.logger.warn("[RunnerRuntime] the #{name} of `#{Array(cmd).last.to_s.truncate(120)}` was not collected whole: " \
+                          "#{not_whole_reason('it was cut to the first 1 MiB')}")
       end
       lines(outcome.result[name])
     end

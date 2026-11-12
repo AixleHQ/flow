@@ -867,21 +867,19 @@ module ContainerStrategies
 
     # == report_uncollected_whole (a runner session's files over 1 MiB, where uploads are not available) ==
 
-    test "report_uncollected_whole puts what the runtime could not read whole into the collection report" do
-      runtime = mock("runtime")
-      runtime.stubs(:take_uncollected_whole).returns([ "read_file /tmp/terminal_output.log — not collected whole: needs S3-compatible storage" ])
-      ContainerRuntime.stubs(:build).returns(runtime)
+    test "report_uncollected_whole puts what the cleanup could not read whole into the collection report" do
+      ContainerRuntime.stubs(:build).returns(ContainerRuntime::FakeRuntime.new(agent_type: "claude_code"))
       strategy = build_strategy
 
       assert_difference "SessionLog.count", 1 do
-        strategy.send(:report_uncollected_whole, @session)
+        strategy.send(:report_uncollected_whole, @session,
+                      [ "read_file /tmp/terminal_output.log — not collected whole: needs S3-compatible storage" ])
       end
       report = @session.session_logs.find_by!(name: Sessions::LogCollector::REPORT_NAME)
       assert_match %r{/tmp/terminal_output.log.*S3-compatible}, report.file.read
 
-      runtime.stubs(:take_uncollected_whole).returns([ "read_file /tmp/out.bin — not collected whole" ])
       assert_no_difference "SessionLog.count" do
-        strategy.send(:report_uncollected_whole, @session)
+        strategy.send(:report_uncollected_whole, @session, [ "read_file /tmp/out.bin — not collected whole" ])
       end
       text = report.reload.file.read
       assert_includes text, "terminal_output.log"
@@ -889,13 +887,35 @@ module ContainerStrategies
     end
 
     test "report_uncollected_whole writes nothing when everything was collected whole" do
-      runtime = mock("runtime")
-      runtime.stubs(:take_uncollected_whole).returns([])
-      ContainerRuntime.stubs(:build).returns(runtime)
+      ContainerRuntime.stubs(:build).returns(ContainerRuntime::FakeRuntime.new(agent_type: "claude_code"))
 
       assert_no_difference "SessionLog.count" do
-        build_strategy.send(:report_uncollected_whole, @session)
+        build_strategy.send(:report_uncollected_whole, @session, [])
       end
+    end
+
+    test "the cleanup's reads fill its own list from the results the runtime gives, and the runtime keeps nothing" do
+      runtime = ContainerRuntime::FakeRuntime.new(agent_type: "claude_code", filesystem: {})
+      runtime.stubs(:read_file_result).with("abc123", "/tmp/terminal_output.log").returns(
+        ContainerRuntime::FileRead.new(content: nil, whole: false, reason: "needs S3-compatible storage")
+      )
+      ContainerRuntime.stubs(:build).returns(runtime)
+      strategy = build_strategy
+      uncollected = []
+
+      strategy.send(:collect_terminal_output, "abc123", @session, uncollected)
+
+      assert_equal 1, uncollected.size
+      assert_match %r{read_file /tmp/terminal_output.log — not collected whole: needs S3-compatible storage}, uncollected.first
+    end
+
+    test "a file read whole adds nothing to the cleanup's list" do
+      runtime = ContainerRuntime::FakeRuntime.new(agent_type: "claude_code", filesystem: { "/tmp/terminal_output.log" => "hello" })
+      ContainerRuntime.stubs(:build).returns(runtime)
+      uncollected = []
+
+      assert_equal 1, build_strategy.send(:collect_terminal_output, "abc123", @session, uncollected)
+      assert_empty uncollected
     end
 
     # A killed container (out of memory, evicted) cannot be exec'd into, so the file read

@@ -17,12 +17,13 @@ module ContainerStrategies
       agent_service = AgentCredentialsService.for(input[:agent_type])
 
       logs_count, log_contents = collect_logs(container, session, agent_service)
-      logs_count += collect_terminal_output(container, session)
+      uncollected = []
+      logs_count += collect_terminal_output(container, session, uncollected)
       collect_usage(session, agent_service, log_contents)
       persist_refreshed_credentials(container, session, agent_service)
 
-      outputs_count = collect_workflow_outputs(container_id)
-      report_uncollected_whole(session)
+      outputs_count = collect_workflow_outputs(container_id, uncollected)
+      report_uncollected_whole(session, uncollected)
 
       # Provider-agnostic teardown hook: every integration that holds
       # session-scoped runtime state (Coder workspace locks today, others
@@ -54,7 +55,7 @@ module ContainerStrategies
 
     private
 
-    def collect_workflow_outputs(container_id)
+    def collect_workflow_outputs(container_id, uncollected = [])
       session = TerminalSession.find(input[:session_id])
       step_run = session.step_run
       unless step_run
@@ -80,7 +81,7 @@ module ContainerStrategies
 
       files.each do |file_path|
         relative = file_path.sub("#{output_dir}/", "")
-        content = read_file_from_container(container, file_path)
+        content = read_file_for_collection(container, file_path, uncollected)
         if content.blank?
           Rails.logger.warn("[WorkflowStepStrategy] Skipped output #{file_path}: #{content.nil? ? 'unreadable' : 'empty'}")
           next
