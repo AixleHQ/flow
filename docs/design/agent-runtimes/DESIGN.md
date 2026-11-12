@@ -3625,8 +3625,10 @@ Alex 2026-11-09): `1.0.0` comes with the extract or the first customer (§14.1).
   `settings.yml`, the one loading mechanism, next to the other `runners:` settings. Besides the
   four keys above the block holds `download_url`, the template of the asset URL the release
   endpoint redirects to (`%{version}`, `%{platform}`), so a mirror is one edit. It pins
-  `protocol_supported: [1]`, no minimum, and `recommended_version: "0.1.0"` with the
-  `linux-amd64` and `linux-arm64` digests of `runner-v0.1.0`'s `checksums.txt` (task #220). The
+  `protocol_supported: [1]`, no minimum, and `recommended_version: "0.2.0"` with the
+  `linux-amd64` and `linux-arm64` digests of `runner-v0.1.0`'s and `runner-v0.2.0`'s
+  `checksums.txt` (task #220; `0.2.0` pinned by task #232, `0.1.0` kept so machines on it still
+  download and verify). The
   gateway's `X-Aixle-Runner-Protocol` check reads `protocol_supported`, and
   `X-Aixle-Runner-Version` is strict SemVer 2.0 from task 10 on, so versions compare by SemVer
   precedence (`Runners::Version`).
