@@ -9,7 +9,7 @@ class Integration < ApplicationRecord
 
   CONNECTABLE_PROVIDERS = %w[github gitlab bitbucket coder slack azure_devops jira linear youtrack].freeze
 
-  enumerize :provider, in: %i[github gitlab bitbucket linear coder slack teams azure_devops jira youtrack], predicates: true
+  enumerize :provider, in: %i[github gitlab bitbucket linear coder slack teams azure_devops jira youtrack insights], predicates: true
   enumerize :status, in: %i[active inactive error], default: :inactive, predicates: true, scope: true
 
   belongs_to :company

@@ -69,6 +69,7 @@ class TerminalSession < ApplicationRecord
   belongs_to :runner_environment, optional: true
   validate :runner_environment_is_the_runners, if: -> { runner_environment_id && will_save_change_to_runner_environment_id? }
   has_one :usage_statistic, dependent: :destroy
+  has_many :insights_otlp_batches, dependent: :delete_all
   has_many :session_logs, dependent: :destroy
   has_many :output_assets, class_name: "Asset", foreign_key: :terminal_session_id
   has_one :step_run, dependent: :nullify

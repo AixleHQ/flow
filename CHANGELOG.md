@@ -14,6 +14,15 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
+- **Integrations**: connect the company to an Aixle Insights organization with
+  the one-time pairing code an Insights owner creates, then switch on the
+  projects whose agents Insights should see. Everything those agents report over
+  OpenTelemetry — usage, prompts, replies, tool calls — is forwarded within a
+  minute, tagged with the person, project and session; only the session's own
+  secrets are masked. The card shows what is still waiting and the last problem.
+  Operators: set `INSIGHTS_URL`, `INSIGHTS_DEPLOYMENT_ID` and
+  `INSIGHTS_DEPLOYMENT_SECRET` (issued by Insights); the integration stays hidden
+  until all three are set.
 - **Tasks**: each file on a task's Assets tab shows when it was uploaded.
 
 ### Changed

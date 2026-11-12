@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_12_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_13_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -892,6 +892,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_12_100000) do
     t.index ["company_id"], name: "index_identity_providers_on_company_id"
     t.index ["kind"], name: "index_identity_providers_unique_deployment_kind", unique: true, where: "((scope)::text = 'deployment'::text)"
     t.check_constraint "scope::text = 'deployment'::text AND company_id IS NULL OR scope::text = 'company'::text AND company_id IS NOT NULL", name: "identity_providers_scope_company_consistency"
+  end
+
+  create_table "insights_otlp_batches", force: :cascade do |t|
+    t.integer "attempts", default: 0, null: false
+    t.datetime "claimed_until"
+    t.datetime "created_at", null: false
+    t.bigint "integration_id", null: false
+    t.string "last_error"
+    t.datetime "next_attempt_at"
+    t.binary "payload", null: false
+    t.bigint "project_id", null: false
+    t.integer "record_count", null: false
+    t.string "signal", null: false
+    t.string "state", default: "pending", null: false
+    t.bigint "terminal_session_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["integration_id", "state", "next_attempt_at"], name: "index_insights_otlp_batches_due"
+    t.index ["project_id", "state"], name: "index_insights_otlp_batches_on_project_id_and_state"
+    t.index ["terminal_session_id"], name: "index_insights_otlp_batches_on_terminal_session_id"
   end
 
   create_table "integration_data", force: :cascade do |t|
@@ -2449,6 +2468,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_12_100000) do
   add_foreign_key "gates", "board_tasks", on_delete: :cascade
   add_foreign_key "gates", "users", column: "creator_id", on_delete: :nullify
   add_foreign_key "identity_providers", "companies"
+  add_foreign_key "insights_otlp_batches", "integrations", on_delete: :cascade
+  add_foreign_key "insights_otlp_batches", "projects", on_delete: :cascade
+  add_foreign_key "insights_otlp_batches", "terminal_sessions", on_delete: :cascade
   add_foreign_key "integration_data", "integrations", on_delete: :cascade
   add_foreign_key "integrations", "azure_devops_installations", on_delete: :restrict
   add_foreign_key "integrations", "bitbucket_installations", on_delete: :restrict

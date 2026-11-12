@@ -192,10 +192,12 @@ Bitbucket repository get the `pull_request_*` tools. Fields:
 **Config items**: `secret` (stored encrypted) or `variable`. Values are entered
 by users in the UI and never returned by any tool.
 
-**Integrations**: `github`, `gitlab`, `bitbucket`, `slack`, `teams`, `azure_devops`, `jira`, `coder`, `linear`, `youtrack`.
+**Integrations**: `github`, `gitlab`, `bitbucket`, `slack`, `teams`, `azure_devops`, `jira`, `coder`, `linear`, `youtrack`, `insights`.
 Users connect them in the browser (`get_integration_setup_url`). Azure DevOps,
 `jira`, `linear` and `youtrack` connections, and GitHub Projects, map their
-projects (Linear: teams) in as task trackers.
+projects (Linear: teams) in as task trackers. `insights` is the company's
+connection to Aixle Insights, made by a company admin with an Insights owner's
+pairing code; each project then chooses to forward its agents' telemetry there.
 
 **Assets**: project or company files. Board-task attachments are separate
 files that live on the task.

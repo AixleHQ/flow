@@ -38,6 +38,7 @@ class Project < ApplicationRecord
   # A limit outliving its project kept reserving capacity nobody could use.
   has_one :session_concurrency_limit, as: :scope, dependent: :destroy
   has_many :template_installs, dependent: :destroy
+  has_many :insights_otlp_batches, dependent: :delete_all
 
   # Validations
   validates :name, presence: true, uniqueness: { scope: :company_id }
@@ -171,6 +172,22 @@ class Project < ApplicationRecord
   # revoked keeps a project_collaborators row but can no longer be assigned.
   def assignable_users
     member_users.where(id: CompanyMembership.active.where(company_id: company_id).select(:user_id))
+  end
+
+  INSIGHTS_DEFAULTS = { "export" => false, "project_id" => nil }.freeze
+
+  # The export switch and the Insights project it maps to (docs/design/insights-otlp-relay.md §3).
+  def insights_settings
+    stored = settings.is_a?(Hash) && settings["insights"].is_a?(Hash) ? settings["insights"] : {}
+    INSIGHTS_DEFAULTS.merge(stored.slice(*INSIGHTS_DEFAULTS.keys))
+  end
+
+  def insights_connection
+    Integration.active.find_by(company_id: company_id, project_id: nil, provider: "insights")
+  end
+
+  def exports_to_insights?
+    insights_settings["export"] == true && insights_connection.present?
   end
 
   private

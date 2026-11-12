@@ -106,6 +106,7 @@ class ActiveSupport::TestCase
   include LinearTestHelper
   include YoutrackTestHelper
   include GithubProjectsTestHelper
+  include InsightsTestHelper
   include FeatureFlagsHelper
   include TemporalActivityHelper
   include TemporalWorkflowHelper

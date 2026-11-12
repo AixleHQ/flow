@@ -273,6 +273,17 @@ FactoryBot.define do
       auth_mode { "oauth" }
     end
 
+    # A company's connection to an Insights organization; the secret is the connection's own.
+    trait :insights do
+      provider { :insights }
+      status { :active }
+      name { "Aixle Insights — Acme" }
+      after(:build) do |integration|
+        integration.credentials_data = { connection_id: SecureRandom.uuid, secret: "aixle_flow_#{SecureRandom.hex(16)}",
+                                         organization_id: "org-1", organization_name: "Acme" }
+      end
+    end
+
     trait :active do
       status { :active }
     end

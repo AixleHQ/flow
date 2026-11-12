@@ -76,6 +76,13 @@ schedules:
     overlap: skip
     enabled: true
 
+  # Aixle Insights relay (docs/design/insights-otlp-relay.md §5): sends what the usage
+  # ingest wrote to the outbox. SKIP overlap: two drains must not race a lease.
+  - workflow: insights_relay_workflow
+    cron: "* * * * *"
+    overlap: skip
+    enabled: true
+
   # Recovery path for CI gates whose resolving webhook never arrived: asks the CI
   # provider what happened to each pending gate's run and resolves it with the
   # provider's own verdict, or marks it stale when the run/repository cannot be
