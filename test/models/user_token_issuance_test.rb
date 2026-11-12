@@ -31,6 +31,14 @@ class UserTokenIssuanceTest < ActiveSupport::TestCase
     assert_not_includes issuance.inspect, issuance.encrypted_token
   end
 
+  test "a persisted issuance is read-only" do
+    issuance = issue("ghu_secret_value")
+
+    assert_raises(ActiveRecord::ReadOnlyRecord) { issuance.update!(target_login: "other") }
+    assert_raises(ActiveRecord::ReadOnlyRecord) { issuance.update!(token: "ghu_changed") }
+    assert_equal "ghu_secret_value", issuance.reload.token
+  end
+
   test "token_values_for lists the tokens of one session only" do
     issue("ghu_one")
     other = create(:terminal_session, :agent_session, user: @user, project: @project)

@@ -89,8 +89,9 @@ class Web::ProfileController < Web::ApplicationController
                                         .find_by(id: params[:project_id])
     return head :not_found unless project
 
-    consent = ActAsConsent.find_or_initialize_by(user: current_user, project: project, company: project.company,
-                                                 provider: params[:provider])
+    # create_or_find_by! so two overlapping first-time updates for one project do not trip the unique index.
+    consent = ActAsConsent.create_or_find_by!(user: current_user, project: project, company: project.company,
+                                              provider: params[:provider])
     consent.in_own_tasks = ActiveModel::Type::Boolean.new.cast(params[:in_own_tasks]) if params.key?(:in_own_tasks)
     consent.in_others_tasks = ActiveModel::Type::Boolean.new.cast(params[:in_others_tasks]) if params.key?(:in_others_tasks)
     consent.save!

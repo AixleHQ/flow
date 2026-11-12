@@ -24,6 +24,12 @@ class UserTokenIssuance < ApplicationRecord
 
   self.filter_attributes += [ :encrypted_token ]
 
+  # Immutable once written, like EntityVersion: the audit trail and the log redaction both rely on it.
+  # Deletions still happen through the database's foreign keys.
+  def readonly?
+    persisted? || super
+  end
+
   def token=(value)
     self.encrypted_token = value.present? ? encrypt_secret(value, column: "encrypted_token") : nil
   end

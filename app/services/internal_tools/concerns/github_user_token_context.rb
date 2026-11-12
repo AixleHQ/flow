@@ -16,6 +16,8 @@ module InternalTools
              "anywhere. Ask again when it expires."
       UNAVAILABLE = "Connecting GitHub accounts is not configured on this installation."
       NO_USER = "This session has no user, so there is no one to act as."
+      NO_IDENTITY = "GitHub did not return this account's identity. Retry in a moment, or reconnect the account " \
+                    "under Profile → Connected accounts."
       NO_PROJECT = "This session has no project."
       NO_REPOSITORIES = "This session has no GitHub repositories connected through the GitHub App."
 
@@ -35,6 +37,8 @@ module InternalTools
 
         user_token = fresh_user_token!(user, credential)
         identity = Github::UserConnection.identity_for(credential)
+        raise Refusal, NO_IDENTITY if identity.blank? || identity["login"].blank? || identity["id"].blank?
+
         tokens = repositories.group_by(&:owner_name).map do |owner, repos|
           mint_token!(user, credential, user_token, owner, repos, identity)
         end
@@ -81,8 +85,7 @@ module InternalTools
       end
 
       def fresh_user_token!(user, credential)
-        Oauth::TokenService.refresh_if_expiring_soon(credential)
-        Oauth::TokenService.access_token_for(owner: user, provider: Github::UserConnection::PROVIDER)
+        Oauth::TokenService.fresh(credential, skew: Oauth::TokenService::PRE_START_SKEW)
           .presence || raise(Oauth::ReauthRequired.new(credential))
       rescue Oauth::ReauthRequired, Encryptable::DecryptionError
         raise Refusal, reconnect_message(user)

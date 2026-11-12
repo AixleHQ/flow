@@ -19,12 +19,14 @@ module Github
     end
 
     # Called by the OAuth callback right after the token is stored. A connection
-    # without an identity is useless, so a failure here destroys the credential.
+    # without an identity is useless, but a failed lookup never destroys the credential
+    # (a reconnect would lose a working connection): the stored identity is cleared so the
+    # new token is not paired with the previous account's, and identity_for refetches it.
     def record_identity!(credential)
       profile = UserTokenService.new.user(credential.access_token)
       store_identity!(credential, profile)
     rescue UserTokenService::Error
-      credential.destroy!
+      credential.update!(metadata: credential.metadata.to_h.except("github_user"))
       raise Oauth::TokenExchangeError, "github identity unavailable"
     end
 
