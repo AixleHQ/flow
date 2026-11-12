@@ -84,6 +84,7 @@ describe('summarize', () => {
       sessionsSucceeded: 76,
       sessionsFailed: 4,
       billingClass: 'no_customer',
+      createdAt: '2026-03-09T22:15:00Z',
       accountStatus: 'active_customer',
       accountType: 'paid',
       billingMethod: 'saas_stripe',
@@ -93,7 +94,13 @@ describe('summarize', () => {
   it('leaves the account blank for a company the report sent no tenant for', () => {
     const [unknown] = summarize([buildUsageDay({ companyId: 9 })], tenants, { start: '2026-10-14', end: '2026-10-14' });
 
-    expect(unknown).toMatchObject({ name: 'Company #9', accountStatus: null, accountType: null, billingMethod: null });
+    expect(unknown).toMatchObject({
+      name: 'Company #9',
+      createdAt: null,
+      accountStatus: null,
+      accountType: null,
+      billingMethod: null,
+    });
   });
 
   it('counts a tenant without a limit as fully used, with no maximum limit', () => {

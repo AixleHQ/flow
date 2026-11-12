@@ -14,6 +14,11 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
+- **Admin**: the dashboard's companies table shows when each account was created
+  and sorts by it, newest first. Compact filters above the table narrow it by
+  account status, account type, billing method and creation date; each opens as
+  a menu from its button. The filters and the name search also narrow the total
+  row and the tiles, all but People and Projects.
 - **Integrations**: Coder's `coder_prepare_repo` clones GitLab, Bitbucket and
   Azure DevOps repositories onto a workspace, not only GitHub and public ones.
   A personal access token from those connections is handed to the workspace

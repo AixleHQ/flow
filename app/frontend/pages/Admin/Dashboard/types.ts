@@ -41,6 +41,8 @@ export type BillingMethod = 'saas_stripe' | 'saas_aws_marketplace' | 'self_hoste
 export interface Tenant {
   id: number;
   name: string;
+  /** When the company was created, as an ISO 8601 UTC instant. */
+  createdAt: string;
   accountStatus: AccountStatus;
   accountType: AccountType;
   /** Null when nobody invoices the company: managed, not paying yet, or self-hosted. */
