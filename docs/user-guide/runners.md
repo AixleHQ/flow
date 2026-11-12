@@ -71,8 +71,9 @@ reach the platform; it needs no `curl` or `sha256sum`. The sequence:
    machine, not in the runner's container.
 2. **Registers the machine.** A throwaway container of
    `ghcr.io/aixlehq/aixle-runner:<version>`, the version the platform
-   recommends, runs `configure --url … --token … --name …`. It uses up the
-   token.
+   recommends, runs `configure --url … --token … --name …` with the Docker
+   socket and the `aixle-runner-docker-root` volume, because `configure` checks
+   Docker and the disk before it registers. It uses up the token.
 3. **Runs it.** A container with `--restart unless-stopped` and the Docker
    socket, so it starts again with Docker.
 
@@ -80,6 +81,13 @@ The container runs as root (`--user 0:0`): reaching the Docker socket already
 gives root on the machine. A runner in Docker does not update itself: to update
 it, remove the container and run the image of the new version with the same
 directory.
+
+The runner reads registry credentials from `~/.docker/config.json` of the user
+it runs as, which in the container is the container's root, not yours. For agent
+images in a private registry, add
+`-v "$HOME/.docker/config.json:/root/.docker/config.json:ro"` to the step 3
+command. A file with a credential helper (`credsStore`) does not work in the
+container: use a file with the credentials in it.
 
 To remove the machine, stop and remove the container, run the same image with
 `unregister` (it removes the machine on the platform), then delete the

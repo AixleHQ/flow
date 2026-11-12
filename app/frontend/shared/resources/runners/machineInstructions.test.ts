@@ -65,12 +65,10 @@ describe('dockerScript', () => {
     const image = "'ghcr.io/aixlehq/aixle-runner:0.1.0'";
     expect(script).toContain("RUNNER_DIR='/var/lib/aixle-runner'");
     expect(script).toContain(
-      `sudo docker run --rm --user 0:0 -e AIXLE_RUNNER_DIR="$RUNNER_DIR" -v "$RUNNER_DIR:$RUNNER_DIR" ${image} configure --url 'https://flow.example.com' --token 'arreg_abc-123_x' --name 'build-01'`,
+      `sudo docker run --rm --user 0:0 -e AIXLE_RUNNER_DIR="$RUNNER_DIR" -v "$RUNNER_DIR:$RUNNER_DIR" -v /var/run/docker.sock:/var/run/docker.sock -v aixle-runner-docker-root:/var/lib/docker:ro ${image} configure --url 'https://flow.example.com' --token 'arreg_abc-123_x' --name 'build-01'`,
     );
     expect(script).toContain('-d --name aixle-runner --restart unless-stopped');
-    expect(script).toContain(
-      '-v /var/run/docker.sock:/var/run/docker.sock -v aixle-runner-docker-root:/var/lib/docker:ro',
-    );
+    expect(script.match(/-v \/var\/run\/docker\.sock:\/var\/run\/docker\.sock/g)).toHaveLength(3);
     expect(script).toContain('# sudo docker run --rm --user 0:0');
     expect(script).toContain('unregister');
     expect(script).not.toContain('--no-auto-update');
