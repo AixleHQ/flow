@@ -140,6 +140,18 @@ class Web::Company::Projects::RunnersControllerTest < ActionDispatch::Integratio
     assert_inertia_props { |props| props[:canManage] == false }
   end
 
+  test "show lists the same machines for a project's runner and for a company runner" do
+    own_machine = create(:runner_environment, runner: @own, display_name: "own-mac")
+    company_machine = create(:runner_environment, runner: @company_runner, display_name: "shared-mac", last_heartbeat_at: 10.minutes.ago)
+    sign_in_as(@owner)
+
+    get company_project_runner_path(@project, @own)
+    assert_inertia_props { |props| props[:machines].map { |m| [ m[:id], m[:state] ] } == [ [ own_machine.id, "idle" ] ] }
+
+    get company_project_runner_path(@project, @company_runner)
+    assert_inertia_props { |props| props[:machines].map { |m| [ m[:id], m[:state] ] } == [ [ company_machine.id, "offline" ] ] }
+  end
+
   test "another project's runner is not found by a write from this page" do
     other = create(:runner, :project_runner, company: @company, created_by: @admin)
     sign_in_as(@admin)

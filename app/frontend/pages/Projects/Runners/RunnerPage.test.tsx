@@ -14,6 +14,7 @@ const render = (props: Record<string, unknown> = {}) =>
     props: {
       project,
       runner: buildRunner({ id: 2, name: 'project-box', scope: 'project', projectId: 7 }),
+      machines: [],
       runnerTypes: [buildRunnerTypeOption()],
       canManage: true,
       projectPermissions: { canExecute: true, canManage: true, canManageCompany: false },

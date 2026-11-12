@@ -10,8 +10,9 @@ admin or the project's owner manages the project's own.
 Runners are behind the `external_runners` feature flag: without it the pages
 do not exist for your company.
 
-This page covers adding machines to a `manual` runner. The rest of the manual
-runner's guide (machines table, health, reuse policy) is not written yet.
+This page covers adding machines to a `manual` runner and reading the
+machines list on its page. The rest of the manual runner's guide (health,
+reuse policy) is not written yet.
 
 ---
 
@@ -97,6 +98,39 @@ commands after the sequence, commented out.
 macOS works through Docker: OrbStack is checked, Docker Desktop as far as
 checked. Rootless Docker and Podman (another socket path) and Windows are not
 covered.
+
+## The machines list
+
+The page of a `manual` runner, in company settings and in the project alike,
+has a **Machines** section: a read-only list with one row per machine. A
+machine appears as soon as it has run `configure`. Each row shows:
+
+- the machine's **name** (the `--name` it was configured with, the hostname by
+  default) and its **key**;
+- its **state**:
+  - **Online**: the machine is connected and running a session;
+  - **Idle**: the machine is connected and has no session;
+  - **Offline**: the platform has not heard from the machine for 90 seconds, or
+    never has. Stop `aixle-runner` on a machine, or lose its network, and it
+    turns offline within about two minutes;
+  - **Failed**: the machine is out of rotation after a failed reset, with the
+    reason shown;
+  - **Gone**: the machine was unregistered;
+- the runner **version** and the **OS / arch** it reported at `configure`
+  (updated every time the runner starts);
+- when it was **registered**;
+- its **last seen**: the last time the platform heard from it. The runner's own
+  "Last seen" in the overview is the latest of its machines'.
+
+The list refreshes itself every 15 seconds while the page is open.
+
+An **offline machine is given no new session**. While another machine of the
+runner is free, a session goes there. If every machine of the runner is
+offline, the session is refused at launch with a message naming the runner and
+saying its machines are offline: start `aixle-runner` on one of them (a machine
+returns to **Idle** on its next poll, within seconds), or pick another runner.
+A machine that is busy running a long step is not treated as offline while that
+step is within its time limit, even when it is silent.
 
 ### Machines on arm64
 
