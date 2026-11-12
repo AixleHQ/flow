@@ -25,6 +25,8 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
     FeatureFlag.find_or_create_by!(key: "external_runners").overrides.create!(company: company, enabled: true, reason: "test")
   end
 
+  def canonical_url = "#{Settings.protocol}://#{Settings.domain}"
+
   def runner_params(**overrides)
     { runner: { name: "Office Mac", runner_type: "manual", max_concurrency: 2, config: { reconnect_grace: 600 } }.merge(overrides) }
   end
@@ -41,12 +43,13 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
     assert_response :not_found
     patch company_settings_runner_path(@runner), params: { runner: { name: "Renamed" } }, as: :json
     assert_response :not_found
-    %i[disable enable revoke].each do |action|
+    %i[disable enable revoke registration_token].each do |action|
       post public_send(:"#{action}_company_settings_runner_path", @runner)
       assert_response :not_found
     end
     delete company_settings_runner_path(@runner)
     assert_response :not_found
+    assert_empty RunnerCredential.all
     assert_equal "Build box", @runner.reload.name
   end
 
@@ -174,7 +177,7 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
     assert_response :not_found
     patch company_settings_runner_path(project_runner), params: { runner: { name: "Hijacked" } }, as: :json
     assert_response :not_found
-    %i[disable enable revoke].each do |action|
+    %i[disable enable revoke registration_token].each do |action|
       post public_send(:"#{action}_company_settings_runner_path", project_runner)
       assert_response :not_found
     end
@@ -184,5 +187,67 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
     assert_not project_runner.deleted?
     assert_equal "pending", project_runner.status
     assert_not_equal "Hijacked", project_runner.name
+  end
+
+  test "only a company admin gets a registration token, once, and only the digest is stored" do
+    assert_role_matrix(WRITE_ROLES, transport: :web, allowed_status: :created) do
+      post registration_token_company_settings_runner_path(@runner), as: :json
+    end
+    assert_equal 1, RunnerCredential.count, "only the admin was given a token"
+    RunnerCredential.delete_all
+
+    sign_in_as(@admin)
+    post registration_token_company_settings_runner_path(@runner), as: :json
+    assert_response :created
+    assert_equal "no-store", response.headers["Cache-Control"]
+    body = response.parsed_body
+    assert_match(/\Aarreg_/, body["token"])
+    assert_equal canonical_url, body["gatewayUrl"]
+    assert_equal Settings.runners.release.recommended_version, body["version"]
+    assert_equal %w[linux-amd64 linux-arm64], body["binaries"].pluck("platform")
+    assert_equal "#{canonical_url}/runner/v1/releases/#{body['version']}/linux-amd64", body["binaries"].first["url"]
+    assert_equal Runners::Release.binary(body["version"], "linux-amd64").sha256, body["binaries"].first["sha256"]
+    assert_in_delta 1.hour.from_now, Time.zone.parse(body["expiresAt"]), 5.seconds
+
+    credential = RunnerCredential.find_by_token(body["token"], kind: :registration)
+    assert_equal @runner, credential.runner
+    assert_equal 1, RunnerCredential.count
+
+    get company_settings_runner_path(@runner)
+    assert_not_includes response.body, body["token"]
+  end
+
+  test "the gateway URL is the platform's own, whatever Host and X-Forwarded-Host say" do
+    sign_in_as(@admin)
+
+    post registration_token_company_settings_runner_path(@runner), as: :json,
+                                                                   headers: { "Host" => "evil.example", "X-Forwarded-Host" => "evil.example" }
+
+    assert_response :created
+    body = response.parsed_body
+    assert_equal canonical_url, body["gatewayUrl"]
+    assert(body["binaries"].all? { |binary| binary["url"].start_with?("#{canonical_url}/runner/v1/releases/") })
+    assert_not_includes response.body, "evil.example"
+  end
+
+  test "a revoked runner is refused with runner_revoked and no token" do
+    @runner.revoke!
+    sign_in_as(@admin)
+
+    post registration_token_company_settings_runner_path(@runner), as: :json
+
+    assert_response :conflict
+    assert_equal "runner_revoked", response.parsed_body["code"]
+    assert_empty RunnerCredential.all
+  end
+
+  test "a deleted runner is not found" do
+    @runner.soft_delete!
+    sign_in_as(@admin)
+
+    post registration_token_company_settings_runner_path(@runner), as: :json
+
+    assert_response :not_found
+    assert_empty RunnerCredential.where(kind: :registration)
   end
 end

@@ -378,4 +378,46 @@ class StepTest < ActiveSupport::TestCase
 
     assert step.reload.update(instructions: "#{step.instructions} Then summarise."), step.errors.full_messages.to_sentence
   end
+
+  test "a step's resource lists are kept as links to the resources, in their order" do
+    first, second = create_list(:repository, 2, scope: @project)
+    tool = create(:tool, scope: @project)
+    step = create(:step, workflow: @workflow, repository_ids: [ second.id, first.id ], tool_ids: [ tool.id ])
+
+    assert_equal [ second.id, first.id ], linked(step, :repository_id)
+    assert_equal [ tool.id ], linked(step, :tool_id)
+
+    step.update!(repository_ids: [ first.id ])
+
+    assert_equal [ first.id ], linked(step, :repository_id)
+    assert_equal [ tool.id ], linked(step, :tool_id), "a list the save did not touch keeps its links"
+  end
+
+  test "a deleted resource drops out of the links of every step that named it" do
+    deleted, kept = create_list(:repository, 2, scope: @project)
+    step = create(:step, workflow: @workflow, repository_ids: [ deleted.id, kept.id ])
+    other = create(:step, workflow: @workflow, repository_ids: [ deleted.id ])
+
+    deleted.destroy!
+
+    assert_equal [ kept.id ], linked(step, :repository_id)
+    assert_empty linked(other, :repository_id)
+  end
+
+  test "an id the list still carries for a deleted resource gets no link" do
+    gone = create(:repository, scope: @project).tap(&:destroy!)
+    live = create(:repository, scope: @project)
+    step = create(:step, workflow: @workflow)
+    step.update_column(:repository_ids, [ gone.id ])
+
+    step.update!(repository_ids: [ gone.id, live.id ])
+
+    assert_equal [ live.id ], linked(step, :repository_id)
+  end
+
+  private
+
+  def linked(step, column)
+    StepResourceLink.where(step: step).where.not(column => nil).order(:position).pluck(column)
+  end
 end

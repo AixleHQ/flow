@@ -38,6 +38,8 @@ export interface RunnerPaths {
   disable: (id: number) => string;
   enable: (id: number) => string;
   revoke: (id: number) => string;
+  /** POST: mints a single-use registration token for "Add machine". */
+  registrationToken: (id: number) => string;
 }
 
 export const schemaTypes = (schema: JsonSchema): string[] =>

@@ -35,6 +35,7 @@ module ProjectMove
         changes = { asset_ids: rewrite_ids(step.asset_ids), instructions: rewrite_text(step.instructions) }
                   .select { |attribute, value| value != step.public_send(attribute) }
         step.update_columns(changes) if changes.any?
+        StepResourceLink.replace!(step, :asset_id, changes[:asset_ids]) if changes.key?(:asset_ids)
       end
       SubStep.where(step_id: steps.select(:id)).find_each do |sub_step|
         text = rewrite_text(sub_step.instructions)
@@ -42,7 +43,10 @@ module ProjectMove
       end
       Workflow.where(id: workflow_ids).find_each do |workflow|
         ids = rewrite_ids(workflow.base_asset_ids)
-        workflow.update_columns(config: workflow.config.merge("base_asset_ids" => ids)) if ids != workflow.base_asset_ids
+        next if ids == workflow.base_asset_ids
+
+        workflow.update_columns(config: workflow.config.merge("base_asset_ids" => ids))
+        WorkflowResourceLink.replace!(workflow, :asset_id, ids)
       end
     end
 
