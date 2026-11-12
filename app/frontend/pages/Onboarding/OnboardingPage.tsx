@@ -371,7 +371,6 @@ function ConnectAgentsStep({
   configuredAgents,
   authSessions,
   loading,
-  isAdmin,
   onBack,
   onNext,
   onSkip,
@@ -379,7 +378,6 @@ function ConnectAgentsStep({
   configuredAgents: AgentType[];
   authSessions: TerminalSession[];
   loading: boolean;
-  isAdmin: boolean;
   onBack: () => void;
   onNext: () => void;
   onSkip: () => void;
@@ -387,7 +385,7 @@ function ConnectAgentsStep({
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
   useFinishOpenedLoginsOnLeave(authSessions, expandedAgent);
   const configuredCount = AVAILABLE_AGENTS.filter((a) => configuredAgents.includes(a.type)).length;
-  const canSkip = isAdmin && configuredCount === 0;
+  const canSkip = configuredCount === 0;
 
   const confirmSkip = useCallback(() => {
     modals.openConfirmModal({
@@ -761,7 +759,6 @@ const OnboardingPage = () => {
             configuredAgents={configuredAgents}
             authSessions={authSessions}
             loading={loading}
-            isAdmin={currentUser.currentRole === 'admin'}
             onBack={handleBack}
             onNext={handleFinish}
             onSkip={handleSkipAgentSetup}
