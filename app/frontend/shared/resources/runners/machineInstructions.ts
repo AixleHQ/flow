@@ -80,7 +80,15 @@ export function dockerScript({ registration, name, host }: DockerScriptOptions):
   const linux = host === 'linux';
   const dir = linux ? "RUNNER_DIR='/var/lib/aixle-runner'" : 'RUNNER_DIR="$HOME/aixle-runner"';
   const sudo = linux ? 'sudo ' : '';
-  const common = ['--user 0:0', '-e AIXLE_RUNNER_DIR="$RUNNER_DIR"', '-v "$RUNNER_DIR:$RUNNER_DIR"'];
+  // `configure` runs the Docker preflight (the daemon and the disk check, §14.4), so it needs the same
+  // socket and volume as the running container.
+  const common = [
+    '--user 0:0',
+    '-e AIXLE_RUNNER_DIR="$RUNNER_DIR"',
+    '-v "$RUNNER_DIR:$RUNNER_DIR"',
+    '-v /var/run/docker.sock:/var/run/docker.sock',
+    '-v aixle-runner-docker-root:/var/lib/docker:ro',
+  ];
   const withRoot = (...rest: string[]) => ['docker run', ...rest, ...common].join(' ');
 
   const configure = [
@@ -98,13 +106,8 @@ export function dockerScript({ registration, name, host }: DockerScriptOptions):
     configure,
     '',
     '# 3. Run it; it restarts with Docker. The Docker socket lets it start the sessions',
-    `${sudo}${withRoot(
-      '-d',
-      '--name aixle-runner',
-      '--restart unless-stopped',
-      '-v /var/run/docker.sock:/var/run/docker.sock',
-      '-v aixle-runner-docker-root:/var/lib/docker:ro',
-    )} ${image}`,
+    '#    (images from a private registry: add -v "$HOME/.docker/config.json:/root/.docker/config.json:ro")',
+    `${sudo}${withRoot('-d', '--name aixle-runner', '--restart unless-stopped')} ${image}`,
     '',
     '# To remove this machine later: stop it, unregister it, delete what it left',
     '# docker stop aixle-runner && docker rm aixle-runner',
