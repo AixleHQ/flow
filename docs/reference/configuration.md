@@ -181,6 +181,25 @@ ports: `container.start` sends a session's port, and the runner listens there.
 | `RUNNER_PROXY_HOST_PORT_BASE`  | no       | `20000` | With `network: host`, a session listens on the machine's `127.0.0.1` on this base plus its id mod `RUNNER_PROXY_HOST_PORT_SPAN`. |
 | `RUNNER_PROXY_HOST_PORT_SPAN`  | no       | `10000` | The size of that port range, at least 1. Base plus span must not pass 65536, the base must be at least 1024, and the range must not include any of the agent image's own ports (7681, 7682, 4040, 4041, 8443, 8888). A deployed app refuses to boot on a proxy port outside these rules. |
 
+### External runners' agent images
+
+A session on an external runner gets its own default agent images, set apart
+from the hosted `AGENT_IMAGE_*` ones (a hosted prefix is often a private
+registry that a customer's machine cannot pull from). The tag is the hosted
+`AGENT_IMAGE_TAG`. A runner's `container.image_override` wins over both.
+
+| Variable                                  | Required | Default                | Purpose                                                                 |
+| ----------------------------------------- | -------- | ---------------------- | ----------------------------------------------------------------------- |
+| `RUNNER_AGENT_IMAGE_PREFIX`               | no       | `ghcr.io/aixlehq/flow-` | Registry/name prefix runner sessions' images are derived from (the public images). |
+| `RUNNER_AGENT_IMAGE_CLAUDE_CODE`          | no       | derived                | Per-runtime override for runner sessions.                               |
+| `RUNNER_AGENT_IMAGE_CURSOR_CLI`           | no       | derived                | Per-runtime override for runner sessions.                               |
+| `RUNNER_AGENT_IMAGE_CODEX`                | no       | derived                | Per-runtime override for runner sessions.                               |
+| `RUNNER_AGENT_IMAGE_GEMINI_CLI`           | no       | derived                | Per-runtime override for runner sessions.                               |
+| `RUNNER_AGENT_IMAGE_ANTIGRAVITY_CLI`      | no       | derived                | Per-runtime override for runner sessions.                               |
+| `RUNNER_AGENT_IMAGE_GROK`                 | no       | derived                | Per-runtime override for runner sessions.                               |
+| `RUNNER_AGENT_IMAGE_KIRO_CLI`             | no       | derived                | Per-runtime override for runner sessions.                               |
+| `RUNNER_AGENT_IMAGE_COPILOT_CLI`          | no       | derived                | Per-runtime override for runner sessions.                               |
+
 ### Kubernetes runtime (when `CONTAINER_RUNTIME=kubernetes`)
 
 | Variable                          | Required | Default                                                | Purpose                                                     |

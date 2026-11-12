@@ -686,6 +686,23 @@ container_execution:
 # inputs: the same for every installation, and set here so the tests can shorten
 # them (config/settings/test.yml).
 runners:
+  # The agent images a session on an external runner machine gets, set apart
+  # from `agents.*` above: the hosted prefix is often a private registry (our
+  # ECR) that a customer's machine cannot pull from. The defaults are the public
+  # images (.github/workflows/images.yml). The tag is the hosted one
+  # (`agents.image_tag`); a runner's `container.image_override` still wins.
+  agent_image_prefix: <%= ENV['RUNNER_AGENT_IMAGE_PREFIX'] || 'ghcr.io/aixlehq/flow-' %>
+  # Per-runtime escape hatch, as `agents.images`. A blank entry falls back to
+  # the derived name.
+  agent_images:
+    claude_code: <%= ENV['RUNNER_AGENT_IMAGE_CLAUDE_CODE'] %>
+    cursor_cli: <%= ENV['RUNNER_AGENT_IMAGE_CURSOR_CLI'] %>
+    codex: <%= ENV['RUNNER_AGENT_IMAGE_CODEX'] %>
+    gemini_cli: <%= ENV['RUNNER_AGENT_IMAGE_GEMINI_CLI'] %>
+    antigravity_cli: <%= ENV['RUNNER_AGENT_IMAGE_ANTIGRAVITY_CLI'] %>
+    grok: <%= ENV['RUNNER_AGENT_IMAGE_GROK'] %>
+    kiro_cli: <%= ENV['RUNNER_AGENT_IMAGE_KIRO_CLI'] %>
+    copilot_cli: <%= ENV['RUNNER_AGENT_IMAGE_COPILOT_CLI'] %>
   # How long ContainerRuntime::RunnerRuntime first waits between two looks at
   # an op's result, in seconds. It doubles up to one second.
   op_poll_interval: 0.25

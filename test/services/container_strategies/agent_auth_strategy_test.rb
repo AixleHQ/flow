@@ -91,6 +91,36 @@ module ContainerStrategies
       assert_equal "aixle/grok:latest", strategy.resolve_image
     end
 
+    # == Runner session images (#229) ==
+
+    def runner_strategy(agent_type: "claude_code")
+      session = create(:runner_session, agent_type: agent_type)
+      AgentAuthStrategy.new(
+        user_id: session.user_id,
+        agent_type: agent_type,
+        session_id: session.id,
+        route_token: session.route_token
+      )
+    end
+
+    test "a runner session gets the public image, with the hosted tag" do
+      assert_equal "ghcr.io/aixlehq/flow-claude-code:latest", runner_strategy.resolve_image
+    end
+
+    test "a runner session takes the runner image prefix" do
+      Settings.runners.stubs(:agent_image_prefix).returns("registry.example/agents/")
+
+      assert_equal "registry.example/agents/codex:latest", runner_strategy(agent_type: "codex").resolve_image
+      assert_equal "aixle/codex:latest", build_strategy(agent_type: "codex").resolve_image
+    end
+
+    test "a runner session takes the per-runtime runner override" do
+      Settings.runners.stubs(:agent_images).returns({ "claude_code" => "registry.example/claude@sha256:abc" })
+
+      assert_equal "registry.example/claude@sha256:abc", runner_strategy.resolve_image
+      assert_equal "aixle/claude-code:latest", build_strategy.resolve_image
+    end
+
     # The Grok login is the device-code flow: nothing in the container can open a
     # browser, so the default browser flow would strand the auth terminal.
     test "grok auth terminal runs the device-code login" do
