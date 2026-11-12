@@ -14,6 +14,7 @@ const paths: RunnerPaths = {
   disable: (id) => `/company/settings/runners/${id}/disable`,
   enable: (id) => `/company/settings/runners/${id}/enable`,
   revoke: (id) => `/company/settings/runners/${id}/revoke`,
+  registrationToken: (id) => `/company/settings/runners/${id}/registration_token`,
 };
 
 const renderForm = (runner?: ReturnType<typeof buildRunner>) =>

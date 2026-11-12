@@ -32,6 +32,7 @@ import quickStart from './quick-start.md?raw';
 import reference from './reference.md?raw';
 import repositories from './repositories.md?raw';
 import runningWorkflows from './running-workflows.md?raw';
+import runners from './runners.md?raw';
 import runtimes from './runtimes.md?raw';
 import secrets from './secrets.md?raw';
 import sessionQueues from './session-queues.md?raw';
@@ -238,6 +239,12 @@ export const DOC_PAGES: Record<string, DocPage & { toc: TocItem[] }> = {
     section: 'User guide',
     content: agents,
     toc: extractToc(agents),
+  },
+  runners: {
+    title: 'Runners',
+    section: 'User guide',
+    content: runners,
+    toc: extractToc(runners),
   },
   runtimes: {
     title: 'Runtimes',

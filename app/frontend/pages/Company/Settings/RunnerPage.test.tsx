@@ -105,4 +105,17 @@ describe('Company/Settings/RunnerPage', () => {
 
     expect(screen.queryByRole('heading', { name: 'gpu-box' })).not.toBeInTheDocument();
   });
+
+  it('offers Add machine on a live manual runner to someone who may manage it, and not otherwise', () => {
+    const { unmount } = render();
+    expect(screen.getByRole('button', { name: 'Add machine' })).toBeInTheDocument();
+    unmount();
+
+    const other = render({ canManage: false });
+    expect(screen.queryByRole('button', { name: 'Add machine' })).not.toBeInTheDocument();
+    other.unmount();
+
+    render({ runner: buildRunner({ id: 5, name: 'gpu-box', status: 'revoked' }) });
+    expect(screen.queryByRole('button', { name: 'Add machine' })).not.toBeInTheDocument();
+  });
 });

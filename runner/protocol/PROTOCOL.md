@@ -1033,5 +1033,10 @@ Each of these is designed in DESIGN.md §6 and comes with its own section and fi
   container is gone. That session's container keeps running on the machine: nothing can stop it,
   because the runner is unregistered and its credentials are revoked, so the operator removes it
   by hand. Scrub and return to service are tasks 11 and 13.
-- An endpoint that issues registration tokens ("Add machine"): task 12.
+- An endpoint that issues registration tokens ("Add machine"): built (task 12a, #225). `POST
+  /company/settings/runners/:id/registration_token` and `POST /company/projects/:project_id/runners/:id/registration_token`
+  on the web application (not the gateway; the caller is a signed-in user who may manage the runner) mint one through
+  `Runners::Credentials.mint_registration!` and answer once with the token, its expiry, the recommended runner version
+  and, for each pinned platform, the binary's URL on the platform's own host and its SHA-256. A revoked runner is
+  refused with `runner_revoked`. The Machines table and per-machine Revoke remain task 12.
 - Ephemeral registration: refused with `ephemeral_not_supported` until it is built.
