@@ -17,13 +17,14 @@ module ContainerStrategies
       agent_service = AgentCredentialsService.for(input[:agent_type])
 
       logs_count, log_contents = collect_logs(container, session, agent_service)
-      uncollected = []
-      logs_count += collect_terminal_output(container, session, uncollected)
+      terminal = collect_terminal_output(container, session)
+      logs_count += terminal.count
       collect_usage(session, agent_service, log_contents)
       persist_refreshed_credentials(container, session, agent_service)
 
-      outputs_count = collect_workflow_outputs(container_id, uncollected)
-      report_uncollected_whole(session, uncollected)
+      outputs = collect_workflow_outputs(container_id)
+      outputs_count = outputs.count
+      report_uncollected_whole(session, terminal.uncollected + outputs.uncollected)
 
       # Provider-agnostic teardown hook: every integration that holds
       # session-scoped runtime state (Coder workspace locks today, others
@@ -55,12 +56,13 @@ module ContainerStrategies
 
     private
 
-    def collect_workflow_outputs(container_id, uncollected = [])
+    # → ContainerStrategies::Collection
+    def collect_workflow_outputs(container_id)
       session = TerminalSession.find(input[:session_id])
       step_run = session.step_run
       unless step_run
         Rails.logger.info("[WorkflowStepStrategy] No step_run for session #{session.id}, skipping output collection")
-        return 0
+        return Collection.none
       end
 
       workflow_run = step_run.workflow_run
@@ -73,15 +75,18 @@ module ContainerStrategies
         stdout: true, stderr: true
       )
       Rails.logger.info("[WorkflowStepStrategy] find exit=#{result[2]}, stdout=#{result[0].join.strip[0..200]}")
-      return 0 unless result[2].zero?
+      return Collection.none unless result[2].zero?
 
       files = result[0].join.split("\n").reject(&:blank?)
       Rails.logger.info("[WorkflowStepStrategy] Found #{files.size} output files for step_run=#{step_run.id}")
       count = 0
+      uncollected = []
 
       files.each do |file_path|
         relative = file_path.sub("#{output_dir}/", "")
-        content = read_file_for_collection(container, file_path, uncollected)
+        read = read_file_result_or_nil(container, file_path)
+        uncollected.concat(uncollected_note(file_path, read))
+        content = read&.content
         if content.blank?
           Rails.logger.warn("[WorkflowStepStrategy] Skipped output #{file_path}: #{content.nil? ? 'unreadable' : 'empty'}")
           next
@@ -109,10 +114,10 @@ module ContainerStrategies
         tmpfile&.close!
       end
 
-      count
+      Collection.of(count, uncollected)
     rescue StandardError => e
       Rails.logger.warn("[WorkflowStepStrategy] Output collection failed: #{e.message}")
-      0
+      Collection.none
     end
 
     def inject_prior_step_outputs(container_id)

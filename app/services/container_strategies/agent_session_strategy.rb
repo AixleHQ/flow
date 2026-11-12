@@ -149,10 +149,11 @@ module ContainerStrategies
       agent_service = AgentCredentialsService.for(input[:agent_type])
 
       logs_count, log_contents = collect_logs(container, session, agent_service)
-      uncollected = []
-      logs_count += collect_terminal_output(container, session, uncollected)
-      outputs_count = collect_outputs(container, session, uncollected)
-      report_uncollected_whole(session, uncollected)
+      terminal = collect_terminal_output(container, session)
+      outputs = collect_outputs(container, session)
+      logs_count += terminal.count
+      outputs_count = outputs.count
+      report_uncollected_whole(session, terminal.uncollected + outputs.uncollected)
       # Refresh first: an agent that rotates its token during a session leaves the
       # stored credential stale, and usage collection may need to call the vendor with
       # it (Kiro reads its credit counter, Grok prices models from the catalogue).
@@ -316,13 +317,16 @@ module ContainerStrategies
       @secret_redactor ||= Sessions::SecretRedactor.for_session(session)
     end
 
-    def collect_terminal_output(container, session, uncollected = [])
+    # → ContainerStrategies::Collection
+    def collect_terminal_output(container, session)
       # The file is populated live by the `agent` pane's tmux pipe-pane, set up in
       # docker/base/entrypoint.sh at container start (`tee -a /tmp/terminal_output.log`),
       # so it already holds the raw ANSI stream — no capture-pane snapshot needed.
-      content = read_file_for_collection(container, "/tmp/terminal_output.log", uncollected)
+      read = read_file_result_or_nil(container, "/tmp/terminal_output.log")
+      uncollected = uncollected_note("/tmp/terminal_output.log", read)
+      content = read&.content
       content = container_stdout(container) if content.nil?
-      return 0 if content.blank?
+      return Collection.of(0, uncollected) if content.blank?
 
       # Anything the agent echoed — a value it read through get_config_item, most
       # of all — is in this stream, often split by the TUI's colour codes and line
@@ -340,10 +344,10 @@ module ContainerStrategies
         file_size: content.bytesize,
         content_type: "text/plain; charset=utf-8"
       )
-      1
+      Collection.of(1, uncollected)
     rescue StandardError => e
       Rails.logger.warn("[AgentSession] Failed to collect terminal output: #{e.message}")
-      0
+      Collection.none
     end
 
     # A container that was killed (out of memory, evicted) cannot be exec'd into, so
@@ -375,7 +379,8 @@ module ContainerStrategies
       [ result.count, result.contents ]
     end
 
-    def collect_outputs(container, session, uncollected = [])
+    # → ContainerStrategies::Collection
+    def collect_outputs(container, session)
       output_dir = "/workspace/outputs"
 
       # Recurse: agents organize outputs into subdirs (e.g. outputs/presentation/index.html).
@@ -387,18 +392,21 @@ module ContainerStrategies
         [ "/bin/sh", "-c", "find #{output_dir} -type f 2>/dev/null || true" ],
         stdout: true, stderr: true
       )
-      return 0 unless result[2].zero?
+      return Collection.none unless result[2].zero?
 
       files = result[0].join.split("\n").reject(&:blank?)
-      return 0 if files.empty?
+      return Collection.none if files.empty?
 
       scope_type, scope_id = resolve_output_scope(session)
       count = 0
+      uncollected = []
 
       files.each do |file_path|
         relative = file_path.sub("#{output_dir}/", "")
         filename = File.basename(relative)
-        content = read_file_for_collection(container, file_path, uncollected)
+        read = read_file_result_or_nil(container, file_path)
+        uncollected.concat(uncollected_note(file_path, read))
+        content = read&.content
         if content.blank?
           # A dropped output used to leave no trace at all — the asset simply never
           # appeared. Log it, so an unreadable file is distinguishable from an empty one.
@@ -426,10 +434,10 @@ module ContainerStrategies
         tmpfile&.close!
       end
 
-      count
+      Collection.of(count, uncollected)
     rescue StandardError => e
       Rails.logger.warn("[AgentSession] Failed to list outputs: #{e.message}")
-      0
+      Collection.none
     end
 
     # Output scope follows the session's project; project-less sessions fall
