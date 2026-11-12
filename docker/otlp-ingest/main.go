@@ -15,6 +15,8 @@ import (
 	collectorlogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	collectormetrics "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
 	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
+	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
+	resourcepb "go.opentelemetry.io/proto/otlp/resource/v1"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -96,6 +98,8 @@ func (s *server) exportHandler(signal string, newRequest func() proto.Message) h
 			}
 		}
 
+		stampSession(req, r.Header)
+
 		jsonBody, err := protojson.Marshal(req)
 		if err != nil {
 			log.Printf("%s json marshal error: %v", signal, err)
@@ -111,6 +115,68 @@ func (s *server) exportHandler(signal string, newRequest func() proto.Message) h
 
 		w.WriteHeader(http.StatusOK)
 	}
+}
+
+// sessionHeaders name a batch's session for CLIs that ignore OTEL_RESOURCE_ATTRIBUTES
+// but send OTEL_EXPORTER_OTLP_HEADERS (Grok). Each becomes the resource attribute the
+// web app checks; a resource that already names its session keeps its own.
+var sessionHeaders = []struct{ header, attribute string }{
+	{"X-Aixle-Session-Token", "terminal_session_token"},
+	{"X-Aixle-Session-Key", "terminal_session_key"},
+}
+
+func stampSession(req proto.Message, header http.Header) {
+	var stamped []*commonpb.KeyValue
+	for _, h := range sessionHeaders {
+		if value := header.Get(h.header); value != "" {
+			stamped = append(stamped, &commonpb.KeyValue{
+				Key:   h.attribute,
+				Value: &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: value}},
+			})
+		}
+	}
+	if len(stamped) == 0 {
+		return
+	}
+	for _, resource := range resources(req) {
+		if !hasAttribute(resource, sessionHeaders[0].attribute) {
+			resource.Attributes = append(resource.Attributes, stamped...)
+		}
+	}
+}
+
+func resources(req proto.Message) []*resourcepb.Resource {
+	var out []*resourcepb.Resource
+	add := func(resource **resourcepb.Resource) {
+		if *resource == nil {
+			*resource = &resourcepb.Resource{}
+		}
+		out = append(out, *resource)
+	}
+	switch m := req.(type) {
+	case *collectorlogs.ExportLogsServiceRequest:
+		for _, rl := range m.ResourceLogs {
+			add(&rl.Resource)
+		}
+	case *collectormetrics.ExportMetricsServiceRequest:
+		for _, rm := range m.ResourceMetrics {
+			add(&rm.Resource)
+		}
+	case *collectortrace.ExportTraceServiceRequest:
+		for _, rs := range m.ResourceSpans {
+			add(&rs.Resource)
+		}
+	}
+	return out
+}
+
+func hasAttribute(resource *resourcepb.Resource, key string) bool {
+	for _, kv := range resource.Attributes {
+		if kv.Key == key {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *server) postUsage(ctx context.Context, body []byte) error {

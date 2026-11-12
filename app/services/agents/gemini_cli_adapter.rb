@@ -318,7 +318,10 @@ module Agents
                            "target" => "local",
                            "otlpEndpoint" => otel_endpoint.to_s,
                            "otlpProtocol" => "http",
-                           "logPrompts" => false
+                           # Every content switch (docs/design/agent-telemetry.md): prompts,
+                           # request and response text, tool arguments and results.
+                           "logPrompts" => true,
+                           "traces" => true
                          }
                        end,
         # Tools - auto approve all operations (container is the sandbox)

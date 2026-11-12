@@ -579,6 +579,15 @@ module Agents
       assert_equal "90000", env["MCP_TIMEOUT"]
     end
 
+    test "default_env_vars turns on every signal and every content switch" do
+      env = @adapter.default_env_vars(@session, callbacks: hosted_callbacks.merge(otel: "http://collector:4318"))
+
+      assert_equal %w[otlp otlp otlp], env.values_at("OTEL_METRICS_EXPORTER", "OTEL_LOGS_EXPORTER", "OTEL_TRACES_EXPORTER")
+      assert_equal "1", env["CLAUDE_CODE_ENHANCED_TELEMETRY_BETA"]
+      %w[OTEL_LOG_USER_PROMPTS OTEL_LOG_ASSISTANT_RESPONSES OTEL_LOG_TOOL_DETAILS OTEL_LOG_TOOL_CONTENT
+         OTEL_LOG_RAW_API_BODIES].each { |switch| assert_equal "1", env[switch], switch }
+    end
+
     test "default_env_vars keeps the CLI off the alternate screen so the session log scrolls" do
       env = @adapter.default_env_vars(@session, callbacks: hosted_callbacks)
 

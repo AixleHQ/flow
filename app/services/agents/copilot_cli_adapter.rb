@@ -210,6 +210,11 @@ module Agents
         "OTEL_EXPORTER_OTLP_ENDPOINT" => otel,
         "OTEL_EXPORTER_OTLP_PROTOCOL" => otel.present? ? "http/json" : nil,
         "OTEL_RESOURCE_ATTRIBUTES" => session && UsageStatistics::SessionKey.resource_attributes(session),
+        # Message content on the spans (docs/design/agent-telemetry.md): prompts, replies,
+        # system instructions, tool definitions, arguments and results. The legacy switch is
+        # the one 1.0.108 documents; the newer one is set too in case it is honoured.
+        "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT" => otel.present? ? "true" : nil,
+        "OTEL_INSTRUMENTATION_GENAI_CAPTURE_CONTENT" => otel.present? ? "SPAN_AND_EVENT" : nil,
         "COPILOT_GH_HOST" => gh_host(credential&.config_data)
       }.compact_blank
     end

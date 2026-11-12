@@ -189,6 +189,25 @@ module Agents
       assert_includes @adapter.session_log_paths, "/var/log/mitm/http.log"
     end
 
+    # The CLI ignores OTEL_RESOURCE_ATTRIBUTES; otlp-ingest turns these headers into the
+    # resource attributes UsageStatisticsService checks.
+    test "default_env_vars exports the CLI's own telemetry, naming the session in headers" do
+      env = @adapter.default_env_vars(@session, callbacks: hosted_callbacks)
+
+      assert_equal "1", env["GROK_EXTERNAL_OTEL"]
+      assert_equal ContainerRuntime::CallbackUrls.hosted(:otel), env["OTEL_EXPORTER_OTLP_ENDPOINT"]
+      headers = env["OTEL_EXPORTER_OTLP_HEADERS"].split(",").to_h { |pair| pair.split("=", 2) }
+      assert_equal @session.route_token, headers["X-Aixle-Session-Token"]
+      assert UsageStatistics::SessionKey.valid?(@session.route_token, headers["X-Aixle-Session-Key"])
+      assert_equal %w[1 1 1], env.values_at("OTEL_LOG_USER_PROMPTS", "OTEL_LOG_TOOL_DETAILS", "OTEL_LOG_TOOL_CONTENT")
+    end
+
+    test "a session without a collector exports no telemetry" do
+      env = @adapter.default_env_vars(@session, callbacks: hosted_callbacks.merge(otel: nil))
+
+      assert_empty env.keys.grep(/OTEL/)
+    end
+
     # XAI_API_KEY outranks a stored session token in the CLI's own credential
     # resolution, so a stray key would silently bill a different xAI account.
     test "conflicting_env_keys drops a stray API key unless the credential is an API-key login" do
