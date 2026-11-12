@@ -6,13 +6,13 @@
 # reloaded: the token exists only in the response that issues it.
 class RunnerRegistrationResource < ApplicationResource
   typelize :string
-  attribute :token
+  attributes :token
 
   typelize :string
-  attribute :gateway_url
+  attributes :gateway_url
 
   typelize :string
-  attribute :version
+  attributes :version
 
   typelize :string
   attribute :expires_at do |registration|
