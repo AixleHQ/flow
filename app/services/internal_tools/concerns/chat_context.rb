@@ -24,7 +24,7 @@ module InternalTools
         return [ named, nil ] if named.present? && Chat::PROVIDERS.key?(named.to_s)
         return [ nil, error("Unknown provider #{named.inspect}: use slack or teams") ] if named.present?
 
-        connected = project ? Tool.active_integration_providers(project) & Chat::PROVIDERS.keys : []
+        connected = project ? (Tool.active_integration_providers(project) & Chat::PROVIDERS.keys).sort : []
         return [ connected.first, nil ] if connected.one?
 
         [ nil, error("Name the messenger: pass `provider` (#{connected.join(' or ').presence || 'none is connected'})") ]
