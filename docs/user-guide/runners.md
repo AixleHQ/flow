@@ -86,5 +86,5 @@ platform's agent image. If that image is in a private registry, run
 `aixle-runner`: the platform sends no registry credentials to a machine.
 
 A self-hosted deployment changes the default for all its runners with
-`RUNNER_AGENT_IMAGE_PREFIX` and the per-runtime `RUNNER_AGENT_IMAGE_<RUNTIME>`
+`RUNNER_AGENT_IMAGE_PREFIX`, `RUNNER_AGENT_IMAGE_TAG` (default `latest`) and the per-runtime `RUNNER_AGENT_IMAGE_<RUNTIME>`
 variables (see the configuration reference).

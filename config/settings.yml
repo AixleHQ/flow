@@ -671,9 +671,12 @@ runners:
   # The agent images a session on an external runner machine gets, set apart
   # from `agents.*` above: the hosted prefix is often a private registry (our
   # ECR) that a customer's machine cannot pull from. The defaults are the public
-  # images (.github/workflows/images.yml). The tag is the hosted one
-  # (`agents.image_tag`); a runner's `container.image_override` still wins.
+  # images (.github/workflows/images.yml). The tag is its own setting too: the
+  # hosted `agents.image_tag` can be a build tag (`sha-…`) that GHCR never
+  # publishes (it carries release tags and `latest` only). A runner's
+  # `container.image_override` still wins.
   agent_image_prefix: <%= ENV['RUNNER_AGENT_IMAGE_PREFIX'] || 'ghcr.io/aixlehq/flow-' %>
+  agent_image_tag: "<%= ENV['RUNNER_AGENT_IMAGE_TAG'] || 'latest' %>"
   # Per-runtime escape hatch, as `agents.images`. A blank entry falls back to
   # the derived name.
   agent_images:

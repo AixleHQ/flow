@@ -103,8 +103,16 @@ module ContainerStrategies
       )
     end
 
-    test "a runner session gets the public image, with the hosted tag" do
+    test "a runner session gets the public image, tagged latest" do
       assert_equal "ghcr.io/aixlehq/flow-claude-code:latest", runner_strategy.resolve_image
+    end
+
+    test "a runner session takes its own tag, not the hosted one" do
+      Settings.agents.stubs(:image_tag).returns("sha-b258cc1")
+      Settings.runners.stubs(:agent_image_tag).returns("1.2.3")
+
+      assert_equal "ghcr.io/aixlehq/flow-claude-code:1.2.3", runner_strategy.resolve_image
+      assert_equal "aixle/claude-code:sha-b258cc1", build_strategy.resolve_image
     end
 
     test "a runner session takes the runner image prefix" do

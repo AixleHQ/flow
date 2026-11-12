@@ -191,6 +191,7 @@ registry that a customer's machine cannot pull from). The tag is the hosted
 | Variable                                  | Required | Default                | Purpose                                                                 |
 | ----------------------------------------- | -------- | ---------------------- | ----------------------------------------------------------------------- |
 | `RUNNER_AGENT_IMAGE_PREFIX`               | no       | `ghcr.io/aixlehq/flow-` | Registry/name prefix runner sessions' images are derived from (the public images). |
+| `RUNNER_AGENT_IMAGE_TAG`                  | no       | `latest`               | Tag of runner sessions' images. Must exist in the registry the prefix names (GHCR has release tags and `latest`). |
 | `RUNNER_AGENT_IMAGE_CLAUDE_CODE`          | no       | derived                | Per-runtime override for runner sessions.                               |
 | `RUNNER_AGENT_IMAGE_CURSOR_CLI`           | no       | derived                | Per-runtime override for runner sessions.                               |
 | `RUNNER_AGENT_IMAGE_CODEX`                | no       | derived                | Per-runtime override for runner sessions.                               |
