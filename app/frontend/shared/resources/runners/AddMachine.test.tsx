@@ -23,8 +23,16 @@ const registration = {
   gatewayUrl: 'https://flow.example.com',
   version: '0.1.0',
   binaries: [
-    { platform: 'linux-amd64', url: 'https://flow.example.com/runner/v1/releases/0.1.0/linux-amd64', sha256: 'a'.repeat(64) },
-    { platform: 'linux-arm64', url: 'https://flow.example.com/runner/v1/releases/0.1.0/linux-arm64', sha256: 'b'.repeat(64) },
+    {
+      platform: 'linux-amd64',
+      url: 'https://flow.example.com/runner/v1/releases/0.1.0/linux-amd64',
+      sha256: 'a'.repeat(64),
+    },
+    {
+      platform: 'linux-arm64',
+      url: 'https://flow.example.com/runner/v1/releases/0.1.0/linux-arm64',
+      sha256: 'b'.repeat(64),
+    },
   ],
 };
 
@@ -39,7 +47,9 @@ describe('AddMachine', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Add machine' });
     expect(fetch).toHaveBeenCalledTimes(1);
     const script = within(dialog).getByLabelText('Install instructions');
-    expect(script).toHaveTextContent('curl -fsSLo aixle-runner https://flow.example.com/runner/v1/releases/0.1.0/linux-amd64');
+    expect(script).toHaveTextContent(
+      'curl -fsSLo aixle-runner https://flow.example.com/runner/v1/releases/0.1.0/linux-amd64',
+    );
     // Two spaces between the digest and the file name, as sha256sum -c reads it (toHaveTextContent collapses them).
     expect(script.textContent).toContain(`echo "${'a'.repeat(64)}  aixle-runner" | sha256sum -c -`);
     expect(script).toHaveTextContent(

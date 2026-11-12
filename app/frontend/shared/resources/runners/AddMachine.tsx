@@ -19,12 +19,7 @@ import type { Runner } from '@/types/generated';
 import { apiRequest, notifyApiFailure } from 'shared/lib/apiFetch';
 import { formatDateTime } from 'shared/lib/formatDate';
 
-import {
-  installScript,
-  isValidMachineName,
-  suggestMachineName,
-  type MachineRegistration,
-} from './machineInstructions';
+import { installScript, isValidMachineName, suggestMachineName, type MachineRegistration } from './machineInstructions';
 import type { RunnerPaths } from './runnerConfig';
 
 interface AddMachineProps {
@@ -91,7 +86,9 @@ export function AddMachine({ runner, paths }: AddMachineProps) {
               description="How the machine is listed. Letters, digits, dots, dashes and underscores."
               value={name}
               onChange={(event) => setName(event.currentTarget.value)}
-              error={validName ? undefined : 'Start with a letter or digit; then letters, digits, . _ - only (63 at most)'}
+              error={
+                validName ? undefined : 'Start with a letter or digit; then letters, digits, . _ - only (63 at most)'
+              }
             />
 
             <Stack gap={4}>

@@ -111,9 +111,9 @@ describe('Company/Settings/RunnerPage', () => {
     expect(screen.getByRole('button', { name: 'Add machine' })).toBeInTheDocument();
     view.unmount();
 
-    const readOnly = render({ canManage: false });
+    const utils = render({ canManage: false });
     expect(screen.queryByRole('button', { name: 'Add machine' })).not.toBeInTheDocument();
-    readOnly.unmount();
+    utils.unmount();
 
     render({ runner: buildRunner({ id: 5, name: 'gpu-box', status: 'revoked' }) });
     expect(screen.queryByRole('button', { name: 'Add machine' })).not.toBeInTheDocument();
