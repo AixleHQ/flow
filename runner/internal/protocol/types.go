@@ -79,6 +79,31 @@ type Registration struct {
 	TokenPair
 }
 
+// CheckInRequest is the body of POST /runner/v1/check-in (§5.9). Every field is
+// optional on the wire; the runner sends all three.
+type CheckInRequest struct {
+	OS    string         `json:"os"`
+	Arch  string         `json:"arch"`
+	Facts map[string]any `json:"facts"`
+}
+
+// CheckIn is the 200 answer of check-in: the environment as the platform has it,
+// the config the runner needs and, only when the platform offers one, the
+// update (§5.4, §5.9).
+type CheckIn struct {
+	Environment Environment   `json:"environment"`
+	Config      CheckInConfig `json:"config"`
+	Update      *Update       `json:"update,omitempty"`
+}
+
+// CheckInConfig is the config of a check-in answer.
+type CheckInConfig struct {
+	// UploadMaxBytes is the largest upload the platform takes for an op's output
+	// or file (§6.5). Each upload slot carries its own `max_bytes`, which is what
+	// binds; this value is for the runner's log.
+	UploadMaxBytes int64 `json:"upload_max_bytes"`
+}
+
 // Op is one op of a GET ops answer (§6). SessionID is set on a session op and
 // absent on an environment op.
 type Op struct {

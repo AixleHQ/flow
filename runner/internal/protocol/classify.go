@@ -106,7 +106,7 @@ func Classify(err error) Action {
 		return ActionBug
 	case "invalid_registration", "ephemeral_not_supported":
 		return ActionFixConfiguration
-	case "invalid_request", "invalid_result":
+	case "invalid_request", "invalid_result", "invalid_check_in":
 		return ActionBug
 	}
 

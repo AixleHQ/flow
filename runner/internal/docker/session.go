@@ -55,40 +55,6 @@ const (
 	timeoutGrace     = 15 * time.Second
 )
 
-// cappedBuffer keeps the first OutputCap bytes written to it and counts the rest.
-type cappedBuffer struct {
-	buf       bytes.Buffer
-	limit     int
-	truncated bool
-}
-
-func newCapped() *cappedBuffer { return &cappedBuffer{limit: OutputCap} }
-
-func (c *cappedBuffer) Write(p []byte) (int, error) {
-	room := c.limit - c.buf.Len()
-	switch {
-	case len(p) <= room:
-		c.buf.Write(p)
-	default:
-		if room > 0 {
-			c.buf.Write(p[:room])
-		}
-		c.truncated = true
-	}
-	// The rest is read and dropped, so the command never blocks on a full pipe.
-	return len(p), nil
-}
-
-// String is the kept output as a JSON string can carry it: a rune cut by the cap
-// is dropped, and bytes that are not UTF-8 become U+FFFD.
-func (c *cappedBuffer) String() string {
-	b := c.buf.Bytes()
-	if c.truncated {
-		b = trimPartialRuneEnd(b)
-	}
-	return strings.ToValidUTF8(string(b), "\uFFFD")
-}
-
 func trimPartialRuneEnd(b []byte) []byte {
 	for i := len(b) - 1; i >= 0 && i >= len(b)-utf8.UTFMax; i-- {
 		if utf8.RuneStart(b[i]) {
@@ -128,6 +94,9 @@ type ExecPayload struct {
 	User    string            `json:"user"`
 	Timeout int64             `json:"timeout"`
 	Stdin   *string           `json:"stdin"`
+	// Uploads offers `stdout` and `stderr` a signed URL each, for the output
+	// over OutputCap (PROTOCOL.md §6.5).
+	Uploads Uploads `json:"uploads"`
 }
 
 func (p ExecPayload) validate() *protocol.Result {
@@ -145,7 +114,7 @@ func (p ExecPayload) validate() *protocol.Result {
 			return invalid("`env` has an invalid variable name %q", name)
 		}
 	}
-	return nil
+	return p.Uploads.validate()
 }
 
 // Exec is `exec`: it runs a command in the running session container through the
@@ -229,7 +198,9 @@ func (e *Environment) exec(ctx context.Context, sessionID int64, p ExecPayload) 
 			_ = attached.CloseWrite()
 		}()
 	}
-	stdout, stderr := newCapped(), newCapped()
+	stdout, stderr := newOutputBuffer(p.Uploads.slot("stdout")), newOutputBuffer(p.Uploads.slot("stderr"))
+	defer stdout.close()
+	defer stderr.close()
 	_, copyErr := stdcopy.StdCopy(stdout, stderr, attached.Reader)
 	elapsed := time.Since(started)
 	if ctx.Err() != nil {
@@ -244,8 +215,8 @@ func (e *Environment) exec(ctx context.Context, sessionID int64, p ExecPayload) 
 			"stderr_truncated": stderr.truncated,
 		},
 	}
-	out, errOut := stdout.String(), stderr.String()
-	result.Stdout, result.Stderr = &out, &errOut
+	result.Stdout = e.streamResult(ctx, "stdout", stdout, result.Data)
+	result.Stderr = e.streamResult(ctx, "stderr", stderr, result.Data)
 
 	code, running, err := e.execExit(ctx, created.ID)
 	switch {
@@ -273,6 +244,38 @@ func (e *Environment) exec(ctx context.Context, sessionID int64, p ExecPayload) 
 		result.Error = &protocol.ResultError{Class: ClassExecTimeout, Message: message}
 	}
 	return result
+}
+
+// streamResult is one stream of an exec's result. A stream that went over the
+// cap into its spool is uploaded to its slot and named in data.uploads, and then
+// has no inline text. When the upload fails, the result carries the first
+// OutputCap bytes, as it does without a slot, marks the stream truncated, and
+// says why in data.upload_errors.
+func (e *Environment) streamResult(ctx context.Context, name string, buf *outputBuffer, data map[string]any) *string {
+	if buf.spooled() {
+		err := e.upload(ctx, buf.slot, buf.file)
+		if err == nil {
+			addEntry(data, "uploads", name, uploaded(buf.slot, buf.file.n))
+			return nil
+		}
+		e.logger().Warn("uploading the output of an exec failed; its first bytes are returned instead", "stream", name, "error", err)
+		addEntry(data, "upload_errors", name, "uploading the "+name+" failed: "+err.Error())
+		data[name+"_truncated"] = true
+	} else if buf.err != nil {
+		e.logger().Warn("spooling the output of an exec failed; its first bytes are returned instead", "stream", name, "error", buf.err)
+		addEntry(data, "upload_errors", name, "spooling the "+name+" for its upload failed: "+buf.err.Error())
+	}
+	text := buf.inline()
+	return &text
+}
+
+func addEntry(data map[string]any, key, name string, value any) {
+	entries, _ := data[key].(map[string]any)
+	if entries == nil {
+		entries = map[string]any{}
+		data[key] = entries
+	}
+	entries[name] = value
 }
 
 // execExit reads an exec's exit code. The output stream can end a moment before
@@ -388,6 +391,9 @@ func (e *Environment) writeFile(ctx context.Context, sessionID int64, p WriteFil
 // ReadFilePayload is the payload of `read_file`.
 type ReadFilePayload struct {
 	Path string `json:"path"`
+	// Uploads offers `content` a signed URL, for a file over OutputCap
+	// (PROTOCOL.md §6.5).
+	Uploads Uploads `json:"uploads"`
 }
 
 // ReadFile is `read_file`: it reads one file of the session container through the
@@ -397,10 +403,17 @@ func (e *Environment) ReadFile(ctx context.Context, sessionID int64, raw json.Ra
 	if r := decodePayload(raw, &p, "{path}"); r != nil {
 		return *r
 	}
-	if r := validTarget("path", p.Path); r != nil {
+	if r := p.validate(); r != nil {
 		return *r
 	}
 	return e.readFile(ctx, sessionID, p)
+}
+
+func (p ReadFilePayload) validate() *protocol.Result {
+	if r := validTarget("path", p.Path); r != nil {
+		return r
+	}
+	return p.Uploads.validate()
 }
 
 func (e *Environment) readFile(ctx context.Context, sessionID int64, p ReadFilePayload) protocol.Result {
@@ -408,17 +421,54 @@ func (e *Environment) readFile(ctx context.Context, sessionID int64, p ReadFileP
 	if r != nil {
 		return *r
 	}
+	slot := p.Uploads.slot("content")
+	// A file over OutputCap with a slot to hold it is copied into a spool and
+	// uploaded; `large` says which way this read goes.
+	var large bool
+	var file *spool
+	defer func() { file.Close() }()
 	content, r := e.copyOut(ctx, c.ID, p.Path, func(stat container.PathStat) *protocol.Result {
-		if stat.Size > OutputCap {
-			r := protocol.ErrorResult(ClassFileTooLarge, fmt.Sprintf("%s is %d bytes, over the %d-byte limit of read_file", p.Path, stat.Size, OutputCap))
+		switch {
+		case stat.Size <= OutputCap:
+		case slot == nil:
+			r := protocol.ErrorResult(ClassFileTooLarge, fmt.Sprintf("%s is %d bytes, over the %d-byte limit of read_file, and the op offers no upload for it", p.Path, stat.Size, OutputCap))
 			return &r
+		case stat.Size > slot.MaxBytes:
+			r := protocol.ErrorResult(ClassFileTooLarge, fmt.Sprintf("%s is %d bytes, over the %d-byte limit of an upload", p.Path, stat.Size, slot.MaxBytes))
+			return &r
+		default:
+			large = true
 		}
 		return nil
 	}, func(tr io.Reader) ([]byte, error) {
-		return io.ReadAll(io.LimitReader(tr, OutputCap+1))
+		if !large {
+			return io.ReadAll(io.LimitReader(tr, OutputCap+1))
+		}
+		var err error
+		if file, err = newSpool(); err != nil {
+			return nil, fmt.Errorf("spooling the file for its upload failed: %w", err)
+		}
+		// One byte more than the slot takes shows a file that grew while it was read.
+		if _, err = io.Copy(file, io.LimitReader(tr, slot.MaxBytes+1)); err != nil {
+			return nil, err
+		}
+		return nil, nil
 	})
 	if r != nil {
 		return *r
+	}
+	if file != nil {
+		if file.n > slot.MaxBytes {
+			return protocol.ErrorResult(ClassFileTooLarge, fmt.Sprintf("%s grew past the %d-byte limit of an upload while it was read", p.Path, slot.MaxBytes))
+		}
+		if err := e.upload(ctx, slot, file); err != nil {
+			e.logger().Warn("uploading a file failed", "path", p.Path, "error", err)
+			return protocol.ErrorResult(ClassFileTooLarge, fmt.Sprintf("%s is %d bytes, over the %d-byte limit of read_file, and uploading it failed: %v", p.Path, file.n, OutputCap, err))
+		}
+		return protocol.Result{Status: protocol.StatusOK, Data: map[string]any{
+			"size":    file.n,
+			"uploads": map[string]any{"content": uploaded(slot, file.n)},
+		}}
 	}
 	if len(content) > OutputCap {
 		return protocol.ErrorResult(ClassFileTooLarge, fmt.Sprintf("%s is over the %d-byte limit of read_file", p.Path, OutputCap))
@@ -581,7 +631,7 @@ func (e *Environment) batchStep(sessionID int64, step BatchStep) (func(context.C
 		if r := decodePayload(raw, &p, "{path}"); r != nil {
 			return nil, r
 		}
-		if r := validTarget("path", p.Path); r != nil {
+		if r := p.validate(); r != nil {
 			return nil, r
 		}
 		return func(ctx context.Context) protocol.Result { return e.readFile(ctx, sessionID, p) }, nil

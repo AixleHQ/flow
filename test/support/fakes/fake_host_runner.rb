@@ -125,8 +125,7 @@ module ContainerRuntime
         return error("no_session_container", "the session container is not running") unless container.running
 
         stdout, stderr, code = machine.exec(payload.fetch("cmd"))
-        ok("exit_code" => code, "stdout" => stdout, "stderr" => stderr,
-           "data" => { "stdout_truncated" => false, "stderr_truncated" => false })
+        exec_result(payload, code, "stdout" => stdout, "stderr" => stderr)
       when "write_file"
         return error("write_failed", "writing #{payload['path']} failed") unless machine.write(payload)
 
@@ -135,13 +134,51 @@ module ContainerRuntime
         content = container.files[payload.fetch("path")]
         return error("file_not_found", "#{payload['path']} does not exist") if content.nil?
 
-        ok("data" => { "content" => Base64.strict_encode64(content), "size" => content.bytesize })
+        read_file_result(payload, content)
       when "logs"
         tail = container.files["/tmp/terminal_output.log"].to_s
         ok("data" => { "tail" => tail, "size" => tail.bytesize, "truncated" => false })
       else
         error("unsupported_op", "the fake runner does not implement #{op}")
       end
+    end
+
+    # The runner's output cap (PROTOCOL.md §6): a stream or file over it comes
+    # back through the upload the payload offers (§6.5), and without one a
+    # stream is cut and a file refused.
+    OUTPUT_CAP = 1 << 20
+
+    def exec_result(payload, code, streams)
+      result = { "exit_code" => code, "data" => { "stdout_truncated" => false, "stderr_truncated" => false } }
+      streams.each do |name, text|
+        text = text.to_s
+        slot = payload.dig("uploads", name)
+        if text.bytesize <= OUTPUT_CAP
+          result[name] = text
+        elsif slot
+          (result["data"]["uploads"] ||= {})[name] = upload(slot, text)
+        else
+          result[name] = text.byteslice(0, OUTPUT_CAP).scrub("")
+          result["data"]["#{name}_truncated"] = true
+        end
+      end
+      ok(result)
+    end
+
+    def read_file_result(payload, content)
+      return ok("data" => { "content" => Base64.strict_encode64(content), "size" => content.bytesize }) if content.bytesize <= OUTPUT_CAP
+
+      slot = payload.dig("uploads", "content")
+      return error("file_too_large", "#{payload['path']} is over the output cap") if slot.nil?
+
+      ok("data" => { "size" => content.bytesize, "uploads" => { "content" => upload(slot, content) } })
+    end
+
+    # What the runner does with a slot: it puts the bytes where the slot's
+    # `id` is, in Shrine's cache storage, and names the upload.
+    def upload(slot, bytes)
+      Shrine.storages[:cache].upload(StringIO.new(bytes), slot.fetch("id"))
+      { "id" => slot.fetch("id"), "size" => bytes.bytesize }
     end
 
     def mismatch(container, session_id)

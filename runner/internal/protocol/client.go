@@ -22,6 +22,7 @@ const (
 	EndpointRegister     Endpoint = "register"
 	EndpointRegistration Endpoint = "registration"
 	EndpointToken        Endpoint = "token"
+	EndpointCheckIn      Endpoint = "check-in"
 	EndpointOps          Endpoint = "ops"
 	EndpointResult       Endpoint = "result"
 	EndpointReleases     Endpoint = "releases"
@@ -114,6 +115,15 @@ func (c *Client) Unregister(ctx context.Context, accessToken string) error {
 func (c *Client) Refresh(ctx context.Context, refreshToken string) (TokenPair, error) {
 	var out TokenPair
 	err := c.do(ctx, EndpointToken, http.MethodPost, "/runner/v1/token", refreshToken, nil, http.StatusOK, &out)
+	return out, err
+}
+
+// CheckIn reports the machine's os, arch and facts after a start, and the
+// version in X-Aixle-Runner-Version (§5.9). The answer carries the config and,
+// under the rule of an empty poll, an update.
+func (c *Client) CheckIn(ctx context.Context, accessToken string, req CheckInRequest) (CheckIn, error) {
+	var out CheckIn
+	err := c.do(ctx, EndpointCheckIn, http.MethodPost, "/runner/v1/check-in", accessToken, req, http.StatusOK, &out)
 	return out, err
 }
 

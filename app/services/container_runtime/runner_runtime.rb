@@ -78,8 +78,11 @@ module ContainerRuntime
     MEMORY_UNITS = { "" => 1, "k" => 1000, "m" => 1000**2, "g" => 1000**3, "t" => 1000**4,
                      "ki" => 1024, "mi" => 1024**2, "gi" => 1024**3, "ti" => 1024**4 }.freeze
 
-    # One op's outcome.
-    Outcome = Data.define(:op, :state, :result) do
+    # One op's outcome. `uploaded` holds the bytes of each upload the result
+    # named, by output name, and `upload_errors` why an upload it named could
+    # not be read (Runners::ResultUploads).
+    Outcome = Data.define(:op, :state, :result, :uploaded, :upload_errors) do
+      def initialize(op:, state:, result:, uploaded: {}, upload_errors: {}) = super
       def ok? = state == "completed"
       def expired? = state == "expired"
       def error_class = expired? ? "expired" : result&.dig("error", "class")
@@ -250,9 +253,15 @@ module ContainerRuntime
     def read_file(id, path)
       return nil if path.blank?
 
-      outcome = call(session_for(id), "read_file", { "path" => path.to_s })
+      outcome = call(session_for(id), "read_file", { "path" => path.to_s }, uploads: %w[content])
       unless outcome.ok?
         Rails.logger.debug { "[RunnerRuntime] read_file #{path}: #{outcome.message}" }
+        return nil
+      end
+      # A file over the output cap came back through an upload (PROTOCOL.md §6.5).
+      return outcome.uploaded["content"] if outcome.uploaded.key?("content")
+      if outcome.upload_errors.key?("content")
+        Rails.logger.warn("[RunnerRuntime] read_file #{path}: #{outcome.upload_errors['content']}")
         return nil
       end
 
@@ -324,11 +333,15 @@ module ContainerRuntime
       timeout = opts[:timeout].to_i
       payload["timeout"] = timeout if timeout.positive?
       payload["stdin"] = opts[:stdin] if opts[:stdin].is_a?(String)
-      outcome = call(session, "exec", payload, seconds: (timeout + EXEC_GRACE if timeout.positive?))
+      outcome = call(session, "exec", payload, seconds: (timeout + EXEC_GRACE if timeout.positive?),
+                                               uploads: %w[stdout stderr])
 
       if outcome.ok? || outcome.error_class == "exec_timeout"
         exit_code = outcome.result["exit_code"] || (outcome.ok? ? 0 : 124)
-        return [ lines(outcome.result["stdout"]), lines(outcome.result["stderr"]), exit_code ]
+        # An output whose upload could not be read is said so in stderr: the
+        # command's caller must not take the lost part for an empty one.
+        notes = outcome.upload_errors.values.map { |reason| "#{reason}\n" }
+        return [ exec_output(outcome, "stdout"), exec_output(outcome, "stderr") + notes, exit_code ]
       end
       if raise_on_gone && (GONE.include?(outcome.error_class) || outcome.expired?)
         raise ContainerUnreachableError.new(outcome.message, container_identifier: session && container_name(session))
@@ -339,6 +352,20 @@ module ContainerRuntime
 
     def lines(text)
       text.to_s.empty? ? [] : text.to_s.lines
+    end
+
+    # One stream of an exec's result: the upload when the stream was over the
+    # output cap and came back through one, as the inline text is (valid
+    # UTF-8, with U+FFFD for the bytes that are not); the inline text
+    # otherwise. An upload that could not be read leaves the inline part, which
+    # the runner sends then.
+    def exec_output(outcome, name)
+      if outcome.uploaded.key?(name)
+        return lines(outcome.uploaded[name].dup.force_encoding(Encoding::UTF_8).scrub("\uFFFD"))
+      end
+
+      Rails.logger.warn("[RunnerRuntime] exec #{name}: #{outcome.upload_errors[name]}") if outcome.upload_errors.key?(name)
+      lines(outcome.result[name])
     end
 
     def started_container_name(session, outcome)
@@ -385,16 +412,62 @@ module ContainerRuntime
     # or no session at all, has nobody to ask: the op answers as a container
     # that is not there, and nothing is enqueued. The hold read here is checked
     # again by the enqueue, under the machine's lock.
-    def call(session, op, payload, lifecycle: false, seconds: nil)
+    #
+    # `uploads` names the outputs of the op that may be over the output cap
+    # (`stdout` and `stderr` of an exec, `content` of a file). The op carries a
+    # signed URL for each (Runners::ResultUploads), and the outcome holds the
+    # bytes of the ones the runner uploaded.
+    def call(session, op, payload, lifecycle: false, seconds: nil, uploads: [])
       environment = session && machine(session)
       return Outcome.new(op: op, state: "failed", result: no_machine_result) if environment.nil?
 
-      operation = Runners::Operations.enqueue!(environment, op: op, payload: payload,
-                                                            deadline_at: deadline_at(seconds, lifecycle), session: session)
+      deadline = deadline_at(seconds, lifecycle)
+      slots = Runners::ResultUploads.issue(uploads, deadline_at: deadline)
+      payload = payload.merge("uploads" => Runners::ResultUploads.payload(slots)) if slots.any?
+      operation = Runners::Operations.enqueue!(environment, op: op, payload: payload, deadline_at: deadline, session: session)
       return Outcome.new(op: op, state: "failed", result: no_machine_result) if operation.nil?
 
-      operation = Runners::Operations.await(operation, on_wait: method(:on_wait))
-      Outcome.new(op: op, state: operation.state.to_s, result: operation.result)
+      begin
+        operation = Runners::Operations.await(operation, on_wait: method(:on_wait))
+        outcome = Outcome.new(op: op, state: operation.state.to_s, result: operation.result)
+        claim_uploads(outcome, slots)
+      ensure
+        discard_uploads(slots, outcome)
+      end
+    end
+
+    # The outcome with the bytes of each upload its result names. A result is
+    # the runner's word: an upload it names that is not the slot's own, or is
+    # missing, over the limit or of another size, is an error the caller reports,
+    # never a partial read.
+    def claim_uploads(outcome, slots)
+      reported = outcome.data["uploads"]
+      return outcome unless reported.is_a?(Hash) && reported.any?
+
+      uploaded, errors = {}, {}
+      reported.each_key do |name|
+        uploaded[name] = Runners::ResultUploads.claim(slots, reported, name)
+      rescue Runners::ResultUploads::Unreadable => e
+        errors[name] = e.message
+      rescue StandardError => e
+        # The storage could not be asked (S3 unreachable, say).
+        errors[name] = "the upload for #{name} cannot be read: #{e.class}: #{e.message}"
+      end
+      outcome.with(uploaded: uploaded.compact, upload_errors: errors)
+    end
+
+    # Removes the objects of the uploads that were used, and of every slot of an
+    # op that has no usable result (it expired, or failed without one): a runner
+    # may have uploaded before its result was lost. A slot nobody used is not
+    # touched, since it was never written, and costs a storage call otherwise.
+    def discard_uploads(slots, outcome)
+      return if slots.blank?
+
+      reported = outcome&.data&.dig("uploads")
+      used = reported.is_a?(Hash) ? slots.slice(*reported.keys) : {}
+      unusable = outcome.nil? || outcome.expired? || outcome.result.nil?
+      removable = unusable ? slots : used
+      Runners::ResultUploads.discard(removable) if removable.any?
     end
 
     def no_machine_result

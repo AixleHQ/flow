@@ -337,6 +337,15 @@ func clientCall(t *testing.T, method, path, token string, headers map[string]*st
 		}
 		c.endpoint = "register"
 		c.run = func(ctx context.Context, cl *protocol.Client) (any, error) { return cl.Register(ctx, token, req) }
+	case method == http.MethodPost && path == "/runner/v1/check-in":
+		// The client sends all three fields; a body that omits one is a request
+		// only another client sends.
+		var req protocol.CheckInRequest
+		if body == nil || !strictDecode(t, body, &req) {
+			return call{}, false
+		}
+		c.endpoint = "check-in"
+		c.run = func(ctx context.Context, cl *protocol.Client) (any, error) { return cl.CheckIn(ctx, token, req) }
 	case method == http.MethodPost && path == "/runner/v1/token" && body == nil:
 		c.endpoint = "token"
 		c.run = func(ctx context.Context, cl *protocol.Client) (any, error) { return cl.Refresh(ctx, token) }
@@ -560,7 +569,7 @@ func TestConformanceFixtures(t *testing.T) {
 	}
 
 	// The scenarios the client uses must really have been driven.
-	for _, endpoint := range []string{"register", "token", "unregister", "ops", "releases", "proxy"} {
+	for _, endpoint := range []string{"register", "check-in", "token", "unregister", "ops", "releases", "proxy"} {
 		if cov.driven[endpoint] == 0 {
 			t.Errorf("no %s exchange was driven through the client", endpoint)
 		}
