@@ -149,9 +149,10 @@ module ContainerStrategies
       agent_service = AgentCredentialsService.for(input[:agent_type])
 
       logs_count, log_contents = collect_logs(container, session, agent_service)
-      logs_count += collect_terminal_output(container, session)
-      outputs_count = collect_outputs(container, session)
-      report_uncollected_whole(session)
+      uncollected = []
+      logs_count += collect_terminal_output(container, session, uncollected)
+      outputs_count = collect_outputs(container, session, uncollected)
+      report_uncollected_whole(session, uncollected)
       # Refresh first: an agent that rotates its token during a session leaves the
       # stored credential stale, and usage collection may need to call the vendor with
       # it (Kiro reads its credit counter, Grok prices models from the catalogue).
@@ -164,6 +165,9 @@ module ContainerStrategies
       Rails.logger.info("[AgentSession] Cleanup: #{logs_count} logs, #{outputs_count} outputs")
       { logs_count: logs_count, outputs_count: outputs_count }
     end
+
+    # At most this many lines of the cleanup's uncollected-files report are written.
+    MAX_UNCOLLECTED_NOTES = 50
 
     protected
 
@@ -312,11 +316,11 @@ module ContainerStrategies
       @secret_redactor ||= Sessions::SecretRedactor.for_session(session)
     end
 
-    def collect_terminal_output(container, session)
+    def collect_terminal_output(container, session, uncollected = [])
       # The file is populated live by the `agent` pane's tmux pipe-pane, set up in
       # docker/base/entrypoint.sh at container start (`tee -a /tmp/terminal_output.log`),
       # so it already holds the raw ANSI stream — no capture-pane snapshot needed.
-      content = read_file_from_container(container, "/tmp/terminal_output.log")
+      content = read_file_for_collection(container, "/tmp/terminal_output.log", uncollected)
       content = container_stdout(container) if content.nil?
       return 0 if content.blank?
 
@@ -371,7 +375,7 @@ module ContainerStrategies
       [ result.count, result.contents ]
     end
 
-    def collect_outputs(container, session)
+    def collect_outputs(container, session, uncollected = [])
       output_dir = "/workspace/outputs"
 
       # Recurse: agents organize outputs into subdirs (e.g. outputs/presentation/index.html).
@@ -394,7 +398,7 @@ module ContainerStrategies
       files.each do |file_path|
         relative = file_path.sub("#{output_dir}/", "")
         filename = File.basename(relative)
-        content = read_file_from_container(container, file_path)
+        content = read_file_for_collection(container, file_path, uncollected)
         if content.blank?
           # A dropped output used to leave no trace at all — the asset simply never
           # appeared. Log it, so an unreadable file is distinguishable from an empty one.
@@ -443,17 +447,16 @@ module ContainerStrategies
       [ "Company", company_id ]
     end
 
-    # What the runtime could not read whole (a runner session's file or output
-    # over 1 MiB, where the platform's storage cannot sign an upload) goes into
-    # the cleanup's `log-collection-report.txt`, next to what the log collector
-    # reported, so that a cut log is not taken for a whole one.
-    def report_uncollected_whole(session)
-      return unless runtime.respond_to?(:take_uncollected_whole)
-
-      notes = runtime.take_uncollected_whole
+    # What the cleanup's own reads could not collect whole (a runner session's
+    # file or output over 1 MiB, where the platform's storage cannot sign an
+    # upload) goes into the cleanup's `log-collection-report.txt`, next to what
+    # the log collector reported, so that a cut log is not taken for a whole one.
+    def report_uncollected_whole(session, notes)
       return if notes.empty?
 
-      text = "Session #{session.id} — files and outputs not collected whole:\n\n" + notes.map { |note| "- #{note}\n" }.join
+      lines = notes.first(MAX_UNCOLLECTED_NOTES).map { |note| "- #{note}\n" }
+      lines << "- … and #{notes.size - MAX_UNCOLLECTED_NOTES} more\n" if notes.size > MAX_UNCOLLECTED_NOTES
+      text = "Session #{session.id} — files and outputs not collected whole:\n\n#{lines.join}"
       report = SessionLog.find_by(terminal_session: session, name: Sessions::LogCollector::REPORT_NAME)
       text = "#{report.file.read}\n#{text}" if report
 

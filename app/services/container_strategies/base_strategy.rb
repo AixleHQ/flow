@@ -191,6 +191,18 @@ module ContainerStrategies
       nil
     end
 
+    # Same as #read_file_from_container, for a cleanup that reports what it could
+    # not collect whole: a file the runtime says came back cut adds a line to
+    # `uncollected`, the cleanup's own list (#report_uncollected_whole).
+    def read_file_for_collection(container, path, uncollected)
+      result = runtime.read_file_result(container, path)
+      uncollected << "read_file #{path} — not collected whole: #{result.reason}" unless result.whole?
+      result.content
+    rescue StandardError => e
+      Rails.logger.warn("[#{self.class.name}] Failed to read #{path}: #{e.message}")
+      nil
+    end
+
     protected
 
     def resolve_container(container_id)
