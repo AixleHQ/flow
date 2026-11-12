@@ -72,7 +72,7 @@ import type TaskStatistics from 'types/generated/TaskStatistics';
 import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 
 import { apiMutate } from 'shared/lib/apiFetch';
-import { formatDateTime } from 'shared/lib/formatDate';
+import { formatDateTime, formatDateTimeShort } from 'shared/lib/formatDate';
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { AssetPreviewModal } from 'shared/resources/assets/AssetPreviewModal';
 import { taskAssetToPreviewItem } from 'shared/resources/assets/previewItem';
@@ -1717,6 +1717,14 @@ export function TaskDetailSidebar({
                       {subText && (
                         <Text style={{ fontSize: 11, color: 'var(--mantine-color-placeholder)' }}>{subText}</Text>
                       )}
+                      <Text
+                        component="time"
+                        dateTime={a.createdAt}
+                        title={formatDateTime(a.createdAt)}
+                        style={{ display: 'block', fontSize: 11, color: 'var(--mantine-color-placeholder)' }}
+                      >
+                        Uploaded {formatDateTimeShort(a.createdAt)}
+                      </Text>
                     </Box>
 
                     {/* Actions */}

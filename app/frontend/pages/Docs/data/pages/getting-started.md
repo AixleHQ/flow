@@ -21,13 +21,12 @@ on the one whose
 account you already have. A terminal opens inline, the runtime's own login runs
 in it, and Flow keeps the resulting credential for you.
 
-You need at least one connected agent to finish onboarding — nothing can run on
-your behalf until then.
+Nothing can run on your behalf until you connect at least one agent.
 
-> info An **admin** who only sets up the company can choose **Skip for now** and
-> confirm. You can invite members and manage the company right away. Workflows,
-> sessions and the Builder stay blocked with "No agent credentials" until you
-> connect an agent in **Profile**.
+> info Want to look around first? Choose **Skip for now** and confirm. You can
+> browse projects and boards — and, as an admin, invite members and manage the
+> company — right away. Workflows, sessions and the Builder stay blocked with
+> "No agent credentials" until you connect an agent in **Profile**.
 
 > info Invited as a **viewer**? The connect step is replaced by a short tour.
 > Viewers read boards, runs and results; they do not start work, so they do not

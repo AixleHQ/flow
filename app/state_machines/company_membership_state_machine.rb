@@ -62,7 +62,7 @@ module CompanyMembershipStateMachine
         transitions from: :step2, to: :completed
       end
 
-      # An admin who only administers the tenant may have no CLI agent at all.
+      # A member may look around before connecting a CLI agent at all.
       # Kept apart from `complete` so its guard stays the only way past step2
       # without an agent, and the skip stays on record.
       event :skip_agent_setup, guard: :can_skip_agent_setup?, after: :mark_agent_setup_skipped do
