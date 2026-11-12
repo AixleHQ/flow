@@ -1,17 +1,8 @@
-/** What "Add machine" returns once (RunnerRegistrationResource). */
-export interface MachineBinary {
-  platform: string;
-  url: string;
-  sha256: string;
-}
+import type { RunnerRegistration } from '@/types/generated';
 
-export interface MachineRegistration {
-  token: string;
-  expiresAt: string;
-  gatewayUrl: string;
-  version: string;
-  binaries: MachineBinary[];
-}
+/** What "Add machine" returns once (RunnerRegistrationResource). */
+export type MachineRegistration = RunnerRegistration;
+export type MachineBinary = RunnerRegistration['binaries'][number];
 
 /** A machine name goes into a shell command, so it is held to a plain, safe alphabet. */
 export const MACHINE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$/;
