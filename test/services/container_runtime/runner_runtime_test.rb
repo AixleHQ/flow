@@ -57,6 +57,15 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert_equal [ "registry.internal/agents/claude:7" ], @host_runner.operations.map { |op| op[:payload]["image"] }
   end
 
+  test "{agent} in the override is the image name of the session's runtime" do
+    @runner.update!(config: @runner.config.deep_merge("container" => { "image_override" => "ghcr.io/aixlehq/flow-{agent}:develop" }))
+    @session.update!(agent_type: "codex")
+
+    @runtime.create_container(spec)
+
+    assert_equal [ "ghcr.io/aixlehq/flow-codex:develop" ], @host_runner.operations.map { |op| op[:payload]["image"] }
+  end
+
   test "create_container takes a free machine and starts the container with the strategy's env and the runner's options" do
     spec = spec(env_vars: [ "SESSION_ID=#{@session.id}", "TTYD_CMD=bash", "A=b=c" ],
                 host_config: { "Memory" => 4.gigabytes, "CpuPeriod" => 100_000, "CpuQuota" => 200_000, "PidsLimit" => 4096 })
