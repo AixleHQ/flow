@@ -50,6 +50,7 @@ class Uploads::CacheUploadTest < ActiveSupport::TestCase
     storage = mock("storage")
     storage.expects(:presign).with(@upload.id, method: :put, expires_in: 90).returns(url: "https://bucket.test/cache/x?sig=1")
     storage.stubs(:respond_to?).with(:presign).returns(true)
+    storage.stubs(:delete)
     Shrine.stubs(:storages).returns(cache: storage)
 
     assert_equal "https://bucket.test/cache/x?sig=1", @upload.presigned_put_url(expires_in: 90)

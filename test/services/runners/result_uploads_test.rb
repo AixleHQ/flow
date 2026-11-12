@@ -38,6 +38,7 @@ class Runners::ResultUploadsTest < ActiveSupport::TestCase
   test "where the storage signs, the URL lives until the op's deadline and the grace, and at least a minute" do
     storage = mock("storage")
     storage.stubs(:respond_to?).with(:presign).returns(true)
+    storage.stubs(:delete)
     storage.expects(:presign).with { |_id, **options| (options[:expires_in] - (120 + 300)).abs <= 2 }.returns(url: "https://b.test/u")
     storage.expects(:presign).with { |_id, **options| options[:expires_in] == 60 }.returns(url: "https://b.test/v")
     Shrine.stubs(:storages).returns(cache: storage)

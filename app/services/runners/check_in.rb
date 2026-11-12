@@ -57,9 +57,9 @@ module Runners
 
     # What the platform tells a runner about its limits. It is for the runner's
     # log: each upload slot of an op carries the `max_bytes` that binds that
-    # upload (Uploads).
+    # upload (ResultUploads).
     def config
-      { "upload_max_bytes" => Uploads.limit }
+      { "upload_max_bytes" => ResultUploads.limit }
     end
   end
 end

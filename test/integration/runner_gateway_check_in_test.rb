@@ -26,7 +26,7 @@ class RunnerGatewayCheckInTest < ActionDispatch::IntegrationTest
   test "a check-in records the version it is sent over the one the machine registered with, and its os, arch and facts" do
     assert_equal "0.1.0", @environment.runner_version
 
-    check_in(os: "linux", arch: "arm64", facts: { "docker" => "27.2.0", "disk_free_bytes" => 53_687_091_200 },
+    check_in({ os: "linux", arch: "arm64", facts: { "docker" => "27.2.0", "disk_free_bytes" => 53_687_091_200 } },
              headers: { "X-Aixle-Runner-Version" => "0.2.0" })
 
     assert_response :ok
@@ -39,7 +39,7 @@ class RunnerGatewayCheckInTest < ActionDispatch::IntegrationTest
   end
 
   test "the answer carries the environment and the config, and no update under the committed pins" do
-    check_in(os: "linux", arch: "amd64", facts: {}, headers: { "X-Aixle-Runner-Version" => "9.0.0" })
+    check_in({ os: "linux", arch: "amd64", facts: {} }, headers: { "X-Aixle-Runner-Version" => "9.0.0" })
 
     assert_response :ok
     assert_equal({ "environment" => { "id" => @environment.id, "key" => @environment.key, "display_name" => "build-01", "state" => "registered" },
@@ -58,14 +58,14 @@ class RunnerGatewayCheckInTest < ActionDispatch::IntegrationTest
   end
 
   test "facts replace the recorded ones" do
-    check_in(facts: { "docker_api" => "1.47" })
+    check_in({ facts: { "docker_api" => "1.47" } })
 
     assert_equal({ "docker_api" => "1.47" }, @environment.reload.facts)
   end
 
   test "an idle machine below the recommended version is offered the update, as the empty poll offers it" do
     pin
-    check_in(os: "linux", arch: "amd64", facts: {})
+    check_in({ os: "linux", arch: "amd64", facts: {} })
 
     assert_response :ok
     assert_equal({ "version" => "1.5.0", "sha256" => AMD64 }, response.parsed_body["update"])
@@ -77,13 +77,13 @@ class RunnerGatewayCheckInTest < ActionDispatch::IntegrationTest
   test "the update follows the version of the request, and the report's os and arch" do
     pin
 
-    check_in(os: "linux", arch: "amd64", facts: {}, headers: { "X-Aixle-Runner-Version" => "1.5.0" })
+    check_in({ os: "linux", arch: "amd64", facts: {} }, headers: { "X-Aixle-Runner-Version" => "1.5.0" })
     assert_not response.parsed_body.key?("update"), "a machine at the recommended version is offered nothing"
 
-    check_in(os: "linux", arch: "riscv64", facts: {})
+    check_in({ os: "linux", arch: "riscv64", facts: {} })
     assert_not response.parsed_body.key?("update"), "no binary is pinned for the machine's platform"
 
-    check_in(os: "linux", arch: "amd64", facts: {})
+    check_in({ os: "linux", arch: "amd64", facts: {} })
     assert_equal "1.5.0", response.parsed_body.dig("update", "version")
   end
 
@@ -91,24 +91,24 @@ class RunnerGatewayCheckInTest < ActionDispatch::IntegrationTest
     pin
     create(:runner_session, :holding, environment: @environment)
 
-    check_in(os: "linux", arch: "amd64", facts: {})
+    check_in({ os: "linux", arch: "amd64", facts: {} })
     assert_not response.parsed_body.key?("update")
 
     @environment.update!(current_session_id: nil)
     @environment.update!(auto_update: false)
-    check_in(os: "linux", arch: "amd64", facts: {})
+    check_in({ os: "linux", arch: "amd64", facts: {} })
     assert_not response.parsed_body.key?("update")
 
     @environment.update!(auto_update: true)
     @runner.update!(config: { "auto_update" => false })
-    check_in(os: "linux", arch: "amd64", facts: {})
+    check_in({ os: "linux", arch: "amd64", facts: {} })
     assert_not response.parsed_body.key?("update")
   end
 
   test "a runner below the platform's minimum is refused, and nothing is recorded" do
     pin
 
-    check_in(os: "linux", arch: "arm64", facts: { "x" => 1 }, headers: { "X-Aixle-Runner-Version" => "1.1.9" })
+    check_in({ os: "linux", arch: "arm64", facts: { "x" => 1 } }, headers: { "X-Aixle-Runner-Version" => "1.1.9" })
 
     assert_refused :bad_request, "runner_version_unsupported"
     assert_match(/minimum 1\.2\.0/, response.parsed_body["message"])

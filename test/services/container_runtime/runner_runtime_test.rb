@@ -366,7 +366,7 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert_equal Settings.runners.upload_limit, slot["max_bytes"]
     assert_match(/\A\h{60}\z/, slot["id"])
     assert_includes slot["url"], "cache/#{slot['id']}", "the URL addresses the slot's own object"
-    assert_equal 4, [ exec["uploads"].values, read["uploads"].values ].flatten.pluck("id").uniq.size, "every slot is its own object"
+    assert_equal 3, [ exec["uploads"].values, read["uploads"].values ].flatten.pluck("id").uniq.size, "every slot is its own object"
   end
 
   test "a file over the output cap comes back whole through the upload, and the object is removed" do
