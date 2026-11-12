@@ -24,6 +24,13 @@ governance, community health — carry none.
   only for a user who can see it) now has its own setting,
   `GITHUB_APP_VERIFY_INSTALLATION_OWNER`, off by default: a deployment that relied
   on the client credentials for that check must set it to `true`.
+- **Tasks**: each file on a task's Assets tab shows when it was uploaded.
+
+### Changed
+- **Sign-in & onboarding**: any member, not only an admin, can skip connecting an
+  agent during onboarding ("Skip for now", then confirm) and look around first.
+  Workflows, sessions and the Builder stay blocked until they connect an agent in
+  Profile settings.
 
 ## [1.12.0] - 2026-11-12
 
