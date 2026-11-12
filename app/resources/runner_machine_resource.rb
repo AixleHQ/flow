@@ -8,6 +8,8 @@
 #
 #   RunnerMachineResource.new(machine, params: { states: Runners::Liveness.states(machines) }).to_h
 class RunnerMachineResource < ApplicationResource
+  typelize_from RunnerEnvironment
+
   attributes :id, :key, :display_name, :os, :arch, :runner_version, :state_reason, :last_heartbeat_at, :created_at
 
   typelize "'online' | 'idle' | 'offline' | 'failed' | 'gone'"
