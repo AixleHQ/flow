@@ -232,4 +232,27 @@ class WorkflowTest < ActiveSupport::TestCase
     assert_queries_count(1) { assert_equal "running", loaded.run_stats.last_state }
     assert_no_queries { assert_equal 1, loaded.run_stats.count }
   end
+
+  test "a workflow's base resource lists are kept as links, and a config change elsewhere leaves them alone" do
+    repository = create(:repository, scope: @project)
+    skill = create(:skill, scope: @project)
+    workflow = create(:workflow, scope: @project,
+                                 config: { "base_repository_ids" => [ repository.id ], "base_skill_ids" => [ skill.id ] })
+
+    workflow.merge_config!("inherit_all_project_resources" => true)
+    workflow.merge_config!("base_skill_ids" => [])
+
+    assert_equal [ repository.id ], linked(workflow, :repository_id)
+    assert_empty linked(workflow, :skill_id)
+
+    repository.destroy!
+
+    assert_empty linked(workflow, :repository_id)
+  end
+
+  private
+
+  def linked(workflow, column)
+    WorkflowResourceLink.where(workflow: workflow).where.not(column => nil).order(:position).pluck(column)
+  end
 end
