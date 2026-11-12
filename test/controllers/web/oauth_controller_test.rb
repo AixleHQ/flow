@@ -753,6 +753,23 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     assert_match(%r{\Ahttps://github\.com/login/oauth/authorize\?}, response.location)
   end
 
+  test "connecting GitHub is refused while impersonating, at authorize and at the callback" do
+    stub_github!
+    sign_in_as(create(:user, :super_admin, password: AuthHelper::TEST_PASSWORD))
+    post impersonate_admin_user_path(@user)
+
+    post oauth_authorize_path("github"), params: { owner_type: "User", owner_id: @user.id, return_to: "/profile/connections" }
+    assert_redirected_to "/profile/connections"
+    assert_match(/while impersonating/, flash[:alert])
+
+    state = build_state(owner: @user, provider: "github", return_to: "/profile/connections")
+    assert_no_difference("OauthCredential.count") do
+      get oauth_callback_path, params: { code: "auth-code-1", state: state }
+    end
+    assert_redirected_to "/profile/connections"
+    assert_match(/while impersonating/, flash[:alert])
+  end
+
   test "the callback refuses another user's id as the GitHub owner" do
     stub_github!
     other = create(:user, :employee, company: @company)

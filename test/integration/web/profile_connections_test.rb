@@ -173,4 +173,44 @@ class Web::ProfileConnectionsTest < ActionDispatch::IntegrationTest
 
     assert OauthCredential.exists?(theirs.id)
   end
+
+  # --- Impersonation: an operator changes nothing about the person's GitHub connection ---
+
+  def impersonate!
+    sign_in_as(create(:user, :super_admin, password: AuthHelper::TEST_PASSWORD))
+    post impersonate_admin_user_path(@user)
+  end
+
+  test "the page stays readable while impersonating" do
+    create(:oauth_credential, :github_user, owner: @user)
+    impersonate!
+
+    get profile_connections_path
+
+    assert_inertia_page "Profile/Connections"
+    assert_equal "connected", inertia.props[:github][:status]
+  end
+
+  test "disconnecting is refused while impersonating" do
+    credential = create(:oauth_credential, :github_user, owner: @user)
+    Github::UserTokenService.expects(:new).never
+    impersonate!
+
+    delete profile_connection_path("github")
+
+    assert_redirected_to profile_connections_path
+    assert_match(/while impersonating/, flash[:alert])
+    assert OauthCredential.exists?(credential.id)
+  end
+
+  test "changing a consent is refused with 403 while impersonating" do
+    create(:oauth_credential, :github_user, owner: @user)
+    impersonate!
+
+    json_patch(@project.id, in_others_tasks: true)
+
+    assert_response :forbidden
+    assert_match(/while impersonating/, response.parsed_body["error"])
+    assert_equal 0, ActAsConsent.where(user: @user).count
+  end
 end
