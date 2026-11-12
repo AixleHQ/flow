@@ -66,6 +66,7 @@ they name a flow users would recognize.
 | --- | --- |
 | **Secrets & Variables** | Credentials and config values agents and connectors use |
 | **Members** | Who is on the project and with what access (roles: Admin, Employee, Viewer) |
+| **Teams** | Named groups of project members a card can be assigned to and a trigger can run as; each run goes to one member, picked by the team's strategy |
 | **Analytics** | Spend, sessions, tokens, success — by project, agent, and source |
 | **Settings** | Project name, language, archive, delete |
 
@@ -142,7 +143,7 @@ Every area above is documented in one chapter of the
 | Connectors | 13. Connectors |
 | Repositories, Integrations | 14. Repositories & Integrations |
 | Aixle Builder | 15. AI Builder |
-| Members | 16. Team |
+| Members, Teams | 16. Team |
 | Secrets & Variables | 17. Secrets & Variables |
 | Analytics | 18. Analytics |
 | Settings | 19. Settings |

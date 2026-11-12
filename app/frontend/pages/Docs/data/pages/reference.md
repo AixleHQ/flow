@@ -28,6 +28,7 @@ Company
     │   └── Workflows → Steps → SubSteps
     │                  └── WorkflowRuns → StepRuns → SubStepRuns
     │                                     └── WorkflowRunAssets
+    ├── ProjectTeams → members (a BoardTask's assignee or a trigger's Runs as; each run goes to one member)
     ├── Assets, Repositories
     └── TerminalSessions
 ```
