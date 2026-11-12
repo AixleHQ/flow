@@ -2,7 +2,7 @@ import { router } from '@inertiajs/react';
 import { Tabs } from '@mantine/core';
 
 import {
-  connectionsProfilePath,
+  profileConnectionsPath,
   mcpProfilePath,
   profilePath,
   securityProfilePath,
@@ -16,7 +16,7 @@ const TAB_PATHS: Record<ProfileTab, () => string> = {
   usage: usageProfilePath,
   mcp: mcpProfilePath,
   security: securityProfilePath,
-  connections: connectionsProfilePath,
+  connections: profileConnectionsPath,
 };
 
 // One tab bar for the profile pages. Each tab is a full page visit — they

@@ -50,13 +50,13 @@ module InternalTools
       end
 
       def check_member!(user)
-        member = user.authenticatable? && project.company.users.exists?(id: user.id) &&
-                 Project.for_user(user).exists?(id: project.id)
-        raise Refusal, "#{user.name} is not a member of project #{project.name}." unless member
+        return if user.authenticatable? && project.accessible_by?(user)
+
+        raise Refusal, "#{user.name} is not a member of project #{project.name}."
       end
 
       def connection_for!(user)
-        credential = Github::UserConnection.credential_for(user)
+        credential = OauthCredential.live_github_connection_of(user)
         return credential if credential
 
         raise Refusal, "#{user.name} has not connected a GitHub account. " \

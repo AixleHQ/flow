@@ -322,14 +322,18 @@ for connections does not refuse installs made through the Setup URL.
 
 | Route | Action | Purpose |
 |---|---|---|
-| `GET /profile/connections` | `ProfileController#connections` | Inertia page `Profile/Connections` |
-| `DELETE /profile/connections/:provider` | `ProfileController#disconnect` | disconnect |
-| `PATCH /profile/act_as_consents` | `ProfileController#update_act_as_consent` | body `{ projectId, provider, inOwnTasks?, inOthersTasks? }` |
+| `GET /profile/connections` | `Web::Profile::ConnectionsController#index` | Inertia page `Profile/Connections` |
+| `DELETE /profile/connections/:provider` | `Web::Profile::ConnectionsController#destroy` | disconnect |
+| `PATCH /profile/connections/:provider/act_as_consents/:project_id` | `Web::Profile::ActAsConsentsController#update` | body `{ inOwnTasks?, inOthersTasks? }`, JSON booleans only (`422` otherwise) |
 | `POST /oauth/github/authorize` | existing `Web::OauthController#authorize` | `owner_type=User&owner_id=<me>&return_to=/profile/connections` |
 
-These are `member` routes on `resource :profile`, like `update_mcp_tools`.
-`update_act_as_consent` resolves the project with `Project.for_user(current_user)`
-inside `current_company`, and answers 404 when the project is not found there.
+These are `resources` routes under `/profile`, like `sign_in_methods`. The controllers
+turn the request into parameters and call the `UserConnections` service (the page's
+data, disconnecting, updating a consent), then map its named errors to a status:
+`UnknownProvider` and `ProjectNotFound` answer 404. The service resolves the project
+with `Project.for_user_in_company(user, company)` and makes the first consent write
+race-safe. The controller checks the body's shape: a switch that is not a JSON boolean
+answers 422.
 
 **Disconnect** does three things:
 
@@ -509,7 +513,7 @@ here, so other providers are not affected.
      the `GithubUserTokenContext` concern.
    - Add the `:github_identity` entry to `Tools::TagCatalog`.
 6. **Profile UI.**
-   - Add the `connections`, `disconnect` and `update_act_as_consent` actions and their
+   - Add the connections and act-as-consents controllers, the `UserConnections` service and their
      routes, and the resources (run `rails typelizer:generate`).
    - Add `pages/Profile/ConnectionsPage.tsx` with a "Connected accounts" tab in
      `ProfileTabs`:

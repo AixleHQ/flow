@@ -5,17 +5,13 @@ module Github
   # stored as an OauthCredential owned by the user
   # (docs/design/github-user-identity.md §2.1, §4.1).
   module UserConnection
-    PROVIDER = "github"
+    PROVIDER = OauthCredential::GITHUB_PROVIDER
     IDENTITY_TTL = 24.hours
 
     module_function
 
     def configured?
       Settings.github.client_id.present? && Settings.github.client_secret.present?
-    end
-
-    def credential_for(user)
-      OauthCredential.for_owner(user).where(provider: PROVIDER).where.not(status: :revoked).order(updated_at: :desc).first
     end
 
     # Called by the OAuth callback right after the token is stored. A connection
@@ -43,8 +39,7 @@ module Github
     end
 
     def disconnect!(user)
-      credentials = OauthCredential.for_owner(user).where(provider: PROVIDER)
-      credentials.each do |credential|
+      OauthCredential.github_connections_of(user).each do |credential|
         revoke_grant(credential)
         credential.destroy!
       end

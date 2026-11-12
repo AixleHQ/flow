@@ -346,4 +346,37 @@ class OauthCredentialTest < ActiveSupport::TestCase
     assert_not_includes OauthCredential.refresh_due, cred
     assert_includes OauthCredential.refresh_due(1.hour), cred
   end
+
+  # --- a person's GitHub connection ---
+
+  test "github_connections_of finds only that person's GitHub credentials" do
+    mine = create(:oauth_credential, :github_user, owner: @user)
+    create(:oauth_credential, :github_user, owner: create(:user, company: @company))
+    create(:oauth_credential, owner: @user, provider: "sentry")
+
+    assert_equal [ mine ], OauthCredential.github_connections_of(@user).to_a
+  end
+
+  test "latest_github_connection_of returns a revoked connection, live_github_connection_of does not" do
+    revoked = create(:oauth_credential, :github_user, owner: @user, status: :revoked)
+
+    assert_equal revoked, OauthCredential.latest_github_connection_of(@user)
+    assert_nil OauthCredential.live_github_connection_of(@user)
+
+    live = create(:oauth_credential, :github_user, owner: @user)
+    revoked.touch
+
+    assert_equal revoked, OauthCredential.latest_github_connection_of(@user)
+    assert_equal live, OauthCredential.live_github_connection_of(@user)
+  end
+
+  test "for_github_user finds credentials by the GitHub account id in metadata" do
+    credential = create(:oauth_credential, :github_user, owner: @user)
+    create(:oauth_credential, owner: @user, provider: "sentry",
+                              metadata: { "github_user" => { "id" => 123 } })
+
+    assert_equal [ credential ], OauthCredential.for_github_user(123).to_a
+    assert_equal [ credential ], OauthCredential.for_github_user("123").to_a
+    assert_empty OauthCredential.for_github_user(456)
+  end
 end

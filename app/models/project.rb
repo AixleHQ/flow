@@ -86,6 +86,9 @@ class Project < ApplicationRecord
       .or(where(id: user.collaborated_projects.select(:id)).where(company_id: member_company_ids))
   }
 
+  # The projects of one company a person can reach.
+  scope :for_user_in_company, ->(user, company) { for_user(user).where(company: company) }
+
   # Ransack
   def self.ransackable_attributes(_auth_object = nil)
     %w[name description state created_at updated_at]

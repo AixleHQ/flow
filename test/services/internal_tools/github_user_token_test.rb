@@ -207,7 +207,7 @@ class InternalTools::GithubUserTokenTest < ActiveSupport::TestCase
   test "the token, the identity and the issuance come from the same credential" do
     consent!(in_own_tasks: true)
     newer = create(:oauth_credential, :github_user, owner: @user, access_token: "ghu_newer_credential")
-    Github::UserConnection.stubs(:credential_for).returns(@credential)
+    OauthCredential.stubs(:live_github_connection_of).returns(@credential)
     newer.touch
 
     run_tool
