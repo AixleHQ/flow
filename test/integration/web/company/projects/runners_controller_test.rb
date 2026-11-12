@@ -162,12 +162,13 @@ class Web::Company::Projects::RunnersControllerTest < ActionDispatch::Integratio
   end
 
   test "a company admin or the project owner gets a registration token for the project's own runner" do
-    assert_role_matrix(MANAGE_ROLES, transport: :web, allowed_status: :created) do
+    body = nil
+    assert_role_matrix(MANAGE_ROLES, transport: :web, allowed_status: :created) do |role|
       post registration_token_company_project_runner_path(@project, @own), as: :json
+      body = response.parsed_body if role == :admin
     end
 
     assert_equal 2, RunnerCredential.where(kind: :registration, runner: @own).count
-    body = response.parsed_body
     assert_match(/\Aarreg_/, body["token"])
     assert_equal "http://www.example.com/runner/v1/releases/#{body['version']}/linux-arm64", body["binaries"].last["url"]
   end

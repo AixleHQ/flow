@@ -40,7 +40,8 @@ describe('AddMachine', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     const script = within(dialog).getByLabelText('Install instructions');
     expect(script).toHaveTextContent('curl -fsSLo aixle-runner https://flow.example.com/runner/v1/releases/0.1.0/linux-amd64');
-    expect(script).toHaveTextContent(`echo "${'a'.repeat(64)}  aixle-runner" | sha256sum -c -`);
+    // Two spaces between the digest and the file name, as sha256sum -c reads it (toHaveTextContent collapses them).
+    expect(script.textContent).toContain(`echo "${'a'.repeat(64)}  aixle-runner" | sha256sum -c -`);
     expect(script).toHaveTextContent(
       'configure --url https://flow.example.com --token arreg_secret-token --name build-box-01',
     );

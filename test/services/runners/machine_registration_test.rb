@@ -57,7 +57,8 @@ class Runners::MachineRegistrationTest < ActiveSupport::TestCase
   end
 
   test "without a recommended version there is nothing to install, and no token is minted" do
-    Runners::Release.stubs(:pins).returns(Runners::Release.pins.with(recommended_version: nil))
+    pins = Runners::Release.pins.with(recommended_version: nil)
+    Runners::Release.stubs(:pins).returns(pins)
 
     error = assert_raises(Runners::Credentials::Refused) { Runners::MachineRegistration.issue!(@runner, gateway_url: GATEWAY) }
 
