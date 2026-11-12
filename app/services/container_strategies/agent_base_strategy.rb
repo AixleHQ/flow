@@ -102,7 +102,7 @@ module ContainerStrategies
     #
     # A session on an external runner takes `runners.agent_image_prefix` and
     # `runners.agent_images` instead (public images by default: the machine
-    # cannot pull from the hosted, often private, registry), with the same tag.
+    # cannot pull from the hosted, often private, registry), with `runners.agent_image_tag`.
     # The runner's `container.image_override` is applied later, by
     # ContainerRuntime::RunnerRuntime.
     def resolve_image
@@ -114,7 +114,7 @@ module ContainerStrategies
 
       prefix = runner ? Settings.runners&.agent_image_prefix : Settings.agents&.image_prefix
       name = "#{prefix}#{AgentRuntime.fetch(agent_type).image}"
-      tag = Settings.agents&.image_tag.to_s.strip
+      tag = (runner ? Settings.runners&.agent_image_tag : Settings.agents&.image_tag).to_s.strip
       tag.present? ? "#{name}:#{tag}" : name
     end
 
