@@ -388,7 +388,8 @@ module ContainerRuntime
     # the runner sends then.
     def exec_output(outcome, name, cmd)
       if outcome.uploaded.key?(name)
-        return lines(outcome.uploaded[name].dup.force_encoding(Encoding::UTF_8).scrub("\uFFFD"))
+        # In place: the bytes read are the only full copy (up to the upload limit).
+        return lines(outcome.uploaded[name].force_encoding(Encoding::UTF_8).scrub!("\uFFFD"))
       end
 
       if outcome.upload_errors.key?(name)
