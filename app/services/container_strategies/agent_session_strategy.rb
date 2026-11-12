@@ -166,6 +166,9 @@ module ContainerStrategies
       { logs_count: logs_count, outputs_count: outputs_count }
     end
 
+    # At most this many lines of the cleanup's uncollected-files report are written.
+    MAX_UNCOLLECTED_NOTES = 50
+
     protected
 
     def session_type = "agent_session"
@@ -443,9 +446,6 @@ module ContainerStrategies
 
       [ "Company", company_id ]
     end
-
-    # At most this many lines of the report are written.
-    MAX_UNCOLLECTED_NOTES = 50
 
     # What the cleanup's own reads could not collect whole (a runner session's
     # file or output over 1 MiB, where the platform's storage cannot sign an
