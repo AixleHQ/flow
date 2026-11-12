@@ -109,7 +109,7 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert_equal({ "path" => "/tmp/x", "content" => Base64.strict_encode64("y"), "mode" => 0o600, "uid" => 1000, "gid" => 1000 },
                  @host_runner.operations.third[:payload])
     assert_equal "y", @runtime.read_file(handle, "/tmp/x")
-    assert RunnerOperation.where(op: "exec").all? { |op| op.deadline_at <= 61.seconds.from_now }
+    assert RunnerOperation.where(op: "exec").all? { |op| op.deadline_at <= (61 + Runners::ResultUploads.budget).seconds.from_now }
     assert RunnerOperation.where.not(state: %w[pending delivered]).all? { |op| op.encrypted_payload.nil? }
   end
 

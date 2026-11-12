@@ -336,6 +336,9 @@ module ContainerRuntime
       true
     end
 
+    # At most this many lines are kept for the cleanup's report.
+    MAX_UNCOLLECTED_NOTES = 50
+
     private
 
     def run_exec(id, cmd, opts, raise_on_gone:)
@@ -360,9 +363,6 @@ module ContainerRuntime
 
       [ [], [ "#{outcome.message}\n" ], 1 ]
     end
-
-    # At most this many lines are kept for the cleanup's report.
-    MAX_UNCOLLECTED_NOTES = 50
 
     # Records that an output or a file did not come back whole, and why. Where the
     # platform's storage cannot sign an upload, that is the reason: output over
