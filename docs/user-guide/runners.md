@@ -58,6 +58,48 @@ By default an idle machine updates itself to the version the platform
 recommends. To turn that off, tick **Turn off self-update**, which adds
 `--no-auto-update` to `configure`.
 
+### Running the runner in Docker
+
+Choose **Docker** instead of a platform when the machine has no systemd, when
+you want no service user, or on macOS. The machine needs Docker and has to
+reach the platform; it needs no `curl` or `sha256sum`. The sequence:
+
+1. **Picks the runner's directory.** `/var/lib/aixle-runner` on Linux; on macOS
+   `~/aixle-runner`, which Docker shares with its VM. The runner keeps its
+   binary and credentials there, and the directory is mounted at the same path
+   in the container: Docker starts the session's containers from files on the
+   machine, not in the runner's container.
+2. **Registers the machine.** A throwaway container of
+   `ghcr.io/aixlehq/aixle-runner:<version>`, the version the platform
+   recommends, runs `configure --url … --token … --name …`. It uses up the
+   token.
+3. **Runs it.** A container with `--restart unless-stopped` and the Docker
+   socket, so it starts again with Docker.
+
+The container runs as root (`--user 0:0`): reaching the Docker socket already
+gives root on the machine. A runner in Docker does not update itself: to update
+it, remove the container and run the image of the new version with the same
+directory.
+
+To remove the machine, stop and remove the container, run the same image with
+`unregister` (it removes the machine on the platform), then delete the
+directory and the `aixle-runner-docker-root` volume. The dialog lists the
+commands after the sequence, commented out.
+
+macOS works through Docker: OrbStack is checked, Docker Desktop as far as
+checked. Rootless Docker and Podman (another socket path) and Windows are not
+covered.
+
+### Machines on arm64
+
+The agent images (`ghcr.io/aixlehq/flow-<image>`) are built for `linux/amd64`
+only, so on an arm64 machine (Apple Silicon, or an ARM Linux server, with the
+binary or with Docker) the runner starts them under amd64 emulation. OrbStack
+and Docker Desktop have it built in; on ARM Linux install it with binfmt (the
+`tonistiigi/binfmt` image installs it). Without it, the session fails to start
+with the Docker daemon's own message. Sessions are slower under emulation until
+the images are built for arm64.
+
 ### If something goes wrong
 
 - A token that was already used, or that is more than an hour old, is refused

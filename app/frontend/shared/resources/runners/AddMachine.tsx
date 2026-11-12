@@ -19,7 +19,15 @@ import type { Runner } from '@/types/generated';
 import { apiRequest, notifyApiFailure } from 'shared/lib/apiFetch';
 import { formatDateTime } from 'shared/lib/formatDate';
 
-import { installScript, isValidMachineName, suggestMachineName, type MachineRegistration } from './machineInstructions';
+import {
+  DOCKER_PLATFORM,
+  dockerScript,
+  installScript,
+  isValidMachineName,
+  suggestMachineName,
+  type DockerHost,
+  type MachineRegistration,
+} from './machineInstructions';
 import type { RunnerPaths } from './runnerConfig';
 
 interface AddMachineProps {
@@ -38,6 +46,7 @@ export function AddMachine({ runner, paths }: AddMachineProps) {
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState('');
   const [platform, setPlatform] = useState('');
+  const [dockerHost, setDockerHost] = useState<DockerHost>('linux');
   const [noAutoUpdate, setNoAutoUpdate] = useState(false);
 
   const open = async () => {
@@ -47,6 +56,7 @@ export function AddMachine({ runner, paths }: AddMachineProps) {
       setName(suggestMachineName(runner.name));
       setPlatform(issued.binaries[0]?.platform ?? '');
       setNoAutoUpdate(false);
+      setDockerHost('linux');
       setRegistration(issued);
     } catch (error) {
       notifyApiFailure(error, 'The registration token was not created');
@@ -55,10 +65,14 @@ export function AddMachine({ runner, paths }: AddMachineProps) {
     }
   };
 
+  const docker = platform === DOCKER_PLATFORM;
   const binary = registration?.binaries.find((b) => b.platform === platform) ?? registration?.binaries[0];
   const validName = isValidMachineName(name);
-  const script =
-    registration && binary && validName ? installScript({ registration, binary, name, noAutoUpdate }) : null;
+  let script: string | null = null;
+  if (registration && validName) {
+    if (docker) script = dockerScript({ registration, name, host: dockerHost });
+    else if (binary) script = installScript({ registration, binary, name, noAutoUpdate });
+  }
 
   return (
     <>
@@ -97,18 +111,43 @@ export function AddMachine({ runner, paths }: AddMachineProps) {
               </Text>
               <SegmentedControl
                 aria-label="Platform"
-                value={binary?.platform ?? ''}
+                value={docker ? DOCKER_PLATFORM : (binary?.platform ?? '')}
                 onChange={setPlatform}
-                data={registration.binaries.map((b) => ({ value: b.platform, label: b.platform }))}
+                data={[
+                  ...registration.binaries.map((b) => ({ value: b.platform, label: b.platform })),
+                  { value: DOCKER_PLATFORM, label: 'Docker' },
+                ]}
               />
             </Stack>
 
-            <Checkbox
-              label="Turn off self-update (--no-auto-update)"
-              description="By default the machine updates itself to the version this platform recommends when it is idle. Turn it off if you manage the binary yourself."
-              checked={noAutoUpdate}
-              onChange={(event) => setNoAutoUpdate(event.currentTarget.checked)}
-            />
+            {docker ? (
+              <Stack gap={4}>
+                <Text fz="sm" fw={500}>
+                  This machine runs
+                </Text>
+                <SegmentedControl
+                  aria-label="Docker host"
+                  value={dockerHost}
+                  onChange={(value) => setDockerHost(value as DockerHost)}
+                  data={[
+                    { value: 'linux', label: 'Linux' },
+                    { value: 'macos', label: 'macOS' },
+                  ]}
+                />
+                <Text fz="xs" c="dimmed">
+                  A runner in Docker does not update itself: update it by running the image of the new version. On an
+                  arm64 machine (Apple Silicon, ARM Linux) sessions run the amd64 agent images under emulation, which
+                  OrbStack and Docker Desktop include and ARM Linux needs binfmt for.
+                </Text>
+              </Stack>
+            ) : (
+              <Checkbox
+                label="Turn off self-update (--no-auto-update)"
+                description="By default the machine updates itself to the version this platform recommends when it is idle. Turn it off if you manage the binary yourself."
+                checked={noAutoUpdate}
+                onChange={(event) => setNoAutoUpdate(event.currentTarget.checked)}
+              />
+            )}
 
             <Code block aria-label="Install instructions" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
               {script ?? 'Enter a valid machine name to see the instructions.'}
@@ -116,9 +155,9 @@ export function AddMachine({ runner, paths }: AddMachineProps) {
 
             <Group justify="space-between">
               <Text fz="xs" c="dimmed">
-                Run this on a Linux machine with systemd and Docker, as a user who can use sudo, with curl and
-                sha256sum, that can reach {registration.gatewayUrl}. The SHA-256 is this platform’s own for aixle-runner{' '}
-                {registration.version}.
+                {docker
+                  ? `Run this on a machine with Docker that can reach ${registration.gatewayUrl}. The image is aixle-runner ${registration.version}.`
+                  : `Run this on a Linux machine with systemd and Docker, as a user who can use sudo, with curl and sha256sum, that can reach ${registration.gatewayUrl}. The SHA-256 is this platform’s own for aixle-runner ${registration.version}.`}
               </Text>
               <CopyButton value={script ?? ''}>
                 {({ copied, copy }) => (

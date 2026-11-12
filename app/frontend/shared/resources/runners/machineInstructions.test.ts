@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  dockerScript,
   installScript,
   isValidMachineName,
   suggestMachineName,
@@ -55,6 +56,36 @@ describe('installScript', () => {
     expect(script).toContain("--url 'https://x.example/'\\''; id; '\\'''");
     expect(script).toContain("--token '$(id)'");
     expect(script).toContain("curl -fsSLo aixle-runner 'https://x.example/a b'");
+  });
+});
+
+describe('dockerScript', () => {
+  it('registers with configure, then runs the image with the Docker socket', () => {
+    const script = dockerScript({ registration, name: 'build-01', host: 'linux' });
+    const image = "'ghcr.io/aixlehq/aixle-runner:0.1.0'";
+    expect(script).toContain("RUNNER_DIR='/var/lib/aixle-runner'");
+    expect(script).toContain(
+      `sudo docker run --rm --user 0:0 -e AIXLE_RUNNER_DIR="$RUNNER_DIR" -v "$RUNNER_DIR:$RUNNER_DIR" ${image} configure --url 'https://flow.example.com' --token 'arreg_abc-123_x' --name 'build-01'`,
+    );
+    expect(script).toContain('-d --name aixle-runner --restart unless-stopped');
+    expect(script).toContain(
+      '-v /var/run/docker.sock:/var/run/docker.sock -v aixle-runner-docker-root:/var/lib/docker:ro',
+    );
+    expect(script).toContain('# sudo docker run --rm --user 0:0');
+    expect(script).toContain('unregister');
+    expect(script).not.toContain('--no-auto-update');
+  });
+
+  it('keeps the directory under the home directory on macOS, without sudo', () => {
+    const script = dockerScript({ registration, name: 'm', host: 'macos' });
+    expect(script).toContain('RUNNER_DIR="$HOME/aixle-runner"');
+    expect(script).not.toContain('sudo');
+  });
+
+  it('quotes the token as shell data', () => {
+    expect(dockerScript({ registration: { ...registration, token: '$(id)' }, name: 'm', host: 'linux' })).toContain(
+      "--token '$(id)'",
+    );
   });
 });
 

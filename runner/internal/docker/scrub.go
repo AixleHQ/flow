@@ -215,7 +215,8 @@ func (e *Environment) emptyOutputs(ctx context.Context, ref string) (bool, error
 	}
 
 	created, err := e.API.ContainerCreate(ctx, client.ContainerCreateOptions{
-		Name: "aixle-" + e.Key + "-scrub",
+		Name:     "aixle-" + e.Key + "-scrub",
+		Platform: AgentPlatform(),
 		Config: &container.Config{
 			Image:      ref,
 			Entrypoint: []string{"/bin/sh", "-c", emptyOutputs},

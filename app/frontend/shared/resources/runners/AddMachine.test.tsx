@@ -67,6 +67,25 @@ describe('AddMachine', () => {
     expect(script).toHaveTextContent('--no-auto-update');
   });
 
+  it('offers Docker next to the binaries, with the directory of the chosen host', async () => {
+    const user = userEvent.setup();
+    answerFetch({ 'POST /company/settings/runners/5/registration_token': registration });
+    renderAuthedPage(<AddMachine runner={buildRunner({ id: 5, name: 'Build Box' })} paths={paths} />);
+
+    await user.click(screen.getByRole('button', { name: 'Add machine' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Add machine' });
+    await user.click(within(dialog).getByText('Docker'));
+
+    const script = within(dialog).getByLabelText('Install instructions');
+    expect(script).toHaveTextContent("RUNNER_DIR='/var/lib/aixle-runner'");
+    expect(script).toHaveTextContent("'ghcr.io/aixlehq/aixle-runner:0.1.0' configure --url 'https://flow.example.com'");
+    expect(script).toHaveTextContent('--restart unless-stopped');
+    expect(within(dialog).queryByRole('checkbox', { name: /Turn off self-update/ })).not.toBeInTheDocument();
+
+    await user.click(within(dialog).getByText('macOS'));
+    expect(script).toHaveTextContent('RUNNER_DIR="$HOME/aixle-runner"');
+  });
+
   it('holds back the instructions for a machine name a shell would misread', async () => {
     const user = userEvent.setup();
     answerFetch({ 'POST /company/settings/runners/5/registration_token': registration });
