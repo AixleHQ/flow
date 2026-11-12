@@ -140,8 +140,8 @@ func put(ctx context.Context, client *http.Client, target string, body io.Reader
 }
 
 // checkSlotURL accepts https, and http only to a loopback host, as the platform
-// URL is accepted (protocol.ParsePlatformURL): a development platform serves its
-// stand-in for S3 there.
+// URL is accepted (protocol.ParsePlatformURL): a local test server takes the PUT
+// there.
 func checkSlotURL(raw string) error {
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" {

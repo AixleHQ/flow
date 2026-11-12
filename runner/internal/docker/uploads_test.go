@@ -260,6 +260,42 @@ func TestAnUploadAfterTheOpsDeadlineIsNotTried(t *testing.T) {
 	}
 }
 
+// blockingUploader is an upload that cannot finish: it runs until its context ends.
+type blockingUploader struct{ started chan struct{} }
+
+func (b blockingUploader) Upload(ctx context.Context, _ UploadSlot, _ io.ReaderAt, _ int64) error {
+	close(b.started)
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+// There is one deadline: an upload that cannot finish before it is cut there, and
+// the op falls back to the answer of a failed upload (the platform settles at the
+// same instant, and gave the op a budget that fits an upload of the largest size).
+func TestAnUploadThatCannotFinishBeforeTheDeadlineIsCutThereAndFallsBack(t *testing.T) {
+	h := newEnvironment(t)
+	c := h.session()
+	uploader := blockingUploader{started: make(chan struct{})}
+	h.env.Uploader = uploader
+	h.put(c, "/big", &fakeFile{Content: bytes.Repeat([]byte("x"), OutputCap+10), Mode: 0o644})
+	ctx := protocol.WithOpDeadline(context.Background(), time.Now().Add(200*time.Millisecond))
+
+	begun := time.Now()
+	r := h.env.ReadFile(ctx, sessionID, mustJSON(t, map[string]any{"path": "/big", "uploads": map[string]any{"content": slotPayload("one", 64<<20)}}))
+
+	select {
+	case <-uploader.started:
+	default:
+		t.Fatal("the upload was never tried")
+	}
+	if r.Error == nil || r.Error.Class != ClassFileTooLarge || !strings.Contains(r.Error.Message, "deadline") {
+		t.Fatalf("%#v", r)
+	}
+	if took := time.Since(begun); took > 5*time.Second {
+		t.Errorf("the upload ran past the deadline: %v", took)
+	}
+}
+
 func TestUploadsOfTheWrongShapeAreInvalidPayloads(t *testing.T) {
 	h := newEnvironment(t)
 	c := h.session()

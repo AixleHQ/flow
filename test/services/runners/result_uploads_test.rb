@@ -5,9 +5,17 @@ require "test_helper"
 # Runners::ResultUploads: the signed upload slots of an op whose output may be
 # over the 1 MiB cap (runner/protocol/PROTOCOL.md §6.5).
 class Runners::ResultUploadsTest < ActiveSupport::TestCase
-  setup { @slots = Runners::ResultUploads.issue(%w[stdout stderr], deadline_at: 2.minutes.from_now) }
+  include PresigningCacheHelper
 
-  teardown { Runners::ResultUploads.discard(@slots) }
+  setup do
+    use_presigning_cache
+    @slots = Runners::ResultUploads.issue(%w[stdout stderr], deadline_at: 2.minutes.from_now)
+  end
+
+  teardown do
+    Runners::ResultUploads.discard(@slots)
+    restore_cache_storage
+  end
 
   def upload(slot, bytes)
     Shrine.storages[:cache].upload(StringIO.new(bytes), slot.id)
@@ -17,7 +25,7 @@ class Runners::ResultUploadsTest < ActiveSupport::TestCase
     assert_equal %w[stdout stderr], @slots.keys
     assert_equal 2, @slots.values.map(&:id).uniq.size
     assert_equal [ Settings.runners.upload_limit ] * 2, @slots.values.map(&:max_bytes)
-    assert_equal 104_857_600, Settings.runners.upload_limit
+    assert_equal 33_554_432, Settings.runners.upload_limit
   end
 
   test "the payload carries each slot's id, URL and limit, and nothing of the storage" do
@@ -29,10 +37,18 @@ class Runners::ResultUploadsTest < ActiveSupport::TestCase
     assert_includes payload["stdout"]["url"], "cache/#{@slots['stdout'].id}"
   end
 
-  test "where the storage cannot sign, the URL is the stand-in endpoint of the platform's address" do
-    url = @slots["stdout"].url
+  test "where the storage cannot sign, uploads are not available, and a slot cannot be issued" do
+    restore_cache_storage
 
-    assert_equal "#{Settings.protocol}://#{Settings.domain}/api/v1/assets/upload/cache/#{@slots['stdout'].id}", url
+    assert_not Runners::ResultUploads.available?
+    assert_raises(ArgumentError) { Runners::ResultUploads.issue(%w[stdout], deadline_at: 2.minutes.from_now) }
+  ensure
+    use_presigning_cache
+  end
+
+  test "where it signs, uploads are available, and the budget fits 32 MiB at 1 MiB/s and the result" do
+    assert Runners::ResultUploads.available?
+    assert_equal 62, Runners::ResultUploads.budget
   end
 
   test "where the storage signs, the URL lives until the op's deadline and the grace, and at least a minute" do
@@ -41,7 +57,9 @@ class Runners::ResultUploadsTest < ActiveSupport::TestCase
     storage.stubs(:delete)
     storage.expects(:presign).with { |_id, **options| (options[:expires_in] - (120 + 300)).abs <= 2 }.returns(url: "https://b.test/u")
     storage.expects(:presign).with { |_id, **options| options[:expires_in] == 60 }.returns(url: "https://b.test/v")
-    Shrine.stubs(:storages).returns(cache: storage)
+    # Assigned, not stubbed: the teardown's restore_cache_storage must write to the real
+    # registry, or the mock would outlive this test (a stub is lifted after the teardown).
+    Shrine.storages[:cache] = storage
 
     Runners::ResultUploads.issue(%w[stdout], deadline_at: 2.minutes.from_now)
     slots = Runners::ResultUploads.issue(%w[stdout], deadline_at: 1.hour.ago)

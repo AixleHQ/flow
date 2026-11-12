@@ -19,22 +19,21 @@ module Runners
   #
   # Where the bytes go. Into Shrine's `cache` storage under a key the platform
   # minted (Uploads::CacheUpload), and never through the gateway or the
-  # application:
+  # application, by a presigned PUT URL of the bucket (S3), the one a browser
+  # upload uses.
   #
-  # - S3: a presigned PUT URL of the bucket, the one a browser upload uses.
-  # - The filesystem storage (development): the application's own stand-in for
-  #   S3 (Api::V1::AssetsController#upload), a URL of the platform's main
-  #   address that takes the PUT. It writes to the same `public/cache` the
-  #   platform then reads from, which is the filesystem storage whose files the
-  #   callback proxy's `assets` route serves (Runners::Proxy::ROUTES).
-  # - The in-memory storage of the tests has no URL a process outside could
-  #   call: the stand-in's URL is issued as for the filesystem, and the test's
-  #   fake runner writes to the storage itself.
+  # Known limitation: uploads need a storage that presigns. With one that cannot
+  # (the filesystem storage of development, the in-memory one of the tests) the
+  # platform issues no slots (`available?` is false): the runner then returns what
+  # fits the 1 MiB cap, as it did before uploads, and the cleanup's
+  # `log-collection-report.txt` says which files were not collected whole and why
+  # (RunnerRuntime#take_uncollected_whole).
   #
   # Lifetime. A slot's URL is valid until the op's `deadline_at` plus
-  # URL_GRACE: a runner that received the op in time may still be uploading as
-  # the deadline passes. S3 enforces it; the stand-in has no expiry, and its
-  # key is the capability.
+  # URL_GRACE, which is only a margin for clocks that differ: there is one
+  # deadline. The runner never uploads past `deadline_at` and the platform
+  # settles the op there, so an op that carries slots is given a `budget` on top
+  # of the time it needs itself.
   #
   # The largest upload is `Settings.runners.upload_limit`, sent in the slot as
   # `max_bytes`: a runner uploads no more than that, and the platform refuses an
@@ -59,7 +58,13 @@ module Runners
       def id = upload.id
     end
 
-    # How long a URL outlives the op's deadline.
+    # The slowest upload the budget allows for, in bytes per second (8 Mbit/s).
+    MIN_UPLOAD_RATE = 1.megabyte
+    # What an op with slots is given beyond the upload itself, in seconds: the
+    # runner's last request, and its result being posted.
+    RESULT_MARGIN = 30
+
+    # How long a URL outlives the op's deadline: a margin, not a second deadline.
     URL_GRACE = 5.minutes
     # A URL lives at least this long, whatever the op's deadline.
     MIN_URL_LIFETIME = 60
@@ -72,6 +77,18 @@ module Runners
     # The largest upload, in bytes.
     def limit
       Settings.runners.upload_limit.to_i
+    end
+
+    # Whether the platform can issue a slot at all: its storage signs uploads.
+    def available?
+      Shrine.storages[:cache].respond_to?(:presign)
+    end
+
+    # The seconds an op with slots is given for the upload of an output of the
+    # largest size, at MIN_UPLOAD_RATE, plus RESULT_MARGIN: 32 MiB takes 32 s at
+    # 1 MiB/s, so 62 s on top of the op's own time.
+    def budget
+      (limit.to_f / MIN_UPLOAD_RATE).ceil + RESULT_MARGIN
     end
 
     # One slot for each of `names`, valid until `deadline_at` and URL_GRACE.
@@ -124,9 +141,7 @@ module Runners
 
     def url_for(upload, lifetime)
       upload.presigned_put_url(expires_in: lifetime) ||
-        Rails.application.routes.url_helpers.upload_api_v1_assets_url(
-          key: upload.key, host: Settings.domain, protocol: Settings.protocol
-        )
+        raise(ArgumentError, "the cache storage cannot sign an upload; check Runners::ResultUploads.available? first")
     end
     private_class_method :url_for
   end

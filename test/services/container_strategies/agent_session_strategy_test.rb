@@ -865,6 +865,39 @@ module ContainerStrategies
       end
     end
 
+    # == report_uncollected_whole (a runner session's files over 1 MiB, where uploads are not available) ==
+
+    test "report_uncollected_whole puts what the runtime could not read whole into the collection report" do
+      runtime = mock("runtime")
+      runtime.stubs(:take_uncollected_whole).returns([ "read_file /tmp/terminal_output.log — not collected whole: needs S3-compatible storage" ])
+      ContainerRuntime.stubs(:build).returns(runtime)
+      strategy = build_strategy
+
+      assert_difference "SessionLog.count", 1 do
+        strategy.send(:report_uncollected_whole, @session)
+      end
+      report = @session.session_logs.find_by!(name: Sessions::LogCollector::REPORT_NAME)
+      assert_match %r{/tmp/terminal_output.log.*S3-compatible}, report.file.read
+
+      runtime.stubs(:take_uncollected_whole).returns([ "read_file /tmp/out.bin — not collected whole" ])
+      assert_no_difference "SessionLog.count" do
+        strategy.send(:report_uncollected_whole, @session)
+      end
+      text = report.reload.file.read
+      assert_includes text, "terminal_output.log"
+      assert_includes text, "/tmp/out.bin"
+    end
+
+    test "report_uncollected_whole writes nothing when everything was collected whole" do
+      runtime = mock("runtime")
+      runtime.stubs(:take_uncollected_whole).returns([])
+      ContainerRuntime.stubs(:build).returns(runtime)
+
+      assert_no_difference "SessionLog.count" do
+        build_strategy.send(:report_uncollected_whole, @session)
+      end
+    end
+
     # A killed container (out of memory, evicted) cannot be exec'd into, so the file read
     # fails — but the pane was also tee'd to the container's stdout, which outlives it.
     test "collect_terminal_output keeps a killed container's terminal from its stdout" do

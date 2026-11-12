@@ -254,6 +254,7 @@ module ContainerRuntime
       return nil if path.blank?
 
       outcome = call(session_for(id), "read_file", { "path" => path.to_s }, uploads: %w[content])
+      note_uncollected_whole("read_file #{path}", outcome.message) if outcome.error_class == "file_too_large"
       unless outcome.ok?
         Rails.logger.debug { "[RunnerRuntime] read_file #{path}: #{outcome.message}" }
         return nil
@@ -315,6 +316,16 @@ module ContainerRuntime
 
     # -- Garbage collection ---------------------------------------------------
 
+    # The files and outputs a cleanup could not read whole since the last call,
+    # one line each, and forgets them. The cleanup puts them in its
+    # `log-collection-report.txt` (ContainerStrategies::AgentSessionStrategy), so
+    # that a log cut at 1 MiB is not taken for a whole one.
+    def take_uncollected_whole
+      notes = @uncollected_whole || []
+      @uncollected_whole = []
+      notes
+    end
+
     # A runner session's objects are the runner's to remove, by label
     # (`env.scrub`, `env.reset`), not the hosted sweep's.
     def list_session_resources(*)
@@ -324,6 +335,9 @@ module ContainerRuntime
     def delete_session_resource(_resource)
       true
     end
+
+    # At most this many lines are kept for the cleanup's report.
+    MAX_UNCOLLECTED_NOTES = 50
 
     private
 
@@ -341,13 +355,26 @@ module ContainerRuntime
         # An output whose upload could not be read is said so in stderr: the
         # command's caller must not take the lost part for an empty one.
         notes = outcome.upload_errors.values.map { |reason| "#{reason}\n" }
-        return [ exec_output(outcome, "stdout"), exec_output(outcome, "stderr") + notes, exit_code ]
+        return [ exec_output(outcome, "stdout", cmd), exec_output(outcome, "stderr", cmd) + notes, exit_code ]
       end
       if raise_on_gone && (GONE.include?(outcome.error_class) || outcome.expired?)
         raise ContainerUnreachableError.new(outcome.message, container_identifier: session && container_name(session))
       end
 
       [ [], [ "#{outcome.message}\n" ], 1 ]
+    end
+
+    # Records that an output or a file did not come back whole, and why. Where the
+    # platform's storage cannot sign an upload, that is the reason: output over
+    # 1 MiB needs S3-compatible storage (DESIGN.md §6.4, a known limitation).
+    def note_uncollected_whole(what, reason)
+      unless Runners::ResultUploads.available?
+        reason = "#{reason.to_s.chomp('.')}. Output over 1 MiB needs S3-compatible storage; " \
+                 "this platform's storage cannot sign an upload, so none was offered"
+      end
+      Rails.logger.warn("[RunnerRuntime] #{what} was not collected whole: #{reason}")
+      @uncollected_whole ||= []
+      @uncollected_whole << "#{what} — not collected whole: #{reason}" if @uncollected_whole.size < MAX_UNCOLLECTED_NOTES
     end
 
     def lines(text)
@@ -359,12 +386,18 @@ module ContainerRuntime
     # UTF-8, with U+FFFD for the bytes that are not); the inline text
     # otherwise. An upload that could not be read leaves the inline part, which
     # the runner sends then.
-    def exec_output(outcome, name)
+    def exec_output(outcome, name, cmd)
       if outcome.uploaded.key?(name)
-        return lines(outcome.uploaded[name].dup.force_encoding(Encoding::UTF_8).scrub("\uFFFD"))
+        # In place: the bytes read are the only full copy (up to the upload limit).
+        return lines(outcome.uploaded[name].force_encoding(Encoding::UTF_8).scrub!("\uFFFD"))
       end
 
-      Rails.logger.warn("[RunnerRuntime] exec #{name}: #{outcome.upload_errors[name]}") if outcome.upload_errors.key?(name)
+      if outcome.upload_errors.key?(name)
+        Rails.logger.warn("[RunnerRuntime] exec #{name}: #{outcome.upload_errors[name]}")
+      end
+      if outcome.data["#{name}_truncated"]
+        note_uncollected_whole("the #{name} of `#{Array(cmd).last.to_s.truncate(120)}`", "it was cut to the first 1 MiB")
+      end
       lines(outcome.result[name])
     end
 
@@ -421,8 +454,13 @@ module ContainerRuntime
       environment = session && machine(session)
       return Outcome.new(op: op, state: "failed", result: no_machine_result) if environment.nil?
 
-      deadline = deadline_at(seconds, lifecycle)
-      slots = Runners::ResultUploads.issue(uploads, deadline_at: deadline)
+      # An op that may upload gets, with its own time, a budget that fits an
+      # upload of the largest size: the runner never uploads past the one
+      # deadline, and the platform settles at it (PROTOCOL.md §6.5). Where the
+      # storage cannot sign an upload, no slot is issued and no time is added.
+      offer_uploads = uploads.any? && Runners::ResultUploads.available?
+      deadline = deadline_at(seconds, lifecycle, extra: offer_uploads ? Runners::ResultUploads.budget : 0)
+      slots = offer_uploads ? Runners::ResultUploads.issue(uploads, deadline_at: deadline) : {}
       payload = payload.merge("uploads" => Runners::ResultUploads.payload(slots)) if slots.any?
       operation = Runners::Operations.enqueue!(environment, op: op, payload: payload, deadline_at: deadline, session: session)
       return Outcome.new(op: op, state: "failed", result: no_machine_result) if operation.nil?
@@ -480,10 +518,13 @@ module ContainerRuntime
       Runners::Machines.held_by(session)
     end
 
-    # An op's deadline is its own budget, and at most the activity's end less
+    # An op's deadline is its own budget plus the upload budget when it offers
+    # upload slots, capped by the caller's `op_timeout` (so a scan-capped call
+    # keeps exactly that cap), and at most the activity's end less
     # ACTIVITY_MARGIN, so the wait for it ends before the activity does (§6.4).
-    def deadline_at(seconds, lifecycle)
+    def deadline_at(seconds, lifecycle, extra: 0)
       seconds ||= lifecycle ? Settings.runners.lifecycle_op_timeout.to_i : Settings.runners.op_timeout.to_i
+      seconds += extra
       seconds = [ seconds, @op_timeout ].min if @op_timeout
       [ Time.current + seconds, activity_deadline ].compact.min.change(usec: 0)
     end

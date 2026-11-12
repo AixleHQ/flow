@@ -22,7 +22,7 @@
           "content": {
             "id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
             "url": "https://uploads.example.test/cache/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc?expires=fixture",
-            "max_bytes": 104857600
+            "max_bytes": 33554432
           }
         }
       }
@@ -57,7 +57,7 @@
                   "content": {
                     "id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
                     "url": "https://uploads.example.test/cache/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc?expires=fixture",
-                    "max_bytes": 104857600
+                    "max_bytes": 33554432
                   }
                 }
               }
@@ -106,7 +106,7 @@
           "content": {
             "id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
             "url": "https://uploads.example.test/cache/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc?expires=fixture",
-            "max_bytes": 104857600
+            "max_bytes": 33554432
           }
         }
       }
@@ -141,7 +141,7 @@
                   "content": {
                     "id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
                     "url": "https://uploads.example.test/cache/cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc?expires=fixture",
-                    "max_bytes": 104857600
+                    "max_bytes": 33554432
                   }
                 }
               }
@@ -159,7 +159,7 @@
           "status": "error",
           "error": {
             "class": "file_too_large",
-            "message": "/tmp/huge.bin is 209715200 bytes, over the 104857600-byte limit of an upload"
+            "message": "/tmp/huge.bin is 209715200 bytes, over the 33554432-byte limit of an upload"
           }
         }
       },

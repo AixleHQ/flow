@@ -15,6 +15,10 @@ type CheckInGateway interface {
 	CheckIn(ctx context.Context, accessToken string, req protocol.CheckInRequest) (protocol.CheckIn, error)
 }
 
+// DefaultCheckInAttempts is how many times a check-in is tried before the runner
+// logs it and starts its ops loop without one.
+const DefaultCheckInAttempts = 5
+
 // Checker is the host runner's check-in after a start (PROTOCOL.md §5.9): the
 // machine's os, arch and facts, and, in the request's X-Aixle-Runner-Version, the
 // version it runs now, which a machine that updated itself has moved on from the
@@ -24,12 +28,17 @@ type Checker struct {
 	Tokens  *tokens.Source
 	Logger  *slog.Logger
 	Backoff *backoff.Backoff
+	// MaxAttempts bounds the tries of a check-in that fails in a way the runner
+	// can wait out. Zero is DefaultCheckInAttempts.
+	MaxAttempts int
 	// Sleep is replaced in tests.
 	Sleep func(ctx context.Context, d time.Duration) error
 }
 
 // CheckIn reports the machine, retrying with backoff a failure the runner can
-// wait out until the platform answers. A refusal that ends the runner's work
+// wait out, at most MaxAttempts times: then it is logged and the runner goes on
+// without a check-in, since the ops do not depend on it (a failing check-in
+// route must not stop a machine that can work). A refusal that ends the runner's work
 // (the credentials, a revoked runner, a version below the platform's minimum) is
 // returned as a *tokens.StopError. A refusal of the report itself is a bug in
 // this runner: it is logged and the runner goes on without a check-in, since the
@@ -46,7 +55,11 @@ func (c *Checker) CheckIn(ctx context.Context, report protocol.CheckInRequest) (
 	if sleep == nil {
 		sleep = backoff.Sleep
 	}
-	for {
+	attempts := c.MaxAttempts
+	if attempts <= 0 {
+		attempts = DefaultCheckInAttempts
+	}
+	for attempt := 1; ; attempt++ {
 		var answer protocol.CheckIn
 		err := c.Tokens.Do(ctx, func(access string) error {
 			var err error
@@ -66,6 +79,10 @@ func (c *Checker) CheckIn(ctx context.Context, report protocol.CheckInRequest) (
 		}
 		if protocol.Classify(err) == protocol.ActionBug {
 			logger.Error("the platform refused the check-in, which is a bug in aixle-runner; going on without it", "error", err)
+			return protocol.CheckIn{}, false, nil
+		}
+		if attempt >= attempts {
+			logger.Error("checking in failed; going on without a check-in, the next start will try again", "attempts", attempt, "error", err)
 			return protocol.CheckIn{}, false, nil
 		}
 		delay := retry.Next()
