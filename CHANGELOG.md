@@ -13,6 +13,8 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-11-12
+
 ### Added
 - **Admin**: the dashboard's companies table shows when each account was created
   and sorts by it, newest first. Compact filters above the table narrow it by
@@ -1304,7 +1306,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.11.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.12.0...develop
+[1.12.0]: https://github.com/AixleHQ/flow/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/AixleHQ/flow/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/AixleHQ/flow/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/AixleHQ/flow/compare/v1.8.0...v1.9.0
