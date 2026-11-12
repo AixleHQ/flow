@@ -253,10 +253,10 @@ class CompanyMembership < ApplicationRecord
     onboarding_profile_complete? && (viewer? || has_configured_agents?)
   end
 
-  # Administering the tenant needs no agent; running anything still does, and
+  # Looking around the app needs no agent; running anything still does, and
   # SessionService refuses those launches until one is connected.
   def can_skip_agent_setup?
-    admin? && onboarding_profile_complete? && !has_configured_agents?
+    onboarding_requires_agent? && onboarding_profile_complete? && !has_configured_agents?
   end
 
   def onboarding_profile_complete?

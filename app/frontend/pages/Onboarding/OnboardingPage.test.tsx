@@ -258,9 +258,9 @@ describe('Onboarding/OnboardingPage', () => {
     expect(screen.getByRole('button', { name: /Get started/ })).toBeDisabled();
   });
 
-  it('lets an admin with no agent skip the step only after confirming the warning', async () => {
+  it('lets an employee with no agent skip the step only after confirming the warning', async () => {
     renderAuthedPage(<OnboardingPage />, {
-      props: { currentUser: userAt({ onboardingState: 'step2', currentRole: 'admin' }), authSessions: [] },
+      props: { currentUser: userAt({ onboardingState: 'step2', currentRole: 'employee' }), authSessions: [] },
     });
 
     await userEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
@@ -282,7 +282,7 @@ describe('Onboarding/OnboardingPage', () => {
     );
   });
 
-  it('keeps the admin on the step when the skip warning is cancelled', async () => {
+  it('keeps the member on the step when the skip warning is cancelled', async () => {
     renderAuthedPage(<OnboardingPage />, {
       props: { currentUser: userAt({ onboardingState: 'step2', currentRole: 'admin' }), authSessions: [] },
     });
@@ -295,20 +295,12 @@ describe('Onboarding/OnboardingPage', () => {
     expect(screen.getByText('Connect your agents')).toBeInTheDocument();
   });
 
-  it('offers no skip to an employee', () => {
-    renderAuthedPage(<OnboardingPage />, {
-      props: { currentUser: userAt({ onboardingState: 'step2', currentRole: 'employee' }), authSessions: [] },
-    });
-
-    expect(screen.queryByRole('button', { name: 'Skip for now' })).not.toBeInTheDocument();
-  });
-
-  it('offers no skip to an admin who already connected an agent', () => {
+  it('offers no skip to a member who already connected an agent', () => {
     renderAuthedPage(<OnboardingPage />, {
       props: {
         currentUser: userAt({
           onboardingState: 'step2',
-          currentRole: 'admin',
+          currentRole: 'employee',
           configuredAgents: ['claude_code'] as AgentType[],
         }),
         authSessions: [],
