@@ -71,7 +71,11 @@ platform's minimum and recommended versions compare that way (§5.1, §5.4).
   it stays far below these limits. The callback proxy's requests (§5.8) count against the same
   limits as the machine's own.
 - **Caching.** Every response that carries a token (`register` and `token`), every `GET ops`
-  response and every answer of the release endpoints has `Cache-Control: no-store`.
+  response, every `check-in` response and every answer of the release endpoints has
+  `Cache-Control: no-store`.
+- **Uploads are not requests to the gateway.** Output and files over the 1 MiB output cap go to a
+  signed URL of the platform's storage that an op's payload names (§6.5), and are not subject to
+  the 2 MiB body cap, the rate limits or the token of this section.
 
 ## 3. Refusals
 
@@ -88,7 +92,7 @@ the platform endpoint's own, not a refusal):
 - `413`, for a body over the cap (§2);
 - `429`, for a request over a rate limit (§2);
 - a `404` for a path the gateway does not serve;
-- a `400` for a `POST /register` or `POST /ops/:id/result` body that is not valid JSON. Its body
+- a `400` for a `POST /register`, `POST /check-in` or `POST /ops/:id/result` body that is not valid JSON. Its body
   is an HTML page or `{"status": 400, "error": "Bad Request"}`, depending on `Accept`. That
   `error` is not a code of the table below. The body is parsed after steps 1 to 4 of the check
   order, so a malformed body with a bad header, token, runner or flag gets that refusal
@@ -99,7 +103,7 @@ the platform endpoint's own, not a refusal):
 | `unsupported_protocol` | 400 | all | `X-Aixle-Runner-Protocol` is missing or not `1`. The message names the version the gateway speaks. |
 | `invalid_runner_version` | 400 | all | `X-Aixle-Runner-Version` is missing or not a semantic version. |
 | `invalid_request` | 400 | `GET ops`, releases | `after` or `wait` is malformed or out of range (§5.4), or a release's version or platform is malformed (§5.6, §5.7). |
-| `runner_version_unsupported` | 400 | `register` | `X-Aixle-Runner-Version` is below the platform's minimum. The message names the minimum (§5.1). |
+| `runner_version_unsupported` | 400 | `register`, `check-in` | `X-Aixle-Runner-Version` is below the platform's minimum. The message names the minimum (§5.1, §5.9). |
 | `invalid_token` | 401 | all | The token is unknown, of the wrong kind for the endpoint, revoked, expired, already used (a registration token), or of an unregistered machine. |
 | `runner_revoked` | 401 | all | The token is valid, but its runner is revoked or deleted. |
 | `credential_reuse_detected` | 401 | `token` | A spent refresh token was presented again, and it was not a retry after a lost response. Its whole family is now revoked (§4). |
@@ -111,6 +115,7 @@ the platform endpoint's own, not a refusal):
 | `ephemeral_not_supported` | 422 | `register` | The body asked for `ephemeral: true`. |
 | `invalid_registration` | 422 | `register` | The body is invalid: a blank or missing `name`, `facts` that is not an object (`null` included), or a field over 255 characters. An `X-Aixle-Runner-Version` over 255 characters is refused this way too, since it is recorded with the machine, and before the `min_version` check, so the answer does not depend on the pins. |
 | `invalid_result` | 422 | `ops/:id/result` | The result body is invalid (§5.5). |
+| `invalid_check_in` | 422 | `check-in` | The body is invalid: `os` or `arch` is not a string of at most 255 characters, or `facts` is not an object (`null` included). An `X-Aixle-Runner-Version` over 255 characters is refused this way too (§5.9). |
 
 **Check order.** Every request is checked in this order, and the first failure answers:
 
@@ -147,8 +152,8 @@ then gets the refusal, not the ops (§5.4).
 | `403 runners_disabled` | Keeps its credentials, backs off and retries. Once the company's runners are enabled again, the same tokens work. |
 | `429` | Backs off and retries. The windows are 60 seconds long. |
 | `413` | Does not resend the same body. |
-| `400 unsupported_protocol`, `400 invalid_runner_version`, `400 runner_version_unsupported` | Stops and reports that `aixle-runner` must be updated, with the gateway's message. Retrying cannot succeed. A refused `register` leaves the registration token usable. |
-| `400 invalid_request`, `422 invalid_result` | A bug in the runner: it reports it and does not resend the same request. |
+| `400 unsupported_protocol`, `400 invalid_runner_version`, `400 runner_version_unsupported` | Stops and reports that `aixle-runner` must be updated, with the gateway's message. Retrying cannot succeed. A refused `register` leaves the registration token usable. A refused `check-in` stops the host runner before it takes an op. |
+| `400 invalid_request`, `422 invalid_result`, `422 invalid_check_in` | A bug in the runner: it reports it and does not resend the same request. |
 | `400` without the JSON refusal shape | A bug in the runner, which sent a body that is not valid JSON: it reports it and does not resend the same body. |
 | `422 ephemeral_not_supported`, `422 invalid_registration` | Reports the problem with its configuration. The registration token is not spent, so `configure` can be run again with the same token once the input is fixed. |
 | `404 not_found` from a result | Drops that result: the op is not this machine's. |
@@ -171,7 +176,7 @@ returned once, by the response that issues it.
 | Kind | Prefix | Issued by | Lifetime | Sent to |
 | --- | --- | --- | --- | --- |
 | Registration | `arreg_` | The platform, for a `manual` runner ("Add machine") | Single use, valid for 1 hour | `POST /register` |
-| Access | `aracc_` | `register` and `token` | 1 hour | `DELETE /registration`, `GET /ops`, `POST /ops/:id/result` |
+| Access | `aracc_` | `register` and `token` | 1 hour | `DELETE /registration`, `POST /check-in`, `GET /ops`, `POST /ops/:id/result`, the proxy route |
 | Refresh | `arref_` | `register` and `token` | 30 days, and spent by its one use | `POST /token` |
 
 The rules:
@@ -217,6 +222,7 @@ A runner keeps its tokens in a file only its own user can read, and never logs t
 | `POST /runner/v1/register` | registration | `201` with the environment and a token pair |
 | `DELETE /runner/v1/registration` | access | `204` |
 | `POST /runner/v1/token` | refresh | `200` with a token pair |
+| `POST /runner/v1/check-in` | access | `200` with the environment, the config and, maybe, `update` |
 | `GET /runner/v1/ops` | access | `200` with up to 20 ops |
 | `POST /runner/v1/ops/:id/result` | access | `200` with the op's state |
 | `GET /runner/v1/releases/:version/:os-:arch` | none | `302` to the binary, with its pinned SHA-256 |
@@ -377,7 +383,8 @@ integer is read as that integer before it is checked.
   once the wait is over: the machine holds no session, the request's `X-Aixle-Runner-Version` is below `recommended_version`, the
   binary for the machine's `os` and `arch` is pinned, and neither the runner (`config.auto_update:
   false`) nor the machine (`auto_update: false` at register) opted out. An answer with ops never
-  carries it. A runner that does not update itself ignores it (§7).
+  carries it. The answer of `check-in` carries the same field under the same rule (§5.9). A runner
+  that does not update itself ignores it (§7).
 
   **What a runner does with it** (DESIGN.md §14.4). Only while it holds no session container,
   only towards a version above its own, and never on a machine configured with
@@ -581,6 +588,72 @@ access token nor the agent's session-key headers go anywhere but this route.
 Fixtures: `proxy/`. The streamed answer, the forwarded headers and the key of each credential
 route are tested by the gateway's own tests (fixtures README).
 
+### 5.9 `POST /runner/v1/check-in`
+
+The host runner of a `manual` machine reports itself after **every start**, authenticated with
+the environment's access token: no token is exchanged. The machine is already registered; the
+check-in refreshes what the platform records about it.
+
+| Field | Type | Rule |
+| --- | --- | --- |
+| `os` | string | Optional, at most 255 characters, e.g. `linux`. Absent leaves the recorded value as it is; any other value, `null` included, is refused with `invalid_check_in`. |
+| `arch` | string | Optional, at most 255 characters, e.g. `amd64`. As `os`. |
+| `facts` | object | Optional. What the machine reports about itself, e.g. `{"docker": "27.2.0"}`. It replaces the recorded facts. `null` is refused with `invalid_check_in`. |
+
+Other fields are ignored. The `X-Aixle-Runner-Version` and `X-Aixle-Runner-Protocol` of the request
+are recorded as the machine's runner and protocol versions, **over** the ones it registered with.
+So a machine that updated itself (§5.4) shows its new version once it restarted and checked in,
+and the platform's "update available" reads the version from there.
+
+**The checks** come after the common ones of §3 (step 5): an `X-Aixle-Runner-Version` over 255
+characters is `422 invalid_check_in`, whatever the pins say, then a version below the platform's
+`min_version` is `400 runner_version_unsupported`, with the upgrade message as for `register`
+(§5.1), then the body is checked. A refused check-in records nothing. The refusal at check-in is
+the one place a machine below the minimum meets it after it registered: it comes when the runner
+starts, never in the middle of a session (DESIGN.md §14.4).
+
+**Known limitation: no drain-safe mode for `min_version`.** A host that restarts while a session
+container is still running, after the platform raised `min_version`, stops at its check-in (the
+refusal above) before it takes an op, so the platform can no longer issue ops for that session
+until the runner is updated and starts again. The session container itself keeps running, and the
+session continues once the updated runner resumes. `min_version` is raised deliberately and only
+for a protocol break; the runbook for raising it (`docs/operations/releasing.md`) says to update
+the machines first.
+
+`200 OK`, with `Cache-Control: no-store`:
+
+```json
+{
+  "environment": { "id": 42, "key": "aixle-r7-1f2e3d4c", "display_name": "build-01", "state": "registered" },
+  "config": { "upload_max_bytes": 33554432 },
+  "update": { "version": "1.5.0", "sha256": "4f2b…" }
+}
+```
+
+- `environment` is as `register` answers it (§5.1).
+- `config` is what the platform tells the runner about its limits. `upload_max_bytes` is the
+  largest object the platform takes for an op's output or file (§6.5). It is for the runner's log:
+  each upload slot of an op carries its own `max_bytes`, which is what binds. A runner ignores a
+  `config` key it does not know.
+- `update` is there under the rule of the `GET ops` answer without ops (§5.4), read after the
+  report is recorded: the machine holds no session, the request's version is below
+  `recommended_version`, the binary for the machine's `os` and `arch` is pinned, and neither the
+  runner nor the machine opted out. A runner that holds a session when it restarts, and checks in
+  with it, gets none. What the runner does with it is §5.4's.
+
+**What the runner does.** It checks in once the callback proxies of the sessions already running
+on the machine are served again, and before it takes its first op. A check-in that fails in a way
+it can wait out (a network error, `429`, a `5xx`, `403 runners_disabled`) is retried with backoff,
+five attempts at most; then the runner logs it and starts its ops loop without a check-in (the
+next start tries again), so a failing check-in route does not stop a machine that can work. A `422 invalid_check_in` is a bug in the runner: it is logged, and the
+runner goes on without a check-in. The refusals that end its work (§3) end it here too.
+
+Its own refusals: `422 invalid_check_in`, and `400 runner_version_unsupported`.
+
+Schema: [`schemas/v1/check_in.request.json`](schemas/v1/check_in.request.json).
+
+Fixtures: `check_in/`.
+
 ## 6. Ops
 
 An op, as `GET ops` returns it:
@@ -642,8 +715,10 @@ does. Nothing of the runner runs inside the agent container.
   `error.class` `invalid_payload`, and nothing is run.
 - **A failure of the Docker daemon** that the op's own classes do not cover is `docker_error`,
   with the daemon's message.
-- **The output cap is 1 MiB** (1 048 576 bytes): the most an op returns of one output stream or
-  one file. It is a constant of protocol 1, since the runner reads no platform settings.
+- **The output cap is 1 MiB** (1 048 576 bytes): the most an op returns inline, in its result, of
+  one output stream or one file. It is a constant of protocol 1, since the runner reads no platform
+  settings. An output or a file over it comes back through an upload to a signed URL that the op's
+  payload carries (§6.5); without one, the stream is cut and the file refused, as below.
 - **A result over the body cap is `result_too_large`.** Before it journals and posts a result,
   the runner encodes it once. If the encoded result is over the gateway's 2 MiB body cap (§2) less
   a 16 KiB margin, the runner posts an `error` result with `error.class` `result_too_large`
@@ -844,6 +919,7 @@ Runs a command in the session container through the daemon's exec API, without a
 | `user` | string | Optional. A user name or uid, with an optional `:group`. Default: the image's user. |
 | `timeout` | integer | Optional, seconds. The command runs under coreutils `timeout` (which the agent images have): SIGTERM at `timeout` seconds, SIGKILL 5 seconds later, to its whole process group. The op's `deadline_at` bounds it too: absent or `0`, or longer than the seconds left until `deadline_at` when the command starts, the command gets those seconds instead (at least 1), the same way. After the deadline nobody waits for the result, and the runner runs one op at a time. |
 | `stdin` | string | Optional. Written to the command's standard input, which is then closed. Without it the command's standard input is not attached. |
+| `uploads` | object | Optional. `stdout` and `stderr` each a slot for the output over the output cap (§6.5). |
 
 | Outcome | `status` | `exit_code` | `stdout`, `stderr` | `data` | `error.class` |
 | --- | --- | --- | --- | --- | --- |
@@ -853,9 +929,11 @@ Runs a command in the session container through the daemon's exec API, without a
 | No running session container | `error` | | | | `no_session_container` |
 | The payload is not the one above | `error` | | | | `invalid_payload` |
 
-**The output cap.** Each stream keeps its first 1 MiB; the rest is read and dropped, so the
+**The output cap.** Each stream keeps its first 1 MiB inline; the rest is read and dropped, so the
 command never blocks on a full pipe, and `<stream>_truncated` is `true`. A UTF-8 character cut
-by the cap is dropped, and bytes that are not UTF-8 arrive as U+FFFD.
+by the cap is dropped, and bytes that are not UTF-8 arrive as U+FFFD. **With a slot** for the
+stream (§6.5), a stream over the cap is kept whole, up to the slot's `max_bytes`, and uploaded:
+the result has no inline text for it, and `data.uploads.<stream>` names the upload.
 
 ```json
 { "status": "ok", "exit_code": 0, "stdout": "main\n", "stderr": "", "data": { "stdout_truncated": false, "stderr_truncated": false } }
@@ -886,12 +964,13 @@ replaced.
 Reads one regular file of the session container through the archive API. A symlink is followed
 once, to the target the daemon resolves.
 
-Payload: `{"path": <an absolute, clean path other than />}`.
+Payload: `{"path": <an absolute, clean path other than />, "uploads": {"content": <a slot, optional>}}`.
 
 | Outcome | `status` | `data` | `error.class` |
 | --- | --- | --- | --- |
 | Read | `ok` | `{"content": <base64>, "size": <integer>}`: the file's bytes and their number | |
-| The file is over the output cap | `error` | | `file_too_large`. Nothing of it is returned (§8). |
+| The file is over the output cap, and the payload has a slot for `content` that takes it (§6.5) | `ok` | `{"size": <integer>, "uploads": {"content": {"id": <string>, "size": <integer>}}}`: no inline `content` | |
+| The file is over the output cap, and the payload has no slot, or its slot takes less than the file, or the upload failed | `error` | | `file_too_large`. Nothing of it is returned; the message says which. |
 | No such file | `error` | | `file_not_found` |
 | A directory or another non-regular file | `error` | | `not_a_file` |
 | No session container | `error` | | `no_session_container` |
@@ -1001,6 +1080,94 @@ Payload: `{}`.
 
 Fixtures: `ops/env_scrub_and_reset.json`.
 
+### 6.5 Output and files over the output cap: uploads to a signed URL
+
+An `exec` and a `read_file` are the ops whose result can be larger than the output cap (§6).
+The platform offers each of them **a signed URL per output** in the payload, so that what is
+over the cap comes back whole without passing through the gateway.
+
+```json
+{
+  "cmd": ["cat", "/tmp/terminal_output.log"],
+  "uploads": {
+    "stdout": { "id": "9f2c…", "url": "https://bucket.s3.amazonaws.com/cache/9f2c…?X-Amz-…", "max_bytes": 33554432 },
+    "stderr": { "id": "41ab…", "url": "https://bucket.s3.amazonaws.com/cache/41ab…?X-Amz-…", "max_bytes": 33554432 }
+  }
+}
+```
+
+| Op | Slots (`uploads` keys) |
+| --- | --- |
+| `exec` | `stdout`, `stderr` |
+| `read_file` | `content` |
+
+A `batch` step carries its own `uploads` as its op does. A slot is `{id, url, max_bytes}`: `id` an
+opaque string that names the upload in the result, `url` the signed URL, `max_bytes` the largest
+object it takes. A payload whose `uploads` is not an object of such slots, or whose slot lacks an
+`id` or a `url`, is `invalid_payload`. A key the op has no output for is ignored, as is a slot
+whose `max_bytes` is not above the output cap: what the cap holds is returned inline.
+
+**Who issues the URL, and when.** The platform does, when it enqueues the op: every `exec` and
+`read_file` it sends carries its slots. Signing is local, so a slot that is not used costs nothing.
+The URL is a capability: it carries its own signature, so **the runner sends no `Authorization`
+header and no other header of the protocol to it**, and it does not follow a redirect.
+
+**What the URL is.** A presigned `PUT` URL of the bucket. The runner `PUT`s the bytes to `url`, as
+they are, with the exact `Content-Length`, and a `2xx` answer is the upload. The platform reads the
+object from its storage, never through the URL.
+
+**Known limitation: uploads need a storage that presigns (S3).** With a storage that cannot sign
+its own uploads (the filesystem storage of a development platform), the platform issues no slots:
+the payload has no `uploads`, and output over 1 MiB comes back as it did before uploads: an `exec`
+answers the first 1 MiB of a stream, marked truncated, and a `read_file` of a larger file answers
+`file_too_large`. The platform's cleanup says so in its `log-collection-report.txt`.
+
+**Its lifetime.** Until the op's `deadline_at` plus 5 minutes (and at least a minute). The extra
+minutes are only a margin for a clock that differs: there is one deadline. The runner never uploads
+past the op's `deadline_at`, and the platform stops waiting for the op there (§6). So an op that
+carries slots gets, with its `deadline_at`, a budget that fits an upload of the largest size (the
+platform adds it to the time the op needs itself), and an upload that cannot finish before the
+deadline falls back as in "When the upload fails".
+
+**The largest upload** is the slot's `max_bytes`, the platform's `Settings.runners.upload_limit`
+(32 MiB), and `config.upload_max_bytes` of the check-in tells it (§5.9). A presigned `PUT` cannot
+carry a size limit of its own, so the limit is kept by both sides: the runner uploads no more, and
+the platform refuses an object over it when it reads it. A stream of an `exec` over it is cut there
+and `<stream>_truncated` is `true`; a file over it is `file_too_large`.
+
+**How the result names the upload.** `data.uploads.<name>` is `{"id": <the slot's id>, "size":
+<bytes uploaded>}`. The platform accepts it only when the `id` is the one it issued for that
+output and the object really has that many bytes; anything else counts as no output, and the
+platform reports why (it never takes a part of an upload). For an `exec`, a stream that is uploaded
+has no inline `stdout` or `stderr`; the other stream is inline as before. For a `read_file`, the
+result has `size` and no `content`.
+
+```json
+{ "status": "ok", "exit_code": 0, "stderr": "",
+  "data": { "stdout_truncated": false, "stderr_truncated": false,
+            "uploads": { "stdout": { "id": "9f2c…", "size": 3145728 } } } }
+```
+
+**When the upload fails.** The runner sends it again after 0.5 s and after 2 s when it failed on
+the network or with a `5xx`; a `4xx` (an expired or refused signature) is not retried. If it
+still fails, the op still has its one result: an `exec` answers the first 1 MiB of the stream
+inline as it does without a slot, marks the stream truncated and says why in
+`data.upload_errors.<name>`; a `read_file` answers `file_too_large`, with the cause in its message.
+
+**An upload no result claims.** The platform removes the object of every upload a result names,
+once it has read it, and every slot of an op that ended without a usable result (it expired, or
+failed with no result). What that cannot reach stays in the storage's `cache/` prefix: an upload
+that landed after the platform stopped waiting, or one whose result was never posted. Nothing
+refers to it and its key cannot be guessed. It is removed by an expiry rule on the `cache/`
+prefix of the bucket, the one an abandoned browser upload needs too: the platform deletes no
+object it did not read, and it adds no sweep of its own (DESIGN.md §6.4).
+
+**On the machine.** The runner keeps the output it uploads in a temporary file, which it removes
+when the op ends, and no longer than the op runs. A file of the session container is copied out
+through the archive API into one before it is sent.
+
+Fixtures: `ops/exec_upload.json`, `ops/exec_upload_failed.json`, `ops/read_file_upload.json`.
+
 ## 7. Versioning
 
 - The protocol version is an integer, sent in `X-Aixle-Runner-Protocol`. The gateway accepts `1`
@@ -1010,23 +1177,31 @@ Fixtures: `ops/env_scrub_and_reset.json`.
 - **The skew policy** (DESIGN.md §14.4). The platform supports the protocol versions its pins
   list in `protocol_supported`, which is the current and the previous one after the first bump,
   and runners at or above its `min_version`. A runner below the minimum is refused at
-  `register` (§5.1), and with the check-in of task 8c at check-in too, never in the middle of a
-  session. A runner below `recommended_version` is offered the update while it is idle (§5.4).
+  `register` (§5.1) and at `check-in` (§5.9), which it makes when it starts, never in the middle of
+  a session. A runner below `recommended_version` is offered the update while it is idle (§5.4).
 
 ## 8. Not in protocol 1 yet
 
 Each of these is designed in DESIGN.md §6 and comes with its own section and fixtures:
 
 - An OTLP route of the callback proxy (§5.8): a runner session gets no telemetry endpoint until it
-  comes. `POST /runner/v1/check-in`, `POST /runner/v1/heartbeat` and
-  `POST /runner/v1/sessions/:id/log`: task 8c.
-  `POST /runner/v1/sessions/:id/events`: later.
-- Output and files over the 1 MiB output cap (§6): `exec` returns the first 1 MiB of each stream
-  and `read_file` refuses a larger file. They come back through an upload to a signed URL with
-  task 8c. Until then a result whose encoded body is over the gateway's 2 MiB cap is answered
-  `result_too_large` (§6).
+  comes.
+- `POST /runner/v1/heartbeat`: task 12, with recording heartbeats and the machine health that is
+  their first reader. The host runner runs one thing at a time, so no poll is outstanding during an
+  op, and an empty `GET ops` answer is the heartbeat until then.
+- `POST /runner/v1/sessions/:id/log` and live-log chunks: not built (Alex, 2026-11-11). A runner
+  session's terminal is read as a hosted one's, through `exec` and `tmux capture-pane`, which is
+  one `exec` op (§6.3); the live view of a runner session comes with the interactive tunnel
+  (DESIGN.md §15 task 16). The `local` log driver and the follow of the container's log are not
+  built either.
+- `POST /runner/v1/sessions/:id/events`: later.
+- A result whose encoded body is over the gateway's 2 MiB cap is still answered
+  `result_too_large` (§6): the output of an `exec` and the file of a `read_file` leave the result
+  for an upload (§6.5), but a `batch` of large steps, or output that JSON escapes heavily, can
+  still reach it.
 - `session.start` and `session.stop`: reserved, answered `unsupported_op`.
-- `update` in the check-in's answer: task 8c, with the check-in, the same field as in §5.4.
+- The bootstrap-token exchange of `check-in` on `coder` and `kubernetes`: with those types (§5.9
+  is the `manual` check-in).
 - `409 busy` on `DELETE /registration` while a session runs. Task 8a assigns sessions to machines
   without it: a machine unregistered during a session stops holding that session, the session's
   next ops are not enqueued and answer `no_session_container`, and the session fails as one whose

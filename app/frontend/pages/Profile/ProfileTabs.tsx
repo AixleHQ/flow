@@ -1,18 +1,25 @@
 import { router } from '@inertiajs/react';
 import { Tabs } from '@mantine/core';
 
-import { mcpProfilePath, profilePath, securityProfilePath, usageProfilePath } from 'shared/routes';
+import {
+  profileConnectionsPath,
+  mcpProfilePath,
+  profilePath,
+  securityProfilePath,
+  usageProfilePath,
+} from 'shared/routes';
 
-export type ProfileTab = 'account' | 'usage' | 'mcp' | 'security';
+export type ProfileTab = 'account' | 'usage' | 'mcp' | 'security' | 'connections';
 
 const TAB_PATHS: Record<ProfileTab, () => string> = {
   account: profilePath,
   usage: usageProfilePath,
   mcp: mcpProfilePath,
   security: securityProfilePath,
+  connections: profileConnectionsPath,
 };
 
-// One tab bar for the three profile pages. Each tab is a full page visit — they
+// One tab bar for the profile pages. Each tab is a full page visit — they
 // are separate Inertia pages, not panels — so the bar has to be rendered by
 // every one of them or the user lands somewhere with no way back.
 export function ProfileTabs({ active }: { active: ProfileTab }) {
@@ -29,6 +36,7 @@ export function ProfileTabs({ active }: { active: ProfileTab }) {
         <Tabs.Tab value="usage">Usage</Tabs.Tab>
         <Tabs.Tab value="mcp">MCP</Tabs.Tab>
         <Tabs.Tab value="security">Security</Tabs.Tab>
+        <Tabs.Tab value="connections">Connected accounts</Tabs.Tab>
       </Tabs.List>
     </Tabs>
   );

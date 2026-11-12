@@ -237,12 +237,16 @@ github:
   app_slug: <%= ENV['GITHUB_APP_SLUG'] %>
   private_key: "<%= ENV['GITHUB_APP_PRIVATE_KEY'] %>"
   webhook_secret: <%= ENV['GITHUB_WEBHOOK_SECRET'] %>
-  # The App's OAuth client. Optional; when both are set, connecting a NEW
+  # The App's OAuth client. Optional; when both are set, users can connect their
+  # own GitHub account (Profile → Connected accounts, Github::UserConnection),
+  # through the App's /oauth/callback URL. They do NOT turn on the installation check.
+  client_id: "<%= ENV['GITHUB_APP_CLIENT_ID'] %>"
+  client_secret: "<%= ENV['GITHUB_APP_CLIENT_SECRET'] %>"
+  # Off by default. When true (and the client above is set), connecting a NEW
   # installation also requires the installing user to be able to see it
   # (Github::InstallationOwnership) — enable "Request user authorization (OAuth)
   # during installation" on the App for GitHub to send the code.
-  client_id: "<%= ENV['GITHUB_APP_CLIENT_ID'] %>"
-  client_secret: "<%= ENV['GITHUB_APP_CLIENT_SECRET'] %>"
+  verify_installation_owner: <%= ENV['GITHUB_APP_VERIFY_INSTALLATION_OWNER'] == 'true' %>
   # Alternative to GITHUB_APP_PRIVATE_KEY for a deployment that mounts the PEM
   # as a file. Read only when the inline key is blank (Github::TokenService) —
   # which until now could never resolve to anything, because the service asked
@@ -678,6 +682,21 @@ runners:
   # container, quota and no-output scans), in seconds: a machine that does not
   # answer reads as unknown, never as dead or idle, and costs the sweep no more.
   scan_op_timeout: 15
+  # The largest object a runner uploads for an op's output or file over the
+  # 1 MiB output cap, in bytes (runner/protocol/PROTOCOL.md §6.5). It is sent
+  # in each upload slot as `max_bytes`, and the platform refuses an object over
+  # it. Output beyond it is dropped by the runner and marked truncated.
+  #
+  # 32 MiB, from production data: of the 61 thousand `terminal_output.log` files
+  # since 2026-03-06, p99.9 is 5.6 MB, the largest 18 MB and none is over
+  # 20 MiB; session outputs of the last 30 days are at most 144 kB. The large
+  # agent logs (`/var/log/mitm/http.log`, up to 869 MB) never pass through
+  # `read_file`: Sessions::LogCollector has the container upload them to storage
+  # itself. A claim holds one copy of the bytes (the String read, re-encoded and
+  # scrubbed in place), so an upload at the limit takes about 32 MiB of a
+  # worker's heap, plus the lines of an exec's output; against worker-ruby's
+  # 2 GiB memory limit that leaves room for the cleanups that run side by side.
+  upload_limit: 33554432
   # The callback proxy's ports (DESIGN.md §6.9.3, runner/protocol/PROTOCOL.md
   # §5.8). Configured here alone: `container.start` carries the session's port
   # as `proxy_port`, and the host runner listens where it says, so the two

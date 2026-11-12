@@ -1,0 +1,143 @@
+{
+  "description": "The answer carries `update` under the rule of an empty `GET ops` answer: only while the machine holds no session, the request's version is below the recommended one, the binary for the machine's os and arch is pinned and nobody opted out. A machine at the recommended version, and a machine that holds a session, get none. The machine's os and arch are the ones it registered with, `linux` and `amd64` here by the committed registration, and the check-in's own report does not change what the platform offers it.",
+  "steps": [
+    {
+      "given": "release_pins",
+      "min_version": "1.2.0",
+      "recommended_version": "1.5.0",
+      "binaries": {
+        "1.5.0": {
+          "linux-amd64": {
+            "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+          },
+          "linux-arm64": {
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        }
+      }
+    },
+    {
+      "given": "registered_machine",
+      "as": "m"
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/check-in",
+        "token": "{{m.access_token}}",
+        "body": {
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {}
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "environment": {
+            "id": {
+              "$type": "integer"
+            },
+            "key": {
+              "$type": "string"
+            },
+            "display_name": {
+              "$type": "string"
+            },
+            "state": "registered"
+          },
+          "config": {
+            "upload_max_bytes": {
+              "$type": "integer"
+            }
+          },
+          "update": {
+            "version": "1.5.0",
+            "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/check-in",
+        "token": "{{m.access_token}}",
+        "body": {
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {}
+        },
+        "headers": {
+          "X-Aixle-Runner-Version": "1.5.0"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "environment": {
+            "id": {
+              "$type": "integer"
+            },
+            "key": {
+              "$type": "string"
+            },
+            "display_name": {
+              "$type": "string"
+            },
+            "state": "registered"
+          },
+          "config": {
+            "upload_max_bytes": {
+              "$type": "integer"
+            }
+          }
+        }
+      }
+    },
+    {
+      "given": "session_on_machine",
+      "machine": "m",
+      "as": "s"
+    },
+    {
+      "given": "session_holds_machine",
+      "machine": "m",
+      "session": "s"
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/check-in",
+        "token": "{{m.access_token}}",
+        "body": {
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {}
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "environment": {
+            "id": {
+              "$type": "integer"
+            },
+            "key": {
+              "$type": "string"
+            },
+            "display_name": {
+              "$type": "string"
+            },
+            "state": "registered"
+          },
+          "config": {
+            "upload_max_bytes": {
+              "$type": "integer"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

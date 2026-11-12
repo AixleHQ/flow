@@ -46,6 +46,7 @@ class Step < ApplicationRecord
   before_validation :assign_next_position, on: :create
   before_validation :normalize_asset_specs
   before_validation :retry_at_least_once
+  after_save :mirror_resource_links
 
   def soft_delete!
     update_column(:deleted_at, Time.current)
@@ -160,6 +161,12 @@ class Step < ApplicationRecord
   # version snapshots and templates hold that pair and must still restore.
   def retry_at_least_once
     self.max_retries = 1 if on_failure == "retry" && max_retries == 0
+  end
+
+  def mirror_resource_links
+    ResourceLink::COLUMNS.each do |list, column|
+      StepResourceLink.replace!(self, column, self[list]) if saved_change_to_attribute?(list)
+    end
   end
 
   REFERENCE_OWNERS = {

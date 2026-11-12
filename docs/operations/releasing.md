@@ -112,6 +112,13 @@ nor `release.yml`.
    `recommended_version` (and, when older runners must go, `min_version`) with a changelog entry.
    Machines start updating once that PR is deployed.
 
+   **Update the machines before you raise `min_version`.** A runner below it is refused at
+   `check-in` when it starts, and there is no drain-safe mode: a host that restarts while a
+   session container is running stops before it takes an op, and the session continues only once
+   the runner is updated and starts again (DESIGN.md §14.4). So raise `recommended_version` first,
+   wait until the machines have updated (or update them yourself), and raise `min_version` only
+   when none runs below it.
+
 ## Writing the changelog
 
 Every PR with a user-visible change adds its entry under `[Unreleased]` in the same PR —

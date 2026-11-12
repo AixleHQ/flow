@@ -172,12 +172,23 @@ module Oauth
       raise "refresh status=#{res.code}" unless res.is_a?(Net::HTTPSuccess)
 
       begin
-        JSON.parse(res.body)
+        parsed = JSON.parse(res.body)
       rescue JSON::ParserError
         # Never let the raw body (which may echo token material) reach the persisted
         # refresh_error column or logs — surface status only (mirrors exchange_code!).
         raise "refresh response not valid JSON (status=#{res.code})"
       end
+      raise "refresh response carried no access token (status=#{res.code})" unless token_granted?(parsed)
+
+      parsed
+    end
+
+    # GitHub answers a bad code or a bad refresh token with HTTP 200 and an `error`
+    # field instead of 4xx. Without this check the blank token would be stored and
+    # the credential marked active. A standards-compliant server answers 400, so
+    # other providers never reach the `error` branch.
+    def token_granted?(response)
+      response.is_a?(Hash) && response["error"].blank? && response["access_token"].present?
     end
   end
 end

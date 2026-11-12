@@ -1,0 +1,117 @@
+{
+  "description": "An exec whose payload carries `uploads` (PROTOCOL.md \u00a76.5) and whose stdout is over the 1 MiB output cap comes back through the upload: the result names it in `data.uploads` with its id and size, and carries no inline `stdout`. The stream that fit the cap is inline as before. The gateway carries the payload and the result as opaque objects.",
+  "steps": [
+    {
+      "given": "registered_machine",
+      "as": "m"
+    },
+    {
+      "given": "session_on_machine",
+      "machine": "m",
+      "as": "s"
+    },
+    {
+      "given": "op_enqueued",
+      "machine": "m",
+      "session": "s",
+      "as": "o",
+      "op": "exec",
+      "payload": {
+        "cmd": [
+          "cat",
+          "/tmp/big.log"
+        ],
+        "uploads": {
+          "stdout": {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "url": "https://uploads.example.test/cache/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?expires=fixture",
+            "max_bytes": 33554432
+          },
+          "stderr": {
+            "id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "url": "https://uploads.example.test/cache/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb?expires=fixture",
+            "max_bytes": 33554432
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/runner/v1/ops?after=0&wait=0",
+        "token": "{{m.access_token}}"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ops": [
+            {
+              "id": {
+                "$var": "o.id"
+              },
+              "sequence": {
+                "$var": "o.sequence"
+              },
+              "op": "exec",
+              "session_id": {
+                "$var": "s.id"
+              },
+              "deadline_at": {
+                "$var": "o.deadline_at"
+              },
+              "payload": {
+                "cmd": [
+                  "cat",
+                  "/tmp/big.log"
+                ],
+                "uploads": {
+                  "stdout": {
+                    "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "url": "https://uploads.example.test/cache/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?expires=fixture",
+                    "max_bytes": 33554432
+                  },
+                  "stderr": {
+                    "id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                    "url": "https://uploads.example.test/cache/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb?expires=fixture",
+                    "max_bytes": 33554432
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/ops/{{o.id}}/result",
+        "token": "{{m.access_token}}",
+        "body": {
+          "status": "ok",
+          "exit_code": 0,
+          "stderr": "",
+          "data": {
+            "stdout_truncated": false,
+            "stderr_truncated": false,
+            "uploads": {
+              "stdout": {
+                "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "size": 3145728
+              }
+            }
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "id": {
+            "$var": "o.id"
+          },
+          "state": "completed"
+        }
+      }
+    }
+  ]
+}

@@ -8,11 +8,13 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/aixlehq/aixle-runner/internal/credentials"
 	"github.com/aixlehq/aixle-runner/internal/docker"
 	"github.com/aixlehq/aixle-runner/internal/host"
 	"github.com/aixlehq/aixle-runner/internal/journal"
+	"github.com/aixlehq/aixle-runner/internal/preflight"
 	"github.com/aixlehq/aixle-runner/internal/protocol"
 	"github.com/aixlehq/aixle-runner/internal/proxy"
 	"github.com/aixlehq/aixle-runner/internal/tokens"
@@ -140,20 +142,58 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 	for name, handler := range env.Handlers() {
 		handlers[name] = handler
 	}
+	updater := &update.Updater{
+		Releases: client,
+		Current:  version.Version,
+		Binary:   binary,
+		Disabled: !selfUpdate,
+		Busy:     env.HoldsSession,
+		Logger:   opts.Logger,
+	}
+
+	// The check-in after every start (PROTOCOL.md §5.9): the platform records the
+	// version this binary is, which a machine that updated itself has moved on
+	// from the one it registered with, and the machine's facts as they are now.
+	// Its answer may offer an update, taken under the rule of an empty poll.
+	checker := &host.Checker{Gateway: client, Tokens: source, Logger: opts.Logger}
+	answer, _, err := checker.CheckIn(ctx, checkInReport(ctx, api, opts.Logger))
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
+		return err
+	}
+	if answer.Update != nil && updater.Apply(ctx, *answer.Update) {
+		return host.ErrUpdated
+	}
+
 	loop := &host.Loop{
 		Gateway:  client,
 		Tokens:   source,
 		Journal:  j,
 		Handlers: handlers,
-		Updater: &update.Updater{
-			Releases: client,
-			Current:  version.Version,
-			Binary:   binary,
-			Disabled: !selfUpdate,
-			Busy:     env.HoldsSession,
-			Logger:   opts.Logger,
-		},
-		Logger: opts.Logger,
+		Updater:  updater,
+		Logger:   opts.Logger,
 	}
 	return loop.Run(ctx)
+}
+
+// preflightTimeout bounds the preflight of a check-in: the daemon is asked twice.
+const preflightTimeout = 30 * time.Second
+
+// checkInReport is what a check-in reports: the preflight's os, arch and facts
+// (the same as `configure` reports at registration). A machine that no longer
+// passes the preflight still checks in, with the failure in its facts under
+// `preflight_error`, so that the platform shows a machine that cannot run the
+// agent (DESIGN.md §6.8) instead of hearing nothing from it.
+func checkInReport(ctx context.Context, api docker.API, logger *slog.Logger) protocol.CheckInRequest {
+	ctx, cancel := context.WithTimeout(ctx, preflightTimeout)
+	defer cancel()
+	report, err := preflight.Run(ctx, preflight.Env{Docker: api})
+	facts := report.Facts()
+	if err != nil {
+		logger.Warn("this machine no longer passes the preflight; checking in anyway", "error", err)
+		facts["preflight_error"] = err.Error()
+	}
+	return protocol.CheckInRequest{OS: report.OS, Arch: report.Arch, Facts: facts}
 }

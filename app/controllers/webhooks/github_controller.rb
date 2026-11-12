@@ -13,6 +13,8 @@ class Webhooks::GithubController < ActionController::API
       handle_workflow_run
     when "installation"
       handle_installation
+    when "github_app_authorization"
+      handle_app_authorization
     when *Trackers::Github::Notifications::TRACKED.keys
       Trackers::Github::Webhooks.receive(event, request.request_parameters, delivery_id: request.headers["X-GitHub-Delivery"])
     end
@@ -69,6 +71,20 @@ class Webhooks::GithubController < ActionController::API
       run_id: run_id,
       conclusion: conclusion
     )
+  end
+
+  # A person revoked the App's access to their account on GitHub: their stored
+  # connection is dead, whoever else shares that GitHub account included.
+  def handle_app_authorization
+    payload = request.request_parameters
+    return unless payload["action"] == "revoked"
+
+    github_id = Integer(payload.dig("sender", "id"), exception: false)
+    return unless github_id
+
+    OauthCredential.for_github_user(github_id).find_each do |credential|
+      credential.update!(status: :revoked, encrypted_access_token: nil, encrypted_refresh_token: nil)
+    end
   end
 
   def handle_installation

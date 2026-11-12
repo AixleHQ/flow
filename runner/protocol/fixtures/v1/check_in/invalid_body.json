@@ -1,0 +1,204 @@
+{
+  "description": "A body that is not {os?, arch?, facts?} of a string, a string and an object is `422 invalid_check_in`. Every field is optional; `null` is not a value (PROTOCOL.md \u00a75.9). An X-Aixle-Runner-Version over 255 characters is refused the same way, since it is recorded with the machine.",
+  "steps": [
+    {
+      "given": "registered_machine",
+      "as": "m"
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/check-in",
+        "token": "{{m.access_token}}",
+        "body": {
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {}
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "environment": {
+            "id": {
+              "$type": "integer"
+            },
+            "key": {
+              "$type": "string"
+            },
+            "display_name": {
+              "$type": "string"
+            },
+            "state": "registered"
+          },
+          "config": {
+            "upload_max_bytes": {
+              "$type": "integer"
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/check-in",
+        "token": "{{m.access_token}}",
+        "body": {
+          "os": 5,
+          "arch": "amd64",
+          "facts": {}
+        }
+      },
+      "response": {
+        "status": 422,
+        "body": {
+          "error": "invalid_check_in",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/check-in",
+        "token": "{{m.access_token}}",
+        "body": {
+          "os": "linux",
+          "arch": null,
+          "facts": {}
+        }
+      },
+      "response": {
+        "status": 422,
+        "body": {
+          "error": "invalid_check_in",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/check-in",
+        "token": "{{m.access_token}}",
+        "body": {
+          "os": "linux",
+          "arch": "amd64",
+          "facts": null
+        }
+      },
+      "response": {
+        "status": 422,
+        "body": {
+          "error": "invalid_check_in",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/check-in",
+        "token": "{{m.access_token}}",
+        "body": {
+          "os": "linux",
+          "arch": "amd64",
+          "facts": [
+            "docker"
+          ]
+        }
+      },
+      "response": {
+        "status": 422,
+        "body": {
+          "error": "invalid_check_in",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/check-in",
+        "token": "{{m.access_token}}",
+        "body": {
+          "os": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "arch": "amd64",
+          "facts": {}
+        }
+      },
+      "response": {
+        "status": 422,
+        "body": {
+          "error": "invalid_check_in",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/check-in",
+        "token": "{{m.access_token}}",
+        "body": {
+          "os": "linux",
+          "arch": "amd64",
+          "facts": {}
+        },
+        "headers": {
+          "X-Aixle-Runner-Version": "1.0.0+bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      },
+      "response": {
+        "status": 422,
+        "body": {
+          "error": "invalid_check_in",
+          "message": {
+            "$type": "string"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/runner/v1/check-in",
+        "token": "{{m.access_token}}",
+        "body": {}
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "environment": {
+            "id": {
+              "$type": "integer"
+            },
+            "key": {
+              "$type": "string"
+            },
+            "display_name": {
+              "$type": "string"
+            },
+            "state": "registered"
+          },
+          "config": {
+            "upload_max_bytes": {
+              "$type": "integer"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

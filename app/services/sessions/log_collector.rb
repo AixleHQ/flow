@@ -286,6 +286,14 @@ module Sessions
         failures << "#{path} — truncated: kept the last #{max_bytes} of #{size} bytes"
       end
 
+      # A runtime that cuts an exec's output (a runner session's 1 MiB cap, where the
+      # platform's storage cannot sign an upload) brings back less than was asked for.
+      expected = [ size, max_bytes ].min
+      if content.bytesize < expected
+        failures << "#{path} — cut: #{content.bytesize} of #{expected} bytes came back from the container " \
+                    "(output over 1 MiB from a runner needs S3-compatible storage)"
+      end
+
       # Anything the agent echoed — a value it read through get_config_item, most of all —
       # is in these bytes verbatim, and the mitm log carries the full request bodies that
       # travelled to the model. Scrub before any of it is persisted and replayed in the UI.

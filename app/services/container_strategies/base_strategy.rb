@@ -191,6 +191,24 @@ module ContainerStrategies
       nil
     end
 
+    # Same as #read_file_from_container, for a cleanup that reports what it could
+    # not collect whole: returns the runtime's ContainerRuntime::FileRead, or nil
+    # when the read failed. #uncollected_note turns a cut read into a note.
+    def read_file_result_or_nil(container, path)
+      runtime.read_file_result(container, path)
+    rescue StandardError => e
+      Rails.logger.warn("[#{self.class.name}] Failed to read #{path}: #{e.message}")
+      nil
+    end
+
+    # The note for a read that came back cut, as a list of zero or one, so that
+    # a collector adds it to the notes it returns (#report_uncollected_whole).
+    def uncollected_note(path, read)
+      return [] if read.nil? || read.whole?
+
+      [ "read_file #{path} — not collected whole: #{read.reason}" ]
+    end
+
     protected
 
     def resolve_container(container_id)

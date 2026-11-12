@@ -1482,6 +1482,21 @@ export function securityProfilePath(options?: object): string {
   return "/" + "profile" + "/" + "security" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /profile/connections/:connection_provider/act_as_consents/:project_id(.:format) */
+export function profileConnectionActAsConsentPath(connection_provider: ScalarType, project_id: ScalarType, options?: object): string {
+  return "/" + "profile" + "/" + "connections" + "/" + connection_provider + "/" + "act_as_consents" + "/" + project_id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["connection_provider","project_id","format"]);
+}
+
+/** /profile/connections(.:format) */
+export function profileConnectionsPath(options?: object): string {
+  return "/" + "profile" + "/" + "connections" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /profile/connections/:provider(.:format) */
+export function profileConnectionPath(provider: ScalarType, options?: object): string {
+  return "/" + "profile" + "/" + "connections" + "/" + provider + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["provider","format"]);
+}
+
 /** /profile(.:format) */
 export function profilePath(options?: object): string {
   return "/" + "profile" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);

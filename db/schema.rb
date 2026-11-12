@@ -10,10 +10,25 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_11_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_12_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "act_as_consents", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "project_id", null: false
+    t.bigint "company_id", null: false
+    t.string "provider", null: false
+    t.boolean "in_own_tasks", default: false, null: false
+    t.boolean "in_others_tasks", default: false, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id"], name: "index_act_as_consents_on_company_id"
+    t.index ["project_id"], name: "index_act_as_consents_on_project_id"
+    t.index ["user_id", "project_id", "provider"], name: "index_act_as_consents_on_user_project_provider", unique: true
+    t.index ["user_id"], name: "index_act_as_consents_on_user_id"
+  end
 
   create_table "agent_credentials", force: :cascade do |t|
     t.string "agent_type", null: false
@@ -1638,6 +1653,31 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_100000) do
     t.index ["key"], name: "index_solid_queue_semaphores_on_key", unique: true
   end
 
+  create_table "step_resource_links", force: :cascade do |t|
+    t.bigint "step_id", null: false
+    t.bigint "tool_id"
+    t.bigint "skill_id"
+    t.bigint "mcp_server_id"
+    t.bigint "asset_id"
+    t.bigint "repository_id"
+    t.bigint "config_item_id"
+    t.integer "position", null: false
+    t.index ["asset_id"], name: "index_step_resource_links_on_asset_id", where: "(asset_id IS NOT NULL)"
+    t.index ["config_item_id"], name: "index_step_resource_links_on_config_item_id", where: "(config_item_id IS NOT NULL)"
+    t.index ["mcp_server_id"], name: "index_step_resource_links_on_mcp_server_id", where: "(mcp_server_id IS NOT NULL)"
+    t.index ["repository_id"], name: "index_step_resource_links_on_repository_id", where: "(repository_id IS NOT NULL)"
+    t.index ["skill_id"], name: "index_step_resource_links_on_skill_id", where: "(skill_id IS NOT NULL)"
+    t.index ["step_id", "asset_id"], name: "index_step_resource_links_on_step_id_and_asset_id", unique: true, where: "(asset_id IS NOT NULL)"
+    t.index ["step_id", "config_item_id"], name: "index_step_resource_links_on_step_id_and_config_item_id", unique: true, where: "(config_item_id IS NOT NULL)"
+    t.index ["step_id", "mcp_server_id"], name: "index_step_resource_links_on_step_id_and_mcp_server_id", unique: true, where: "(mcp_server_id IS NOT NULL)"
+    t.index ["step_id", "repository_id"], name: "index_step_resource_links_on_step_id_and_repository_id", unique: true, where: "(repository_id IS NOT NULL)"
+    t.index ["step_id", "skill_id"], name: "index_step_resource_links_on_step_id_and_skill_id", unique: true, where: "(skill_id IS NOT NULL)"
+    t.index ["step_id", "tool_id"], name: "index_step_resource_links_on_step_id_and_tool_id", unique: true, where: "(tool_id IS NOT NULL)"
+    t.index ["step_id"], name: "index_step_resource_links_on_step_id"
+    t.index ["tool_id"], name: "index_step_resource_links_on_tool_id", where: "(tool_id IS NOT NULL)"
+    t.check_constraint "num_nonnulls(tool_id, skill_id, mcp_server_id, asset_id, repository_id, config_item_id) = 1", name: "step_resource_links_one_resource"
+  end
+
   create_table "step_runs", force: :cascade do |t|
     t.datetime "completed_at"
     t.datetime "created_at", null: false
@@ -2127,6 +2167,30 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_100000) do
     t.index ["user_id"], name: "index_user_sessions_on_user_id"
   end
 
+  create_table "user_token_issuances", force: :cascade do |t|
+    t.bigint "terminal_session_id", null: false
+    t.bigint "company_id", null: false
+    t.bigint "project_id", null: false
+    t.bigint "acting_for_user_id", null: false
+    t.bigint "session_user_id"
+    t.string "tool_name", null: false
+    t.string "provider", null: false
+    t.bigint "oauth_credential_id"
+    t.text "encrypted_token", null: false
+    t.string "token_last_eight"
+    t.string "target_login", null: false
+    t.string "repository_full_names", default: [], null: false, array: true
+    t.datetime "expires_at"
+    t.datetime "created_at", null: false
+    t.index ["acting_for_user_id", "created_at"], name: "index_user_token_issuances_on_user_and_created_at"
+    t.index ["acting_for_user_id"], name: "index_user_token_issuances_on_acting_for_user_id"
+    t.index ["company_id"], name: "index_user_token_issuances_on_company_id"
+    t.index ["oauth_credential_id"], name: "index_user_token_issuances_on_oauth_credential_id"
+    t.index ["project_id"], name: "index_user_token_issuances_on_project_id"
+    t.index ["session_user_id"], name: "index_user_token_issuances_on_session_user_id"
+    t.index ["terminal_session_id"], name: "index_user_token_issuances_on_terminal_session_id"
+  end
+
   create_table "users", force: :cascade do |t|
     t.string "avatar_url"
     t.datetime "created_at", null: false
@@ -2187,6 +2251,31 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_100000) do
     t.index ["created_by_id"], name: "index_webhook_endpoints_on_created_by_id"
     t.index ["project_id"], name: "index_webhook_endpoints_on_project_id"
     t.index ["slug"], name: "index_webhook_endpoints_on_slug", unique: true
+  end
+
+  create_table "workflow_resource_links", force: :cascade do |t|
+    t.bigint "workflow_id", null: false
+    t.bigint "tool_id"
+    t.bigint "skill_id"
+    t.bigint "mcp_server_id"
+    t.bigint "asset_id"
+    t.bigint "repository_id"
+    t.bigint "config_item_id"
+    t.integer "position", null: false
+    t.index ["asset_id"], name: "index_workflow_resource_links_on_asset_id", where: "(asset_id IS NOT NULL)"
+    t.index ["config_item_id"], name: "index_workflow_resource_links_on_config_item_id", where: "(config_item_id IS NOT NULL)"
+    t.index ["mcp_server_id"], name: "index_workflow_resource_links_on_mcp_server_id", where: "(mcp_server_id IS NOT NULL)"
+    t.index ["repository_id"], name: "index_workflow_resource_links_on_repository_id", where: "(repository_id IS NOT NULL)"
+    t.index ["skill_id"], name: "index_workflow_resource_links_on_skill_id", where: "(skill_id IS NOT NULL)"
+    t.index ["tool_id"], name: "index_workflow_resource_links_on_tool_id", where: "(tool_id IS NOT NULL)"
+    t.index ["workflow_id", "asset_id"], name: "index_workflow_resource_links_on_workflow_id_and_asset_id", unique: true, where: "(asset_id IS NOT NULL)"
+    t.index ["workflow_id", "config_item_id"], name: "idx_on_workflow_id_config_item_id_44574998dd", unique: true, where: "(config_item_id IS NOT NULL)"
+    t.index ["workflow_id", "mcp_server_id"], name: "index_workflow_resource_links_on_workflow_id_and_mcp_server_id", unique: true, where: "(mcp_server_id IS NOT NULL)"
+    t.index ["workflow_id", "repository_id"], name: "index_workflow_resource_links_on_workflow_id_and_repository_id", unique: true, where: "(repository_id IS NOT NULL)"
+    t.index ["workflow_id", "skill_id"], name: "index_workflow_resource_links_on_workflow_id_and_skill_id", unique: true, where: "(skill_id IS NOT NULL)"
+    t.index ["workflow_id", "tool_id"], name: "index_workflow_resource_links_on_workflow_id_and_tool_id", unique: true, where: "(tool_id IS NOT NULL)"
+    t.index ["workflow_id"], name: "index_workflow_resource_links_on_workflow_id"
+    t.check_constraint "num_nonnulls(tool_id, skill_id, mcp_server_id, asset_id, repository_id, config_item_id) = 1", name: "workflow_resource_links_one_resource"
   end
 
   create_table "workflow_run_assets", force: :cascade do |t|
@@ -2307,6 +2396,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_100000) do
     t.index ["user_id"], name: "index_youtrack_pairings_on_user_id"
   end
 
+  add_foreign_key "act_as_consents", "companies", on_delete: :cascade
+  add_foreign_key "act_as_consents", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_act_as_consents_project_company", on_delete: :cascade
+  add_foreign_key "act_as_consents", "projects", on_delete: :cascade
+  add_foreign_key "act_as_consents", "users", on_delete: :cascade
   add_foreign_key "agent_credentials", "companies"
   add_foreign_key "agent_credentials", "users"
   add_foreign_key "agents", "companies", on_delete: :cascade, validate: false
@@ -2492,6 +2585,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_100000) do
   add_foreign_key "solid_queue_ready_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
   add_foreign_key "solid_queue_recurring_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
   add_foreign_key "solid_queue_scheduled_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
+  add_foreign_key "step_resource_links", "assets", on_delete: :cascade
+  add_foreign_key "step_resource_links", "config_items", on_delete: :cascade
+  add_foreign_key "step_resource_links", "mcp_servers", on_delete: :cascade
+  add_foreign_key "step_resource_links", "repositories", on_delete: :cascade
+  add_foreign_key "step_resource_links", "skills", on_delete: :cascade
+  add_foreign_key "step_resource_links", "steps", on_delete: :cascade
+  add_foreign_key "step_resource_links", "tools", on_delete: :cascade
   add_foreign_key "step_runs", "entity_versions", column: "workflow_version_id", on_delete: :nullify
   add_foreign_key "step_runs", "steps", on_delete: :cascade
   add_foreign_key "step_runs", "terminal_sessions"
@@ -2551,11 +2651,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_100000) do
   add_foreign_key "user_session_proofs", "user_sessions", on_delete: :cascade
   add_foreign_key "user_sessions", "users", column: "impersonator_id", on_delete: :nullify
   add_foreign_key "user_sessions", "users", on_delete: :cascade
+  add_foreign_key "user_token_issuances", "companies", on_delete: :cascade
+  add_foreign_key "user_token_issuances", "oauth_credentials", on_delete: :nullify
+  add_foreign_key "user_token_issuances", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_user_token_issuances_project_company", on_delete: :cascade
+  add_foreign_key "user_token_issuances", "projects", on_delete: :cascade
+  add_foreign_key "user_token_issuances", "terminal_sessions", on_delete: :cascade
+  add_foreign_key "user_token_issuances", "users", column: "acting_for_user_id", on_delete: :cascade
+  add_foreign_key "user_token_issuances", "users", column: "session_user_id", on_delete: :nullify
   add_foreign_key "users", "companies", column: "last_company_id", on_delete: :nullify
   add_foreign_key "webauthn_credentials", "users"
   add_foreign_key "webhook_endpoints", "companies", on_delete: :cascade
   add_foreign_key "webhook_endpoints", "projects", on_delete: :cascade
   add_foreign_key "webhook_endpoints", "users", column: "created_by_id", on_delete: :nullify
+  add_foreign_key "workflow_resource_links", "assets", on_delete: :cascade
+  add_foreign_key "workflow_resource_links", "config_items", on_delete: :cascade
+  add_foreign_key "workflow_resource_links", "mcp_servers", on_delete: :cascade
+  add_foreign_key "workflow_resource_links", "repositories", on_delete: :cascade
+  add_foreign_key "workflow_resource_links", "skills", on_delete: :cascade
+  add_foreign_key "workflow_resource_links", "tools", on_delete: :cascade
+  add_foreign_key "workflow_resource_links", "workflows", on_delete: :cascade
   add_foreign_key "workflow_run_assets", "step_runs", column: "produced_by_step_run_id", on_delete: :nullify
   add_foreign_key "workflow_run_assets", "terminal_sessions", column: "shared_in_session_id", on_delete: :nullify
   add_foreign_key "workflow_run_assets", "users", column: "shared_by_id", on_delete: :nullify

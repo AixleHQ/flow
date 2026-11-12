@@ -301,6 +301,27 @@ class Webhooks::GithubControllerTest < ActionController::TestCase
     assert unrelated.reload.active?
   end
 
+  # == github_app_authorization ==
+
+  test "a user revoking the App on GitHub marks their stored connection revoked" do
+    user = create(:user)
+    other = create(:user)
+    revoked = create(:oauth_credential, :github_user, owner: user)
+    unrelated = create(:oauth_credential, owner: other, provider: "github",
+                                          metadata: { "github_user" => { "id" => 999, "login" => "someone" } })
+    payload = { action: "revoked", sender: { id: 123, login: "octo-user" } }.to_json
+
+    @request.headers["X-Hub-Signature-256"] = sign_payload(payload)
+    @request.headers["X-GitHub-Event"] = "github_app_authorization"
+    post_raw(payload)
+
+    assert_response :ok
+    revoked.reload
+    assert revoked.revoked?
+    assert_nil revoked.encrypted_access_token
+    assert unrelated.reload.active?
+  end
+
   test "an installation event without an installation id changes nothing" do
     payload = { action: "deleted" }.to_json
 

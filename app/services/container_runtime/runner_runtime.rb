@@ -78,8 +78,11 @@ module ContainerRuntime
     MEMORY_UNITS = { "" => 1, "k" => 1000, "m" => 1000**2, "g" => 1000**3, "t" => 1000**4,
                      "ki" => 1024, "mi" => 1024**2, "gi" => 1024**3, "ti" => 1024**4 }.freeze
 
-    # One op's outcome.
-    Outcome = Data.define(:op, :state, :result) do
+    # One op's outcome. `uploaded` holds the bytes of each upload the result
+    # named, by output name, and `upload_errors` why an upload it named could
+    # not be read (Runners::ResultUploads).
+    Outcome = Data.define(:op, :state, :result, :uploaded, :upload_errors) do
+      def initialize(op:, state:, result:, uploaded: {}, upload_errors: {}) = super
       def ok? = state == "completed"
       def expired? = state == "expired"
       def error_class = expired? ? "expired" : result&.dig("error", "class")
@@ -248,18 +251,37 @@ module ContainerRuntime
     end
 
     def read_file(id, path)
-      return nil if path.blank?
+      read_file_result(id, path).content
+    end
 
-      outcome = call(session_for(id), "read_file", { "path" => path.to_s })
+    # A file over the output cap comes back through an upload (PROTOCOL.md §6.5).
+    # Where that is not possible the file is not read at all, and the answer
+    # says why: output over 1 MiB needs S3-compatible storage (DESIGN.md §6.4,
+    # a known limitation).
+    def read_file_result(id, path)
+      return FileRead.new(content: nil) if path.blank?
+
+      outcome = call(session_for(id), "read_file", { "path" => path.to_s }, uploads: %w[content])
       unless outcome.ok?
+        if outcome.error_class == "file_too_large"
+          reason = not_whole_reason(outcome.message)
+          Rails.logger.warn("[RunnerRuntime] read_file #{path} was not collected whole: #{reason}")
+          return FileRead.new(content: nil, whole: false, reason: reason)
+        end
         Rails.logger.debug { "[RunnerRuntime] read_file #{path}: #{outcome.message}" }
-        return nil
+        return FileRead.new(content: nil)
+      end
+      return FileRead.new(content: outcome.uploaded["content"]) if outcome.uploaded.key?("content")
+      if outcome.upload_errors.key?("content")
+        reason = outcome.upload_errors["content"]
+        Rails.logger.warn("[RunnerRuntime] read_file #{path}: #{reason}")
+        return FileRead.new(content: nil, whole: false, reason: reason)
       end
 
-      Base64.strict_decode64(outcome.data["content"].to_s)
+      FileRead.new(content: Base64.strict_decode64(outcome.data["content"].to_s))
     rescue ArgumentError => e
       Rails.logger.warn("[RunnerRuntime] read_file #{path}: the runner sent content that is not base64: #{e.message}")
-      nil
+      FileRead.new(content: nil)
     end
 
     # -- Introspection --------------------------------------------------------
@@ -324,11 +346,15 @@ module ContainerRuntime
       timeout = opts[:timeout].to_i
       payload["timeout"] = timeout if timeout.positive?
       payload["stdin"] = opts[:stdin] if opts[:stdin].is_a?(String)
-      outcome = call(session, "exec", payload, seconds: (timeout + EXEC_GRACE if timeout.positive?))
+      outcome = call(session, "exec", payload, seconds: (timeout + EXEC_GRACE if timeout.positive?),
+                                               uploads: %w[stdout stderr])
 
       if outcome.ok? || outcome.error_class == "exec_timeout"
         exit_code = outcome.result["exit_code"] || (outcome.ok? ? 0 : 124)
-        return [ lines(outcome.result["stdout"]), lines(outcome.result["stderr"]), exit_code ]
+        # An output whose upload could not be read is said so in stderr: the
+        # command's caller must not take the lost part for an empty one.
+        notes = outcome.upload_errors.values.map { |reason| "#{reason}\n" }
+        return [ exec_output(outcome, "stdout", cmd), exec_output(outcome, "stderr", cmd) + notes, exit_code ]
       end
       if raise_on_gone && (GONE.include?(outcome.error_class) || outcome.expired?)
         raise ContainerUnreachableError.new(outcome.message, container_identifier: session && container_name(session))
@@ -337,8 +363,38 @@ module ContainerRuntime
       [ [], [ "#{outcome.message}\n" ], 1 ]
     end
 
+    # Why a file did not come back whole. Where the platform's storage cannot
+    # sign an upload, that is the reason: no upload was offered.
+    def not_whole_reason(reason)
+      return reason if Runners::ResultUploads.available?
+
+      "#{reason.to_s.chomp('.')}. Output over 1 MiB needs S3-compatible storage; " \
+        "this platform's storage cannot sign an upload, so none was offered"
+    end
+
     def lines(text)
       text.to_s.empty? ? [] : text.to_s.lines
+    end
+
+    # One stream of an exec's result: the upload when the stream was over the
+    # output cap and came back through one, as the inline text is (valid
+    # UTF-8, with U+FFFD for the bytes that are not); the inline text
+    # otherwise. An upload that could not be read leaves the inline part, which
+    # the runner sends then.
+    def exec_output(outcome, name, cmd)
+      if outcome.uploaded.key?(name)
+        # In place: the bytes read are the only full copy (up to the upload limit).
+        return lines(outcome.uploaded[name].force_encoding(Encoding::UTF_8).scrub!("\uFFFD"))
+      end
+
+      if outcome.upload_errors.key?(name)
+        Rails.logger.warn("[RunnerRuntime] exec #{name}: #{outcome.upload_errors[name]}")
+      end
+      if outcome.data["#{name}_truncated"]
+        Rails.logger.warn("[RunnerRuntime] the #{name} of `#{Array(cmd).last.to_s.truncate(120)}` was not collected whole: " \
+                          "#{not_whole_reason('it was cut to the first 1 MiB')}")
+      end
+      lines(outcome.result[name])
     end
 
     def started_container_name(session, outcome)
@@ -385,16 +441,67 @@ module ContainerRuntime
     # or no session at all, has nobody to ask: the op answers as a container
     # that is not there, and nothing is enqueued. The hold read here is checked
     # again by the enqueue, under the machine's lock.
-    def call(session, op, payload, lifecycle: false, seconds: nil)
+    #
+    # `uploads` names the outputs of the op that may be over the output cap
+    # (`stdout` and `stderr` of an exec, `content` of a file). The op carries a
+    # signed URL for each (Runners::ResultUploads), and the outcome holds the
+    # bytes of the ones the runner uploaded.
+    def call(session, op, payload, lifecycle: false, seconds: nil, uploads: [])
       environment = session && machine(session)
       return Outcome.new(op: op, state: "failed", result: no_machine_result) if environment.nil?
 
-      operation = Runners::Operations.enqueue!(environment, op: op, payload: payload,
-                                                            deadline_at: deadline_at(seconds, lifecycle), session: session)
+      # An op that may upload gets, with its own time, a budget that fits an
+      # upload of the largest size: the runner never uploads past the one
+      # deadline, and the platform settles at it (PROTOCOL.md §6.5). Where the
+      # storage cannot sign an upload, no slot is issued and no time is added.
+      offer_uploads = uploads.any? && Runners::ResultUploads.available?
+      deadline = deadline_at(seconds, lifecycle, extra: offer_uploads ? Runners::ResultUploads.budget : 0)
+      slots = offer_uploads ? Runners::ResultUploads.issue(uploads, deadline_at: deadline) : {}
+      payload = payload.merge("uploads" => Runners::ResultUploads.payload(slots)) if slots.any?
+      operation = Runners::Operations.enqueue!(environment, op: op, payload: payload, deadline_at: deadline, session: session)
       return Outcome.new(op: op, state: "failed", result: no_machine_result) if operation.nil?
 
-      operation = Runners::Operations.await(operation, on_wait: method(:on_wait))
-      Outcome.new(op: op, state: operation.state.to_s, result: operation.result)
+      begin
+        operation = Runners::Operations.await(operation, on_wait: method(:on_wait))
+        outcome = Outcome.new(op: op, state: operation.state.to_s, result: operation.result)
+        claim_uploads(outcome, slots)
+      ensure
+        discard_uploads(slots, outcome)
+      end
+    end
+
+    # The outcome with the bytes of each upload its result names. A result is
+    # the runner's word: an upload it names that is not the slot's own, or is
+    # missing, over the limit or of another size, is an error the caller reports,
+    # never a partial read.
+    def claim_uploads(outcome, slots)
+      reported = outcome.data["uploads"]
+      return outcome unless reported.is_a?(Hash) && reported.any?
+
+      uploaded, errors = {}, {}
+      reported.each_key do |name|
+        uploaded[name] = Runners::ResultUploads.claim(slots, reported, name)
+      rescue Runners::ResultUploads::Unreadable => e
+        errors[name] = e.message
+      rescue StandardError => e
+        # The storage could not be asked (S3 unreachable, say).
+        errors[name] = "the upload for #{name} cannot be read: #{e.class}: #{e.message}"
+      end
+      outcome.with(uploaded: uploaded.compact, upload_errors: errors)
+    end
+
+    # Removes the objects of the uploads that were used, and of every slot of an
+    # op that has no usable result (it expired, or failed without one): a runner
+    # may have uploaded before its result was lost. A slot nobody used is not
+    # touched, since it was never written, and costs a storage call otherwise.
+    def discard_uploads(slots, outcome)
+      return if slots.blank?
+
+      reported = outcome&.data&.dig("uploads")
+      used = reported.is_a?(Hash) ? slots.slice(*reported.keys) : {}
+      unusable = outcome.nil? || outcome.expired? || outcome.result.nil?
+      removable = unusable ? slots : used
+      Runners::ResultUploads.discard(removable) if removable.any?
     end
 
     def no_machine_result
@@ -407,10 +514,13 @@ module ContainerRuntime
       Runners::Machines.held_by(session)
     end
 
-    # An op's deadline is its own budget, and at most the activity's end less
+    # An op's deadline is its own budget plus the upload budget when it offers
+    # upload slots, capped by the caller's `op_timeout` (so a scan-capped call
+    # keeps exactly that cap), and at most the activity's end less
     # ACTIVITY_MARGIN, so the wait for it ends before the activity does (§6.4).
-    def deadline_at(seconds, lifecycle)
+    def deadline_at(seconds, lifecycle, extra: 0)
       seconds ||= lifecycle ? Settings.runners.lifecycle_op_timeout.to_i : Settings.runners.op_timeout.to_i
+      seconds += extra
       seconds = [ seconds, @op_timeout ].min if @op_timeout
       [ Time.current + seconds, activity_deadline ].compact.min.change(usec: 0)
     end
