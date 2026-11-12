@@ -31,9 +31,22 @@ describe('RunnerMachines', () => {
       <RunnerMachines
         machines={[
           machine(),
-          machine({ id: 2, key: 'aixle-r5-ffff0000', displayName: 'linux-box', os: 'linux', arch: 'amd64', state: 'online' }),
+          machine({
+            id: 2,
+            key: 'aixle-r5-ffff0000',
+            displayName: 'linux-box',
+            os: 'linux',
+            arch: 'amd64',
+            state: 'online',
+          }),
           machine({ id: 3, key: 'aixle-r5-00001111', displayName: 'old-box', lastHeartbeatAt: null, state: 'offline' }),
-          machine({ id: 4, key: 'aixle-r5-22223333', displayName: 'bad-box', state: 'failed', stateReason: 'env.reset failed' }),
+          machine({
+            id: 4,
+            key: 'aixle-r5-22223333',
+            displayName: 'bad-box',
+            state: 'failed',
+            stateReason: 'env.reset failed',
+          }),
         ]}
       />,
     );
