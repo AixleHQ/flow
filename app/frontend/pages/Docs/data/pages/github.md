@@ -392,7 +392,7 @@ Flow decides none of how the token is used. Your instructions do, for example:
 export GIT_AUTHOR_NAME="$NAME" GIT_AUTHOR_EMAIL="$EMAIL" \
        GIT_COMMITTER_NAME="$NAME" GIT_COMMITTER_EMAIL="$EMAIL"
 git commit -s -m "feat: ..."
-git -c credential.helper= \
+TOKEN="$TOKEN" git -c credential.helper= \
     -c credential.helper='!f() { echo username=x-access-token; echo "password=$TOKEN"; }; f' \
     push origin HEAD:feature/x
 GH_TOKEN="$TOKEN" gh pr create -R owner/repo --base develop --head feature/x --title "..." --body "..."
@@ -442,11 +442,16 @@ the operator registers one GitHub App for the whole deployment:
    permissions from them. Flow ignores every other event.
 5. If organizations other than the app's owner will install it, make it
    installable on any account.
-   To let people connect their own accounts ([Acting as yourself](#acting-as-yourself)),
-   also add `https://<your domain>/oauth/callback` as a second callback URL,
-   **after** the setup URL above: install-time authorization goes to the first
-   one. Turn **Expire user authorization tokens** on, and set
-   `GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET`. GitHub sends the App
+   To let people connect their own accounts ([Acting as yourself](#acting-as-yourself)):
+   - Under **Identifying and authorizing users**, add
+     `https://<your domain>/oauth/callback` as a **Redirect URI**.
+   - Under **Optional Features → User-to-server token expiration**, choose
+     **Opt-in**.
+   - On the **Credentials** tab, copy the **Client ID** and generate a client
+     secret, and set `GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET`.
+
+   Setting the client credentials switches on only connecting accounts; the
+   Setup URL keeps working for installations. GitHub sends the App
    `github_app_authorization` events without a subscription; Flow follows a
    revocation from them.
 6. Generate a private key, and configure Flow:
@@ -491,16 +496,23 @@ installation, so an installation's existence proves nothing about who installed
 it. By default an installation belongs to one company: the first that connects
 it.
 
-To check the person instead, set `GITHUB_APP_CLIENT_ID` and
-`GITHUB_APP_CLIENT_SECRET` from the app, turn on
-**Request user authorization (OAuth) during installation**, and point the app's
-callback URL at the same `/company/integrations/github_setup`. A new
-installation then connects only for a GitHub user who can see it, and one
+To check the person instead, this is a separate opt-in:
+
+1. Set `GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET` from the app's
+   **Credentials** tab.
+2. Turn on **Request user authorization (OAuth) during installation** on the app,
+   and make `https://<your domain>/company/integrations/github_setup` the
+   **first** Redirect URI. With this on, GitHub makes the Setup URL unavailable
+   and sends installations to the first Redirect URI. (Keep `/oauth/callback`
+   listed as well if people connect their own accounts.)
+3. Set `GITHUB_APP_VERIFY_INSTALLATION_OWNER=true`.
+
+A new installation then connects only for a GitHub user who can see it, and one
 organization can be connected from several companies.
 
-Set the client credentials and the user authorization together. With the
-credentials set and the authorization off, GitHub sends no code back, and every
-new installation is refused.
+Turn the three on together. With the setting on and the authorization off,
+GitHub sends no code back, and every new installation is refused. The client
+credentials alone never turn the check on.
 
 ## Limits
 

@@ -63,6 +63,21 @@ class Web::ProfileConnectionsTest < ActionDispatch::IntegrationTest
     assert consent.in_others_tasks
   end
 
+  test "two overlapping first-time updates for one project both save" do
+    winner = ActAsConsent.create!(user: @user, project: @project, company: @project.company, provider: "github",
+                                  in_others_tasks: true)
+    # This request looked before the other one committed its first-time row.
+    ActAsConsent.stubs(:find_by).returns(nil).then.returns(winner)
+
+    json_patch(project_id: @project.id, provider: "github", in_own_tasks: true)
+
+    assert_response :success
+    consent = ActAsConsent.find_by!(user: @user, project: @project, provider: "github")
+    assert consent.in_own_tasks
+    assert consent.in_others_tasks
+    assert_equal 1, ActAsConsent.where(user: @user, project: @project, provider: "github").count
+  end
+
   test "a consent update for a project outside the company answers 404" do
     other_company = create(:company)
     foreign = create(:project, company: other_company, owner: create(:user, :admin, company: other_company))

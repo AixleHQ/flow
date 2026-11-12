@@ -7,13 +7,15 @@ module Github
   # then carries a `code`, which is exchanged for that user's token, and
   # `GET /user/installations` has to list the installation.
   #
-  # Enforced once the deployment configures the App's client id and secret.
+  # Enforced once the deployment sets GITHUB_APP_VERIFY_INSTALLATION_OWNER and configures
+  # the App's client id and secret. The client credentials alone only enable
+  # connecting a user's own account.
   # Without them the one-installation-per-company claim on Integration is the
   # only guard, and an installation nobody has connected yet can be connected
   # by whoever forges the setup callback first.
   class InstallationOwnership
     def self.enforced?
-      Settings.github.client_id.present? && Settings.github.client_secret.present?
+      Settings.github.verify_installation_owner == true && Settings.github.client_id.present? && Settings.github.client_secret.present?
     end
 
     def initialize(code:)

@@ -184,6 +184,58 @@ class InternalTools::GithubUserTokenTest < ActiveSupport::TestCase
     assert_match(/needs to be renewed/, run_tool[:stderr])
   end
 
+  test "refuses a token 30 minutes from expiry when its refresh fails" do
+    consent!(in_own_tasks: true)
+    @credential.update!(expires_at: 30.minutes.from_now, refresh_token: "ghr_old")
+    stub_request(:post, "https://github.com/login/oauth/access_token").to_return(status: 400, body: "{}")
+
+    result = run_tool
+
+    assert_match(/needs to be renewed/, result[:stderr])
+    assert_empty @fake.calls_to(:scoped_token)
+    assert_equal 0, UserTokenIssuance.count
+  end
+
+  test "refuses a token 30 minutes from expiry that has no refresh token" do
+    consent!(in_own_tasks: true)
+    @credential.update!(expires_at: 30.minutes.from_now, refresh_token: nil)
+
+    assert_match(/needs to be renewed/, run_tool[:stderr])
+    assert_empty @fake.calls_to(:scoped_token)
+  end
+
+  test "the token, the identity and the issuance come from the same credential" do
+    consent!(in_own_tasks: true)
+    newer = create(:oauth_credential, :github_user, owner: @user, access_token: "ghu_newer_credential")
+    Github::UserConnection.stubs(:credential_for).returns(@credential)
+    newer.touch
+
+    run_tool
+
+    assert_equal @credential.access_token, @fake.calls_to(:scoped_token).sole[:user_token]
+    assert_equal @credential, UserTokenIssuance.sole.oauth_credential
+  end
+
+  test "refuses before minting a token when the identity is unknown" do
+    consent!(in_own_tasks: true)
+    @credential.update!(metadata: {})
+    Github::UserTokenService.stubs(:new).returns(FakeGithub::UserTokenService.new(profile_error: Github::UserTokenService::Unavailable.new("x")))
+
+    result = run_tool
+
+    assert_match(/did not return this account's identity/, result[:stderr])
+    assert_equal 0, UserTokenIssuance.count
+  end
+
+  test "refetches an identity that a failed reconnect cleared" do
+    consent!(in_own_tasks: true)
+    @credential.update!(metadata: {})
+
+    payload = JSON.parse(run_tool[:stdout])
+
+    assert_equal "octo-user", payload.dig("identity", "login")
+  end
+
   test "is unavailable where the GitHub App's client credentials are not set" do
     Settings.github.stubs(:client_id).returns("")
     definition = InternalTools::GithubUserToken.tool_definition

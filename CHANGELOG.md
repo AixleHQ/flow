@@ -25,8 +25,12 @@ governance, community health — carry none.
   Connected accounts and allow agents to act as you, per project. An agent given
   `github_user_token` gets a token limited to the session's repositories, plus
   the identity to commit with, so it can push and open pull requests in your
-  name. Self-hosted: add `/oauth/callback` as a second callback URL on the
-  GitHub App and set `GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET`.
+  name. Self-hosted: add `/oauth/callback` as a Redirect URI on the GitHub App,
+  opt in to user-to-server token expiration, and set `GITHUB_APP_CLIENT_ID` and
+  `GITHUB_APP_CLIENT_SECRET`. The installation check (a new installation connects
+  only for a user who can see it) now has its own setting,
+  `GITHUB_APP_VERIFY_INSTALLATION_OWNER`, off by default: a deployment that relied
+  on the client credentials for that check must set it to `true`.
 - **Integrations**: Coder's `coder_prepare_repo` clones GitLab, Bitbucket and
   Azure DevOps repositories onto a workspace, not only GitHub and public ones.
   A personal access token from those connections is handed to the workspace

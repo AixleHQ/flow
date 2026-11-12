@@ -9,6 +9,7 @@ module Github
     setup do
       Settings.github.stubs(:client_id).returns("Iv1.client")
       Settings.github.stubs(:client_secret).returns("client-secret")
+      Settings.github.stubs(:verify_installation_owner).returns(true)
     end
 
     def stub_code_exchange(access_token: "ghu_user_token")
@@ -25,10 +26,16 @@ module Github
                    headers: { "Content-Type" => "application/json" })
     end
 
-    test "is enforced only when the App's OAuth client is configured" do
+    test "is enforced only when the setting is on and the App's OAuth client is configured" do
       assert InstallationOwnership.enforced?
 
       Settings.github.stubs(:client_secret).returns("")
+      assert_not InstallationOwnership.enforced?
+    end
+
+    test "the client credentials alone do not enable the check" do
+      Settings.github.stubs(:verify_installation_owner).returns(false)
+
       assert_not InstallationOwnership.enforced?
     end
 

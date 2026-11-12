@@ -702,15 +702,23 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     assert_equal 123, credential.metadata.dig("github_user", "id")
   end
 
-  test "a failed identity fetch leaves no GitHub credential behind" do
+  test "a failed identity fetch on a reconnect keeps the existing credential, its consents and its status" do
     stub_github!(profile: nil)
+    existing = create(:oauth_credential, :github_user, owner: @user, access_token: "ghu_old",
+                                                       oauth_client: Oauth::Providers.client_for("github"))
+    project = create(:project, company: @company, owner: @user)
+    consent = create(:act_as_consent, user: @user, project: project, in_own_tasks: true)
     state = build_state(owner: @user, provider: "github", return_to: "/profile/connections")
 
-    assert_no_difference("OauthCredential.count") do
+    assert_no_difference([ "OauthCredential.count", "ActAsConsent.count" ]) do
       get oauth_callback_path, params: { code: "auth-code-1", state: state }
     end
 
     assert_equal "Failed to complete connection", flash[:alert]
+    existing.reload
+    assert existing.active?
+    assert_nil existing.metadata["github_user"], "the previous account's identity must not stay next to the new token"
+    assert consent.reload.in_own_tasks
   end
 
   test "GitHub answering 200 with an error stores nothing" do

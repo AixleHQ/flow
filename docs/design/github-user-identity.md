@@ -313,9 +313,10 @@ calls `Oauth::Providers.after_connect(provider, credential)` after
 call fails, the callback destroys the new row and shows "Failed to complete
 connection", so a connection never exists without an identity.
 
-No new environment variable. `GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET`
-already exist. The comment above them in `config/settings.yml` changes to say they
-are also required for user connections.
+`GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET` already exist and enable user
+connections. They no longer enable the installation check: that has its own setting,
+`GITHUB_APP_VERIFY_INSTALLATION_OWNER` (off by default), so setting the credentials
+for connections does not refuse installs made through the Setup URL.
 
 ### 4.2 Web routes (profile)
 
@@ -612,12 +613,15 @@ in adapter contract tests.
   equal the parent token's expiry. Refreshing first (step 6 of §4.3) makes it at least
   about an hour, and the tool tells the agent to ask again. A spike on staging
   confirms the value. If it turns out shorter, nothing changes except the docs.
-- **R3. Callback URLs on the App.** The user flow redirects to `/oauth/callback`. The
-  App must list it as a callback URL, and the existing
-  `/company/integrations/github_setup` must stay first, because install-time user
-  authorization goes to the first URL. If an operator puts them in the wrong order,
-  installing breaks. The docs and the staging checklist cover this. On aixle.com
-  this is a one-time App settings change before release.
+- **R3. Redirect URIs on the App.** The user flow redirects to `/oauth/callback`, which
+  the App lists as a **Redirect URI** under "Identifying and authorizing users"; token
+  expiration is on under **Optional Features → User-to-server token expiration → Opt-in**.
+  The installation check is a separate opt-in (`GITHUB_APP_VERIFY_INSTALLATION_OWNER`,
+  off by default): the client credentials alone enable only connecting accounts. With
+  the check on, "Request user authorization (OAuth) during installation" is on, and
+  `/company/integrations/github_setup` must be the **first** Redirect URI, because GitHub
+  then makes the Setup URL unavailable and sends installs to the first one. Staging and
+  aixle.com leave the check off, so installing through the Setup URL keeps working.
 - **R4. Refresh-token rotation.** GitHub refresh tokens are single use. `RefreshLease`
   and the "only mark an error if the stored refresh token was the one sent" rule in
   `refresh_leased!` already handle concurrent refreshes.
@@ -659,7 +663,7 @@ in adapter contract tests.
 | D8 | The tools are `user_attachable` with no auto-injection. They appear in the picker under "GitHub as a user". | Task §2: "whoever configures a workflow or a session decides which tool the agent gets" |
 | D9 | Only repositories on a GitHub **App** connection are covered. PAT-connected repositories are skipped with a reason. | The scoped endpoint needs the App installed on the target |
 | D10 | `user_id` is the only way to name a user. | Board tools expose member ids (`board_list_members`, `assignee_id`) |
-| D11 | No new environment variable. The existing `GITHUB_APP_CLIENT_ID` / `SECRET` gate the feature. | `config/settings.yml` `github.*` |
+| D11 | The existing `GITHUB_APP_CLIENT_ID` / `SECRET` gate the feature; the installation check has its own setting, `GITHUB_APP_VERIFY_INSTALLATION_OWNER`, off by default. | `config/settings.yml` `github.*` |
 | D12 | The platform does not set the commit identity, sign-off or `gh` credentials for the session. It returns the identity, and the instructions apply it. | Task: "a workflow's instructions decide how to use it" |
 | D14 | The tools read the session's user through one private helper, `InternalTools::Base#session_user`, so a search for it finds every reader. Readers outside the tools (container strategies, `SessionService`, resources) keep reading `session.user` directly. | Accepted in Alex's second review, 2026-11-11 |
 | D15 | `workflow_run.user` readers that describe the run, not a session (`WorkflowService` retry and run activity, `Chat::StatusCard`, `PersonalTools::Base`), stay on it. | Accepted in Alex's second review, 2026-11-11 |
