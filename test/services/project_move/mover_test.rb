@@ -53,6 +53,8 @@ class ProjectMove::MoverTest < ActiveSupport::TestCase
     assert_equal "Follow {{asset:#{copy.id}}} closely.", @s.step.instructions
     assert_equal "Check against {{asset:#{copy.id}}}.", @s.sub_step.reload.instructions
     assert_equal [ copy.id ], @s.workflow.reload.base_asset_ids
+    assert_equal [ copy.id ], StepResourceLink.where(step: @s.step).where.not(asset_id: nil).pluck(:asset_id)
+    assert_equal [ copy.id ], WorkflowResourceLink.where(workflow: @s.workflow).where.not(asset_id: nil).pluck(:asset_id)
     assert_equal @s.source.id, @s.company_asset.reload.company_id, "the original stays with its company"
   end
 

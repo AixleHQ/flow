@@ -16,6 +16,7 @@ class Workflow < ApplicationRecord
 
   before_destroy :purge_steps, prepend: true
   before_destroy :check_column_bindings
+  after_save :mirror_base_resource_links, if: :saved_change_to_config?
 
   ALLOWED_CONFIG_KEYS = %w[
     base_tool_ids base_skill_ids base_mcp_server_ids
@@ -255,6 +256,14 @@ class Workflow < ApplicationRecord
     return if foreign.empty?
 
     errors.add(:config, "base_config_item_ids contains items outside this project: #{foreign.sort.join(', ')}")
+  end
+
+  def mirror_base_resource_links
+    before, after = saved_change_to_config.map { |config| (config || {}).to_h.stringify_keys }
+    ResourceLink::COLUMNS.each do |list, column|
+      key = "base_#{list}"
+      WorkflowResourceLink.replace!(self, column, after[key]) if before[key] != after[key]
+    end
   end
 
   def purge_steps
