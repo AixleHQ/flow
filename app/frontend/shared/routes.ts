@@ -1722,6 +1722,11 @@ export function disableCompanySettingsRunnerPath(id: ScalarType, options?: objec
   return "/" + "company" + "/" + "settings" + "/" + "runners" + "/" + id + "/" + "disable" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
+/** /company/settings/runners/:id/registration_token(.:format) */
+export function registrationTokenCompanySettingsRunnerPath(id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "settings" + "/" + "runners" + "/" + id + "/" + "registration_token" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
 /** /company/settings/runners/:id/enable(.:format) */
 export function enableCompanySettingsRunnerPath(id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "settings" + "/" + "runners" + "/" + id + "/" + "enable" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
@@ -2095,6 +2100,11 @@ export function companyProjectAgentPath(project_id: ScalarType, id: ScalarType, 
 /** /company/projects/:project_id/runners/:id/disable(.:format) */
 export function disableCompanyProjectRunnerPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "runners" + "/" + id + "/" + "disable" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /company/projects/:project_id/runners/:id/registration_token(.:format) */
+export function registrationTokenCompanyProjectRunnerPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "runners" + "/" + id + "/" + "registration_token" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
 /** /company/projects/:project_id/runners/:id/enable(.:format) */
