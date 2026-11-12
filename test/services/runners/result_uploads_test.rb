@@ -57,7 +57,9 @@ class Runners::ResultUploadsTest < ActiveSupport::TestCase
     storage.stubs(:delete)
     storage.expects(:presign).with { |_id, **options| (options[:expires_in] - (120 + 300)).abs <= 2 }.returns(url: "https://b.test/u")
     storage.expects(:presign).with { |_id, **options| options[:expires_in] == 60 }.returns(url: "https://b.test/v")
-    Shrine.stubs(:storages).returns(cache: storage)
+    # Assigned, not stubbed: the teardown's restore_cache_storage must write to the real
+    # registry, or the mock would outlive this test (a stub is lifted after the teardown).
+    Shrine.storages[:cache] = storage
 
     Runners::ResultUploads.issue(%w[stdout], deadline_at: 2.minutes.from_now)
     slots = Runners::ResultUploads.issue(%w[stdout], deadline_at: 1.hour.ago)
