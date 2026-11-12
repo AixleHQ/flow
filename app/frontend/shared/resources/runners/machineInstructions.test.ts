@@ -26,23 +26,35 @@ describe('installScript', () => {
     expect(installScript({ registration, binary, name: 'build-01', noAutoUpdate: false })).toBe(
       [
         '# 1. Download aixle-runner 0.1.0 (linux-amd64) and verify it',
-        `curl -fsSLo aixle-runner ${binary.url}`,
-        `echo "${'a'.repeat(64)}  aixle-runner" | sha256sum -c -`,
+        `curl -fsSLo aixle-runner '${binary.url}'`,
+        `echo '${'a'.repeat(64)}  aixle-runner' | sha256sum -c -`,
         'chmod 0755 aixle-runner',
         '',
         '# 2. Register this machine (this uses up the token)',
-        'sudo ./aixle-runner configure --url https://flow.example.com --token arreg_abc-123_x --name build-01',
+        "sudo ./aixle-runner configure --url 'https://flow.example.com' --token 'arreg_abc-123_x' --name 'build-01'",
         '',
         '# 3. Run it as a service that survives logout and reboot',
-        'sudo ./aixle-runner service install && sudo aixle-runner service start',
+        'sudo ./aixle-runner service install && sudo ./aixle-runner service start',
       ].join('\n'),
     );
   });
 
   it('adds --no-auto-update to configure on request', () => {
     expect(installScript({ registration, binary, name: 'm', noAutoUpdate: true })).toContain(
-      '--name m --no-auto-update',
+      "--name 'm' --no-auto-update",
     );
+  });
+
+  it('quotes the URLs and the token as shell data', () => {
+    const script = installScript({
+      registration: { ...registration, gatewayUrl: "https://x.example/'; id; '", token: '$(id)' },
+      binary: { ...binary, url: 'https://x.example/a b' },
+      name: 'm',
+      noAutoUpdate: false,
+    });
+    expect(script).toContain("--url 'https://x.example/'\\''; id; '\\'''");
+    expect(script).toContain("--token '$(id)'");
+    expect(script).toContain("curl -fsSLo aixle-runner 'https://x.example/a b'");
   });
 });
 

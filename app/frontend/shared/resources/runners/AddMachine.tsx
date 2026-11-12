@@ -116,7 +116,7 @@ export function AddMachine({ runner, paths }: AddMachineProps) {
 
             <Group justify="space-between">
               <Text fz="xs" c="dimmed">
-                Run this on a Linux machine with Docker that can reach {registration.gatewayUrl}. The SHA-256 is this
+                Run this on a Linux machine with systemd and Docker, as a user who can use sudo, with curl and sha256sum, that can reach {registration.gatewayUrl}. The SHA-256 is this
                 platform’s own for aixle-runner {registration.version}.
               </Text>
               <CopyButton value={script ?? ''}>

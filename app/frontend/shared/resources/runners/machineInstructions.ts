@@ -27,26 +27,29 @@ interface ScriptOptions {
   noAutoUpdate: boolean;
 }
 
+/** Quotes a value as one shell word, so data from the platform is never read as shell syntax. */
+export const shellQuote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'`;
+
 /** The copy-paste sequence of DESIGN.md §6.3: download and verify, register, run as a service. */
 export function installScript({ registration, binary, name, noAutoUpdate }: ScriptOptions): string {
   const configure = [
     'sudo ./aixle-runner configure',
-    `--url ${registration.gatewayUrl}`,
-    `--token ${registration.token}`,
-    `--name ${name}`,
+    `--url ${shellQuote(registration.gatewayUrl)}`,
+    `--token ${shellQuote(registration.token)}`,
+    `--name ${shellQuote(name)}`,
     ...(noAutoUpdate ? ['--no-auto-update'] : []),
   ].join(' ');
 
   return [
     `# 1. Download aixle-runner ${registration.version} (${binary.platform}) and verify it`,
-    `curl -fsSLo aixle-runner ${binary.url}`,
-    `echo "${binary.sha256}  aixle-runner" | sha256sum -c -`,
+    `curl -fsSLo aixle-runner ${shellQuote(binary.url)}`,
+    `echo ${shellQuote(`${binary.sha256}  aixle-runner`)} | sha256sum -c -`,
     'chmod 0755 aixle-runner',
     '',
     '# 2. Register this machine (this uses up the token)',
     configure,
     '',
     '# 3. Run it as a service that survives logout and reboot',
-    'sudo ./aixle-runner service install && sudo aixle-runner service start',
+    'sudo ./aixle-runner service install && sudo ./aixle-runner service start',
   ].join('\n');
 }
