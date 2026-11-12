@@ -12,15 +12,16 @@ class Web::ProfileConnectionsTest < ActionDispatch::IntegrationTest
     sign_in_as(@user)
   end
 
-  def json_patch(params)
-    patch act_as_consents_profile_path, params: params.to_json,
-                                        headers: { "Content-Type" => "application/json", "Accept" => "application/json" }
+  def json_patch(project_id, provider: "github", **body)
+    patch profile_connection_act_as_consent_path(provider, project_id), params: body.to_json,
+                                                                         headers: { "Content-Type" => "application/json",
+                                                                                    "Accept" => "application/json" }
   end
 
   test "the page lists the connection and a row per project with both switches off" do
     create(:oauth_credential, :github_user, owner: @user)
 
-    get connections_profile_path
+    get profile_connections_path
 
     assert_inertia_page "Profile/Connections"
     props = inertia.props
@@ -35,7 +36,7 @@ class Web::ProfileConnectionsTest < ActionDispatch::IntegrationTest
   test "without a connection the page offers Connect, and says when the App is not configured" do
     Settings.github.stubs(:client_secret).returns("")
 
-    get connections_profile_path
+    get profile_connections_path
 
     assert_nil inertia.props[:github]
     assert_not inertia.props[:available]
@@ -44,20 +45,20 @@ class Web::ProfileConnectionsTest < ActionDispatch::IntegrationTest
   test "a revoked connection reads as needing a reconnect" do
     create(:oauth_credential, :github_user, owner: @user, status: :revoked)
 
-    get connections_profile_path
+    get profile_connections_path
 
     assert_equal "needs_reconnect", inertia.props[:github][:status]
   end
 
   test "a consent update stores the switch and leaves the other alone" do
-    json_patch(project_id: @project.id, provider: "github", in_own_tasks: true)
+    json_patch(@project.id, in_own_tasks: true)
 
     assert_response :success
     consent = ActAsConsent.find_by!(user: @user, project: @project, provider: "github")
     assert consent.in_own_tasks
     assert_not consent.in_others_tasks
 
-    json_patch(project_id: @project.id, provider: "github", in_others_tasks: true)
+    json_patch(@project.id, in_others_tasks: true)
 
     assert consent.reload.in_own_tasks
     assert consent.in_others_tasks
@@ -69,7 +70,7 @@ class Web::ProfileConnectionsTest < ActionDispatch::IntegrationTest
     # This request looked before the other one committed its first-time row.
     ActAsConsent.stubs(:find_by).returns(nil).then.returns(winner)
 
-    json_patch(project_id: @project.id, provider: "github", in_own_tasks: true)
+    json_patch(@project.id, in_own_tasks: true)
 
     assert_response :success
     consent = ActAsConsent.find_by!(user: @user, project: @project, provider: "github")
@@ -82,14 +83,53 @@ class Web::ProfileConnectionsTest < ActionDispatch::IntegrationTest
     other_company = create(:company)
     foreign = create(:project, company: other_company, owner: create(:user, :admin, company: other_company))
 
-    json_patch(project_id: foreign.id, provider: "github", in_own_tasks: true)
+    json_patch(foreign.id, in_own_tasks: true)
 
     assert_response :not_found
     assert_equal 0, ActAsConsent.count
   end
 
+  test "a switch that is not a JSON boolean is refused with 422 and changes nothing" do
+    [ "true", 1, "yes", nil, [ true ] ].each do |value|
+      json_patch(@project.id, in_own_tasks: value)
+
+      assert_response :unprocessable_entity, "#{value.inspect} should be refused"
+    end
+    json_patch(@project.id, in_own_tasks: true, in_others_tasks: "false")
+
+    assert_response :unprocessable_entity
+    assert_equal 0, ActAsConsent.count
+  end
+
+  test "a consent update can turn a switch off again" do
+    create(:act_as_consent, :own, user: @user, project: @project)
+
+    json_patch(@project.id, in_own_tasks: false)
+
+    assert_response :success
+    assert_not ActAsConsent.find_by!(user: @user, project: @project).in_own_tasks
+  end
+
+  test "a signed-out visitor is sent to login by every connections route" do
+    reset!
+
+    get profile_connections_path
+    assert_redirected_to login_path
+    delete profile_connection_path("github")
+    assert_redirected_to login_path
+    json_patch(@project.id, in_own_tasks: true)
+    assert_redirected_to login_path
+    assert_equal 0, ActAsConsent.count
+  end
+
+  test "disconnect of an unknown provider answers 404" do
+    delete profile_connection_path("gitlab")
+
+    assert_response :not_found
+  end
+
   test "a consent update for an unknown provider answers 404" do
-    json_patch(project_id: @project.id, provider: "gitlab", in_own_tasks: true)
+    json_patch(@project.id, provider: "gitlab", in_own_tasks: true)
 
     assert_response :not_found
   end
@@ -104,9 +144,9 @@ class Web::ProfileConnectionsTest < ActionDispatch::IntegrationTest
     fake = FakeGithub::UserTokenService.new
     Github::UserTokenService.stubs(:new).returns(fake)
 
-    delete disconnect_profile_path("github")
+    delete profile_connection_path("github")
 
-    assert_redirected_to connections_profile_path
+    assert_redirected_to profile_connections_path
     assert fake.called?(:revoke_grant)
     assert_nil OauthCredential.find_by(id: credential.id)
     assert_equal 0, ActAsConsent.where(user: @user).count
@@ -119,7 +159,7 @@ class Web::ProfileConnectionsTest < ActionDispatch::IntegrationTest
       FakeGithub::UserTokenService.new(revoke_error: Github::UserTokenService::Unavailable.new("down"))
     )
 
-    delete disconnect_profile_path("github")
+    delete profile_connection_path("github")
 
     assert_nil OauthCredential.find_by(id: credential.id)
   end
@@ -129,7 +169,7 @@ class Web::ProfileConnectionsTest < ActionDispatch::IntegrationTest
     theirs = create(:oauth_credential, :github_user, owner: other)
     Github::UserTokenService.stubs(:new).returns(FakeGithub::UserTokenService.new)
 
-    delete disconnect_profile_path("github")
+    delete profile_connection_path("github")
 
     assert OauthCredential.exists?(theirs.id)
   end

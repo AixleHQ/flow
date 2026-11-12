@@ -10,10 +10,10 @@ import { AuthLayout } from 'layouts/AuthLayout';
 import { apiMutate } from 'shared/lib/apiFetch';
 import { postNavigate } from 'shared/lib/postNavigate';
 import {
-  actAsConsentsProfilePath,
-  connectionsProfilePath,
-  disconnectProfilePath,
   oauthAuthorizePath,
+  profileConnectionActAsConsentPath,
+  profileConnectionPath,
+  profileConnectionsPath,
 } from 'shared/routes';
 import { type SharedProps } from 'shared/ui';
 import { StatusBadge } from 'shared/ui/StatusBadge';
@@ -50,7 +50,7 @@ function GithubCard({
     postNavigate(oauthAuthorizePath(GITHUB), {
       owner_type: 'User',
       owner_id: String(userId),
-      return_to: connectionsProfilePath(),
+      return_to: profileConnectionsPath(),
     });
   };
 
@@ -64,7 +64,7 @@ function GithubCard({
       ),
       labels: { confirm: 'Disconnect', cancel: 'Cancel' },
       confirmProps: { color: 'red' },
-      onConfirm: () => router.delete(disconnectProfilePath(GITHUB)),
+      onConfirm: () => router.delete(profileConnectionPath(GITHUB)),
     });
 
   return (
@@ -114,10 +114,10 @@ function ConsentsCard({ consents }: { consents: ActAsConsent[] }) {
 
   const change = async (consent: ActAsConsent, field: Switchable, value: boolean) => {
     setSaving(`${consent.projectId}:${field}`);
-    const saved = await apiMutate(actAsConsentsProfilePath(), {
+    const saved = await apiMutate(profileConnectionActAsConsentPath(GITHUB, consent.projectId), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId: consent.projectId, provider: GITHUB, [field]: value }),
+      body: JSON.stringify({ [field]: value }),
     });
     setSaving(null);
     if (saved) router.reload({ only: ['consents'] });

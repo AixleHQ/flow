@@ -201,6 +201,16 @@ class ProjectTest < ActiveSupport::TestCase
     assert_equal [ admin, employee ].sort_by(&:id), @project.ownership_candidates.order(:id).to_a
   end
 
+  test "for_user_in_company lists the company's projects the person can reach" do
+    other_owner = create(:user, :employee, :onboarding_completed, company: @company)
+    create(:project, company: @company, owner: other_owner)
+    other_company = create(:company)
+    create(:project, company: other_company, owner: create(:user, :employee, :onboarding_completed, company: other_company))
+
+    assert_equal [ @project ], Project.for_user_in_company(@project_owner, @company).to_a
+    assert_empty Project.for_user_in_company(@project_owner, other_company)
+  end
+
   private
 
   def create_named_projects(*names)

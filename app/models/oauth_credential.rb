@@ -27,6 +27,8 @@ class OauthCredential < ApplicationRecord
   # (a {access,refresh}_token denylist would still leak an OIDC id_token in cleartext).
   SAFE_METADATA_KEYS = %w[account user organization token_uuid].freeze
 
+  GITHUB_PROVIDER = "github"
+
   # Consecutive refresh failures before the credential is escalated to status:error
   # (surfaced as a reconnect badge + notification). Below the threshold it stays
   # :active so the sweep keeps retrying — a transient provider blip self-heals.
@@ -35,6 +37,14 @@ class OauthCredential < ApplicationRecord
   # --- Scopes ---
   scope :for_owner,      ->(owner) { where(owner: owner) }
   scope :for_mcp_server, ->(server) { where(mcp_server_id: server.id) }
+  # A person's own GitHub connection (their user-to-server grant). A person has at most
+  # one live one; a reconnect updates it, a revoked one stays until they disconnect.
+  scope :github_connections_of, ->(user) { for_owner(user).where(provider: GITHUB_PROVIDER) }
+  # GitHub says an account's login can change but its numeric id cannot, so the webhook
+  # for a revoked authorization finds credentials by the id stored in `metadata`.
+  scope :for_github_user, ->(github_id) {
+    where(provider: GITHUB_PROVIDER).where("metadata -> 'github_user' ->> 'id' = ?", github_id.to_s)
+  }
   # Sweep scope (Phase 2 consumes this; index [:status, :expires_at] backs it).
   #
   # Deliberately NOT filtered to credentials that have a refresh token. One without
@@ -119,6 +129,17 @@ class OauthCredential < ApplicationRecord
   # The credential a server uses for `owner`: the newest live one issued for the
   # server's current origin. Every reader — token injection, the session-start
   # preflight and refresh, the status badge — picks through here.
+  # The connection the profile page shows: the latest one, a revoked one included
+  # (the page offers to reconnect it).
+  def self.latest_github_connection_of(user)
+    github_connections_of(user).order(updated_at: :desc).first
+  end
+
+  # The connection an agent's token comes from: the latest one that is not revoked.
+  def self.live_github_connection_of(user)
+    github_connections_of(user).where.not(status: :revoked).order(updated_at: :desc).first
+  end
+
   def self.current_for(server:, owner:)
     return nil if owner.nil?
 

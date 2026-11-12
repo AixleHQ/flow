@@ -82,9 +82,7 @@ class Webhooks::GithubController < ActionController::API
     github_id = Integer(payload.dig("sender", "id"), exception: false)
     return unless github_id
 
-    OauthCredential.where(provider: Github::UserConnection::PROVIDER)
-                   .where("metadata -> 'github_user' ->> 'id' = ?", github_id.to_s)
-                   .find_each do |credential|
+    OauthCredential.for_github_user(github_id).find_each do |credential|
       credential.update!(status: :revoked, encrypted_access_token: nil, encrypted_refresh_token: nil)
     end
   end

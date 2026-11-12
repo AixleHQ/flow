@@ -53,7 +53,7 @@ describe('Profile Connected accounts tab', () => {
   });
 
   it('saves a switch with a PATCH and reloads the consents', async () => {
-    const fetchSpy = answerFetch({ 'PATCH /profile/act_as_consents': {} });
+    const fetchSpy = answerFetch({ 'PATCH /profile/connections/github/act_as_consents/7': {} });
     renderPageWith();
 
     await userEvent.click(screen.getByRole('switch', { name: /In my tasks — Acme/ }));
@@ -61,7 +61,7 @@ describe('Profile Connected accounts tab', () => {
     await waitFor(() => expect(router.reload).toHaveBeenCalledWith({ only: ['consents'] }));
     const [, init] = fetchSpy.mock.calls[0];
     expect(init?.method).toBe('PATCH');
-    expect(JSON.parse(String(init?.body))).toEqual({ projectId: 7, provider: 'github', inOwnTasks: true });
+    expect(JSON.parse(String(init?.body))).toEqual({ inOwnTasks: true });
   });
 
   it('asks for confirmation before disconnecting', async () => {
