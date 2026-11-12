@@ -7,6 +7,8 @@
 # decides which runner a request may touch: the company-level runners only, so
 # a project's runner is not found here.
 class Web::Company::RunnersController < Web::Company::ApplicationController
+  include RunnerRegistrationTokens
+
   requires_feature :external_runners
 
   def index
@@ -54,6 +56,12 @@ class Web::Company::RunnersController < Web::Company::ApplicationController
   def destroy
     company_runners.find(params[:id]).soft_delete!
     redirect_to company_settings_runners_path, notice: "Runner deleted"
+  end
+
+  # "Add machine": a single-use registration token for a `manual` runner,
+  # returned once (DESIGN.md §6.3).
+  def registration_token
+    render_registration_token(company_runners.find(params[:id]))
   end
 
   def disable = transition(:disable, "disabled")

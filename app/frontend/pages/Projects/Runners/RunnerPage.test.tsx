@@ -32,6 +32,12 @@ describe('Projects/Runners/RunnerPage', () => {
     expect(router.post).toHaveBeenCalledWith('/company/projects/7/runners/2/disable', {}, expect.anything());
   });
 
+  it('offers Add machine on the project runner', () => {
+    render();
+
+    expect(screen.getByRole('button', { name: 'Add machine' })).toBeInTheDocument();
+  });
+
   it('shows a company runner read-only, pointing an admin to company settings', () => {
     render({
       runner: buildRunner({ id: 1, name: 'company-box', scope: 'company' }),
@@ -47,6 +53,7 @@ describe('Projects/Runners/RunnerPage', () => {
     ['Edit', 'Disable', 'Revoke', 'Delete'].forEach((name) =>
       expect(screen.queryByRole('button', { name })).not.toBeInTheDocument(),
     );
+    expect(screen.queryByRole('button', { name: 'Add machine' })).not.toBeInTheDocument();
   });
 
   it('renders nothing with the flag off', () => {

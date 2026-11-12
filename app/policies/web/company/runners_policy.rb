@@ -18,6 +18,8 @@ module Web
       def disable? = admin?
       def enable? = admin?
       def revoke? = admin?
+      # "Add machine": a registration token lets a machine join the runner.
+      def registration_token? = admin?
     end
   end
 end

@@ -24,6 +24,7 @@ import { formatDateTime } from 'shared/lib/formatDate';
 import { PageHeader } from 'shared/ui/PageHeader';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
+import { AddMachine } from './AddMachine';
 import { accessWideners, humanize, setKeys, type RunnerPaths, type RunnerTypeOption } from './runnerConfig';
 import { DEFAULT_REUSE_POLICY, lastSeen, REUSE_POLICY_COPY, runnerTypeTitle } from './runnerCopy';
 import { RunnerFormModal } from './RunnerFormModal';
@@ -97,6 +98,8 @@ export function RunnerDetails({ runner, runnerTypes, canManage, paths, backLabel
 
   const actions = canManage && (
     <Group gap="xs">
+      {/* A revoked runner has no credentials left to give a machine (runner_revoked). */}
+      {runner.runnerType === 'manual' && runner.status !== 'revoked' && <AddMachine runner={runner} paths={paths} />}
       {/* Revoke is final (RunnerStateMachine), so a revoked runner has nothing left to edit. */}
       {option && runner.status !== 'revoked' && (
         <Button variant="default" onClick={() => setEditing(true)}>

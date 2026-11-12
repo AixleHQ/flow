@@ -139,6 +139,7 @@ running Flow — the product-level guide outlined above is a separate document s
 - **[user-guide/trackers.md](./user-guide/trackers.md)** — Provider-neutral trackers (Azure Boards, Jira, GitHub Projects, Linear, YouTrack): the Trackers page, primary/read-only/detach, connecting a board column (intake), tracker triggers and delivery, the tracker tools and write attribution
 - **[user-guide/slack.md](./user-guide/slack.md)** — Installing the Slack app for a company: mention-started workflows and how text is matched, status cards, the chat tools, the self-hosted Slack app
 - **[user-guide/teams.md](./user-guide/teams.md)** — Connecting a Microsoft 365 organization through its administrator: Teams-started workflows, status cards, files both ways, the chat tools, the self-hosted bot
+- **[user-guide/runners.md](./user-guide/runners.md)** — Runners: where a session runs; adding a machine to a `manual` runner (the single-use registration token and the install sequence)
 - **[user-guide/coder.md](./user-guide/coder.md)** — Connecting Coder: workspace allocation and locks, health checks and dead-workspace cleanup, the coder tools, self-hosted settings
 - **[user-guide/session-queues.md](./user-guide/session-queues.md)** — Why a session waits: every combination of project limit and installation ceiling, how a reservation differs from a cap, what is exempt from the queue altogether, and the operator knobs behind it
 - **[user-guide/configuration.md](./user-guide/configuration.md)** — Env vars, OAuth, agent credentials, and other knobs

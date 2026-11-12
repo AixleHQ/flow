@@ -33,12 +33,13 @@ class Web::Company::Projects::RunnersControllerTest < ActionDispatch::Integratio
     assert_response :not_found
     patch company_project_runner_path(@project, @own), params: { runner: { name: "Renamed" } }, as: :json
     assert_response :not_found
-    %i[disable enable revoke].each do |action|
+    %i[disable enable revoke registration_token].each do |action|
       post public_send(:"#{action}_company_project_runner_path", @project, @own)
       assert_response :not_found
     end
     delete company_project_runner_path(@project, @own)
     assert_response :not_found
+    assert_empty RunnerCredential.all
     assert_equal "pending", @own.reload.status
   end
 
@@ -101,13 +102,14 @@ class Web::Company::Projects::RunnersControllerTest < ActionDispatch::Integratio
 
       patch company_project_runner_path(@project, @company_runner), params: { runner: { name: "Hijacked" } }, as: :json
       assert_response :not_found
-      %i[disable enable revoke].each do |action|
+      %i[disable enable revoke registration_token].each do |action|
         post public_send(:"#{action}_company_project_runner_path", @project, @company_runner)
         assert_response :not_found
       end
       delete company_project_runner_path(@project, @company_runner)
       assert_response :not_found
     end
+    assert_empty RunnerCredential.all
 
     @company_runner.reload
     assert_equal "Company box", @company_runner.name
@@ -157,5 +159,28 @@ class Web::Company::Projects::RunnersControllerTest < ActionDispatch::Integratio
            params: { runner: { name: "K8s", runner_type: "kubernetes", max_concurrency: 1, config: { namespace: "aixle" } } }, as: :json
     end
     assert_includes Array(session["inertia_errors"][:runner_type]), "is not available yet"
+  end
+
+  test "a company admin or the project owner gets a registration token for the project's own runner" do
+    body = nil
+    assert_role_matrix(MANAGE_ROLES, transport: :web, allowed_status: :created) do |role|
+      post registration_token_company_project_runner_path(@project, @own), as: :json
+      body = response.parsed_body if role == :admin
+    end
+
+    assert_equal 2, RunnerCredential.where(kind: :registration, runner: @own).count
+    assert_match(/\Aarreg_/, body["token"])
+    assert_equal "http://www.example.com/runner/v1/releases/#{body['version']}/linux-arm64", body["binaries"].last["url"]
+  end
+
+  test "a revoked project runner is refused with runner_revoked" do
+    @own.revoke!
+    sign_in_as(@owner)
+
+    post registration_token_company_project_runner_path(@project, @own), as: :json
+
+    assert_response :conflict
+    assert_equal "runner_revoked", response.parsed_body["code"]
+    assert_empty RunnerCredential.all
   end
 end
