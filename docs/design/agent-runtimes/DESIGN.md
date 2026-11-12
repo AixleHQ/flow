@@ -311,7 +311,8 @@ with the first runner type that needs one.
 | `auto_update` | `manual`: copied from the runner's `config.auto_update`, overridable per machine with `aixle-runner configure --no-auto-update` (§14.4). |
 | `current_session_id` | The `terminal_sessions` row it is executing. At most one (§7.3). |
 | `last_workflow_id` | Affinity for warm-cache reuse (§7.3). |
-| `last_heartbeat_at`, `checked_in_at`, `sessions_count`, `consecutive_failures` | |
+| `last_heartbeat_at` | The last time the platform heard from the machine: any authenticated request (a poll, an op result, `check-in`, a token refresh, `register`), written at most once every 15 s (`Runners::Liveness.record!`). Null until the machine is first heard. Task 12c (below). |
+| `checked_in_at`, `sessions_count`, `consecutive_failures` | |
 | `reset_requested` | `none`, `reset` or `rebuild` (§7.2). |
 
 **What v1 has so far (§15 task 5a).** `db/migrate/20261030140000_create_runner_environments_and_credentials.rb`
@@ -328,8 +329,12 @@ values, and the §5.2 state machine replaces that with task 11. `state_reason` h
 (`Runners::Credentials.rotate!` through `Runners::Machines.fail!`), held by no session, so it is
 given no session, besides its revoked credentials keeping it out.
 `project_id`, `external_id`, `reusable`, `auto_update`, `current_session_id`,
-`last_workflow_id`, the heartbeat and check-in columns and `reset_requested` land with their
-first reader. `auto_update` landed with task 10 (boolean, default true; false for a machine
+`last_workflow_id`, `checked_in_at`, the other counters and `reset_requested` land with their
+first reader. `last_heartbeat_at` landed with task 12c: every authenticated request of a
+machine records its time (`Runners::Liveness.record!`, from the gateway's `authenticate` and
+from `Runners::Registration.register!`), and `runners.last_seen_at` is raised to it, so a
+runner's last seen is the latest of its machines'. Both are plain writes that leave
+`updated_at` alone, and a machine is written at most once every 15 s. `auto_update` landed with task 10 (boolean, default true; false for a machine
 registered with `configure --no-auto-update`, which is then never offered an update, §14.4).
 
 ### 2.3 `runner_credentials` and `runner_operations`
@@ -514,6 +519,28 @@ For `manual`, the UI also shows each machine as **online** (connected and runnin
 session, environment `busy`), **idle** (connected, no session, environment `idle`) or
 **offline** (no heartbeat for 90 s, the `unreachable` overlay of §5.2), in the spirit of
 GitHub's self-hosted runner list.
+
+**Built in task 12c.** The machine's display state (`Runners::Liveness.states`) is:
+
+- **online**: heard within 90 s (`RunnerEnvironment::ONLINE_WINDOW`) and holding a session;
+- **idle**: heard within 90 s, no session;
+- **offline**: not heard for 90 s, or never heard;
+- `failed` and `gone` machines show as such, whatever their last heartbeat.
+
+**The op-deadline exception.** The host runner runs one op at a time and does not poll during
+it (§6.7), so a machine executing a delivered op is not offline before that op's deadline,
+even when it is silent: it counts as heard while it has a `delivered` op whose `deadline_at`
+is still ahead (`RunnerEnvironment.executing_op`). Once the deadline passes it is offline
+again unless it has been heard.
+
+**Placement.** A machine that is neither heard nor executing an op (`RunnerEnvironment.reachable`)
+is given no new session: `Runners::Machines.take!` skips it, and a launch against a runner
+whose every registered machine is offline is refused as `runner_unreachable` with
+"Runner \"X\" has no machine online: every machine is offline (…). Start aixle-runner on one
+of them, or pick another runner" (`Runners::Resolver`, and `NoMachine` where the machine is
+taken), as it is when every machine has failed. A runner whose reachable machines are all
+busy is not refused: its session waits for a free one. The runner's own status from health
+(`connected`, `degraded`, `unreachable`) stays in task 12.
 - `disabled`: switched off by a user. No new sessions. Running sessions are left to finish.
 - `revoked`: every credential is invalidated immediately and running sessions fail (§9.3).
   This is terminal: to get it back, create a new runner.
@@ -1255,8 +1282,9 @@ implementation choices behind them:
   row first is committed before the poll reads it, so an op with a result is never returned.
   After a positive `wait` the access checks run again, read past the request's query cache
   and its local copy of `Rails.cache`, so a revocation or the flag turned off during the wait
-  answers the refusal without the payload. Recording the empty answer as a heartbeat comes
-  with task 12.
+  answers the refusal without the payload. Since task 12c every authenticated request of a
+  machine, the poll and its empty answer included, is recorded as a heartbeat (§2.2,
+  `Runners::Liveness.record!`), at most once every 15 s per machine.
 - **`POST ops/:id/result`** (§15 task 5b) stores the fields other than `status` in `result`,
   encrypted with `runners_key` (§2.3), and the same update nulls the payload. No
   `/runner/v1/*` request has its params in the request log (`config/application.rb`), as
@@ -3106,7 +3134,7 @@ and the pages `Company/Settings/RunnersPage`, `Company/Settings/RunnerPage`,
   policy carries the §7.1 wording and is sent only when chosen, so the server's per-type
   default applies. The server's errors land at their field: a `config` message at the field
   its leading key names, anything else above the form. The "Add machine" button is on a live `manual` runner's page since task 12a;
-  the Machines table is task 12. A created runner opens its page.
+  the read-only Machines section is since task 12c (below), and the Machines table's actions are task 12/13. A created runner opens its page.
 - **Session page, wait reasons.** A runner session waits for the same reasons as any other
   session (§10). The only runner-specific one is `runner_capacity` (the runner's own
   capacity, rows 11 and 12); there is no `runner_limit`.
@@ -3114,9 +3142,17 @@ and the pages `Company/Settings/RunnersPage`, `Company/Settings/RunnerPage`,
   policy, capabilities, the keys the config sets, and the §6.8 options that widen access
   called out above them. Edit (the same form without the type step), Disable, Enable,
   Revoke and Delete (the soft delete) only with `canManage`; a company runner seen from a
-  project is read-only there and links a company admin to company settings. Machines,
-  environments, tokens, the runner version and the egress list are not there yet (tasks 5,
-  12 and 13).
+  project is read-only there and links a company admin to company settings. Environments,
+  tokens, the runner version and the egress list are not there yet (tasks 5, 12 and 13).
+- **Machines section (task 12c).** On the page of a `manual` runner, company and project alike
+  (`machines` prop, `RunnerMachineResource`; `RunnerMachines.tsx`), read-only: for each
+  machine its name (`display_name`) and key, its state (online, idle or offline, or failed or
+  gone with the reason, §2.5), its runner version and os/arch (from `register`, and from
+  `check-in`), when it registered and its last seen (`last_heartbeat_at`). Machines are listed
+  in registration order, `gone` ones included. The page asks for `runner` and `machines` again
+  every 15 s while the tab is visible, so states and last seen move without a reload. The
+  Overview's "Last seen" is the runner's `last_seen_at`. The facts, first-seen IP, Docker
+  version and the actions (Reset, Return to service, Revoke) stay in tasks 12 and 13.
 
 **What v1 has so far (§15 task 4).** Behind the same flag, the selects and the badges, built from
 `shared/resources/runners/runnerChoice.tsx`. The selects are fed by `RunnerSummaryResource` (name,
@@ -3811,6 +3847,7 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 11 | 3 | `Runners::Allocator` and environment state machine, including the self-registering entry path (§5.2): affinity, project binding, no step 4 on non-`provisionable` types, scrub and reset escalation without rebuild, Return to service, Release to company (§9.4), reconciliation pass, and the capacity path of §10: a `ContainerRuntime::CapacityError` from the allocator (the runner at `max_environments`, or the provider out of capacity) becomes `capacity_wait` with the wait reason `runner_capacity`, reservation kept. When `env.scrub` is first sent, the removal of its helper container in `runner/internal/docker/scrub.go` gets a bounded timeout under a fresh context, as `container.start`'s removal on failure did in 8a's Fix CR round 6; in 8a its code is unchanged, because `env.scrub` is not sent yet (Alex, Fix CR round 7). |
 | 12a | 3 | **Done.** "Add machine", brought forward from row 12 on its own (Alex, 2026-11-12, task #225) so that QA can register a staging machine and exercise the runner paths that need a machine's credentials (8c and after). The button on a live `manual` runner's page, company and project, offered under the policy that guards update and revoke (`registration_token?`); `POST .../runners/:id/registration_token` mints a single-use token (1 h) through `Runners::Credentials.mint_registration!` (`Runners::MachineRegistration.issue!`) and returns it once, with the recommended version and, per platform, the binary's URL on the platform's own host and its SHA-256 from the pins; the dialog shows the §6.3 sequence (download and verify, `configure --url --token --name`, `service install` and `service start`) with a choice of `linux-amd64` or `linux-arm64`, a machine name and `--no-auto-update`. A revoked runner offers no button and is refused with `runner_revoked`. The "Adding a machine" section of `docs/user-guide/runners.md`. As built: §6.3. Row 12 keeps the rest. |
 | 12b | 3 | **Done.** A Docker choice in "Add machine" (the published image as a host runner: its entrypoint keeps the binary and the state in `AIXLE_RUNNER_DIR`, a directory of the machine mounted at the same path; restart policy `unless-stopped` and the Docker socket; removal by `unregister`) and machines on arm64: the agent container, the sidecar and the scrub container are pulled and created for `linux/amd64`, so an arm64 daemon runs them under emulation until native images (#226). User guide: "Adding a machine". As built: §6.3, §6.9.3, §14.4. Decided by Alex, 2026-11-12. |
+| 12c | 3 | **Done.** What 12's Machines table needed to be useful, brought forward on its own (Alex, 2026-11-12, task #231): (1) **liveness**: `runner_environments.last_heartbeat_at` (§2.2) is written by every authenticated request of a machine (polls, op results, `check-in`, token refresh and `register`) at most once every 15 s (`Runners::Liveness.record!`), and `runners.last_seen_at` is raised to it; (2) **the machine's state** for display, online / idle / offline (§2.5), with the op-deadline exception (a machine executing a delivered op is not offline before its deadline) and `failed` / `gone` shown as such; (3) **placement**: `Runners::Machines.take!` skips an offline machine, and a runner whose every registered machine is offline is refused at launch as `runner_unreachable` with a message that names the runner and says its machines are offline; (4) **the Machines section** on the runner page, company and project, read-only (§11). Row 12 keeps the rest: the runner's status from health (`pending` to `connected` / `degraded` / `unreachable`), `check_health` and heartbeat-based `observe`, `POST /runner/v1/heartbeat`, per-machine Revoke, facts and first-seen IP in the list, `created_by_id`, `reuse_policy`, the writable-mount acknowledgement, the §9.7 disclosure, the `runner_capacity` wait reason and the "every machine busy" message, and the full `manual` user docs. |
 | 12 | 3 | `manual` end to end: `POST /runner/v1/heartbeat` (moved from 8c, Alex 2026-11-11: it records heartbeats and derives machine health, its first readers; the host runner runs one thing at a time, so no poll is outstanding during an op, but nothing reads a heartbeat before this row), `ManualAdapter#check_health` derived from machine heartbeats (§2.5), heartbeat-based `observe`, the Machines table (online / idle / offline, facts, first-seen IP), per-machine Revoke, `reuse_policy` per §7.1, the writable-mount acknowledgement, the §9.7 disclosure, the `runner_capacity` wait reason on the session page and the "every machine busy" message ("Waiting for a free machine on runner \"X\" (2 of 2 busy).", §10), and user docs for `manual` (dedicated machine recommended). The operator docs must say that a bind source can't be under the machine's `/tmp` or `/var/tmp` when the runner runs as the service: the unit has `PrivateTmp=true`, so the runner doesn't see those directories and refuses such a bind with `forbidden_mount` (verification round 1 of 6b; accepted as a known limitation, Alex 2026-11-06). From 8b, for `network: host` (Alex, 2026-11-10): **port collisions**: a session's proxy port is `20000 + session id mod 10000`, so two sessions on one machine whose ids are congruent mod 10000, or any other service in 20000 to 29999, can take it, and the session then fails with `proxy_port_in_use`, which is not retryable on that machine; **local access**: the listener is on the machine's own `127.0.0.1`, so any local user or process can reach it, and the host runner adds the environment credential to what it sends. A session key is still required, but the exposure is wider than the sidecar's private network namespace. |
 | 13 | 3 | Runner page actions (Reset, Force release), connection-lost banner, the revoke flow, Administrate dashboards. |
 | 14 | 3 | Staging validation per §12.4 (QA task). Record the machine used in the result. |

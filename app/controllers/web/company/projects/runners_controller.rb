@@ -10,6 +10,7 @@
 # is not found by a write from this page.
 class Web::Company::Projects::RunnersController < Web::Company::Projects::ApplicationController
   include RunnerRegistrationTokens
+  include RunnerMachinesList
 
   requires_feature :external_runners
 
@@ -26,6 +27,7 @@ class Web::Company::Projects::RunnersController < Web::Company::Projects::Applic
 
     render inertia: "Projects/Runners/RunnerPage", props: {
       runner: RunnerResource.new(runner).to_h,
+      machines: machines_prop(runner),
       runner_types: Runners::Form.runner_types,
       can_manage: runners_policy.update? && runner.project_id == current_project.id
     }

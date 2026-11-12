@@ -1,7 +1,7 @@
 import { Head, Link, usePage } from '@inertiajs/react';
 import { Alert, Anchor, Box, Stack, Text } from '@mantine/core';
 
-import type { Project, Runner } from '@/types/generated';
+import type { Project, Runner, RunnerMachine } from '@/types/generated';
 
 import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
@@ -15,6 +15,7 @@ import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 interface PageProps {
   project: Pick<Project, 'id' | 'name'>;
   runner: Runner;
+  machines: RunnerMachine[];
   runnerTypes: RunnerTypeOption[];
   /** False for a company runner, which is managed from company settings only. */
   canManage: boolean;
@@ -22,7 +23,7 @@ interface PageProps {
 }
 
 const RunnerPage = () => {
-  const { project, runner, runnerTypes, canManage } = usePage<PageProps>().props;
+  const { project, runner, machines, runnerTypes, canManage } = usePage<PageProps>().props;
   const { canManageCompany } = useProjectPermissions();
   const externalRunners = useFeatureFlag('externalRunners');
 
@@ -46,6 +47,7 @@ const RunnerPage = () => {
         )}
         <RunnerDetails
           runner={runner}
+          machines={machines}
           runnerTypes={runnerTypes}
           canManage={canManage}
           paths={projectRunnerPaths(project.id)}

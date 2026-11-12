@@ -15,8 +15,9 @@ module Runners
   # under the machine's row lock, so two sessions never take one machine; the
   # session records the machine it ran on in terminal_sessions.runner_environment_id.
   # Runners::Operations.enqueue! checks the hold under the same lock, so a
-  # session's op is created only while it holds the machine. "Online" is
-  # decided by heartbeats with task 12; until then a registered machine counts.
+  # session's op is created only while it holds the machine. A machine that is
+  # not reachable (RunnerEnvironment.reachable: heard within 90 s, or executing
+  # an op within its deadline) is offline and is given no session (task 12c).
   #
   # A machine whose reset failed is `failed` (§5.2) and held by no session, so
   # nothing that happens to the session, its deletion included, returns it to
@@ -24,14 +25,17 @@ module Runners
   # back by unregistering it and configuring it again.
   module Machines
     # Whether a runner has a machine that can take a session: `:available`
-    # (one registered, free or busy), `:none_registered`, or `:all_failed`,
-    # with the failed machines for the message.
-    Availability = Data.define(:status, :failed) do
+    # (one registered and reachable, free or busy), `:all_offline` (some
+    # registered, none reachable, with the offline machines for the message),
+    # `:none_registered`, or `:all_failed`, with the failed machines for the
+    # message.
+    Availability = Data.define(:status, :failed, :offline) do
       def available? = status == :available
     end
 
     # The runner has no machine that can take a session (DESIGN.md §8,
-    # `runner_unreachable`): none registered, or every one `failed`.
+    # `runner_unreachable`): none registered, every one `failed`, or every
+    # registered one offline.
     class NoMachine < StandardError
       def reason = UNREACHABLE
     end
@@ -79,10 +83,14 @@ module Runners
     end
 
     def availability(runner)
-      return Availability.new(status: :available, failed: []) if RunnerEnvironment.exists?(runner_id: runner.id, state: "registered")
+      registered = RunnerEnvironment.where(runner_id: runner.id, state: "registered")
+      return Availability.new(status: :available, failed: [], offline: []) if registered.reachable.exists?
+
+      offline = registered.order(:id).to_a
+      return Availability.new(status: :all_offline, failed: [], offline: offline) if offline.any?
 
       failed = RunnerEnvironment.where(runner_id: runner.id, state: "failed").order(:id).to_a
-      Availability.new(status: failed.empty? ? :none_registered : :all_failed, failed: failed)
+      Availability.new(status: failed.empty? ? :none_registered : :all_failed, failed: failed, offline: [])
     end
 
     # Why the runner cannot take a session, for a result that is not
@@ -90,6 +98,11 @@ module Runners
     def unavailable_message(runner, availability, pick_from = nil)
       elsewhere = pick_from ? " #{pick_from}" : ""
       case availability.status
+      when :all_offline
+        machines = availability.offline
+        listed = machines.map { |machine| machine.display_name.presence || machine.key }
+        "Runner \"#{runner.name}\" has no machine online: #{machines.one? ? 'its machine is' : 'every machine is'} offline " \
+          "(#{listed.join(', ')}). Start aixle-runner on #{machines.one? ? 'it' : 'one of them'}, or pick another runner#{elsewhere}."
       when :none_registered
         "Runner \"#{runner.name}\" has no machine registered. Register a machine on it, or pick another runner#{elsewhere}."
       when :all_failed
@@ -109,15 +122,15 @@ module Runners
       # A savepoint of its own, so a lost race on the hold's unique index
       # leaves a caller's transaction usable for #acquire!'s second look.
       RunnerEnvironment.transaction(requires_new: true) do
-        environment = RunnerEnvironment.free.where(runner_id: runner.id).order(:id)
+        environment = RunnerEnvironment.free.reachable.where(runner_id: runner.id).order(:id)
                                        .lock("FOR UPDATE SKIP LOCKED").first
         if environment.nil?
           availability = availability(runner)
           raise NoMachine, unavailable_message(runner, availability) unless availability.available?
 
-          # Only the machines that can come back are counted: a `failed` one
-          # does not by itself.
-          busy = RunnerEnvironment.where(runner_id: runner.id, state: "registered").count
+          # Only the machines that can take a session are counted: a `failed`
+          # or an offline one does not by itself.
+          busy = RunnerEnvironment.where(runner_id: runner.id, state: "registered").reachable.count
           raise ContainerRuntime::CapacityError,
                 "Waiting for a free machine on runner \"#{runner.name}\" (#{busy} of #{busy} busy)."
         end

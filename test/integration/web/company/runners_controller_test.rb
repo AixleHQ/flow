@@ -79,6 +79,36 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
     assert_inertia_props { |props| props[:runner][:name] == "Build box" && props[:canManage] == false }
   end
 
+  test "show lists the machines with their display state, and the runner's last seen" do
+    idle = create(:runner_environment, runner: @runner, display_name: "mac", os: "darwin", arch: "arm64", runner_version: "0.2.0")
+    silent = create(:runner_environment, runner: @runner, display_name: "gone-quiet", last_heartbeat_at: 5.minutes.ago)
+    busy = create(:runner_environment, runner: @runner, display_name: "busy",
+                                       current_session: create(:runner_session, environment: idle, runner_environment: nil))
+    seen = Time.current.change(usec: 0)
+    @runner.update!(last_seen_at: seen)
+    sign_in_as(@owner)
+
+    get company_settings_runner_path(@runner)
+
+    assert_inertia_props do |props|
+      machines = props[:machines].index_by { |machine| machine[:id] }
+      props[:runner][:lastSeenAt].present? &&
+        machines.keys == [ idle.id, silent.id, busy.id ] &&
+        machines[idle.id].values_at(:displayName, :state, :os, :arch, :runnerVersion) == %w[mac idle darwin arm64 0.2.0] &&
+        machines[silent.id][:state] == "offline" && machines[busy.id][:state] == "online" &&
+        machines[idle.id][:key] == idle.key && machines[idle.id][:lastHeartbeatAt].present?
+    end
+  end
+
+  test "a runner that is not manual has no machines" do
+    runner = create(:runner, :kubernetes, company: @company, created_by: @admin)
+    sign_in_as(@owner)
+
+    get company_settings_runner_path(runner)
+
+    assert_inertia_props { |props| props[:machines] == [] }
+  end
+
   test "only a company admin creates a company runner, and the request decides its scope and author" do
     assert_role_matrix(WRITE_ROLES, transport: :web) do |role|
       post company_settings_runners_path, params: runner_params(name: "Box #{role}"), as: :json
