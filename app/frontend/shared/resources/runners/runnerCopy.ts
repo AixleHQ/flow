@@ -39,7 +39,8 @@ export const FIELD_COPY: Record<string, { label: string; description?: string }>
   },
   'container.image_override': {
     label: 'Image override',
-    description: 'An image built FROM the Aixle base image. Leave empty for the stock agent image.',
+    description:
+      'An image built FROM the Aixle base image. Leave empty for the stock agent image. {agent} is replaced with the session agent’s image name, e.g. claude-code, so one value serves every agent. For example ghcr.io/aixlehq/flow-{agent}:develop.',
   },
   'container.resources': { label: 'Resources', description: 'CPU and memory limits for the agent container.' },
   'container.resources.cpus': { label: 'CPUs' },

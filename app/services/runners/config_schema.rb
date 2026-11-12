@@ -98,8 +98,20 @@ module Runners
     # `{"container" => {"network" => ...}}`).
     GROUPS = KEYS.keys.filter_map { |path| path.split(".").first if path.include?(".") }.uniq.freeze
 
+    # The rules every type runs.
+    COMMON_RULES = %i[image_override_errors].freeze
+
     # The rules of each type beyond its schema, run in this order.
     TYPE_RULES = { "manual" => %i[home_mount_errors acknowledgement_errors docker_socket_errors] }.freeze
+
+    # What `container.image_override` may contain between braces, and what each is
+    # replaced with at launch (§2.7, §6.8). Braces can't appear in an image
+    # reference, so a placeholder never reads as a literal name.
+    IMAGE_PLACEHOLDERS = { "agent" => "the image name of the session's agent runtime (config/agent_runtimes.json)" }.freeze
+    PLACEHOLDER = /\{([^{}]*)\}/
+    IMAGE_COMPONENT = "[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*"
+    IMAGE_DOMAIN = "(?:[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])(?:\\.(?:[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]))*(?::[0-9]+)?"
+    IMAGE_REFERENCE = %r{\A(?:#{IMAGE_DOMAIN}/)?#{IMAGE_COMPONENT}(?:/#{IMAGE_COMPONENT})*(?::\w[\w.-]{0,127})?(?:@[A-Za-z][A-Za-z0-9]*(?:[-_+.][A-Za-z][A-Za-z0-9]*)*:[0-9a-fA-F]{32,})?\z}
 
     EPHEMERAL = "ephemeral is not a config key: it is set per machine at registration"
     TYPE_NAMES = { "string" => "a string", "integer" => "an integer", "number" => "a number", "boolean" => "true or false",
@@ -155,6 +167,13 @@ module Runners
           *extra.pluck("target"), *cache.pluck("target") ].compact.uniq
       end
 
+      # `container.image_override` with `{agent}` replaced by `agent_image`, the
+      # image name of the session's runtime. A value without a placeholder is
+      # returned as it is.
+      def image_reference(override, agent_image)
+        override.to_s.gsub(PLACEHOLDER) { Regexp.last_match(1) == "agent" ? agent_image.to_s : Regexp.last_match(0) }
+      end
+
       # The value `config` holds for `path`, or the key's default.
       def value(config, path)
         key = KEYS.fetch(path)
@@ -199,7 +218,23 @@ module Runners
       end
 
       def rule_errors(config, type)
-        TYPE_RULES.fetch(type, []).flat_map { |rule| send(rule, config) }
+        (COMMON_RULES + TYPE_RULES.fetch(type, [])).flat_map { |rule| send(rule, config) }
+      end
+
+      # §2.7: the override holds known placeholders only, and is an image
+      # reference once each is replaced, whichever runtime the session has.
+      def image_override_errors(config)
+        override = value(config, "container.image_override")
+        return [] if override.blank?
+
+        unknown = override.scan(PLACEHOLDER).flatten.uniq - IMAGE_PLACEHOLDERS.keys
+        if unknown.any?
+          known = IMAGE_PLACEHOLDERS.keys.map { |name| "{#{name}}" }.to_sentence
+          return [ "container.image_override has an unknown placeholder #{unknown.map { |n| "{#{n}}" }.to_sentence}: only #{known} is replaced" ]
+        end
+        return [] if AgentRuntime.all.all? { |runtime| IMAGE_REFERENCE.match?(image_reference(override, runtime.image)) }
+
+        [ "container.image_override must be an image reference such as ghcr.io/acme/flow-{agent}:develop" ]
       end
 
       # §2.7 and §6.8: the home directory to mount is the operator's to name.
