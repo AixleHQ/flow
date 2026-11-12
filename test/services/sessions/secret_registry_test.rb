@@ -81,6 +81,15 @@ module Sessions
       assert SecretRegistry.publish!(session)
     end
 
+    test "publishes the tokens issued on a user's behalf, with no secret config items" do
+      UserTokenIssuance.create!(terminal_session: @session, company: @company, project: @project,
+                                acting_for_user: @user, tool_name: "github_user_token", provider: "github",
+                                token: "ghu_issued_token", target_login: "acme")
+
+      assert SecretRegistry.publish!(@session)
+      assert_equal [ "ghu_issued_token" ], published
+    end
+
     test "reports failure when the container cannot take the list" do
       hand_out("STRIPE_KEY", "sk_live_abc")
       @runtime.stubs(:write_file).raises(ContainerRuntime::ContainerUnreachableError.new(container_identifier: "gone"))

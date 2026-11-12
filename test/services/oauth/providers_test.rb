@@ -12,10 +12,11 @@ class Oauth::ProvidersTest < ActiveSupport::TestCase
   test "known? / config / provider_names cover the Phase-1 providers" do
     assert Oauth::Providers.known?("sentry")
     assert Oauth::Providers.known?("railway")
-    refute Oauth::Providers.known?("github")
+    assert Oauth::Providers.known?("github")
+    refute Oauth::Providers.known?("gitlab")
     refute Oauth::Providers.known?(nil)
 
-    assert_equal %w[sentry railway].sort, Oauth::Providers.provider_names.sort
+    assert_equal %w[sentry railway github].sort, Oauth::Providers.provider_names.sort
     assert_equal "https://sentry.io", Oauth::Providers.config("sentry")[:issuer]
   end
 

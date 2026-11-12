@@ -240,7 +240,9 @@ github:
   # The App's OAuth client. Optional; when both are set, connecting a NEW
   # installation also requires the installing user to be able to see it
   # (Github::InstallationOwnership) — enable "Request user authorization (OAuth)
-  # during installation" on the App for GitHub to send the code.
+  # during installation" on the App for GitHub to send the code. They are also
+  # required for users to connect their own GitHub account (Profile → Connected
+  # accounts, Github::UserConnection), through the App's /oauth/callback URL.
   client_id: "<%= ENV['GITHUB_APP_CLIENT_ID'] %>"
   client_secret: "<%= ENV['GITHUB_APP_CLIENT_SECRET'] %>"
   # Alternative to GITHUB_APP_PRIVATE_KEY for a deployment that mounts the PEM

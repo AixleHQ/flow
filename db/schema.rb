@@ -10,10 +10,25 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_11_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_11_200100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "act_as_consents", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "project_id", null: false
+    t.bigint "company_id", null: false
+    t.string "provider", null: false
+    t.boolean "in_own_tasks", default: false, null: false
+    t.boolean "in_others_tasks", default: false, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id"], name: "index_act_as_consents_on_company_id"
+    t.index ["project_id"], name: "index_act_as_consents_on_project_id"
+    t.index ["user_id", "project_id", "provider"], name: "index_act_as_consents_on_user_project_provider", unique: true
+    t.index ["user_id"], name: "index_act_as_consents_on_user_id"
+  end
 
   create_table "agent_credentials", force: :cascade do |t|
     t.string "agent_type", null: false
@@ -2130,6 +2145,30 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_100000) do
     t.index ["user_id"], name: "index_user_sessions_on_user_id"
   end
 
+  create_table "user_token_issuances", force: :cascade do |t|
+    t.bigint "terminal_session_id", null: false
+    t.bigint "company_id", null: false
+    t.bigint "project_id", null: false
+    t.bigint "acting_for_user_id", null: false
+    t.bigint "session_user_id"
+    t.string "tool_name", null: false
+    t.string "provider", null: false
+    t.bigint "oauth_credential_id"
+    t.text "encrypted_token", null: false
+    t.string "token_last_eight"
+    t.string "target_login", null: false
+    t.string "repository_full_names", default: [], null: false, array: true
+    t.datetime "expires_at"
+    t.datetime "created_at", null: false
+    t.index ["acting_for_user_id", "created_at"], name: "index_user_token_issuances_on_user_and_created_at"
+    t.index ["acting_for_user_id"], name: "index_user_token_issuances_on_acting_for_user_id"
+    t.index ["company_id"], name: "index_user_token_issuances_on_company_id"
+    t.index ["oauth_credential_id"], name: "index_user_token_issuances_on_oauth_credential_id"
+    t.index ["project_id"], name: "index_user_token_issuances_on_project_id"
+    t.index ["session_user_id"], name: "index_user_token_issuances_on_session_user_id"
+    t.index ["terminal_session_id"], name: "index_user_token_issuances_on_terminal_session_id"
+  end
+
   create_table "users", force: :cascade do |t|
     t.string "avatar_url"
     t.datetime "created_at", null: false
@@ -2310,6 +2349,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_100000) do
     t.index ["user_id"], name: "index_youtrack_pairings_on_user_id"
   end
 
+  add_foreign_key "act_as_consents", "companies", on_delete: :cascade
+  add_foreign_key "act_as_consents", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_act_as_consents_project_company", on_delete: :cascade
+  add_foreign_key "act_as_consents", "projects", on_delete: :cascade
+  add_foreign_key "act_as_consents", "users", on_delete: :cascade
   add_foreign_key "agent_credentials", "companies"
   add_foreign_key "agent_credentials", "users"
   add_foreign_key "agents", "companies", on_delete: :cascade, validate: false
@@ -2554,6 +2597,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_11_100000) do
   add_foreign_key "user_session_proofs", "user_sessions", on_delete: :cascade
   add_foreign_key "user_sessions", "users", column: "impersonator_id", on_delete: :nullify
   add_foreign_key "user_sessions", "users", on_delete: :cascade
+  add_foreign_key "user_token_issuances", "companies", on_delete: :cascade
+  add_foreign_key "user_token_issuances", "oauth_credentials", on_delete: :nullify
+  add_foreign_key "user_token_issuances", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_user_token_issuances_project_company", on_delete: :cascade
+  add_foreign_key "user_token_issuances", "projects", on_delete: :cascade
+  add_foreign_key "user_token_issuances", "terminal_sessions", on_delete: :cascade
+  add_foreign_key "user_token_issuances", "users", column: "acting_for_user_id", on_delete: :cascade
+  add_foreign_key "user_token_issuances", "users", column: "session_user_id", on_delete: :nullify
   add_foreign_key "users", "companies", column: "last_company_id", on_delete: :nullify
   add_foreign_key "webauthn_credentials", "users"
   add_foreign_key "webhook_endpoints", "companies", on_delete: :cascade

@@ -85,9 +85,23 @@ class FullyWiredUserScenario
                                    failed_agent_credential: @credential)
     create(:workflow_run_asset, workflow_run: run, shared_by: @user)
     create(:terminal_session, :agent_session, user: @user, project: @project, state: "finished")
+    build_github_identity
 
     asset = create(:asset, scope: @project, created_by: @user, shared_by: @user)
     create(:asset_version, asset: asset, uploaded_by: @user)
+  end
+
+  # The user's consent, a token issued for them (deleted with them), and a token
+  # issued in their session for someone else (kept, with the session user cleared).
+  def build_github_identity
+    create(:act_as_consent, :own, user: @user, project: @project)
+    own_session = create(:terminal_session, :agent_session, user: @heir, project: @project, state: "finished")
+    UserTokenIssuance.create!(terminal_session: own_session, company: @company, project: @project,
+                              acting_for_user: @user, session_user: @heir, tool_name: "github_user_token",
+                              provider: "github", token: "ghu_mine", target_login: "acme")
+    UserTokenIssuance.create!(terminal_session: own_session, company: @company, project: @project,
+                              acting_for_user: @heir, session_user: @user, tool_name: "github_user_token_for",
+                              provider: "github", token: "ghu_heir", target_login: "acme")
   end
 
   def build_company_records

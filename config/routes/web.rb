@@ -483,6 +483,11 @@ scope module: :web, defaults: { format: :html } do
     # Passkeys, one-time codes and live sessions — the person's own security
     # surface (CAP-4, AD-18).
     get :security, on: :member
+    # Accounts the person connected (GitHub) and what agents may do with them,
+    # per project (docs/design/github-user-identity.md §4.2).
+    get :connections, on: :member
+    delete "connections/:provider", action: :disconnect, on: :member, as: :disconnect
+    patch :act_as_consents, action: :update_act_as_consent, on: :member
   end
   resources :sign_in_methods, only: %i[create destroy], path: "profile/sign_in_methods"
   patch "profile/password", to: "passwords#update", as: :profile_password

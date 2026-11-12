@@ -133,6 +133,16 @@ class Sessions::SecretRedactorTest < ActiveSupport::TestCase
     assert_includes result, "https://api.test"
   end
 
+  test "for_session collects the tokens issued on a user's behalf when no config item is attached" do
+    UserTokenIssuance.create!(terminal_session: @session, company: @company, project: @project,
+                              acting_for_user: @user, tool_name: "github_user_token", provider: "github",
+                              token: "ghu_issued_token_abcdef", target_login: "acme")
+
+    redactor = Sessions::SecretRedactor.for_session(@session)
+
+    assert_not_includes redactor.call("push with ghu_issued_token_abcdef"), "ghu_issued_token_abcdef"
+  end
+
   test "for_session ignores a secret that is not attached" do
     create(:config_item, :secret, scope: @project, name: "OTHER_KEY", value: "sk_unattached")
 
