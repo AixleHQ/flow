@@ -89,9 +89,7 @@ class Web::ProfileController < Web::ApplicationController
                                         .find_by(id: params[:project_id])
     return head :not_found unless project
 
-    # create_or_find_by! so two overlapping first-time updates for one project do not trip the unique index.
-    consent = ActAsConsent.create_or_find_by!(user: current_user, project: project, company: project.company,
-                                              provider: params[:provider])
+    consent = act_as_consent_row(project)
     consent.in_own_tasks = ActiveModel::Type::Boolean.new.cast(params[:in_own_tasks]) if params.key?(:in_own_tasks)
     consent.in_others_tasks = ActiveModel::Type::Boolean.new.cast(params[:in_others_tasks]) if params.key?(:in_others_tasks)
     consent.save!
@@ -234,6 +232,17 @@ class Web::ProfileController < Web::ApplicationController
   end
 
   private
+
+  # Race-safe for two overlapping first-time updates of one project: the losing
+  # insert hits the unique index (create_or_find_by! then finds the winner's row),
+  # or, when the winner committed first, the uniqueness validation; both end on
+  # the one row.
+  def act_as_consent_row(project)
+    attributes = { user: current_user, project: project, company: project.company, provider: params[:provider] }
+    ActAsConsent.find_by(attributes) || ActAsConsent.create_or_find_by!(attributes)
+  rescue ActiveRecord::RecordInvalid
+    ActAsConsent.find_by(attributes) || raise
+  end
 
   # One row per project of the current company the person can reach; a project
   # without a stored row is shown with both switches off.

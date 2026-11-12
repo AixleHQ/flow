@@ -64,10 +64,10 @@ class Web::ProfileConnectionsTest < ActionDispatch::IntegrationTest
   end
 
   test "two overlapping first-time updates for one project both save" do
-    ActAsConsent.create!(user: @user, project: @project, company: @project.company, provider: "github",
-                         in_others_tasks: true)
-    # The racing request lost the insert: find_by inside create_or_find_by! finds the winner's row.
-    ActAsConsent.stubs(:find_or_initialize_by).raises("must not be used")
+    winner = ActAsConsent.create!(user: @user, project: @project, company: @project.company, provider: "github",
+                                  in_others_tasks: true)
+    # This request looked before the other one committed its first-time row.
+    ActAsConsent.stubs(:find_by).returns(nil).then.returns(winner)
 
     json_patch(project_id: @project.id, provider: "github", in_own_tasks: true)
 

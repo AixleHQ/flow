@@ -703,10 +703,11 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "a failed identity fetch on a reconnect keeps the existing credential, its consents and its status" do
-    existing = create(:oauth_credential, :github_user, owner: @user, access_token: "ghu_old")
+    stub_github!(profile: nil)
+    existing = create(:oauth_credential, :github_user, owner: @user, access_token: "ghu_old",
+                                                       oauth_client: Oauth::Providers.client_for("github"))
     project = create(:project, company: @company, owner: @user)
     consent = create(:act_as_consent, user: @user, project: project, in_own_tasks: true)
-    stub_github!(profile: nil)
     state = build_state(owner: @user, provider: "github", return_to: "/profile/connections")
 
     assert_no_difference([ "OauthCredential.count", "ActAsConsent.count" ]) do
