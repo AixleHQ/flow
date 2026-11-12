@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/AixleHQ/flow/runner/protocol/schemas/v1/check_in.request.json",
+  "title": "POST /runner/v1/check-in: the request body",
+  "description": "PROTOCOL.md §5.9. A body that fails this schema is 422 invalid_check_in. Every field is optional: one that is absent leaves what the platform has recorded for the machine as it is. Other fields are ignored.",
+  "type": "object",
+  "properties": {
+    "os": {
+      "description": "e.g. `linux`. A string of at most 255 characters: any other value, `null` included, is refused.",
+      "type": "string",
+      "maxLength": 255
+    },
+    "arch": {
+      "description": "e.g. `amd64`. A string of at most 255 characters: any other value, `null` included, is refused.",
+      "type": "string",
+      "maxLength": 255
+    },
+    "facts": {
+      "description": "What the machine reports about itself, e.g. {\"docker\": \"27.1.0\"}. It replaces the recorded facts. `null` is refused.",
+      "type": "object"
+    }
+  }
+}

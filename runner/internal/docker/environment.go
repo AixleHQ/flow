@@ -69,6 +69,9 @@ type Environment struct {
 	RemoveTimeout time.Duration
 	// Logger receives what an op cannot put in its answer. Nil is slog.Default().
 	Logger *slog.Logger
+	// Uploader puts the output and the files over OutputCap to the signed URLs of
+	// an op's payload (PROTOCOL.md §6.5). Nil is HTTPUploader{}.
+	Uploader Uploader
 	// Proxy is the host runner's callback-proxy relay (PROTOCOL.md §5.8).
 	// `container.start` starts a session's proxy through it: a sidecar, or with
 	// `network: host` a listener. Nil starts none.

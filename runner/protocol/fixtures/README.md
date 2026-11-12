@@ -17,7 +17,7 @@ get. Both sides run them:
   be absent. An exchange the client never sends (a protocol header other than `1`, a release
   request that carries the protocol headers, a malformed `after`, an invalid result body) is
   skipped, because it tests the gateway's
-  checks, which the Rails side runs. The test fails if no register, token, unregister, ops,
+  checks, which the Rails side runs. The test fails if no register, check-in, token, unregister, ops,
   releases or proxy exchange was driven, and it fails for a fixture of which it drives no exchange
   at all, unless the fixture is on its `gatewayOnly` list with the reason (empty today). It runs in
   the Go CI job. `runner/internal/docker/fixtures_test.go` also

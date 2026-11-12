@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -92,7 +93,21 @@ func (p *platform) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// checkedIn is the platform's answer to a check-in: nothing to update.
+func checkedIn() answer {
+	return answer{200, map[string]any{
+		"environment": map[string]any{"id": 42, "key": "aixle-r7-build", "display_name": "build-01", "state": "registered"},
+		"config":      map[string]any{"upload_max_bytes": 104857600},
+	}}
+}
+
+// newPlatform serves the answers it is given. A host runner checks in after it
+// starts (PROTOCOL.md §5.9), so unless a test scripts the check-in, the platform
+// takes it.
 func newPlatform(t *testing.T, answers map[string][]answer) (*platform, string) {
+	if _, scripted := answers["POST /runner/v1/check-in"]; !scripted {
+		answers["POST /runner/v1/check-in"] = []answer{checkedIn()}
+	}
 	p := &platform{answers: answers}
 	s := httptest.NewServer(p)
 	t.Cleanup(s.Close)
@@ -360,13 +375,21 @@ func TestUnregisterOfAnUnconfiguredMachine(t *testing.T) {
 // machine with no container of the environment to serve a proxy for again.
 type hostDocker struct{ docker.API }
 
+func (hostDocker) ServerVersion(ctx context.Context, o client.ServerVersionOptions) (client.ServerVersionResult, error) {
+	return fakeDocker{api: "1.47"}.ServerVersion(ctx, o)
+}
+
+func (hostDocker) Info(ctx context.Context, o client.InfoOptions) (client.SystemInfoResult, error) {
+	return fakeDocker{api: "1.47"}.Info(ctx, o)
+}
+
 func (hostDocker) ContainerList(context.Context, client.ContainerListOptions) (client.ContainerListResult, error) {
 	return client.ContainerListResult{}, nil
 }
 
 // unlistableDocker is the Docker of a machine whose daemon cannot list the
 // environment's containers when the host runner starts.
-type unlistableDocker struct{ docker.API }
+type unlistableDocker struct{ hostDocker }
 
 func (unlistableDocker) ContainerList(context.Context, client.ContainerListOptions) (client.ContainerListResult, error) {
 	return client.ContainerListResult{}, errors.New("Cannot connect to the Docker daemon")
@@ -704,6 +727,129 @@ func TestAHostRunnerWithNoSelfUpdateStartsWithSelfUpdateOff(t *testing.T) {
 		want := fmt.Sprintf("auto_update=%v", !noSelfUpdate)
 		if !strings.Contains(logs.String(), want) {
 			t.Errorf("NoSelfUpdate %v: the start line lacks %s:\n%s", noSelfUpdate, want, logs.String())
+		}
+	}
+}
+
+// A host runner checks in after it starts, before it takes an op, with the
+// machine's os, arch and facts, and the version it runs in the header
+// (PROTOCOL.md §5.9).
+func TestAHostRunnerChecksInBeforeItPolls(t *testing.T) {
+	p, url := newPlatform(t, map[string][]answer{"GET /runner/v1/ops": {{200, map[string]any{"ops": []any{}}}}})
+	dir := t.TempDir()
+	storeCreds(t, dir, url)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	p.mu.Lock()
+	p.seen = func(r request) {
+		if r.method == http.MethodGet {
+			cancel()
+		}
+	}
+	p.mu.Unlock()
+
+	if err := RunHost(ctx, HostOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}); err != nil {
+		t.Fatal(err)
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(p.requests) < 2 || p.requests[0].method != http.MethodPost || p.requests[0].path != "/runner/v1/check-in" || p.requests[1].path != "/runner/v1/ops" {
+		t.Fatalf("requests %+v", p.requests)
+	}
+	check := p.requests[0]
+	facts, _ := check.body["facts"].(map[string]any)
+	if check.auth == "" || check.body["os"] != runtime.GOOS || check.body["arch"] != runtime.GOARCH || facts["docker"] != "27.1.0" || facts["docker_api"] != "1.47" {
+		t.Errorf("check-in %+v", check)
+	}
+}
+
+// A machine that no longer passes the preflight still checks in, and says why.
+func TestACheckInReportOfAMachineThatFailsThePreflightCarriesTheFailure(t *testing.T) {
+	report := checkInReport(context.Background(), unlistableDocker{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	if report.OS != runtime.GOOS || report.Arch != runtime.GOARCH {
+		t.Errorf("report %+v", report)
+	}
+	// unlistableDocker answers the daemon's version, so the failure is the free
+	// space of a directory this machine does not have, or none at all.
+	if failure, failed := report.Facts["preflight_error"]; failed && failure == "" {
+		t.Errorf("an empty failure: %+v", report.Facts)
+	}
+	if report.Facts["docker"] != "27.1.0" {
+		t.Errorf("facts %+v", report.Facts)
+	}
+
+	down := checkInReport(context.Background(), brokenDocker{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if msg, _ := down.Facts["preflight_error"].(string); !strings.Contains(msg, "not reachable") {
+		t.Errorf("facts %+v", down.Facts)
+	}
+}
+
+// brokenDocker is a daemon that cannot be reached.
+type brokenDocker struct{ hostDocker }
+
+func (brokenDocker) ServerVersion(context.Context, client.ServerVersionOptions) (client.ServerVersionResult, error) {
+	return client.ServerVersionResult{}, errors.New("connection refused")
+}
+
+// A runner that updated itself checks in with its new version, and the platform's
+// answer may offer an update, which an idle machine takes before it polls.
+func TestAHostRunnerTakesTheUpdateOfItsCheckIn(t *testing.T) {
+	offer := answer{200, map[string]any{
+		"environment": map[string]any{"id": 42, "key": "aixle-r7-build", "display_name": "build-01", "state": "registered"},
+		"config":      map[string]any{"upload_max_bytes": 1},
+		"update":      map[string]any{"version": "9.9.9", "sha256": strings.Repeat("a", 64)},
+	}}
+	p, url := newPlatform(t, map[string][]answer{
+		"POST /runner/v1/check-in": {offer},
+		"GET /runner/v1/ops":       {{200, map[string]any{"ops": []any{}}}},
+	})
+	dir := t.TempDir()
+	storeCreds(t, dir, url)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	p.mu.Lock()
+	p.seen = func(r request) {
+		if r.method == http.MethodGet && strings.HasPrefix(r.path, "/runner/v1/releases/") && strings.HasSuffix(r.path, "/checksums") {
+			cancel()
+		}
+	}
+	p.mu.Unlock()
+
+	_ = RunHost(ctx, HostOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var paths []string
+	for _, r := range p.requests {
+		paths = append(paths, r.method+" "+r.path)
+	}
+	if len(paths) < 2 || paths[0] != "POST /runner/v1/check-in" || !strings.Contains(paths[1], "/runner/v1/releases/9.9.9/checksums") {
+		t.Fatalf("requests %v", paths)
+	}
+}
+
+// A runner below the platform's minimum is refused at check-in and stops for an
+// operator: it takes no op.
+func TestAHostRunnerBelowTheMinimumStopsAtCheckIn(t *testing.T) {
+	p, url := newPlatform(t, map[string][]answer{
+		"POST /runner/v1/check-in": {refused(400, "runner_version_unsupported")},
+		"GET /runner/v1/ops":       {{200, map[string]any{"ops": []any{}}}},
+	})
+	dir := t.TempDir()
+	storeCreds(t, dir, url)
+
+	err := RunHost(context.Background(), HostOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+
+	if err == nil || !NeedsOperator(err) || !strings.Contains(err.Error(), "update aixle-runner") {
+		t.Fatalf("got %v", err)
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, r := range p.requests {
+		if r.path == "/runner/v1/ops" {
+			t.Fatalf("the runner polled after the refusal: %+v", p.requests)
 		}
 	}
 }

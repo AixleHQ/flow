@@ -9,6 +9,12 @@ module Uploads
   # The client never chooses the object key. It is minted here, so a caller
   # cannot aim a write at another user's pending cache entry or at `store/`.
   class CacheUpload
+    # The object is not in the storage: it was never uploaded, or it is gone.
+    class Missing < StandardError; end
+
+    # The object holds more bytes than the caller allows.
+    class TooLarge < StandardError; end
+
     attr_reader :id
 
     def self.mint(filename:)
@@ -53,11 +59,38 @@ module Uploads
     # check is each uploader's validate_max_size, which runs on promotion
     # against the bytes actually stored: an oversized upload can reach cache
     # storage but never becomes a file anyone keeps.
-    def presigned_put_url
-      storage.respond_to?(:presign) ? storage.presign(id, method: :put)[:url] : nil
+    #
+    # `expires_in` is the URL's lifetime in seconds (S3's own default, 900,
+    # without it).
+    def presigned_put_url(expires_in: nil)
+      return nil unless storage.respond_to?(:presign)
+
+      options = expires_in ? { expires_in: expires_in.to_i } : {}
+      storage.presign(id, method: :put, **options)[:url]
     end
 
     def uploaded? = storage.exists?(id)
+
+    # The object's bytes, as a binary string, read from the storage itself and
+    # never through a URL. Raises Missing when nothing was uploaded and TooLarge
+    # when the object is over `limit` bytes: at most `limit + 1` of them are
+    # read, so an object far over the limit costs no more than one just over it.
+    def read(limit:)
+      io = storage.open(id)
+      data = io.read(limit + 1).to_s.b
+      raise TooLarge, "the upload is over #{limit} bytes" if data.bytesize > limit
+
+      data
+    rescue Shrine::FileNotFound
+      raise Missing, "nothing was uploaded to #{key}"
+    ensure
+      io&.close
+    end
+
+    # Removes the object. Absent is not an error.
+    def delete
+      storage.delete(id)
+    end
 
     private
 
