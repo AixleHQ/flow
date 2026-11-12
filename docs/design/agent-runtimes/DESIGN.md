@@ -1314,7 +1314,7 @@ ends as on hosted (§6.9.4).
 
   # 3. Run as a service that survives logout and reboot; install copies the binary into
   #    /var/lib/aixle-runner/bin, which the service runs and updates (§14.4)
-  sudo ./aixle-runner service install && sudo aixle-runner service start
+  sudo ./aixle-runner service install && sudo ./aixle-runner service start
   ```
 
   `configure` calls `register`, which consumes the token, creates the environment row

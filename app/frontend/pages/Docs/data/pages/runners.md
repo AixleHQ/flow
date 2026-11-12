@@ -36,8 +36,10 @@ sequence. The token is:
 ### The sequence
 
 Choose a machine name and a platform (`linux-amd64` or `linux-arm64`), and
-copy the sequence. Run it on a Linux machine with Docker that can reach the
-platform. It does three things:
+copy the sequence. Run it on a Linux machine with systemd and Docker, as a user
+who can use `sudo`, with `curl` and `sha256sum` installed, that can reach the
+platform. (Hosts without systemd are not covered by this sequence.) It does
+three things:
 
 1. **Downloads the binary and verifies it.** The binary is downloaded from the
    platform's own host (`/runner/v1/releases/<version>/<os>-<arch>`), at the
@@ -47,7 +49,9 @@ platform. It does three things:
 2. **Registers the machine.** `aixle-runner configure --url … --token … --name …`
    uses up the token and stores the machine's credentials on the machine, in
    `/var/lib/aixle-runner/credentials`.
-3. **Runs it as a service.** `service install` and `service start` set up a
+3. **Runs it as a service.** `service install` and `service start` (both run as
+   `./aixle-runner` from the directory you downloaded it to: `service install`
+   puts no `aixle-runner` on the `PATH`) set up a
    systemd service that survives logout and reboot.
 
 By default an idle machine updates itself to the version the platform

@@ -25,6 +25,8 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
     FeatureFlag.find_or_create_by!(key: "external_runners").overrides.create!(company: company, enabled: true, reason: "test")
   end
 
+  def canonical_url = "#{Settings.protocol}://#{Settings.domain}"
+
   def runner_params(**overrides)
     { runner: { name: "Office Mac", runner_type: "manual", max_concurrency: 2, config: { reconnect_grace: 600 } }.merge(overrides) }
   end
@@ -200,10 +202,10 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
     assert_equal "no-store", response.headers["Cache-Control"]
     body = response.parsed_body
     assert_match(/\Aarreg_/, body["token"])
-    assert_equal "http://www.example.com", body["gatewayUrl"]
+    assert_equal canonical_url, body["gatewayUrl"]
     assert_equal Settings.runners.release.recommended_version, body["version"]
     assert_equal %w[linux-amd64 linux-arm64], body["binaries"].pluck("platform")
-    assert_equal "http://www.example.com/runner/v1/releases/#{body['version']}/linux-amd64", body["binaries"].first["url"]
+    assert_equal "#{canonical_url}/runner/v1/releases/#{body['version']}/linux-amd64", body["binaries"].first["url"]
     assert_equal Runners::Release.binary(body["version"], "linux-amd64").sha256, body["binaries"].first["sha256"]
     assert_in_delta 1.hour.from_now, Time.zone.parse(body["expiresAt"]), 5.seconds
 
@@ -213,6 +215,19 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
 
     get company_settings_runner_path(@runner)
     assert_not_includes response.body, body["token"]
+  end
+
+  test "the gateway URL is the platform's own, whatever Host and X-Forwarded-Host say" do
+    sign_in_as(@admin)
+
+    post registration_token_company_settings_runner_path(@runner), as: :json,
+                                                                   headers: { "Host" => "evil.example", "X-Forwarded-Host" => "evil.example" }
+
+    assert_response :created
+    body = response.parsed_body
+    assert_equal canonical_url, body["gatewayUrl"]
+    assert(body["binaries"].all? { |binary| binary["url"].start_with?("#{canonical_url}/runner/v1/releases/") })
+    assert_not_includes response.body, "evil.example"
   end
 
   test "a revoked runner is refused with runner_revoked and no token" do

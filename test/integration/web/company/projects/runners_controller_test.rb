@@ -170,7 +170,7 @@ class Web::Company::Projects::RunnersControllerTest < ActionDispatch::Integratio
 
     assert_equal 2, RunnerCredential.where(kind: :registration, runner: @own).count
     assert_match(/\Aarreg_/, body["token"])
-    assert_equal "http://www.example.com/runner/v1/releases/#{body['version']}/linux-arm64", body["binaries"].last["url"]
+    assert_equal "#{Settings.protocol}://#{Settings.domain}/runner/v1/releases/#{body['version']}/linux-arm64", body["binaries"].last["url"]
   end
 
   test "a revoked project runner is refused with runner_revoked" do

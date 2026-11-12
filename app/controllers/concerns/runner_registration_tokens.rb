@@ -15,13 +15,19 @@ module RunnerRegistrationTokens
 
   private
 
-  # The instructions point at this platform's own host: the runner gateway
-  # answers on the same one (/runner/v1).
+  # The instructions point at this platform's own canonical URL (the one the
+  # app's mailers and integrations use), never at the request's Host or
+  # X-Forwarded-Host: the live token is sent to it by `configure`. The runner
+  # gateway answers on the same host (/runner/v1).
   def render_registration_token(runner)
-    registration = Runners::MachineRegistration.issue!(runner, gateway_url: request.base_url)
+    registration = Runners::MachineRegistration.issue!(runner, gateway_url: gateway_url)
     response.headers["Cache-Control"] = "no-store"
     render json: RunnerRegistrationResource.new(registration).to_h, status: :created
   rescue Runners::Credentials::Refused => e
     render json: { error: e.message, code: e.reason }, status: REFUSAL_STATUS.fetch(e.reason)
+  end
+
+  def gateway_url
+    "#{Settings.protocol}://#{Settings.domain}"
   end
 end
