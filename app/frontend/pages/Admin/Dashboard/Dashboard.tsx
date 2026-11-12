@@ -18,6 +18,8 @@ import {
 } from './aggregate';
 import CompanyDetail from './CompanyDetail';
 import classes from './Dashboard.module.css';
+import FilterBar from './FilterBar';
+import { filterRows, isFiltered, NO_FILTERS, type Filters } from './filters';
 import {
   ACCOUNT_STATUS_LABELS,
   ACCOUNT_TYPE_LABELS,
@@ -32,7 +34,7 @@ import Tiles from './Tiles';
 import type { BillingClass, DashboardData } from './types';
 import { useTenantP95 } from './useTenantP95';
 
-type SortKey = 'name' | 'accountStatus' | 'accountType' | 'billingMethod' | DeltaField;
+type SortKey = 'name' | 'createdAt' | 'accountStatus' | 'accountType' | 'billingMethod' | DeltaField;
 type Direction = 'ascending' | 'descending';
 
 interface Column {
@@ -42,6 +44,7 @@ interface Column {
 
 const COLUMNS: Column[] = [
   { key: 'name', label: 'Company' },
+  { key: 'createdAt', label: 'Account created' },
   { key: 'accountStatus', label: 'Account status' },
   { key: 'accountType', label: 'Account type' },
   { key: 'billingMethod', label: 'Billing method' },
@@ -103,6 +106,7 @@ const billingMethodOf = (row: TenantSummary) => (row.billingMethod ? BILLING_MET
 
 function sortValue(row: TenantSummary, key: SortKey): number | string {
   if (key === 'name') return row.name.toLowerCase();
+  if (key === 'createdAt') return row.createdAt ? Date.parse(row.createdAt) : -Infinity;
   if (key === 'accountStatus') return accountStatusOf(row)?.label ?? '—';
   if (key === 'accountType') return accountTypeOf(row);
   if (key === 'billingMethod') return billingMethodOf(row);
@@ -125,7 +129,7 @@ export default function Dashboard({
   const [grain, setGrain] = useState<Grain>('month');
   const [chosenPeriod, setChosenPeriod] = useState<string | null>(null);
   const [custom, setCustom] = useState<DayRange>({ start: `${today.slice(0, 7)}-01`, end: today });
-  const [query, setQuery] = useState('');
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [sort, setSort] = useState<{ key: SortKey; direction: Direction }>({ key: 'name', direction: 'ascending' });
   const [opened, setOpened] = useState<TenantSummary | null>(null);
   const closeDetail = useCallback(() => setOpened(null), []);
@@ -165,9 +169,8 @@ export default function Dashboard({
       dataStart,
       dataEnd,
       comparison,
+      previous,
       previousByTenant: new Map(previous.map((row) => [row.tenantId, row])),
-      totals: totalsOf(rows),
-      previousTotals: totalsOf(previous),
     };
   }, [data, grain, chosenPeriod, custom, today]);
 
@@ -186,9 +189,12 @@ export default function Dashboard({
     return new Map(previous.map((row) => [row.tenantId, row]));
   }, [view.previousByTenant, previousP95]);
 
+  const filtering = isFiltered(filters);
+  const filtered = useMemo(() => filterRows(rows, filters), [rows, filters]);
+  const totals = useMemo(() => totalsOf(filtered), [filtered]);
+  const previousTotals = useMemo(() => totalsOf(filterRows(view.previous, filters)), [view.previous, filters]);
+
   const visible = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    const filtered = needle ? rows.filter((row) => row.name.toLowerCase().includes(needle)) : rows;
     const direction = sort.direction === 'ascending' ? 1 : -1;
     return [...filtered].sort((a, b) => {
       const left = sortValue(a, sort.key);
@@ -199,21 +205,29 @@ export default function Dashboard({
           : String(left).localeCompare(String(right));
       return order * direction;
     });
-  }, [rows, query, sort]);
+  }, [filtered, sort]);
 
-  const latestClasses = useMemo(() => {
+  const latestClass = useMemo(() => {
     const latest = new Map<number, BillingClass>();
     for (const row of data.days) latest.set(row.companyId, row.billingClass);
-    return Array.from(latest.values()).filter((billingClass) => billingClass !== 'inactive');
+    return latest;
   }, [data.days]);
+
+  const companies = filtering
+    ? {
+        count: filtered.length,
+        latestClasses: filtered.flatMap((row) => latestClass.get(row.tenantId) ?? []),
+      }
+    : { count: data.snapshot.companies, latestClasses: Array.from(latestClass.values()) };
 
   const tiles = (
     <Tiles
       snapshot={data.snapshot}
-      latestClasses={latestClasses}
-      rows={view.rows}
-      totals={view.totals}
-      previous={view.previousTotals}
+      companies={companies}
+      filtered={filtering}
+      rows={filtered}
+      totals={totals}
+      previous={previousTotals}
     />
   );
 
@@ -236,7 +250,8 @@ export default function Dashboard({
     span = spanOf(grain === 'custom' ? view.range : { start: view.dataStart, end: view.dataEnd });
     if (grain === 'custom') span += ' · custom range';
     else if (grain !== 'day' && view.period === current) span += ' · to date';
-    span += ` · ${view.rows.length} ${view.rows.length === 1 ? 'company' : 'companies'}`;
+    const shown = filtering ? `${filtered.length} of ${view.rows.length}` : `${view.rows.length}`;
+    span += ` · ${shown} ${view.rows.length === 1 ? 'company' : 'companies'}`;
   }
   const compare = view.comparison
     ? view.previousByTenant.size
@@ -260,7 +275,7 @@ export default function Dashboard({
   const totalCell = (totals: Totals, field: keyof Totals) => (
     <td className={classes.number}>
       {field === 'workerHours' || field === 'busyHours' ? formatHours(totals[field]) : formatCount(totals[field])}
-      {delta(field, totals[field], view.previousTotals?.[field])}
+      {delta(field, totals[field], previousTotals?.[field])}
     </td>
   );
 
@@ -345,10 +360,12 @@ export default function Dashboard({
           className={classes.search}
           aria-label="Search companies"
           placeholder="Search companies"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          value={filters.query}
+          onChange={(event) => setFilters({ ...filters, query: event.target.value })}
         />
       </div>
+
+      <FilterBar filters={filters} today={today} onChange={setFilters} />
 
       <p className={classes.span}>{span}</p>
       {compare && <p className={classes.compare}>{compare}</p>}
@@ -379,7 +396,7 @@ export default function Dashboard({
             {visible.length === 0 ? (
               <tr>
                 <td colSpan={COLUMNS.length} className={classes.emptyRow}>
-                  {query ? 'No companies match that search.' : 'No company activity in this period.'}
+                  {filtering ? 'No companies match the search and filters.' : 'No company activity in this period.'}
                 </td>
               </tr>
             ) : (
@@ -393,6 +410,7 @@ export default function Dashboard({
                         {row.name}
                       </button>
                     </th>
+                    <td>{row.createdAt ? longDay.format(new Date(row.createdAt)) : '—'}</td>
                     <td>
                       {status ? (
                         <span className={`${classes.badge} ${classes[status.tone]}`}>{status.label}</span>
@@ -455,23 +473,24 @@ export default function Dashboard({
               })
             )}
           </tbody>
-          {view.totals && (
+          {totals && (
             <tfoot>
               <tr>
-                <th scope="row">Total, all companies</th>
-                <td />
-                <td />
-                <td />
-                {totalCell(view.totals, 'workerHours')}
-                {totalCell(view.totals, 'busyHours')}
+                <th scope="row">{filtering ? 'Total, companies shown' : 'Total, all companies'}</th>
                 <td />
                 <td />
                 <td />
                 <td />
+                {totalCell(totals, 'workerHours')}
+                {totalCell(totals, 'busyHours')}
                 <td />
                 <td />
-                {totalCell(view.totals, 'sessionsSucceeded')}
-                {totalCell(view.totals, 'sessionsFailed')}
+                <td />
+                <td />
+                <td />
+                <td />
+                {totalCell(totals, 'sessionsSucceeded')}
+                {totalCell(totals, 'sessionsFailed')}
               </tr>
             </tfoot>
           )}
@@ -485,10 +504,12 @@ export default function Dashboard({
         workers are the limit (∞ when none was set); peak workers is the most held at once. Wait time is how long a
         session queued before a worker took it; 95% of the period&apos;s sessions started within the p95 wait. Account
         status, account type and billing method are each company&apos;s as it stands now, whatever the period; a company
-        with no billing method is one nobody invoices — managed by Aixle, not paying yet, or self-hosted. “Not billed”
-        in the Companies tile counts companies that run free without being managed, which should never happen. Days are
-        UTC and weeks run Monday to Sunday. The small figure under each value is the change from the previous period; a
-        period still in progress is compared with the same number of days of the one before.
+        with no billing method is one nobody invoices — managed by Aixle, not paying yet, or self-hosted. Account
+        created is the UTC day the company was created. The search and the filters narrow the table, its total and the
+        tiles to the companies that match, all but People and Projects, which always count the whole platform. “Not
+        billed” in the Companies tile counts companies that run free without being managed, which should never happen.
+        Days are UTC and weeks run Monday to Sunday. The small figure under each value is the change from the previous
+        period; a period still in progress is compared with the same number of days of the one before.
         {data.measuredThrough && ` Measured through ${instant.format(new Date(data.measuredThrough))} UTC.`} Open a
         company for its queue in detail: wait percentiles, how many were already waiting, its projects and its hours.
       </p>

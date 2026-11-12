@@ -7,7 +7,10 @@ import type { BillingClass, Snapshot } from './types';
 
 interface Props {
   snapshot: Snapshot;
-  latestClasses: BillingClass[];
+  /** The companies the Companies tile counts, each by its latest billing class. */
+  companies: { count: number; latestClasses: BillingClass[] };
+  /** Whether filters narrow the tiles; People and Projects always count the whole platform. */
+  filtered: boolean;
   rows: TenantSummary[];
   totals: Totals | null;
   previous: Totals | null;
@@ -43,9 +46,9 @@ const COMPANY_CLASSES: { billingClass: BillingClass; label: string }[] = [
 const UNBILLED: BillingClass[] = ['unlimited', 'no_customer'];
 
 /** The platform's size as it stands, then what the selected period used. */
-export default function Tiles({ snapshot, latestClasses, rows, totals, previous }: Props) {
+export default function Tiles({ snapshot, companies, filtered, rows, totals, previous }: Props) {
   const count = (wanted: BillingClass[]) =>
-    latestClasses.filter((billingClass) => wanted.includes(billingClass)).length;
+    companies.latestClasses.filter((billingClass) => wanted.includes(billingClass)).length;
   const split = COMPANY_CLASSES.flatMap(({ billingClass, label }) => {
     const n = count([billingClass]);
     return n ? [`${n} ${label}`] : [];
@@ -56,15 +59,15 @@ export default function Tiles({ snapshot, latestClasses, rows, totals, previous 
 
   return (
     <div className={classes.tiles}>
-      <Tile label="Companies" value={formatCount(snapshot.companies)}>
-        {split.join(' · ') || 'none measured yet'}
+      <Tile label="Companies" value={formatCount(companies.count)}>
+        {split.join(' · ') || (filtered ? 'none match the filters' : 'none measured yet')}
         {unbilled > 0 && <span className={classes.bad}> · {unbilled} not billed</span>}
       </Tile>
       <Tile label="People" value={formatCount(snapshot.members)}>
-        active members
+        {filtered ? 'active members, all companies' : 'active members'}
       </Tile>
       <Tile label="Projects" value={formatCount(snapshot.projects)}>
-        active projects
+        {filtered ? 'active projects, all companies' : 'active projects'}
       </Tile>
       <Tile
         label="Worker hours"

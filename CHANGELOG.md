@@ -20,6 +20,15 @@ governance, community health — carry none.
   the identity to commit with, so it can push and open pull requests in your
   name. Self-hosted: add `/oauth/callback` as a second callback URL on the
   GitHub App and set `GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET`.
+
+## [1.12.0] - 2026-11-12
+
+### Added
+- **Admin**: the dashboard's companies table shows when each account was created
+  and sorts by it, newest first. Compact filters above the table narrow it by
+  account status, account type, billing method and creation date; each opens as
+  a menu from its button. The filters and the name search also narrow the total
+  row and the tiles, all but People and Projects.
 - **Integrations**: Coder's `coder_prepare_repo` clones GitLab, Bitbucket and
   Azure DevOps repositories onto a workspace, not only GitHub and public ones.
   A personal access token from those connections is handed to the workspace
@@ -110,6 +119,9 @@ governance, community health — carry none.
   show each company as it stands now, whatever period is selected.
 
 ### Fixed
+- **Sign-in & onboarding**: the email confirming a new workspace and the sign-in link
+  email are readable again — their text was near-black on the emails' dark background.
+  Both now use the same card and button as every other Aixle Flow email.
 - **Sessions & Runs**: Kiro CLI, Copilot CLI and Grok show their own logo next to
   the agent name wherever the other runtimes do — session lists, run cards, the
   runtime picker, analytics and onboarding — and Antigravity CLI shows its own
@@ -1302,7 +1314,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.11.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.12.0...develop
+[1.12.0]: https://github.com/AixleHQ/flow/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/AixleHQ/flow/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/AixleHQ/flow/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/AixleHQ/flow/compare/v1.8.0...v1.9.0

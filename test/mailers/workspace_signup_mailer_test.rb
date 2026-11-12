@@ -3,6 +3,8 @@
 require "test_helper"
 
 class WorkspaceSignupMailerTest < ActionMailer::TestCase
+  include MailerAssertions
+
   test "it sends the link to the address that claimed the workspace" do
     token = WorkspaceSignupTicket.issue(name: "Acme Robotics", email: "dana@acme-robotics.example")
 
@@ -27,5 +29,11 @@ class WorkspaceSignupMailerTest < ActionMailer::TestCase
     assert_includes CGI.unescapeHTML(href), "/workspace/confirm"
     query = URI.parse(CGI.unescapeHTML(href)).query
     assert_equal token, URI.decode_www_form(query.to_s).to_h["token"]
+  end
+
+  test "every line of the email is readable on the layout's dark background" do
+    token = WorkspaceSignupTicket.issue(name: "Acme", email: "dana@acme.example")
+
+    assert_every_text_coloured WorkspaceSignupMailer.confirm(email: "dana@acme.example", workspace_name: "Acme", token: token)
   end
 end

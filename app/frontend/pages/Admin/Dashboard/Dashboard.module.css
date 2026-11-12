@@ -128,8 +128,126 @@
   margin-left: auto;
 }
 
+/* ── Filters ─────────────────────────────────────── */
+
+.root .filterBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.root .filterMenu {
+  position: relative;
+}
+
+.root .filterButton,
+.root .clearFilters {
+  height: 30px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid var(--app-border-default);
+  border-radius: 999px;
+  background: var(--app-bg-paper);
+  color: var(--app-text-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.root .filterBar .filterButton:hover,
+.root .filterBar .filterButton:focus,
+.root .filterBar .clearFilters:hover,
+.root .filterBar .clearFilters:focus {
+  background: var(--app-bg-elevated);
+  color: var(--app-text-primary);
+}
+
+.root .filterBar .filterButton.filterSet,
+.root .filterBar .filterButton.filterSet:hover,
+.root .filterBar .filterButton.filterSet:focus {
+  border-color: var(--app-primary);
+  color: var(--app-primary-strong);
+}
+
+.root .filterBar .clearFilters {
+  border-color: transparent;
+  background: transparent;
+}
+
+.root .chevron {
+  margin-left: 6px;
+  vertical-align: -1px;
+}
+
+.root .filterButton[aria-expanded='true'] .chevron {
+  transform: rotate(180deg);
+}
+
+.root .filterPopover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  min-width: 220px;
+  padding: 10px 12px;
+  border: 1px solid var(--app-border-default);
+  border-radius: 8px;
+  background: var(--app-bg-paper);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+}
+
+.root .filterPopover .filterGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.root .filterPopover .choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--app-text-primary);
+  font-size: 13.5px;
+  font-weight: 400;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.root .filterPopover .choice input {
+  width: auto;
+  margin: 0;
+  accent-color: var(--app-primary);
+}
+
+.root .filterPopover .field {
+  display: grid;
+  grid-template-columns: 3em auto;
+  align-items: center;
+}
+
+.root .visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 .root .segment:focus-visible,
 .root .navButton:focus-visible,
+.root .filterButton:focus-visible,
+.root .clearFilters:focus-visible,
+.root .filterPopover .choice input:focus-visible,
 .root .select:focus-visible,
 .root .search:focus-visible,
 .root .field input:focus-visible,

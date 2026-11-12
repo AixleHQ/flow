@@ -94,7 +94,7 @@ they name a flow users would recognize.
 
 | Area | What it covers |
 | --- | --- |
-| **Admin** | The superadmin area: the dashboard (the platform at a glance, and worker hours, busy hours, peak workers, queue wait and session outcomes per company and period, with each company's account status, account type and billing method, and a breakdown of one company's queue) and the administration of companies, users and the rest |
+| **Admin** | The superadmin area: the dashboard (the platform at a glance, and worker hours, busy hours, peak workers, queue wait and session outcomes per company and period, with each company's creation date, account status, account type and billing method, filters on them, and a breakdown of one company's queue) and the administration of companies, users and the rest |
 
 ### Help
 

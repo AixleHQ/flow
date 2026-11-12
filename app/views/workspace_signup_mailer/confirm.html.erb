@@ -1,10 +1,58 @@
-<p>Hello,</p>
+<%
+  font = "font-family:#{email_font};"
+%>
+<!-- Preheader (hidden preview text) -->
+<div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">
+  Open the link to create <%= @workspace_name %> on Aixle Flow. It expires in <%= @ttl_hours %> hours.&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+</div>
 
-<p>Someone asked to create the <strong><%= @workspace_name %></strong> workspace on Aixle Flow
-using this address. Opening the link below creates it and makes you its administrator.
-The link expires in <%= @ttl_hours %> hours.</p>
+<!-- Card -->
+<tr>
+  <td style="background-color:#121110; border:1px solid #292726; border-radius:8px; padding:44px 44px 40px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
 
-<p><%= link_to "Create #{@workspace_name}", @url %></p>
+      <!-- Heading -->
+      <tr>
+        <td role="heading" aria-level="1" style="<%= font %> font-size:20px; line-height:28px; font-weight:600; letter-spacing:-0.01em; color:#d1cfcd; padding-bottom:16px;">
+          Confirm your workspace
+        </td>
+      </tr>
 
-<p>If that was not you, ignore this message. Nothing has been created, and nothing
-will be until the link is opened.</p>
+      <!-- Body -->
+      <tr>
+        <td style="<%= font %> font-size:14px; line-height:22px; color:#9f9d9c; padding-bottom:28px;">
+          Hello, someone asked to create the <strong style="color:#d1cfcd; font-weight:600;"><%= @workspace_name %></strong>
+          workspace on Aixle Flow using this address. Opening the link below creates it and makes
+          you its administrator. The link expires in <strong style="color:#d1cfcd; font-weight:600;"><%= @ttl_hours %> hours</strong>.
+        </td>
+      </tr>
+
+      <!-- CTA -->
+      <tr>
+        <td style="padding-bottom:28px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td bgcolor="#cf6b4a" style="background-color:#cf6b4a; border-radius:5px;">
+                <a href="<%= @url %>" target="_blank" role="button" aria-label="Create <%= @workspace_name %>"
+                   style="display:inline-block; padding:11px 24px; <%= font %> font-size:14px; font-weight:600; line-height:20px; color:#0a0908; text-decoration:none; border-radius:5px;">
+                  Create <%= @workspace_name %>
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+
+      <!-- Ignore note + fallback link -->
+      <tr>
+        <td style="<%= font %> font-size:12px; line-height:18px; color:#5d5b5a; border-top:1px solid #292726; padding-top:24px;">
+          If that was not you, ignore this message. Nothing has been created, and nothing will be
+          until the link is opened.<br><br>
+          If the button doesn't work, paste this link into your browser:<br>
+          <a href="<%= @url %>" style="color:#cf6b4a; text-decoration:underline; overflow-wrap:break-word; word-break:break-word;"><%= @url %></a>
+        </td>
+      </tr>
+
+    </table>
+  </td>
+</tr>

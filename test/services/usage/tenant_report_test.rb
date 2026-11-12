@@ -53,6 +53,15 @@ class Usage::TenantReportTest < ActiveSupport::TestCase
     assert_equal "2026-10-15T06:00:00Z", report[:measured_through]
   end
 
+  test "each tenant carries when its account was created, in UTC" do
+    @acme.update_column(:created_at, Time.utc(2026, 3, 9, 22, 15))
+    hour(@acme, @day + 9.hours)
+
+    tenant = Usage::TenantReport.new(now: @day + 1.day).to_h[:tenants].sole
+
+    assert_equal "2026-03-09T22:15:00Z", tenant[:created_at]
+  end
+
   test "each tenant carries its account status, account type and billing method as they stand" do
     hour(@acme, @day + 9.hours)
     @acme.update!(billing_state: "blocked", billing_block_reason: "payment_failed")
