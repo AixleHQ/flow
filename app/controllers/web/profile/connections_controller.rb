@@ -8,6 +8,7 @@ class Web::Profile::ConnectionsController < Web::ApplicationController
   layout "inertia"
 
   before_action :require_auth
+  before_action :refuse_impersonation, only: :destroy
 
   def index
     render inertia: "Profile/Connections", props: {
@@ -34,5 +35,13 @@ class Web::Profile::ConnectionsController < Web::ApplicationController
 
   def require_auth
     redirect_to login_path unless signed_in?
+  end
+
+  # The connection decides what agents may do as the person, so an operator
+  # impersonating them does not change it (docs/design/github-user-identity.md §4.2).
+  def refuse_impersonation
+    return unless impersonated?
+
+    redirect_to profile_connections_path, alert: "Connected accounts cannot be changed while impersonating."
   end
 end

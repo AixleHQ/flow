@@ -5,6 +5,7 @@ class Web::Profile::ActAsConsentsController < Web::ApplicationController
   SWITCHES = %i[in_own_tasks in_others_tasks].freeze
 
   before_action :require_auth
+  before_action :refuse_impersonation
 
   # PATCH /profile/connections/:connection_provider/act_as_consents/:project_id
   # Body: { inOwnTasks?: boolean, inOthersTasks?: boolean }. A switch left out stays as it is.
@@ -27,5 +28,14 @@ class Web::Profile::ActAsConsentsController < Web::ApplicationController
 
   def require_auth
     redirect_to login_path unless signed_in?
+  end
+
+  # The switches decide whether other people's agents may take the person's GitHub
+  # token, so an operator impersonating them does not flip them
+  # (docs/design/github-user-identity.md §4.2).
+  def refuse_impersonation
+    return unless impersonated?
+
+    render json: { error: "Consents cannot be changed while impersonating." }, status: :forbidden
   end
 end

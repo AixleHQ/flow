@@ -17,6 +17,8 @@
 # the RFC 8707 resource indicator through the exchange. A DCR token_endpoint is
 # attacker-authored, so it is re-validated against the SSRF guard at exchange time.
 class Web::OauthController < Web::ApplicationController
+  IMPERSONATION_ALERT = "GitHub cannot be connected while impersonating."
+
   before_action :require_auth, except: :client_metadata
   # The OAuth return must land here even for super-admins (who are otherwise
   # bounced to the admin panel on every web request).
@@ -44,6 +46,7 @@ class Web::OauthController < Web::ApplicationController
   def authorize
     provider = params[:provider].to_s
     return redirect_to(root_path, alert: "Unknown OAuth provider") unless Oauth::Providers.known?(provider)
+    return redirect_to(safe_return_to(params[:return_to]), alert: IMPERSONATION_ALERT) if refuse_github_connect?(provider)
 
     owner = resolve_owner(params[:owner_type], params[:owner_id])
     return redirect_to(root_path, alert: "Not permitted") unless owner && may_connect?(owner)
@@ -103,6 +106,8 @@ class Web::OauthController < Web::ApplicationController
     end
 
     provider = payload["provider"].to_s
+    # A connect started before the impersonation began must not store the credential either.
+    return redirect_to(return_to, alert: IMPERSONATION_ALERT) if refuse_github_connect?(provider)
 
     # (5) owner authorization — even though state is signed, re-bind to a record
     # the CURRENT user may act for, with the right to connect it now.
@@ -244,6 +249,13 @@ class Web::OauthController < Web::ApplicationController
   end
 
   private
+
+  # No GitHub credential is stored for a person during an impersonation: it decides what
+  # agents may do as them (docs/design/github-user-identity.md §4.2). Other providers,
+  # MCP connections included, are left as they are.
+  def refuse_github_connect?(provider)
+    impersonated? && provider == Github::UserConnection::PROVIDER
+  end
 
   def require_auth
     redirect_to login_path unless signed_in?

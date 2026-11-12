@@ -344,6 +344,14 @@ answers 422.
 
 Issuance rows stay, with `oauth_credential_id` nulled.
 
+**Impersonation.** An operator impersonating a person changes nothing about the
+person's GitHub connection, as with passwords, sign-in methods and the MCP token: it
+decides what agents may do as them, and the person never made the choice. While
+`impersonated?`, disconnecting (`ConnectionsController#destroy`) and connecting through
+the OAuth flow (`OauthController#authorize` and `#callback`, GitHub only) redirect with
+an alert, and a consent update answers `403` with an error message. The page itself
+stays readable. Existing per-user MCP connections are left as they are.
+
 Page props, through Alba resources:
 
 - `UserConnectionResource`: `provider`, `status` (`connected` | `needs_reconnect`, the

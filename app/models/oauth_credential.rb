@@ -45,6 +45,17 @@ class OauthCredential < ApplicationRecord
   scope :for_github_user, ->(github_id) {
     where(provider: GITHUB_PROVIDER).where("metadata -> 'github_user' ->> 'id' = ?", github_id.to_s)
   }
+  # The connection the profile page shows: the latest one, a revoked one included
+  # (the page offers to reconnect it).
+  def self.latest_github_connection_of(user)
+    github_connections_of(user).order(updated_at: :desc).first
+  end
+
+  # The connection an agent's token comes from: the latest one that is not revoked.
+  def self.live_github_connection_of(user)
+    github_connections_of(user).where.not(status: :revoked).order(updated_at: :desc).first
+  end
+
   # Sweep scope (Phase 2 consumes this; index [:status, :expires_at] backs it).
   #
   # Deliberately NOT filtered to credentials that have a refresh token. One without
@@ -129,17 +140,6 @@ class OauthCredential < ApplicationRecord
   # The credential a server uses for `owner`: the newest live one issued for the
   # server's current origin. Every reader — token injection, the session-start
   # preflight and refresh, the status badge — picks through here.
-  # The connection the profile page shows: the latest one, a revoked one included
-  # (the page offers to reconnect it).
-  def self.latest_github_connection_of(user)
-    github_connections_of(user).order(updated_at: :desc).first
-  end
-
-  # The connection an agent's token comes from: the latest one that is not revoked.
-  def self.live_github_connection_of(user)
-    github_connections_of(user).where.not(status: :revoked).order(updated_at: :desc).first
-  end
-
   def self.current_for(server:, owner:)
     return nil if owner.nil?
 
