@@ -16,7 +16,7 @@ import { act, cleanup, renderAuthedPage, screen, userEvent, waitFor, within } fr
 import type BoardTask from 'types/generated/BoardTask';
 import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 
-import { formatDateTime } from 'shared/lib/formatDate';
+import { formatDateTime, formatDateTimeShort } from 'shared/lib/formatDate';
 
 import BoardPage from './BoardPage';
 import { GATE_CHIP_WIDTH } from './GateStatusChip';
@@ -583,6 +583,31 @@ describe('Projects/Board/BoardPage', () => {
     await userEvent.click(drawer.getByRole('tab', { name: /Assets/ }));
 
     expect(drawer.getByText(/from ENG-1 · text\/plain/)).toBeInTheDocument();
+  });
+
+  it('shows when each task file was uploaded', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        selectedTask: makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100 }),
+        taskComments: [],
+        taskAssets: [
+          buildTaskAsset({
+            id: 33,
+            name: 'RP-727-design.pdf',
+            contentType: 'application/pdf',
+            createdAt: '2026-11-12T14:04:00Z',
+          }),
+        ],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+      },
+    });
+
+    const drawer = within(screen.getByRole('dialog'));
+    await userEvent.click(drawer.getByRole('tab', { name: /Assets/ }));
+
+    expect(drawer.getByText(`Uploaded ${formatDateTimeShort('2026-11-12T14:04:00Z')}`)).toBeInTheDocument();
   });
 
   describe('previewing task files', () => {

@@ -13,6 +13,9 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Tasks**: each file on a task's Assets tab shows when it was uploaded.
+
 ## [1.12.0] - 2026-11-12
 
 ### Added
