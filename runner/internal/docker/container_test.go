@@ -300,6 +300,24 @@ func TestContainerStartAlwaysPullsTheImageThenCreatesTheContainer(t *testing.T) 
 	}
 }
 
+// The agent images are linux/amd64 only, so a daemon on arm64 pulls and runs
+// them for that platform (under emulation) instead of failing on the manifest.
+func TestTheAgentImageIsPulledAndTheContainerCreatedForLinuxAmd64(t *testing.T) {
+	h := newEnvironment(t)
+	h.start(h.env, nil)
+	if len(h.engine.pullPlatforms) != 1 || h.engine.pullPlatforms[0] != "linux/amd64" {
+		t.Fatalf("pull platforms %q", h.engine.pullPlatforms)
+	}
+	if len(h.engine.createPlatforms) == 0 {
+		t.Fatal("nothing was created")
+	}
+	for _, p := range h.engine.createPlatforms {
+		if p != "linux/amd64" {
+			t.Fatalf("create platforms %q: every container made from the agent image is for linux/amd64", h.engine.createPlatforms)
+		}
+	}
+}
+
 func TestThePullSendsTheDockerCredentialsOfTheImagesRegistry(t *testing.T) {
 	h := newEnvironment(t)
 	login := base64.StdEncoding.EncodeToString([]byte("agent-bot:s3cret"))
