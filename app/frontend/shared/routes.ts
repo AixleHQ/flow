@@ -1747,6 +1747,11 @@ export function revokeCompanySettingsRunnerPath(id: ScalarType, options?: object
   return "/" + "company" + "/" + "settings" + "/" + "runners" + "/" + id + "/" + "revoke" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
+/** /company/settings/runners/:id/registration_token(.:format) */
+export function registrationTokenCompanySettingsRunnerPath(id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "settings" + "/" + "runners" + "/" + id + "/" + "registration_token" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
 /** /company/settings/runners(.:format) */
 export function companySettingsRunnersPath(options?: object): string {
   return "/" + "company" + "/" + "settings" + "/" + "runners" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -2120,6 +2125,11 @@ export function enableCompanyProjectRunnerPath(project_id: ScalarType, id: Scala
 /** /company/projects/:project_id/runners/:id/revoke(.:format) */
 export function revokeCompanyProjectRunnerPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "runners" + "/" + id + "/" + "revoke" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /company/projects/:project_id/runners/:id/registration_token(.:format) */
+export function registrationTokenCompanyProjectRunnerPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "runners" + "/" + id + "/" + "registration_token" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
 /** /company/projects/:project_id/runners(.:format) */

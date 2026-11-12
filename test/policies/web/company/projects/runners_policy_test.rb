@@ -6,7 +6,7 @@ module Web
   module Company
     module Projects
       class RunnersPolicyTest < ActiveSupport::TestCase
-        WRITES = %i[create? update? destroy? disable? enable? revoke?].freeze
+        WRITES = %i[create? update? destroy? disable? enable? revoke? registration_token?].freeze
 
         setup do
           @company = create(:company)

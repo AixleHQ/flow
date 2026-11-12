@@ -47,6 +47,7 @@ export const NAV_STRUCTURE: NavSection[] = [
       { slug: 'quick-start', label: 'Quick start' },
       { slug: 'agents', label: 'Agents' },
       { slug: 'runtimes', label: 'Runtimes' },
+      { slug: 'runners', label: 'Runners' },
       { slug: 'tools', label: 'Tools' },
       // The app nav calls this page's subject "Connectors"; same thing, and
       // naming both is what lets a docs reader find it in the product. NOT done

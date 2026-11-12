@@ -9,6 +9,8 @@
 # visible runners, and every write among the project's own, so a company runner
 # is not found by a write from this page.
 class Web::Company::Projects::RunnersController < Web::Company::Projects::ApplicationController
+  include RunnerRegistrationTokens
+
   requires_feature :external_runners
 
   def index
@@ -56,6 +58,12 @@ class Web::Company::Projects::RunnersController < Web::Company::Projects::Applic
   def destroy
     own_runners.find(params[:id]).soft_delete!
     redirect_to company_project_runners_path(current_project), notice: "Runner deleted"
+  end
+
+  # "Add machine": a single-use registration token for a `manual` runner of
+  # the project, returned once (DESIGN.md §6.3). A company runner is not found.
+  def registration_token
+    render_registration_token(own_runners.find(params[:id]))
   end
 
   def disable = transition(:disable, "disabled")

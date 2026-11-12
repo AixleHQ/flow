@@ -599,6 +599,7 @@ scope module: :web, defaults: { format: :html } do
         post :disable
         post :enable
         post :revoke
+        post :registration_token
       end
     end
     # Stopping at the end of the billing period, and taking that back before
@@ -724,6 +725,7 @@ scope module: :web, defaults: { format: :html } do
             post :disable
             post :enable
             post :revoke
+            post :registration_token
           end
         end
         resources :tools, only: %i[index create update destroy]

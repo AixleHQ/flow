@@ -163,6 +163,12 @@ export const SEARCH_INDEX: SearchResult[] = [
     desc: 'The eight LLM CLI runtimes: claude_code, cursor_cli, codex, gemini_cli, antigravity_cli, grok, kiro_cli, and copilot_cli.',
   },
   {
+    slug: 'runners',
+    title: 'Runners',
+    section: 'User guide',
+    desc: 'Runners send a session to a machine you control. Adding a machine to a manual runner: the single-use registration token and the install sequence.',
+  },
+  {
     slug: 'tools',
     title: 'Tools',
     section: 'User guide',

@@ -24,6 +24,8 @@ module Web
         def disable? = manage?
         def enable? = manage?
         def revoke? = manage?
+        # "Add machine": a registration token lets a machine join the runner.
+        def registration_token? = manage?
 
         private
 
