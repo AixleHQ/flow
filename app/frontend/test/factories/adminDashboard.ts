@@ -4,6 +4,7 @@ import type { CompanyBreakdown, Tenant, UsageDay } from 'pages/Admin/Dashboard/t
 export const buildTenant = (overrides: Partial<Tenant> = {}): Tenant => ({
   id: 1,
   name: 'Acme',
+  createdAt: '2026-03-09T22:15:00Z',
   accountStatus: 'active_customer',
   accountType: 'paid',
   billingMethod: 'saas_stripe',
