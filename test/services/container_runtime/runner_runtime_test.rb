@@ -345,6 +345,18 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert_operator RunnerOperation.order(:id).last.deadline_at, :<=, 16.seconds.from_now
   end
 
+  test "a scan-capped exec keeps its cap with upload slots offered: the cap applies after the upload budget" do
+    handle = start_session
+    @host_runner.operations.clear
+    capped = ContainerRuntime.for_session(@session, op_timeout: Settings.runners.scan_op_timeout)
+
+    capped.exec(handle, [ "true" ])
+
+    op = RunnerOperation.where(op: "exec").order(:id).last
+    assert @host_runner.operations.last[:payload].key?("uploads"), "the exec offers upload slots"
+    assert_in_delta Settings.runners.scan_op_timeout, op.deadline_at - op.created_at, 2
+  end
+
   test "an op's deadline is the end of the activity that sends it, less the margin" do
     handle = start_session
     finished = in_activity(20.0, DeadlineProbe, handle)

@@ -316,8 +316,6 @@ module ContainerRuntime
 
     # -- Garbage collection ---------------------------------------------------
 
-    # A runner session's objects are the runner's to remove, by label
-    # (`env.scrub`, `env.reset`), not the hosted sweep's.
     # The files and outputs a cleanup could not read whole since the last call,
     # one line each, and forgets them. The cleanup puts them in its
     # `log-collection-report.txt` (ContainerStrategies::AgentSessionStrategy), so
@@ -328,6 +326,8 @@ module ContainerRuntime
       notes
     end
 
+    # A runner session's objects are the runner's to remove, by label
+    # (`env.scrub`, `env.reset`), not the hosted sweep's.
     def list_session_resources(*)
       []
     end
@@ -518,12 +518,14 @@ module ContainerRuntime
       Runners::Machines.held_by(session)
     end
 
-    # An op's deadline is its own budget, and at most the activity's end less
+    # An op's deadline is its own budget plus the upload budget when it offers
+    # upload slots, capped by the caller's `op_timeout` (so a scan-capped call
+    # keeps exactly that cap), and at most the activity's end less
     # ACTIVITY_MARGIN, so the wait for it ends before the activity does (§6.4).
     def deadline_at(seconds, lifecycle, extra: 0)
       seconds ||= lifecycle ? Settings.runners.lifecycle_op_timeout.to_i : Settings.runners.op_timeout.to_i
-      seconds = [ seconds, @op_timeout ].min if @op_timeout
       seconds += extra
+      seconds = [ seconds, @op_timeout ].min if @op_timeout
       [ Time.current + seconds, activity_deadline ].compact.min.change(usec: 0)
     end
 

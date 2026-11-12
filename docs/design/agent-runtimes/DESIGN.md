@@ -1427,7 +1427,9 @@ The decisions:
 - **One deadline.** The runner never uploads past the op's `deadline_at`, and the platform
   settles the op there. So an op that carries slots is given, on top of its own time, a budget
   that fits an upload of the largest size (`Runners::ResultUploads.budget`: 32 MiB at 1 MiB/s,
-  and 30 s for the last request and the result posted, 62 s). The URL's extra five minutes are
+  and 30 s for the last request and the result posted, 62 s). The caller's `op_timeout` caps the
+  sum, so a scan-capped call (the monitor's snapshot, the dead-container and stale scans) keeps
+  exactly `scan_op_timeout` (15 s) with slots offered. The URL's extra five minutes are
   only a margin for clocks that differ. An upload that cannot finish before the deadline falls
   back as a failed upload does (below).
 - **Lifetime and size.** A URL lives until the op's `deadline_at` plus 5 minutes (at least one).
