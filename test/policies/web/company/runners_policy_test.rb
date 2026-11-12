@@ -5,7 +5,7 @@ require "test_helper"
 module Web
   module Company
     class RunnersPolicyTest < ActiveSupport::TestCase
-      WRITES = %i[create? update? destroy? disable? enable? revoke?].freeze
+      WRITES = %i[create? update? destroy? disable? enable? revoke? registration_token?].freeze
 
       setup do
         @company = create(:company)

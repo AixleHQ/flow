@@ -7,6 +7,8 @@ import {
   disableCompanySettingsRunnerPath,
   enableCompanyProjectRunnerPath,
   enableCompanySettingsRunnerPath,
+  registrationTokenCompanyProjectRunnerPath,
+  registrationTokenCompanySettingsRunnerPath,
   revokeCompanyProjectRunnerPath,
   revokeCompanySettingsRunnerPath,
 } from 'shared/routes';
@@ -19,6 +21,7 @@ export const companyRunnerPaths = (): RunnerPaths => ({
   disable: (id) => disableCompanySettingsRunnerPath(id),
   enable: (id) => enableCompanySettingsRunnerPath(id),
   revoke: (id) => revokeCompanySettingsRunnerPath(id),
+  registrationToken: (id) => registrationTokenCompanySettingsRunnerPath(id),
 });
 
 export const projectRunnerPaths = (projectId: number): RunnerPaths => ({
@@ -27,4 +30,5 @@ export const projectRunnerPaths = (projectId: number): RunnerPaths => ({
   disable: (id) => disableCompanyProjectRunnerPath(projectId, id),
   enable: (id) => enableCompanyProjectRunnerPath(projectId, id),
   revoke: (id) => revokeCompanyProjectRunnerPath(projectId, id),
+  registrationToken: (id) => registrationTokenCompanyProjectRunnerPath(projectId, id),
 });
