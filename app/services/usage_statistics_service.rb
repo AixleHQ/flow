@@ -24,6 +24,8 @@ class UsageStatisticsService
     sessions = authenticated_sessions(payload, sessions)
     return Result.new(status: :unauthorized, error: "Invalid session key") if sessions.empty?
 
+    Insights::Relay.capture(payload, sessions.values)
+
     persisted = false
     sessions.each_value do |terminal_session|
       adapter = adapter_for(terminal_session)

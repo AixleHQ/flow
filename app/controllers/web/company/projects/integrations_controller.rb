@@ -8,7 +8,8 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   }.freeze
 
   def index
-    integrations = Integration.visible_for_project(current_project).includes(:connected_by).order(created_at: :desc).to_a
+    integrations = Integration.visible_for_project(current_project).where.not(provider: "insights")
+                              .includes(:connected_by).order(created_at: :desc).to_a
     preload_provider_associations(integrations)
 
     render inertia: "Projects/Integrations/IntegrationsPage", props: {
@@ -22,7 +23,8 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
       linear: { oauth_enabled: Linear::AppConfig.oauth_enabled? },
       youtrack: { enabled: true, marketplace_url: Youtrack::Config::MARKETPLACE_URL },
       slack: { enabled: Slack::Oauth.enabled? },
-      teams: { enabled: Teams::Config.enabled? }
+      teams: { enabled: Teams::Config.enabled? },
+      insights: insights_props
     }
   end
 
@@ -372,6 +374,41 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   end
 
   private
+
+  # Aixle Insights has a card of its own (Web::Company::Projects::InsightsController): the
+  # company's connection, never its secret, and this project's switch and mapping.
+  def insights_props
+    return { enabled: false } unless Insights::Config.enabled?
+
+    connection = Integration.find_by(company_id: current_project.company_id, project_id: nil, provider: "insights")
+    policy = Web::Company::Projects::InsightsPolicy.new(policy_context, current_project)
+    settings = current_project.insights_settings
+    {
+      enabled: true,
+      connection: connection && {
+        status: connection.status,
+        organization_name: connection.credentials_data_for_display["organization_name"],
+        connected_at: connection.created_at.iso8601
+      },
+      project: { export: settings["export"], insights_project_id: settings["project_id"] },
+      can_connect: policy.connect?,
+      can_manage: policy.update?,
+      delivery: insights_delivery
+    }
+  end
+
+  # What of this project is still on its way to Insights, and why the last batch that did
+  # not arrive did not.
+  def insights_delivery
+    batches = current_project.insights_otlp_batches
+    pending = batches.where(state: "pending")
+    {
+      pending: pending.count,
+      oldest_pending_at: pending.minimum(:created_at)&.iso8601,
+      failed: batches.where(state: "failed").count,
+      last_error: batches.where.not(last_error: nil).order(updated_at: :desc).pick(:last_error)
+    }
+  end
 
   # A Slack or Teams connection serves the whole company unless it is asked for
   # this project only.
