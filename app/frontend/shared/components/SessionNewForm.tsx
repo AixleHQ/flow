@@ -223,9 +223,10 @@ export const SessionNewForm = ({
     configCount > 0 ||
     runnerId !== null;
 
+  // A session being started is a save in flight: the visit to its page must not ask to discard.
   useEffect(() => {
-    onDirtyChange?.(dirty);
-  }, [dirty, onDirtyChange]);
+    onDirtyChange?.(dirty && !loading);
+  }, [dirty, loading, onDirtyChange]);
 
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
@@ -269,6 +270,8 @@ export const SessionNewForm = ({
         } else {
           router.visit(fallbackPath);
         }
+        // Stay "saving" until the visit replaces this page.
+        return;
       } else {
         const errData = await res.json().catch(() => null);
         const reauth = errData?.reauth_required;

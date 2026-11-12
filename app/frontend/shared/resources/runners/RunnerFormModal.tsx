@@ -99,7 +99,7 @@ export function RunnerFormModal({ opened, onClose, runnerTypes, paths, runner }:
   const schema = useMemo(() => option?.configSchema ?? {}, [option]);
   const provisionable = option?.capabilities.provisionable ?? false;
   const dirty = JSON.stringify(draft) !== JSON.stringify(draftFor(runner));
-  const requestClose = useUnsavedChanges({ opened, dirty, onClose });
+  const requestClose = useUnsavedChanges({ opened, dirty: dirty && !submitting, onClose });
 
   const update = (changes: Partial<Draft>) => setDraft((current) => ({ ...current, ...changes }));
   const step = steps[active];

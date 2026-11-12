@@ -3,7 +3,8 @@ import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { buildRunner, buildRunnerTypeOption } from 'test/factories/runner';
-import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
+import { visitHeld } from 'test/inertiaVisit';
+import { act, renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
 
 import type { RunnerPaths } from './runnerConfig';
 import { RunnerFormModal } from './RunnerFormModal';
@@ -171,6 +172,27 @@ describe('RunnerFormModal', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Next' }));
     expect(within(dialog).getByText('has already been taken')).toBeInTheDocument();
     expect(within(dialog).getByText('must be greater than 0')).toBeInTheDocument();
+  });
+
+  it('does not ask to discard while a create is in flight, and asks again once it is refused', async () => {
+    let options: { onError?: (errors: Record<string, unknown>) => void; onFinish?: () => void } = {};
+    vi.mocked(router.post).mockImplementationOnce((...args: unknown[]) => {
+      options = args[2] as typeof options;
+    });
+    const user = userEvent.setup();
+    renderForm();
+    const dialog = await pickManual(user);
+    await fillLimits(user, dialog);
+
+    expect(visitHeld('/company/settings/runners/1')).toBe(true);
+    await user.click(within(dialog).getByRole('button', { name: 'Create runner' }));
+    expect(visitHeld('/company/settings/runners/1')).toBe(false);
+
+    act(() => {
+      options.onError?.({ name: ['has already been taken'] });
+      options.onFinish?.();
+    });
+    expect(visitHeld('/company/settings/runners/1')).toBe(true);
   });
 
   it('edits a runner without the type step, keeping its config and never sending its type', async () => {

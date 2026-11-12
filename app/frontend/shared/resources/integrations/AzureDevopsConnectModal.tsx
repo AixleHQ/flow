@@ -114,7 +114,7 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
     pat !== '' ||
     federatedDirty ||
     capabilitiesChanged(capabilities);
-  const requestClose = useUnsavedChanges({ opened, dirty, onClose: close });
+  const requestClose = useUnsavedChanges({ opened, dirty: dirty && !loading, onClose: close });
 
   // Step one: prove this company may bind the organization at all, and see what
   // it holds. An organization already bound needs no token — the binding is the
