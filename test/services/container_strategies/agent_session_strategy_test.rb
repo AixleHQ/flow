@@ -526,9 +526,9 @@ module ContainerStrategies
       mock_service.stubs(:adapter).returns(mock_adapter)
       AgentCredentialsService.stubs(:for).returns(mock_service)
 
-      strategy.stubs(:collect_outputs).returns(0)
+      strategy.stubs(:collect_outputs).returns(ContainerStrategies::Collection.none)
       strategy.stubs(:collect_logs).returns([ 0, {} ])
-      strategy.stubs(:collect_terminal_output).returns(0)
+      strategy.stubs(:collect_terminal_output).returns(ContainerStrategies::Collection.none)
       strategy.stubs(:persist_refreshed_credentials)
       strategy.stubs(:persist_credential_metadata)
       strategy.stubs(:collect_usage)
@@ -687,9 +687,9 @@ module ContainerStrategies
       mock_service.stubs(:adapter).returns(mock_adapter)
       AgentCredentialsService.stubs(:for).returns(mock_service)
 
-      strategy.stubs(:collect_outputs).returns(0)
+      strategy.stubs(:collect_outputs).returns(ContainerStrategies::Collection.none)
       strategy.stubs(:collect_logs).returns([ 0, {} ])
-      strategy.stubs(:collect_terminal_output).returns(0)
+      strategy.stubs(:collect_terminal_output).returns(ContainerStrategies::Collection.none)
       strategy.stubs(:persist_refreshed_credentials)
       strategy.stubs(:persist_credential_metadata)
 
@@ -842,7 +842,7 @@ module ContainerStrategies
       strategy = build_strategy
 
       assert_difference "SessionLog.count", 1 do
-        assert_equal 1, strategy.send(:collect_terminal_output, "abc123", @session)
+        assert_equal 1, strategy.send(:collect_terminal_output, "abc123", @session).count
       end
 
       log = @session.session_logs.last
@@ -861,7 +861,7 @@ module ContainerStrategies
       strategy = build_strategy
 
       assert_no_difference "SessionLog.count" do
-        assert_equal 0, strategy.send(:collect_terminal_output, "abc123", @session)
+        assert_equal 0, strategy.send(:collect_terminal_output, "abc123", @session).count
       end
     end
 
@@ -894,28 +894,28 @@ module ContainerStrategies
       end
     end
 
-    test "the cleanup's reads fill its own list from the results the runtime gives, and the runtime keeps nothing" do
+    test "a collector returns the notes for the reads the runtime says came back cut, and the runtime keeps nothing" do
       runtime = ContainerRuntime::FakeRuntime.new(agent_type: "claude_code", filesystem: {})
       runtime.stubs(:read_file_result).with("abc123", "/tmp/terminal_output.log").returns(
         ContainerRuntime::FileRead.new(content: nil, whole: false, reason: "needs S3-compatible storage")
       )
       ContainerRuntime.stubs(:build).returns(runtime)
       strategy = build_strategy
-      uncollected = []
 
-      strategy.send(:collect_terminal_output, "abc123", @session, uncollected)
+      collection = strategy.send(:collect_terminal_output, "abc123", @session)
 
-      assert_equal 1, uncollected.size
-      assert_match %r{read_file /tmp/terminal_output.log — not collected whole: needs S3-compatible storage}, uncollected.first
+      assert_equal 1, collection.uncollected.size
+      assert_match %r{read_file /tmp/terminal_output.log — not collected whole: needs S3-compatible storage}, collection.uncollected.first
     end
 
-    test "a file read whole adds nothing to the cleanup's list" do
+    test "a file read whole adds no note to what the collector returns" do
       runtime = ContainerRuntime::FakeRuntime.new(agent_type: "claude_code", filesystem: { "/tmp/terminal_output.log" => "hello" })
       ContainerRuntime.stubs(:build).returns(runtime)
-      uncollected = []
 
-      assert_equal 1, build_strategy.send(:collect_terminal_output, "abc123", @session, uncollected)
-      assert_empty uncollected
+      collection = build_strategy.send(:collect_terminal_output, "abc123", @session)
+
+      assert_equal 1, collection.count
+      assert_empty collection.uncollected
     end
 
     # A killed container (out of memory, evicted) cannot be exec'd into, so the file read
@@ -930,7 +930,7 @@ module ContainerStrategies
       strategy = build_strategy
 
       assert_difference "SessionLog.count", 1 do
-        assert_equal 1, strategy.send(:collect_terminal_output, "abc123", @session)
+        assert_equal 1, strategy.send(:collect_terminal_output, "abc123", @session).count
       end
 
       log = @session.session_logs.find_by(name: "terminal_output.log")
@@ -954,7 +954,7 @@ module ContainerStrategies
       ContainerRuntime.stubs(:build).returns(fake)
 
       assert_no_difference "SessionLog.count" do
-        assert_equal 0, build_strategy.send(:collect_terminal_output, "abc123", @session)
+        assert_equal 0, build_strategy.send(:collect_terminal_output, "abc123", @session).count
       end
     end
 
@@ -1086,7 +1086,7 @@ module ContainerStrategies
 
       count = nil
       assert_difference "Asset.count", 4 do
-        count = strategy.send(:collect_outputs, "abc123", @session)
+        count = strategy.send(:collect_outputs, "abc123", @session).count
       end
 
       assert_equal 4, count
@@ -1108,7 +1108,7 @@ module ContainerStrategies
       strategy = build_strategy
 
       assert_no_difference "Asset.count" do
-        assert_equal 0, strategy.send(:collect_outputs, "abc123", @session)
+        assert_equal 0, strategy.send(:collect_outputs, "abc123", @session).count
       end
     end
 
@@ -1127,8 +1127,8 @@ module ContainerStrategies
     # four are stubbed and the collector is left real.
     def cleanup_strategy
       strategy = build_strategy
-      strategy.stubs(:collect_outputs).returns(0)
-      strategy.stubs(:collect_terminal_output).returns(0)
+      strategy.stubs(:collect_outputs).returns(ContainerStrategies::Collection.none)
+      strategy.stubs(:collect_terminal_output).returns(ContainerStrategies::Collection.none)
       strategy.stubs(:persist_refreshed_credentials)
       strategy.stubs(:persist_credential_metadata)
       strategy.stubs(:collect_usage)
