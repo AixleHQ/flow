@@ -60,7 +60,7 @@ export const EditRepositoryModal: FC<Props> = ({ repo, branches = [], basePath, 
     );
   };
 
-  const requestClose = useUnsavedChanges({ opened: !!repo, dirty: form.isDirty(), onClose });
+  const requestClose = useUnsavedChanges({ opened: !!repo, dirty: form.isDirty() && !loading, onClose });
 
   return (
     <ResourceDrawer

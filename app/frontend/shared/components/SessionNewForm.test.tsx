@@ -397,6 +397,46 @@ describe('SessionNewForm', () => {
     expect(onDirtyChange).toHaveBeenLastCalledWith(false);
   });
 
+  it('reports the form as clean once Start is pressed, so the visit to the new session does not ask to discard', async () => {
+    const user = userEvent.setup();
+    const onDirtyChange = vi.fn();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: { id: 'sess-77' } }),
+    } as Response);
+    renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 42, onDirtyChange })} />, {
+      props: authProps(['claude_code']),
+    });
+
+    await user.click(screen.getByText('Claude Code'));
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+
+    await user.click(screen.getByRole('button', { name: /start session/i }));
+    await waitFor(() => expect(router.visit).toHaveBeenCalledWith('/sessions/sess-77?project=42'));
+
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+    fetchSpy.mockRestore();
+  });
+
+  it('is dirty again after a refused start', async () => {
+    const user = userEvent.setup();
+    const onDirtyChange = vi.fn();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false,
+      json: () => Promise.resolve({ errors: ['Quota exceeded'] }),
+    } as Response);
+    renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 1, onDirtyChange })} />, {
+      props: authProps(['codex']),
+    });
+
+    await user.click(screen.getByText('Codex'));
+    await user.click(screen.getByRole('button', { name: /start session/i }));
+
+    await screen.findAllByText('Quota exceeded');
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+    fetchSpy.mockRestore();
+  });
+
   describe('default model label', () => {
     const agentModels = [
       {
