@@ -27,6 +27,14 @@ governance, community health — carry none.
 - **Tasks**: each file on a task's Assets tab shows when it was uploaded.
 
 ### Changed
+- Runner compatibility: the platform now recommends `aixle-runner` 0.2.0 and
+  serves it next to 0.1.0. It pins the `linux-amd64` and `linux-arm64` binaries
+  of [runner-v0.2.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.2.0)
+  by their SHA-256. "Add machine" now offers 0.2.0, the binary and the
+  `ghcr.io/aixlehq/aixle-runner:0.2.0` image, and an idle machine on 0.1.0 that
+  has not opted out is offered the update. 0.2.0 brings the callback proxy,
+  `check-in` and uploads over 1 MiB, and the published image as a host runner
+  in Docker. Runner protocol 1 only, and no minimum runner version.
 - **Sign-in & onboarding**: any member, not only an admin, can skip connecting an
   agent during onboarding ("Skip for now", then confirm) and look around first.
   Workflows, sessions and the Builder stay blocked until they connect an agent in
