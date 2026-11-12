@@ -612,12 +612,20 @@ characters is `422 invalid_check_in`, whatever the pins say, then a version belo
 the one place a machine below the minimum meets it after it registered: it comes when the runner
 starts, never in the middle of a session (DESIGN.md §14.4).
 
+**Known limitation: no drain-safe mode for `min_version`.** A host that restarts while a session
+container is still running, after the platform raised `min_version`, stops at its check-in (the
+refusal above) before it takes an op, so the platform can no longer issue ops for that session
+until the runner is updated and starts again. The session container itself keeps running, and the
+session continues once the updated runner resumes. `min_version` is raised deliberately and only
+for a protocol break; the runbook for raising it (`docs/operations/releasing.md`) says to update
+the machines first.
+
 `200 OK`, with `Cache-Control: no-store`:
 
 ```json
 {
   "environment": { "id": 42, "key": "aixle-r7-1f2e3d4c", "display_name": "build-01", "state": "registered" },
-  "config": { "upload_max_bytes": 104857600 },
+  "config": { "upload_max_bytes": 33554432 },
   "update": { "version": "1.5.0", "sha256": "4f2b…" }
 }
 ```
@@ -635,8 +643,9 @@ starts, never in the middle of a session (DESIGN.md §14.4).
 
 **What the runner does.** It checks in once the callback proxies of the sessions already running
 on the machine are served again, and before it takes its first op. A check-in that fails in a way
-it can wait out (a network error, `429`, a `5xx`, `403 runners_disabled`) is retried with backoff
-until the platform answers. A `422 invalid_check_in` is a bug in the runner: it is logged, and the
+it can wait out (a network error, `429`, a `5xx`, `403 runners_disabled`) is retried with backoff,
+five attempts at most; then the runner logs it and starts its ops loop without a check-in (the
+next start tries again), so a failing check-in route does not stop a machine that can work. A `422 invalid_check_in` is a bug in the runner: it is logged, and the
 runner goes on without a check-in. The refusals that end its work (§3) end it here too.
 
 Its own refusals: `422 invalid_check_in`, and `400 runner_version_unsupported`.
@@ -1081,8 +1090,8 @@ over the cap comes back whole without passing through the gateway.
 {
   "cmd": ["cat", "/tmp/terminal_output.log"],
   "uploads": {
-    "stdout": { "id": "9f2c…", "url": "https://bucket.s3.amazonaws.com/cache/9f2c…?X-Amz-…", "max_bytes": 104857600 },
-    "stderr": { "id": "41ab…", "url": "https://bucket.s3.amazonaws.com/cache/41ab…?X-Amz-…", "max_bytes": 104857600 }
+    "stdout": { "id": "9f2c…", "url": "https://bucket.s3.amazonaws.com/cache/9f2c…?X-Amz-…", "max_bytes": 33554432 },
+    "stderr": { "id": "41ab…", "url": "https://bucket.s3.amazonaws.com/cache/41ab…?X-Amz-…", "max_bytes": 33554432 }
   }
 }
 ```
@@ -1103,19 +1112,25 @@ whose `max_bytes` is not above the output cap: what the cap holds is returned in
 The URL is a capability: it carries its own signature, so **the runner sends no `Authorization`
 header and no other header of the protocol to it**, and it does not follow a redirect.
 
-**What the URL is.** Where the platform's storage can sign its own uploads (S3), a presigned `PUT`
-URL of the bucket. Where it cannot (the filesystem storage of a development platform, whose files
-the proxy's `assets` route serves, §5.8), the platform's own `PUT` endpoint, which stands in for S3
-and writes to the same storage. The runner does not tell them apart: it `PUT`s the bytes to `url`,
-as they are, with the exact `Content-Length`, and a `2xx` answer is the upload. The platform
-reads the object from its storage, never through the URL.
+**What the URL is.** A presigned `PUT` URL of the bucket. The runner `PUT`s the bytes to `url`, as
+they are, with the exact `Content-Length`, and a `2xx` answer is the upload. The platform reads the
+object from its storage, never through the URL.
 
-**Its lifetime.** Until the op's `deadline_at` plus 5 minutes (and at least a minute). A runner
-that receives the op in time may still be uploading as the deadline passes; but the platform stops
-waiting for the op at its `deadline_at` (§6), so the runner does not start an upload after it.
+**Known limitation: uploads need a storage that presigns (S3).** With a storage that cannot sign
+its own uploads (the filesystem storage of a development platform), the platform issues no slots:
+the payload has no `uploads`, and output over 1 MiB comes back as it did before uploads: an `exec`
+answers the first 1 MiB of a stream, marked truncated, and a `read_file` of a larger file answers
+`file_too_large`. The platform's cleanup says so in its `log-collection-report.txt`.
+
+**Its lifetime.** Until the op's `deadline_at` plus 5 minutes (and at least a minute). The extra
+minutes are only a margin for a clock that differs: there is one deadline. The runner never uploads
+past the op's `deadline_at`, and the platform stops waiting for the op there (§6). So an op that
+carries slots gets, with its `deadline_at`, a budget that fits an upload of the largest size (the
+platform adds it to the time the op needs itself), and an upload that cannot finish before the
+deadline falls back as in "When the upload fails".
 
 **The largest upload** is the slot's `max_bytes`, the platform's `Settings.runners.upload_limit`
-(100 MiB), and `config.upload_max_bytes` of the check-in tells it (§5.9). A presigned `PUT` cannot
+(32 MiB), and `config.upload_max_bytes` of the check-in tells it (§5.9). A presigned `PUT` cannot
 carry a size limit of its own, so the limit is kept by both sides: the runner uploads no more, and
 the platform refuses an object over it when it reads it. A stream of an `exec` over it is cut there
 and `<stream>_truncated` is `true`; a file over it is `file_too_large`.

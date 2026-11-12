@@ -25,12 +25,12 @@
           "stdout": {
             "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "url": "https://uploads.example.test/cache/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?expires=fixture",
-            "max_bytes": 104857600
+            "max_bytes": 33554432
           },
           "stderr": {
             "id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
             "url": "https://uploads.example.test/cache/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb?expires=fixture",
-            "max_bytes": 104857600
+            "max_bytes": 33554432
           }
         }
       }
@@ -68,12 +68,12 @@
                   "stdout": {
                     "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
                     "url": "https://uploads.example.test/cache/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?expires=fixture",
-                    "max_bytes": 104857600
+                    "max_bytes": 33554432
                   },
                   "stderr": {
                     "id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
                     "url": "https://uploads.example.test/cache/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb?expires=fixture",
-                    "max_bytes": 104857600
+                    "max_bytes": 33554432
                   }
                 }
               }
@@ -97,7 +97,7 @@
             "uploads": {
               "stderr": {
                 "id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-                "size": 104857600
+                "size": 33554432
               }
             },
             "upload_errors": {

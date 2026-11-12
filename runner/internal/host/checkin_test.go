@@ -138,6 +138,29 @@ func TestCheckInGoesOnWithoutItWhenThePlatformRefusesTheReport(t *testing.T) {
 	}
 }
 
+// A check-in route that keeps failing must not stop a machine that can work.
+func TestCheckInGivesUpAfterABoundedNumberOfAttemptsAndTheRunnerGoesOn(t *testing.T) {
+	down := &protocol.Refusal{Endpoint: protocol.EndpointCheckIn, Status: 502}
+	gw := &checkInGateway{answers: []error{down, down, down, down, down, down, down}}
+	checker, sleeps, logs := newChecker(gw)
+
+	_, recorded, err := checker.CheckIn(context.Background(), report)
+
+	if err != nil || recorded || len(gw.requests) != DefaultCheckInAttempts || len(*sleeps) != DefaultCheckInAttempts-1 {
+		t.Fatalf("%v %v, %d requests, %d pauses", recorded, err, len(gw.requests), len(*sleeps))
+	}
+	if !strings.Contains(logs.String(), "going on without a check-in") {
+		t.Errorf("the give-up is not logged:\n%s", logs.String())
+	}
+
+	gw = &checkInGateway{answers: []error{down, down, down}}
+	checker, _, _ = newChecker(gw)
+	checker.MaxAttempts = 2
+	if _, recorded, err = checker.CheckIn(context.Background(), report); err != nil || recorded || len(gw.requests) != 2 {
+		t.Fatalf("MaxAttempts: %v %v, %d requests", recorded, err, len(gw.requests))
+	}
+}
+
 func TestCheckInEndsWithTheRunner(t *testing.T) {
 	gw := &checkInGateway{answers: []error{&protocol.NetworkError{Endpoint: protocol.EndpointCheckIn, Err: errors.New("down")}}}
 	checker, _, _ := newChecker(gw)

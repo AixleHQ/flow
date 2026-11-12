@@ -151,6 +151,7 @@ module ContainerStrategies
       logs_count, log_contents = collect_logs(container, session, agent_service)
       logs_count += collect_terminal_output(container, session)
       outputs_count = collect_outputs(container, session)
+      report_uncollected_whole(session)
       # Refresh first: an agent that rotates its token during a session leaves the
       # stored credential stale, and usage collection may need to call the vendor with
       # it (Kiro reads its credit counter, Grok prices models from the catalogue).
@@ -440,6 +441,32 @@ module ContainerStrategies
       end
 
       [ "Company", company_id ]
+    end
+
+    # What the runtime could not read whole (a runner session's file or output
+    # over 1 MiB, where the platform's storage cannot sign an upload) goes into
+    # the cleanup's `log-collection-report.txt`, next to what the log collector
+    # reported, so that a cut log is not taken for a whole one.
+    def report_uncollected_whole(session)
+      return unless runtime.respond_to?(:take_uncollected_whole)
+
+      notes = runtime.take_uncollected_whole
+      return if notes.empty?
+
+      text = "Session #{session.id} — files and outputs not collected whole:\n\n" + notes.map { |note| "- #{note}\n" }.join
+      report = SessionLog.find_by(terminal_session: session, name: Sessions::LogCollector::REPORT_NAME)
+      text = "#{report.file.read}\n#{text}" if report
+
+      io = StringIO.new(text)
+      io.define_singleton_method(:original_filename) { Sessions::LogCollector::REPORT_NAME }
+      attributes = { file: io, file_size: text.bytesize, content_type: "text/plain; charset=utf-8" }
+      if report
+        report.update!(attributes)
+      else
+        SessionLog.create!(attributes.merge(terminal_session: session, name: Sessions::LogCollector::REPORT_NAME))
+      end
+    rescue StandardError => e
+      Rails.logger.warn("[AgentSession] Failed to report the files not collected whole: #{e.message}")
     end
 
     def collect_usage(session, agent_service, log_contents = {})

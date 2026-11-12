@@ -22,6 +22,7 @@ module ContainerStrategies
       persist_refreshed_credentials(container, session, agent_service)
 
       outputs_count = collect_workflow_outputs(container_id)
+      report_uncollected_whole(session)
 
       # Provider-agnostic teardown hook: every integration that holds
       # session-scoped runtime state (Coder workspace locks today, others

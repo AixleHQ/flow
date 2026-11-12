@@ -9,9 +9,12 @@ require "test_helper"
 # argument. FakeHostRunner (test/support/fakes/fake_host_runner.rb) answers the
 # ops.
 class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
+  include PresigningCacheHelper
+
   IMAGE = "ghcr.io/aixlehq/flow-claude-code:latest"
 
   setup do
+    use_presigning_cache
     @runner = create(:runner, :manual, config: { "container" => { "network" => "host", "workspace_volume" => false,
                                                                   "resources" => { "cpus" => 2, "memory" => "8Gi" },
                                                                   "cache_mounts" => [ { "name" => "pip", "target" => "/home/agent/.cache/pip" } ] } })
@@ -23,7 +26,10 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     ContainerRuntime::FakeHostRunner.identify!(@session, @identity)
   end
 
-  teardown { @host_runner.stop }
+  teardown do
+    @host_runner.stop
+    restore_cache_storage
+  end
 
   test "pull_image does nothing, as on Kubernetes: the runner pulls in container.start" do
     result = @runtime.pull_image(IMAGE)
@@ -401,6 +407,55 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert_equal Encoding::UTF_8, stdout.first.encoding
     assert stdout.all?(&:valid_encoding?)
     assert_equal 2, stdout.size
+  end
+
+  test "an op that carries slots gets a budget that fits an upload of the largest size, and one without them does not" do
+    handle = start_session
+    @host_runner.operations.clear
+    budget = Runners::ResultUploads.budget
+    assert_equal 62, budget, "32 MiB at 1 MiB/s, and 30 s for the last request and the result"
+
+    @runtime.exec(handle, [ "true" ], timeout: 30)
+    @runtime.write_file(handle, "/tmp/x", "y")
+
+    with_slots, without = RunnerOperation.where(op: %w[exec write_file]).order(:id).to_a
+    own_time = 30 + ContainerRuntime::RunnerRuntime::EXEC_GRACE
+    assert_in_delta own_time + budget, with_slots.deadline_at - with_slots.created_at, 2
+    assert_in_delta Settings.runners.op_timeout, without.deadline_at - without.created_at, 2
+  end
+
+  test "an upload that cannot finish before the deadline falls back to the first MiB, which the exec marks truncated" do
+    handle = start_session
+    cap = ContainerRuntime::FakeHostRunner::OUTPUT_CAP
+    @host_runner.answer_with("exec") do |_payload, _session|
+      { "status" => "ok", "exit_code" => 0, "stdout" => "x" * cap, "stderr" => "",
+        "data" => { "stdout_truncated" => true, "stderr_truncated" => false,
+                    "upload_errors" => { "stdout" => "uploading the stdout failed: the op's deadline has passed" } } }
+    end
+
+    stdout, _stderr, code = @runtime.exec(handle, [ "cat", "/tmp/big" ])
+
+    assert_equal 0, code
+    assert_equal cap, stdout.join.bytesize
+    assert_match(/cut to the first 1 MiB/, @runtime.take_uncollected_whole.join)
+  end
+
+  test "where the storage cannot sign, no slot is issued, no time is added, and the cut output is reported with the reason" do
+    restore_cache_storage
+    handle = start_session
+    @host_runner.operations.clear
+    big = "x".b * (ContainerRuntime::FakeHostRunner::OUTPUT_CAP + 1)
+    @host_runner.machine.container.files["/tmp/big"] = big
+
+    assert_nil @runtime.read_file(handle, "/tmp/big")
+
+    op = RunnerOperation.where(op: "read_file").order(:id).last
+    assert_not @host_runner.operations.last[:payload].key?("uploads")
+    assert_in_delta Settings.runners.op_timeout, op.deadline_at - op.created_at, 2
+    notes = @runtime.take_uncollected_whole
+    assert_equal 1, notes.size
+    assert_match %r{/tmp/big.*not collected whole.*S3-compatible storage}, notes.first
+    assert_empty @runtime.take_uncollected_whole, "the notes are taken once"
   end
 
   test "a stream under the cap stays inline, and nothing is fetched or removed" do
