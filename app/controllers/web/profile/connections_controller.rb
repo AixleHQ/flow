@@ -5,6 +5,8 @@
 class Web::Profile::ConnectionsController < Web::ApplicationController
   PROVIDER = Github::UserConnection::PROVIDER
 
+  layout "inertia"
+
   before_action :require_auth
 
   def index
