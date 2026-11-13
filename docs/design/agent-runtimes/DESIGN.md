@@ -576,7 +576,7 @@ constrained in SQL:
 | `namespace` | string | required | `kubernetes`; must equal the namespace the controller reports at registration | §5.1, §9.6 |
 | `reconnect_grace` | integer, seconds, 60–7200 | `900` (15 min) | all | §6.7 |
 | `auto_update` | boolean | `true` | `manual`; overridable per machine with `aixle-runner configure --no-auto-update` (`runner_environments.auto_update`) | §14.4 |
-| `container.image_override` | string, image reference | null (the runner default image of the session's runtime, §6.8) | all; must be built `FROM` our base image, checked at check-in | §6.8 |
+| `container.image_override` | string, image reference; `{agent}` is replaced at launch with the image name of the session's runtime (`config/agent_runtimes.json`), so `ghcr.io/aixlehq/flow-{agent}:develop` serves every agent; any other placeholder is refused, and so is a value that is no image reference once replaced | null (the runner default image of the session's runtime, §6.8) | all; must be built `FROM` our base image, checked at check-in | §6.8 |
 | `container.resources` | `{cpus, memory}` | from the hosted pod spec | all; `--cpus`/`--memory` on `manual` and `coder`, pod requests and limits on `kubernetes` | §6.8 |
 | `container.workspace_volume` | boolean | `true` | `manual`, `coder` | §6.8, §7.1 |
 | `container.cache_mounts` | array of `{name}` (named volume `aixle-cache-<key>-<name>`) or `{host_path}`, each with `target` | `[]` | `manual`, `coder` | §6.8, §7.2 |
@@ -1354,6 +1354,16 @@ browser only until the dialog closes. The dialog builds the sequence above with 
 (`409`), a runner that is not `manual` with `runner_not_manual`, and a platform that recommends
 no version with `no_runner_release` (both `422`).
 
+**What v1 has so far (§15 task 12b).** The dialog has a **Docker** choice next to the platforms
+(Alex, 2026-11-12). It runs `ghcr.io/aixlehq/aixle-runner:<recommended version>` (multi-arch)
+and the machine needs neither systemd nor a service user: `configure` is run in a throwaway
+container, then the runner in a container with `--restart unless-stopped`, the Docker socket and
+the volume of §14.4. The runner's directory is `/var/lib/aixle-runner` on Linux and
+`$HOME/aixle-runner` on macOS (OrbStack, and Docker Desktop as far as checked), a directory
+Docker shares. The image does not update itself, so the dialog has no self-update option for
+it. Removal is: stop and remove the container, run `unregister`, delete the directory and the
+volume. A rootless Docker or Podman (another socket path) and Windows are not covered.
+
 ### 6.4 Operations
 
 Each op is `{id, sequence, op, session_id?, deadline_at, payload}`. Results are
@@ -1638,7 +1648,11 @@ machine cannot pull from (`image_pull_failed`). The defaults are the public imag
 do for hosted sessions; the tag is `Settings.runners.agent_image_tag`
 (`RUNNER_AGENT_IMAGE_TAG`, default `latest`), not the hosted `agents.image_tag`, which can be
 a build tag (`sha-…`) that GHCR does not carry (QA, #229). The runner's
-`container.image_override` wins over the default; hosted sessions are unchanged. A private
+`container.image_override` wins over the default; hosted sessions are unchanged. The choice
+is made in one place, `ContainerRuntime::RunnerRuntime#runner_image`, next to the override:
+`container.image_override` (with `{agent}`), else `runners.agent_images.<runtime>`, else the
+prefix, the runtime's image name and the tag. The strategy's (hosted) image is not used for a
+session on a runner. A private
 image needs `docker login` on the machine: no registry credentials are sent to it.
 
 **Decided (§6.9):** `aixle-runner` is not PID 1 on any type, and nothing of it is in the
@@ -1912,7 +1926,7 @@ option does; types, defaults and per-type applicability are in §2.7. All of the
 | `pid` | `private` | `host` drops PID isolation. |
 | `extra_mounts` | `[]` | Arbitrary `src:dst[:ro]` bind mounts, validated as absolute paths. Read-only unless `:rw` is written out. |
 | `resources` | from the hosted pod spec | `--cpus` / `--memory`, so a session cannot starve the machine. Pod requests and limits on `kubernetes`. |
-| `image_override` | none | An image built `FROM` our base image instead of the stock one, prerequisites checked at check-in. |
+| `image_override` | none | An image built `FROM` our base image instead of the stock one, prerequisites checked at check-in. It is one image for every session on the runner, unless it contains `{agent}`, which is replaced at launch with the session agent's image name (`claude-code`, `codex`, …): `ghcr.io/aixlehq/flow-{agent}:develop` starts each agent in its own image. `{agent}` is the only placeholder; `Runners::ConfigSchema` refuses an unknown one, or a value that is not an image reference once replaced, when the runner is saved. |
 
 The container receives the same environment variables the hosted pod spec sets for the
 image, with the callback addresses of the session's local proxy (§6.6). On
@@ -2288,7 +2302,15 @@ The details task 8 fills in:
   `docker_files_not_visible`, whose message names the paths and the cause (a remote
   `DOCKER_HOST`, or a daemon that runs elsewhere). The session fails with it. There is no start
   check. The dev `local` adapter keeps its binary and state in `RUNNER_LOCAL_DIR`, a directory
-  of the machine mounted at the same path, for this reason.
+  of the machine mounted at the same path, for this reason, and so does the published image
+  when it is run as a host runner (§14.4).
+- **A daemon on arm64** (task 12b, Alex, 2026-11-12): the agent images are OCI indexes with
+  `linux/amd64` only (native arm64 images are task #226). The pull and the creation of the
+  agent container, of the proxy sidecar (the same image) and of the scrub container ask for
+  `linux/amd64`, so an arm64 daemon runs them under emulation: built into OrbStack and Docker
+  Desktop, `binfmt` on ARM Linux. Without emulation the container fails to start with the
+  daemon's own words. The sidecar's entrypoint is the runner's native binary, which the kernel
+  runs natively.
 
 #### 6.9.4 Question 3: the live log and how a session ends (§6.5, task 8)
 
@@ -3620,8 +3642,10 @@ Alex 2026-11-09): `1.0.0` comes with the extract or the first customer (§14.1).
   `settings.yml`, the one loading mechanism, next to the other `runners:` settings. Besides the
   four keys above the block holds `download_url`, the template of the asset URL the release
   endpoint redirects to (`%{version}`, `%{platform}`), so a mirror is one edit. It pins
-  `protocol_supported: [1]`, no minimum, and `recommended_version: "0.1.0"` with the
-  `linux-amd64` and `linux-arm64` digests of `runner-v0.1.0`'s `checksums.txt` (task #220). The
+  `protocol_supported: [1]`, no minimum, and `recommended_version: "0.2.0"` with the
+  `linux-amd64` and `linux-arm64` digests of `runner-v0.1.0`'s and `runner-v0.2.0`'s
+  `checksums.txt` (task #220; `0.2.0` pinned by task #232, `0.1.0` kept so machines on it still
+  download and verify). The
   gateway's `X-Aixle-Runner-Protocol` check reads `protocol_supported`, and
   `X-Aixle-Runner-Version` is strict SemVer 2.0 from task 10 on, so versions compare by SemVer
   precedence (`Runners::Version`).
@@ -3732,6 +3756,18 @@ Alex 2026-11-09): `1.0.0` comes with the extract or the first customer (§14.1).
     place while the machine is idle and exits, and systemd starts the new binary. There is no
     root helper and no package manager: operators who manage the machine themselves turn
     self-update off.
+  - **`manual` in Docker (task 12b):** the published image runs as a host runner
+    (`docker/runner/Dockerfile`). The proxy sidecar bind-mounts the runner's own binary and
+    its relay socket, and the daemon resolves those paths on the machine, so with
+    `AIXLE_RUNNER_DIR` set the entrypoint copies the binary into that directory, a directory
+    of the machine mounted at the same path, and `configure`, `unregister` and `--mode host`
+    keep the state in `$AIXLE_RUNNER_DIR/state`. Without it the entrypoint is the binary, as
+    before. The container runs as `--user 0:0`: the image's user 10001 can reach neither the
+    Docker socket nor the machine's directory, and a process with the Docker socket is root
+    on the machine anyway. A volume mounted read-only at `/var/lib/docker` lets the
+    preflight's disk check measure the daemon's filesystem, as `runner-local` does. The image
+    does not update itself (the tag is the version): update it by running the new version's
+    image over the same directory.
   - **Kubernetes:** the init container and image as in §9.6.
   - **Decided (§6.9.6):** there is no session runner. The proxy sidecar on `manual` and
     `coder` runs the host runner's own binary, bind-mounted, so it is updated with it. On
@@ -3769,6 +3805,7 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 10 | 2 | **Done.** Runner release lane: `runner-release.yml` for `runner-v*` (binaries, `checksums.txt`, GHCR image, from `docker/runner/Dockerfile`), applied by Alex from the task's patch since agents cannot push `.github/workflows/`. The pins file read through `Settings.runners.release` and checked by `Runners::Release` at boot (since task #220 the `runners.release` block of `config/settings.yml`). The `/runner/v1/releases` redirect and checksums endpoints, public and with `schemas/v1/releases.params.json`. The `min_version` refusal at `register` (`400 runner_version_unsupported`), strict SemVer 2.0 for `X-Aixle-Runner-Version` and `protocol_supported` for `X-Aixle-Runner-Protocol`. The "Runner compatibility" and "Releasing the runner" sections in `docs/operations/releasing.md` (§14.2). Self-update with the opt-out (`config.auto_update: false`, `configure --no-auto-update` as `runner_environments.auto_update`, §14.4), moved from task 6. **Decisions (Alex, 2026-11-09):** (1) the first runner version is `0.1.0`, and `1.0.0` comes with the extract or the first customer; (2) a runner learns of an update from the answer of `GET /runner/v1/ops` without ops, which carries `update: {version, sha256}` only while the machine holds no session and runs below `recommended_version`, unless it opted out, and 8c's `check-in` adds the same field; (3) the binary lives in `/var/lib/aixle-runner/bin`, owned by the `aixle-runner` user, `service install` installs it there and points `ExecStart` at it, and an update downloads there, verifies the SHA-256, switches atomically and exits for systemd to restart (`Restart=always`), with no root helper and no package manager; (4) `runner-release.yml` also runs by `workflow_dispatch` as a dry run that builds and checks the binaries and the image and pushes and releases nothing. As built: §14.2 "What v1 has", §14.4 "What v1 has", §6.3. Alex tags `runner-v0.1.0` after this merges, and a follow-up PR pins `0.1.0` and its digests (task #220: done, with the pins moved into `config/settings.yml`). **Fix CR round 1 (Alex, 2026-11-10):** no update reservation, and `update.DownloadTimeout` is 2 minutes, so a `container.start` queued during an update outlives it (§14.4); the release requests carry neither protocol header, and the Go conformance harness checks each fixture header's presence or absence; a `download_url` template that `format` cannot fill in fails boot; a runner version over 255 characters is `invalid_registration` before the `min_version` refusal; the published image sets `AIXLE_RUNNER_NO_SELF_UPDATE=1` and does not update itself (§14.4); the parsed pins are memoized. **Fix CR round 2 (Alex, 2026-11-10):** every answer of the release endpoints, the `400` and `404` refusals included, has `Cache-Control: no-store`; the `update` offer drops `url` and is `{version, sha256}`, since the runner builds its release requests from its own configured platform URL (protocol 1 is unreleased, so nothing is kept for compatibility); `configure` treats `AIXLE_RUNNER_NO_SELF_UPDATE` as `--no-auto-update`, so a machine configured from the published image registers `auto_update: false`; the host runner computes its effective self-update setting once, for the start line and the updater. |
 | 11 | 3 | `Runners::Allocator` and environment state machine, including the self-registering entry path (§5.2): affinity, project binding, no step 4 on non-`provisionable` types, scrub and reset escalation without rebuild, Return to service, Release to company (§9.4), reconciliation pass, and the capacity path of §10: a `ContainerRuntime::CapacityError` from the allocator (the runner at `max_environments`, or the provider out of capacity) becomes `capacity_wait` with the wait reason `runner_capacity`, reservation kept. When `env.scrub` is first sent, the removal of its helper container in `runner/internal/docker/scrub.go` gets a bounded timeout under a fresh context, as `container.start`'s removal on failure did in 8a's Fix CR round 6; in 8a its code is unchanged, because `env.scrub` is not sent yet (Alex, Fix CR round 7). |
 | 12a | 3 | **Done.** "Add machine", brought forward from row 12 on its own (Alex, 2026-11-12, task #225) so that QA can register a staging machine and exercise the runner paths that need a machine's credentials (8c and after). The button on a live `manual` runner's page, company and project, offered under the policy that guards update and revoke (`registration_token?`); `POST .../runners/:id/registration_token` mints a single-use token (1 h) through `Runners::Credentials.mint_registration!` (`Runners::MachineRegistration.issue!`) and returns it once, with the recommended version and, per platform, the binary's URL on the platform's own host and its SHA-256 from the pins; the dialog shows the §6.3 sequence (download and verify, `configure --url --token --name`, `service install` and `service start`) with a choice of `linux-amd64` or `linux-arm64`, a machine name and `--no-auto-update`. A revoked runner offers no button and is refused with `runner_revoked`. The "Adding a machine" section of `docs/user-guide/runners.md`. As built: §6.3. Row 12 keeps the rest. |
+| 12b | 3 | **Done.** A Docker choice in "Add machine" (the published image as a host runner: its entrypoint keeps the binary and the state in `AIXLE_RUNNER_DIR`, a directory of the machine mounted at the same path; restart policy `unless-stopped` and the Docker socket; removal by `unregister`) and machines on arm64: the agent container, the sidecar and the scrub container are pulled and created for `linux/amd64`, so an arm64 daemon runs them under emulation until native images (#226). User guide: "Adding a machine". As built: §6.3, §6.9.3, §14.4. Decided by Alex, 2026-11-12. |
 | 12 | 3 | `manual` end to end: `POST /runner/v1/heartbeat` (moved from 8c, Alex 2026-11-11: it records heartbeats and derives machine health, its first readers; the host runner runs one thing at a time, so no poll is outstanding during an op, but nothing reads a heartbeat before this row), `ManualAdapter#check_health` derived from machine heartbeats (§2.5), heartbeat-based `observe`, the Machines table (online / idle / offline, facts, first-seen IP), per-machine Revoke, `reuse_policy` per §7.1, the writable-mount acknowledgement, the §9.7 disclosure, the `runner_capacity` wait reason on the session page and the "every machine busy" message ("Waiting for a free machine on runner \"X\" (2 of 2 busy).", §10), and user docs for `manual` (dedicated machine recommended). The operator docs must say that a bind source can't be under the machine's `/tmp` or `/var/tmp` when the runner runs as the service: the unit has `PrivateTmp=true`, so the runner doesn't see those directories and refuses such a bind with `forbidden_mount` (verification round 1 of 6b; accepted as a known limitation, Alex 2026-11-06). From 8b, for `network: host` (Alex, 2026-11-10): **port collisions**: a session's proxy port is `20000 + session id mod 10000`, so two sessions on one machine whose ids are congruent mod 10000, or any other service in 20000 to 29999, can take it, and the session then fails with `proxy_port_in_use`, which is not retryable on that machine; **local access**: the listener is on the machine's own `127.0.0.1`, so any local user or process can reach it, and the host runner adds the environment credential to what it sends. A session key is still required, but the exposure is wider than the sidecar's private network namespace. |
 | 13 | 3 | Runner page actions (Reset, Force release), connection-lost banner, the revoke flow, Administrate dashboards. |
 | 14 | 3 | Staging validation per §12.4 (QA task). Record the machine used in the result. |
@@ -3778,7 +3815,8 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 18 | 5 | Staging validation per §12.5 (QA task), on the staging Coder integration configured on the test project and a template it offers at test time. Record the template used and the §12.5 checks (Docker daemon, disk, pruning) in the result. |
 | 19 | 6 | Kubernetes: declare `external_runners_kubernetes` (§12.1); `aixle-runner` controller mode, the Helm chart and its `runner-chart-v*` OCI lane in `AixleHQ/aixle-runner` (§14.1), `KubernetesAdapter` over controller ops, registration-token UX, documented agent image sizes. Preceded by the runner extract if it has not happened yet. **Decided (§6.9.2):** the controller runs the session ops through the Kubernetes API (`client-go` exec, `tar` over exec, the pod watch and the log API) behind the session-op handlers of #204, does the check-in for each pod with the bootstrap token from the `provision` op, follows the pod log, creates the proxy sidecar and its per-session proxy key (TLS on the relay, revoked when the session ends), keeps its state on a `PersistentVolumeClaim`, takes leader election with a `Lease` and a controller generation the gateway checks, requires Kubernetes 1.29 and an enforced NetworkPolicy (checked by the validation), and gets the RBAC of §9.6's decided footprint. An `interrupted` op may still run in the pod (§6.9.7). |
 | 20 | 7 | `host` execution mode (§6.8): `config.execution_mode: host` and `config.host.cli_source` declared in the §2.7 schema, the host-side CLI with `cli_source` (prototype `docker create` + `docker cp` first), the host-generated CA trusted in three stores and passed into the MITM container, the `NODE_OPTIONS` instrumentation, host-side ttyd/IDE/watcher for the tunnel, the redaction path, the per-session OS user and its scrub (§7.2), toolcache session kits, P2. Likely several tasks when it is cut. **Decided (§6.9, Alex, 2026-11-06): mode 2, on Coder only, with one session per workspace.** The agent CLI runs on the workspace's machine; the services that can run in Docker (`mitmdump`, the callback proxy and the others) run in containers with their ports published on the machine, so that the runner and the agent reach them. The reason: a full development machine with no container around the agent, for example to run `docker compose up`. The workspace is the unit of isolation, so the per-session OS user and the airtight scrub of §7.2, written for `manual`, are not needed. The `host` mode is not planned for `manual`. |
-| 21 | 5 | **Runner sessions' default agent images (#229, Alex, 2026-11-12).** `Settings.runners.agent_image_prefix` (default `ghcr.io/aixlehq/flow-`) and `agent_images.<runtime>`, from `RUNNER_AGENT_IMAGE_*`; `AgentBaseStrategy#resolve_image` takes them for a session with a runner, the hosted `agents.*` otherwise; the tag is `runners.agent_image_tag` (`RUNNER_AGENT_IMAGE_TAG`, default `latest`; GHCR has no `sha-*` tags); `container.image_override` still wins (§2.7, §6.8). Docs: configuration reference, runners user guide. |
+| 21 | 5 | **Runner sessions' default agent images (#229, Alex, 2026-11-12).** `Settings.runners.agent_image_prefix` (default `ghcr.io/aixlehq/flow-`) and `agent_images.<runtime>`, from `RUNNER_AGENT_IMAGE_*`; `ContainerRuntime::RunnerRuntime#runner_image` chooses them (the override, then `agent_images.<runtime>`, then prefix, runtime image and tag), and `AgentBaseStrategy#resolve_image` is unchanged for hosted `agents.*`; the tag is `runners.agent_image_tag` (`RUNNER_AGENT_IMAGE_TAG`, default `latest`; GHCR has no `sha-*` tags); `container.image_override` still wins (§2.7, §6.8). Docs: configuration reference, runners user guide. |
+| 22 | 7 | **`{agent}` in `container.image_override` (Alex, 2026-11-12).** `Runners::ConfigSchema` accepts the placeholder `{agent}` and refuses any other, and a value that is not an image reference once replaced; `RunnerRuntime#runner_image` replaces it with `AgentRuntime.fetch(session.agent_type).image` at `container.start`; an override without a placeholder works as before. The runner form's help text says what `{agent}` is replaced with. Default images for runner sessions are not part of it. |
 
 ---
 

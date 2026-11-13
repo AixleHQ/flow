@@ -377,7 +377,7 @@ const BuilderPage = () => {
       setSaving(false);
     }
   }, [projectId, workflow, sortedSteps, replaceIssues]);
-  useUnsavedChanges({ dirty: dirty && !saving, onSave: save });
+  useUnsavedChanges({ dirty, saving, onSave: save });
 
   // Derive selected session and step from selection state
   const selectedSession = useMemo(

@@ -57,7 +57,12 @@ export const BitbucketConnectModal = ({ opened, onClose, basePath, bitbucket }: 
     setErrors({});
   }, [onClose]);
 
-  const requestClose = useUnsavedChanges({ opened, dirty: workspace !== '' || token !== '', onClose: close });
+  const requestClose = useUnsavedChanges({
+    opened,
+    dirty: workspace !== '' || token !== '',
+    saving: loading,
+    onClose: close,
+  });
 
   // Only this branch posts a token, so switching modes can never submit one
   // the other path collected.

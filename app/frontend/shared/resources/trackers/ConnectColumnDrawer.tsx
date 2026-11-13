@@ -62,7 +62,7 @@ export const ConnectColumnDrawer = ({ projectId, tracker, workflows, boardColumn
     copyAttachments ||
     workflowId !== (workflows[0]?.id.toString() ?? null) ||
     columnId !== (boardColumns[0]?.id.toString() ?? null);
-  const requestClose = useUnsavedChanges({ opened: Boolean(tracker), dirty, onClose });
+  const requestClose = useUnsavedChanges({ opened: Boolean(tracker), dirty, saving, onClose });
 
   const submit = async () => {
     if (!tracker || !workflowId) return;

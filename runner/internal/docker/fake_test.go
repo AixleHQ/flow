@@ -42,7 +42,11 @@ type fakeEngine struct {
 	pulls     []string
 	// pullAuths is the X-Registry-Auth of every pull, "" for an anonymous one.
 	pullAuths []string
-	rootDir   string
+	// pullPlatforms and createPlatforms are the `platform` of every pull and of
+	// every container create, "" when none was asked for.
+	pullPlatforms   []string
+	createPlatforms []string
+	rootDir         string
 
 	containers map[string]*fakeContainer
 	execs      map[string]*fakeExec
@@ -188,6 +192,7 @@ func (f *fakeEngine) serveImages(w http.ResponseWriter, r *http.Request, p strin
 		ref := r.URL.Query().Get("fromImage") + separator + tag
 		f.pulls = append(f.pulls, ref)
 		f.pullAuths = append(f.pullAuths, r.Header.Get("X-Registry-Auth"))
+		f.pullPlatforms = append(f.pullPlatforms, r.URL.Query().Get("platform"))
 		if f.pullDelay > 0 {
 			select {
 			case <-time.After(f.pullDelay):
@@ -408,6 +413,7 @@ func (f *fakeEngine) createContainer(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.creates = append(f.creates, req)
+	f.createPlatforms = append(f.createPlatforms, r.URL.Query().Get("platform"))
 	name := r.URL.Query().Get("name")
 	if !f.images[req.Config.Image] {
 		writeJSON(w, http.StatusNotFound, map[string]any{"message": "No such image: " + req.Config.Image})

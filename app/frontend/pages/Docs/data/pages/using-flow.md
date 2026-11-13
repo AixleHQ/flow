@@ -28,8 +28,9 @@ instead. This section is for people who *use* the product.
    [session queue](/docs/session-queues).
 3. The agent works under the credential of the person the run belongs to: the
    card's assignee, else whoever moved the card or pressed **Run**; for a
-   schedule, a message, a webhook or a tracker event, whoever set up the
-   trigger.
+   schedule, a message, a webhook or a tracker event, whoever the trigger runs
+   as. When that is a [team](/docs/people-and-access#project-teams), the run
+   goes to one of its members whose agent can take it.
 4. Results come back to where the work started. A card gets status, comments
    and files; a Slack or Teams thread gets a status card that follows the run;
    a tracker issue gets a comment if the run fails. Files are kept in Assets,

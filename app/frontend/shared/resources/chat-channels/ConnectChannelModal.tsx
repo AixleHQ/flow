@@ -87,7 +87,7 @@ export const ConnectChannelModal = ({
   const label = CHAT_PROVIDER_LABELS[provider] ?? provider;
   const hint = CHANNEL_HINTS[provider];
   const blank = channel.trim() === '';
-  const requestClose = useUnsavedChanges({ opened, dirty: !blank && code === null && !issuing, onClose });
+  const requestClose = useUnsavedChanges({ opened, dirty: !blank && code === null, saving: issuing, onClose });
 
   const issue = async (event: FormEvent) => {
     event.preventDefault();

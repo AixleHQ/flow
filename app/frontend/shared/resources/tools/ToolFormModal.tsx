@@ -302,7 +302,7 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
 
   const dirty = form.isDirty() || JSON.stringify(files) !== initialFiles.current;
   const unsaved = isEditMode && dirty;
-  const requestClose = useUnsavedChanges({ opened, dirty, onClose });
+  const requestClose = useUnsavedChanges({ opened, dirty, saving: submitting, onClose });
 
   return (
     <ResourceDrawer
