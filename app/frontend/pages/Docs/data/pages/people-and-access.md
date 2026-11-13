@@ -91,6 +91,7 @@ carries a status:
 | --- | --- |
 | **Ready** | Can take a run now |
 | **On hold until** a date | Their agent ran out of quota; they are passed over until it resets |
+| **Login expired** | Their agent's login can no longer be renewed; they are passed over until they sign in again from Profile |
 | **Can't take runs** | Hover for the reason — no agent connected, a viewer, or no longer in the project |
 
 ### Strategies
@@ -115,6 +116,8 @@ A member is picked only when they:
 - can still start runs in the project — not a viewer, not removed;
 - have an agent connected for **every** runtime the run needs — each step's
   pinned runtime, or any agent when the steps pin none;
+- have a working login on each of those agents — one whose token can no longer
+  be renewed is skipped, the same login a run of their own would be refused on;
 - have none of those agents on hold.
 
 An agent goes on hold when a run stops on its quota: until the usage window
@@ -130,11 +133,14 @@ connected* — and shows wherever a failed run does: the card, the runs list,
 the chat thread's status card. There is no fallback to the person who
 triggered it.
 
-**When the quota runs out in the middle of a run**, a step set to retry on
-failure is retried as the team's next member: that step and every step after
-it run as them, and the handover is recorded. The retry counts toward the
-step's retries. A step that is not set to retry fails the run, as it would for
-anyone.
+**When the quota runs out in the middle of a run**, or the agent's login
+fails, the step runs again as the team's next member: that step and every step
+after it run as them, and the handover is recorded. This does not depend on the
+step's **On Failure** setting and does not use up its retries, so a team needs
+no retry on its costly steps to survive a quota stop. A run never goes back to
+a member it has left. When nobody is left to take it, a quota stop fails the
+run; a login failure is then handled by the step's **On Failure**, as it would
+be for anyone.
 
 ### Using a team
 
@@ -175,7 +181,7 @@ someone or deals with it.
 - Deleting a team clears it from its cards. A team that a trigger runs as
   cannot be deleted; the error lists those triggers.
 - Members added, removed or leaving, a changed strategy, and a run handed to
-  another member on quota are all in the audit trail.
+  another member on a quota stop or a failed login are all in the audit trail.
 
 Over the personal MCP server the same management is `list_project_teams`,
 `create_project_team`, `update_project_team` and `delete_project_team`.

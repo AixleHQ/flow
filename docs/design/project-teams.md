@@ -1,6 +1,8 @@
 # Project teams
 
-**Status:** built, 2026-11-11 — all three phases. The code lives under
+**Status:** built, 2026-11-11 — all three phases. Revised 2026-11-13 after the
+first feedback: an expired login takes a member out of the pick, and a quota or
+login stop hands the run on whatever the step's `on_failure` (decision 3). The code lives under
 `ProjectTeams::` (`app/services/project_teams/`); `Teams::` is the Microsoft Teams
 integration.
 The user-facing guide is the docs portal's **Team & access** page, section
@@ -36,7 +38,7 @@ A team moves the choice of person into the platform, for cards and triggers alik
 |---|---|---|
 | 1 | No member can take the run | Fail the run at once, with the reason for every member who was skipped. No fallback to whoever triggered it. |
 | 2 | Is a card bound to one member? | No. Each run of a card assigned to a team picks the best member at that moment. |
-| 3 | Quota hit in the middle of a run | When the failed step is set to retry on failure, the retry picks the next member by the team's strategy. Otherwise the run fails as today. |
+| 3 | Quota hit in the middle of a run | The step runs again as the team's next member, whatever its `on_failure` and without spending a retry. A login failure is handed on the same way. (Until 2026-11-13 this needed the step set to retry, and spent a retry: teams had to turn retry on for every failure, costly steps included, to survive a quota stop.) |
 | 4 | Consent of the member | Members are notified when added and can leave a team themselves. A profile setting, off by default, keeps a user out of every team. |
 | 5 | Who manages teams | The project owner and company admins — the same people who may change a trigger's Runs as (`change_run_as?`). |
 
@@ -106,7 +108,11 @@ A member is a candidate when all of these hold:
    requested. Steps with no pinned runtime resolve from the member's own default
    (`SessionService`, `app/services/session_service.rb:217`), so they need no more
    than one credential of any kind;
-3. none of those credentials has `quota_exhausted_until` in the future.
+3. each of those credentials is a working login: `active` (not condemned by the
+   refresh sweep) and not `unrecoverably_expired?` — the test
+   `SessionService#preflight_agent_credential!` applies at launch. A member who
+   fails it shows as **Login expired** on the Teams page;
+4. none of those credentials has `quota_exhausted_until` in the future.
 
 Rule 2 also closes a gap that exists today for single assignees: an assignee with
 some credential, but not the runtime a step pins, gets a nil credential and the step
@@ -166,35 +172,44 @@ hold is not a new login. A new sign-in (`AgentCredential.from_artifacts` with
 one; a hold in the past is ignored. The field is not team-specific — a run owned by
 one person is not affected by it — and the Teams page shows it per member.
 
-## Retry on quota
+## Handing a run on
 
-Today a step that failed on quota is never retried
-(`@quota_error_step_run_ids`, `app/temporal/workflows/workflow_execution_workflow.rb:300`):
-the same account would fail again.
+A step that failed on quota is never retried for a run without a team
+(`@quota_error_step_run_ids`, `WorkflowExecutionWorkflow`): the same account would
+fail again.
 
-For a run with `team_id`, a quota failure on a step whose `on_failure` is `retry`
-and that has a retry left goes through `workflow_reassign_run_owner_activity`
-(`ProjectTeams::QuotaRetry`) before the normal retry path:
+For a run with `team_id`, a step that stopped on its owner's quota or login
+(`CompleteStepActivity` reports `quota_error` or `auth_error`) goes through
+`workflow_reassign_run_owner_activity` (`ProjectTeams::Handoff`) before anything
+else:
 
 1. pick the next member with the team's strategy, passing over the run's current
-   owner (whose credential is also held by now);
-2. none → the step fails and the run fails, with the same `team_unavailable` message;
-3. otherwise set `workflow_runs.user_id` to the new member, audit the change
-   (`run_owner_reassigned`: from, to, step run), and retry the step — the retried
-   step's session is created for `workflow_run.user` (`SessionService`,
-   `app/services/session_service.rb:229`), so it and every later step run as the new
-   member.
+   owner and every member the run has already left (the `run_owner_reassigned`
+   audits) — a failed login puts no hold on the credential, so without that two
+   members whose logins both fail would pass the run back and forth;
+2. none → a quota stop fails the step and the run, with the same `team_unavailable`
+   message; a login failure goes on to the step's `on_failure`, as it does without
+   a team;
+3. otherwise set `workflow_runs.user_id` to the new member, clear the run's
+   `failure_reason` and `failed_agent_credential_id` (the stop no longer says why
+   the run ends), audit the change (`run_owner_reassigned`: from, to, step run,
+   quota or login), and run the step again — the new step run's session is created
+   for `workflow_run.user` (`SessionService`), so it and every later step run as the
+   new member.
 
-The retry counts toward the step's `max_retries`. Earlier steps' sessions keep their
-original owner.
+The handoff does not depend on `on_failure` and does not count toward
+`max_retries`. It happens at most once per member. Earlier steps' sessions keep
+their original owner.
 
-This changes workflow code that runs for in-flight executions, so the new branch sits
-behind `Temporalio::Workflow.patched("team-quota-retry")` in
+This changes workflow code that runs for in-flight executions, so the branch sits
+behind `Temporalio::Workflow.patched("team-handoff")` in
 `WorkflowExecutionWorkflow#recover_from_step_completion_failure`, which
 `WorkflowExecutionWorkflowV2` inherits (see `docs/architecture/temporal-versioning.md`).
-The pick runs in the activity, never in workflow code.
+Executions started before it keep the earlier `team-quota-retry` behaviour: a quota
+stop handed on only when the step was set to retry, spending a retry. The pick runs
+in the activity, never in workflow code.
 
-A run without a team, or a step without retry, behaves exactly as today.
+A run without a team behaves as before.
 
 ## Membership
 
@@ -217,7 +232,7 @@ A run without a team, or a step without retry, behaves exactly as today.
   for anyone a write that skipped the callbacks left behind. Deleting a team nullifies `assignee_team_id` on its tasks and is refused
   while a trigger runs as it, listing those triggers.
 - **Audit.** Member added, removed, left; strategy changed; a run's owner switched by
-  a quota retry.
+  a quota or login handoff.
 
 ## Permissions
 
@@ -233,7 +248,7 @@ A run without a team, or a step without retry, behaves exactly as today.
 - **Project → Teams** (`/company/projects/:id/teams`, the sidebar item after
   Members; `Web::Company::Projects::TeamsController`). One card per team: its
   strategy; its members in order, each with whether they can take a run now
-  (Ready, On hold until a date, or Can't take runs, the reason on hover); the
+  (Ready, On hold until a date, Login expired, or Can't take runs, the reason on hover); the
   member the next run goes to, marked Next (`ProjectTeams::Picker.preview`, which
   locks nothing, moves no cursor and asks no vendor); what uses the team; Leave and
   Edit. The editor sets name, strategy and member order, and deletes the team. The
@@ -271,7 +286,7 @@ A run without a team, or a step without retry, behaves exactly as today.
 - A session belongs to one person. Credentials, personal MCP OAuth tokens, cloud
   connections, config item access records and the Kubernetes namespace all come from
   that person (`SessionCompany.agent_credentials_for`, `SessionService` preflights).
-- A run's owner is fixed at launch, except for the quota retry above.
+- A run's owner is fixed at launch, except for the handoff above.
 - A card assigned to a person, and a trigger running as a person, behave as today.
 
 ## Phases
@@ -283,12 +298,13 @@ All three shipped together:
    opt-out, notifications, personal MCP tools.
 2. **Teams as assignees.** Board UI, filters, bulk assign, session and personal tools.
 3. **Retry and balance.** `most_remaining`, the quota retry behind the
-   `team-quota-retry` patch, and the `workflow_run.quota_exceeded` event.
+   `team-quota-retry` patch (replaced by `team-handoff` on 2026-11-13), and the
+   `workflow_run.quota_exceeded` event.
 
 ## Open points
 
 - **Provider terms.** A run still uses one person's own account, as Runs as does
-  today; what is new is that `most_remaining` and the quota retry move work to
+  today; what is new is that `most_remaining` and the handoff move work to
   another member's subscription when one member's limit is reached. Whether that
   fits each provider's terms is for legal to assess. Nothing in the code restricts
   which credential kinds a team may use.

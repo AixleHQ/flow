@@ -13,7 +13,16 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Changed
+- **Teams**: when a step of a team's run stops on its owner's agent quota or on a
+  failed login, it runs again as the team's next member whatever the step's On
+  Failure setting, and without using up a retry. Before, the step had to be set
+  to retry, which also retried every ordinary failure.
+
 ### Fixed
+- **Teams**: a member whose agent login has expired is passed over instead of
+  being handed runs that then fail at launch, and the Teams page marks them
+  **Login expired**.
 - **Sessions & Runs**: the web log no longer prints, on every request, the
   OpenTelemetry spans a Copilot CLI session sends every couple of seconds.
 - **Workflows**: a repository, skill, connector or secret deleted from the
