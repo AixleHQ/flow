@@ -370,6 +370,28 @@ class OauthCredentialTest < ActiveSupport::TestCase
     assert_equal live, OauthCredential.live_github_connection_of(@user)
   end
 
+  test "gitlab_connections_of finds only that person's credentials on the current GitLab host" do
+    mine = create(:oauth_credential, :gitlab_user, owner: @user)
+    create(:oauth_credential, :gitlab_user, owner: create(:user, company: @company))
+    create(:oauth_credential, :github_user, owner: @user)
+    old_host = create(:oauth_client, :gitlab, issuer: "https://old.gitlab.example.com")
+    create(:oauth_credential, :gitlab_user, owner: @user, oauth_client: old_host)
+
+    assert_equal [ mine ], OauthCredential.gitlab_connections_of(@user).to_a
+  end
+
+  test "latest_gitlab_connection_of returns a revoked connection, live_gitlab_connection_of does not" do
+    revoked = create(:oauth_credential, :gitlab_user, owner: @user, status: :revoked)
+
+    assert_equal revoked, OauthCredential.latest_gitlab_connection_of(@user)
+    assert_nil OauthCredential.live_gitlab_connection_of(@user)
+
+    live = create(:oauth_credential, :gitlab_user, owner: @user)
+    live.touch
+
+    assert_equal live, OauthCredential.live_gitlab_connection_of(@user)
+  end
+
   test "for_github_user finds credentials by the GitHub account id in metadata" do
     credential = create(:oauth_credential, :github_user, owner: @user)
     create(:oauth_credential, owner: @user, provider: "sentry",

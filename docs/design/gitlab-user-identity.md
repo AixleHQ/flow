@@ -1,6 +1,6 @@
 # Agents act as the user on GitLab
 
-**Task:** #238 · **Status:** proposal · **Date:** 2026-11-13
+**Task:** #238 · **Status:** built · **Date:** 2026-11-13
 
 Builds on [github-user-identity.md](./github-user-identity.md) (#214, built). Read its
 §2.1–§2.3, §3 and §4.3 first: this document says only what GitLab changes. Anything not

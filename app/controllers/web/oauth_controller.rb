@@ -17,7 +17,7 @@
 # the RFC 8707 resource indicator through the exchange. A DCR token_endpoint is
 # attacker-authored, so it is re-validated against the SSRF guard at exchange time.
 class Web::OauthController < Web::ApplicationController
-  IMPERSONATION_ALERT = "GitHub cannot be connected while impersonating."
+  IMPERSONATION_ALERT = "This account cannot be connected while impersonating."
 
   before_action :require_auth, except: :client_metadata
   # The OAuth return must land here even for super-admins (who are otherwise
@@ -153,7 +153,8 @@ class Web::OauthController < Web::ApplicationController
     # (4) PKCE verifier supplied to the exchange (mandatory). The RFC 8707 resource
     # indicator (nil for static providers) is threaded through from the signed state.
     resp = exchange_code!(client, code: params[:code].to_s,
-                          code_verifier: consumed["code_verifier"], resource: payload["resource"])
+                          code_verifier: consumed["code_verifier"], resource: payload["resource"],
+                          provider: provider)
 
     credential = OauthCredential.upsert_from_token!(
       owner: owner,
@@ -250,11 +251,11 @@ class Web::OauthController < Web::ApplicationController
 
   private
 
-  # No GitHub credential is stored for a person during an impersonation: it decides what
-  # agents may do as them (docs/design/github-user-identity.md §4.2). Other providers,
-  # MCP connections included, are left as they are.
+  # No GitHub or GitLab credential is stored for a person during an impersonation: it
+  # decides what agents may do as them (docs/design/github-user-identity.md §4.2).
+  # Other providers, MCP connections included, are left as they are.
   def refuse_github_connect?(provider)
-    impersonated? && provider == Github::UserConnection::PROVIDER
+    impersonated? && UserConnections::PROVIDERS.key?(provider)
   end
 
   def require_auth
@@ -404,12 +405,12 @@ class Web::OauthController < Web::ApplicationController
   # any non-2xx response, network error, or unparseable body. NEVER interpolates
   # the code or any token into logs or exception messages. When present, the RFC
   # 8707 `resource` indicator (canonical MCP URL) is bound to the exchange.
-  def exchange_code!(client, code:, code_verifier:, resource: nil)
+  def exchange_code!(client, code:, code_verifier:, resource: nil, provider: nil)
     # SECURITY (oauth-unification §5): a source:"dcr" token_endpoint is
     # attacker-authored (discovered from an untrusted MCP server). Re-validate at
     # time-of-use — a persisted endpoint is no more trustworthy than a freshly
     # discovered one (TOCTOU). Static endpoints come from the trusted registry.
-    guard_token_endpoint!(client)
+    guard_token_endpoint!(client, provider)
 
     body = {
       grant_type: "authorization_code",
@@ -423,7 +424,8 @@ class Web::OauthController < Web::ApplicationController
 
     uri = URI.parse(client.token_endpoint)
     http = SafeHttp.http_for(uri, open_timeout: Oauth::TokenService::TOKEN_TIMEOUT,
-                                  read_timeout: Oauth::TokenService::TOKEN_TIMEOUT)
+                                  read_timeout: Oauth::TokenService::TOKEN_TIMEOUT,
+                                  trusted_hosts: Oauth::Providers.trusted_hosts(provider))
     req = Net::HTTP::Post.new(uri)
     req["Accept"] = "application/json"
     req.set_form_data(body)
@@ -446,8 +448,9 @@ class Web::OauthController < Web::ApplicationController
   # endpoints come from the trusted registry and pass unchanged. Raises
   # Oauth::TokenExchangeError (no endpoint interpolated) so the callback surfaces a
   # generic failure and never contacts the unsafe host.
-  def guard_token_endpoint!(client)
-    errs = UrlSafetyValidator.errors_for(client.token_endpoint, require_https: true)
+  def guard_token_endpoint!(client, provider = nil)
+    errs = UrlSafetyValidator.errors_for(client.token_endpoint, require_https: true,
+                                                                trusted_hosts_override: Oauth::Providers.trusted_hosts(provider))
     raise Oauth::TokenExchangeError, "unsafe token_endpoint" if errs.any?
   end
 end
