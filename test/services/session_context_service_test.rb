@@ -1144,6 +1144,30 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_nil session.reload.metadata["failed_repos"]
   end
 
+  # The safe.directory fragment is chained with `&&` after the clone and chown. A
+  # failed clone has to keep its exit code, or the retry and record_failed_repo
+  # never run and the agent starts with no checkout.
+  test "a public clone that fails exits non-zero through the real shell command" do
+    repo = create(:repository, :public_source, full_name: "rails/rails", source_branch: "main",
+                  clone_url: "https://github.com/rails/rails.git", scope: @project)
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    captured = nil
+    runtime = Object.new
+    runtime.define_singleton_method(:exec) { |_ctr, cmd| (captured = cmd) && [ [], [], 0 ] }
+
+    context_service(session, "ctr1", runtime: runtime).send(:exec_clone_command, repo, nil, nil, 1001, "/tmp/never-cloned")
+
+    Dir.mktmpdir do |dir|
+      stub = File.join(dir, "git")
+      File.write(stub, "#!/bin/sh\nexit 128\n")
+      File.chmod(0o755, stub)
+      env = { "PATH" => "#{dir}:#{ENV['PATH']}", "GIT_CONFIG_SYSTEM" => File.join(dir, "gitconfig") }
+
+      assert_not system(env, *captured, err: File::NULL), "a failed clone must not exit 0"
+      assert_equal 128, $?.exitstatus
+    end
+  end
+
   test "inject_repositories skips inactive integration" do
     integration = create(:integration, company: @company, connected_by: @user, status: :inactive)
     repo = create(:repository, full_name: "acme/repo", source_branch: "main",

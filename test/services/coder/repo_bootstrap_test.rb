@@ -74,11 +74,10 @@ module Coder
 
     # git reads safe.directory only from system, global and command-line config, so
     # the repository-local entry this used to write had no effect.
-    test "marks the clone as safe in the global git config, never the repository's own, once" do
+    test "marks the clone as safe through the shared helper, never the repository's own config" do
       prepare
 
-      assert_match(/git config --global --add safe\.directory "\$TARGET"/, @runner.command)
-      assert_match(/git config --global --get-all safe\.directory \| grep -qxF -- "\$TARGET"/, @runner.command)
+      assert_includes @runner.command, GitCredentials::SafeDirectory.script("/root/app", scope: :global)
       assert_no_match(/-C "\$TARGET" config --add safe\.directory/, @runner.command)
     end
 

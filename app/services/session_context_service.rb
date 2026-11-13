@@ -686,7 +686,7 @@ class SessionContextService
   def exec_clone_command(repo, integration, token, uid, target_path)
     clone_url = build_clone_url(repo, integration, token)
     branch = Shellwords.escape(repo.source_branch)
-    cmd = [ "sh", "-c", "git clone --depth=1 --branch=#{branch} #{clone_url} #{target_path} && chown -R #{uid}:#{uid} #{target_path} && #{GitCredentials::SafeDirectory.script(target_path)}" ]
+    cmd = [ "sh", "-c", "git clone --depth=1 --branch=#{branch} #{clone_url} #{target_path} && chown -R #{uid}:#{uid} #{target_path} && #{GitCredentials::SafeDirectory.script(target_path, scope: :system)}" ]
     runtime.exec(container_id, cmd)
   end
 

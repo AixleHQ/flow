@@ -111,7 +111,7 @@ module AzureDevops
         unset AIXLE_GIT_AUTH_HEADER
         #{configure_helper_script(repository, target_path)}
         chown -R #{uid}:#{uid} #{path}
-        #{GitCredentials::SafeDirectory.script(target_path)}
+        #{GitCredentials::SafeDirectory.script(target_path, scope: :system)}
       SH
 
       runtime.exec(container_id, [ "sh", "-c", script ], timeout: GitCredentials::SessionGitSetup::CLONE_TIMEOUT)

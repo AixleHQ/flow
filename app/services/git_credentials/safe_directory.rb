@@ -19,12 +19,26 @@ module GitCredentials
   # agent is a non-root user that owns the checkout and needs no entry, so a
   # failed write must not fail the clone.
   module SafeDirectory
-    # Shell for one path, idempotent: an entry already present is not added again
-    # (a reconfigure runs on every refresh_github_token call).
-    def self.script(path)
+    SCOPES = %i[system global].freeze
+
+    # Shell fragment for one path, idempotent: an entry already present is not
+    # added again (a reconfigure runs on every refresh_github_token call).
+    #
+    # `scope:` is required, with no default, and is `:system` (the container's
+    # /etc/gitconfig, for session containers) or `:global` (the exec user's own
+    # file, for a Coder workspace whose system file is not ours to write). Anything
+    # else raises ArgumentError.
+    #
+    # The fragment always succeeds by itself: the `|| true` sits INSIDE the group,
+    # so it is safe to chain with `&&` (`a && b && <fragment>`). A failure of `a` or
+    # `b` short-circuits past the group and keeps its exit code; a trailing `|| true`
+    # outside the group would turn it into exit 0.
+    def self.script(path, scope:)
+      raise ArgumentError, "scope must be one of #{SCOPES.inspect}, got #{scope.inspect}" unless SCOPES.include?(scope)
+
       quoted = Shellwords.escape(path.to_s)
-      "{ git config --system --get-all safe.directory | grep -qxF -- #{quoted} || " \
-        "git config --system --add safe.directory #{quoted}; } || true"
+      "{ git config --#{scope} --get-all safe.directory | grep -qxF -- #{quoted} || " \
+        "git config --#{scope} --add safe.directory #{quoted} || true; }"
     end
   end
 end
