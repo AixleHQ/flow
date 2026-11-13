@@ -553,9 +553,14 @@ module ContainerRuntime
 
     # The image the runner pulls and starts: the runner's
     # `container.image_override` where it sets one, else the strategy's, as it
-    # was given.
-    def runner_image(config, image)
-      setting(config, "container.image_override").presence || image
+    # was given. `{agent}` in the override is the image name of the session's
+    # runtime.
+    def runner_image(config, image, session)
+      override = setting(config, "container.image_override").presence
+      return image if override.nil?
+      return override unless override.include?("{agent}")
+
+      Runners::ConfigSchema.image_reference(override, AgentRuntime.fetch(session.agent_type).image)
     end
 
     # `proxy_port` is the session's port of its callback proxy, which the
@@ -565,7 +570,7 @@ module ContainerRuntime
     def container_payload(session, spec)
       config = session.runner&.config || {}
       {
-        "image" => runner_image(config, spec[:image]),
+        "image" => runner_image(config, spec[:image], session),
         "env" => env_hash(spec[:env_vars]),
         "workspace_volume" => setting(config, "container.workspace_volume"),
         "mounts" => mounts(config),

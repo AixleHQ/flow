@@ -76,6 +76,20 @@ module Agents
       refute settings.dig("tools").key?("autoAccept")
     end
 
+    test "config_files exports every signal with prompts and content for full telemetry" do
+      config = hosted_otel(full_telemetry: true)
+      settings = JSON.parse(@adapter.config_files({ "api_key" => "test-key" }, config)["/home/gemini/.gemini/settings.json"])
+
+      assert_equal [ true, true, true ], settings["telemetry"].values_at("enabled", "logPrompts", "traces")
+    end
+
+    test "config_files keeps prompts, content and traces out of the telemetry without full telemetry" do
+      settings = JSON.parse(@adapter.config_files({ "api_key" => "test-key" }, hosted_otel)["/home/gemini/.gemini/settings.json"])
+
+      assert_equal [ true, false ], settings["telemetry"].values_at("enabled", "logPrompts")
+      assert_not settings["telemetry"].key?("traces")
+    end
+
     test "config_files keeps the UI inline, off the alternate screen" do
       settings = JSON.parse(@adapter.config_files({ "api_key" => "test-key" }, hosted_otel)["/home/gemini/.gemini/settings.json"])
 
