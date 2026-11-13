@@ -13,6 +13,15 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Fixed
+- **Integrations**: Connect GitHub under Profile → Connected accounts no longer
+  fails with "The authorization came back from a different server". GitHub names
+  itself `https://github.com/login/oauth` in its authorization response, and the
+  connection now expects that. An unused GitHub client record left by a failed
+  attempt stays in place and does no harm.
+
+## [1.13.0] - 2026-11-13
+
 ### Added
 - Runner image override: `container.image_override` may contain `{agent}`,
   replaced at launch with the session agent's image name, so one override such
@@ -1366,7 +1375,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.12.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.13.0...develop
+[1.13.0]: https://github.com/AixleHQ/flow/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/AixleHQ/flow/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/AixleHQ/flow/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/AixleHQ/flow/compare/v1.9.0...v1.10.0
