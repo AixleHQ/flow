@@ -24,7 +24,7 @@ FactoryBot.define do
     # the instance this deployment points at.
     trait :gitlab_user do
       provider { "gitlab" }
-      association :oauth_client, :gitlab
+      oauth_client factory: %i[oauth_client gitlab]
       expires_at { 2.hours.from_now }
       metadata { { "gitlab_user" => { "id" => 456, "username" => "lab-user", "name" => "Lab User",
                                         "avatar_url" => "https://a.test/456", "commit_email" => "456-lab-user@users.noreply.gitlab.com",
