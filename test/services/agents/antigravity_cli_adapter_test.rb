@@ -50,6 +50,25 @@ module Agents
       )
     end
 
+    test "installs a hook per lifecycle event that forwards it to the session's collector" do
+      files = @adapter.config_files({ "access_token" => "tok-123" }, otel_endpoint: "http://otlp-ingest:4318")
+      hooks = JSON.parse(files["/home/antigravity/.gemini/config/hooks.json"]).fetch("aixle-telemetry")
+
+      assert_equal %w[SessionStart PreInvocation PostInvocation PreToolUse PostToolUse Stop], hooks.keys
+      assert_equal "python3 -I /opt/mitm/otlp_hook.py antigravity-cli Stop || true",
+                   hooks["Stop"].sole["command"]
+      tool_hook = hooks["PreToolUse"].sole
+      assert_equal "*", tool_hook["matcher"]
+      assert_equal "python3 -I /opt/mitm/otlp_hook.py antigravity-cli PreToolUse || true",
+                   tool_hook["hooks"].sole["command"]
+    end
+
+    test "installs no hooks for a session without a collector" do
+      files = @adapter.config_files({ "access_token" => "tok-123" }, otel_endpoint: nil)
+
+      assert_not_includes files.keys, "/home/antigravity/.gemini/config/hooks.json"
+    end
+
     test "leaves onboarding to agy for a login that is not a consumer one" do
       files = @adapter.config_files({ "access_token" => "tok-123", "auth_method" => "gcp" })
 
@@ -212,6 +231,18 @@ module Agents
       assert_equal "googleapis.com,google.com", env["MITM_TRACKED_DOMAINS"]
       # Still no credential in the environment: the token travels in the config file.
       assert_nil env.values.find { |v| v.to_s.include?("access_token") }
+    end
+
+    # Under its own name, not OTEL_RESOURCE_ATTRIBUTES: agy's telemetry goes to Google, and
+    # an SDK that reads that variable would send the session key along.
+    test "default_env_vars gives the hooks the collector and the session, and only for a session with a collector" do
+      env = @adapter.default_env_vars(@session, callbacks: hosted_callbacks)
+      runner_env = @adapter.default_env_vars(@session, callbacks: hosted_callbacks.merge(otel: nil))
+
+      assert_equal [ Settings.otel.endpoint, UsageStatistics::SessionKey.resource_attributes(@session) ],
+                   env.values_at("AIXLE_OTLP_ENDPOINT", "AIXLE_OTLP_RESOURCE_ATTRIBUTES")
+      assert_not_includes env.keys, "OTEL_RESOURCE_ATTRIBUTES"
+      assert_empty runner_env.keys.grep(/\AAIXLE_OTLP/)
     end
 
     # 51 production sessions in the 30 days to 2026-09-17 produced zero HTTP records,

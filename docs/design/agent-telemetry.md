@@ -1,7 +1,7 @@
 # Agent telemetry: what each runtime sends
 
-Status: implemented for the runtimes with OpenTelemetry export; hooks for the others are
-not built yet (§3).
+Status: implemented — OpenTelemetry switches for the runtimes that export it (§1), lifecycle
+hooks for the ones that do not (§3).
 
 Every agent session reports to the platform's collector, `docker/otlp-ingest`, which
 accepts OTLP/HTTP logs, metrics and traces (protobuf or JSON) and forwards them as JSON
@@ -31,9 +31,9 @@ session has a collector (a runner session has none yet).
 | Gemini CLI 0.60.0 | logs, metrics, traces (`telemetry.traces`) | `telemetry.logPrompts` | logs |
 | Copilot CLI 1.0.108 | traces, metrics (it has no logs) | `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`; `OTEL_INSTRUMENTATION_GENAI_CAPTURE_CONTENT=SPAN_AND_EVENT` in case it is honoured | `chat` spans |
 | Grok 1.0.70 | logs, metrics (`GROK_EXTERNAL_OTEL`) | `OTEL_LOG_USER_PROMPTS`, `OTEL_LOG_TOOL_DETAILS`, `OTEL_LOG_TOOL_CONTENT` | MITM log (no cost in OTLP) |
-| Kiro CLI 3.0.0 | metrics, `--no-interactive` runs only | none exist | credit metrics, MITM fallback |
-| Cursor CLI | none to a collector | — | Cursor usage API |
-| Antigravity CLI 1.5.0 | none | — | stream-json result |
+| Kiro CLI 3.0.0 | metrics; logs from its hooks (§3) | none exist | credit metrics, MITM fallback |
+| Cursor CLI 2026.10.22 | logs from its hooks (§3) | — | Cursor usage API |
+| Antigravity CLI 1.5.0 | logs from its hooks (§3) | — | stream-json result |
 
 Notes:
 
@@ -61,20 +61,77 @@ arguments and tool output, and for Claude Code the raw API request and response 
 Flow's own usage keeps none of it. It leaves Flow only through the Insights relay, for
 projects switched on there, with the session's secret config items masked.
 
-## 3. Runtimes without OpenTelemetry: hooks (not built)
+## 3. Runtimes without OpenTelemetry: hooks
 
-Kiro, Cursor and Antigravity have lifecycle hooks that a user-level config in the
-container's home directory can install, without touching the repository. A hook would
-receive the CLI's event JSON on stdin and post it — unchanged, as the body of one OTLP log
-record — to the collector in the background, with the session named in the command Flow
-writes (whether hooks inherit the CLI's environment is not confirmed for every CLI).
+Kiro, Cursor and Antigravity export nothing a collector can take (Kiro only its credit
+metrics), but each runs user-level lifecycle hooks: a command, given the event as JSON on
+stdin. The adapter writes a hooks file into the container's home directory — next to any
+hooks the repository brings, never in it — whose every command is
+`docker/base/logger/otlp_hook.py` (`/opt/mitm/otlp_hook.py` in every agent image):
 
-| Runtime | Hook config | Events | What a hook sees that OTLP does not give |
+```
+python3 -I /opt/mitm/otlp_hook.py <service.name> <event> [reply] || true
+```
+
+It posts one OTLP/HTTP JSON log record to `$AIXLE_OTLP_ENDPOINT/v1/logs`:
+
+| Field | Value |
+| --- | --- |
+| resource `service.name` | `kiro-cli`, `cursor-agent`, `antigravity-cli` |
+| resource `terminal_session_token`, `terminal_session_key` | from `AIXLE_OTLP_RESOURCE_ATTRIBUTES` |
+| scope | `aixle_flow.hooks` |
+| `event.name` | the CLI's own name for the event (`PreToolUse`, `stop`, …) |
+| body | the event JSON exactly as the CLI wrote it (cut at 8 MiB, marked `aixle_flow.hook.truncated_from_bytes`) |
+
+The collector and the session come from the environment — `AIXLE_OTLP_ENDPOINT` and
+`AIXLE_OTLP_RESOURCE_ATTRIBUTES`, set by `default_env_vars`, inherited by the hook from the
+CLI — so the hooks file itself is the same for every session. Two reasons, both measured:
+Cursor strips `//` comments from `hooks.json` before parsing it, so an `http://` in a command
+silently drops every hook in the file; and `OTEL_RESOURCE_ATTRIBUTES` is not used because
+Antigravity's own telemetry goes to Google, and an SDK that read it would carry the session
+key there.
+
+A hook runs inside the agent's turn, and the CLIs act on what it does:
+
+| | Kiro 3.0.0 | Cursor 2026.10.22 | Antigravity 1.5.0 |
 | --- | --- | --- | --- |
-| Kiro CLI 3.0.0 | `~/.kiro/hooks/*.json` | `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Stop`, `SessionEnd` | prompts; tool name, input, success and result. No model, tokens or credits. |
-| Cursor CLI | `~/.cursor/hooks.json` | `beforeSubmitPrompt`, `preToolUse`, `postToolUse(Failure)`, `afterShellExecution`, `afterMCPExecution`, `afterAgentResponse`, `stop`, … | prompts; tool input, output, id and duration; model; per-turn tokens on `stop` / `afterAgentResponse`. No cost. |
-| Antigravity CLI 1.5.0 | `~/.gemini/config/hooks.json` | `PreInvocation` / `PostInvocation`, `PreToolUse` / `PostToolUse`, `Stop` | prompt and tool name and arguments. No tool result, no tokens; event name and tool id only from 1.5.4. Its stream-json output, which Flow already captures, has more. |
+| File | `~/.kiro/hooks/aixle-telemetry.json` | `~/.cursor/hooks.json` | `~/.gemini/config/hooks.json` |
+| Non-zero exit | blocks the tool / prompt | ignored; exit 2 blocks | blocks the tool (PreToolUse) |
+| Stdout | added to the model's context | parsed as JSON; not an object denies the tool | protojson; `{}` denies the tool |
+| Waits for | the process | every pipe to close (5 s fallback) | the process, then 1 s for pipes |
 
-Each needs a live run in Flow's container before it ships: that the hooks fire in the way
-Flow runs the CLI, and that a slow or failing hook does not hold up the agent (Kiro, Cursor
-and Grok wait for tool hooks).
+So the script prints only its `reply` (`{}` for Cursor, nothing for the others), always
+exits 0 (`|| true` covers a missing script or interpreter), reads stdin for at most two
+seconds, and posts from a child that has closed every descriptor and left the CLI's process
+group — the agent never waits on the collector, and a collector that is down loses the
+record, nothing else. Each hook has a timeout (5 s Kiro, 10 s the others) as a backstop.
+
+What each runtime's hooks carry:
+
+| Runtime | Events | Carries | Not there |
+| --- | --- | --- | --- |
+| Kiro | `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Stop`, `SessionEnd` | prompt; tool name, input and result | model, tokens, credits (its OTLP metrics) |
+| Cursor | `sessionStart`, `beforeSubmitPrompt`, `preToolUse`, `postToolUse`, `postToolUseFailure`, `afterAgentThought`, `afterAgentResponse`, `stop`, `subagentStart`, `subagentStop`, `preCompact`, `sessionEnd` | prompt; model; tool input, output and duration; reply and thinking; per-turn input, output and cache tokens | cost |
+| Antigravity | `SessionStart`, `PreInvocation`, `PostInvocation`, `PreToolUse`, `PostToolUse`, `Stop` | prompt; model; invocation and step numbers; tool name, arguments and error; why the turn ended | model output, tool result, tokens (its stream-json result, which Flow reads, has the tokens); event name in the payload (1.5.4) |
+
+Left out on purpose: Cursor's shell, MCP and file events repeat its generic tool events
+(`beforeReadFile` with every file read in full), and an unknown event name makes it drop the
+whole file; Kiro's file events repeat its write tool. Cursor's `beforeSubmitPrompt`, `stop`
+and `afterAgentResponse` do not fire under `-p`; Flow runs Cursor without it.
+
+A session without a collector (a runner session) gets neither the hooks file nor the
+variables.
+
+### Checked live (2026-11-13)
+
+Each runtime's image at its pin, the adapter's own hooks file, a real `otlp-ingest`, and a
+stand-in for the Rails endpoint that kept what it was sent:
+
+| Runtime | How | Records, each with the session | The tool ran |
+| --- | --- | --- | --- |
+| Antigravity 1.5.0 | Gemini API key against a scripted model (a `run_command` call, then text); `--print` and TUI | `SessionStart`, `PreInvocation` ×2, `PreToolUse`, `PostToolUse`, `PostInvocation` ×2, `Stop` | yes, whole run 1–2 s |
+| Cursor 2026.10.22 | real login, TUI | `sessionStart`, `beforeSubmitPrompt`, `afterAgentThought` ×2, `preToolUse`, `postToolUse`, `stop`, `afterAgentResponse`, `sessionEnd` | yes |
+| Kiro 3.0.0 | real IdC login, TUI | `SessionStart`, `UserPromptSubmit`, `SessionEnd` | the account was at its monthly limit, so the model called no tool: Kiro's tool hooks and `Stop` are not yet seen live |
+
+No hook process outlived its event and none was left a zombie. The first Cursor run sent
+nothing — the `//` finding above.

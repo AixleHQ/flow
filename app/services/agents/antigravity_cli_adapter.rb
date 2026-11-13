@@ -190,13 +190,31 @@ module Agents
     # it once when signing in (the auth container is not seeded with this), and this is
     # the file agy itself leaves behind after it. Consumer logins only: the "Google Cloud
     # project" login has its own enterprise terms, never observed here.
-    def config_files(credentials, _workflow_config = {})
+    def config_files(credentials, workflow_config = {})
       files = {
         "#{home_dir}/#{SETTINGS_PATH}" => settings.to_json,
         config_path => generate_config(credentials).to_json
       }
       files["#{home_dir}/#{ONBOARDING_PATH}"] = CONSUMER_ONBOARDING.to_json if credentials["auth_method"] == "consumer"
+      files["#{home_dir}/#{HOOKS_PATH}"] = telemetry_hooks.to_json if workflow_config[:otel_endpoint].present?
       files
+    end
+
+    # agy exports no telemetry of its own to anyone but Google; its hooks see the prompt,
+    # the model's output per invocation, each tool call with its arguments and error, and
+    # the turn's end. Not a tool's result or tokens (1.5.0). A tool hook takes a matcher
+    # and its handlers; the others take handlers directly. A failing PreToolUse handler
+    # denies the tool, as does any stdout but none.
+    HOOKS_PATH = ".gemini/config/hooks.json"
+    HOOK_EVENTS = %w[SessionStart PreInvocation PostInvocation PreToolUse PostToolUse Stop].freeze
+    TOOL_HOOK_EVENTS = %w[PreToolUse PostToolUse].freeze
+
+    def telemetry_hooks
+      events = HOOK_EVENTS.to_h do |event|
+        handler = { "type" => "command", "command" => otlp_hook_command("antigravity-cli", event), "timeout" => 10 }
+        [ event, TOOL_HOOK_EVENTS.include?(event) ? [ { "matcher" => "*", "hooks" => [ handler ] } ] : [ handler ] ]
+      end
+      { "aixle-telemetry" => events }
     end
 
     # Written before auth starts so the auth terminal already has tips disabled and
@@ -213,7 +231,7 @@ module Agents
     # happened, against which endpoint, with what status.
     MITM_DOMAINS = %w[googleapis.com google.com].freeze
 
-    def default_env_vars(_session, callbacks:)
+    def default_env_vars(session, callbacks:)
       {
         "AGY_CLI_HIDE_LOGO" => "1",
         # Without it the CLI, run as root, replaces the pinned /usr/local/bin/agy with the
@@ -222,7 +240,8 @@ module Agents
         # "true" is honoured: "1", "TRUE" and "yes" still update.
         "AGY_CLI_DISABLE_AUTO_UPDATE" => "true",
         "MITM_LOG_PATH" => "/var/log/mitm/http.log",
-        "MITM_TRACKED_DOMAINS" => MITM_DOMAINS.join(",")
+        "MITM_TRACKED_DOMAINS" => MITM_DOMAINS.join(","),
+        **otlp_hook_env(session, callbacks[:otel])
       }
     end
 

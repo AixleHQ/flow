@@ -91,7 +91,7 @@ module Agents
     def config_files(credentials, workflow_config = {})
       workspace = workflow_config[:workspace] || "/workspace"
       auth_json = generate_config(credentials, workflow_config).to_json
-      {
+      files = {
         # Auth tokens — write to both paths so any CLI version picks them up
         config_path => auth_json,
         config_path_alt => auth_json,
@@ -100,6 +100,25 @@ module Agents
         # Workspace trust (skip trust dialog)
         "#{home_dir}/.cursor/projects#{workspace}/.workspace-trusted" => generate_workspace_trust(workspace).to_json
       }
+      files["#{home_dir}/.cursor/hooks.json"] = telemetry_hooks.to_json if workflow_config[:otel_endpoint].present?
+      files
+    end
+
+    # The CLI exports no telemetry; its hooks see the prompt, every tool call with its
+    # input, output and duration, the model's reply and thinking, and the turn's tokens
+    # (`stop`, `afterAgentResponse`). An unknown event name makes the CLI drop the whole
+    # file. Each hook prints `{}`: for a tool hook, output that is not a JSON object
+    # denies the tool. The tool-specific events (shell, MCP, file read and edit) repeat
+    # what the generic tool hooks carry, `beforeReadFile` with every file read in full.
+    HOOK_EVENTS = %w[sessionStart beforeSubmitPrompt preToolUse postToolUse postToolUseFailure
+                     afterAgentThought afterAgentResponse stop subagentStart subagentStop
+                     preCompact sessionEnd].freeze
+
+    def telemetry_hooks
+      hooks = HOOK_EVENTS.index_with do |event|
+        [ { "command" => otlp_hook_command("cursor-agent", event, reply: "{}"), "timeout" => 10 } ]
+      end
+      { "version" => 1, "hooks" => hooks }
     end
 
     # Session command: agent --force (interactive), agent --force -p (non-interactive)
@@ -233,8 +252,9 @@ module Agents
     # Env vars for MITM proxy and http2-logger configuration.
     # MITM_TRACKED_DOMAINS limits mitm_logger.py to cursor.sh traffic only.
     # http2-logger.js uses MITM_LOG_PATH to write AgentService/Run timestamps.
-    def default_env_vars(_session, callbacks:)
+    def default_env_vars(session, callbacks:)
       {
+        **otlp_hook_env(session, callbacks[:otel]),
         "MITM_LOG_PATH" => "/var/log/mitm/http.log",
         # cursor.com as well as cursor.sh: the filter is a suffix match, Cursor has been
         # moving off the .sh domain (the installer already lives on cursor.com), and our

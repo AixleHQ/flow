@@ -393,6 +393,28 @@ module Agents
       :accepted
     end
 
+    # docker/base/logger/otlp_hook.py as every agent image installs it.
+    OTLP_HOOK_SCRIPT = "/opt/mitm/otlp_hook.py"
+
+    # The command of a lifecycle hook that forwards the CLI's event to the session's
+    # collector, for the runtimes that export no OpenTelemetry of their own
+    # (docs/design/agent-telemetry.md §3). `reply` is printed for a CLI that reads one.
+    # `|| true` because a failing hook blocks the tool it runs before (Kiro, Antigravity).
+    def otlp_hook_command(service, event, reply: nil)
+      "#{Shellwords.join([ 'python3', '-I', OTLP_HOOK_SCRIPT, service, event, reply ].compact)} || true"
+    end
+
+    # Where the hook posts and the session its records prove they belong to
+    # (UsageStatistics::SessionKey), inherited from the CLI's environment. The collector's
+    # URL stays out of the hook command: Cursor strips `//` comments from hooks.json before
+    # parsing it, so an `http://` in a command drops the whole file (measured, 2026.10.22).
+    def otlp_hook_env(session, endpoint)
+      return {} if endpoint.blank?
+
+      { "AIXLE_OTLP_ENDPOINT" => endpoint,
+        "AIXLE_OTLP_RESOURCE_ATTRIBUTES" => UsageStatistics::SessionKey.resource_attributes(session) }
+    end
+
     # =================================================================
     # Available Models (fetched from provider API)
     # =================================================================

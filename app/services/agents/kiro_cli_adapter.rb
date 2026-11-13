@@ -272,6 +272,7 @@ module Agents
     def token_handoff_path = "#{home_dir}/.local/share/kiro-cli/.aixle-token-handoff.json"
     def cli_settings_path = "#{home_dir}/.kiro/settings/cli.json"
     def permissions_path  = "#{home_dir}/.kiro/settings/permissions.yaml"
+    def hooks_path        = "#{home_dir}/.kiro/hooks/aixle-telemetry.json"
 
     # The state database is the whole credential — there is nothing else to capture.
     def auth_file_paths
@@ -354,7 +355,7 @@ module Agents
     # at the path the CLI reads, and an MCP config for SessionContextService to merge
     # into. User scope (~/.kiro/settings/mcp.json) is loaded for every session, so no
     # custom agent definition is needed to pick the servers up.
-    def config_files(credentials, _workflow_config = {})
+    def config_files(credentials, workflow_config = {})
       files = {
         mcp_config_path => { "mcpServers" => {} }.to_json,
         cli_settings_path => CLI_SETTINGS.to_json,
@@ -363,7 +364,21 @@ module Agents
 
       state = decoded_state(credentials)
       files[state_path] = state if state.present?
+      files[hooks_path] = telemetry_hooks.to_json if workflow_config[:otel_endpoint].present?
       files
+    end
+
+    # Kiro's own export carries credits only; its hooks see the prompts and every tool
+    # call with its input and result. A global hook (~/.kiro/hooks) runs next to any the
+    # repository brings.
+    HOOK_EVENTS = %w[SessionStart UserPromptSubmit PreToolUse PostToolUse Stop SessionEnd].freeze
+
+    def telemetry_hooks
+      hooks = HOOK_EVENTS.map do |event|
+        { "name" => "aixle-telemetry-#{event}", "trigger" => event, "timeout" => 5,
+          "action" => { "type" => "command", "command" => otlp_hook_command("kiro-cli", event) } }
+      end
+      { "version" => "v1", "hooks" => hooks }
     end
 
     # Never a file for this runtime: the only file carrying the token is the state
@@ -791,7 +806,8 @@ module Agents
         "KIRO_TELEMETRY_OTEL" => "1",
         "KIRO_TELEMETRY_OTLP_ENDPOINT" => endpoint,
         "KIRO_TELEMETRY_EXPORT_INTERVAL_MS" => OTEL_EXPORT_INTERVAL_MS,
-        "OTEL_RESOURCE_ATTRIBUTES" => UsageStatistics::SessionKey.resource_attributes(session)
+        "OTEL_RESOURCE_ATTRIBUTES" => UsageStatistics::SessionKey.resource_attributes(session),
+        **otlp_hook_env(session, endpoint)
       }
     end
 
