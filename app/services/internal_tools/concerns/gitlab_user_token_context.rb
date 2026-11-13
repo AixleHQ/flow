@@ -52,7 +52,7 @@ module InternalTools
       def mint_tokens!(user, credential, user_token, repositories, identity)
         covered, skipped = check_coverage!(user, credential, user_token, repositories, identity)
         if covered.empty?
-          raise Refusal, "#{user.name} cannot push to #{repositories.map(&:full_name).join(', ')} on GitLab."
+          raise UserTokenContext::Refusal, "#{user.name} cannot push to #{repositories.map(&:full_name).join(', ')} on GitLab."
         end
 
         expires_at = reported_expiry(credential)
@@ -73,9 +73,9 @@ module InternalTools
         [ covered, skipped.map { |repo| { repository: repo.full_name, reason: "#{user.name} cannot push to it" } } ]
       rescue Gitlab::UserTokenService::InvalidToken
         credential.mark_refresh_error!("GitLab no longer accepts this user token")
-        raise Refusal, reconnect_message(user)
+        raise UserTokenContext::Refusal, reconnect_message(user)
       rescue Gitlab::UserTokenService::Unavailable
-        raise Refusal, "GitLab is unavailable right now. Retry in a moment."
+        raise UserTokenContext::Refusal, "GitLab is unavailable right now. Retry in a moment."
       end
 
       # A repository GitLab refuses to show the person (403) is one they cannot push to.

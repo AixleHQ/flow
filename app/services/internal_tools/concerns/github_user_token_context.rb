@@ -62,12 +62,12 @@ module InternalTools
           permissions: PERMISSIONS, expires_at: minted[:expires_at]&.iso8601 }
       rescue Github::UserTokenService::InvalidToken
         credential.mark_refresh_error!("GitHub no longer accepts this user token")
-        raise Refusal, reconnect_message(user)
+        raise UserTokenContext::Refusal, reconnect_message(user)
       rescue Github::UserTokenService::Forbidden
-        raise Refusal, "GitHub refused access to #{repositories.map(&:full_name).join(', ')} for " \
+        raise UserTokenContext::Refusal, "GitHub refused access to #{repositories.map(&:full_name).join(', ')} for " \
                        "#{identity&.dig('login') || user.name}: the user or the App has no access there."
       rescue Github::UserTokenService::Unavailable
-        raise Refusal, "GitHub is unavailable right now. Retry in a moment."
+        raise UserTokenContext::Refusal, "GitHub is unavailable right now. Retry in a moment."
       end
 
       def result(user, identity, tokens, skipped)

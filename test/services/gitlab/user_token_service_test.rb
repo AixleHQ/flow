@@ -11,7 +11,9 @@ class Gitlab::UserTokenServiceTest < ActiveSupport::TestCase
     @service = Gitlab::UserTokenService.new
   end
 
-  def json(body, status: 200) = { status: status, body: body.to_json, headers: { "Content-Type" => "application/json" } }
+  def json(body = nil, status: 200, **fields)
+    { status: status, body: (body || fields).to_json, headers: { "Content-Type" => "application/json" } }
+  end
 
   test "user returns the identity with the address GitLab commits with" do
     stub_request(:get, "#{API}/user").with(headers: { "Authorization" => "Bearer glo-token" }).to_return(json(

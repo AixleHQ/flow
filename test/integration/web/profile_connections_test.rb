@@ -125,13 +125,13 @@ class Web::ProfileConnectionsTest < ActionDispatch::IntegrationTest
   end
 
   test "disconnect of an unknown provider answers 404" do
-    delete profile_connection_path("gitlab")
+    delete profile_connection_path("bitbucket")
 
     assert_response :not_found
   end
 
   test "a consent update for an unknown provider answers 404" do
-    json_patch(@project.id, provider: "gitlab", in_own_tasks: true)
+    json_patch(@project.id, provider: "bitbucket", in_own_tasks: true)
 
     assert_response :not_found
   end
