@@ -55,11 +55,10 @@ class RunnerOperation < ApplicationRecord
   validates :terminal_session, absence: { message: "must be empty for an environment op" }, unless: :session_op?
 
   scope :deliverable, -> { where(state: DELIVERABLE_STATES) }
-  # Handed to the machine and still within its deadline: the machine is
-  # executing it.
-  scope :delivered_before_deadline, ->(now = Time.current) {
-    where(state: "delivered").where(arel_table[:deadline_at].gt(now))
-  }
+  # Handed to the machine and not yet answered.
+  scope :delivered, -> { where(state: "delivered") }
+  # Delivered and still within its deadline: the machine is executing it.
+  scope :delivered_before_deadline, ->(now = Time.current) { delivered.where(arel_table[:deadline_at].gt(now)) }
 
   def deliverable?
     DELIVERABLE_STATES.include?(state)

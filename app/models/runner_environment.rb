@@ -35,6 +35,9 @@ class RunnerEnvironment < ApplicationRecord
   belongs_to :company
   belongs_to :current_session, class_name: "TerminalSession", optional: true
   has_many :credentials, class_name: "RunnerCredential", inverse_of: :runner_environment
+  # Only the delivered ops (few), not the machine's whole history, so a list of
+  # machines can `includes` it.
+  has_many :delivered_operations, -> { delivered }, class_name: "RunnerOperation", inverse_of: :runner_environment
 
   scope :free, -> { where(state: "registered", current_session_id: nil) }
   scope :heard, ->(now = Time.current) { where(last_heartbeat_at: (now - ONLINE_WINDOW)..) }
@@ -61,6 +64,23 @@ class RunnerEnvironment < ApplicationRecord
 
   def heard?(now = Time.current)
     last_heartbeat_at.present? && last_heartbeat_at >= now - ONLINE_WINDOW
+  end
+
+  # Executing an op it was delivered, within the op's deadline (the Ruby side of
+  # `executing_op`); reads `delivered_operations`, so `includes` avoids a query
+  # per machine.
+  def executing_op?(now = Time.current)
+    delivered_operations.any? { |operation| operation.deadline_at > now }
+  end
+
+  # How the machine shows on the runner page (§2.5): `failed` and `gone` as they
+  # are; a `registered` one is `offline` unless it is heard or executing an op,
+  # else `online` holding a session and `idle` without one.
+  def display_state(now = Time.current)
+    return state.to_s unless registered?
+    return "offline" unless heard?(now) || executing_op?(now)
+
+    current_session_id ? "online" : "idle"
   end
 
   private

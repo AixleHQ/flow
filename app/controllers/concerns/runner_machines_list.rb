@@ -12,8 +12,6 @@ module RunnerMachinesList
   def machines_prop(runner)
     return [] unless runner.manual?
 
-    machines = runner.environments.order(:id).to_a
-    states = Runners::Liveness.states(machines)
-    machines.map { |machine| RunnerMachineResource.new(machine, params: { states: states }).to_h }
+    runner.environments.includes(:delivered_operations).order(:id).map { |machine| RunnerMachineResource.new(machine).to_h }
   end
 end

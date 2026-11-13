@@ -510,7 +510,7 @@ session, environment `busy`), **idle** (connected, no session, environment `idle
 **offline** (no heartbeat for 90 s, the `unreachable` overlay of §5.2), in the spirit of
 GitHub's self-hosted runner list.
 
-**Built in task 12c.** The machine's display state (`Runners::Liveness.states`) is:
+**Built in task 12c.** The machine's display state (`RunnerEnvironment#display_state`) is:
 
 - **online**: heard within 90 s (`RunnerEnvironment::ONLINE_WINDOW`) and holding a session;
 - **idle**: heard within 90 s, no session;
@@ -520,7 +520,7 @@ GitHub's self-hosted runner list.
 **The op-deadline exception.** The host runner runs one op at a time and does not poll during
 it (§6.7), so a machine executing a delivered op is not offline before that op's deadline,
 even when it is silent: it counts as heard while it has a `delivered` op whose `deadline_at`
-is still ahead (`RunnerEnvironment.executing_op`). Once the deadline passes it is offline
+is still ahead (`RunnerEnvironment.executing_op` in SQL, `RunnerEnvironment#executing_op?` over the `delivered_operations` association for the display). Once the deadline passes it is offline
 again unless it has been heard.
 
 **Placement.** A machine that is neither heard nor executing an op (`RunnerEnvironment.reachable`)
