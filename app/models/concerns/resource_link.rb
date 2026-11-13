@@ -2,11 +2,7 @@
 
 # One entry of a step's or a workflow's resource list. Exactly one resource
 # column is set, and its foreign key drops the entry when the resource is deleted.
-#
-# Every read of a list comes from here. Writes still go to the jsonb id lists
-# (`steps.repository_ids`, `workflows.config["base_repository_ids"]`, …), which
-# Step and Workflow mirror here on save, so pods of the previous release that
-# read them stay right; the lists go in the release after this one.
+# The lists themselves are read and written through ResourceLists.
 module ResourceLink
   extend ActiveSupport::Concern
 
@@ -14,6 +10,8 @@ module ResourceLink
     tool_ids: :tool_id, skill_ids: :skill_id, mcp_server_ids: :mcp_server_id,
     asset_ids: :asset_id, repository_ids: :repository_id, config_item_ids: :config_item_id
   }.freeze
+
+  def self.ids(list) = Array(list).compact_blank.map(&:to_i).select(&:positive?).uniq
 
   included do
     belongs_to :tool, optional: true
@@ -28,7 +26,7 @@ module ResourceLink
     # Makes the owner's links in `column` the given ids, in their order. An id
     # whose row is gone has nothing to link to and is skipped.
     def replace!(owner, column, ids)
-      ids = Array(ids).compact_blank.map(&:to_i).select(&:positive?).uniq
+      ids = ResourceLink.ids(ids)
       target = reflect_on_association(column.to_s.delete_suffix("_id")).klass
       present = target.where(id: ids).pluck(:id).to_set
       rows = ids.select { |id| present.include?(id) }

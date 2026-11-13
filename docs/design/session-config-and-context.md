@@ -422,31 +422,18 @@ Configured on the **Profile** page. By default — the last added `AgentCredenti
 
 ### 1.6.2 Workflow — base resources + inherit_all
 
-We use the existing `config` jsonb:
+The flag `inherit_all_project_resources` lives in the workflow's `config` jsonb.
+The base lists (`base_tool_ids`, `base_skill_ids`, `base_mcp_server_ids`,
+`base_asset_ids`, `base_repository_ids`, `base_config_item_ids`) are rows of
+`workflow_resource_links`, one foreign key per resource kind with
+`ON DELETE CASCADE`, so deleting a resource drops it from every list that named
+it. A step's own lists are `step_resource_links` in the same shape
+(`ResourceLists`, `ResourceLink`).
 
-```ruby
-class Workflow < ApplicationRecord
-  def base_tool_ids
-    config&.dig("base_tool_ids") || []
-  end
-
-  def base_skill_ids
-    config&.dig("base_skill_ids") || []
-  end
-
-  def base_mcp_server_ids
-    config&.dig("base_mcp_server_ids") || []
-  end
-
-  def base_asset_ids
-    config&.dig("base_asset_ids") || []
-  end
-
-  def inherit_all_project_resources
-    config&.dig("inherit_all_project_resources") || false
-  end
-end
-```
+The builder, the API and templates still send the base lists inside `config`;
+`Workflow#config=` takes them out and they are written as links on save.
+`Workflow#linked_config` puts them back for whatever reads a whole config
+(snapshots, duplicates, the data-flow check).
 
 ### 1.6.3 LaunchStepSessionActivity — use the Resolver
 

@@ -315,11 +315,12 @@ class StepTest < ActiveSupport::TestCase
     assert step.valid?, step.errors.full_messages.to_sentence
   end
 
-  test "a stale foreign id already on the step does not block unrelated edits" do
+  test "a stale foreign id already on the step does not block an edit that sends the list again" do
     step = create(:step, workflow: @workflow)
-    step.update_column(:mcp_server_ids, [ create(:mcp_server, scope: create(:project, :standalone)).id ])
+    StepResourceLink.replace!(step, :mcp_server_id, [ create(:mcp_server, scope: create(:project, :standalone)).id ])
+    step.reload
 
-    assert step.reload.update(name: "Renamed"), step.errors.full_messages.to_sentence
+    assert step.update(name: "Renamed", mcp_server_ids: step.mcp_server_ids), step.errors.full_messages.to_sentence
   end
 
   test "upstream_step_ids is every live step it runs after, nearest first" do
@@ -404,11 +405,10 @@ class StepTest < ActiveSupport::TestCase
     assert_empty linked(other, :repository_id)
   end
 
-  test "an id the list still carries for a deleted resource gets no link" do
+  test "an assigned id whose resource is gone is dropped, not refused" do
     gone = create(:repository, scope: @project).tap(&:destroy!)
     live = create(:repository, scope: @project)
     step = create(:step, workflow: @workflow)
-    step.update_column(:repository_ids, [ gone.id ])
 
     step.update!(repository_ids: [ gone.id, live.id ])
 

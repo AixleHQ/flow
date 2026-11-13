@@ -108,6 +108,24 @@ class Versions::WorkflowSnapshotTest < ActiveSupport::TestCase
     assert @check.reload.required, "a sub-step column comes back as its default"
   end
 
+  test "reverting to a snapshot without a resource list empties that list" do
+    Versions.save!(@workflow, actor: @actor) { @workflow.update!(description: "bare") }
+    bare = @workflow.latest_version
+    legacy = bare.snapshot.merge("config" => bare.snapshot["config"].except("base_repository_ids"),
+                                 "steps" => bare.snapshot["steps"].map { |step| step.except("config_item_ids") })
+    EntityVersion.where(id: bare.id).update_all(snapshot: legacy)
+
+    Versions.save!(@workflow, actor: @actor) do
+      @workflow.merge_config!("base_repository_ids" => [ create(:repository, scope: @project).id ])
+      @build.update!(config_item_ids: [ create(:config_item, scope: @project).id ])
+    end
+
+    Versions.revert!(@workflow, to: bare.reload, actor: @actor)
+
+    assert_empty @workflow.reload.base_repository_ids
+    assert_empty @build.reload.config_item_ids
+  end
+
   test "revert restores a dependency chain whatever order the steps were saved in" do
     deploy = create(:step, workflow: @workflow, name: "Deploy", position: 3, depends_on_step_ids: [ @test.id ])
     Versions.save!(@workflow, actor: @actor) { @workflow.update!(description: "chain") }

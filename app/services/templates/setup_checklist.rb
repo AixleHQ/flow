@@ -92,8 +92,7 @@ module Templates
     def attach!(item, workflow_key:, step_column:, id:)
       targets = item.detail["attach_to"].to_h
       @project.workflows.where(id: targets["workflow_ids"]).includes(:base_resource_links).find_each do |workflow|
-        ids = workflow.public_send(workflow_key)
-        workflow.update!(config: workflow.config.merge(workflow_key => (ids | [ id ])))
+        workflow.update!(workflow_key => (workflow.public_send(workflow_key) | [ id ]))
       end
       Step.joins(:workflow).where(id: targets["step_ids"], workflows: { scope_type: "Project", scope_id: @project.id })
           .includes(:resource_links).find_each { |step| step.update!(step_column => (step.public_send(step_column) | [ id ])) }

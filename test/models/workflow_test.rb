@@ -250,6 +250,16 @@ class WorkflowTest < ActiveSupport::TestCase
     assert_empty linked(workflow, :repository_id)
   end
 
+  test "base lists sent inside config become links and stay out of the config column" do
+    tool = create(:tool, scope: @project)
+    workflow = create(:workflow, scope: @project,
+                                 config: { "base_tool_ids" => [ tool.id ], "inherit_all_project_resources" => true })
+
+    assert_equal({ "inherit_all_project_resources" => true }, workflow.reload.config)
+    assert_equal [ tool.id ], workflow.base_tool_ids
+    assert_equal [ tool.id ], workflow.linked_config["base_tool_ids"]
+  end
+
   test "a workflow's base lists are read from its links, so a deleted resource is no longer in them" do
     kept, deleted = create_list(:repository, 2, scope: @project)
     workflow = create(:workflow, scope: @project, config: { "base_repository_ids" => [ deleted.id, kept.id ] })
