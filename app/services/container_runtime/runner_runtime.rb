@@ -22,11 +22,13 @@ module ContainerRuntime
   # The phases:
   #
   # - pull_image does nothing, as KubernetesRuntime#pull_image: the runner
-  #   pulls the image in `container.start`.
+  #   pulls the image in `container.start`. The image is the one this runtime
+  #   chooses (runner_image), not the hosted image the strategy resolves.
   # - create_container takes a free machine of the session's runner, the first
   #   phase that needs one (Runners::Machines; every machine busy is a
   #   CapacityError, so the session waits), and sends `container.start` with
-  #   the image reference as it was given, a tag or a digest: the runner always
+  #   the image runner_image chooses (the runner's override, else the runner
+  #   default), as the reference was given, a tag or a digest: the runner always
   #   pulls it, then creates and starts the container in one op, as a
   #   Kubernetes pod is created running. The container's environment, which
   #   carries the session's secrets, exists only in this phase
@@ -169,7 +171,7 @@ module ContainerRuntime
     def pull_image(image)
       raise ArgumentError, "image is required" if image.blank?
 
-      Rails.logger.info("[RunnerRuntime] Pull image is a no-op: the runner pulls #{image} in container.start")
+      Rails.logger.info("[RunnerRuntime] Pull image is a no-op: the runner pulls the image runner_image chooses in container.start")
       { status: :skipped, image: image, duration_seconds: 0 }
     end
 
@@ -551,16 +553,28 @@ module ContainerRuntime
       environment && "aixle-#{environment.key}-#{session.id}"
     end
 
-    # The image the runner pulls and starts: the runner's
-    # `container.image_override` where it sets one, else the strategy's, as it
-    # was given. `{agent}` in the override is the image name of the session's
-    # runtime.
-    def runner_image(config, image, session)
+    # The image the runner pulls and starts, chosen here and not by the
+    # strategy, whose (hosted) image a runner session does not use. In order:
+    # the runner's `container.image_override` (`{agent}` in it is the image name
+    # of the session's runtime), else `runners.agent_images.<runtime>`, else
+    # `runners.agent_image_prefix` + the runtime's image name + `runners.agent_image_tag`.
+    # The defaults are the public images, which a customer's machine can pull.
+    def runner_image(config, session)
+      image_name = AgentRuntime.fetch(session.agent_type).image
       override = setting(config, "container.image_override").presence
-      return image if override.nil?
-      return override unless override.include?("{agent}")
+      return Runners::ConfigSchema.image_reference(override, image_name) if override
 
-      Runners::ConfigSchema.image_reference(override, AgentRuntime.fetch(session.agent_type).image)
+      default_runner_image(session.agent_type, image_name)
+    end
+
+    def default_runner_image(agent_type, image_name)
+      settings = Settings.runners
+      configured = settings.agent_images.to_h.transform_keys(&:to_s)[agent_type.to_s]
+      return configured.to_s if configured.present?
+
+      name = "#{settings.agent_image_prefix}#{image_name}"
+      tag = settings.agent_image_tag.to_s.strip
+      tag.present? ? "#{name}:#{tag}" : name
     end
 
     # `proxy_port` is the session's port of its callback proxy, which the
@@ -570,7 +584,7 @@ module ContainerRuntime
     def container_payload(session, spec)
       config = session.runner&.config || {}
       {
-        "image" => runner_image(config, spec[:image], session),
+        "image" => runner_image(config, session),
         "env" => env_hash(spec[:env_vars]),
         "workspace_volume" => setting(config, "container.workspace_volume"),
         "mounts" => mounts(config),

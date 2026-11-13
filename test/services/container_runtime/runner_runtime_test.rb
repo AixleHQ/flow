@@ -66,6 +66,47 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert_equal [ "ghcr.io/aixlehq/flow-codex:develop" ], @host_runner.operations.map { |op| op[:payload]["image"] }
   end
 
+  test "without an override a runner session gets the public image, tagged latest" do
+    @runtime.create_container(spec(image: "aixle/claude-code:sha-b258cc1")) # the strategy's hosted image is not used
+
+    assert_equal [ "ghcr.io/aixlehq/flow-claude-code:latest" ], @host_runner.operations.map { |op| op[:payload]["image"] }
+  end
+
+  test "a runner session takes its own tag, not the hosted one" do
+    Settings.agents.stubs(:image_tag).returns("sha-b258cc1")
+    Settings.runners.stubs(:agent_image_tag).returns("1.2.3")
+
+    @runtime.create_container(spec)
+
+    assert_equal [ "ghcr.io/aixlehq/flow-claude-code:1.2.3" ], @host_runner.operations.map { |op| op[:payload]["image"] }
+  end
+
+  test "a runner session takes the runner image prefix" do
+    Settings.runners.stubs(:agent_image_prefix).returns("registry.example/agents/")
+    @session.update!(agent_type: "codex")
+
+    @runtime.create_container(spec)
+
+    assert_equal [ "registry.example/agents/codex:latest" ], @host_runner.operations.map { |op| op[:payload]["image"] }
+  end
+
+  test "a runner session takes the per-runtime runner override" do
+    Settings.runners.stubs(:agent_images).returns({ "claude_code" => "registry.example/claude@sha256:abc" })
+
+    @runtime.create_container(spec)
+
+    assert_equal [ "registry.example/claude@sha256:abc" ], @host_runner.operations.map { |op| op[:payload]["image"] }
+  end
+
+  test "the runner's image override wins over the runner defaults" do
+    Settings.runners.stubs(:agent_images).returns({ "claude_code" => "registry.example/claude@sha256:abc" })
+    @runner.update!(config: @runner.config.deep_merge("container" => { "image_override" => "registry.internal/agents/claude:7" }))
+
+    @runtime.create_container(spec)
+
+    assert_equal [ "registry.internal/agents/claude:7" ], @host_runner.operations.map { |op| op[:payload]["image"] }
+  end
+
   test "create_container takes a free machine and starts the container with the strategy's env and the runner's options" do
     spec = spec(env_vars: [ "SESSION_ID=#{@session.id}", "TTYD_CMD=bash", "A=b=c" ],
                 host_config: { "Memory" => 4.gigabytes, "CpuPeriod" => 100_000, "CpuQuota" => 200_000, "PidsLimit" => 4096 })
@@ -237,7 +278,9 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     @host_runner.answer_with("container.start", "status" => "error",
                                                 "error" => { "class" => "image_pull_failed", "message" => "pull access denied" })
 
-    error = assert_raises(ContainerRuntime::CreateRefusedError) { @runtime.create_container(spec(image: "ghcr.io/aixlehq/nope:1")) }
+    @runner.update!(config: @runner.config.deep_merge("container" => { "image_override" => "ghcr.io/aixlehq/nope:1" }))
+
+    error = assert_raises(ContainerRuntime::CreateRefusedError) { @runtime.create_container(spec) }
 
     assert_match(%r{Could not pull ghcr.io/aixlehq/nope:1: container.start failed: image_pull_failed: pull access denied}, error.message)
     assert_equal @session.id, @environment.reload.current_session_id, "the cleanup frees the machine (AdmittedPhaseActivity)"
