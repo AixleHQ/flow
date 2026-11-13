@@ -20,7 +20,7 @@ longest first; click again to flip it. A run sorts by what its sessions add
 up to.
 A session from a workflow links back to the run it belongs to; a standalone
 session has nothing to expand. A run that a
-[team](/docs/people-and-access#project-teams) handed out names both:
+[team](/docs/project-teams) handed out names both:
 *Planner → Anna*.
 
 Sessions someone kept private show as locked. You can see that they exist and

@@ -5,8 +5,8 @@ first feedback: an expired login takes a member out of the pick, and a quota or
 login stop hands the run on whatever the step's `on_failure` (decision 3). The code lives under
 `ProjectTeams::` (`app/services/project_teams/`); `Teams::` is the Microsoft Teams
 integration.
-The user-facing guide is the docs portal's **Team & access** page, section
-*Project teams* (`app/frontend/pages/Docs/data/pages/people-and-access.md`).
+The user-facing guide is the docs portal's **Project teams** page
+(`app/frontend/pages/Docs/data/pages/project-teams.md`).
 
 A **team** is a named group of a project's members with a rule for choosing one of
 them. A board task can be assigned to a team, and an off-board trigger (schedule,

@@ -1,5 +1,9 @@
 # Connecting Microsoft Teams
 
+This page is about the Microsoft Teams chat app. Teams of project members that
+share runs between their agent subscriptions are
+[Project teams](../design/project-teams.md).
+
 Microsoft Teams connects for the whole **company** or for **one project**. A
 company-wide connection serves every project in the company; a project
 connection serves that project alone. From then on:

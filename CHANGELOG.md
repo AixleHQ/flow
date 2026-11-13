@@ -13,7 +13,15 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Tasks**: in bulk mode, **Select all** picks every card the board shows, so
+  filtering the board to one person and then choosing **Assign** moves all of
+  their cards to a team at once.
+
 ### Changed
+- **Docs**: project teams have their own page, *Project teams*, next to *Team &
+  access*, and it and *Microsoft Teams* each point to the other, so a search for
+  "teams" no longer lands only on the chat integration.
 - **Teams**: when a step of a team's run stops on its owner's agent quota or on a
   failed login, it runs again as the team's next member whatever the step's On
   Failure setting, and without using up a retry. Before, the step had to be set

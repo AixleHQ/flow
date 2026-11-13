@@ -29,7 +29,7 @@ instead. This section is for people who *use* the product.
 3. The agent works under the credential of the person the run belongs to: the
    card's assignee, else whoever moved the card or pressed **Run**; for a
    schedule, a message, a webhook or a tracker event, whoever the trigger runs
-   as. When that is a [team](/docs/people-and-access#project-teams), the run
+   as. When that is a [team](/docs/project-teams), the run
    goes to one of its members whose agent can take it.
 4. Results come back to where the work started. A card gets status, comments
    and files; a Slack or Teams thread gets a status card that follows the run;
