@@ -13,6 +13,8 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-11-13
+
 ### Added
 - **Tasks**: in bulk mode, **Select all** picks every card the board shows, so
   filtering the board to one person and then choosing **Assign** moves all of
@@ -1390,7 +1392,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.13.1...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.14.0...develop
+[1.14.0]: https://github.com/AixleHQ/flow/compare/v1.13.1...v1.14.0
 [1.13.1]: https://github.com/AixleHQ/flow/compare/v1.13.0...v1.13.1
 [1.13.0]: https://github.com/AixleHQ/flow/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/AixleHQ/flow/compare/v1.11.0...v1.12.0
