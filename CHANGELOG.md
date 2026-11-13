@@ -17,6 +17,9 @@ governance, community health — carry none.
 - **Profile**: a connected Cursor account now shows its remaining quota in the
   Usage limits card — the plan allowance, the Cursor Models / Other Models
   split, and any on-demand spend, each with when the billing period resets.
+- **Profile**: a signed-in Grok account now shows its remaining quota in the
+  Usage limits card — the weekly credit window and the monthly spend limit, each
+  with when it resets.
 - **Integrations**: you can connect your own GitHub account under Profile →
   Connected accounts and allow agents to act as you, per project. An agent given
   `github_user_token` gets a token limited to the session's repositories, plus

@@ -332,6 +332,27 @@ module Agents
       models.present? ? { models: models, source: :api } : { models: FALLBACK_MODELS, source: :fallback }
     end
 
+    # Plan-usage windows read from Grok's billing endpoint — the same view the CLI
+    # shows for a signed-in (OAuth) session. An API-key login bills per token and
+    # has no subscription windows, so it returns nil and the card omits the row.
+    def fetch_subscription_usage(credentials)
+      token = oauth_session_token(credentials)
+      return nil if token.blank?
+
+      billing = Grok::Api.billing(access_token: token, user_id: grok_user_id(credentials))
+      windows = grok_windows(billing)
+      return { status: "unavailable" } if windows.empty?
+
+      { status: "ok", windows: windows }
+    rescue Grok::Api::UnauthorizedError
+      { status: "unauthorized" }
+    rescue Grok::Api::HTTPError => e
+      e.status == 429 ? { status: "rate_limited" } : { status: "unavailable" }
+    rescue Grok::Api::ApiError => e
+      Rails.logger.warn("[GrokAdapter] subscription usage fetch failed: #{e.class}: #{e.message}")
+      { status: "unavailable" }
+    end
+
     # =================================================================
     # Usage Collection
     # =================================================================
@@ -408,6 +429,76 @@ module Agents
       scopes.dig(API_KEY_SCOPE, TOKEN_FIELD) ||
         scopes.dig(OAUTH_SCOPE, TOKEN_FIELD) ||
         scopes.values.first&.dig(TOKEN_FIELD)
+    end
+
+    # The OAuth session token, distinct from an API key: only a signed-in session
+    # has a billing view to read.
+    def oauth_session_token(credentials)
+      return nil unless credentials.is_a?(Hash)
+
+      scopes = auth_scopes(credentials["auth"])
+      scopes.dig(OAUTH_SCOPE, TOKEN_FIELD) || oidc_scope_entry(scopes)&.dig(TOKEN_FIELD)
+    end
+
+    def oidc_scope_entry(scopes)
+      entry = scopes.find { |scope, _| oidc_client_id(scope) }
+      entry&.last
+    end
+
+    def grok_user_id(credentials)
+      return nil unless credentials.is_a?(Hash)
+
+      entry = auth_scopes(credentials["auth"])[OAUTH_SCOPE] || oidc_scope_entry(auth_scopes(credentials["auth"]))
+      entry && entry["user_id"].presence
+    end
+
+    # The billing response's weekly credit percentage and its monthly spend, each
+    # as a window. A signed-in account reports one or the other (or both).
+    def grok_windows(billing)
+      config = billing["config"].is_a?(Hash) ? billing["config"] : billing
+      resets_at = grok_resets_at(config)
+
+      [ grok_weekly_window(config, resets_at), grok_monthly_window(config, resets_at) ].compact
+    end
+
+    def grok_weekly_window(config, resets_at)
+      percent = grok_number(config["creditUsagePercent"])
+      return nil if percent.nil?
+
+      { key: "grok_weekly", utilization: percent.clamp(0.0, 100.0), resets_at: resets_at, window_duration_mins: 10_080 }
+    end
+
+    def grok_monthly_window(config, resets_at)
+      limit = grok_money(config["monthlyLimit"])
+      used = grok_money(config["used"])
+      return nil if limit.nil? || used.nil? || !limit.positive?
+
+      { key: "grok_monthly", utilization: (used / limit * 100.0).clamp(0.0, 100.0), resets_at: resets_at, window_duration_mins: 43_200 }
+    end
+
+    def grok_resets_at(config)
+      period = config["currentPeriod"].is_a?(Hash) ? config["currentPeriod"] : {}
+      iso = period["end"].presence || config["billingPeriodEnd"].presence
+      return nil if iso.blank?
+
+      Time.zone.parse(iso.to_s)&.utc&.iso8601
+    rescue StandardError
+      nil
+    end
+
+    def grok_money(value)
+      return nil unless value.is_a?(Hash)
+
+      grok_number(value["val"])
+    end
+
+    def grok_number(value)
+      return nil if value.nil?
+
+      number = Float(value)
+      number.finite? ? number : nil
+    rescue ArgumentError, TypeError
+      nil
     end
 
     def model_description(model)
