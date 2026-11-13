@@ -13,6 +13,8 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-11-13
+
 ### Added
 - **Integrations**: you can connect your own GitHub account under Profile →
   Connected accounts and allow agents to act as you, per project. An agent given
@@ -1347,7 +1349,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.12.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.13.0...develop
+[1.13.0]: https://github.com/AixleHQ/flow/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/AixleHQ/flow/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/AixleHQ/flow/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/AixleHQ/flow/compare/v1.9.0...v1.10.0
