@@ -153,25 +153,11 @@ the images are built for arm64.
   (`/runner/v1`) on the platform's host. If the gateway is served on a private
   address, the machine has to be inside that network or on its VPN.
 
----
+## Using your own agent image
 
-## Which agent image a machine pulls
-
-A session on a runner runs the platform's agent image for the session's agent
-runtime, and the machine pulls it. By default that is the public image,
-`ghcr.io/aixlehq/flow-<image>` (for example `ghcr.io/aixlehq/flow-claude-code`),
-so the machine needs no registry login. The tag is the one the platform's own
-sessions use. Hosted sessions are not affected: they keep their own images.
-
-To run another image on a runner's machines, set **`container.image_override`**
-in the runner's settings. It wins over the default and must be built `FROM` the
-platform's agent image. If that image is in a private registry, run
-`docker login` for that registry on each machine as the user that runs
-`aixle-runner`: the platform sends no registry credentials to a machine.
-
-A self-hosted deployment changes the default for all its runners with
-`RUNNER_AGENT_IMAGE_PREFIX`, `RUNNER_AGENT_IMAGE_TAG` (default `latest`) and the per-runtime `RUNNER_AGENT_IMAGE_<RUNTIME>`
-variables (see the configuration reference).
+A runner starts every session in the stock image of the session's agent. To use
+your own image (built `FROM` the Aixle base image), set **Image override** in
+the runner's settings.
 
 The override is one image for every session on the runner. A runner that serves
 several agents puts `{agent}` in it, which is replaced when the session starts
