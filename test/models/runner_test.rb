@@ -245,6 +245,17 @@ class RunnerTest < ActiveSupport::TestCase
     assert Integration.exists?(integration.id)
   end
 
+  test "not_seen_since holds the runners never seen or last seen before the time" do
+    now = Time.current
+    never = create(:runner, company: @company, created_by: @user)
+    stale = create(:runner, company: @company, created_by: @user, last_seen_at: now - 1.minute)
+    at_time = create(:runner, company: @company, created_by: @user, last_seen_at: now)
+    create(:runner, company: @company, created_by: @user, last_seen_at: now + 1.minute)
+
+    assert_equal [ never.id, stale.id ].sort, Runner.not_seen_since(now).pluck(:id).sort
+    assert_not_includes Runner.not_seen_since(now).pluck(:id), at_time.id
+  end
+
   test "the database accepts a runner with a deleted runner's name" do
     deleted = create(:runner, company: @company, created_by: @user)
     deleted.soft_delete!

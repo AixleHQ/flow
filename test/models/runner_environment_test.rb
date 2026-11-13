@@ -68,6 +68,16 @@ class RunnerEnvironmentTest < ActiveSupport::TestCase
     assert_nil environment.reload.current_session_id
   end
 
+  test "not_heard_since holds the machines never heard or last heard at or before the time" do
+    now = Time.current
+    never = create(:runner_environment, runner: @runner)
+    stale = create(:runner_environment, runner: @runner, last_heartbeat_at: now - 1.minute)
+    at_time = create(:runner_environment, runner: @runner, last_heartbeat_at: now)
+    create(:runner_environment, runner: @runner, last_heartbeat_at: now + 1.second)
+
+    assert_equal [ never.id, stale.id, at_time.id ].sort, RunnerEnvironment.not_heard_since(now).pluck(:id).sort
+  end
+
   private
 
   def check_session_company_key

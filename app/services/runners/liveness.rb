@@ -32,11 +32,11 @@ module Runners
     # whether it wrote.
     def record!(runner_id:, environment_id:, now: Time.current)
       written = RunnerEnvironment.where(id: environment_id)
-                                 .where("last_heartbeat_at IS NULL OR last_heartbeat_at <= ?", now - RECORD_EVERY)
+                                 .not_heard_since(now - RECORD_EVERY)
                                  .update_all(last_heartbeat_at: now)
       return false if written.zero?
 
-      Runner.where(id: runner_id).where("last_seen_at IS NULL OR last_seen_at < ?", now).update_all(last_seen_at: now)
+      Runner.where(id: runner_id).not_seen_since(now).update_all(last_seen_at: now)
       true
     end
 

@@ -86,6 +86,16 @@ class RunnerOperationTest < ActiveSupport::TestCase
     assert_equal 0, RunnerOperation.count
   end
 
+  test "delivered_before_deadline holds the delivered ops whose deadline is after now" do
+    now = Time.current
+    live = build_operation(state: :delivered, deadline_at: now + 1.minute)
+    live.save!
+    build_operation(sequence: 2, state: :delivered, deadline_at: now - 1.second).save!
+    build_operation(sequence: 3, state: :pending, deadline_at: now + 1.minute).save!
+
+    assert_equal [ live.id ], RunnerOperation.delivered_before_deadline(now).pluck(:id)
+  end
+
   private
 
   def build_operation(payload: { "cmd" => "true" }, **attributes)
