@@ -198,6 +198,29 @@ module Agents
       []
     end
 
+    # Plan-usage windows read from Cursor's dashboard `usage-summary` endpoint —
+    # the same source the IDE's own usage view reads. Cursor has no rolling
+    # windows like Claude's five-hour bucket: an account carries one allowance per
+    # billing period, split across the "Cursor Models" / "Other Models" pools and
+    # an optional on-demand pool, so each pool is a window.
+    #
+    # The stored access token (a JWT) is all the endpoint needs: its `sub` claim
+    # is the cookie subject, so nothing extra is configured.
+    def fetch_subscription_usage(credentials)
+      token = credentials["accessToken"].presence
+      return nil if token.blank?
+
+      summary = Cursor::Api.usage_summary(access_token: token)
+      { status: "ok", windows: usage_windows(summary) }
+    rescue Cursor::Api::UnauthorizedError
+      { status: "unauthorized" }
+    rescue Cursor::Api::HTTPError => e
+      e.status == 429 ? { status: "rate_limited" } : { status: "unavailable" }
+    rescue Cursor::Api::ApiError => e
+      Rails.logger.warn("[CursorCliAdapter] subscription usage fetch failed: #{e.class}: #{e.message}")
+      { status: "unavailable" }
+    end
+
     # Exchange the stored refresh token for a fresh session token.
     #
     # The response carries `access_token` and `id_token` and NO new refresh token, and
@@ -295,6 +318,95 @@ module Agents
     end
 
     private
+
+    # The pools in a usage-summary body, each as a window. `plan` is the account's
+    # own allowance; a team-limited account reports the member's included
+    # allowance as `overall`, so a disabled `plan` falls back to it. On-demand is
+    # spend on top of the plan and only appears once enabled.
+    def usage_windows(summary)
+      individual = summary["individualUsage"].is_a?(Hash) ? summary["individualUsage"] : {}
+      end_ms = cursor_epoch_ms(summary["billingCycleEnd"])
+      resets_at = cursor_epoch_ms_to_iso(end_ms)
+      duration = cursor_window_minutes(cursor_epoch_ms(summary["billingCycleStart"]), end_ms)
+
+      plan = cursor_prefer_enabled_pool(individual["plan"], individual["overall"])
+      on_demand = individual["onDemand"]
+
+      [
+        cursor_pool_window("cursor_plan", cursor_pool_utilization(plan, "totalPercentUsed"), resets_at, duration),
+        cursor_pool_window("cursor_models", cursor_pool_utilization(plan, "autoPercentUsed"), resets_at, duration),
+        cursor_pool_window("cursor_other_models", cursor_pool_utilization(plan, "apiPercentUsed"), resets_at, duration),
+        cursor_pool_window("cursor_on_demand", cursor_on_demand_utilization(on_demand), resets_at, duration)
+      ].compact
+    end
+
+    def cursor_pool_window(key, utilization, resets_at, duration)
+      return nil if utilization.nil?
+
+      { key: key, utilization: utilization, resets_at: resets_at, window_duration_mins: duration }
+    end
+
+    # The reported percentage of a pool, falling back to its raw used/limit ratio
+    # when the percentage field is absent.
+    def cursor_pool_utilization(pool, percent_key)
+      return nil unless pool.is_a?(Hash)
+
+      (cursor_number(pool[percent_key]) || cursor_ratio(pool))&.clamp(0.0, 100.0)
+    end
+
+    # On-demand bills against its own cap; its raw allowance avoids the rounding
+    # its reported percentage can carry.
+    def cursor_on_demand_utilization(on_demand)
+      return nil unless on_demand.is_a?(Hash) && on_demand["enabled"] == true
+
+      (cursor_ratio(on_demand) || cursor_number(on_demand["totalPercentUsed"]))&.clamp(0.0, 100.0)
+    end
+
+    def cursor_ratio(pool)
+      used = cursor_number(pool["used"])
+      limit = cursor_number(pool["limit"])
+      used && limit && limit.positive? ? (used / limit * 100.0) : nil
+    end
+
+    def cursor_number(value)
+      return nil if value.nil?
+
+      number = Float(value)
+      number.finite? ? number : nil
+    rescue ArgumentError, TypeError
+      nil
+    end
+
+    def cursor_prefer_enabled_pool(primary, fallback)
+      return fallback if primary.is_a?(Hash) && primary["enabled"] == false && fallback.is_a?(Hash) && fallback["enabled"] == true
+
+      primary.is_a?(Hash) ? primary : fallback
+    end
+
+    # Cursor's dashboard mixes epoch seconds and milliseconds for the billing
+    # cycle bounds.
+    def cursor_epoch_ms(value)
+      return nil if value.blank?
+
+      seconds = value.to_f
+      seconds > 1e12 ? seconds : seconds * 1000
+    rescue StandardError
+      nil
+    end
+
+    def cursor_epoch_ms_to_iso(value)
+      return nil if value.nil?
+
+      Time.at(value / 1000.0).utc.iso8601
+    rescue StandardError
+      nil
+    end
+
+    def cursor_window_minutes(start_ms, end_ms)
+      return nil if start_ms.nil? || end_ms.nil? || end_ms <= start_ms
+
+      ((end_ms - start_ms) / 60_000.0).round
+    end
 
     def request_models(access_token)
       uri = URI(CURSOR_MODELS_URL)
