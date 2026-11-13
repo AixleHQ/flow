@@ -593,6 +593,59 @@ module Agents
       assert_equal 0, stat.cost_cents
     end
 
+    # == Subscription usage ==
+
+    test "fetch_subscription_usage returns nil for an API-key login" do
+      assert_nil @adapter.fetch_subscription_usage(@adapter.extract_credentials(api_key_auth_json))
+    end
+
+    test "fetch_subscription_usage maps the weekly credit and monthly spend windows" do
+      Grok::Api.expects(:billing).with(access_token: "grok-session-token", user_id: nil).returns({
+        "config" => {
+          "creditUsagePercent" => 42.0,
+          "currentPeriod" => { "type" => "USAGE_PERIOD_TYPE_WEEKLY", "end" => "2026-08-21T12:00:00Z" },
+          "monthlyLimit" => { "val" => "100" },
+          "used" => { "val" => "40" }
+        }
+      })
+
+      usage = @adapter.fetch_subscription_usage(@adapter.extract_credentials(oauth_auth_json))
+
+      assert_equal "ok", usage[:status]
+      assert_equal %w[grok_weekly grok_monthly], usage[:windows].pluck(:key)
+
+      weekly = usage[:windows].find { |w| w[:key] == "grok_weekly" }
+      assert_in_delta 42.0, weekly[:utilization]
+      assert_equal "2026-08-21T12:00:00Z", weekly[:resets_at]
+      assert_equal 10_080, weekly[:window_duration_mins]
+
+      monthly = usage[:windows].find { |w| w[:key] == "grok_monthly" }
+      assert_in_delta 40.0, monthly[:utilization]
+      assert_equal 43_200, monthly[:window_duration_mins]
+    end
+
+    test "fetch_subscription_usage passes the stored user id to the billing endpoint" do
+      credentials = { "auth" => { GrokAdapter::OAUTH_SCOPE => { "key" => "tok", "user_id" => "u-1" } } }
+      Grok::Api.expects(:billing).with(access_token: "tok", user_id: "u-1").returns({
+        "config" => { "creditUsagePercent" => 10.0, "currentPeriod" => { "end" => "2026-08-21T12:00:00Z" } }
+      })
+
+      assert_equal "ok", @adapter.fetch_subscription_usage(credentials)[:status]
+    end
+
+    test "fetch_subscription_usage exposes authentication, throttling and transport states" do
+      credentials = @adapter.extract_credentials(oauth_auth_json)
+
+      Grok::Api.stubs(:billing).raises(Grok::Api::UnauthorizedError.new("unauthorized", status: 401))
+      assert_equal({ status: "unauthorized" }, @adapter.fetch_subscription_usage(credentials))
+
+      Grok::Api.stubs(:billing).raises(Grok::Api::HTTPError.new("slow", status: 429))
+      assert_equal({ status: "rate_limited" }, @adapter.fetch_subscription_usage(credentials))
+
+      Grok::Api.stubs(:billing).raises(Grok::Api::TimeoutError, "timeout")
+      assert_equal({ status: "unavailable" }, @adapter.fetch_subscription_usage(credentials))
+    end
+
     # == Misc contract ==
 
     test "default_config_paths surfaces the paths the UI hints at" do
