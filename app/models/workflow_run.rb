@@ -28,9 +28,12 @@ class WorkflowRun < ApplicationRecord
                               .where(step_runs: { workflow_run_id: run_ids })
                               .pluck(Arel.sql("step_runs.workflow_run_id"), :state)
     sessions.group_by(&:first).filter_map do |run_id, rows|
-      states = rows.map(&:last)
-      run_id if states.include?("queued") && (states & %w[running ready finishing]).empty?
+      run_id if parked_on_slot?(rows.map(&:last))
     end.to_set
+  end
+
+  def self.parked_on_slot?(session_states)
+    session_states.include?("queued") && (session_states & %w[running ready finishing]).empty?
   end
 
   include WorkflowRunStateMachine
@@ -173,6 +176,18 @@ class WorkflowRun < ApplicationRecord
 
     seconds = (completed_at - execution_started_at).round
     seconds unless seconds.negative?
+  end
+
+  # .waiting_for_slot_ids for one run, read off its step runs' sessions — no query
+  # when the caller preloaded `step_runs: :terminal_session`.
+  def waiting_for_slot?
+    self.class.parked_on_slot?(step_runs.filter_map { |step_run| step_run.terminal_session&.state })
+  end
+
+  # The state every screen shows: the run page, the task drawer and the board card
+  # must agree on a run that is parked on a session slot.
+  def displayed_state(waiting = waiting_for_slot?)
+    waiting ? "queued" : state
   end
 
   def can_run_non_interactive?

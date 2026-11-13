@@ -31,6 +31,9 @@ governance, community health — carry none.
 - **Teams**: a member whose agent login has expired is passed over instead of
   being handed runs that then fail at launch, and the Teams page marks them
   **Login expired**.
+- **Sessions & Runs**: a run waiting for a free session slot now reads Queued on
+  its own page and in the task's Runs tab, as it already did on the board card,
+  instead of Running while nothing is executing yet.
 - **Sessions & Runs**: the web log no longer prints, on every request, the
   OpenTelemetry spans a Copilot CLI session sends every couple of seconds.
 - **Workflows**: a repository, skill, connector or secret deleted from the
