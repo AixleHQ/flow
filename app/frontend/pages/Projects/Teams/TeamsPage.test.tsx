@@ -81,6 +81,23 @@ describe('Projects/Teams/TeamsPage', () => {
     expect(await screen.findByText('Kiro CLI quota exhausted until 2026-12-01 12:00 UTC')).toBeInTheDocument();
   });
 
+  it('marks a member whose login expired, and says how to fix it on hover', async () => {
+    const maria = buildTeamMember({
+      id: 6,
+      name: 'Maria',
+      status: {
+        state: 'signed_out',
+        until: null,
+        detail: 'Kiro CLI login expired — sign in again in Profile settings',
+      },
+    });
+    renderTeams({ teams: [buildProjectTeam({ id: 12, name: 'Night shift', members: [maria], nextMemberId: null })] });
+
+    await userEvent.hover(screen.getByText('Login expired'));
+
+    expect(await screen.findByText('Kiro CLI login expired — sign in again in Profile settings')).toBeInTheDocument();
+  });
+
   it('shows the empty state when the project has no teams', () => {
     renderTeams({ teams: [] });
 

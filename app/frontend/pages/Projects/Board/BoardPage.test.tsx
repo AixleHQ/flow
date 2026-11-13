@@ -2934,6 +2934,40 @@ describe('Projects/Board/BoardPage', () => {
     expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
   });
 
+  it('selects every card on the board at once and hands them all to a team', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 200 }));
+    renderAuthedPage(<BoardPage />, { props: { ...populatedProps, teams: [{ id: 7, name: 'Planner' }] } });
+
+    await armBulkMode();
+    await userEvent.click(screen.getByRole('button', { name: 'Select all (2)' }));
+
+    expect(await screen.findByText('2 selected')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Select all/ })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Assign' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Planner' }));
+
+    await waitFor(() => {
+      const patched = fetchSpy.mock.calls
+        .filter(([, init]) => (init as RequestInit | undefined)?.method === 'PATCH')
+        .map(([url, init]) => [url, JSON.parse((init as RequestInit).body as string)]);
+      expect(patched).toEqual([
+        ['/api/v1/projects/7/tasks/1', { board_task: { assignee_id: null, assignee_team_id: 7 } }],
+        ['/api/v1/projects/7/tasks/2', { board_task: { assignee_id: null, assignee_team_id: 7 } }],
+      ]);
+    });
+  });
+
+  it('leaves the cards of a collapsed column out of Select all', async () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Collapse column' })[1]);
+    await armBulkMode();
+    await userEvent.click(screen.getByRole('button', { name: 'Select all (1)' }));
+
+    expect(await screen.findByText('1 selected')).toBeInTheDocument();
+  });
+
   it('offers Retry run on a failed card only to those who may run workflows', () => {
     const failed = makeTask({
       id: 1,

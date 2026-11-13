@@ -42,13 +42,10 @@ namespace :tools do
       findings[:custom_reserved_namespace] << "#{tool.name} (##{tool.id})" if tool.name.start_with?("mcp__")
     end
 
-    # 4. Workflow step configs referencing soft-deleted or missing tool rows.
-    if defined?(Step) && Step.column_names.include?("tool_ids")
-      live_ids = Tool.not_deleted.pluck(:id).to_set
-      Step.where.not(tool_ids: []).find_each do |step|
-        dangling = Array(step.tool_ids).reject { |id| live_ids.include?(id) }
-        findings[:dangling_step_tool_ids] << "step ##{step.id}: #{dangling.join(', ')}" if dangling.any?
-      end
+    # 4. Workflow steps linked to soft-deleted tool rows.
+    StepResourceLink.where.not(tool_id: nil).where.not(tool_id: Tool.not_deleted.select(:id)).group(:step_id)
+                    .pluck(:step_id, Arel.sql("array_agg(tool_id ORDER BY position)")).each do |step_id, ids|
+      findings[:dangling_step_tool_ids] << "step ##{step_id}: #{ids.join(', ')}"
     end
 
     findings.reject! { |_, v| v.empty? }

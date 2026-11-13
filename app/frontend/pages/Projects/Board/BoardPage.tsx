@@ -431,6 +431,15 @@ const BoardPage = () => {
     return map;
   }, [columns, localTasks]);
 
+  const selectableTaskIds = useMemo(
+    () =>
+      localColumns
+        .filter((col) => !collapsedColumns.has(col.id))
+        .flatMap((col) => (tasksByColumn[col.id] ?? []).map((task) => task.id)),
+    [localColumns, collapsedColumns, tasksByColumn],
+  );
+  const selectAll = useCallback(() => setSelectedIds(new Set(selectableTaskIds)), [selectableTaskIds]);
+
   const form = useForm<TaskFormValues>({
     validate: zodResolver(taskSchema),
     initialValues: EMPTY_TASK_FORM,
@@ -903,6 +912,8 @@ const BoardPage = () => {
           active={bulkMode}
           selectedCount={selectedIds.size}
           selectedIds={selectedIds}
+          selectableCount={selectableTaskIds.length}
+          onSelectAll={selectAll}
           columns={localColumns}
           members={members}
           teams={teams}

@@ -27,6 +27,7 @@ import peopleAndAccess from './people-and-access.md?raw';
 import personas from './personas.md?raw';
 import plansAndLimits from './plans-and-limits.md?raw';
 import projectHome from './project-home.md?raw';
+import projectTeams from './project-teams.md?raw';
 import promptGuide from './prompt-guide.md?raw';
 import quickStart from './quick-start.md?raw';
 import reference from './reference.md?raw';
@@ -185,6 +186,12 @@ export const DOC_PAGES: Record<string, DocPage & { toc: TocItem[] }> = {
     section: 'Using Flow',
     content: peopleAndAccess,
     toc: extractToc(peopleAndAccess),
+  },
+  'project-teams': {
+    title: 'Project teams',
+    section: 'Using Flow',
+    content: projectTeams,
+    toc: extractToc(projectTeams),
   },
   'signing-in': {
     title: 'Signing in & SSO',

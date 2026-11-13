@@ -9,6 +9,7 @@ import {
   IconChevronDown,
   IconColumns,
   IconFlag,
+  IconListCheck,
   IconTag,
   IconTrash,
   IconUser,
@@ -34,6 +35,9 @@ export interface SelectionBarProps {
   active: boolean;
   selectedCount: number;
   selectedIds: Set<number>;
+  /** Cards on screen that Select all would pick: loaded, in columns that are not collapsed. */
+  selectableCount?: number;
+  onSelectAll?: () => void;
   columns: BulkColumn[];
   members: Pick<BoardMember, 'id' | 'name'>[];
   teams?: BoardTeam[];
@@ -168,6 +172,8 @@ function AddTagModal({
 export function SelectionBar({
   active,
   selectedCount,
+  selectableCount = 0,
+  onSelectAll,
   columns,
   members,
   teams = [],
@@ -241,6 +247,18 @@ export function SelectionBar({
           {selectedCount} selected
         </Text>
       </Group>
+
+      {onSelectAll && selectedCount < selectableCount && (
+        <Button
+          size="xs"
+          variant="default"
+          leftSection={<IconListCheck size={12} />}
+          styles={btnStyle}
+          onClick={onSelectAll}
+        >
+          Select all ({selectableCount})
+        </Button>
+      )}
 
       {/* Separator — matches .sb-sep */}
       <div style={{ width: 1, height: 20, backgroundColor: 'var(--app-border-default)', flexShrink: 0 }} />

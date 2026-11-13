@@ -13,15 +13,15 @@ module Versions
                     current_version_number created_at updated_at].freeze
       STEP_FIELDS = %w[id name instructions position agent_id preferred_model reasoning_effort required_agent_runtime
                        skip_policy on_failure max_retries bmad_enabled allow_non_interactive input_asset_specs
-                       output_asset_specs tool_ids skill_ids mcp_server_ids asset_ids repository_ids
-                       config_item_ids depends_on_step_ids].freeze
+                       output_asset_specs depends_on_step_ids].freeze
       STEP_EXCLUDED = %w[workflow_id deleted_at created_at updated_at].freeze
       SUB_STEP_FIELDS = %w[id name instructions position required].freeze
       SUB_STEP_EXCLUDED = %w[step_id deleted_at created_at updated_at].freeze
 
       # Step id lists and the resource model each one names. Ids of rows that no
       # longer exist at all are dropped on restore; archived ones are kept (the
-      # revert dialog lists them, runtime skips them).
+      # revert dialog lists them, runtime skips them). A list a snapshot lacks
+      # restores empty.
       STEP_REFERENCES = {
         "tool_ids" => "Tool", "skill_ids" => "Skill", "mcp_server_ids" => "MCPServer",
         "asset_ids" => "Asset", "repository_ids" => "Repository", "config_item_ids" => "ConfigItem"
@@ -33,13 +33,15 @@ module Versions
 
       class << self
         def dump(record)
-          steps = record.steps.not_deleted.reorder(:position).includes(:sub_steps).map do |step|
+          steps = record.steps.not_deleted.reorder(:position).includes(:sub_steps, :resource_links).map do |step|
             sub_steps = step.sub_steps.reject(&:deleted?).sort_by { |s| [ s.position, s.id ] }
             step.attributes.slice(*STEP_FIELDS).merge(
+              STEP_REFERENCES.keys.index_with { |list| step.public_send(list) },
               "sub_steps" => sub_steps.map { |sub| sub.attributes.slice(*SUB_STEP_FIELDS) }
             )
           end
           super.merge("steps" => steps).tap do |snapshot|
+            snapshot["config"] = record.linked_config unless snapshot["config"].nil?
             # Hosted is the absence of a runner, as in every snapshot written
             # before runner_id existed, so saving an unchanged hosted workflow
             # still records nothing.
@@ -63,7 +65,8 @@ module Versions
 
         def restorable_step(step)
           sub_steps = Array(step["sub_steps"]).map { |sub| with_column_defaults(::SubStep, SUB_STEP_FIELDS, sub) }
-          with_column_defaults(::Step, STEP_FIELDS, step).merge("sub_steps" => sub_steps)
+          lists = STEP_REFERENCES.keys.index_with { [] }
+          with_column_defaults(::Step, STEP_FIELDS, lists.merge(step)).merge("sub_steps" => sub_steps)
         end
 
         # A snapshot holds the columns its version had. A column added since then
@@ -88,7 +91,7 @@ module Versions
 
         def existing_config(config)
           CONFIG_REFERENCES.each_with_object(config.dup) do |(key, model), memo|
-            memo[key] = WorkflowStepSync.existing_ids(model, config[key]) if config.key?(key)
+            memo[key] = WorkflowStepSync.existing_ids(model, config[key])
           end
         end
       end

@@ -4,6 +4,7 @@ class Step < ApplicationRecord
   extend Enumerize
   include ProjectOwnedReferences
   include DecodesHtmlEntities
+  include ResourceLists
 
   SUPPORTED_AGENT_RUNTIMES = CompanyMembership::AVAILABLE_AGENTS
   MODEL_ID_FORMAT = /\A[a-z0-9][a-z0-9._:-]*\z/
@@ -16,6 +17,8 @@ class Step < ApplicationRecord
 
   has_many :step_runs, dependent: :destroy
   has_many :sub_steps, -> { order(:position) }, dependent: :destroy
+  has_many :resource_links, -> { order(:position) }, class_name: "StepResourceLink", inverse_of: :step
+  resource_lists :resource_links
 
   accepts_nested_attributes_for :sub_steps, allow_destroy: true
 
@@ -46,7 +49,6 @@ class Step < ApplicationRecord
   before_validation :assign_next_position, on: :create
   before_validation :normalize_asset_specs
   before_validation :retry_at_least_once
-  after_save :mirror_resource_links
 
   def soft_delete!
     update_column(:deleted_at, Time.current)
@@ -116,32 +118,35 @@ class Step < ApplicationRecord
   # decide what `get_config_item` will decrypt for the step's session, so they
   # are never taken on trust from the request that set them.
   def config_item_ids_belong_to_project
-    return if config_item_ids.blank?
+    return unless resource_list_changed?(:config_item_ids) && config_item_ids.present?
 
     unless workflow&.scope_type == "Project"
       errors.add(:config_item_ids, "can only be set on a project-scoped workflow")
       return
     end
 
-    owned = ConfigItem.where(scope_type: "Project", scope_id: workflow.scope_id, id: config_item_ids).pluck(:id)
-    foreign = config_item_ids.map(&:to_i) - owned
+    foreign = ConfigItem.where(id: config_item_ids)
+                        .where.not(scope_type: "Project", scope_id: workflow.scope_id).pluck(:id)
     return if foreign.empty?
 
     errors.add(:config_item_ids, "contains items outside this project: #{foreign.sort.join(', ')}")
   end
 
   STEP_RESOURCES = {
-    agent_id: :agents, tool_ids: :tools, skill_ids: :skills, mcp_server_ids: :mcp_servers,
+    tool_ids: :tools, skill_ids: :skills, mcp_server_ids: :mcp_servers,
     asset_ids: :assets, repository_ids: :repositories
   }.freeze
 
   def resource_ids_belong_to_project
     return unless workflow&.scope_type == "Project"
 
-    STEP_RESOURCES.each do |attribute, kind|
-      next unless will_save_change_to_attribute?(attribute)
+    if will_save_change_to_agent_id?
+      validate_owned_ids(workflow.scope, :agents, :agent_id, agent_id_in_database, agent_id)
+    end
+    STEP_RESOURCES.each do |list, kind|
+      next unless resource_list_changed?(list)
 
-      validate_owned_ids(workflow.scope, kind, attribute, attribute_in_database(attribute), self[attribute])
+      validate_owned_ids(workflow.scope, kind, list, linked_ids(list), self[list], lenient: true)
     end
   end
 
@@ -161,12 +166,6 @@ class Step < ApplicationRecord
   # version snapshots and templates hold that pair and must still restore.
   def retry_at_least_once
     self.max_retries = 1 if on_failure == "retry" && max_retries == 0
-  end
-
-  def mirror_resource_links
-    ResourceLink::COLUMNS.each do |list, column|
-      StepResourceLink.replace!(self, column, self[list]) if saved_change_to_attribute?(list)
-    end
   end
 
   REFERENCE_OWNERS = {

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_12_110000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_13_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1705,27 +1705,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_12_110000) do
   create_table "steps", force: :cascade do |t|
     t.bigint "agent_id"
     t.boolean "allow_non_interactive", default: false, null: false
-    t.jsonb "asset_ids", default: [], null: false
     t.boolean "bmad_enabled", default: false, null: false
-    t.jsonb "config_item_ids", default: [], null: false
     t.datetime "created_at", null: false
     t.datetime "deleted_at"
     t.jsonb "depends_on_step_ids", default: [], null: false
     t.jsonb "input_asset_specs", default: [], null: false
     t.text "instructions"
     t.integer "max_retries", default: 0, null: false
-    t.jsonb "mcp_server_ids", default: [], null: false
     t.string "name", null: false
     t.string "on_failure", default: "fail", null: false
     t.jsonb "output_asset_specs", default: [], null: false
     t.integer "position", null: false
     t.string "preferred_model"
     t.string "reasoning_effort"
-    t.jsonb "repository_ids", default: [], null: false
     t.string "required_agent_runtime"
-    t.jsonb "skill_ids", default: [], null: false
     t.string "skip_policy", default: "never", null: false
-    t.jsonb "tool_ids", default: [], null: false
     t.datetime "updated_at", null: false
     t.bigint "workflow_id", null: false
     t.index ["agent_id"], name: "index_steps_on_agent_id"

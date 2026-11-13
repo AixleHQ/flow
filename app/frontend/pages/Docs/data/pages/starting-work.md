@@ -36,7 +36,7 @@ nobody is at the keyboard when it fires — so the creator needs a connected
 credential for every runtime the workflow uses. The project owner or a company
 admin can point such a trigger at another member under **Runs as**.
 
-A card can also be assigned to a [team](/docs/people-and-access#project-teams),
+A card can also be assigned to a [team](/docs/project-teams),
 and a trigger can run as one. Then each run goes to one member of the team,
 picked by its strategy from those whose agents can take it, and belongs to
 that member from then on. When no member can take it, the run fails at once

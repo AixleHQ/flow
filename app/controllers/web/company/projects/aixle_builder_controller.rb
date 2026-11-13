@@ -74,7 +74,7 @@ class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::A
       },
       workflows: InertiaRails.defer {
         Workflow.attach_run_stats(
-          Workflow.visible_for_project(current_project).includes(:steps).order(:name)
+          Workflow.visible_for_project(current_project).includes(:steps, :base_resource_links).order(:name)
         ).map { |w| WorkflowResource.new(w).to_h }
       },
       board_columns: InertiaRails.defer {

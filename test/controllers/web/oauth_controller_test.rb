@@ -702,6 +702,23 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     assert_equal 123, credential.metadata.dig("github_user", "id")
   end
 
+  test "connecting GitHub accepts the iss GitHub names itself and refuses another issuer" do
+    stub_github!
+    state = build_state(owner: @user, provider: "github", return_to: "/profile/connections")
+
+    assert_difference("OauthCredential.count", 1) do
+      get oauth_callback_path, params: { code: "auth-code-1", state: state, iss: "https://github.com/login/oauth" }
+    end
+    assert_redirected_to "/profile/connections"
+    assert_nil flash[:alert]
+
+    other_state = build_state(owner: @user, provider: "github", return_to: "/profile/connections")
+    assert_no_difference("OauthCredential.count") do
+      get oauth_callback_path, params: { code: "auth-code-2", state: other_state, iss: "https://github.com" }
+    end
+    assert_match(/different server/, flash[:alert])
+  end
+
   test "a failed identity fetch on a reconnect keeps the existing credential, its consents and its status" do
     stub_github!(profile: nil)
     existing = create(:oauth_credential, :github_user, owner: @user, access_token: "ghu_old",

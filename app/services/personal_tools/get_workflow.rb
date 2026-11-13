@@ -21,7 +21,7 @@ module PersonalTools
       workflow = Workflow.visible_for_project(project).find_by(id: params[:workflow_id])
       return error("Workflow not found in this project") unless workflow
 
-      steps = workflow.steps.not_deleted.includes(:agent).order(:position).map { |step| step_view(step) }
+      steps = workflow.steps.not_deleted.includes(:agent, :resource_links).order(:position).map { |step| step_view(step) }
       success(id: workflow.id, name: workflow.name, description: workflow.description,
               published_at: workflow.published_at, current_version_number: workflow.current_version_number,
               base_tool_ids: workflow.base_tool_ids, base_skill_ids: workflow.base_skill_ids,
