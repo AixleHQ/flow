@@ -15,9 +15,10 @@ module Billing
     # and each licence's minutes are simply floored.
     class AwsMarketplaceSaas < Base
       # Immutable once the listing is published, and must match the dimension's
-      # API identifier character for character. Deliberately NOT the container
-      # product's `queue_minute`: the two products bill for different things, and
-      # that one is published and cannot move.
+      # API identifier character for character. The self-hosted product bills
+      # under the same word since 13 November 2026 (its first listing said
+      # `queue_minute`); the two products are still told apart by the adapter,
+      # never by the dimension.
       DIMENSION = "worker_minute"
 
       # The receipt of an hour AWS refused for having been told a different
