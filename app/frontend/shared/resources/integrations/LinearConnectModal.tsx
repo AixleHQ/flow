@@ -71,7 +71,12 @@ export const LinearConnectModal = ({ opened, onClose, basePath, linear }: Connec
     setDedicated(false);
     setError(null);
   }, [onClose]);
-  const requestClose = useUnsavedChanges({ opened, dirty: apiKey !== '' || teamIds.length > 0, onClose: close });
+  const requestClose = useUnsavedChanges({
+    opened,
+    dirty: apiKey !== '' || teamIds.length > 0,
+    saving: connecting,
+    onClose: close,
+  });
 
   const check = useCallback(async () => {
     setError(null);
@@ -227,7 +232,7 @@ export const LinearTeamsModal = ({ integration, onClose, basePath }: TeamsProps)
     ((apiKeyMode && dedicated !== integration.linearDedicatedIdentity) ||
       teamIds.length !== covered.length ||
       teamIds.some((id) => !covered.includes(id)));
-  const requestClose = useUnsavedChanges({ opened: !!integration, dirty, onClose });
+  const requestClose = useUnsavedChanges({ opened: !!integration, dirty, saving, onClose });
 
   const save = useCallback(() => {
     if (!integration) return;

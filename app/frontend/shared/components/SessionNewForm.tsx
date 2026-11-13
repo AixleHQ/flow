@@ -70,8 +70,11 @@ export interface SessionNewFormProps {
    * footer, so the 460px side panel matches the Run Workflow drawer exactly.
    */
   layout?: 'page' | 'drawer';
-  /** Reports whether the form holds input that unmounting it would throw away; false again on unmount. */
-  onDirtyChange?: (dirty: boolean) => void;
+  /**
+   * Reports whether the form holds input that unmounting it would throw away, and whether its Start
+   * request is in flight; both false again on unmount.
+   */
+  onStateChange?: (state: { dirty: boolean; saving: boolean }) => void;
 }
 
 const formatCents = (cents: number): string => `$${(cents / 100).toFixed(2)}`;
@@ -111,7 +114,7 @@ export const SessionNewForm = ({
   preSelectedProjectId,
   costHint,
   layout = 'page',
-  onDirtyChange,
+  onStateChange,
 }: SessionNewFormProps) => {
   const { currentUser } = usePage().props as unknown as SharedProps;
   const { canExecute } = useProjectPermissions();
@@ -223,12 +226,12 @@ export const SessionNewForm = ({
     configCount > 0 ||
     runnerId !== null;
 
-  // A session being started is a save in flight: the visit to its page must not ask to discard.
+  // A session being started is a save in flight; useUnsavedChanges treats it as not dirty.
   useEffect(() => {
-    onDirtyChange?.(dirty && !loading);
-  }, [dirty, loading, onDirtyChange]);
+    onStateChange?.({ dirty, saving: loading });
+  }, [dirty, loading, onStateChange]);
 
-  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+  useEffect(() => () => onStateChange?.({ dirty: false, saving: false }), [onStateChange]);
 
   const handleStart = useCallback(async () => {
     if (!canSubmit) return;
@@ -270,7 +273,8 @@ export const SessionNewForm = ({
         } else {
           router.visit(fallbackPath);
         }
-        // Stay "saving" until the visit replaces this page.
+        // Keep Start disabled even if this visit never lands: the session already exists, and
+        // re-arming the button would let a second click launch another one.
         return;
       } else {
         const errData = await res.json().catch(() => null);

@@ -515,6 +515,7 @@ const BoardPage = () => {
   const requestCloseCreate = useUnsavedChanges({
     opened: canExecute && createOpen,
     dirty: form.isDirty(),
+    saving: loading,
     onClose: closeCreate,
   });
 

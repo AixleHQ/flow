@@ -220,6 +220,7 @@ const TeamsPage = () => {
   const requestClose = useUnsavedChanges({
     opened: editing !== null,
     dirty: !sameForm(form, initial),
+    saving,
     onClose: handleClose,
   });
 

@@ -87,7 +87,7 @@ export const JiraConnectModal = ({ opened, onClose, basePath, jira }: ConnectPro
   }, [onClose]);
 
   const dirty = siteUrl !== '' || clientId !== '' || clientSecret !== '' || projectIds.length > 0;
-  const requestClose = useUnsavedChanges({ opened, dirty, onClose: close });
+  const requestClose = useUnsavedChanges({ opened, dirty, saving: connecting, onClose: close });
 
   const check = useCallback(async () => {
     setError(null);
@@ -268,7 +268,7 @@ export const JiraProjectsModal = ({ integration, onClose, basePath }: ProjectsPr
       dedicated !== integration.jiraDedicatedIdentity ||
       projectIds.length !== covered.length ||
       projectIds.some((id) => !covered.includes(id)));
-  const requestClose = useUnsavedChanges({ opened: !!integration, dirty, onClose });
+  const requestClose = useUnsavedChanges({ opened: !!integration, dirty, saving, onClose });
 
   const save = useCallback(() => {
     if (!integration) return;

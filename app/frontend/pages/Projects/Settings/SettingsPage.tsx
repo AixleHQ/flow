@@ -178,7 +178,8 @@ const SettingsPage = () => {
     });
 
   useUnsavedChanges({
-    dirty: form.isDirty() && !isSubmitting,
+    dirty: form.isDirty(),
+    saving: isSubmitting,
     onSave: form.isValid() ? () => handleSubmit(form.getValues()) : undefined,
   });
 
