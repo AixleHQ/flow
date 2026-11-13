@@ -207,8 +207,10 @@ class SessionContextService
     mcp_server_names ||= build_all_servers.map { |server| MCPServer.config_key_for(server.name) }
     # `otel_endpoint` is kept when nil: a runner session has no OTLP endpoint, and the
     # adapters that write one into a config file then write none.
+    otel_endpoint = runtime.callback_url(:otel, session)
     { enabled_mcp_servers: mcp_server_names, model: resolve_session_model(credential), mode: session.mode,
-      reasoning_effort: session.reasoning_effort }.compact.merge(otel_endpoint: runtime.callback_url(:otel, session))
+      reasoning_effort: session.reasoning_effort }.compact
+      .merge(otel_endpoint: otel_endpoint, full_telemetry: otel_endpoint.present? && session.full_telemetry?)
   end
 
   # == Story 9.2: Config File Injection ==
@@ -684,7 +686,7 @@ class SessionContextService
   def exec_clone_command(repo, integration, token, uid, target_path)
     clone_url = build_clone_url(repo, integration, token)
     branch = Shellwords.escape(repo.source_branch)
-    cmd = [ "sh", "-c", "git clone --depth=1 --branch=#{branch} #{clone_url} #{target_path} && chown -R #{uid}:#{uid} #{target_path} && #{GitCredentials::SafeDirectory.script(target_path)}" ]
+    cmd = [ "sh", "-c", "git clone --depth=1 --branch=#{branch} #{clone_url} #{target_path} && chown -R #{uid}:#{uid} #{target_path} && #{GitCredentials::SafeDirectory.script(target_path, scope: :system)}" ]
     runtime.exec(container_id, cmd)
   end
 

@@ -14,11 +14,16 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Fixed
+- **Sessions & Runs**: the web log no longer prints, on every request, the
+  OpenTelemetry spans a Copilot CLI session sends every couple of seconds.
+
+## [1.13.1] - 2026-11-13
+
+### Fixed
 - **Integrations**: Connect GitHub under Profile → Connected accounts no longer
   fails with "The authorization came back from a different server". GitHub names
   itself `https://github.com/login/oauth` in its authorization response, and the
-  connection now expects that. An unused GitHub client record left by a failed
-  attempt stays in place and does no harm.
+  connection now expects that.
 
 ## [1.13.0] - 2026-11-13
 
@@ -1375,7 +1380,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.13.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.13.1...develop
+[1.13.1]: https://github.com/AixleHQ/flow/compare/v1.13.0...v1.13.1
 [1.13.0]: https://github.com/AixleHQ/flow/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/AixleHQ/flow/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/AixleHQ/flow/compare/v1.10.0...v1.11.0
