@@ -64,8 +64,8 @@ describe('runnerConfig', () => {
       [
         'container.extra_mounts[0].source must be an absolute path',
         'container.home_mount.path is required on a manual runner',
-        'reconnect_grace must be between 60 and 7200',
-        'ephemeral is not a config key: it is set per machine at registration',
+        'auto_update must be true or false',
+        'bogus is not a supported config key',
         'must be an object',
       ],
       MANUAL_CONFIG_SCHEMA,
@@ -74,12 +74,9 @@ describe('runnerConfig', () => {
     expect(byField).toEqual({
       'container.extra_mounts': ['container.extra_mounts[0].source must be an absolute path'],
       'container.home_mount.path': ['container.home_mount.path is required on a manual runner'],
-      reconnect_grace: ['reconnect_grace must be between 60 and 7200'],
+      auto_update: ['auto_update must be true or false'],
     });
-    expect(unplaced).toEqual([
-      'ephemeral is not a config key: it is set per machine at registration',
-      'must be an object',
-    ]);
+    expect(unplaced).toEqual(['bogus is not a supported config key', 'must be an object']);
   });
 
   it('reads the server errors whether they arrive as a string or a list', () => {

@@ -8,7 +8,7 @@ require "test_helper"
 class RunnerGatewayOperationsTest < ActionDispatch::IntegrationTest
   include ProcessModeHelper::RunnerGateway
 
-  REGISTRATION = { os: "linux", arch: "amd64", facts: {}, ephemeral: false }.freeze
+  REGISTRATION = { os: "linux", arch: "amd64", facts: {} }.freeze
   SECRET = "ghp_payload-secret-0123456789"
 
   # Calls the block when the event named by `pattern` starts, on the thread

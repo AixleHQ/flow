@@ -2,45 +2,31 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/AixleHQ/flow/runner/protocol/schemas/v1/register.request.json",
   "title": "POST /runner/v1/register: the request body",
-  "description": "PROTOCOL.md §5.1. A body that fails this schema is 422 invalid_registration. A body with `ephemeral: true` passes whatever the rest of it holds (`if`/`then`), so that it is refused with 422 ephemeral_not_supported before the body is. The rules that need the value itself, a `name` blank once its surrounding spaces are dropped and a value over 255 characters, are checked when the machine is recorded and answer the same refusal. Other fields are ignored.",
+  "description": "PROTOCOL.md §5.1. A body that fails this schema is 422 invalid_registration. The rules that need the value itself, a `name` blank once its surrounding spaces are dropped and a value over 255 characters, are checked when the machine is recorded and answer the same refusal. Fields the schema does not know are ignored: `aixle-runner` 0.2.0 still sends `ephemeral: false`.",
   "type": "object",
-  "if": {
-    "description": "The body asks for `ephemeral`: the key is present and its value is the JSON boolean true.",
-    "required": ["ephemeral"],
-    "properties": {
-      "ephemeral": { "const": true }
-    }
-  },
-  "then": true,
-  "else": {
-    "required": ["name"],
-    "properties": {
-      "name": {
-        "description": "Leading and trailing spaces are dropped, and it must not be blank then. At most 255 characters.",
-        "type": "string"
-      },
-      "os": {
-        "description": "Optional, e.g. `linux`. A string of at most 255 characters: any other value, `null` included, is refused.",
-        "type": "string",
-        "maxLength": 255
-      },
-      "arch": {
-        "description": "Optional, e.g. `amd64`. A string of at most 255 characters: any other value, `null` included, is refused.",
-        "type": "string",
-        "maxLength": 255
-      },
-      "facts": {
-        "description": "What the machine reports about itself, e.g. {\"docker\": \"27.1.0\"}. Default {} when absent; `null` is refused.",
-        "type": "object"
-      },
-      "ephemeral": {
-        "description": "Optional, default false. A JSON boolean: any other value (\"true\", 1, 0.0, `null`) is refused. `true` is refused with 422 ephemeral_not_supported: such a body passes this schema's `if`/`then`, whatever the rest of it holds.",
-        "type": "boolean"
-      },
-      "auto_update": {
-        "description": "Default true when absent. `false` is `aixle-runner configure --no-auto-update`: the machine is never offered an update. `null` is refused.",
-        "type": "boolean"
-      }
+  "required": ["name"],
+  "properties": {
+    "name": {
+      "description": "Leading and trailing spaces are dropped, and it must not be blank then. At most 255 characters.",
+      "type": "string"
+    },
+    "os": {
+      "description": "Optional, e.g. `linux`. A string of at most 255 characters: any other value, `null` included, is refused.",
+      "type": "string",
+      "maxLength": 255
+    },
+    "arch": {
+      "description": "Optional, e.g. `amd64`. A string of at most 255 characters: any other value, `null` included, is refused.",
+      "type": "string",
+      "maxLength": 255
+    },
+    "facts": {
+      "description": "What the machine reports about itself, e.g. {\"docker\": \"27.1.0\"}. Default {} when absent; `null` is refused.",
+      "type": "object"
+    },
+    "auto_update": {
+      "description": "Default true when absent. `false` is `aixle-runner configure --no-auto-update`: the machine is never offered an update. `null` is refused.",
+      "type": "boolean"
     }
   }
 }

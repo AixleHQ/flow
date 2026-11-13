@@ -112,7 +112,6 @@ the platform endpoint's own, not a refusal):
 | `route_not_allowed` | 404 | `proxy` | The route, its method or the path below it is not on the proxy's allow-list (§5.8). |
 | `session_not_on_environment` | 403 | `proxy` | The request carries no key of the session that holds this machine now: the key is missing or wrong, it is another session's, or the machine holds no session (§5.8). |
 | `upstream_unavailable` | 502 | `proxy` | The platform's endpoint for the route did not answer (§5.8). |
-| `ephemeral_not_supported` | 422 | `register` | The body asked for `ephemeral: true`. |
 | `invalid_registration` | 422 | `register` | The body is invalid: a blank or missing `name`, `facts` that is not an object (`null` included), or a field over 255 characters. An `X-Aixle-Runner-Version` over 255 characters is refused this way too, since it is recorded with the machine, and before the `min_version` check, so the answer does not depend on the pins. |
 | `invalid_result` | 422 | `ops/:id/result` | The result body is invalid (§5.5). |
 | `invalid_check_in` | 422 | `check-in` | The body is invalid: `os` or `arch` is not a string of at most 255 characters, or `facts` is not an object (`null` included). An `X-Aixle-Runner-Version` over 255 characters is refused this way too (§5.9). |
@@ -155,7 +154,7 @@ then gets the refusal, not the ops (§5.4).
 | `400 unsupported_protocol`, `400 invalid_runner_version`, `400 runner_version_unsupported` | Stops and reports that `aixle-runner` must be updated, with the gateway's message. Retrying cannot succeed. A refused `register` leaves the registration token usable. A refused `check-in` stops the host runner before it takes an op. |
 | `400 invalid_request`, `422 invalid_result`, `422 invalid_check_in` | A bug in the runner: it reports it and does not resend the same request. |
 | `400` without the JSON refusal shape | A bug in the runner, which sent a body that is not valid JSON: it reports it and does not resend the same body. |
-| `422 ephemeral_not_supported`, `422 invalid_registration` | Reports the problem with its configuration. The registration token is not spent, so `configure` can be run again with the same token once the input is fixed. |
+| `422 invalid_registration` | Reports the problem with its configuration. The registration token is not spent, so `configure` can be run again with the same token once the input is fixed. |
 | `404 not_found` from a result | Drops that result: the op is not this machine's. |
 | A refusal of the proxy route (§5.8) | Passes it on to the agent as it is, with its `X-Aixle-Runner-Refusal` header, after the one refresh and retry of an `invalid_token`. The agent's own client decides what to do. |
 
@@ -246,7 +245,6 @@ machine, which the platform calls an environment.
 | `os` | string | Optional, a string, at most 255 characters, e.g. `linux`. Any other value, `null` included, is refused with `invalid_registration`. |
 | `arch` | string | Optional, a string, at most 255 characters, e.g. `amd64`. Any other value, `null` included, is refused with `invalid_registration`. |
 | `facts` | object | Optional, default `{}` when the key is absent. What the machine reports about itself, e.g. `{"docker": "27.1.0"}`. Omit it or send an object: `null` is refused with `invalid_registration`. |
-| `ephemeral` | boolean | Optional, default `false`. A JSON boolean: any other value (`"true"`, `1`, `0.0`, `null`) is refused with `invalid_registration`. `true` is refused with `ephemeral_not_supported`: ephemeral registration is not in protocol 1 yet. |
 | `auto_update` | boolean | Optional, default `true`. `false` is `aixle-runner configure --no-auto-update`: the platform never offers the machine an update (§5.4). `null` is refused with `invalid_registration`. |
 
 The `X-Aixle-Runner-Version` and `X-Aixle-Runner-Protocol` of the request are recorded as the
@@ -277,13 +275,13 @@ refused by the other endpoints: a session is never killed because a newer runner
 either.
 
 Its own refusals: `422 invalid_registration` for an `X-Aixle-Runner-Version` over 255
-characters, then `400 runner_version_unsupported`, then `422 ephemeral_not_supported`, then
+characters, then `400 runner_version_unsupported`, then
 `422 invalid_registration` for the body. None of them spends the token. An overlength version is
 refused the same way whatever `min_version` is. Two machines that race on one token create one environment; the other gets
 `invalid_token`.
 
-Schema: [`schemas/v1/register.request.json`](schemas/v1/register.request.json). A body with
-`ephemeral: true` passes it whatever the rest of it holds, so the `ephemeral` refusal comes first;
+Schema: [`schemas/v1/register.request.json`](schemas/v1/register.request.json). Fields it does not
+know are ignored: `aixle-runner` 0.2.0 still sends `"ephemeral": false`, and registers.
 `name` blank once trimmed and a value over 255 characters are checked when
 the machine is recorded, with the same refusal.
 
@@ -1207,11 +1205,10 @@ Each of these is designed in DESIGN.md §6 and comes with its own section and fi
   next ops are not enqueued and answer `no_session_container`, and the session fails as one whose
   container is gone. That session's container keeps running on the machine: nothing can stop it,
   because the runner is unregistered and its credentials are revoked, so the operator removes it
-  by hand. Scrub and return to service are tasks 11 and 13.
+  by hand. Scrub and return to service are task 11a (#242).
 - An endpoint that issues registration tokens ("Add machine"): built (task 12a, #225). `POST
   /company/settings/runners/:id/registration_token` and `POST /company/projects/:project_id/runners/:id/registration_token`
   on the web application (not the gateway; the caller is a signed-in user who may manage the runner) mint one through
   `Runners::Credentials.mint_registration!` and answer once with the token, its expiry, the recommended runner version
   and, for each pinned platform, the binary's URL on the platform's own host and its SHA-256. A revoked runner is
   refused with `runner_revoked`. The Machines table and per-machine Revoke remain task 12.
-- Ephemeral registration: refused with `ephemeral_not_supported` until it is built.
