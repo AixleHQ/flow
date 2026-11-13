@@ -12,12 +12,13 @@ class ProcessModeRoutesTest < ActionDispatch::IntegrationTest
 
   GATEWAY_ENDPOINTS = [
     %w[POST /runner/v1/register], %w[DELETE /runner/v1/registration], %w[POST /runner/v1/token], %w[POST /runner/v1/check-in],
-    %w[GET /runner/v1/ops], %w[POST /runner/v1/ops/1/result], %w[GET /runner/v1/releases/0.1.0/linux-amd64],
+    %w[POST /runner/v1/heartbeat], %w[GET /runner/v1/ops], %w[POST /runner/v1/ops/1/result], %w[GET /runner/v1/releases/0.1.0/linux-amd64],
     %w[GET /runner/v1/releases/0.1.0/checksums], %w[POST /runner/v1/proxy/mcp],
     %w[GET /runner/v1/proxy/assets/store/report.pdf]
   ].freeze
   GATEWAY_PATHS = [
-    "/up", "/runner/v1/register", "/runner/v1/registration", "/runner/v1/token", "/runner/v1/check-in", "/runner/v1/ops",
+    "/up", "/runner/v1/register", "/runner/v1/registration", "/runner/v1/token", "/runner/v1/check-in", "/runner/v1/heartbeat",
+    "/runner/v1/ops",
     "/runner/v1/ops/:id/result", "/runner/v1/releases/:version/checksums", "/runner/v1/releases/:version/:platform",
     "/runner/v1/proxy/:route(/*path)"
   ].freeze

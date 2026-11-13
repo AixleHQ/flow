@@ -188,7 +188,7 @@ describe('SessionShowContent', () => {
     expect(screen.getByText('Waiting for cluster capacity')).toBeInTheDocument();
   });
 
-  it('names the runner wait, with the launch\'s own message, instead of cluster capacity', () => {
+  it("names the runner wait, with the launch's own message, instead of cluster capacity", () => {
     renderPage(
       <SessionShowContent
         session={makeSession({

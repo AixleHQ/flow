@@ -124,7 +124,7 @@ class Runners::ManualAdapterTest < ActiveSupport::TestCase
   test "the reason is cut to 255 characters" do
     now = Time.current
     create(:runner_environment, runner: runner, last_heartbeat_at: now)
-    create_list(:runner_environment, 30, runner: runner, last_heartbeat_at: now - 2.minutes)
+    create_list(:runner_environment, 10, runner: runner, display_name: "a-machine-with-a-long-name", last_heartbeat_at: now - 2.minutes)
 
     assert_operator check(now).last.length, :<=, 255
   end

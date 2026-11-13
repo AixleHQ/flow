@@ -22,7 +22,7 @@ describe('launchWaitMessage', () => {
     expect(isWaitingForCluster('namespace_quota')).toBe(true);
   });
 
-  it('names a free machine, not the cluster, when every machine of the session\'s runner is busy', () => {
+  it("names a free machine, not the cluster, when every machine of the session's runner is busy", () => {
     expect(launchWaitMessage('runner_capacity')).toBe('Waiting for a free machine');
     expect(launchWaitMessage('runner_capacity', 'authentication')).toBe('Waiting for a free machine');
     expect(isWaitingForRunner('runner_capacity')).toBe(true);
