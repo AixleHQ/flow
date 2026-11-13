@@ -41,6 +41,9 @@ governance, community health — carry none.
   Profile settings.
 
 ### Fixed
+- **Sessions & Runs**: starting a session from the New session drawer opens it
+  instead of asking "Discard unsaved changes?". Answering "Keep editing" there
+  left the started session running and let a second Start launch a duplicate.
 - **Integrations**: Slack no longer switches itself off when Slack reports that
   a member's own token was revoked, for example when someone leaves the
   workspace. Only removing the app, or revoking its bot token, disconnects the

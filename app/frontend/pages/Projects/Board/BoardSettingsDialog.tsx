@@ -51,6 +51,7 @@ export function BoardSettingsDialog({
   const requestClose = useUnsavedChanges({
     opened,
     dirty: JSON.stringify(cols) !== JSON.stringify(savedCols),
+    saving,
     onClose,
   });
 

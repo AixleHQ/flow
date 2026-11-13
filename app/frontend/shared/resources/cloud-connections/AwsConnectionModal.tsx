@@ -173,7 +173,7 @@ export function AwsConnectionModal({ opened, onClose, onConnected, embedded = fa
   const selectedAccount = accounts.find((a) => a.account_id === accountId);
 
   // Only the sign-in is lost on close: the typed fields are never reset and are still there on reopen.
-  const requestClose = useUnsavedChanges({ opened, dirty: phase !== 'form', onClose });
+  const requestClose = useUnsavedChanges({ opened, dirty: phase !== 'form', saving: phase === 'saving', onClose });
 
   const body = (
     <Stack gap="md">

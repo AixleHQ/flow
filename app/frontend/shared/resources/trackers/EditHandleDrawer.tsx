@@ -33,6 +33,7 @@ export const EditHandleDrawer = ({ tracker, basePath, onClose }: Props) => {
   const requestClose = useUnsavedChanges({
     opened: tracker !== null,
     dirty: tracker !== null && handle !== tracker.handle,
+    saving,
     onClose,
   });
 

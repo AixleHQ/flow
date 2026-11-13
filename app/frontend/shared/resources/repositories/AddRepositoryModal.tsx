@@ -198,7 +198,7 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
     form.reset();
     onClose();
   };
-  const requestClose = useUnsavedChanges({ opened, dirty: form.isDirty(), onClose: handleClose });
+  const requestClose = useUnsavedChanges({ opened, dirty: form.isDirty(), saving: loading, onClose: handleClose });
 
   const pageErrors = usePage().props.errors as Record<string, string> | undefined;
   const serverErrors = useMemo(() => {
