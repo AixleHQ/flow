@@ -59,6 +59,30 @@ module ProjectTeams
       end
     end
 
+    test "passes over a member whose login can no longer be renewed, and says so" do
+      AgentCredential.find_by!(user: @anna).update!(status: :error)
+
+      result = pick
+      assert_equal @pavel, result.user
+      skip = result.skipped.sole
+      assert_equal "Kiro CLI login expired — sign in again in Profile settings", skip.reason
+      assert skip.signed_out
+      assert_nil skip.held_until
+    end
+
+    # Expired, and a live session holds the tokens, so a launch could not refresh
+    # them: the same login SessionService's preflight refuses.
+    test "passes over a member whose expired login a launch could not refresh" do
+      anna = AgentCredential.find_by!(user: @anna)
+      anna.update!(agent_type: "claude_code", config_data: { "claudeAiOauth" => {
+                     "accessToken" => "sk-ant-tok", "expiresAt" => (1.minute.ago.to_f * 1000).to_i } })
+      create(:terminal_session, user: @anna, company_id: @company.id, agent_type: "claude_code", state: "ready")
+
+      result = pick
+      assert_equal @pavel, result.user
+      assert_equal "Claude Code login expired — sign in again in Profile settings", result.skipped.sole.reason
+    end
+
     test "a member needs a credential for every runtime the steps pin" do
       create(:step, workflow: @workflow, required_agent_runtime: "codex")
       create(:agent_credential, user: @olga, company: @company, agent_type: "codex")

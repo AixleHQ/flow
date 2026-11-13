@@ -28,7 +28,7 @@ Create a card from a column's **+** button, or press **n** anywhere on the
 board. A card carries a title, a description, a type, an assignee, tags, an
 optional parent epic, subtasks, comments, and attachments.
 
-The assignee is a person or a [team](/docs/people-and-access#project-teams).
+The assignee is a person or a [team](/docs/project-teams).
 A card assigned to a team shows the team's name, and each of its runs goes to
 one member, picked when the run starts — so two runs of the same card can land
 with different people. Select several cards to assign them all at once, to a

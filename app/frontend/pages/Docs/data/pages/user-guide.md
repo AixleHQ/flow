@@ -68,7 +68,7 @@ card's run belongs to its assignee when they have a connected agent, else to
 whoever moved the card or pressed **Run** on it; a workflow started by hand
 belongs to whoever pressed **Run**; any other trigger runs as its creator, or
 whoever it was pointed at, because nobody is at the keyboard when it fires. A
-card assigned to a [team](/docs/people-and-access#project-teams), or a trigger that runs as one, hands each run to
+card assigned to a [team](/docs/project-teams), or a trigger that runs as one, hands each run to
 one member whose agent can take it. Each step uses that person's
 credential for its runtime, and acts as that person: the agent's board
 comments, attachments, moves and gates, and its tracker uploads, are recorded

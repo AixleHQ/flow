@@ -13,7 +13,24 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Tasks**: in bulk mode, **Select all** picks every card the board shows, so
+  filtering the board to one person and then choosing **Assign** moves all of
+  their cards to a team at once.
+
+### Changed
+- **Docs**: project teams have their own page, *Project teams*, next to *Team &
+  access*, and it and *Microsoft Teams* each point to the other, so a search for
+  "teams" no longer lands only on the chat integration.
+- **Teams**: when a step of a team's run stops on its owner's agent quota or on a
+  failed login, it runs again as the team's next member whatever the step's On
+  Failure setting, and without using up a retry. Before, the step had to be set
+  to retry, which also retried every ordinary failure.
+
 ### Fixed
+- **Teams**: a member whose agent login has expired is passed over instead of
+  being handed runs that then fail at launch, and the Teams page marks them
+  **Login expired**.
 - **Sessions & Runs**: the web log no longer prints, on every request, the
   OpenTelemetry spans a Copilot CLI session sends every couple of seconds.
 - **Workflows**: a repository, skill, connector or secret deleted from the
