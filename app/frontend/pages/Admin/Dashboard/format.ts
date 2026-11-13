@@ -24,7 +24,7 @@ type Tone = 'success' | 'warning' | 'danger' | 'info';
 
 export const BILLING_LABELS: Record<BillingClass, { label: string; tone: Tone }> = {
   paying: { label: 'Paying', tone: 'success' },
-  no_customer: { label: 'Not billed · no Stripe customer', tone: 'danger' },
+  no_customer: { label: 'Not billed · no payer', tone: 'danger' },
   unlimited: { label: 'Not billed · no limit', tone: 'danger' },
   managed: { label: 'Free · managed', tone: 'info' },
   trial: { label: 'Trial', tone: 'info' },

@@ -225,8 +225,10 @@ failure instead, and **Nothing** keeps the thread quiet.
 
 ### Who the run belongs to
 
-A Teams-started run belongs to the person who added the trigger, and it uses
-their credentials, as with Slack. Anyone in the organization who can address
+A Teams-started run belongs to whoever **Runs as** names on the trigger — the
+person who added it, unless it was pointed at another member or at a [team](/docs/people-and-access#project-teams),
+which hands each run to one of its members — and it uses their credentials, as
+with Slack. Anyone in the organization who can address
 the app in an accepted conversation can start it. Flow records who asked: it is
 shown on the run page, and an agent sees the sender's name. A sender who signs
 in to Flow with Microsoft, or has linked their Teams account, is recognized as

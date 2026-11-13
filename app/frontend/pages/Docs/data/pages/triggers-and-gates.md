@@ -71,14 +71,16 @@ Every trigger records its **creator** — whoever added it, not whoever later
 caused the event (the Slack sender, the webhook caller, the person who moved the
 card). The Triggers tab shows that name on the card and in the add/edit panel.
 
-Off-board runs (schedule / Slack / webhook) belong to the creator and use *their*
+Off-board runs (schedule / Slack / webhook) belong to the creator — or to the
+member or team the trigger was later pointed at (below) — and use *their*
 agent credentials, because nobody is at the keyboard when they fire. A trigger
 with no creator therefore cannot start one — it is skipped, and the card says so.
 Triggers created before the creator was recorded show **Unknown**; an admin can
 pick who they run as (below), or re-create them.
 
 A column trigger's run still belongs to the person the card puts on it (the
-assignee, else whoever moved it), so its creator is provenance only.
+assignee — or, for a card assigned to a team, the member the team picks —
+else whoever moved it), so its creator is provenance only.
 
 Editing a trigger's name, filter, cron or enabled flag never reassigns who it
 runs as, and deleting that person's account leaves the trigger in place without
@@ -101,6 +103,36 @@ picked.
 Everyone else sees **Runs as** read-only. Each change is recorded in the audit
 trail with who made it and the old and new member. Over MCP, the same change is
 `update_workflow_trigger` with `run_as_user_id`.
+
+### Running as a team
+
+**Runs as** can also name one of the project's
+[teams](/docs/people-and-access#project-teams) — offered when the trigger is
+added as well as later, to the same people who may change it. Each run then
+goes to one member of the team, picked by the team's strategy from the members
+whose agents can take it, and belongs to that member from then on. The trigger
+keeps its creator as its author: clearing the team, or picking a person
+instead, makes it run as a person again.
+
+When no member can take a run, the run fails at once, naming each member and
+why they were passed over, and the failure is reported like any other — on
+the runs list, the card, and the chat thread's status card. Over MCP and the
+API the field is `run_as_team_id` on `create_workflow_trigger` /
+`update_workflow_trigger`: `null` clears it, and naming a person with
+`run_as_user_id` replaces it. Each trigger carries its `run_as_team`.
+
+A column trigger has no **Runs as** of its own: its run follows the card, so
+a card assigned to a team sends its runs to the team.
+
+### Reacting to a quota stop
+
+Every run that stops on its owner's agent quota — in a team or not — raises a
+`workflow_run.quota_exceeded` event carrying the run, its workflow and card,
+its owner and team, the runtime, when the quota resets, and the trigger that
+started the run. An `event` trigger with that event type starts a workflow on
+it: to tell someone, or to move the work elsewhere. A run this event started
+does not raise it again, and the event is only ever accepted from Flow itself,
+so a webhook cannot pass one off.
 
 ## subject_policy
 

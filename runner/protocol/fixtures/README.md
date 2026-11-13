@@ -121,7 +121,7 @@ step's arguments.
 | `flag_off` | none | Turns `external_runners` off for the company. | nothing |
 | `flag_on` | none | Turns it back on. | nothing |
 | `time_passes` | `seconds` (an integer) | Moves the gateway's clock forward. | nothing |
-| `release_pins` | `min_version`, `recommended_version` (each optional, a version string; absent means null), `binaries` (optional, the `binaries` map of the platform's pins, `runners.release` in `config/settings.yml`: `{"1.5.0": {"linux-amd64": {"sha256": "<64 hex>"}}}`; absent means none) | Replaces the platform's runner pins for the rest of the scenario: the committed `runners.release` block, its `protocol_supported` and `download_url` kept, with these three keys in place of its own. Without this step a scenario runs on the committed pins, which pin no minimum and recommend `0.1.0` with its binaries, below the version the scenarios' requests report (`1.4.0`), so they offer no update. | nothing |
+| `release_pins` | `min_version`, `recommended_version` (each optional, a version string; absent means null), `binaries` (optional, the `binaries` map of the platform's pins, `runners.release` in `config/settings.yml`: `{"1.5.0": {"linux-amd64": {"sha256": "<64 hex>"}}}`; absent means none) | Replaces the platform's runner pins for the rest of the scenario: the committed `runners.release` block, its `protocol_supported` and `download_url` kept, with these three keys in place of its own. Without this step a scenario runs on the committed pins, which pin no minimum, recommend `0.2.0`, and pin the binaries of `0.1.0` and `0.2.0`, all below the version the scenarios' requests report (`1.4.0`), so they offer no update. | nothing |
 
 ## Exchanges
 
