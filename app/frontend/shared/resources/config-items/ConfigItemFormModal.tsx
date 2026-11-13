@@ -83,7 +83,7 @@ export const ConfigItemFormModal: FC<Props> = ({ opened, onClose, item, basePath
     }
   };
 
-  const requestClose = useUnsavedChanges({ opened, dirty: form.isDirty() && !loading, onClose });
+  const requestClose = useUnsavedChanges({ opened, dirty: form.isDirty(), saving: loading, onClose });
 
   return (
     <Modal opened={opened} onClose={requestClose} title={isEditing ? 'Edit secret' : 'Add secret'} centered>

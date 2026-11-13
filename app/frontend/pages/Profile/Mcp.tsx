@@ -259,7 +259,7 @@ function ToolsSection({ mcp }: { mcp: McpProps }) {
       );
     });
 
-  useUnsavedChanges({ dirty: dirty && !saving, onSave: save });
+  useUnsavedChanges({ dirty, saving, onSave: save });
 
   return (
     <Card p={24} mt={16}>

@@ -52,7 +52,7 @@ export const InviteMemberDrawer: FC<Props> = ({ opened, onClose, basePath }) => 
     form.reset();
     onClose();
   };
-  const requestClose = useUnsavedChanges({ opened, dirty: form.isDirty(), onClose: handleClose });
+  const requestClose = useUnsavedChanges({ opened, dirty: form.isDirty(), saving: loading, onClose: handleClose });
 
   const handleSubmit = (values: FormData) => {
     setLoading(true);

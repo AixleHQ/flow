@@ -78,7 +78,7 @@ export const ManualSkillModal: FC<ManualSkillModalProps> = ({ opened, onClose, b
 
   const dirty = content !== (skill?.content ?? STARTER);
   const unsaved = editing && dirty;
-  const requestClose = useUnsavedChanges({ opened, dirty, onClose });
+  const requestClose = useUnsavedChanges({ opened, dirty, saving: submitting, onClose });
 
   return (
     <Modal

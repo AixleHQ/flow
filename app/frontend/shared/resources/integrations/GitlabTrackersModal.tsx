@@ -91,6 +91,7 @@ export const GitlabTrackersModal = ({ integration, onClose, basePath }: Props) =
   const requestClose = useUnsavedChanges({
     opened: !!integration,
     dirty: projects !== null && current !== initial,
+    saving,
     onClose,
   });
 

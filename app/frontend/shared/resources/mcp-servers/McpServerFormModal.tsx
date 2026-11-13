@@ -295,7 +295,7 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
     JSON.stringify(Object.fromEntries(Object.entries(original ?? {}).map(([k, v]) => [k, String(v)])));
   const dirty = form.isDirty() || kvChanged(headersList, editServer?.headers) || kvChanged(envList, editServer?.env);
   const unsaved = isEdit && dirty;
-  const requestClose = useUnsavedChanges({ opened, dirty: dirty && !loading, onClose });
+  const requestClose = useUnsavedChanges({ opened, dirty, saving: loading, onClose });
 
   return (
     <Drawer

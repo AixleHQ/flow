@@ -347,7 +347,7 @@ const NewWorkspacePage = () => {
     email: suggestedEmail ?? '',
     accept_terms: false,
   });
-  useUnsavedChanges({ dirty: form.isDirty && !form.processing });
+  useUnsavedChanges({ dirty: form.isDirty, saving: form.processing });
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();

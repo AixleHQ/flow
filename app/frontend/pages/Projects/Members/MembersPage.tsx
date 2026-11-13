@@ -61,7 +61,7 @@ const MembersPage = () => {
     setAddOpen(false);
     setSelectedUserId(null);
   };
-  const requestClose = useUnsavedChanges({ opened: addOpen, dirty: selectedUserId !== null, onClose: handleClose });
+  const requestClose = useUnsavedChanges({ opened: addOpen, dirty: selectedUserId !== null, saving: loading, onClose: handleClose });
 
   const handleAdd = () => {
     if (!selectedUserId) return;

@@ -59,7 +59,8 @@ export const BitbucketConnectModal = ({ opened, onClose, basePath, bitbucket }: 
 
   const requestClose = useUnsavedChanges({
     opened,
-    dirty: (workspace !== '' || token !== '') && !loading,
+    dirty: workspace !== '' || token !== '',
+    saving: loading,
     onClose: close,
   });
 
