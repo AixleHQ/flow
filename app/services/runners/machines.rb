@@ -16,8 +16,8 @@ module Runners
   # session records the machine it ran on in terminal_sessions.runner_environment_id.
   # Runners::Operations.enqueue! checks the hold under the same lock, so a
   # session's op is created only while it holds the machine. A machine that is
-  # not reachable (RunnerEnvironment.reachable: heard within 90 s, or executing
-  # an op within its deadline) is offline and is given no session (task 12c).
+  # not heard within 90 s (RunnerEnvironment.heard; a machine running an op
+  # sends heartbeats, §6.7) is offline and is given no session (task 12c).
   #
   # A machine whose reset failed is `failed` (§5.2) and held by no session, so
   # nothing that happens to the session, its deletion included, returns it to
@@ -41,6 +41,10 @@ module Runners
     end
 
     UNREACHABLE = "runner_unreachable"
+
+    # The wait reason of ContainerRuntime::CapacityError when every machine that
+    # can take a session is busy (SessionAdmission::WAIT_REASONS, §10).
+    RUNNER_CAPACITY = "runner_capacity"
 
     module_function
 
@@ -84,7 +88,7 @@ module Runners
 
     def availability(runner)
       registered = RunnerEnvironment.where(runner_id: runner.id, state: "registered")
-      return Availability.new(status: :available, failed: [], offline: []) if registered.reachable.exists?
+      return Availability.new(status: :available, failed: [], offline: []) if registered.heard.exists?
 
       offline = registered.order(:id).to_a
       return Availability.new(status: :all_offline, failed: [], offline: offline) if offline.any?
@@ -122,7 +126,7 @@ module Runners
       # A savepoint of its own, so a lost race on the hold's unique index
       # leaves a caller's transaction usable for #acquire!'s second look.
       RunnerEnvironment.transaction(requires_new: true) do
-        environment = RunnerEnvironment.free.reachable.where(runner_id: runner.id).order(:id)
+        environment = RunnerEnvironment.free.heard.where(runner_id: runner.id).order(:id)
                                        .lock("FOR UPDATE SKIP LOCKED").first
         if environment.nil?
           availability = availability(runner)
@@ -130,9 +134,10 @@ module Runners
 
           # Only the machines that can take a session are counted: a `failed`
           # or an offline one does not by itself.
-          busy = RunnerEnvironment.where(runner_id: runner.id, state: "registered").reachable.count
+          busy = RunnerEnvironment.where(runner_id: runner.id, state: "registered").heard.count
           raise ContainerRuntime::CapacityError,
-                "Waiting for a free machine on runner \"#{runner.name}\" (#{busy} of #{busy} busy)."
+                "Waiting for a free machine on runner \"#{runner.name}\" (#{busy} of #{busy} busy).",
+                reason: RUNNER_CAPACITY
         end
 
         environment.update!(current_session_id: session.id)

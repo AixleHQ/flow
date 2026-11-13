@@ -14,7 +14,13 @@
  * and this module is the single place that turns it into words.
  */
 
-export type LaunchPhase = 'queued_for_slot' | 'starting' | 'cluster_capacity' | 'namespace_quota' | 'running';
+export type LaunchPhase =
+  | 'queued_for_slot'
+  | 'starting'
+  | 'cluster_capacity'
+  | 'namespace_quota'
+  | 'runner_capacity'
+  | 'running';
 
 /** True only when the session really is behind other sessions in its pool. */
 export function isWaitingForSlot(phase: string | null | undefined): boolean {
@@ -24,6 +30,11 @@ export function isWaitingForSlot(phase: string | null | undefined): boolean {
 /** True when the cluster, not the pool, is what has no room. */
 export function isWaitingForCluster(phase: string | null | undefined): boolean {
   return phase === 'cluster_capacity' || phase === 'namespace_quota';
+}
+
+/** True when every machine of the session's external runner is busy. */
+export function isWaitingForRunner(phase: string | null | undefined): boolean {
+  return phase === 'runner_capacity';
 }
 
 /**
@@ -36,6 +47,8 @@ export function launchWaitMessage(
 ): string {
   if (isWaitingForSlot(phase)) return 'Waiting for a free session slot';
   if (isWaitingForCluster(phase)) return 'Waiting for cluster capacity';
+  // The launch error under the headline names the runner and how many machines are busy.
+  if (isWaitingForRunner(phase)) return 'Waiting for a free machine';
 
   return kind === 'authentication' ? 'Starting authentication session…' : 'Starting session…';
 }

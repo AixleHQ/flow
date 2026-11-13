@@ -367,6 +367,19 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     assert_nil admission.reload.released_at
   end
 
+  test "the stale reaper leaves a reservation that is waiting for a free machine of its runner alone" do
+    session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 2.hours.ago)
+    admission = admit(session)
+    session.update!(state: "running", started_at: 2.hours.ago)
+    admission.update!(wait_reason: "runner_capacity")
+    TemporalService.expects(:cancel_workflow).never
+
+    Activities::Session::CleanupStaleActivity.new.run
+
+    assert_equal "running", session.reload.state
+    assert_nil admission.reload.released_at
+  end
+
   test "the stale reaper tears down an admitted session that stopped making progress" do
     session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 2.hours.ago,
       temporal_workflow_id: "agent-session-x")

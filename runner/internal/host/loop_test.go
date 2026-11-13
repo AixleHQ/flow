@@ -31,6 +31,7 @@ type gateway struct {
 	afters      []int64
 	tokens      []string
 	pollErrs    []error
+	heartbeats  []string
 	resultErrs  []error
 	inFlight    int
 	maxInFlight int
@@ -93,6 +94,13 @@ func (g *gateway) PostResult(_ context.Context, access string, id int64, r proto
 		g.results[id] = r
 	}
 	return protocol.ResultState{ID: id, State: "completed"}, nil
+}
+
+func (g *gateway) Heartbeat(_ context.Context, access string) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.heartbeats = append(g.heartbeats, access)
+	return nil
 }
 
 type memStore struct{ saved []credentials.Credentials }
@@ -549,5 +557,48 @@ func TestAnUpdateIsOfferedOnlyOnceTheOpsAreDone(t *testing.T) {
 	// The gateway offers an update only with no ops, and both ops ran before it.
 	if len(u.ranThen) != 1 || u.ranThen[0] != 2 || gw.posts[1] != 1 || gw.posts[2] != 1 {
 		t.Fatalf("offered after %v ops, posts %v", u.ranThen, gw.posts)
+	}
+}
+
+func TestSendsHeartbeatsWhileAnOpRunsAndNoneBetweenOps(t *testing.T) {
+	gw := newGateway(envOp(1, 1))
+	h := newHarness(t, t.TempDir(), gw)
+	h.loop.HeartbeatEvery = 5 * time.Millisecond
+	h.loop.Handlers["env.scrub"] = func(ctx context.Context, _ *int64, _ json.RawMessage) protocol.Result {
+		deadline := time.Now().Add(3 * time.Second)
+		for time.Now().Before(deadline) {
+			gw.mu.Lock()
+			n := len(gw.heartbeats)
+			gw.mu.Unlock()
+			if n >= 2 {
+				return protocol.Result{Status: protocol.StatusOK}
+			}
+			time.Sleep(time.Millisecond)
+		}
+		return protocol.ErrorResult("test", "no heartbeat while the op ran")
+	}
+	if err := h.run(); err != nil {
+		t.Fatal(err)
+	}
+	gw.mu.Lock()
+	defer gw.mu.Unlock()
+	if r := gw.results[1]; r.Status != protocol.StatusOK {
+		t.Fatalf("the op got no heartbeat while it ran: %+v", r)
+	}
+	for _, access := range gw.heartbeats {
+		if access != "aracc_first" {
+			t.Fatalf("a heartbeat carried %q, not the access token", access)
+		}
+	}
+}
+
+func TestSendsNoHeartbeatBeforeTheIntervalHasPassed(t *testing.T) {
+	gw := newGateway(envOp(1, 1))
+	h := newHarness(t, t.TempDir(), gw)
+	if err := h.run(); err != nil {
+		t.Fatal(err)
+	}
+	if len(gw.heartbeats) != 0 {
+		t.Fatalf("an op that ended at once sent %d heartbeats", len(gw.heartbeats))
 	}
 }

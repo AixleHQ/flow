@@ -188,6 +188,24 @@ describe('SessionShowContent', () => {
     expect(screen.getByText('Waiting for cluster capacity')).toBeInTheDocument();
   });
 
+  it('names the runner wait, with the launch\'s own message, instead of cluster capacity', () => {
+    renderPage(
+      <SessionShowContent
+        session={makeSession({
+          state: 'queued',
+          startedAt: null,
+          launchPhase: 'runner_capacity',
+          launchError: 'Waiting for a free machine on runner "Build farm" (1 of 1 busy).',
+        })}
+        cableStream="signed-stream"
+        context={ctx}
+      />,
+    );
+    expect(screen.getByText('Waiting for a free machine')).toBeInTheDocument();
+    expect(screen.getByText('Waiting for a free machine on runner "Build farm" (1 of 1 busy).')).toBeInTheDocument();
+    expect(screen.queryByText('Waiting for cluster capacity')).not.toBeInTheDocument();
+  });
+
   it('treats cancelled sessions as terminal without finish controls', () => {
     renderPage(
       <SessionShowContent session={makeSession({ state: 'cancelled' })} cableStream="signed-stream" context={ctx} />,
