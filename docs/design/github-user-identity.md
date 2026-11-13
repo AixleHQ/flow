@@ -297,7 +297,7 @@ in `metadata["github_user"] = { "id", "login", "name", "fetched_at" }`.
 
 ```ruby
 "github" => {
-  issuer: "https://github.com",
+  issuer: "https://github.com/login/oauth",
   authorization_endpoint: "https://github.com/login/oauth/authorize",
   token_endpoint: "https://github.com/login/oauth/access_token",
   scopes: "",            # GitHub Apps take permissions from the App, not scopes

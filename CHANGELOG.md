@@ -13,6 +13,12 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Fixed
+- **Integrations**: Connect GitHub under Profile → Connected accounts no longer
+  fails with "The authorization came back from a different server". GitHub names
+  itself `https://github.com/login/oauth` in its authorization response, and the
+  connection now expects that.
+
 ## [1.13.0] - 2026-11-13
 
 ### Added
