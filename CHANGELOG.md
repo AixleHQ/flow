@@ -13,6 +13,11 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Fixed
+- **Workflows**: the preview before reverting a workflow no longer lists a
+  repository, skill, connector or secret deleted since as coming back. The
+  revert leaves such a resource out, and the preview now says the same.
+
 ## [1.14.0] - 2026-11-13
 
 ### Added
