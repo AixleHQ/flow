@@ -273,7 +273,8 @@ export const SessionNewForm = ({
         } else {
           router.visit(fallbackPath);
         }
-        // Stay "saving" until the visit replaces this page.
+        // Keep Start disabled even if this visit never lands: the session already exists, and
+        // re-arming the button would let a second click launch another one.
         return;
       } else {
         const errData = await res.json().catch(() => null);
