@@ -72,6 +72,15 @@ module Coder
       assert_match(%r{TARGET='/root/app'}, @runner.command)
     end
 
+    # git reads safe.directory only from system, global and command-line config, so
+    # the repository-local entry this used to write had no effect.
+    test "marks the clone as safe through the shared helper, never the repository's own config" do
+      prepare
+
+      assert_includes @runner.command, GitCredentials::SafeDirectory.script("/root/app", scope: :global)
+      assert_no_match(/-C "\$TARGET" config --add safe\.directory/, @runner.command)
+    end
+
     # The three things every session was rediscovering by hand.
     test "repairs the refspec, the partial-clone filter and the shallow history" do
       prepare

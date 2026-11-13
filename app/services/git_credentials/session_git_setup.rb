@@ -69,6 +69,7 @@ module GitCredentials
         unset AIXLE_GIT_AUTH_HEADER
         #{configure_helper_script(url, repository, target_path)}
         chown -R #{uid}:#{uid} #{Shellwords.escape(target_path)}
+        #{SafeDirectory.script(target_path, scope: :system)}
       SH
       @runtime.exec(@container_id, [ "sh", "-c", script ], timeout: CLONE_TIMEOUT)
     ensure
@@ -91,6 +92,7 @@ module GitCredentials
         #{git} remote set-url origin #{Shellwords.escape(url)}
         #{configure_helper_script(url, repository, target_path, git: git)}
         chown #{uid}:#{uid} #{path}/.git/config
+        #{SafeDirectory.script(target_path, scope: :system)}
       SH
     end
 
