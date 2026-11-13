@@ -13,6 +13,13 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Changed
+- **Company settings**: a self-hosted installation bought through AWS Marketplace
+  reports its usage under the dimension `worker_minute`, the same word as the SaaS
+  product, instead of `queue_minute`. Operators: from this version an installation meters
+  only against the new self-hosted listing; an installation subscribed to the first listing
+  (dimension `queue_minute`) keeps running and reports no usage once upgraded.
+
 ### Fixed
 - **Sessions & Runs**: the web log no longer prints, on every request, the
   OpenTelemetry spans a Copilot CLI session sends every couple of seconds.

@@ -26,7 +26,7 @@ class Billing::MarketplaceMeteringClientContractTest < ActiveSupport::TestCase
 
     assert_not client.configured?
     error = assert_raises(Billing::MarketplaceMeteringClient::Error) do
-      client.meter_usage(dimension: "queue_minute", quantity: 60, occurred_at: Time.current)
+      client.meter_usage(dimension: "worker_minute", quantity: 60, occurred_at: Time.current)
     end
     assert_match(/product code/, error.message)
   end
