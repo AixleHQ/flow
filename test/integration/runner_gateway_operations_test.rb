@@ -35,6 +35,40 @@ class RunnerGatewayOperationsTest < ActionDispatch::IntegrationTest
     @environment = RunnerEnvironment.sole
   end
 
+  # == liveness (task 12c) ==
+
+  test "registration, a poll and an op result each record the machine's heartbeat, at most every 15 seconds" do
+    assert_not_nil @environment.reload.last_heartbeat_at, "register records it"
+    assert_equal @environment.last_heartbeat_at, @runner.reload.last_seen_at
+
+    travel 16.seconds
+    poll(@pair, wait: 0)
+    assert_response :ok
+    assert_in_delta Time.current, @environment.reload.last_heartbeat_at, 1
+    assert_in_delta Time.current, @runner.reload.last_seen_at, 1
+
+    recorded = @environment.last_heartbeat_at
+    travel 5.seconds
+    poll(@pair, wait: 0)
+    assert_equal recorded, @environment.reload.last_heartbeat_at, "a second request within 15 s writes nothing"
+
+    travel 15.seconds
+    operation = enqueue
+    post_result(@pair, operation, status: "ok", exit_code: 0)
+    assert_response :ok
+    assert_operator @environment.reload.last_heartbeat_at, :>, recorded
+  end
+
+  test "a refused request records nothing" do
+    travel 1.minute
+    recorded = @environment.reload.last_heartbeat_at
+
+    get "/runner/v1/ops", params: { after: 0, wait: 0 }, headers: headers_for("not-a-token")
+
+    assert_response :unauthorized
+    assert_equal recorded, @environment.reload.last_heartbeat_at
+  end
+
   # == GET /runner/v1/ops ==
 
   test "an op enqueued before the poll is returned at once and becomes delivered" do

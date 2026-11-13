@@ -56,6 +56,7 @@ module Runners
         end
 
         credential.update!(used_at: Time.current, runner_environment: environment)
+        Liveness.record!(runner_id: environment.runner_id, environment_id: environment.id)
         Result.new(environment: environment, pair: Credentials.issue_pair!(environment))
       end
     end

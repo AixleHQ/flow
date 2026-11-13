@@ -8,6 +8,7 @@
 # a project's runner is not found here.
 class Web::Company::RunnersController < Web::Company::ApplicationController
   include RunnerRegistrationTokens
+  include RunnerMachinesList
 
   requires_feature :external_runners
 
@@ -24,6 +25,7 @@ class Web::Company::RunnersController < Web::Company::ApplicationController
 
     render inertia: "Company/Settings/RunnerPage", props: {
       runner: RunnerResource.new(runner).to_h,
+      machines: machines_prop(runner),
       runner_types: Runners::Form.runner_types,
       can_manage: runners_policy.update?
     }

@@ -442,6 +442,7 @@ func TestAWaitResultWithAnErrorDoesNotStopTheAgentWhileTheSidecarRuns(t *testing
 	h.engine.exit(sidecar, 3)
 	h.engine.mu.Unlock()
 	h.waitForTheAgentToStop(log)
+	h.waitForTheExitToBeLogged(log)
 	if !strings.Contains(log.String(), "exit_code=3") {
 		t.Errorf("the log lacks the sidecar's real exit code: %s", log)
 	}
@@ -466,6 +467,20 @@ func (h *harness) waitForTheAgentToStop(log *lockedBuffer) {
 	}
 }
 
+// waitForTheExitToBeLogged waits for the watcher's exit line: it stops the
+// agent first and logs after reading the sidecar's log, so a stopped agent
+// does not mean the line is there yet.
+func (h *harness) waitForTheExitToBeLogged(log *lockedBuffer) {
+	h.t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(log.String(), "the proxy sidecar exited") {
+		if time.Now().After(deadline) {
+			h.t.Fatalf("the sidecar's exit was not logged: %s", log)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 func TestASidecarThatExitsWhileTheWaitStreamIsBrokenStopsTheAgent(t *testing.T) {
 	h := newEnvironment(t)
 	_, log := h.withProxy()
@@ -478,6 +493,7 @@ func TestASidecarThatExitsWhileTheWaitStreamIsBrokenStopsTheAgent(t *testing.T) 
 	h.engine.exit(sidecar, 3)
 	h.engine.mu.Unlock()
 	h.waitForTheAgentToStop(log)
+	h.waitForTheExitToBeLogged(log)
 	for _, want := range []string{"the proxy sidecar exited", "exit_code=3"} {
 		if !strings.Contains(log.String(), want) {
 			t.Errorf("the log lacks %q: %s", want, log)
@@ -499,6 +515,7 @@ func TestASidecarRemovedBehindTheHostRunnersBackStopsTheAgent(t *testing.T) {
 	delete(h.engine.containers, sidecar.ID)
 	h.engine.mu.Unlock()
 	h.waitForTheAgentToStop(log)
+	h.waitForTheExitToBeLogged(log)
 	for _, want := range []string{"the proxy sidecar exited", "exit_code=-1"} {
 		if !strings.Contains(log.String(), want) {
 			t.Errorf("the log lacks %q: %s", want, log)

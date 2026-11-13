@@ -18,7 +18,7 @@ import {
 import { IconAlertTriangle, IconArrowLeft } from '@tabler/icons-react';
 import { useState, type ReactNode } from 'react';
 
-import type { Runner } from '@/types/generated';
+import type { Runner, RunnerMachine } from '@/types/generated';
 
 import { formatDateTime } from 'shared/lib/formatDate';
 import { PageHeader } from 'shared/ui/PageHeader';
@@ -28,9 +28,12 @@ import { AddMachine } from './AddMachine';
 import { accessWideners, humanize, setKeys, type RunnerPaths, type RunnerTypeOption } from './runnerConfig';
 import { DEFAULT_REUSE_POLICY, lastSeen, REUSE_POLICY_COPY, runnerTypeTitle } from './runnerCopy';
 import { RunnerFormModal } from './RunnerFormModal';
+import { RunnerMachines } from './RunnerMachines';
 
 interface RunnerDetailsProps {
   runner: Runner;
+  /** The runner's machines, read-only; empty for a runner that is not `manual`. */
+  machines: RunnerMachine[];
   runnerTypes: RunnerTypeOption[];
   canManage: boolean;
   paths: RunnerPaths;
@@ -68,7 +71,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-export function RunnerDetails({ runner, runnerTypes, canManage, paths, backLabel }: RunnerDetailsProps) {
+export function RunnerDetails({ runner, machines, runnerTypes, canManage, paths, backLabel }: RunnerDetailsProps) {
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState<Confirming>(null);
   const [busy, setBusy] = useState(false);
@@ -162,6 +165,12 @@ export function RunnerDetails({ runner, runnerTypes, canManage, paths, backLabel
           <Fact label="Last seen">{lastSeen(runner)}</Fact>
         </SimpleGrid>
       </Section>
+
+      {runner.runnerType === 'manual' && (
+        <Section title="Machines">
+          <RunnerMachines machines={machines} />
+        </Section>
+      )}
 
       <Section title="Limits">
         <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="lg">

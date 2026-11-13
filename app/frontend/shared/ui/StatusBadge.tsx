@@ -21,6 +21,7 @@ const STATE_TONES: Record<string, StatusTone> = {
   active: 'success',
   connected: 'success',
   enabled: 'success',
+  online: 'success',
   // in flight
   running: 'running',
   in_progress: 'running',
@@ -29,6 +30,7 @@ const STATE_TONES: Record<string, StatusTone> = {
   // waiting on something
   pending: 'info',
   queued: 'info',
+  idle: 'info',
   not_started: 'info',
   invited: 'info',
   // needs attention but not broken
@@ -36,6 +38,7 @@ const STATE_TONES: Record<string, StatusTone> = {
   inactive: 'warning',
   suspended: 'warning',
   degraded: 'warning',
+  offline: 'warning',
   // broken
   failed: 'danger',
   error: 'danger',
@@ -45,6 +48,7 @@ const STATE_TONES: Record<string, StatusTone> = {
   archived: 'neutral',
   disabled: 'neutral',
   revoked: 'neutral',
+  gone: 'neutral',
 };
 
 const TONE_STYLES: Record<StatusTone, { color: string; background: string; borderColor: string }> = {

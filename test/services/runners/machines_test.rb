@@ -115,6 +115,53 @@ class Runners::MachinesTest < ActiveSupport::TestCase
     assert_equal :none_registered, Runners::Machines.availability(@runner).status
   end
 
+  test "an offline machine is skipped while another is free" do
+    @machine.update!(last_heartbeat_at: 2.minutes.ago)
+    online = create(:runner_environment, runner: @runner)
+
+    assert_equal online, Runners::Machines.acquire!(runner_session)
+  end
+
+  test "every machine offline refuses the launch with a message that names the runner" do
+    @machine.update!(last_heartbeat_at: 2.minutes.ago)
+
+    error = assert_raises(Runners::Machines::NoMachine) { Runners::Machines.acquire!(runner_session) }
+
+    assert_equal "runner_unreachable", error.reason
+    assert_match(/\ARunner "Build farm" has no machine online: its machine is offline \(#{@machine.display_name}\)/, error.message)
+    assert_nil @machine.reload.current_session_id
+  end
+
+  test "an offline machine does not count as busy: the only reachable one busy is a capacity wait" do
+    create(:runner_environment, runner: @runner, last_heartbeat_at: 2.minutes.ago)
+    Runners::Machines.acquire!(runner_session)
+
+    error = assert_raises(ContainerRuntime::CapacityError) { Runners::Machines.acquire!(runner_session) }
+
+    assert_equal "Waiting for a free machine on runner \"Build farm\" (1 of 1 busy).", error.message
+  end
+
+  test "a silent machine with a delivered op inside its deadline is reachable, so its runner is not offline" do
+    holder = runner_session
+    Runners::Machines.acquire!(holder)
+    @machine.update!(last_heartbeat_at: 5.minutes.ago)
+    operation = Runners::Operations.enqueue!(@machine.reload, op: "exec", payload: { "cmd" => "true" }, session: holder,
+                                                              deadline_at: 5.minutes.from_now)
+    operation.update!(state: :delivered, delivered_at: Time.current)
+
+    assert Runners::Machines.availability(@runner).available?
+    assert_raises(ContainerRuntime::CapacityError) { Runners::Machines.acquire!(runner_session) }
+  end
+
+  test "availability reports every machine offline, and failed machines only when none is registered" do
+    @machine.update!(last_heartbeat_at: 2.minutes.ago)
+    offline = Runners::Machines.availability(@runner)
+    assert_equal [ :all_offline, [ @machine ] ], [ offline.status, offline.offline ]
+
+    Runners::Machines.fail!(@machine, "env.reset failed")
+    assert_equal :all_failed, Runners::Machines.availability(@runner).status
+  end
+
   test "a gone machine stays gone when it fails" do
     @machine.update!(state: :gone)
 

@@ -69,9 +69,19 @@ module RunnerGateway
           return refuse(:forbidden, "runners_disabled", "External runners are turned off for this company.")
         end
 
-        return if !@credential.access? || Runners::Credentials.record_use!(@credential)
+        if @credential.access? && !Runners::Credentials.record_use!(@credential)
+          return refuse(:unauthorized, "invalid_token", "The token is unknown, used, revoked or expired.")
+        end
 
-        refuse(:unauthorized, "invalid_token", "The token is unknown, used, revoked or expired.")
+        record_heartbeat if kind == :access
+      end
+
+      # Every authenticated request of a machine is a sign of life (§6.2),
+      # written at most once per Runners::Liveness::RECORD_EVERY. A refresh
+      # records it once the token is rotated (TokensController): a spent one
+      # that is reused proves nothing about the machine.
+      def record_heartbeat
+        Runners::Liveness.record!(runner_id: @credential.runner_id, environment_id: @credential.runner_environment_id)
       end
 
       def runner_live?(runner_id)
