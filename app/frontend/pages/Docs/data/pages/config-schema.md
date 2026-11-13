@@ -189,6 +189,12 @@ registry that a customer's machine cannot pull from). The tag is
 `RUNNER_AGENT_IMAGE_TAG` (default `latest`), not the hosted `AGENT_IMAGE_TAG`. A
 runner's `container.image_override` wins over both.
 
+Hosted sessions follow "web X.Y.Z launches agent images X.Y.Z"
+(`config/settings/production.yml`). The runner default `latest` moves with every
+stable release, so a deployment that stays on an older version runs newer agent
+images on its runners. Production deployments should pin `RUNNER_AGENT_IMAGE_TAG`
+to the release they run.
+
 | Variable                                  | Required | Default                | Purpose                                                                 |
 | ----------------------------------------- | -------- | ---------------------- | ----------------------------------------------------------------------- |
 | `RUNNER_AGENT_IMAGE_PREFIX`               | no       | `ghcr.io/aixlehq/flow-` | Registry/name prefix runner sessions' images are derived from (the public images). |
