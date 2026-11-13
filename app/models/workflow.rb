@@ -7,6 +7,7 @@ class Workflow < ApplicationRecord
   include Versioned
   include DecodesHtmlEntities
   include RunnerReference
+  include ResourceLists
   belongs_to :published_by, class_name: "User", optional: true
 
   has_many :steps, dependent: :destroy
@@ -14,10 +15,10 @@ class Workflow < ApplicationRecord
   has_many :column_workflow_bindings
   has_many :trigger_bindings, dependent: :destroy
   has_many :base_resource_links, -> { order(:position) }, class_name: "WorkflowResourceLink", inverse_of: :workflow
+  resource_lists :base_resource_links, prefix: "base_"
 
   before_destroy :purge_steps, prepend: true
   before_destroy :check_column_bindings
-  after_save :mirror_base_resource_links, if: :saved_change_to_config?
 
   ALLOWED_CONFIG_KEYS = %w[
     base_tool_ids base_skill_ids base_mcp_server_ids
@@ -174,25 +175,19 @@ class Workflow < ApplicationRecord
     scope if scope_type == "Project"
   end
 
-  BASE_LISTS = ResourceLink::COLUMNS.keys.map { |list| "base_#{list}" }.freeze
-
-  # As on Step: a list assigned since the last save reads as assigned, otherwise
-  # it is the workflow's links.
-  ResourceLink::COLUMNS.each do |list, column|
-    key = "base_#{list}"
-    define_method(key) do
-      if new_record? || base_list_unsaved?(key)
-        config.to_h.stringify_keys[key] || []
-      else
-        base_resource_links.filter_map(&column)
-      end
-    end
+  # The builder, the API and templates send the base lists inside `config`.
+  # They are links, so they are taken out here and never reach the column.
+  def config=(value)
+    value = value.to_h.stringify_keys unless value.nil?
+    resource_list_columns.each_key { |list| public_send("#{list}=", value.delete(list)) if value&.key?(list) }
+    super(value)
   end
 
-  # The config with each base list it holds read from the links, for what copies
-  # or inspects a whole config (snapshots, duplicates, the data-flow check).
+  # The config with the base lists in it, as the builder sends it and as
+  # snapshots, duplicates and the data-flow check read a whole config.
   def linked_config
-    config.to_h.stringify_keys.to_h { |key, value| [ key, BASE_LISTS.include?(key) ? public_send(key) : value ] }
+    lists = resource_list_columns.keys
+    config.to_h.except(*lists).merge(lists.index_with { |list| public_send(list) })
   end
 
   def inherit_all_project_resources
@@ -200,7 +195,7 @@ class Workflow < ApplicationRecord
   end
 
   def merge_config!(updates)
-    self.config = (config || {}).merge(updates.stringify_keys)
+    self.config = config.to_h.except(*resource_list_columns.keys).merge(updates.stringify_keys)
     save!
   end
 
@@ -231,17 +226,17 @@ class Workflow < ApplicationRecord
   }.freeze
 
   def base_resource_ids_belong_to_project
-    return unless scope_type == "Project" && will_save_change_to_config?
+    return unless scope_type == "Project"
 
-    before = (attribute_in_database(:config) || {}).to_h.stringify_keys
-    after = (config || {}).to_h.stringify_keys
-    BASE_RESOURCES.each do |key, kind|
-      validate_owned_ids(scope, kind, :config, before[key], after[key], label: key)
+    BASE_RESOURCES.each do |list, kind|
+      next unless resource_list_changed?(list)
+
+      validate_owned_ids(scope, kind, :config, linked_ids(list), self[list], label: list, lenient: true)
     end
   end
 
   def base_config_item_ids_belong_to_project
-    return unless base_list_unsaved?("base_config_item_ids")
+    return unless resource_list_changed?("base_config_item_ids")
 
     ids = base_config_item_ids
     return if ids.blank?
@@ -251,22 +246,10 @@ class Workflow < ApplicationRecord
       return
     end
 
-    owned = ConfigItem.where(scope_type: "Project", scope_id: scope_id, id: ids).pluck(:id)
-    foreign = ids.map(&:to_i) - owned
+    foreign = ConfigItem.where(id: ids).where.not(scope_type: "Project", scope_id: scope_id).pluck(:id)
     return if foreign.empty?
 
     errors.add(:config, "base_config_item_ids contains items outside this project: #{foreign.sort.join(', ')}")
-  end
-
-  def base_list_unsaved?(key)
-    will_save_change_to_config? && config.to_h.stringify_keys[key] != attribute_in_database(:config).to_h[key]
-  end
-
-  def mirror_base_resource_links
-    before, after = saved_change_to_config.map { |config| config.to_h.stringify_keys }
-    changed = ResourceLink::COLUMNS.reject { |list, _| before["base_#{list}"] == after["base_#{list}"] }
-    changed.each { |list, column| WorkflowResourceLink.replace!(self, column, after["base_#{list}"]) }
-    base_resource_links.reset if changed.any?
   end
 
   def purge_steps
