@@ -135,9 +135,9 @@ module Runners
           # Only the machines that can take a session are counted: a `failed`
           # or an offline one does not by itself.
           busy = RunnerEnvironment.where(runner_id: runner.id, state: "registered").heard.count
-          raise ContainerRuntime::CapacityError,
-                "Waiting for a free machine on runner \"#{runner.name}\" (#{busy} of #{busy} busy).",
-                reason: RUNNER_CAPACITY
+          raise ContainerRuntime::CapacityError.new(
+            "Waiting for a free machine on runner \"#{runner.name}\" (#{busy} of #{busy} busy).", reason: RUNNER_CAPACITY
+          )
         end
 
         environment.update!(current_session_id: session.id)
