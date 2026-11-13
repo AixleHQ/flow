@@ -76,8 +76,9 @@ recommends. To turn that off, tick **Turn off self-update**, which adds
 A session on a runner runs the platform's agent image for the session's agent
 runtime, and the machine pulls it. By default that is the public image,
 `ghcr.io/aixlehq/flow-<image>` (for example `ghcr.io/aixlehq/flow-claude-code`),
-so the machine needs no registry login. The tag is the one the platform's own
-sessions use. Hosted sessions are not affected: they keep their own images.
+so the machine needs no registry login. The tag is `latest`, unless the
+deployment sets `RUNNER_AGENT_IMAGE_TAG`. Hosted sessions are not affected: they
+keep their own images.
 
 To run another image on a runner's machines, set **`container.image_override`**
 in the runner's settings. It wins over the default and must be built `FROM` the
@@ -86,5 +87,6 @@ platform's agent image. If that image is in a private registry, run
 `aixle-runner`: the platform sends no registry credentials to a machine.
 
 A self-hosted deployment changes the default for all its runners with
-`RUNNER_AGENT_IMAGE_PREFIX`, `RUNNER_AGENT_IMAGE_TAG` (default `latest`) and the per-runtime `RUNNER_AGENT_IMAGE_<RUNTIME>`
-variables (see the configuration reference).
+`RUNNER_AGENT_IMAGE_PREFIX`, `RUNNER_AGENT_IMAGE_TAG` (default `latest`) and the
+per-runtime `RUNNER_AGENT_IMAGE_<RUNTIME>` variables (see the configuration
+reference).

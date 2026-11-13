@@ -91,6 +91,15 @@ module ContainerStrategies
       assert_equal "aixle/grok:latest", strategy.resolve_image
     end
 
+    # The image of a session on a runner is chosen by
+    # ContainerRuntime::RunnerRuntime#runner_image (#229), not here.
+    test "a hosted session gets the hosted prefix and tag" do
+      Settings.agents.stubs(:image_prefix).returns("registry.example/aixle-app-")
+      Settings.agents.stubs(:image_tag).returns("sha-b258cc1")
+
+      assert_equal "registry.example/aixle-app-claude-code:sha-b258cc1", build_strategy.resolve_image
+    end
+
     # The Grok login is the device-code flow: nothing in the container can open a
     # browser, so the default browser flow would strand the auth terminal.
     test "grok auth terminal runs the device-code login" do
