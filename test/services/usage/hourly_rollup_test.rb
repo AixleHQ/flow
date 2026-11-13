@@ -137,6 +137,23 @@ class Usage::HourlyRollupTest < ActiveSupport::TestCase
     companies.each { |expected, company| assert_equal expected, row(company).billing_class, company.name }
   end
 
+  test "a company AWS bills is paying while AWS meters its licence, and not billed without one" do
+    aws = { billing_provider: Company::BILLING_PROVIDER_AWS_MARKETPLACE }
+    metered = create(:company, **aws)
+    create(:marketplace_license, :active, company: metered)
+    pending = create(:company, **aws)
+    create(:marketplace_license, company: pending)
+    ended_with_an_old_card = create(:company, **aws, stripe_customer_id: "cus_left_from_card_entry")
+    create(:marketplace_license, company: ended_with_an_old_card, subscription_state: "ended")
+    [ metered, pending, ended_with_an_old_card ].each { |company| limit(company, 3, @hour - 1.day) }
+
+    roll_up
+
+    assert_equal "paying", row(metered).billing_class
+    assert_equal "no_customer", row(pending).billing_class
+    assert_equal "no_customer", row(ended_with_an_old_card).billing_class
+  end
+
   test "outside the hosted product the class follows the deployment" do
     Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SELF_HOSTED))
     roll_up
