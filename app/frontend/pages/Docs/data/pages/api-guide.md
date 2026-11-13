@@ -62,7 +62,10 @@ DELETE /api/v1/projects/:project_id/workflows/:wf_id/steps/:id
 
 Triggers hang off the same path: `GET`/`POST
 /api/v1/projects/:project_id/workflows/:wf_id/triggers` and
-`PATCH`/`DELETE .../triggers/:id`.
+`PATCH`/`DELETE .../triggers/:id`. An off-board
+trigger runs as a person (`run_as_user_id`) or a project team
+(`run_as_team_id`; `null` clears it) — set by the project owner or a company
+admin — and each trigger returns its `run_as_team`.
 
 ### Workflow runs
 
@@ -145,13 +148,17 @@ rest from here as it is scrolled:
 | -------------------------------------- | ------------------------------------------------------------------- |
 | `board_column_id`                      | Restrict to one column.                                             |
 | `limit` / `offset`                     | Page window, ordered by `position` then `id`.                       |
-| `q[title_i_cont]`, `q[assignee_id_eq]`, … | Ransack predicates over `BoardTask.ransackable_attributes`. `_cont`, `_start` and `_end` match case; `_i_cont`, `_i_start` and `_i_end` ignore it. |
+| `q[title_i_cont]`, `q[assignee_id_eq]`, `q[assignee_team_id_eq]`, … | Ransack predicates over `BoardTask.ransackable_attributes`. `_cont`, `_start` and `_end` match case; `_i_cont`, `_i_start` and `_i_end` ignore it. |
 | `tags[]` + `tags_match=all`            | Tag filter. Default matches any listed tag; `all` requires them all. |
 | `archived`                             | `archived` for archived only, `all` for both; default active only.   |
 
 The response carries the **unpaginated** match count in the
 `X-Total-Count` header, which is how a column header shows its real total
 while holding a single page.
+
+A task's assignee is a person (`assignee_id`) or a project team
+(`assignee_team_id`), never both: `POST` and `PATCH` take either, and so does
+the board's bulk assign and a view preset's filters.
 
 ### Assets
 

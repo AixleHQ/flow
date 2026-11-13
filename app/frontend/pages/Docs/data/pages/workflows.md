@@ -34,7 +34,7 @@ One Step = one agent session = one container = one major deliverable.
 | `agent_id`             | Which agent persona runs this step.                                      |
 | `allow_non_interactive`| Can the step run with no user in the loop.                                |
 | `skip_policy`          | `never`, `if_outputs_exist`, or `manual`.                                |
-| `on_failure`           | `retry`, `skip`, or `fail` (default).                                    |
+| `on_failure`           | `retry`, `skip`, or `fail` (default). A step that stopped on its owner's agent quota is not retried — the same account would fail again — except in a run a team handed out, where the retry goes to the team's next member. |
 | `max_retries`          | Times a failed step starts again when `on_failure` is `retry`: 1–10.     |
 | `tool_ids`             | Tools available in this step (merged with workflow base).                |
 | `skill_ids`            | Skills injected (merged with workflow base).                             |

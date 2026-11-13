@@ -52,6 +52,8 @@ class MarketplaceLicense < ApplicationRecord
   # Everything AWS has not finished with. `ended` is terminal, so this is the
   # one that can still be billed, cancelled, or stand in the way of another.
   scope :live, -> { where.not(subscription_state: "ended") }
+  # What AWS accepts usage for. A pending licence is live but not yet billable.
+  scope :metered, -> { where(subscription_state: %w[active ending]) }
   scope :proposed_to, ->(company) { where(proposed_company: company, proposal_state: "pending") }
   # Bound to nothing, and with a future to apply: `ending` is already closing,
   # and a request to apply it would wait on a confirmation that cannot come.

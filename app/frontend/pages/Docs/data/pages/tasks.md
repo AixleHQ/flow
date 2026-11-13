@@ -28,13 +28,20 @@ Create a card from a column's **+** button, or press **n** anywhere on the
 board. A card carries a title, a description, a type, an assignee, tags, an
 optional parent epic, subtasks, comments, and attachments.
 
+The assignee is a person or a [team](/docs/people-and-access#project-teams).
+A card assigned to a team shows the team's name, and each of its runs goes to
+one member, picked when the run starts — so two runs of the same card can land
+with different people. Select several cards to assign them all at once, to a
+person or a team, from the selection bar.
+
 Open a card and the detail drawer has tabs:
 
 - **Details** — description, assignee, tags, the column it sits in (moving it
   from the **Column** select is the same as dragging it), and a *Latest run*
   tile.
-- **Runs** — every workflow run this card has triggered, newest first. Click
-  one to jump into the session.
+- **Runs** — every workflow run this card has triggered, newest first, with
+  who it ran as — *Planner → Anna* when a team handed it to Anna. Click one to
+  jump into the session.
 - **Comments** — the conversation. Agents comment here too, so you can filter
   by author type to read only what people wrote, or only what agents produced.
 - **Analytics** — what this single card has cost: run time, tokens, spend.
@@ -46,8 +53,9 @@ happened on the board recently — it stays open while you keep working.
 
 - **Search** — press **/** to jump into it; it searches the whole board, not
   just loaded cards.
-- **Type**, **Assignee**, **Tags** — filters that narrow the board; clicking a
-  tag on a card filters by it, clicking again clears it.
+- **Type**, **Assignee**, **Tags** — filters that narrow the board; the
+  assignee filter takes a person or a team. Clicking a tag on a card filters by
+  it, clicking again clears it.
 - **Archived** — hidden by default, revealed with the toggle.
 - **Presets** — saved views. Two are built in: **My Work** (only your cards)
   and **All Bugs**. Save your own filter combination as a preset and share it

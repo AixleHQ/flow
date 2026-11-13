@@ -25,6 +25,21 @@ class Billing::AccountClassificationTest < ActiveSupport::TestCase
                  classify(create(:company, :trialing)))
   end
 
+  test "a trial that opened card entry and left has a Stripe customer but no subscription, so no method yet" do
+    company = create(:company, :trialing)
+    company.update!(stripe_customer_id: "cus_from_card_entry")
+
+    assert_equal Company::BILLING_PROVIDER_STRIPE, company.billing_provider
+    assert_nil classify(company)[:billing_method]
+  end
+
+  test "a customer whose Stripe subscription was canceled was invoiced by Stripe" do
+    company = create(:company, :subscribed, billing_state: "blocked", billing_block_reason: "canceled")
+
+    assert_equal({ account_status: "canceled", account_type: "paid", billing_method: "saas_stripe" },
+                 classify(company))
+  end
+
   test "each reason a company is stopped for reads as its own status" do
     expected = {
       "allowance" => "trial_expired",
