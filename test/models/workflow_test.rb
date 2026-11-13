@@ -250,6 +250,26 @@ class WorkflowTest < ActiveSupport::TestCase
     assert_empty linked(workflow, :repository_id)
   end
 
+  test "a workflow's base lists are read from its links, so a deleted resource is no longer in them" do
+    kept, deleted = create_list(:repository, 2, scope: @project)
+    workflow = create(:workflow, scope: @project, config: { "base_repository_ids" => [ deleted.id, kept.id ] })
+
+    deleted.destroy!
+
+    assert_equal [ kept.id ], workflow.reload.base_repository_ids
+  end
+
+  test "a config item deleted since does not block changing the workflow's other settings" do
+    item = create(:config_item, scope: @project)
+    workflow = create(:workflow, scope: @project, config: { "base_config_item_ids" => [ item.id ] })
+
+    item.destroy!
+    workflow.reload.merge_config!("inherit_all_project_resources" => true)
+
+    assert workflow.inherit_all_project_resources
+    assert_empty workflow.base_config_item_ids
+  end
+
   private
 
   def linked(workflow, column)

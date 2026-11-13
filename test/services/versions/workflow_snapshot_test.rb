@@ -25,6 +25,18 @@ class Versions::WorkflowSnapshotTest < ActiveSupport::TestCase
                  snapshot["steps"].first["sub_steps"]
   end
 
+  test "the snapshot names only the resources that still exist" do
+    kept, deleted = create_list(:repository, 2, scope: @project)
+    @workflow.merge_config!("base_repository_ids" => [ deleted.id, kept.id ])
+    @build.update!(repository_ids: [ deleted.id, kept.id ])
+
+    deleted.destroy!
+    snapshot = Versions::Snapshot.dump(@workflow.reload)
+
+    assert_equal [ kept.id ], snapshot["config"]["base_repository_ids"]
+    assert_equal [ kept.id ], snapshot["steps"].first["repository_ids"]
+  end
+
   test "revert brings back deleted steps and sub-steps by id and retires steps added since" do
     Versions.save!(@workflow, actor: @actor) { @workflow.update!(description: "v1") }
     v1 = @workflow.latest_version

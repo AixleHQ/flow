@@ -33,13 +33,15 @@ module Versions
 
       class << self
         def dump(record)
-          steps = record.steps.not_deleted.reorder(:position).includes(:sub_steps).map do |step|
+          steps = record.steps.not_deleted.reorder(:position).includes(:sub_steps, :resource_links).map do |step|
             sub_steps = step.sub_steps.reject(&:deleted?).sort_by { |s| [ s.position, s.id ] }
             step.attributes.slice(*STEP_FIELDS).merge(
+              STEP_REFERENCES.keys.index_with { |list| step.public_send(list) },
               "sub_steps" => sub_steps.map { |sub| sub.attributes.slice(*SUB_STEP_FIELDS) }
             )
           end
           super.merge("steps" => steps).tap do |snapshot|
+            snapshot["config"] = record.linked_config unless snapshot["config"].nil?
             # Hosted is the absence of a runner, as in every snapshot written
             # before runner_id existed, so saving an unchanged hosted workflow
             # still records nothing.

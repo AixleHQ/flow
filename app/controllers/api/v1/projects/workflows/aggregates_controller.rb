@@ -30,7 +30,7 @@ module Api
 
             render json: {
               workflow: WorkflowResource.new(workflow).to_h,
-              steps: workflow.steps.not_deleted.includes(:sub_steps).map { |s| StepResource.new(s).to_h },
+              steps: workflow.steps.not_deleted.includes(:sub_steps, :resource_links).map { |s| StepResource.new(s).to_h },
               currentVersionNumber: workflow.current_version_number,
               versionCreated: version.present?,
               issues: DataFlow::Check.for_workflow(workflow, project: current_project).issues.map(&:as_json)

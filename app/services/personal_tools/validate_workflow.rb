@@ -35,7 +35,7 @@ module PersonalTools
 
       errors = []
       warnings = []
-      steps = workflow.steps.not_deleted.includes(:sub_steps).order(:position).to_a
+      steps = workflow.steps.not_deleted.includes(:sub_steps, :resource_links).order(:position).to_a
       errors << "Workflow has no steps" if steps.empty?
       unattended = unattended_triggers(workflow)
 
