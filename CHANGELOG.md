@@ -22,6 +22,9 @@ governance, community health — carry none.
 ## [1.13.0] - 2026-11-13
 
 ### Added
+- Runner image override: `container.image_override` may contain `{agent}`,
+  replaced at launch with the session agent's image name, so one override such
+  as `ghcr.io/aixlehq/flow-{agent}:develop` serves every agent on the runner.
 - **Integrations**: you can connect your own GitHub account under Profile →
   Connected accounts and allow agents to act as you, per project. An agent given
   `github_user_token` gets a token limited to the session's repositories, plus
