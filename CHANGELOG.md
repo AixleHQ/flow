@@ -40,6 +40,12 @@ governance, community health — carry none.
   Workflows, sessions and the Builder stay blocked until they connect an agent in
   Profile settings.
 
+### Fixed
+- **Integrations**: Slack no longer switches itself off when Slack reports that
+  a member's own token was revoked, for example when someone leaves the
+  workspace. Only removing the app, or revoking its bot token, disconnects the
+  workspace now.
+
 ## [1.12.0] - 2026-11-12
 
 ### Added
