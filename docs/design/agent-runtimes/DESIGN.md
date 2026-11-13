@@ -1961,7 +1961,7 @@ option does; types, defaults and per-type applicability are in §2.7. All of the
 | `pid` | `private` | `host` drops PID isolation. |
 | `extra_mounts` | `[]` | Arbitrary `src:dst[:ro]` bind mounts, validated as absolute paths. Read-only unless `:rw` is written out. |
 | `resources` | from the hosted pod spec | `--cpus` / `--memory`, so a session cannot starve the machine. Pod requests and limits on `kubernetes`. |
-| `image_override` | none | An image built `FROM` our base image instead of the stock one, prerequisites checked at check-in. It is one image for every session on the runner, unless it contains `{agent}`, which is replaced at launch with the session agent's image name (`claude-code`, `codex`, …): `ghcr.io/aixlehq/flow-{agent}:develop` starts each agent in its own image. A session with no agent (a tool session) keeps the strategy's image when the override has a placeholder. `{agent}` is the only placeholder; `Runners::ConfigSchema` refuses an unknown one, or a value that is not an image reference once replaced, when the runner is saved. |
+| `image_override` | none | An image built `FROM` our base image instead of the stock one, prerequisites checked at check-in. It is one image for every session on the runner, unless it contains `{agent}`, which is replaced at launch with the session agent's image name (`claude-code`, `codex`, …): `ghcr.io/aixlehq/flow-{agent}:develop` starts each agent in its own image. `{agent}` is the only placeholder; `Runners::ConfigSchema` refuses an unknown one, or a value that is not an image reference once replaced, when the runner is saved. |
 
 The container receives the same environment variables the hosted pod spec sets for the
 image, with the callback addresses of the session's local proxy (§6.6). On

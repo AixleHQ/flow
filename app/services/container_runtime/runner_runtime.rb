@@ -554,12 +554,11 @@ module ContainerRuntime
     # The image the runner pulls and starts: the runner's
     # `container.image_override` where it sets one, else the strategy's, as it
     # was given. `{agent}` in the override is the image name of the session's
-    # runtime; a session without an agent runtime keeps the strategy's image.
+    # runtime.
     def runner_image(config, image, session)
       override = setting(config, "container.image_override").presence
       return image if override.nil?
       return override unless override.include?("{agent}")
-      return image if session.agent_type.blank?
 
       Runners::ConfigSchema.image_reference(override, AgentRuntime.fetch(session.agent_type).image)
     end

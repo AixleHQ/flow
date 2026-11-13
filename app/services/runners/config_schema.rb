@@ -110,7 +110,11 @@ module Runners
     IMAGE_PLACEHOLDERS = { "agent" => "the image name of the session's agent runtime (config/agent_runtimes.json)" }.freeze
     PLACEHOLDER = /\{([^{}]*)\}/
     IMAGE_COMPONENT = "[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*"
-    IMAGE_DOMAIN = "(?:[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])(?:\\.(?:[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]))*(?::[0-9]+)?"
+    # Docker's rule: the first path component is a registry only when it has a
+    # `.` or a `:port`, or is `localhost`; otherwise it is a repository component
+    # and must be lowercase.
+    IMAGE_HOST_LABEL = "(?:[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])"
+    IMAGE_DOMAIN = "(?:#{IMAGE_HOST_LABEL}(?:\\.#{IMAGE_HOST_LABEL})+(?::[0-9]+)?|#{IMAGE_HOST_LABEL}:[0-9]+|localhost)"
     IMAGE_REFERENCE = %r{\A(?:#{IMAGE_DOMAIN}/)?#{IMAGE_COMPONENT}(?:/#{IMAGE_COMPONENT})*(?::\w[\w.-]{0,127})?(?:@[A-Za-z][A-Za-z0-9]*(?:[-_+.][A-Za-z][A-Za-z0-9]*)*:[0-9a-fA-F]{32,})?\z}
 
     EPHEMERAL = "ephemeral is not a config key: it is set per machine at registration"
