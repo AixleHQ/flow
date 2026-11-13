@@ -53,8 +53,7 @@ describe('RunnerFormModal', () => {
     expect(within(fieldset).getByRole('radio', { name: 'bridge (default)' })).toBeChecked();
     expect(within(fieldset).getByRole('radio', { name: 'private (default)' })).toBeChecked();
     expect(within(dialog).getByRole('switch', { name: /^Auto-update/ })).toBeChecked();
-    expect(within(dialog).getByRole('textbox', { name: /Reconnect grace/ })).toHaveAttribute('placeholder', '900');
-    expect(within(dialog).getByText('Default: 900.')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('textbox', { name: /Reconnect grace/ })).not.toBeInTheDocument();
     expect(within(dialog).getByRole('radio', { name: /Reuse \(default\)/ })).toBeChecked();
     expect(
       within(dialog).getByText(/Fresh on a manual runner wipes everything Aixle put on the machine/),
@@ -151,10 +150,7 @@ describe('RunnerFormModal', () => {
       options.onError?.({
         name: ['has already been taken'],
         maxConcurrency: ['must be greater than 0'],
-        config: [
-          'container.network must be one of bridge, host',
-          'bogus is not a supported config key',
-        ],
+        config: ['container.network must be one of bridge, host', 'bogus is not a supported config key'],
       });
     });
     const user = userEvent.setup();
