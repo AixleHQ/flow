@@ -173,7 +173,11 @@ module Coder
           git #{auth} clone --branch "$BRANCH" "$URL" "$TARGET"
         fi
 
-        git -C "$TARGET" config --add safe.directory "$TARGET" || true
+        # safe.directory is read only from system, global and command-line config,
+        # never from the repository's own, so it goes in the global file (the
+        # workspace user's, which the agent's git reads). Once, not per bootstrap.
+        git config --global --get-all safe.directory | grep -qxF -- "$TARGET" ||
+          git config --global --add safe.directory "$TARGET" || true
 
         #{checkout_section(ref: ref, auth: auth)}
         if [ -n "$(git -C "$TARGET" status --porcelain)" ]; then WORKTREE=dirty; else WORKTREE=clean; fi
