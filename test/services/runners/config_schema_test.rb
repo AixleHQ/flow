@@ -97,6 +97,15 @@ class Runners::ConfigSchemaTest < ActiveSupport::TestCase
     assert_match(/must be an image reference/, errors("container" => { "image_override" => "acme/{agent" }).sole)
   end
 
+  test "image_override follows Docker: the first component is a registry only with a dot, a port or localhost" do
+    %w[ghcr.io/acme/flow-{agent}:develop localhost:5000/flow-{agent} localhost/flow-{agent} acme/flow-{agent} flow-{agent}].each do |value|
+      assert_empty errors("container" => { "image_override" => value }), value
+    end
+    %w[UPPER/flow-{agent}:x Acme/flow-{agent} ghcr.io/Acme/flow-{agent}].each do |value|
+      assert_match(/must be an image reference/, errors("container" => { "image_override" => value }).sole, value)
+    end
+  end
+
   test "image_reference replaces {agent} and leaves a plain value as it is" do
     assert_equal "acme/flow-codex:1", Runners::ConfigSchema.image_reference("acme/flow-{agent}:1", "codex")
     assert_equal "acme/agent:1", Runners::ConfigSchema.image_reference("acme/agent:1", "codex")
