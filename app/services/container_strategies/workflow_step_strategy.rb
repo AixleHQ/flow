@@ -21,6 +21,7 @@ module ContainerStrategies
       logs_count += terminal.count
       collect_usage(session, agent_service, log_contents)
       persist_refreshed_credentials(container, session, agent_service)
+      persist_credential_metadata(container, SessionCompany.agent_credentials_for(session).find_by(agent_type: input[:agent_type]), agent_service, :session)
 
       outputs = collect_workflow_outputs(container_id)
       outputs_count = outputs.count

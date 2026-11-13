@@ -40,6 +40,14 @@ module Agents
                             "onboardingComplete" => true }.freeze
     WORKSPACE = "/workspace"
 
+    # The metadata key under which the last `/usage` probe's snapshot is stored,
+    # and the print-mode command that reads it. `/usage` is the CLI's own quota
+    # view; in print mode it reports without spending a model turn (agy 1.1.11+,
+    # verified by Orca). Never add `--disable-slash-commands`: agy then sends
+    # `/usage` as a billed prompt.
+    SUBSCRIPTION_USAGE_KEY = "subscription_usage"
+    USAGE_PROBE_COMMAND = [ "agy", "-p", "/usage", "--output-format", "json", "--print-timeout", "20s" ].freeze
+
     # API-equivalent prices in USD per million tokens. Antigravity's result event
     # reports cache reads as a subset of input tokens, so cached input is removed
     # from the regular input bucket before pricing. Keep this table beside the
@@ -312,6 +320,39 @@ module Agents
       )
     end
 
+    # Antigravity's remaining quota is read from the CLI itself (`agy`'s `/usage`
+    # print mode), which only runs inside the container — so the reading is a
+    # snapshot captured here at cleanup, not a live server-side fetch. Only the
+    # session phase is probed: at :auth the credential was just captured and no
+    # quota has been spent since the last session.
+    def collect_credential_metadata(runtime, container, credential, phase)
+      return {} if phase != :session || credential.blank?
+
+      stdout, _stderr, status = runtime.exec(container, USAGE_PROBE_COMMAND, stdout: true, stderr: true)
+      return {} unless status.to_i.zero?
+
+      windows = usage_windows_from_probe(Array(stdout).join)
+      return {} if windows.empty?
+
+      { SUBSCRIPTION_USAGE_KEY => { "fetched_at" => Time.current.utc.iso8601, "windows" => windows } }
+    rescue StandardError => e
+      Rails.logger.warn("[AntigravityCliAdapter] could not read the quota: #{e.class}: #{e.message}")
+      {}
+    end
+
+    # Reads the snapshot #collect_credential_metadata stored. Lives outside
+    # #fetch_subscription_usage because the server cannot fetch this quota live;
+    # SubscriptionUsageService prefers it when the adapter responds to it.
+    def fetch_subscription_usage_from_snapshot(credential)
+      snapshot = credential&.metadata&.dig(SUBSCRIPTION_USAGE_KEY)
+      return nil unless snapshot.is_a?(Hash)
+
+      windows = snapshot["windows"]
+      return nil unless windows.is_a?(Array)
+
+      { status: "ok", windows: windows.map(&:symbolize_keys), fetched_at: snapshot["fetched_at"] }
+    end
+
     def context_file_path = "#{home_dir}/.gemini/GEMINI.md"
     def skills_agent_name = "gemini-cli"
     def skills_install_path = "#{home_dir}/.gemini/skills"
@@ -337,6 +378,54 @@ module Agents
     private
 
     ANSI_ESCAPE = /\e(?:\[[0-?]*[ -\/]*[@-~]|\][^\a]*(?:\a|\e\\))/.freeze
+
+    # The `/usage` print-mode envelope is a single JSON line; the CLI may
+    # interleave other output around it. Each bucket becomes one window.
+    def usage_windows_from_probe(stdout)
+      envelope = parse_print_envelope(stdout)
+      return [] unless envelope.is_a?(Hash) && envelope["status"] == "SUCCESS"
+
+      command = envelope["command"]
+      data = command.is_a?(Hash) ? command["data"] : nil
+      groups = data.is_a?(Hash) ? Array(data["groups"]) : []
+      groups.flat_map { |group| usage_windows_from_group(group) }.compact
+    end
+
+    def usage_windows_from_group(group)
+      return [] unless group.is_a?(Hash)
+
+      Array(group["buckets"]).filter_map do |bucket|
+        next unless bucket.is_a?(Hash) && bucket["disabled"] != true
+
+        fraction = bucket["remaining_fraction"]
+        key = bucket["id"].to_s.presence
+        next if fraction.nil? || key.blank?
+
+        {
+          key: key,
+          utilization: ((1.0 - fraction.to_f) * 100).clamp(0.0, 100.0),
+          resets_at: bucket["reset_time"].presence,
+          window_duration_mins: window_minutes_for(bucket["window"])
+        }.compact
+      end
+    end
+
+    def window_minutes_for(window)
+      { "weekly" => 10_080, "5h" => 300 }[window.to_s]
+    end
+
+    def parse_print_envelope(stdout)
+      stdout.to_s.each_line do |line|
+        trimmed = line.strip
+        next unless trimmed.start_with?("{")
+
+        parsed = JSON.parse(trimmed)
+        return parsed if parsed.is_a?(Hash)
+      rescue JSON::ParserError
+        next
+      end
+      nil
+    end
 
     def terminal_output(terminal_session)
       terminal_session.session_logs.find_by(name: "terminal_output.log")&.file&.read
