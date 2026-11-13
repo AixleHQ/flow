@@ -7,7 +7,7 @@ type ProjectTeam = {
   name: string;
   projectId: number;
   strategy: 'priority' | 'round_robin' | 'most_remaining';
-  members: Array<{ id: number; name: string; email: string; status: { state: 'ready' | 'on_hold' | 'unavailable'; until: string | null; detail: string | null }; runtimes: Array<{ agentType: string; label: string; quotaExhaustedUntil: string | null }> }>;
+  members: Array<{ id: number; name: string; email: string; status: { state: 'ready' | 'on_hold' | 'signed_out' | 'unavailable'; until: string | null; detail: string | null }; runtimes: Array<{ agentType: string; label: string; quotaExhaustedUntil: string | null }> }>;
   nextMemberId: number | null;
   triggers: Array<{ id: number; name: string | null; workflowName: string | null }>;
   triggerCount: number;
