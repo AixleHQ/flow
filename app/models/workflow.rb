@@ -194,8 +194,14 @@ class Workflow < ApplicationRecord
     config&.dig("inherit_all_project_resources") || false
   end
 
+  # A base list left in the stored config by a pod of an older release is not
+  # read back here as an update: the links are the list.
+  def merge_config(updates)
+    self.config = config.to_h.except(*resource_list_columns.keys).merge(updates.to_h.stringify_keys)
+  end
+
   def merge_config!(updates)
-    self.config = config.to_h.except(*resource_list_columns.keys).merge(updates.stringify_keys)
+    merge_config(updates)
     save!
   end
 

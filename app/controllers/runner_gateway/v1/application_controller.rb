@@ -36,7 +36,6 @@ module RunnerGateway
         "credential_reuse_detected" => :unauthorized,
         "runner_revoked" => :unauthorized,
         "runner_version_unsupported" => :bad_request,
-        "ephemeral_not_supported" => :unprocessable_entity,
         "invalid_registration" => :unprocessable_entity,
         "invalid_check_in" => :unprocessable_entity
       }.freeze

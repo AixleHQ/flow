@@ -25,4 +25,15 @@ class WorkflowResourceTest < ActiveSupport::TestCase
     refute payload["hasActiveRuns"]
     assert_in_delta @latest.reload.created_at, Time.zone.parse(payload["lastRunAt"].to_s), 1
   end
+
+  test "config carries the base lists, read from the links" do
+    repository = create(:repository, scope: @project)
+    @workflow.merge_config!("base_repository_ids" => [ repository.id ], "inherit_all_project_resources" => true)
+
+    config = WorkflowResource.new(@workflow.reload).to_h["config"]
+
+    assert_equal [ repository.id ], config["baseRepositoryIds"]
+    assert config["inheritAllProjectResources"]
+    assert_equal [], config["baseToolIds"]
+  end
 end

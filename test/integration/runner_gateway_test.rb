@@ -8,7 +8,7 @@ require "test_helper"
 class RunnerGatewayTest < ActionDispatch::IntegrationTest
   include ProcessModeHelper::RunnerGateway
 
-  REGISTRATION = { name: "build-01", os: "linux", arch: "amd64", facts: { "docker" => "27.1.0" }, ephemeral: false }.freeze
+  REGISTRATION = { name: "build-01", os: "linux", arch: "amd64", facts: { "docker" => "27.1.0" } }.freeze
 
   setup do
     @company = create(:company)
@@ -50,7 +50,7 @@ class RunnerGatewayTest < ActionDispatch::IntegrationTest
     assert_equal 0, RunnerEnvironment.count
   end
 
-  test "registration refuses an unknown token, a token of another kind and an ephemeral machine" do
+  test "registration refuses an unknown token, and a token of another kind" do
     pair = registered_pair
     token = Runners::Credentials.mint_registration!(@runner)
 
@@ -58,8 +58,6 @@ class RunnerGatewayTest < ActionDispatch::IntegrationTest
     assert_refused :unauthorized, "invalid_token"
     register(pair["access_token"])
     assert_refused :unauthorized, "invalid_token"
-    register(token, REGISTRATION.merge(ephemeral: true))
-    assert_refused :unprocessable_entity, "ephemeral_not_supported"
     register(token, REGISTRATION.merge(name: " "))
     assert_refused :unprocessable_entity, "invalid_registration"
 
@@ -67,36 +65,13 @@ class RunnerGatewayTest < ActionDispatch::IntegrationTest
     assert_response :created
   end
 
-  # PROTOCOL.md §5.1: ephemeral_not_supported, then invalid_registration.
-  test "an ephemeral registration is refused as such even when the rest of its body is invalid" do
-    token = Runners::Credentials.mint_registration!(@runner)
-
-    register(token, { ephemeral: true, facts: nil })
-    assert_refused :unprocessable_entity, "ephemeral_not_supported"
-    register(token, { ephemeral: true, name: 5 })
-    assert_refused :unprocessable_entity, "ephemeral_not_supported"
-    register(token, REGISTRATION.merge(name: 5))
-    assert_refused :unprocessable_entity, "invalid_registration"
-    assert_equal 0, RunnerEnvironment.count
-  end
-
-  # PROTOCOL.md §5.1: `ephemeral` is a JSON boolean, and only `true` asks for it.
-  test "an ephemeral that is not a JSON boolean is invalid_registration; false or absent registers" do
-    token = Runners::Credentials.mint_registration!(@runner)
-
-    [ "true", 1, 0.0 ].each do |value|
-      register(token, REGISTRATION.merge(ephemeral: value))
-      assert_refused :unprocessable_entity, "invalid_registration"
-      register(token, { ephemeral: value, name: 5 })
-      assert_refused :unprocessable_entity, "invalid_registration"
-    end
-    assert_equal 0, RunnerEnvironment.count
-
-    register(token, REGISTRATION.except(:ephemeral))
+  # `aixle-runner` 0.2.0 still sends `"ephemeral": false`: the schema ignores fields it does not know.
+  test "a registration body with a field the protocol does not know registers" do
+    register(Runners::Credentials.mint_registration!(@runner), REGISTRATION.merge(ephemeral: false))
     assert_response :created
-    register(Runners::Credentials.mint_registration!(@runner), REGISTRATION.merge(name: "build-02", ephemeral: false))
+    register(Runners::Credentials.mint_registration!(@runner), REGISTRATION.merge(name: "build-02", ephemeral: true))
     assert_response :created
-    assert_equal [ false, false ], RunnerEnvironment.order(:id).pluck(:ephemeral)
+    assert_equal 2, RunnerEnvironment.count
   end
 
   # PROTOCOL.md §5.1: `os` and `arch` are optional strings.

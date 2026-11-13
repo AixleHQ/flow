@@ -14,7 +14,7 @@ require "socket"
 class RunnerGatewayProxyTest < ActionDispatch::IntegrationTest
   include ProcessModeHelper::RunnerGateway
 
-  REGISTRATION = { os: "linux", arch: "amd64", facts: {}, ephemeral: false }.freeze
+  REGISTRATION = { os: "linux", arch: "amd64", facts: {} }.freeze
 
   setup do
     @company = create(:company)

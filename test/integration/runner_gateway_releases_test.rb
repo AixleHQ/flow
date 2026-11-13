@@ -10,7 +10,7 @@ require "test_helper"
 class RunnerGatewayReleasesTest < ActionDispatch::IntegrationTest
   include ProcessModeHelper::RunnerGateway
 
-  REGISTRATION = { name: "build-01", os: "linux", arch: "amd64", facts: {}, ephemeral: false }.freeze
+  REGISTRATION = { name: "build-01", os: "linux", arch: "amd64", facts: {} }.freeze
   AMD64 = "a" * 64
   ARM64 = "b" * 64
   ASSET = "https://github.com/AixleHQ/flow/releases/download/runner-v1.5.0/aixle-runner-linux-amd64"
