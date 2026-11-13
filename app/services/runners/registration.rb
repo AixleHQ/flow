@@ -25,19 +25,15 @@ module Runners
     #
     # The checks run after the gateway's, in the order of PROTOCOL.md §5.1,
     # and the token is spent only by a registration that passes them all:
-    # `ephemeral: true` is `ephemeral_not_supported`, and then the machine is
-    # saved with its name stripped, whose validations refuse a name blank once
-    # stripped or a value over its column with `invalid_registration`.
+    # the machine is saved with its name stripped, whose validations refuse a
+    # name blank once stripped or a value over its column with
+    # `invalid_registration`.
     # `runner_version` and `protocol_version` are the ones the machine runs
     # and speaks.
     #
     # `auto_update: false` is a machine configured with `--no-auto-update`
     # (DESIGN.md §14.4): it is never offered an update.
-    def register!(credential, name:, os:, arch:, facts:, ephemeral:, auto_update:, runner_version:, protocol_version:)
-      if ephemeral
-        raise Credentials::Refused.new("ephemeral_not_supported", "Ephemeral registration is not supported yet.")
-      end
-
+    def register!(credential, name:, os:, arch:, facts:, auto_update:, runner_version:, protocol_version:)
       RunnerCredential.transaction do
         Credentials.lock_live_runner!(credential.runner_id)
         credential.lock!

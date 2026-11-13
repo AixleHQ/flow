@@ -18,7 +18,6 @@ class Runners::RegistrationTest < ActiveSupport::TestCase
     assert_equal [ "build-01", "linux", "amd64" ], [ environment.display_name, environment.os, environment.arch ]
     assert_equal({ "docker" => "27.1.0" }, environment.facts)
     assert_equal [ "1.4.0", "1" ], [ environment.runner_version, environment.protocol_version ]
-    assert_equal false, environment.ephemeral # rubocop:disable Minitest/RefuteFalse
     assert_match(/\Aaixle-r#{@runner.id}-\h{8}\z/, environment.key)
     assert @credential.reload.used?
     assert_equal environment, @credential.runner_environment
@@ -33,24 +32,14 @@ class Runners::RegistrationTest < ActiveSupport::TestCase
     assert_equal 1, RunnerEnvironment.count
   end
 
-  test "an ephemeral or invalid registration is refused and leaves the token unspent" do
-    ephemeral = assert_raises(Runners::Credentials::Refused) { register(ephemeral: true) }
+  test "an invalid registration is refused and leaves the token unspent" do
     blank = assert_raises(Runners::Credentials::Refused) { register(name: "   ") }
     too_long = assert_raises(Runners::Credentials::Refused) { register(os: "o" * 256) }
 
-    assert_equal "ephemeral_not_supported", ephemeral.reason
     assert_equal [ "invalid_registration", "invalid_registration" ], [ blank.reason, too_long.reason ]
     assert_match(/Display name/, blank.message)
     assert_not @credential.reload.used?
     assert_equal 0, RunnerEnvironment.count
-  end
-
-  # PROTOCOL.md §5.1: `ephemeral` comes before the machine's validations.
-  test "an ephemeral registration is refused as such whatever its other parameters" do
-    error = assert_raises(Runners::Credentials::Refused) { register(name: nil, facts: nil, ephemeral: true) }
-
-    assert_equal [ "ephemeral_not_supported", "Ephemeral registration is not supported yet." ], [ error.reason, error.message ]
-    assert_not @credential.reload.used?
   end
 
   test "the name is stored without its surrounding spaces, and auto_update false is recorded" do
@@ -65,7 +54,7 @@ class Runners::RegistrationTest < ActiveSupport::TestCase
     environment = register.environment
     other = Runners::Registration.register!(
       RunnerCredential.find_by_token(Runners::Credentials.mint_registration!(@runner), kind: :registration),
-      name: "build-02", os: "linux", arch: "arm64", facts: {}, ephemeral: false, auto_update: true,
+      name: "build-02", os: "linux", arch: "arm64", facts: {}, auto_update: true,
       runner_version: "1.4.0", protocol_version: "1"
     )
 
@@ -82,7 +71,7 @@ class Runners::RegistrationTest < ActiveSupport::TestCase
   def register(**changes)
     Runners::Registration.register!(
       @credential,
-      **{ name: "build-01", os: "linux", arch: "amd64", facts: { "docker" => "27.1.0" }, ephemeral: false,
+      **{ name: "build-01", os: "linux", arch: "amd64", facts: { "docker" => "27.1.0" },
           auto_update: true, runner_version: "1.4.0", protocol_version: "1" }.merge(changes)
     )
   end

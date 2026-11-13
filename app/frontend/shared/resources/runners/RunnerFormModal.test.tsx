@@ -153,7 +153,7 @@ describe('RunnerFormModal', () => {
         maxConcurrency: ['must be greater than 0'],
         config: [
           'container.network must be one of bridge, host',
-          'ephemeral is not a config key: it is set per machine at registration',
+          'bogus is not a supported config key',
         ],
       });
     });
@@ -165,9 +165,7 @@ describe('RunnerFormModal', () => {
 
     // The first step with an error is the configuration.
     expect(await within(dialog).findByText('container.network must be one of bridge, host')).toBeInTheDocument();
-    expect(
-      within(dialog).getByText('ephemeral is not a config key: it is set per machine at registration'),
-    ).toBeInTheDocument();
+    expect(within(dialog).getByText('bogus is not a supported config key')).toBeInTheDocument();
 
     await user.click(within(dialog).getByRole('button', { name: 'Next' }));
     expect(within(dialog).getByText('has already been taken')).toBeInTheDocument();

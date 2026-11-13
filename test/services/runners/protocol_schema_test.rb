@@ -46,21 +46,12 @@ class Runners::ProtocolSchemaTest < ActiveSupport::TestCase
     invalid.each { |body| assert_not Runners::ProtocolSchema.valid?("register.request", body), body.inspect }
   end
 
-  # PROTOCOL.md §5.1: the gateway refuses such a body as ephemeral_not_supported, before its other fields.
-  test "a registration with ephemeral true passes whatever the rest of it holds; one without, does not" do
-    asks = [ { "ephemeral" => true }, { "ephemeral" => true, "name" => 5, "facts" => nil } ]
-    does_not = [ false, nil, 0, 0.0, 1, "true", "" ].map { |value| { "ephemeral" => value, "name" => 5 } }
-
-    asks.each { |body| assert Runners::ProtocolSchema.valid?("register.request", body), body.inspect }
-    does_not.each { |body| assert_not Runners::ProtocolSchema.valid?("register.request", body), body.inspect }
-  end
-
-  test "a registration's ephemeral is a JSON boolean: any other value is refused, even with a valid body" do
-    assert Runners::ProtocolSchema.valid?("register.request", { "name" => "b" })
-    assert Runners::ProtocolSchema.valid?("register.request", { "name" => "b", "ephemeral" => false })
-    [ "true", "false", 1, 0, 0.0, 1.0, nil, "" ].each do |value|
-      assert_not Runners::ProtocolSchema.valid?("register.request", { "name" => "b", "ephemeral" => value }), value.inspect
+  # aixle-runner 0.2.0 sends `ephemeral: false`; the schema ignores fields it does not know.
+  test "a registration's fields the schema does not know are ignored" do
+    [ false, true, "true", 1, nil ].each do |value|
+      assert Runners::ProtocolSchema.valid?("register.request", { "name" => "b", "ephemeral" => value }), value.inspect
     end
+    assert_not Runners::ProtocolSchema.valid?("register.request", { "ephemeral" => true })
   end
 
   test "the long-poll's after and wait are non-negative integers, after within the bigint range" do
