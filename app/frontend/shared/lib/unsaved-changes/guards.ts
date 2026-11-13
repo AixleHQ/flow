@@ -104,7 +104,8 @@ function onPopState(event: PopStateEvent) {
 /**
  * Puts the browser Back/Forward hold in place. Call it once at boot, before Inertia starts: a
  * popstate listener added after Inertia's runs after it, and the page is swapped under the question.
- * It does nothing while no form is dirty. `registerGuard` calls it too, as a fallback.
+ * It does nothing while no form is dirty. `registerGuard` does not install it: the boot call is the
+ * only place that does.
  */
 export function holdBrowserHistory() {
   if (holdingBrowserHistory) return;
@@ -129,7 +130,6 @@ function install() {
 
 export function registerGuard(guard: Guard) {
   guards.add(guard);
-  holdBrowserHistory();
   removeListeners ??= install();
 
   return () => {
