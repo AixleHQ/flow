@@ -117,7 +117,7 @@ class RunnerEnvironmentTest < ActiveSupport::TestCase
   end
 
   test "display_state over includes(:delivered_operations) makes no query per machine" do
-    3.times { create(:runner_environment, runner: @runner) }
+    create_list(:runner_environment, 3, runner: @runner)
     machines = @runner.environments.includes(:delivered_operations).order(:id).to_a
 
     assert_no_queries_match(/runner_operations/) { machines.each(&:display_state) }
