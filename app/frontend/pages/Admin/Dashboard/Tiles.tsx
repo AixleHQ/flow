@@ -3,12 +3,21 @@ import type { ReactNode } from 'react';
 import { deltaOf, type DeltaField, type TenantSummary, type Totals } from './aggregate';
 import classes from './Dashboard.module.css';
 import { formatCount, formatHours, formatPercent } from './format';
-import type { BillingClass, Snapshot } from './types';
+import type { AccountStatus, AccountType, BillingMethod, Snapshot } from './types';
+
+interface Account {
+  accountStatus: AccountStatus | null;
+  accountType: AccountType | null;
+  billingMethod: BillingMethod | null;
+}
 
 interface Props {
   snapshot: Snapshot;
-  /** The companies the Companies tile counts, each by its latest billing class. */
-  companies: { count: number; latestClasses: BillingClass[] };
+  /**
+   * The companies the Companies tile counts, split by the same account columns
+   * as the table, and how many ran their latest hour unbilled.
+   */
+  companies: { count: number; accounts: Account[]; unbilled: number };
   /** Whether filters narrow the tiles; People and Projects always count the whole platform. */
   filtered: boolean;
   rows: TenantSummary[];
@@ -36,24 +45,35 @@ function Tile({ label, value, delta, children }: TileProps) {
   );
 }
 
-const COMPANY_CLASSES: { billingClass: BillingClass; label: string }[] = [
-  { billingClass: 'paying', label: 'paying' },
-  { billingClass: 'trial', label: 'trial' },
-  { billingClass: 'managed', label: 'managed' },
-  { billingClass: 'blocked', label: 'blocked' },
-];
+type AccountGroup = 'paying' | 'trial' | 'trial expired' | 'pending' | 'locked' | 'canceled' | 'managed';
 
-const UNBILLED: BillingClass[] = ['unlimited', 'no_customer'];
+const ACCOUNT_GROUPS: AccountGroup[] = ['paying', 'trial', 'trial expired', 'pending', 'locked', 'canceled', 'managed'];
+
+const GROUP_BY_STATUS: Partial<Record<AccountStatus, AccountGroup>> = {
+  trial_active: 'trial',
+  trial_expired: 'trial expired',
+  pending_activation: 'pending',
+  locked_nonpayment: 'locked',
+  canceled: 'canceled',
+};
+
+// An active customer nobody invoices is not paying, whatever its status says:
+// every company of a self-hosted installation reads that way.
+function groupOf({ accountStatus, accountType, billingMethod }: Account): AccountGroup | null {
+  if (!accountStatus || accountStatus === 'inactive') return null;
+  if (accountType === 'managed') return 'managed';
+  if (accountStatus === 'active_customer') return billingMethod ? 'paying' : null;
+  return GROUP_BY_STATUS[accountStatus] ?? null;
+}
 
 /** The platform's size as it stands, then what the selected period used. */
 export default function Tiles({ snapshot, companies, filtered, rows, totals, previous }: Props) {
-  const count = (wanted: BillingClass[]) =>
-    companies.latestClasses.filter((billingClass) => wanted.includes(billingClass)).length;
-  const split = COMPANY_CLASSES.flatMap(({ billingClass, label }) => {
-    const n = count([billingClass]);
-    return n ? [`${n} ${label}`] : [];
+  const groups = companies.accounts.map(groupOf);
+  const split = ACCOUNT_GROUPS.flatMap((group) => {
+    const n = groups.filter((each) => each === group).length;
+    return n ? [`${n} ${group}`] : [];
   });
-  const unbilled = count(UNBILLED);
+  const { unbilled } = companies;
   const freeBusy = rows.filter((row) => row.billingClass !== 'paying').reduce((sum, row) => sum + row.busyHours, 0);
   const sessions = totals ? totals.sessionsSucceeded + totals.sessionsFailed : 0;
 

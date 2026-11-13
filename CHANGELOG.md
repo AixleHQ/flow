@@ -45,6 +45,11 @@ governance, community health — carry none.
   a member's own token was revoked, for example when someone leaves the
   workspace. Only removing the app, or revoking its bot token, disconnects the
   workspace now.
+- **Admin**: on the dashboard, a company that pays through AWS Marketplace is
+  counted as paying, not as "Not billed · no Stripe customer". The Companies tile
+  now groups companies by the same Account status, Account type and Billing method
+  as the table. A trial that opened card entry but never finished it no longer
+  shows "SaaS – Stripe" as its billing method.
 
 ## [1.12.0] - 2026-11-12
 

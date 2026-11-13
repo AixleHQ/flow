@@ -92,7 +92,8 @@ module Billing
       # installation is not ours to report and is counted, not sent.
       def licenses_for(report)
         ::MarketplaceLicense
-          .where(company_id: report.breakdown_minutes.keys, subscription_state: %w[active ending])
+          .metered
+          .where(company_id: report.breakdown_minutes.keys)
           .joins(:company)
           .where(companies: { billing_provider: ::Company::BILLING_PROVIDER_AWS_MARKETPLACE })
           .pluck(:company_id, :license_arn, :customer_aws_account_id)
