@@ -298,8 +298,7 @@ export function TaskDetailSidebar({
   const requestClose = useUnsavedChanges({
     opened: !!task,
     dirty:
-      commentBody.trim() !== '' ||
-      (editedComment !== undefined && editingCommentBody.trim() !== editedComment.body),
+      commentBody.trim() !== '' || (editedComment !== undefined && editingCommentBody.trim() !== editedComment.body),
     saving: submittingComment || savingCommentEdit,
     onClose,
   });
