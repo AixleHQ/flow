@@ -34,8 +34,11 @@ module Oauth
       # The GitHub App's user OAuth flow (docs/design/github-user-identity.md §4.1).
       # A GitHub App takes its permissions from the App, so no scopes are requested.
       # A connection is a person's own account: only a User may own one.
+      # GitHub names itself `https://github.com/login/oauth` in the `iss` of the
+      # authorization response (RFC 9207), not `https://github.com`; the callback
+      # compares the two, so the issuer must be that value.
       "github" => {
-        issuer: "https://github.com",
+        issuer: "https://github.com/login/oauth",
         authorization_endpoint: "https://github.com/login/oauth/authorize",
         token_endpoint: "https://github.com/login/oauth/access_token",
         scopes: "",
