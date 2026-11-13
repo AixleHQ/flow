@@ -3,6 +3,8 @@
 **Status:** built, 2026-11-11 — all three phases. The code lives under
 `ProjectTeams::` (`app/services/project_teams/`); `Teams::` is the Microsoft Teams
 integration.
+The user-facing guide is the docs portal's **Team & access** page, section
+*Project teams* (`app/frontend/pages/Docs/data/pages/people-and-access.md`).
 
 A **team** is a named group of a project's members with a rule for choosing one of
 them. A board task can be assigned to a team, and an off-board trigger (schedule,

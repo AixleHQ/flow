@@ -12,7 +12,18 @@ import (
 	"github.com/moby/moby/api/pkg/authconfig"
 	"github.com/moby/moby/api/types/registry"
 	"github.com/moby/moby/client"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
+
+// AgentPlatform is the platform the agent images are built for: the images
+// (ghcr.io/aixlehq/flow-<image>) are OCI indexes with linux/amd64 only. The pull
+// and the creation of every container made from one ask for it, so a daemon on
+// arm64 runs them under amd64 emulation instead of failing with "no matching
+// manifest for linux/arm64/v8" (DESIGN.md §6.9.3). Native arm64 images, when
+// they exist, make this the daemon's own platform again.
+func AgentPlatform() *ocispec.Platform {
+	return &ocispec.Platform{OS: "linux", Architecture: "amd64"}
+}
 
 // Result error classes shared by the ops (runner/protocol/PROTOCOL.md §6).
 const (
@@ -53,7 +64,7 @@ func pull(ctx context.Context, api API, ref string) error {
 	if err != nil {
 		return err
 	}
-	resp, err := api.ImagePull(ctx, ref, client.ImagePullOptions{RegistryAuth: auth})
+	resp, err := api.ImagePull(ctx, ref, client.ImagePullOptions{RegistryAuth: auth, Platforms: []ocispec.Platform{*AgentPlatform()}})
 	if err != nil {
 		return err
 	}

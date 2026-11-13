@@ -105,6 +105,12 @@ When a run misbehaves, `get_step_run` returns that step's error, retry
 history and container-session diagnostics — the same detail the run page
 shows.
 
+Teams are covered too: `list_project_teams`, `create_project_team`,
+`update_project_team` and `delete_project_team` manage a project's teams;
+`create_board_task` and `update_board_task` take `assignee_team_id`, and
+`create_workflow_trigger` and `update_workflow_trigger` take `run_as_team_id`,
+so a trigger built over MCP can run as a team from the start.
+
 The token is shown once — regenerate or disable it any time from your
 profile. Regenerating immediately invalidates the old token.
 
