@@ -20,6 +20,10 @@ governance, community health — carry none.
 - **Profile**: a signed-in Grok account now shows its remaining quota in the
   Usage limits card — the weekly credit window and the monthly spend limit, each
   with when it resets.
+- **Profile**: a connected Antigravity account now shows its remaining quota in
+  the Usage limits card, read from the CLI's own `/usage` view at the end of each
+  session (its quota is not reachable by the server, so the card shows the last
+  session's reading).
 - **Integrations**: you can connect your own GitHub account under Profile →
   Connected accounts and allow agents to act as you, per project. An agent given
   `github_user_token` gets a token limited to the session's repositories, plus

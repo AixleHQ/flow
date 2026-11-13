@@ -50,10 +50,11 @@ module Agents
       return cached if cached && !refetch?(cached)
       return nil unless fetch
 
-      usage = adapter_for(credential).fetch_subscription_usage(credential.config_data)
+      usage = usage_reading(credential)
       return nil if usage.nil? # not a subscription login — nothing to show
 
-      entry = usage.merge(agent_type: credential.agent_type, fetched_at: Time.current)
+      entry = usage.merge(agent_type: credential.agent_type)
+      entry[:fetched_at] = Time.current unless entry.key?(:fetched_at)
       Rails.cache.write(cache_key(credential), entry, expires_in: entry[:status] == "ok" ? OK_TTL : ERROR_TTL)
       entry
     rescue StandardError => e
@@ -64,6 +65,15 @@ module Agents
     end
 
     private
+
+    # A runtime whose quota is read by a container probe (Antigravity) returns
+    # its last snapshot; every other runtime fetches live from the vendor.
+    def usage_reading(credential)
+      adapter = adapter_for(credential)
+      return adapter.fetch_subscription_usage_from_snapshot(credential) if adapter.respond_to?(:fetch_subscription_usage_from_snapshot)
+
+      adapter.fetch_subscription_usage(credential.config_data)
+    end
 
     def refetch?(cached)
       @force && cached[:fetched_at].to_time <= MIN_REFRESH_INTERVAL.ago

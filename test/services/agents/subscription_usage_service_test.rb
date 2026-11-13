@@ -20,6 +20,18 @@ module Agents
       end
     end
 
+    # Stands in for a container-probed runtime (Antigravity): it reads a stored
+    # snapshot instead of fetching live, and reports the snapshot's own time.
+    class SnapshotAdapter
+      def fetch_subscription_usage_from_snapshot(_credential)
+        {
+          status: "ok",
+          windows: [ { key: "gemini-weekly", utilization: 40.0, resets_at: "2026-08-21T12:00:00Z" } ],
+          fetched_at: "2026-08-21T12:00:00Z"
+        }
+      end
+    end
+
     OK_USAGE = {
       status: "ok",
       windows: [ { key: "five_hour", utilization: 33.0, resets_at: "2026-08-16T18:00:00+00:00" } ],
@@ -123,6 +135,15 @@ module Agents
       end.new
 
       assert_equal [], build_service(exploding).call
+    end
+
+    test "a container-probed runtime is read from its snapshot, keeping its own timestamp" do
+      entries = build_service(SnapshotAdapter.new).call
+
+      assert_equal 1, entries.size
+      assert_equal "claude_code", entries.first[:agent_type]
+      assert_equal "2026-08-21T12:00:00Z", entries.first[:fetched_at]
+      assert_equal [ "gemini-weekly" ], entries.first[:windows].map { |w| w[:key] }
     end
   end
 end
