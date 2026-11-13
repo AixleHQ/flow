@@ -603,7 +603,7 @@ constrained in SQL:
 | `namespace` | string | required | `kubernetes`; must equal the namespace the controller reports at registration | §5.1, §9.6 |
 | `reconnect_grace` | integer, seconds, 60–7200 | `900` (15 min) | all | §6.7 |
 | `auto_update` | boolean | `true` | `manual`; overridable per machine with `aixle-runner configure --no-auto-update` (`runner_environments.auto_update`) | §14.4 |
-| `container.image_override` | string, image reference | null (the stock image of `AgentRuntime`) | all; must be built `FROM` our base image, checked at check-in | §6.8 |
+| `container.image_override` | string, image reference; `{agent}` is replaced at launch with the image name of the session's runtime (`config/agent_runtimes.json`), so `ghcr.io/aixlehq/flow-{agent}:develop` serves every agent; any other placeholder is refused, and so is a value that is no image reference once replaced | null (the stock image of `AgentRuntime`) | all; must be built `FROM` our base image, checked at check-in | §6.8 |
 | `container.resources` | `{cpus, memory}` | from the hosted pod spec | all; `--cpus`/`--memory` on `manual` and `coder`, pod requests and limits on `kubernetes` | §6.8 |
 | `container.workspace_volume` | boolean | `true` | `manual`, `coder` | §6.8, §7.1 |
 | `container.cache_mounts` | array of `{name}` (named volume `aixle-cache-<key>-<name>`) or `{host_path}`, each with `target` | `[]` | `manual`, `coder` | §6.8, §7.2 |
@@ -1937,7 +1937,7 @@ option does; types, defaults and per-type applicability are in §2.7. All of the
 | `pid` | `private` | `host` drops PID isolation. |
 | `extra_mounts` | `[]` | Arbitrary `src:dst[:ro]` bind mounts, validated as absolute paths. Read-only unless `:rw` is written out. |
 | `resources` | from the hosted pod spec | `--cpus` / `--memory`, so a session cannot starve the machine. Pod requests and limits on `kubernetes`. |
-| `image_override` | none | An image built `FROM` our base image instead of the stock one, prerequisites checked at check-in. |
+| `image_override` | none | An image built `FROM` our base image instead of the stock one, prerequisites checked at check-in. It is one image for every session on the runner, unless it contains `{agent}`, which is replaced at launch with the session agent's image name (`claude-code`, `codex`, …): `ghcr.io/aixlehq/flow-{agent}:develop` starts each agent in its own image. `{agent}` is the only placeholder; `Runners::ConfigSchema` refuses an unknown one, or a value that is not an image reference once replaced, when the runner is saved. |
 
 The container receives the same environment variables the hosted pod spec sets for the
 image, with the callback addresses of the session's local proxy (§6.6). On
@@ -3661,8 +3661,10 @@ Alex 2026-11-09): `1.0.0` comes with the extract or the first customer (§14.1).
   `settings.yml`, the one loading mechanism, next to the other `runners:` settings. Besides the
   four keys above the block holds `download_url`, the template of the asset URL the release
   endpoint redirects to (`%{version}`, `%{platform}`), so a mirror is one edit. It pins
-  `protocol_supported: [1]`, no minimum, and `recommended_version: "0.1.0"` with the
-  `linux-amd64` and `linux-arm64` digests of `runner-v0.1.0`'s `checksums.txt` (task #220). The
+  `protocol_supported: [1]`, no minimum, and `recommended_version: "0.2.0"` with the
+  `linux-amd64` and `linux-arm64` digests of `runner-v0.1.0`'s and `runner-v0.2.0`'s
+  `checksums.txt` (task #220; `0.2.0` pinned by task #232, `0.1.0` kept so machines on it still
+  download and verify). The
   gateway's `X-Aixle-Runner-Protocol` check reads `protocol_supported`, and
   `X-Aixle-Runner-Version` is strict SemVer 2.0 from task 10 on, so versions compare by SemVer
   precedence (`Runners::Version`).
@@ -3833,6 +3835,7 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 18 | 5 | Staging validation per §12.5 (QA task), on the staging Coder integration configured on the test project and a template it offers at test time. Record the template used and the §12.5 checks (Docker daemon, disk, pruning) in the result. |
 | 19 | 6 | Kubernetes: declare `external_runners_kubernetes` (§12.1); `aixle-runner` controller mode, the Helm chart and its `runner-chart-v*` OCI lane in `AixleHQ/aixle-runner` (§14.1), `KubernetesAdapter` over controller ops, registration-token UX, documented agent image sizes. Preceded by the runner extract if it has not happened yet. **Decided (§6.9.2):** the controller runs the session ops through the Kubernetes API (`client-go` exec, `tar` over exec, the pod watch and the log API) behind the session-op handlers of #204, does the check-in for each pod with the bootstrap token from the `provision` op, follows the pod log, creates the proxy sidecar and its per-session proxy key (TLS on the relay, revoked when the session ends), keeps its state on a `PersistentVolumeClaim`, takes leader election with a `Lease` and a controller generation the gateway checks, requires Kubernetes 1.29 and an enforced NetworkPolicy (checked by the validation), and gets the RBAC of §9.6's decided footprint. An `interrupted` op may still run in the pod (§6.9.7). |
 | 20 | 7 | `host` execution mode (§6.8): `config.execution_mode: host` and `config.host.cli_source` declared in the §2.7 schema, the host-side CLI with `cli_source` (prototype `docker create` + `docker cp` first), the host-generated CA trusted in three stores and passed into the MITM container, the `NODE_OPTIONS` instrumentation, host-side ttyd/IDE/watcher for the tunnel, the redaction path, the per-session OS user and its scrub (§7.2), toolcache session kits, P2. Likely several tasks when it is cut. **Decided (§6.9, Alex, 2026-11-06): mode 2, on Coder only, with one session per workspace.** The agent CLI runs on the workspace's machine; the services that can run in Docker (`mitmdump`, the callback proxy and the others) run in containers with their ports published on the machine, so that the runner and the agent reach them. The reason: a full development machine with no container around the agent, for example to run `docker compose up`. The workspace is the unit of isolation, so the per-session OS user and the airtight scrub of §7.2, written for `manual`, are not needed. The `host` mode is not planned for `manual`. |
+| 21 | 7 | **`{agent}` in `container.image_override` (Alex, 2026-11-12).** `Runners::ConfigSchema` accepts the placeholder `{agent}` and refuses any other, and a value that is not an image reference once replaced; `RunnerRuntime#runner_image` replaces it with `AgentRuntime.fetch(session.agent_type).image` at `container.start`; an override without a placeholder works as before. The runner form's help text says what `{agent}` is replaced with. Default images for runner sessions are not part of it. |
 
 ---
 

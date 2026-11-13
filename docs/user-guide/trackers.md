@@ -163,7 +163,8 @@ An ordinary tracker trigger on the chosen workflow:
 - the issue's files copied onto the task when a run starts, if you switched on
   **Copy issue files to the task** ([Files](#files)).
 
-The trigger runs as you. It appears on the workflow's **Triggers** tab as
+The trigger runs as you until **Runs as** points it at another member or a
+team. It appears on the workflow's **Triggers** tab as
 "Issue moves to Ready for AI" or "Aixle is mentioned in a comment", where you
 edit, switch off or delete it like any other trigger. Connecting the same
 column to the same workflow again is refused, since the workflow already has

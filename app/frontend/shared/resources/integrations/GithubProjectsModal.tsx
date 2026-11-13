@@ -52,7 +52,7 @@ export const GithubProjectsModal = ({ integration, onClose, basePath }: Props) =
   }, [basePath, integration]);
 
   const dirty = projectIds.length !== selected.length || projectIds.some((id) => !selected.includes(id));
-  const requestClose = useUnsavedChanges({ opened: !!integration, dirty, onClose });
+  const requestClose = useUnsavedChanges({ opened: !!integration, dirty, saving, onClose });
 
   const save = useCallback(() => {
     if (!integration) return;

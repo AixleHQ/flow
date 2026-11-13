@@ -13,7 +13,12 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-11-13
+
 ### Added
+- Runner image override: `container.image_override` may contain `{agent}`,
+  replaced at launch with the session agent's image name, so one override such
+  as `ghcr.io/aixlehq/flow-{agent}:develop` serves every agent on the runner.
 - **Integrations**: you can connect your own GitHub account under Profile →
   Connected accounts and allow agents to act as you, per project. An agent given
   `github_user_token` gets a token limited to the session's repositories, plus
@@ -27,10 +32,32 @@ governance, community health — carry none.
 - **Tasks**: each file on a task's Assets tab shows when it was uploaded.
 
 ### Changed
+- Runner compatibility: the platform now recommends `aixle-runner` 0.2.0 and
+  serves it next to 0.1.0. It pins the `linux-amd64` and `linux-arm64` binaries
+  of [runner-v0.2.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.2.0)
+  by their SHA-256. "Add machine" now offers 0.2.0, the binary and the
+  `ghcr.io/aixlehq/aixle-runner:0.2.0` image, and an idle machine on 0.1.0 that
+  has not opted out is offered the update. 0.2.0 brings the callback proxy,
+  `check-in` and uploads over 1 MiB, and the published image as a host runner
+  in Docker. Runner protocol 1 only, and no minimum runner version.
 - **Sign-in & onboarding**: any member, not only an admin, can skip connecting an
   agent during onboarding ("Skip for now", then confirm) and look around first.
   Workflows, sessions and the Builder stay blocked until they connect an agent in
   Profile settings.
+
+### Fixed
+- **Sessions & Runs**: starting a session from the New session drawer opens it
+  instead of asking "Discard unsaved changes?". Answering "Keep editing" there
+  left the started session running and let a second Start launch a duplicate.
+- **Integrations**: Slack no longer switches itself off when Slack reports that
+  a member's own token was revoked, for example when someone leaves the
+  workspace. Only removing the app, or revoking its bot token, disconnects the
+  workspace now.
+- **Admin**: on the dashboard, a company that pays through AWS Marketplace is
+  counted as paying, not as "Not billed · no Stripe customer". The Companies tile
+  now groups companies by the same Account status, Account type and Billing method
+  as the table. A trial that opened card entry but never finished it no longer
+  shows "SaaS – Stripe" as its billing method.
 
 ## [1.12.0] - 2026-11-12
 
@@ -1325,7 +1352,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.12.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.13.0...develop
+[1.13.0]: https://github.com/AixleHQ/flow/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/AixleHQ/flow/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/AixleHQ/flow/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/AixleHQ/flow/compare/v1.9.0...v1.10.0

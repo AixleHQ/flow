@@ -93,6 +93,32 @@ class Webhooks::SlackControllerTest < ActionDispatch::IntegrationTest
     assert @integration.reload.inactive?
   end
 
+  test "revoking only users' tokens leaves the workspace connected for every company" do
+    other = create(:user, :with_company)
+    peer = Integration.create!(provider: :slack, company: other.companies.first, connected_by: other, name: "Acme",
+                               status: :active, settings: { "team_id" => "T1" })
+    raw = { type: "event_callback", team_id: "T1",
+            event: { type: "tokens_revoked", tokens: { oauth: [ "U0MEMBER1" ], bot: [] } } }.to_json
+
+    post "/webhooks/slack/events", params: raw, headers: slack_headers(raw)
+
+    assert_response :ok
+    assert @endpoint.reload.enabled
+    assert [ @integration, peer ].map(&:reload).all?(&:active?)
+    assert_equal "active", peer.chat_workspace.reload.status
+  end
+
+  test "revoking the bot token deactivates the install" do
+    raw = { type: "event_callback", team_id: "T1",
+            event: { type: "tokens_revoked", tokens: { oauth: [ "U0MEMBER1" ], bot: [ "U0BOT0001" ] } } }.to_json
+
+    post "/webhooks/slack/events", params: raw, headers: slack_headers(raw)
+
+    assert_response :ok
+    assert_not @endpoint.reload.enabled
+    assert @integration.reload.inactive?
+  end
+
   test "a renamed connected channel keeps its new name, and nothing is queued for it" do
     channel = connect_chat_channel(company: @company, integration: @integration, external_id: "C0DEPLOYS1", name: "deploys")
     raw = { type: "event_callback", team_id: "T1",

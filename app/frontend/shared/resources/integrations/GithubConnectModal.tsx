@@ -46,7 +46,7 @@ export const GithubConnectModal = ({ opened, onClose, basePath, github }: Props)
     setError(null);
   }, [onClose]);
 
-  const requestClose = useUnsavedChanges({ opened, dirty: pat !== '', onClose: close });
+  const requestClose = useUnsavedChanges({ opened, dirty: pat !== '', saving: loading, onClose: close });
 
   const installApp = useCallback(() => {
     // Server-side endpoint mints a SIGNED state (Oauth::State) and redirects to GitHub's

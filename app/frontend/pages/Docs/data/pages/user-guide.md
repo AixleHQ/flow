@@ -66,8 +66,10 @@ retry or skip on failure, or pause until a person approves them.
 **A session runs on a person's credential.** A run belongs to someone. A
 card's run belongs to its assignee when they have a connected agent, else to
 whoever moved the card or pressed **Run** on it; a workflow started by hand
-belongs to whoever pressed **Run**; any other trigger runs as its creator,
-because nobody is at the keyboard when it fires. Each step uses that person's
+belongs to whoever pressed **Run**; any other trigger runs as its creator, or
+whoever it was pointed at, because nobody is at the keyboard when it fires. A
+card assigned to a [team](/docs/people-and-access#project-teams), or a trigger that runs as one, hands each run to
+one member whose agent can take it. Each step uses that person's
 credential for its runtime, and acts as that person: the agent's board
 comments, attachments, moves and gates, and its tracker uploads, are recorded
 under their name. Before its container starts, a session can wait in the

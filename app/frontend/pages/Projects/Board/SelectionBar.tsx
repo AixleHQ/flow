@@ -130,7 +130,7 @@ function AddTagModal({
     setTag('');
     onClose();
   };
-  const requestClose = useUnsavedChanges({ opened, dirty: tag.trim() !== '', onClose: close });
+  const requestClose = useUnsavedChanges({ opened, dirty: tag.trim() !== '', saving: false, onClose: close });
 
   const submit = () => {
     const trimmed = tag.trim();

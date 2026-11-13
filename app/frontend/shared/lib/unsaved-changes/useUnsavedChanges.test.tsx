@@ -11,7 +11,7 @@ import { useUnsavedChanges } from './useUnsavedChanges';
 
 function NoteDialog({ onClose }: { onClose: () => void }) {
   const [note, setNote] = useState('');
-  const requestClose = useUnsavedChanges({ dirty: note !== '', onClose });
+  const requestClose = useUnsavedChanges({ dirty: note !== '', saving: false, onClose });
 
   return (
     <Modal opened onClose={requestClose} title="Add note" closeButtonProps={{ 'aria-label': 'Close' }}>
@@ -21,11 +21,20 @@ function NoteDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-function NameForm({ label = 'Name', onSave }: { label?: string; onSave?: (name: string) => Promise<boolean> }) {
+function NameForm({
+  label = 'Name',
+  saving = false,
+  onSave,
+}: {
+  label?: string;
+  saving?: boolean;
+  onSave?: (name: string) => Promise<boolean>;
+}) {
   const [saved, setSaved] = useState('Acme');
   const [name, setName] = useState('Acme');
   useUnsavedChanges({
     dirty: name !== saved,
+    saving,
     onSave: onSave
       ? async () => {
           const ok = await onSave(name);
@@ -147,6 +156,18 @@ describe('useUnsavedChanges — leaving the page', () => {
     await user.click(within(await discardQuestion()).getByRole('button', { name: 'Discard' }));
 
     expect(router.visit).toHaveBeenCalledWith(elsewhereUrl(), expect.objectContaining({ method: 'get' }));
+  });
+
+  it('lets a visit through while the form is saving, and holds it again once the save ends', async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderPage(<NameForm saving />);
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), ' Inc');
+
+    expect(visitHeld(elsewhere)).toBe(false);
+
+    rerender(<NameForm saving={false} />);
+
+    expect(visitHeld(elsewhere)).toBe(true);
   });
 
   it('stays on the page on Keep editing', async () => {

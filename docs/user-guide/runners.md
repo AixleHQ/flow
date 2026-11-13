@@ -152,3 +152,19 @@ the images are built for arm64.
 - On a self-hosted installation the machine must reach the runner gateway
   (`/runner/v1`) on the platform's host. If the gateway is served on a private
   address, the machine has to be inside that network or on its VPN.
+
+## Using your own agent image
+
+A runner starts every session in the stock image of the session's agent. To use
+your own image (built `FROM` the Aixle base image), set **Image override** in
+the runner's settings.
+
+The override is one image for every session on the runner. A runner that serves
+several agents puts `{agent}` in it, which is replaced when the session starts
+with the image name of the session's agent (`claude-code`, `cursor-cli`,
+`codex`, …). For example `ghcr.io/aixlehq/flow-{agent}:develop` starts a Claude
+Code session in `ghcr.io/aixlehq/flow-claude-code:develop`. `{agent}` is the
+only placeholder. The runner isn't saved if the override has another one, or
+isn't an image reference once `{agent}` is replaced. As in Docker, the first
+part of the path is a registry only when it has a `.` or a port, or is
+`localhost`; any other part must be lowercase, so `UPPER/flow-{agent}` is refused.

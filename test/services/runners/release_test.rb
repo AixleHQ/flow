@@ -27,22 +27,24 @@ class Runners::ReleaseTest < ActiveSupport::TestCase
     create(:runner_environment, runner: @runner, os: "linux", arch: arch, runner_version: "1.4.0", protocol_version: "1")
   end
 
-  # The digests of runner-v0.1.0's checksums.txt
-  # (https://github.com/AixleHQ/flow/releases/tag/runner-v0.1.0).
+  # The digests of runner-v0.1.0's and runner-v0.2.0's checksums.txt
+  # (https://github.com/AixleHQ/flow/releases/tag/runner-v0.1.0, …/runner-v0.2.0).
   RELEASED = {
     "0.1.0" => { "linux-amd64" => "55af0ecb22c70f52ca4213f7f310c6321ba0e1d175545f663c1c948107caad44",
-                 "linux-arm64" => "e27d43e8d29ec520f5868b4394d66c9e95ea7476ffc3ee3d0a85e6b259527441" }
+                 "linux-arm64" => "e27d43e8d29ec520f5868b4394d66c9e95ea7476ffc3ee3d0a85e6b259527441" },
+    "0.2.0" => { "linux-amd64" => "d60316a9f7e42b9b66c62bdd109ec54f2469e81416a123e16e8a8242bbf3fe68",
+                 "linux-arm64" => "4ce66c64b9406e700ded79f29b4576d5b005907391f5d28efe2b241beb8fb4ee" }
   }.freeze
 
   test "the committed pins are config/settings.yml's runners.release block, read through Settings" do
-    assert_equal({ "protocol_supported" => [ 1 ], "min_version" => nil, "recommended_version" => "0.1.0",
+    assert_equal({ "protocol_supported" => [ 1 ], "min_version" => nil, "recommended_version" => "0.2.0",
                    "download_url" => PINS["download_url"],
                    "binaries" => RELEASED.transform_values { |platforms| platforms.transform_values { |digest| { "sha256" => digest } } } },
                  Settings.runners.release.to_h.deep_stringify_keys)
     pins = Runners::Release.pins
     assert_equal [ 1 ], pins.protocol_supported
     assert_nil pins.min_version
-    assert_equal Runners::Version.parse("0.1.0"), pins.recommended_version
+    assert_equal Runners::Version.parse("0.2.0"), pins.recommended_version
     assert_equal RELEASED, pins.binaries
     assert_equal "https://github.com/AixleHQ/flow/releases/download/runner-v0.1.0/aixle-runner-linux-amd64",
                  Runners::Release.binary("0.1.0", "linux-amd64").url

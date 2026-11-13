@@ -100,7 +100,7 @@ export const SEARCH_INDEX: SearchResult[] = [
     slug: 'people-and-access',
     title: 'Team & access',
     section: 'Using Flow',
-    desc: 'Admin, employee and viewer roles, company members, project collaborators, and what each role can see.',
+    desc: 'Admin, employee and viewer roles, company members, project collaborators, project teams that share runs between members, and what each role can see.',
   },
   {
     slug: 'signing-in',
