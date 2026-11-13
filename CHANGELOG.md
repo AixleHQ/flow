@@ -17,8 +17,7 @@ governance, community health — carry none.
 - **Integrations**: Connect GitHub under Profile → Connected accounts no longer
   fails with "The authorization came back from a different server". GitHub names
   itself `https://github.com/login/oauth` in its authorization response, and the
-  connection now expects that. An unused GitHub client record left by a failed
-  attempt stays in place and does no harm.
+  connection now expects that.
 
 ## [1.13.0] - 2026-11-13
 
