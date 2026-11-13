@@ -1043,6 +1043,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
                            "https://github.com/acme/my-app.git /workspace/repo/my-app"
     assert_includes clone, "credential.https://github.com/acme/my-app.git.helper /workspace/.aixle/git-credential-aixle"
     assert_includes clone, "chown -R 1001:1001 /workspace/repo/my-app"
+    assert_includes clone, "git config --system --add safe.directory /workspace/repo/my-app"
     assert commands.none? { |c| c.include?("ghs_test_token") }, "the token must never be part of a command"
 
     header_file = runtime.fs.keys.find { |path| path.start_with?("/tmp/.aixle-git-") }
