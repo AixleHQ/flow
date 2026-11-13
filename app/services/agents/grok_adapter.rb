@@ -210,7 +210,7 @@ module Agents
       env = {
         "MITM_LOG_PATH" => "/var/log/mitm/http.log",
         "MITM_TRACKED_DOMAINS" => MITM_DOMAINS.join(",")
-      }
+      }.merge(telemetry_env(session, callbacks))
 
       # Inject the API key from the credential of THIS session's company: keys are per
       # company so the vendor bill lands on the company that ran the session.
@@ -219,6 +219,30 @@ module Agents
       env["XAI_API_KEY"] = api_key if api_key.present?
 
       env
+    end
+
+    # The CLI's own OpenTelemetry — logs and metrics, with every content switch
+    # (docs/design/agent-telemetry.md) — for a session with full telemetry
+    # (TerminalSession#full_telemetry?); Flow's usage comes from the MITM log
+    # (#collect_usage). The CLI ignores OTEL_RESOURCE_ATTRIBUTES, so the session is named in
+    # headers, which otlp-ingest turns into the resource attributes the ingest checks. A
+    # session without a collector exports nothing.
+    def telemetry_env(session, callbacks)
+      endpoint = callbacks ? callbacks[:otel] : Settings.otel.endpoint.to_s
+      token = session&.route_token
+      return {} if endpoint.blank? || token.blank? || !session.full_telemetry?
+
+      {
+        "GROK_EXTERNAL_OTEL" => "1",
+        "OTEL_EXPORTER_OTLP_ENDPOINT" => endpoint,
+        "OTEL_EXPORTER_OTLP_HEADERS" =>
+          "X-Aixle-Session-Token=#{token},X-Aixle-Session-Key=#{UsageStatistics::SessionKey.generate(token)}",
+        "OTEL_LOGS_EXPORTER" => "otlp",
+        "OTEL_METRICS_EXPORTER" => "otlp",
+        "OTEL_LOG_USER_PROMPTS" => "1",
+        "OTEL_LOG_TOOL_DETAILS" => "1",
+        "OTEL_LOG_TOOL_CONTENT" => "1"
+      }
     end
 
     # A stray XAI_API_KEY outranks a stored session token in the CLI's credential
@@ -336,12 +360,9 @@ module Agents
     # Usage Collection
     # =================================================================
 
-    # Grok CLI's own OpenTelemetry export cannot be correlated back to an Aixle
-    # session: its resource attributes are a fixed, audited set (it ignores
-    # OTEL_RESOURCE_ATTRIBUTES outright) and out-of-schema attribute keys are dropped
-    # at export, so `terminal_session_token` — the only thing UsageStatisticsService
-    # matches on — can never reach the collector. Usage therefore comes from the MITM
-    # log at cleanup, the same source CursorCli and Codex fall back to.
+    # Usage comes from the MITM log at cleanup, the same source CursorCli and Codex fall
+    # back to. The CLI's own OpenTelemetry (#telemetry_env), where a session sends it,
+    # carries no cost, and its attribute keys are a fixed, audited set.
     #
     # Model traffic goes over HTTPS to api.x.ai (API-key login) or to
     # cli-chat-proxy.grok.com (the default signed-in/OAuth login) — both are tracked, see

@@ -13,6 +13,10 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Fixed
+- **Sessions & Runs**: the web log no longer prints, on every request, the
+  OpenTelemetry spans a Copilot CLI session sends every couple of seconds.
+
 ## [1.13.1] - 2026-11-13
 
 ### Fixed

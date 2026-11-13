@@ -782,6 +782,18 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_not context_service(session).credential_workflow_config(nil, []).key?(:reasoning_effort)
   end
 
+  test "credential_workflow_config asks for full telemetry only of a session that has it and a collector" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "claude_code")
+    runner = mock("runtime")
+    on_runner = context_service(session, runtime: runner)
+    runner.stubs(:callback_url).with(:otel, anything).returns(nil)
+
+    refute context_service(session).credential_workflow_config(nil, [])[:full_telemetry]
+    session.stubs(:full_telemetry?).returns(true)
+    assert context_service(session).credential_workflow_config(nil, [])[:full_telemetry]
+    refute on_runner.credential_workflow_config(nil, [])[:full_telemetry]
+  end
+
   test "assemble_session_context orchestrates all steps in order" do
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
                      mode: "interactive")
