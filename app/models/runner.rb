@@ -55,6 +55,8 @@ class Runner < ApplicationRecord
   validate :config_matches_schema, if: -> { runner_type.present? && (new_record? || config_or_type_changing?) }
 
   scope :not_deleted, -> { where(deleted_at: nil) }
+  # Never seen, or last seen before `time`.
+  scope :not_seen_since, ->(time) { where(last_seen_at: nil).or(where(arel_table[:last_seen_at].lt(time))) }
   # What a picker offers: the company's runners and the project's own, live
   # ones only. What a reference may name, deleted ones included, is
   # TenantScope.owned(Runner, project:).

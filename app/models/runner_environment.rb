@@ -38,10 +38,11 @@ class RunnerEnvironment < ApplicationRecord
 
   scope :free, -> { where(state: "registered", current_session_id: nil) }
   scope :heard, ->(now = Time.current) { where(last_heartbeat_at: (now - ONLINE_WINDOW)..) }
+  # Never heard, or last heard at or before `time`.
+  scope :not_heard_since, ->(time) { where(last_heartbeat_at: nil).or(where(arel_table[:last_heartbeat_at].lteq(time))) }
   # Executing an op it was delivered, within the op's deadline.
   scope :executing_op, ->(now = Time.current) {
-    where(id: RunnerOperation.where(state: "delivered").where("runner_operations.deadline_at > ?", now)
-                             .select(:runner_environment_id))
+    where(id: RunnerOperation.delivered_before_deadline(now).select(:runner_environment_id))
   }
   scope :reachable, ->(now = Time.current) { heard(now).or(executing_op(now)) }
 
