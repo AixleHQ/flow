@@ -22,11 +22,13 @@ module ContainerRuntime
   # The phases:
   #
   # - pull_image does nothing, as KubernetesRuntime#pull_image: the runner
-  #   pulls the image in `container.start`.
+  #   pulls the image in `container.start`. The image is the one this runtime
+  #   chooses (runner_image), not the hosted image the strategy resolves.
   # - create_container takes a free machine of the session's runner, the first
   #   phase that needs one (Runners::Machines; every machine busy is a
   #   CapacityError, so the session waits), and sends `container.start` with
-  #   the image reference as it was given, a tag or a digest: the runner always
+  #   the image runner_image chooses (the runner's override, else the runner
+  #   default), as the reference was given, a tag or a digest: the runner always
   #   pulls it, then creates and starts the container in one op, as a
   #   Kubernetes pod is created running. The container's environment, which
   #   carries the session's secrets, exists only in this phase
@@ -169,7 +171,7 @@ module ContainerRuntime
     def pull_image(image)
       raise ArgumentError, "image is required" if image.blank?
 
-      Rails.logger.info("[RunnerRuntime] Pull image is a no-op: the runner pulls #{image} in container.start")
+      Rails.logger.info("[RunnerRuntime] Pull image is a no-op: the runner pulls the image runner_image chooses in container.start")
       { status: :skipped, image: image, duration_seconds: 0 }
     end
 

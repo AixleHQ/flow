@@ -1,5 +1,9 @@
 # Connecting Microsoft Teams
 
+This page is about the Microsoft Teams chat app. Teams of project members that
+share runs between their agent subscriptions are
+[Project teams](/docs/project-teams).
+
 Microsoft Teams connects for the whole **company** or for **one project**. A
 company-wide connection serves every project in the company; a project
 connection serves that project alone. From then on:
@@ -226,7 +230,7 @@ failure instead, and **Nothing** keeps the thread quiet.
 ### Who the run belongs to
 
 A Teams-started run belongs to whoever **Runs as** names on the trigger — the
-person who added it, unless it was pointed at another member or at a [team](/docs/people-and-access#project-teams),
+person who added it, unless it was pointed at another member or at a [team](/docs/project-teams),
 which hands each run to one of its members — and it uses their credentials, as
 with Slack. Anyone in the organization who can address
 the app in an accepted conversation can start it. Flow records who asked: it is

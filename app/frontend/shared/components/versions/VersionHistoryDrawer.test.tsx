@@ -118,6 +118,30 @@ describe('VersionHistoryDrawer', () => {
     expect(onReverted).toHaveBeenCalled();
   });
 
+  it('does not offer back in a revert what has been deleted since', async () => {
+    answerFetch({
+      [`GET ${listPath}`]: {
+        versions: [version({ id: 12, number: 2 }), version({ id: 11, number: 1 })],
+        nextBefore: null,
+        currentVersionNumber: 2,
+      },
+      [`GET ${listPath}/11`]: detail({
+        versionableType: 'Workflow',
+        snapshot: { name: 'Release', config: { base_repository_ids: [1, 2] }, steps: [] },
+        currentSnapshot: { name: 'Release', config: { base_repository_ids: [] }, steps: [] },
+        references: { Repository: { '1': { name: 'acme/app', archived: false } } },
+      }),
+    });
+
+    renderDrawer({ versionableType: 'Workflow' });
+    await userEvent.click(await screen.findByRole('button', { name: /v1 Saved/ }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Revert to v1' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Revert to v1?' });
+
+    expect(within(dialog).getByText('acme/app')).toBeInTheDocument();
+    expect(within(dialog).queryByText(/#2/)).not.toBeInTheDocument();
+  });
+
   it('says so when someone saved in between', async () => {
     answerFetch({
       [`GET ${listPath}`]: {

@@ -37,7 +37,7 @@ class Web::DocsController < Web::ApplicationController
   PAGES = %w[using-flow getting-started project-home tasks running-workflows starting-work
              sessions-and-runs session-queues plans-and-limits aws-marketplace-billing assets personas
              agent-capabilities repositories ai-builder
-             people-and-access signing-in secrets templates analytics company-workspace examples
+             people-and-access project-teams signing-in secrets templates analytics company-workspace examples
              user-guide prompt-guide quick-start agents runtimes runners tools mcp board workflows
              triggers-and-gates integrations github gitlab bitbucket azure-devops jira linear youtrack trackers slack teams coder
              configuration configuring-sso reference cli-ref

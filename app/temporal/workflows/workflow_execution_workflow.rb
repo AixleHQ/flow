@@ -80,6 +80,7 @@ module Workflows
       @step_failure_counts = {}
       # step_run_ids where CompleteStepActivity detected a quota error — must never be retried
       @quota_error_step_run_ids = {}
+      @auth_error_step_run_ids = {}
     end
 
     def reset_signal_state
@@ -297,7 +298,14 @@ module Workflows
 
     def recover_from_step_completion_failure(step_data, step_run_id, failed_outcome)
       return failed_outcome if failed_outcome != :failed
-      return :failed if @quota_error_step_run_ids[step_run_id] && !handed_to_next_team_member?(step_data, step_run_id)
+
+      quota_stop = @quota_error_step_run_ids[step_run_id]
+      if (quota_stop || @auth_error_step_run_ids[step_run_id]) && Temporalio::Workflow.patched("team-handoff")
+        return hand_to_next_team_member(step_data) if reassigned_to_next_team_member?(step_run_id)
+        return :failed if quota_stop
+      elsif quota_stop
+        return :failed unless handed_to_next_team_member?(step_data, step_run_id)
+      end
 
       sid = step_data["step_id"]
       @step_failure_counts[sid] = (@step_failure_counts[sid] || 0) + 1
@@ -320,11 +328,26 @@ module Workflows
       end
     end
 
-    # A step that stopped on its owner's quota is retried only when it is set to
-    # retry, has a retry left, and the run's team has another member to take it
-    # (docs/design/project-teams.md, "Retry on quota"). Without a team the same
-    # account would fail again. Code without this patch failed every quota stop,
-    # and its histories must replay that way.
+    # A step that stopped on its owner's quota or login runs again as the team's
+    # next member, whatever its on_failure says and without spending its retries
+    # (docs/design/project-teams.md, "Handing a run on"). The handoff never returns
+    # a run to a member it has left, so it ends after at most one per member.
+    # Without a team, or with nobody left, a quota stop fails the step: the same
+    # account would fail again. A login failure goes on to the step's on_failure.
+    def reassigned_to_next_team_member?(step_run_id)
+      result = execute_activity(activities.workflow_reassign_run_owner_activity,
+        { workflow_run_id: @workflow_run_id, step_run_id: step_run_id }, start_to_close_timeout: 60)
+      result["reassigned"] == true
+    end
+
+    def hand_to_next_team_member(step_data)
+      @retry_overrides[step_data["step_id"]] = create_retry_step_run(step_data)
+      execute_step(step_data)
+    end
+
+    # Before team-handoff: a quota stop was handed on only when the step was set to
+    # retry and had a retry left, and the handoff spent it. Histories recorded then
+    # must replay that way.
     def handed_to_next_team_member?(step_data, step_run_id)
       return false unless step_data["on_failure"].to_s == "retry"
 
@@ -379,6 +402,7 @@ module Workflows
       result = execute_activity(activities.workflow_complete_step_activity,
         { step_run_id: step_run_id }, start_to_close_timeout: 300)
       @quota_error_step_run_ids[step_run_id] = true if result["quota_error"]
+      @auth_error_step_run_ids[step_run_id] = true if result["auth_error"]
       result["failed"] ? :failed : :completed
     end
 

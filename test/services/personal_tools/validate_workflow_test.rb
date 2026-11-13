@@ -25,19 +25,20 @@ module PersonalTools
       assert_empty report["errors"]
     end
 
-    test "reports empty workflows, blank instructions and resources that are gone or disabled" do
+    test "reports empty workflows, blank instructions and resources that are disabled or not in the project" do
       assert_includes validate["errors"], "Workflow has no steps"
 
       step = create(:step, workflow: @workflow, name: "Review", instructions: "")
       disabled = create(:mcp_server, scope: @project, enabled: false)
       step.update!(mcp_server_ids: [ disabled.id ])
-      step.update_column(:repository_ids, [ 999_999 ])
+      foreign = create(:repository, scope: create(:project, :standalone))
+      StepResourceLink.replace!(step, :repository_id, [ foreign.id ])
 
       errors = validate["errors"]
 
       assert_includes errors, "Step 'Review' has no instructions"
       assert errors.any? { |e| e.include?("mcp server #{disabled.id}") }
-      assert errors.any? { |e| e.include?("repository 999999") }
+      assert errors.any? { |e| e.include?("repository #{foreign.id}") }
       assert validate["warnings"].any? { |w| w.include?("no agent") }
     end
 

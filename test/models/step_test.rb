@@ -315,11 +315,12 @@ class StepTest < ActiveSupport::TestCase
     assert step.valid?, step.errors.full_messages.to_sentence
   end
 
-  test "a stale foreign id already on the step does not block unrelated edits" do
+  test "a stale foreign id already on the step does not block an edit that sends the list again" do
     step = create(:step, workflow: @workflow)
-    step.update_column(:mcp_server_ids, [ create(:mcp_server, scope: create(:project, :standalone)).id ])
+    StepResourceLink.replace!(step, :mcp_server_id, [ create(:mcp_server, scope: create(:project, :standalone)).id ])
+    step.reload
 
-    assert step.reload.update(name: "Renamed"), step.errors.full_messages.to_sentence
+    assert step.update(name: "Renamed", mcp_server_ids: step.mcp_server_ids), step.errors.full_messages.to_sentence
   end
 
   test "upstream_step_ids is every live step it runs after, nearest first" do
@@ -404,15 +405,44 @@ class StepTest < ActiveSupport::TestCase
     assert_empty linked(other, :repository_id)
   end
 
-  test "an id the list still carries for a deleted resource gets no link" do
+  test "an assigned id whose resource is gone is dropped, not refused" do
     gone = create(:repository, scope: @project).tap(&:destroy!)
     live = create(:repository, scope: @project)
     step = create(:step, workflow: @workflow)
-    step.update_column(:repository_ids, [ gone.id ])
 
     step.update!(repository_ids: [ gone.id, live.id ])
 
     assert_equal [ live.id ], linked(step, :repository_id)
+  end
+
+  test "a step's lists are read from its links, so a deleted resource is no longer in them" do
+    kept, deleted = create_list(:repository, 2, scope: @project)
+    step = create(:step, workflow: @workflow, repository_ids: [ deleted.id, kept.id ])
+
+    deleted.destroy!
+
+    assert_equal [ kept.id ], step.reload.repository_ids
+  end
+
+  test "a list reads as assigned until the step is saved, then from its links" do
+    repository = create(:repository, scope: @project)
+    step = create(:step, workflow: @workflow)
+    assert_empty step.repository_ids
+
+    step.repository_ids = [ repository.id ]
+    assert_equal [ repository.id ], step.repository_ids
+
+    step.save!
+    assert_equal [ repository.id ], step.repository_ids
+  end
+
+  test "a config item deleted since does not block saving the step" do
+    item = create(:config_item, scope: @project)
+    step = create(:step, workflow: @workflow, config_item_ids: [ item.id ])
+
+    item.destroy!
+
+    assert step.reload.update(name: "Renamed"), step.errors.full_messages.to_sentence
   end
 
   private

@@ -191,3 +191,5 @@ A self-hosted deployment changes the default for all its runners with
 `RUNNER_AGENT_IMAGE_PREFIX`, `RUNNER_AGENT_IMAGE_TAG` (default `latest`) and the
 per-runtime `RUNNER_AGENT_IMAGE_<RUNTIME>` variables (see the configuration
 reference).
+`latest` moves with every stable release, so pin `RUNNER_AGENT_IMAGE_TAG` to the
+release the deployment runs in production.

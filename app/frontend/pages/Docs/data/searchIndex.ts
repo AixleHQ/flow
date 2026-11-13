@@ -100,7 +100,13 @@ export const SEARCH_INDEX: SearchResult[] = [
     slug: 'people-and-access',
     title: 'Team & access',
     section: 'Using Flow',
-    desc: 'Admin, employee and viewer roles, company members, project collaborators, project teams that share runs between members, and what each role can see.',
+    desc: 'Admin, employee and viewer roles, company members, project collaborators, and what each role can see.',
+  },
+  {
+    slug: 'project-teams',
+    title: 'Project teams',
+    section: 'Using Flow',
+    desc: 'Teams of project members that cards are assigned to and triggers run as: strategies, who can take a run, quota holds and expired logins, handing a run to the next member, and who manages teams.',
   },
   {
     slug: 'signing-in',

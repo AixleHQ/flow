@@ -107,7 +107,7 @@ trail with who made it and the old and new member. Over MCP, the same change is
 ### Running as a team
 
 **Runs as** can also name one of the project's
-[teams](/docs/people-and-access#project-teams) — offered when the trigger is
+[teams](/docs/project-teams) — offered when the trigger is
 added as well as later, to the same people who may change it. Each run then
 goes to one member of the team, picked by the team's strategy from the members
 whose agents can take it, and belongs to that member from then on. The trigger

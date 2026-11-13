@@ -25,7 +25,7 @@ class WorkflowDuplicator
       new_workflow = @target_scope.workflows.new(
         name: available_name,
         description: @source.description,
-        config: remapped_config(@source.config.deep_dup)
+        config: remapped_config(@source.linked_config)
       )
 
       Versions.save!(new_workflow, actor: @actor, metadata: { "duplicated_from" => @source.id }) do
@@ -46,7 +46,7 @@ class WorkflowDuplicator
     step_id_map = {}
     step_pairs = []
 
-    @source.steps.not_deleted.order(:position).each do |step|
+    @source.steps.not_deleted.includes(:resource_links).order(:position).each do |step|
       new_step = duplicate_step(step, new_workflow)
       step_id_map[step.id] = new_step.id
       step_pairs << [ step, new_step ]

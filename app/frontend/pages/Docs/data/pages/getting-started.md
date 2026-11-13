@@ -38,7 +38,7 @@ Everything personal lives in **Profile**, on three tabs.
 
 | Tab | What is there |
 | --- | --- |
-| **Account** | Your display name, your connected agent credentials, default models, the companies you belong to, and the [teams](/docs/people-and-access#project-teams) you are in — with **Leave**, and a switch that keeps you out of teams altogether |
+| **Account** | Your display name, your connected agent credentials, default models, the companies you belong to, and the [teams](/docs/project-teams) you are in — with **Leave**, and a switch that keeps you out of teams altogether |
 | **Usage** | Your own sessions, tokens and spend — plus any usage window that applies to you, with the time left on it |
 | **MCP** | Personal access: generate a token so an agent you run *outside* Flow (your own Claude Code, for example) can reach your Aixle projects |
 

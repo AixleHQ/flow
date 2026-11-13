@@ -14,8 +14,41 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Fixed
+- **Workflows**: the preview before reverting a workflow no longer lists a
+  repository, skill, connector or secret deleted since as coming back. The
+  revert leaves such a resource out, and the preview now says the same.
+
+## [1.14.0] - 2026-11-13
+
+### Added
+- **Tasks**: in bulk mode, **Select all** picks every card the board shows, so
+  filtering the board to one person and then choosing **Assign** moves all of
+  their cards to a team at once.
+
+### Changed
+- **Docs**: project teams have their own page, *Project teams*, next to *Team &
+  access*, and it and *Microsoft Teams* each point to the other, so a search for
+  "teams" no longer lands only on the chat integration.
+- **Teams**: when a step of a team's run stops on its owner's agent quota or on a
+  failed login, it runs again as the team's next member whatever the step's On
+  Failure setting, and without using up a retry. Before, the step had to be set
+  to retry, which also retried every ordinary failure.
+
+### Fixed
+- **Teams**: a member whose agent login has expired is passed over instead of
+  being handed runs that then fail at launch, and the Teams page marks them
+  **Login expired**.
+- **Sessions & Runs**: a run waiting for a free session slot now reads Queued on
+  its own page and in the task's Runs tab, as it already did on the board card,
+  instead of Running while nothing is executing yet.
 - **Sessions & Runs**: the web log no longer prints, on every request, the
   OpenTelemetry spans a Copilot CLI session sends every couple of seconds.
+- **Workflows**: a repository, skill, connector or secret deleted from the
+  project drops out of every workflow and step that used it, instead of staying
+  behind in the builder as a bare id. A step whose only repository was deleted
+  now gets the project's repositories when its workflow inherits project
+  resources, rather than starting with none, and a deleted secret no longer
+  makes saving the step or workflow fail.
 
 ## [1.13.1] - 2026-11-13
 
@@ -1380,7 +1413,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.13.1...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.14.0...develop
+[1.14.0]: https://github.com/AixleHQ/flow/compare/v1.13.1...v1.14.0
 [1.13.1]: https://github.com/AixleHQ/flow/compare/v1.13.0...v1.13.1
 [1.13.0]: https://github.com/AixleHQ/flow/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/AixleHQ/flow/compare/v1.11.0...v1.12.0
