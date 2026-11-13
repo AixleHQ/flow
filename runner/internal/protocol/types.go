@@ -74,7 +74,6 @@ type RegisterRequest struct {
 	OS         string         `json:"os"`
 	Arch       string         `json:"arch"`
 	Facts      map[string]any `json:"facts"`
-	Ephemeral  bool           `json:"ephemeral"`
 	AutoUpdate *bool          `json:"auto_update,omitempty"`
 }
 

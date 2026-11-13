@@ -49,8 +49,6 @@ class RunnerEnvironment < ApplicationRecord
   validates :display_name, presence: true, if: :origin_registered?
   validates :display_name, :os, :arch, :runner_version, :protocol_version, length: { maximum: 255 }
   validate :facts_is_an_object
-  # Reserved for an ephemeral registration (§6.3), which v1 refuses.
-  validates :ephemeral, inclusion: { in: [ false ] }
   validate :company_matches_runner, if: -> { runner && company_id }
 
   def heard?(now = Time.current, within: ONLINE_WINDOW)

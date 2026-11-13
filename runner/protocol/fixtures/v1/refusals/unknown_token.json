@@ -30,8 +30,7 @@
           "name": "build-01",
           "os": "linux",
           "arch": "amd64",
-          "facts": {"docker": "27.1.0"},
-          "ephemeral": false
+          "facts": {"docker": "27.1.0"}
         }
       },
       "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}

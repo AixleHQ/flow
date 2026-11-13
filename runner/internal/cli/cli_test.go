@@ -153,7 +153,7 @@ func TestConfigureRegistersAndStoresTheCredentials(t *testing.T) {
 	r := p.requests[0]
 	facts, _ := r.body["facts"].(map[string]any)
 	if r.auth != "Bearer arreg_token" || r.body["name"] != "build-01" || r.body["os"] != "linux" || r.body["arch"] != "arm64" ||
-		r.body["ephemeral"] != false || facts["docker"] != "27.1.0" || facts["docker_api"] != "1.47" {
+		facts["docker"] != "27.1.0" || facts["docker_api"] != "1.47" {
 		t.Fatalf("register sent %#v", r)
 	}
 
@@ -253,11 +253,10 @@ func TestConfigureRefusals(t *testing.T) {
 		answer answer
 		want   string
 	}{
-		"invalid_token":           {refused(401, "invalid_token"), "unknown, used or expired"},
-		"invalid_registration":    {refused(422, "invalid_registration"), "was not spent"},
-		"ephemeral_not_supported": {refused(422, "ephemeral_not_supported"), "was not spent"},
-		"runners_disabled":        {refused(403, "runners_disabled"), "try again later with the same token"},
-		"unsupported_protocol":    {refused(400, "unsupported_protocol"), "update aixle-runner"},
+		"invalid_token":        {refused(401, "invalid_token"), "unknown, used or expired"},
+		"invalid_registration": {refused(422, "invalid_registration"), "was not spent"},
+		"runners_disabled":     {refused(403, "runners_disabled"), "try again later with the same token"},
+		"unsupported_protocol": {refused(400, "unsupported_protocol"), "update aixle-runner"},
 		"runner_version_unsupported": {answer{400, map[string]any{
 			"error": "runner_version_unsupported", "message": "aixle-runner 0.0.0-dev is no longer supported (minimum 0.1.0)."}},
 			"is no longer supported (minimum 0.1.0). The registration token was not spent: update aixle-runner"},

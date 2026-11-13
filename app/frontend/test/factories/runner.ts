@@ -57,7 +57,6 @@ export const MANUAL_CONFIG_SCHEMA: JsonSchema = {
   type: 'object',
   additionalProperties: false,
   properties: {
-    reconnect_grace: { type: 'integer', minimum: 60, maximum: 7200, default: 900 },
     auto_update: { type: 'boolean', default: true },
     container: {
       type: 'object',
