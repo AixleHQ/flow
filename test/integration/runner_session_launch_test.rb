@@ -78,6 +78,9 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     assert_equal({ "capacity_wait" => true }, run_phase(second, "create_container"))
     assert_match(/Waiting for a free machine on runner "Build farm" \(1 of 1 busy\)/,
                  second.session_admission.reload.last_error)
+    assert_equal "runner_capacity", second.session_admission.wait_reason
+    assert_equal "runner_capacity", second.session_admission.launch_phase
+    assert_includes SessionAdmission.waiting.pluck(:id), second.session_admission.id
 
     run_phases(first, %w[start_container exec cleanup])
     run_phases(second, %w[create_container])

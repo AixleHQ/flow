@@ -141,16 +141,26 @@ class Runners::MachinesTest < ActiveSupport::TestCase
     assert_equal "Waiting for a free machine on runner \"Build farm\" (1 of 1 busy).", error.message
   end
 
-  test "a silent machine with a delivered op inside its deadline is reachable, so its runner is not offline" do
+  test "a busy machine that keeps sending heartbeats while it runs an op stays online, and a silent one is offline whatever op it holds" do
     holder = runner_session
     Runners::Machines.acquire!(holder)
-    @machine.update!(last_heartbeat_at: 5.minutes.ago)
     operation = Runners::Operations.enqueue!(@machine.reload, op: "exec", payload: { "cmd" => "true" }, session: holder,
                                                               deadline_at: 5.minutes.from_now)
     operation.update!(state: :delivered, delivered_at: Time.current)
 
+    @machine.update!(last_heartbeat_at: 30.seconds.ago)
     assert Runners::Machines.availability(@runner).available?
-    assert_raises(ContainerRuntime::CapacityError) { Runners::Machines.acquire!(runner_session) }
+
+    @machine.update!(last_heartbeat_at: 5.minutes.ago)
+    assert_equal :all_offline, Runners::Machines.availability(@runner).status, "a delivered op within its deadline no longer counts as heard"
+  end
+
+  test "the wait for a free machine carries the runner_capacity reason, not the cluster's" do
+    Runners::Machines.acquire!(runner_session)
+
+    error = assert_raises(ContainerRuntime::CapacityError) { Runners::Machines.acquire!(runner_session) }
+
+    assert_equal "runner_capacity", error.reason
   end
 
   test "availability reports every machine offline, and failed machines only when none is registered" do

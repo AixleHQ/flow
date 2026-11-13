@@ -47,6 +47,7 @@ type Handler func(ctx context.Context, sessionID *int64, payload json.RawMessage
 type Gateway interface {
 	PollOps(ctx context.Context, accessToken string, after int64, wait time.Duration) (protocol.Poll, error)
 	PostResult(ctx context.Context, accessToken string, opID int64, result protocol.Result) (protocol.ResultState, error)
+	Heartbeat(ctx context.Context, accessToken string) error
 }
 
 // Updater takes an update the platform offers (internal/update). It says whether
@@ -72,6 +73,10 @@ type Loop struct {
 	Backoff *backoff.Backoff
 	// Wait is the long-poll's wait. Zero means protocol.MaxWait.
 	Wait time.Duration
+	// HeartbeatEvery is how often a heartbeat is sent while an op runs or its
+	// result is posted, when no poll is outstanding. Zero means
+	// protocol.HeartbeatEvery.
+	HeartbeatEvery time.Duration
 	// Now and Sleep are replaced in tests.
 	Now   func() time.Time
 	Sleep func(ctx context.Context, d time.Duration) error
@@ -86,6 +91,9 @@ func (l *Loop) defaults() {
 	}
 	if l.Wait == 0 {
 		l.Wait = protocol.MaxWait
+	}
+	if l.HeartbeatEvery == 0 {
+		l.HeartbeatEvery = protocol.HeartbeatEvery
 	}
 	if l.Now == nil {
 		l.Now = time.Now
@@ -164,6 +172,8 @@ func (l *Loop) poll(ctx context.Context) (protocol.Poll, error) {
 
 func (l *Loop) handle(ctx context.Context, op protocol.Op) error {
 	log := l.Logger.With("op_id", op.ID, "sequence", op.Sequence, "op", op.Op)
+	stop := l.heartbeats(ctx, log)
+	defer stop()
 	result, err := l.resultFor(ctx, op, log)
 	if err != nil {
 		return err
@@ -176,6 +186,37 @@ func (l *Loop) handle(ctx context.Context, op protocol.Op) error {
 		return err
 	}
 	return l.Journal.Acknowledge(op.ID)
+}
+
+// heartbeats sends a heartbeat every HeartbeatEvery until the returned function
+// is called, which waits for the sender to end. The loop runs one thing at a
+// time, so while an op runs and its result is posted no poll is outstanding and
+// the platform would hear nothing (PROTOCOL.md §5.10). A failed heartbeat is
+// logged and not retried: the next one comes after the interval, and a refusal
+// that ends the runner's work reaches the loop through its own requests.
+func (l *Loop) heartbeats(ctx context.Context, log *slog.Logger) (stop func()) {
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(l.HeartbeatEvery)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+			err := l.Tokens.Do(ctx, func(access string) error { return l.Gateway.Heartbeat(ctx, access) })
+			if err != nil && ctx.Err() == nil {
+				log.Warn("heartbeat failed", "error", err)
+			}
+		}
+	}()
+	return func() {
+		cancel()
+		<-done
+	}
 }
 
 // resultFor runs the op, or answers it from the journal. A nil result means the

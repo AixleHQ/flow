@@ -176,7 +176,7 @@ returned once, by the response that issues it.
 | Kind | Prefix | Issued by | Lifetime | Sent to |
 | --- | --- | --- | --- | --- |
 | Registration | `arreg_` | The platform, for a `manual` runner ("Add machine") | Single use, valid for 1 hour | `POST /register` |
-| Access | `aracc_` | `register` and `token` | 1 hour | `DELETE /registration`, `POST /check-in`, `GET /ops`, `POST /ops/:id/result`, the proxy route |
+| Access | `aracc_` | `register` and `token` | 1 hour | `DELETE /registration`, `POST /check-in`, `POST /heartbeat`, `GET /ops`, `POST /ops/:id/result`, the proxy route |
 | Refresh | `arref_` | `register` and `token` | 30 days, and spent by its one use | `POST /token` |
 
 The rules:
@@ -223,6 +223,7 @@ A runner keeps its tokens in a file only its own user can read, and never logs t
 | `DELETE /runner/v1/registration` | access | `204` |
 | `POST /runner/v1/token` | refresh | `200` with a token pair |
 | `POST /runner/v1/check-in` | access | `200` with the environment, the config and, maybe, `update` |
+| `POST /runner/v1/heartbeat` | access | `204` |
 | `GET /runner/v1/ops` | access | `200` with up to 20 ops |
 | `POST /runner/v1/ops/:id/result` | access | `200` with the op's state |
 | `GET /runner/v1/releases/:version/:os-:arch` | none | `302` to the binary, with its pinned SHA-256 |
@@ -653,6 +654,32 @@ Its own refusals: `422 invalid_check_in`, and `400 runner_version_unsupported`.
 Schema: [`schemas/v1/check_in.request.json`](schemas/v1/check_in.request.json).
 
 Fixtures: `check_in/`.
+
+### 5.10 `POST /runner/v1/heartbeat`
+
+The host runner of a `manual` machine saying it is alive while **no poll is outstanding**. It runs one
+op at a time and does not poll while it runs one, so without a heartbeat the platform would hear
+nothing from it for as long as the op takes (an image pull of several minutes, say), and would
+count the machine offline. Authenticated with the environment's access token.
+
+The request has no body, and the gateway does not read one. A body may carry something in a later
+release; a runner sends none in protocol 1.
+
+`204 No Content`, with no body. Every authenticated request of a machine records that the
+platform heard from it, at most once every 15 seconds (`GET ops` and its answer, `POST ops/:id/result`,
+`POST check-in`, `POST token` and the proxy among them); the heartbeat is the one that does nothing
+else.
+
+**What the runner does.** While it runs an op, and while it posts the op's result, it sends a
+heartbeat **at least every 25 seconds** (`aixle-runner` sends one every 20), so that the gap
+between two requests of the machine stays under the 25 seconds of a poll. It sends none while a
+poll is outstanding, which is the heartbeat then. A heartbeat that fails is not retried: the next
+comes in its turn, and a refusal that ends the runner's work (§3) reaches it through the requests
+it makes anyway. The platform counts a machine as heard for 90 seconds after its last request.
+
+Its own refusals: none. It answers the common refusals of §3.
+
+Fixtures: `heartbeat/`.
 
 ## 6. Ops
 
@@ -1186,9 +1213,8 @@ Each of these is designed in DESIGN.md §6 and comes with its own section and fi
 
 - An OTLP route of the callback proxy (§5.8): a runner session gets no telemetry endpoint until it
   comes.
-- `POST /runner/v1/heartbeat`: task 12, with recording heartbeats and the machine health that is
-  their first reader. The host runner runs one thing at a time, so no poll is outstanding during an
-  op, and an empty `GET ops` answer is the heartbeat until then.
+- The running-session summary in the heartbeat's body (DESIGN.md §6.7, §15 task 11): the heartbeat
+  has no body in protocol 1, and a later release can add the field, which is not a breaking change.
 - `POST /runner/v1/sessions/:id/log` and live-log chunks: not built (Alex, 2026-11-11). A runner
   session's terminal is read as a hosted one's, through `exec` and `tmux capture-pane`, which is
   one `exec` op (§6.3); the live view of a runner session comes with the interactive tunnel

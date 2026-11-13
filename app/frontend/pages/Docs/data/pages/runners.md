@@ -10,8 +10,9 @@ admin or the project's owner manages the project's own.
 Runners are behind the `external_runners` feature flag: without it the pages
 do not exist for your company.
 
-This page covers adding machines to a `manual` runner. The rest of the manual
-runner's guide (machines table, health, reuse policy) is not written yet.
+This page covers adding machines to a `manual` runner, what the runner's status
+means, and what a session shows while it waits for a free machine. The rest of
+the manual runner's guide (reuse policy, scrub) is not written yet.
 
 ---
 
@@ -68,6 +69,44 @@ recommends. To turn that off, tick **Turn off self-update**, which adds
 - On a self-hosted installation the machine must reach the runner gateway
   (`/runner/v1`) on the platform's host. If the gateway is served on a private
   address, the machine has to be inside that network or on its VPN.
+
+---
+
+## What the runner's status means
+
+The runner's page and the runners list show a status, with the reason under it.
+For a `manual` runner the platform works it out from its machines once a minute,
+so it can be up to a minute behind what a machine is doing. It reads what the
+machines last reported and calls nothing on them.
+
+A machine is **online** or **idle** while the platform heard from it in the last
+90 seconds. A machine that is running a long step, such as pulling an image for
+several minutes, keeps reporting while it runs, so it stays online. A machine
+whose `aixle-runner` is older than the version that reports during a step shows
+**offline** during a long step until it updates itself.
+
+| Status | What it means |
+| --- | --- |
+| Pending | No machine has registered yet. It becomes Connected within about a minute of the first machine reporting. |
+| Connected | Every registered machine was heard in the last 90 seconds, and none has failed. |
+| Degraded | Some registered machines are offline or failed. The reason names them. Sessions still start on the machines that are online. |
+| Unreachable | No registered machine has been heard for more than 3 minutes, every machine has failed, or no machine is registered (every one was unregistered). The reason says which. |
+| Disabled, Revoked | Set by a person. The check does not change them. |
+
+The status is for you: it refuses nothing. Whether a session may start on a
+runner is decided by its machines at that moment. A runner with no machine that
+can take a session refuses the launch, and the message says why: every machine
+is offline, none is registered, or every one failed.
+
+## Waiting for a free machine
+
+A machine takes one session at a time. When a session needs a runner whose
+machines are all busy, the session waits and starts as soon as a machine is
+free. The session page says **Waiting for a free machine**, and under it names
+the runner and how many of its machines are busy:
+`Waiting for a free machine on runner "Build farm" (1 of 1 busy).` Machines that
+are offline or failed are not counted. A session that waits for a hosted
+cluster still says **Waiting for cluster capacity**.
 
 ---
 
