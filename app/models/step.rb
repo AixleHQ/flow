@@ -16,6 +16,7 @@ class Step < ApplicationRecord
 
   has_many :step_runs, dependent: :destroy
   has_many :sub_steps, -> { order(:position) }, dependent: :destroy
+  has_many :resource_links, -> { order(:position) }, class_name: "StepResourceLink", inverse_of: :step
 
   accepts_nested_attributes_for :sub_steps, allow_destroy: true
 
@@ -47,6 +48,14 @@ class Step < ApplicationRecord
   before_validation :normalize_asset_specs
   before_validation :retry_at_least_once
   after_save :mirror_resource_links
+
+  # A list assigned since the last save reads as assigned; otherwise a list is
+  # its links, which a deleted resource has already dropped out of.
+  ResourceLink::COLUMNS.each do |list, column|
+    define_method(list) do
+      new_record? || will_save_change_to_attribute?(list) ? super() : resource_links.filter_map(&column)
+    end
+  end
 
   def soft_delete!
     update_column(:deleted_at, Time.current)
@@ -116,7 +125,7 @@ class Step < ApplicationRecord
   # decide what `get_config_item` will decrypt for the step's session, so they
   # are never taken on trust from the request that set them.
   def config_item_ids_belong_to_project
-    return if config_item_ids.blank?
+    return unless will_save_change_to_attribute?(:config_item_ids) && config_item_ids.present?
 
     unless workflow&.scope_type == "Project"
       errors.add(:config_item_ids, "can only be set on a project-scoped workflow")
@@ -164,9 +173,9 @@ class Step < ApplicationRecord
   end
 
   def mirror_resource_links
-    ResourceLink::COLUMNS.each do |list, column|
-      StepResourceLink.replace!(self, column, self[list]) if saved_change_to_attribute?(list)
-    end
+    changed = ResourceLink::COLUMNS.select { |list, _| saved_change_to_attribute?(list) }
+    changed.each { |list, column| StepResourceLink.replace!(self, column, self[list]) }
+    resource_links.reset if changed.any?
   end
 
   REFERENCE_OWNERS = {

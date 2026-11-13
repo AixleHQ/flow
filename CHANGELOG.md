@@ -16,6 +16,12 @@ governance, community health — carry none.
 ### Fixed
 - **Sessions & Runs**: the web log no longer prints, on every request, the
   OpenTelemetry spans a Copilot CLI session sends every couple of seconds.
+- **Workflows**: a repository, skill, connector or secret deleted from the
+  project drops out of every workflow and step that used it, instead of staying
+  behind in the builder as a bare id. A step whose only repository was deleted
+  now gets the project's repositories when its workflow inherits project
+  resources, rather than starting with none, and a deleted secret no longer
+  makes saving the step or workflow fail.
 
 ## [1.13.1] - 2026-11-13
 

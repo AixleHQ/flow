@@ -31,7 +31,7 @@ module ProjectMove
       return if @copies.empty?
 
       steps = Step.unscoped.where(workflow_id: workflow_ids)
-      steps.find_each do |step|
+      steps.includes(:resource_links).find_each do |step|
         changes = { asset_ids: rewrite_ids(step.asset_ids), instructions: rewrite_text(step.instructions) }
                   .select { |attribute, value| value != step.public_send(attribute) }
         step.update_columns(changes) if changes.any?
@@ -41,7 +41,7 @@ module ProjectMove
         text = rewrite_text(sub_step.instructions)
         sub_step.update_columns(instructions: text) if text != sub_step.instructions
       end
-      Workflow.where(id: workflow_ids).find_each do |workflow|
+      Workflow.where(id: workflow_ids).includes(:base_resource_links).find_each do |workflow|
         ids = rewrite_ids(workflow.base_asset_ids)
         next if ids == workflow.base_asset_ids
 

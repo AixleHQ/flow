@@ -275,7 +275,7 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
                                          headers: { "Authorization" => "Bearer theirs" })
     workflow = create(:workflow, scope: @source_project, name: "Legacy")
     step = create(:step, workflow: workflow)
-    step.update_column(:mcp_server_ids, [ foreign_server.id ])
+    StepResourceLink.replace!(step, :mcp_server_id, [ foreign_server.id ])
 
     copy = WorkflowDuplicator.new(workflow, target_scope: @project, name: "Legacy copy").duplicate!
 

@@ -13,7 +13,7 @@ class WorkflowResourceTest < ActiveSupport::TestCase
   end
 
   test "run stats serialize from the attached aggregate without querying workflow runs" do
-    preloaded = Workflow.attach_run_stats(Workflow.where(id: @workflow.id).includes(:steps)).first
+    preloaded = Workflow.attach_run_stats(Workflow.where(id: @workflow.id).includes(:steps, :base_resource_links)).first
 
     payload = nil
     assert_no_queries do

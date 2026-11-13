@@ -3,9 +3,10 @@
 # One entry of a step's or a workflow's resource list. Exactly one resource
 # column is set, and its foreign key drops the entry when the resource is deleted.
 #
-# The jsonb id lists (`steps.repository_ids`, `workflows.config["base_repository_ids"]`,
-# …) are still what everything reads; Step and Workflow mirror each write here
-# until reads move over (CreateResourceLinks).
+# Every read of a list comes from here. Writes still go to the jsonb id lists
+# (`steps.repository_ids`, `workflows.config["base_repository_ids"]`, …), which
+# Step and Workflow mirror here on save, so pods of the previous release that
+# read them stay right; the lists go in the release after this one.
 module ResourceLink
   extend ActiveSupport::Concern
 
