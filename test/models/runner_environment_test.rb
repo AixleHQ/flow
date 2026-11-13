@@ -78,6 +78,51 @@ class RunnerEnvironmentTest < ActiveSupport::TestCase
     assert_equal [ never.id, stale.id, at_time.id ].sort, RunnerEnvironment.not_heard_since(now).pluck(:id).sort
   end
 
+  test "display_state: idle without a session and online with one while heard, offline after 90 seconds or never" do
+    now = Time.current
+    machine = create(:runner_environment, runner: @runner, last_heartbeat_at: now - 89.seconds)
+    assert_equal "idle", machine.display_state(now)
+
+    machine.update!(current_session: create(:runner_session, environment: machine, runner_environment: nil))
+    assert_equal "online", machine.display_state(now)
+
+    machine.update!(last_heartbeat_at: now - 91.seconds)
+    assert_equal "offline", machine.display_state(now)
+
+    machine.update!(last_heartbeat_at: nil)
+    assert_equal "offline", machine.display_state(now)
+  end
+
+  test "display_state: a silent machine executing a delivered op within its deadline is not offline" do
+    now = Time.current
+    machine = create(:runner_environment, runner: @runner, last_heartbeat_at: now - 5.minutes)
+    session = create(:runner_session, :holding, environment: machine)
+    operation = Runners::Operations.enqueue!(machine.reload, op: "exec", payload: { "cmd" => "true" }, session: session,
+                                                             deadline_at: now + 10.minutes)
+
+    assert_equal "offline", machine.display_state(now), "an op that was not delivered does not count"
+
+    operation.update!(state: :delivered, delivered_at: now - 4.minutes)
+    assert_equal "online", RunnerEnvironment.find(machine.id).display_state(now)
+    assert_equal "offline", RunnerEnvironment.find(machine.id).display_state(now + 11.minutes), "past the deadline it is offline again"
+  end
+
+  test "display_state: failed and gone machines show as such, however recently they were heard" do
+    gone = create(:runner_environment, runner: @runner, state: :gone)
+    failed = create(:runner_environment, runner: @runner)
+    Runners::Machines.fail!(failed, "env.reset failed")
+
+    assert_equal "gone", gone.display_state
+    assert_equal "failed", failed.reload.display_state
+  end
+
+  test "display_state over includes(:delivered_operations) makes no query per machine" do
+    create_list(:runner_environment, 3, runner: @runner)
+    machines = @runner.environments.includes(:delivered_operations).order(:id).to_a
+
+    assert_no_queries_match(/runner_operations/) { machines.each(&:display_state) }
+  end
+
   private
 
   def check_session_company_key
