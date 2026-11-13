@@ -13,6 +13,8 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.13.1] - 2026-11-13
+
 ### Fixed
 - **Integrations**: Connect GitHub under Profile → Connected accounts no longer
   fails with "The authorization came back from a different server". GitHub names
@@ -1358,7 +1360,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.13.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.13.1...develop
+[1.13.1]: https://github.com/AixleHQ/flow/compare/v1.13.0...v1.13.1
 [1.13.0]: https://github.com/AixleHQ/flow/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/AixleHQ/flow/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/AixleHQ/flow/compare/v1.10.0...v1.11.0
