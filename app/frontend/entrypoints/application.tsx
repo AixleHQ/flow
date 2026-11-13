@@ -7,6 +7,7 @@ import * as Sentry from '@sentry/react';
 import 'shared/lib/zodConfig';
 import { registerPreloadErrorReload } from 'shared/lib/preloadErrorReload';
 import { initSentry } from 'shared/lib/sentry';
+import { holdBrowserHistory } from 'shared/lib/unsaved-changes/guards';
 import { cssVariablesResolver, mantineTheme } from 'shared/theme/mantineTheme';
 import { InertiaRouteIndicator } from 'shared/ui';
 import { AppCrashFallback, ProviderCrashFallback } from 'shared/ui/AppCrashFallback';
@@ -42,6 +43,10 @@ try {
 // Recover from stale Vite chunk 404s after a deploy: prompt the user to reload
 // into the new version instead of landing on a broken page.
 registerPreloadErrorReload();
+
+// Must run before createInertiaApp: the unsaved-changes hold on browser Back/Forward has to sit
+// ahead of Inertia's own popstate listener, and listeners run in the order they were added.
+holdBrowserHistory();
 
 createInertiaApp({
   strictMode: true,
