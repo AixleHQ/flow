@@ -177,6 +177,72 @@ agent reviewed — Flow checks, and GitLab checks the same commit again — and
 never bypasses approval rules or protected branches. GitLab merges with the
 project's own merge method; `fast_forward` cannot be asked for.
 
+## Acting as yourself
+
+By default an agent's commits are authored by the GitLab connection's account, and
+its merge requests and comments are that account's too. To have work in your own
+name, connect your own GitLab account and let agents use it. (GitHub has the same:
+[Acting as yourself](/docs/github#acting-as-yourself).)
+
+**Connect.** Open **Profile → Connected accounts** and press **Connect GitLab**.
+GitLab asks you to authorize Flow's application; Flow keeps the connection fresh
+for you. **Disconnect** revokes the authorization on GitLab and clears your
+permissions below. If you revoke the application on GitLab instead, the card
+shows *Needs reconnect*. The button is offered only when the operator has set up
+the GitLab OAuth application ([Self-managed GitLab](#self-managed-gitlab)).
+
+**Allow it, per project.** The same tab lists your projects, with two switches
+for each GitLab account. Both start off.
+
+- **In my tasks:** agents may act as you in sessions you own.
+- **In tasks that aren't mine:** an agent working for someone else in that project
+  may take your token, when it names you.
+
+**Give the agent the tool.** Whoever configures a step, a workflow or a session
+adds the tool from the picker, under *GitLab as a user*. Flow never adds them on
+its own.
+
+| Tool | What it does |
+| --- | --- |
+| `gitlab_user_token` | A token for the person the session runs for, and the identity to commit with |
+| `gitlab_user_token_for` | The same for another member of the company, given their `user_id` (from `board_list_members` or a task's `assignee_id`) |
+
+Each tool returns the commit identity (`login`, `gitlab_id`, `name` and the
+`email` GitLab itself commits with) and a token, with the GitLab `host`, the
+`api_url`, the `git_username` (`oauth2`) and the repositories it was checked
+for. The token expires within two hours; `expires_at` says when to ask again.
+The agent should use it only in the command that needs it: it is masked in
+session logs, but it does enter the agent's context.
+
+**The token is not limited to the session's repositories.** GitLab cannot narrow
+an OAuth token to chosen repositories (GitHub can), and merge requests need the
+`api` scope. So the token can do whatever you can do on that GitLab, in every
+project you can reach. Allowing it in a project allows your whole GitLab account in
+that project's sessions. What bounds it instead: your own switches, your own
+access (it can do nothing you cannot), the two-hour lifetime, and a record and
+masking of every token handed out. Flow also checks, with your token, that you can
+push (Developer or more) to each of the session's GitLab repositories; one you cannot
+push to is listed under `skipped` and left out of `repositories`.
+
+The tool answers with a plain error when the person has not connected an account,
+has not allowed it in this project, is not a member of the project, the session
+has no user or no GitLab repository on an active connection, or they cannot push
+to any of them.
+
+Flow decides none of how the token is used. Your instructions do, for example:
+
+```bash
+# token, email and name come from gitlab_user_token
+export GIT_AUTHOR_NAME="$NAME" GIT_AUTHOR_EMAIL="$EMAIL" \
+       GIT_COMMITTER_NAME="$NAME" GIT_COMMITTER_EMAIL="$EMAIL"
+git commit -s -m "feat: ..."
+git -c credential.helper= \
+    -c credential.helper='!f() { echo username=oauth2; echo "password=$TOKEN"; }; f' \
+    push origin HEAD:feature/x
+curl -sS -H "Authorization: Bearer $TOKEN" -X POST "$API_URL/projects/$ID/merge_requests" \
+     -d source_branch=feature/x -d target_branch=main -d title="..."
+```
+
 ---
 
 ## CI gates
@@ -326,6 +392,10 @@ GITLAB_ENDPOINT=https://gitlab.example.com/api/v4
   `GITLAB_OAUTH_CLIENT_SECRET`. On gitlab.com, the deployment's operator
   registers the application under a group's **Settings → Applications**, with
   the same redirect URI and scope.
+- **Acting as yourself** needs the same OAuth application, with one more
+  redirect URI: `<PROTOCOL>://<DOMAIN>/oauth/callback`. The host must be a name,
+  not a literal IP address; Flow trusts the `GITLAB_ENDPOINT` host for the token
+  exchange, so an instance on a private network works.
 
 Sessions get the token from Flow's credential endpoint, `GIT_CREDENTIALS_URL`,
 which by default is on the internal network. Never point it at a public host,

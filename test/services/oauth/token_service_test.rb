@@ -420,6 +420,32 @@ module Oauth
       assert_equal 1, cred.reload.refresh_failure_count
     end
 
+    # == a self-managed GitLab on a private network (docs/design/gitlab-user-identity.md §2.2) ==
+
+    test "a gitlab credential refreshes against the operator's host although it resolves privately" do
+      Settings.gitlab.stubs(:endpoint).returns("https://gitlab.corp.internal/api/v4")
+      UrlSafetyValidator.stubs(:resolved_addresses).returns([ IPAddr.new("10.0.0.5") ])
+      client = create(:oauth_client, :gitlab)
+      cred = build_credential(owner: @user, oauth_client: client, provider: "gitlab", access_token: "old",
+                              refresh_token: "old-refresh", expires_at: 1.minute.from_now)
+      stub_request(:post, "https://gitlab.corp.internal/oauth/token")
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                   body: { access_token: "new", refresh_token: "new-refresh", expires_in: 7200 }.to_json)
+
+      assert_equal "new", Oauth::TokenService.fresh(cred)
+    end
+
+    test "the same private host under another provider stays refused" do
+      UrlSafetyValidator.stubs(:resolved_addresses).returns([ IPAddr.new("10.0.0.5") ])
+      client = build_client(client_id: "other")
+      client.update!(token_endpoint: "https://gitlab.corp.internal/oauth/token")
+      cred = build_credential(owner: @user, oauth_client: client, provider: "sentry", access_token: "old",
+                              refresh_token: "old-refresh", expires_at: 1.minute.from_now)
+
+      assert_raises(Oauth::ReauthRequired) { Oauth::TokenService.fresh(cred) }
+      assert_not_requested :post, "https://gitlab.corp.internal/oauth/token"
+    end
+
     private
 
     def build_client(client_id: "public-client", client_secret: nil)

@@ -28,6 +28,7 @@ class OauthCredential < ApplicationRecord
   SAFE_METADATA_KEYS = %w[account user organization token_uuid].freeze
 
   GITHUB_PROVIDER = "github"
+  GITLAB_PROVIDER = "gitlab"
 
   # Consecutive refresh failures before the credential is escalated to status:error
   # (surfaced as a reconnect badge + notification). Below the threshold it stays
@@ -54,6 +55,22 @@ class OauthCredential < ApplicationRecord
   # The connection an agent's token comes from: the latest one that is not revoked.
   def self.live_github_connection_of(user)
     github_connections_of(user).where.not(status: :revoked).order(updated_at: :desc).first
+  end
+
+  # A person's own GitLab connection (docs/design/gitlab-user-identity.md §3). Only rows
+  # made against the instance this deployment points at count: after GITLAB_ENDPOINT
+  # changes, a credential on the old host is invisible (and lapses).
+  scope :gitlab_connections_of, ->(user) {
+    for_owner(user).where(provider: GITLAB_PROVIDER)
+                   .where(oauth_client_id: OauthClient.where(issuer: Gitlab::Host.web_base).select(:id))
+  }
+
+  def self.latest_gitlab_connection_of(user)
+    gitlab_connections_of(user).order(updated_at: :desc).first
+  end
+
+  def self.live_gitlab_connection_of(user)
+    gitlab_connections_of(user).where.not(status: :revoked).order(updated_at: :desc).first
   end
 
   # Sweep scope (Phase 2 consumes this; index [:status, :expires_at] backs it).

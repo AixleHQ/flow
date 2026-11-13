@@ -25,12 +25,14 @@ class Web::ProfileConnectionsTest < ActionDispatch::IntegrationTest
 
     assert_inertia_page "Profile/Connections"
     props = inertia.props
-    assert props[:available]
-    assert_equal "connected", props[:github][:status]
-    assert_equal "octo-user", props[:github][:login]
-    assert_equal [ { projectId: @project.id, inOwnTasks: false, inOthersTasks: false, projectName: "Alpha" } ],
-                 props[:consents].map { |row| row.symbolize_keys.slice(:projectId, :inOwnTasks, :inOthersTasks, :projectName) }
-    assert_not_includes props[:github].to_json, "at-"
+    assert props[:available][:github]
+    assert_equal "connected", props[:connections][:github][:status]
+    assert_equal "octo-user", props[:connections][:github][:login]
+    assert_nil props[:connections][:gitlab]
+    assert_equal [ { provider: "github", projectId: @project.id, inOwnTasks: false, inOthersTasks: false, projectName: "Alpha" } ],
+                 props[:consents][:github].map { |row| row.symbolize_keys.slice(:provider, :projectId, :inOwnTasks, :inOthersTasks, :projectName) }
+    assert_equal [ "gitlab" ], props[:consents][:gitlab].map { |row| row[:provider] }.uniq
+    assert_not_includes props[:connections][:github].to_json, "at-"
   end
 
   test "without a connection the page offers Connect, and says when the App is not configured" do
@@ -38,8 +40,8 @@ class Web::ProfileConnectionsTest < ActionDispatch::IntegrationTest
 
     get profile_connections_path
 
-    assert_nil inertia.props[:github]
-    assert_not inertia.props[:available]
+    assert_nil inertia.props[:connections][:github]
+    assert_not inertia.props[:available][:github]
   end
 
   test "a revoked connection reads as needing a reconnect" do
@@ -47,7 +49,7 @@ class Web::ProfileConnectionsTest < ActionDispatch::IntegrationTest
 
     get profile_connections_path
 
-    assert_equal "needs_reconnect", inertia.props[:github][:status]
+    assert_equal "needs_reconnect", inertia.props[:connections][:github][:status]
   end
 
   test "a consent update stores the switch and leaves the other alone" do
@@ -164,6 +166,71 @@ class Web::ProfileConnectionsTest < ActionDispatch::IntegrationTest
     assert_nil OauthCredential.find_by(id: credential.id)
   end
 
+  test "the page lists a GitLab connection with its own consents, when the OAuth app is set" do
+    Settings.gitlab.stubs(:oauth_client_id).returns("lab-cid")
+    Settings.gitlab.stubs(:oauth_client_secret).returns("lab-secret")
+    create(:oauth_credential, :gitlab_user, owner: @user)
+
+    get profile_connections_path
+
+    props = inertia.props
+    assert props[:available][:gitlab]
+    assert_equal "connected", props[:connections][:gitlab][:status]
+    assert_equal "gitlab", props[:connections][:gitlab][:provider]
+    assert_equal "lab-user", props[:connections][:gitlab][:login]
+    assert_equal "Lab User", props[:connections][:gitlab][:name]
+    assert_nil props[:connections][:github]
+    assert_equal [ "Alpha" ], props[:consents][:gitlab].map { |row| row[:projectName] }
+    assert_not_includes props[:connections][:gitlab].to_json, "at-"
+  end
+
+  test "GitLab is not offered without the OAuth app" do
+    Settings.gitlab.stubs(:oauth_client_id).returns("")
+
+    get profile_connections_path
+
+    assert_not inertia.props[:available][:gitlab]
+  end
+
+  test "a GitLab consent update stores the switch under the gitlab provider only" do
+    json_patch(@project.id, provider: "gitlab", in_others_tasks: true)
+
+    assert_response :success
+    consent = ActAsConsent.find_by!(user: @user, project: @project, provider: "gitlab")
+    assert consent.in_others_tasks
+    assert_equal "gitlab", JSON.parse(response.body)["provider"]
+    assert_nil ActAsConsent.find_by(user: @user, project: @project, provider: "github")
+  end
+
+  test "disconnecting GitLab revokes the grant, removes the credential and its consents, and leaves GitHub alone" do
+    gitlab = create(:oauth_credential, :gitlab_user, owner: @user)
+    github = create(:oauth_credential, :github_user, owner: @user)
+    create(:act_as_consent, :own, user: @user, project: @project, provider: "gitlab")
+    create(:act_as_consent, :own, user: @user, project: @project, provider: "github")
+    fake = FakeGitlab::UserTokenService.new
+    Gitlab::UserTokenService.stubs(:new).returns(fake)
+
+    delete profile_connection_path("gitlab")
+
+    assert_redirected_to profile_connections_path
+    assert_equal "GitLab disconnected", flash[:notice]
+    assert fake.called?(:revoke)
+    assert_nil OauthCredential.find_by(id: gitlab.id)
+    assert OauthCredential.exists?(github.id)
+    assert_equal [ "github" ], ActAsConsent.where(user: @user).pluck(:provider)
+  end
+
+  test "disconnecting GitLab still removes the connection when GitLab is unreachable" do
+    credential = create(:oauth_credential, :gitlab_user, owner: @user)
+    Gitlab::UserTokenService.stubs(:new).returns(
+      FakeGitlab::UserTokenService.new(revoke_error: Gitlab::UserTokenService::Unavailable.new("down"))
+    )
+
+    delete profile_connection_path("gitlab")
+
+    assert_nil OauthCredential.find_by(id: credential.id)
+  end
+
   test "disconnect never touches another user's connection" do
     other = create(:user, :employee, company: @company)
     theirs = create(:oauth_credential, :github_user, owner: other)
@@ -188,7 +255,7 @@ class Web::ProfileConnectionsTest < ActionDispatch::IntegrationTest
     get profile_connections_path
 
     assert_inertia_page "Profile/Connections"
-    assert_equal "connected", inertia.props[:github][:status]
+    assert_equal "connected", inertia.props[:connections][:github][:status]
   end
 
   test "disconnecting is refused while impersonating" do

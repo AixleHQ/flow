@@ -45,6 +45,21 @@ module Oauth
         settings_key: :github,
         owner_types: %w[User],
         after_connect: "Github::UserConnection"
+      },
+      # A person's own GitLab account, through the deployment's GitLab OAuth app
+      # (docs/design/gitlab-user-identity.md §2.2). The endpoints and the issuer follow
+      # GITLAB_ENDPOINT, so a resolver supplies them; the client id and secret are
+      # the app's, under other Settings names. The operator's host is trusted for
+      # the token call (a self-managed GitLab is often on a private network).
+      "gitlab" => {
+        endpoints: "Gitlab::UserConnection",
+        scopes: "api",
+        settings_key: :gitlab,
+        client_id_key: :oauth_client_id,
+        client_secret_key: :oauth_client_secret,
+        owner_types: %w[User],
+        after_connect: "Gitlab::UserConnection",
+        trust_endpoint_host: true
       }
     }.freeze
 
@@ -54,8 +69,26 @@ module Oauth
       REGISTRY.key?(provider.to_s)
     end
 
+    # The registry entry, with the endpoints its resolver names (if any) merged in.
     def config(provider)
-      REGISTRY.fetch(provider.to_s)
+      entry = REGISTRY.fetch(provider.to_s)
+      resolver = entry[:endpoints]
+      resolver ? entry.merge(resolver.constantize.endpoints) : entry
+    end
+
+    # Hosts the token call may reach although they resolve privately: the operator's
+    # own host, for a provider whose entry says so. Empty for every other provider
+    # (and for an MCP one, which is not in the registry).
+    def trusted_hosts(provider)
+      return [] unless known?(provider)
+
+      cfg = config(provider)
+      return [] unless cfg[:trust_endpoint_host]
+
+      host = URI.parse(cfg[:token_endpoint].to_s).host.to_s.downcase
+      host.empty? ? [] : [ host ]
+    rescue URI::InvalidURIError
+      []
     end
 
     def provider_names
@@ -87,7 +120,7 @@ module Oauth
     def client_for(provider)
       cfg = config(provider)
       creds = provider_settings(cfg[:settings_key])
-      client_id = creds&.client_id.presence
+      client_id = creds&.public_send(cfg.fetch(:client_id_key, :client_id)).presence
       raise Oauth::MissingClientConfig, provider.to_s if client_id.blank?
 
       client = OauthClient.find_or_initialize_by(issuer: cfg[:issuer], client_id: client_id)
@@ -95,7 +128,8 @@ module Oauth
       client.token_endpoint = cfg[:token_endpoint]
       client.scopes = cfg[:scopes]
       client.source = "static"
-      secret = creds.respond_to?(:client_secret) ? creds.client_secret.presence : nil
+      secret_key = cfg.fetch(:client_secret_key, :client_secret)
+      secret = creds.respond_to?(secret_key) ? creds.public_send(secret_key).presence : nil
       client.client_secret = secret if secret
       client.save!
       client

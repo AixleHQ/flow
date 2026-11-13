@@ -1,10 +1,17 @@
 # frozen_string_literal: true
 
-# The accounts a person connected (GitHub today) and what agents may do with them
+# The accounts a person connected (GitHub and GitLab) and what agents may do with them
 # in each project (docs/design/github-user-identity.md §4.2). The profile's
 # "Connected accounts" page calls this; it takes named parameters, never the request.
 module UserConnections
-  PROVIDERS = [ Github::UserConnection::PROVIDER ].freeze
+  # Provider name => the module that knows how to connect and disconnect it.
+  PROVIDERS = {
+    Github::UserConnection::PROVIDER => Github::UserConnection,
+    Gitlab::UserConnection::PROVIDER => Gitlab::UserConnection
+  }.freeze
+
+  # What the profile page shows each provider as.
+  LABELS = { "github" => "GitHub", "gitlab" => "GitLab" }.freeze
 
   class Error < StandardError; end
 
@@ -18,14 +25,17 @@ module UserConnections
 
   def available?(provider:)
     known!(provider)
-    Github::UserConnection.configured?
+    PROVIDERS.fetch(provider).configured?
   end
 
   # The person's connection at the provider, a revoked one included (the page
   # shows it as needing a reconnect), or nil.
   def connection(user:, provider:)
     known!(provider)
-    OauthCredential.latest_github_connection_of(user)
+    case provider
+    when Github::UserConnection::PROVIDER then OauthCredential.latest_github_connection_of(user)
+    else OauthCredential.latest_gitlab_connection_of(user)
+    end
   end
 
   # One row per project of the company the person can reach; a project without a
@@ -42,7 +52,7 @@ module UserConnections
 
   def disconnect!(user:, provider:)
     known!(provider)
-    Github::UserConnection.disconnect!(user)
+    PROVIDERS.fetch(provider).disconnect!(user)
   end
 
   # Sets the switches that are given (true or false); a nil leaves its switch as it is.
@@ -62,7 +72,7 @@ module UserConnections
   end
 
   def known!(provider)
-    raise UnknownProvider, "unknown provider #{provider.inspect}" unless PROVIDERS.include?(provider)
+    raise UnknownProvider, "unknown provider #{provider.inspect}" unless PROVIDERS.key?(provider)
   end
 
   def consent_row(user, project, provider)

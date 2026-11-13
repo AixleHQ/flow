@@ -157,14 +157,16 @@ module Oauth
       # no more trustworthy than a freshly discovered one (TOCTOU). Static endpoints
       # come from the trusted registry and pass. Raised as StandardError so `fresh`
       # marks the credential errored and surfaces ReauthRequired.
-      uri_errs = UrlSafetyValidator.errors_for(client.token_endpoint, require_https: true)
+      trusted = Oauth::Providers.trusted_hosts(cred.provider)
+      uri_errs = UrlSafetyValidator.errors_for(client.token_endpoint, require_https: true,
+                                                                      trusted_hosts_override: trusted)
       raise "unsafe token_endpoint" if uri_errs.any?
 
       # RFC 8707 resource indicator: the one the grant was issued for.
       body[:resource] = cred.resource.presence || cred.mcp_server.url if cred.mcp_server_id.present?
 
       uri = URI.parse(client.token_endpoint)
-      http = SafeHttp.http_for(uri, open_timeout: TOKEN_TIMEOUT, read_timeout: TOKEN_TIMEOUT)
+      http = SafeHttp.http_for(uri, open_timeout: TOKEN_TIMEOUT, read_timeout: TOKEN_TIMEOUT, trusted_hosts: trusted)
       req = Net::HTTP::Post.new(uri)
       req["Accept"] = "application/json"
       req.set_form_data(body)

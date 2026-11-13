@@ -8,6 +8,35 @@ import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/rende
 
 import ConnectionsPage from './Connections';
 
+type PageProps = Parameters<typeof ConnectionsPage>[0];
+
+const renderPageWith = ({
+  available = { github: true, gitlab: true },
+  github = buildUserConnection(),
+  gitlab = null,
+  consents = {},
+}: {
+  available?: PageProps['available'];
+  github?: PageProps['connections']['github'];
+  gitlab?: PageProps['connections']['gitlab'];
+  consents?: Partial<PageProps['consents']>;
+} = {}) => {
+  const props: PageProps = {
+    available,
+    connections: { github, gitlab },
+    consents: { github: [buildActAsConsent()], gitlab: [buildActAsConsent({ provider: 'gitlab' })], ...consents },
+  };
+  return renderAuthedPage(<ConnectionsPage {...props} />, { props });
+};
+
+afterEach, describe, expect, it, vi } from 'vitest';
+
+import { buildActAsConsent, buildUserConnection } from 'test/factories/userConnection';
+import { answerFetch } from 'test/fetchStub';
+import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
+
+import ConnectionsPage from './Connections';
+
 const renderPageWith = ({
   available = true,
   github = buildUserConnection(),
@@ -34,6 +63,35 @@ describe('Profile Connected accounts tab', () => {
 
     expect(screen.queryByRole('button', { name: 'Connect GitHub' })).not.toBeInTheDocument();
     expect(screen.getByText(/has not configured the GitHub App/)).toBeInTheDocument();
+  });
+
+  it('offers GitLab next to GitHub, and says so when GitLab is not configured', () => {
+    renderPageWith({ github: null, available: { github: true, gitlab: false } });
+
+    expect(screen.getByRole('button', { name: 'Connect GitHub' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Connect GitLab' })).not.toBeInTheDocument();
+    expect(screen.getByText(/has not configured GitLab/)).toBeInTheDocument();
+  });
+
+  it('shows a connected GitLab account with its own switches', () => {
+    renderPageWith({
+      github: null,
+      gitlab: buildUserConnection({ provider: 'gitlab', login: 'lab-user', name: 'Lab User' }),
+    });
+
+    expect(screen.getByText(/@lab-user/)).toBeInTheDocument();
+    expect(screen.getByText('What agents may do as you on GitLab')).toBeInTheDocument();
+    expect(screen.getAllByRole('switch')).toHaveLength(2);
+  });
+
+  it('saves a GitLab switch against the gitlab provider', async () => {
+    const fetchSpy = answerFetch({ 'PATCH /profile/connections/gitlab/act_as_consents/7': {} });
+    renderPageWith({ github: null, gitlab: buildUserConnection({ provider: 'gitlab' }) });
+
+    await userEvent.click(screen.getByRole('switch', { name: /In tasks that aren't mine — Acme/ }));
+
+    await waitFor(() => expect(router.reload).toHaveBeenCalledWith({ only: ['consents'] }));
+    expect(JSON.parse(String(fetchSpy.mock.calls[0][1]?.body))).toEqual({ inOthersTasks: true });
   });
 
   it('shows the connected account with a Disconnect button and two switches per project', () => {

@@ -690,7 +690,8 @@ in adapter contract tests.
 - **Notifying a user when the any-user tool takes their token.** Not asked for.
 - **Routing the user's token through the git credential helper and `gh` wrapper**
   (§2.2), so that agents need no token in context. This is a later opt-in.
-- **GitLab, Bitbucket and Azure DevOps providers.** Out of scope. They need a
-  registry entry, an adapter and a tool pair each.
+- **GitLab, Bitbucket and Azure DevOps providers.** Out of scope here. GitLab is done:
+  see [gitlab-user-identity.md](./gitlab-user-identity.md). Bitbucket and Azure DevOps
+  need a registry entry, an adapter and a tool pair each.
 - **Moving this project's workflows from `ALEX_GITHUB_TOKEN` to the tools.** This
   follows after release (task: out of scope).

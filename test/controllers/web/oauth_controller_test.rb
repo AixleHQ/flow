@@ -796,4 +796,94 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
       get oauth_callback_path, params: { code: "auth-code-1", state: state }
     end
   end
+
+  # --- GitLab: a user's own account (docs/design/gitlab-user-identity.md §2.2) ---
+
+  def stub_gitlab!(host: "gitlab.example.com", profile: { id: 456, username: "lab-user", name: "Lab User",
+                                                          avatar_url: "https://a.test/456", commit_email: "456-lab-user@users.noreply.gitlab.example.com" },
+                   token_body: { access_token: "glo_live", refresh_token: "glr_live", expires_in: 7200 })
+    Settings.gitlab.stubs(:endpoint).returns("https://#{host}/api/v4")
+    Settings.gitlab.stubs(:oauth_client_id).returns("lab-cid")
+    Settings.gitlab.stubs(:oauth_client_secret).returns("lab-secret")
+    stub_request(:post, "https://#{host}/oauth/token").to_return(status: 200, body: token_body.to_json,
+                                                                  headers: { "Content-Type" => "application/json" })
+    stub_request(:get, "https://#{host}/api/v4/user")
+      .to_return(status: profile ? 200 : 401, body: profile.to_json, headers: { "Content-Type" => "application/json" })
+  end
+
+  test "connecting GitLab for a user stores the credential and the GitLab identity" do
+    stub_gitlab!
+    state = build_state(owner: @user, provider: "gitlab", return_to: "/profile/connections")
+
+    assert_difference("OauthCredential.count", 1) do
+      get oauth_callback_path, params: { code: "auth-code-1", state: state }
+    end
+
+    assert_redirected_to "/profile/connections"
+    credential = OauthCredential.find_by!(owner: @user, provider: "gitlab")
+    assert_equal "glo_live", credential.access_token
+    assert_equal "https://gitlab.example.com", credential.oauth_client.issuer
+    assert_equal "lab-user", credential.metadata.dig("gitlab_user", "username")
+    assert_equal "456-lab-user@users.noreply.gitlab.example.com", credential.metadata.dig("gitlab_user", "commit_email")
+    assert_equal credential, OauthCredential.live_gitlab_connection_of(@user)
+  end
+
+  test "the token exchange reaches a self-managed GitLab that resolves privately" do
+    stub_gitlab!(host: "gitlab.corp.internal")
+    UrlSafetyValidator.stubs(:resolved_addresses).returns([ IPAddr.new("10.0.0.5") ])
+    state = build_state(owner: @user, provider: "gitlab", return_to: "/profile/connections")
+
+    assert_difference("OauthCredential.count", 1) do
+      get oauth_callback_path, params: { code: "auth-code-1", state: state }
+    end
+
+    assert_redirected_to "/profile/connections"
+    assert_nil flash[:alert]
+  end
+
+  test "a failed GitLab identity fetch keeps the existing credential and clears its identity" do
+    stub_gitlab!(profile: nil)
+    existing = create(:oauth_credential, :gitlab_user, owner: @user, access_token: "glo_old",
+                                                       oauth_client: Oauth::Providers.client_for("gitlab"))
+    state = build_state(owner: @user, provider: "gitlab", return_to: "/profile/connections")
+
+    assert_no_difference("OauthCredential.count") do
+      get oauth_callback_path, params: { code: "auth-code-1", state: state }
+    end
+
+    assert_equal "Failed to complete connection", flash[:alert]
+    assert existing.reload.active?
+    assert_nil existing.metadata["gitlab_user"]
+  end
+
+  test "a GitLab connection cannot belong to a company" do
+    stub_gitlab!
+    state = build_state(owner: @company, provider: "gitlab")
+
+    assert_no_difference("OauthCredential.count") do
+      get oauth_callback_path, params: { code: "auth-code-1", state: state }
+    end
+
+    assert_equal "Not permitted", flash[:alert]
+  end
+
+  test "authorize for GitLab sends a user to the instance's authorize page with the api scope" do
+    stub_gitlab!
+
+    post oauth_authorize_path("gitlab"), params: { owner_type: "User", owner_id: @user.id, return_to: "/profile/connections" }
+
+    assert_match(%r{\Ahttps://gitlab\.example\.com/oauth/authorize\?}, response.location)
+    assert_equal "api", Rack::Utils.parse_query(URI.parse(response.location).query)["scope"]
+  end
+
+  test "connecting GitLab is refused while impersonating" do
+    stub_gitlab!
+    sign_in_as(create(:user, :super_admin, password: AuthHelper::TEST_PASSWORD))
+    post impersonate_admin_user_path(@user)
+
+    post oauth_authorize_path("gitlab"), params: { owner_type: "User", owner_id: @user.id, return_to: "/profile/connections" }
+
+    assert_redirected_to "/profile/connections"
+    assert_match(/while impersonating/, flash[:alert])
+  end
 end
