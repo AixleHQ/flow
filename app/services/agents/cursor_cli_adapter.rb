@@ -100,12 +100,13 @@ module Agents
         # Workspace trust (skip trust dialog)
         "#{home_dir}/.cursor/projects#{workspace}/.workspace-trusted" => generate_workspace_trust(workspace).to_json
       }
-      files["#{home_dir}/.cursor/hooks.json"] = telemetry_hooks.to_json if workflow_config[:otel_endpoint].present?
+      files["#{home_dir}/.cursor/hooks.json"] = telemetry_hooks.to_json if workflow_config[:full_telemetry]
       files
     end
 
-    # The CLI exports no telemetry; its hooks see the prompt, every tool call with its
-    # input, output and duration, the model's reply and thinking, and the turn's tokens
+    # The CLI exports no telemetry; for a session with full telemetry
+    # (TerminalSession#full_telemetry?) its hooks report the prompt, every tool call with
+    # its input, output and duration, the model's reply and thinking, and the turn's tokens
     # (`stop`, `afterAgentResponse`). An unknown event name makes the CLI drop the whole
     # file. Each hook prints `{}`: for a tool hook, output that is not a JSON object
     # denies the tool. The tool-specific events (shell, MCP, file read and edit) repeat

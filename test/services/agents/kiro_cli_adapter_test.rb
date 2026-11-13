@@ -259,7 +259,8 @@ module Agents
     end
 
     test "config_files installs a global hook per lifecycle event that forwards it to the session's collector" do
-      hooks = JSON.parse(@adapter.config_files({}, otel_endpoint: "http://otlp-ingest:4318")["/home/kiro/.kiro/hooks/aixle-telemetry.json"])
+      files = @adapter.config_files({}, otel_endpoint: "http://otlp-ingest:4318", full_telemetry: true)
+      hooks = JSON.parse(files["/home/kiro/.kiro/hooks/aixle-telemetry.json"])
 
       assert_equal "v1", hooks["version"]
       assert_equal %w[SessionStart UserPromptSubmit PreToolUse PostToolUse Stop SessionEnd], hooks["hooks"].pluck("trigger")
@@ -269,8 +270,10 @@ module Agents
                    tool_hook.dig("action", "command")
     end
 
-    test "config_files installs no hooks for a session without a collector" do
-      refute_includes @adapter.config_files({}, otel_endpoint: nil).keys, "/home/kiro/.kiro/hooks/aixle-telemetry.json"
+    test "config_files installs no hooks without full telemetry" do
+      files = @adapter.config_files({}, otel_endpoint: "http://otlp-ingest:4318")
+
+      refute_includes files.keys, "/home/kiro/.kiro/hooks/aixle-telemetry.json"
     end
 
     test "config_files omits the state file when the credential holds no login" do
@@ -536,10 +539,20 @@ module Agents
       assert_equal Settings.otel.endpoint, env["KIRO_TELEMETRY_OTLP_ENDPOINT"]
       assert_equal "terminal_session_token=tok-123,terminal_session_key=#{UsageStatistics::SessionKey.generate('tok-123')}",
                    env["OTEL_RESOURCE_ATTRIBUTES"]
-      assert_equal [ env["OTEL_RESOURCE_ATTRIBUTES"], Settings.otel.endpoint ],
-                   env.values_at("AIXLE_OTLP_RESOURCE_ATTRIBUTES", "AIXLE_OTLP_ENDPOINT")
       # Measured: this one stops the export altogether, cost figures included.
       refute_includes env.keys, "KIRO_DISABLE_TELEMETRY"
+    end
+
+    test "default_env_vars gives the hooks the collector and the session with full telemetry" do
+      session = build(:terminal_session, agent_type: "kiro_cli", route_token: "tok-123")
+      plain_env = @adapter.default_env_vars(session, callbacks: hosted_callbacks)
+      session.stubs(:full_telemetry?).returns(true)
+
+      env = @adapter.default_env_vars(session, callbacks: hosted_callbacks)
+
+      assert_equal [ env["OTEL_RESOURCE_ATTRIBUTES"], Settings.otel.endpoint ],
+                   env.values_at("AIXLE_OTLP_RESOURCE_ATTRIBUTES", "AIXLE_OTLP_ENDPOINT")
+      assert_empty plain_env.keys.grep(/\AAIXLE_OTLP/)
     end
 
     test "default_env_vars of a runner session turns the export off and forwards no MCP port" do

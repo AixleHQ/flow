@@ -191,7 +191,8 @@ module Agents
 
     # The CLI ignores OTEL_RESOURCE_ATTRIBUTES; otlp-ingest turns these headers into the
     # resource attributes UsageStatisticsService checks.
-    test "default_env_vars exports the CLI's own telemetry, naming the session in headers" do
+    test "default_env_vars exports the CLI's own telemetry with full telemetry, naming the session in headers" do
+      @session.stubs(:full_telemetry?).returns(true)
       env = @adapter.default_env_vars(@session, callbacks: hosted_callbacks)
 
       assert_equal "1", env["GROK_EXTERNAL_OTEL"]
@@ -202,10 +203,13 @@ module Agents
       assert_equal %w[1 1 1], env.values_at("OTEL_LOG_USER_PROMPTS", "OTEL_LOG_TOOL_DETAILS", "OTEL_LOG_TOOL_CONTENT")
     end
 
-    test "a session without a collector exports no telemetry" do
-      env = @adapter.default_env_vars(@session, callbacks: hosted_callbacks.merge(otel: nil))
+    test "a session without full telemetry or without a collector exports no telemetry" do
+      plain_env = @adapter.default_env_vars(@session, callbacks: hosted_callbacks)
+      @session.stubs(:full_telemetry?).returns(true)
+      runner_env = @adapter.default_env_vars(@session, callbacks: hosted_callbacks.merge(otel: nil))
 
-      assert_empty env.keys.grep(/OTEL/)
+      assert_empty plain_env.keys.grep(/OTEL/)
+      assert_empty runner_env.keys.grep(/OTEL/)
     end
 
     # XAI_API_KEY outranks a stored session token in the CLI's own credential

@@ -205,16 +205,18 @@ module Agents
     def default_env_vars(session, callbacks: nil)
       credential = session && SessionCompany.agent_credentials_for(session).find_by(agent_type: "copilot_cli")
       otel = callbacks ? callbacks[:otel] : Settings.otel.endpoint.to_s
+      content = otel.present? && session&.full_telemetry?
       {
         "COPILOT_OTEL_ENABLED" => otel.present? ? "true" : nil,
         "OTEL_EXPORTER_OTLP_ENDPOINT" => otel,
         "OTEL_EXPORTER_OTLP_PROTOCOL" => otel.present? ? "http/json" : nil,
         "OTEL_RESOURCE_ATTRIBUTES" => session && UsageStatistics::SessionKey.resource_attributes(session),
-        # Message content on the spans (docs/design/agent-telemetry.md): prompts, replies,
-        # system instructions, tool definitions, arguments and results. The legacy switch is
-        # the one 1.0.108 documents; the newer one is set too in case it is honoured.
-        "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT" => otel.present? ? "true" : nil,
-        "OTEL_INSTRUMENTATION_GENAI_CAPTURE_CONTENT" => otel.present? ? "SPAN_AND_EVENT" : nil,
+        # Message content on the spans, with full telemetry (TerminalSession#full_telemetry?,
+        # docs/design/agent-telemetry.md): prompts, replies, system instructions, tool
+        # definitions, arguments and results. The legacy switch is the one 1.0.108
+        # documents; the newer one is set too in case it is honoured.
+        "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT" => content ? "true" : nil,
+        "OTEL_INSTRUMENTATION_GENAI_CAPTURE_CONTENT" => content ? "SPAN_AND_EVENT" : nil,
         "COPILOT_GH_HOST" => gh_host(credential&.config_data)
       }.compact_blank
     end

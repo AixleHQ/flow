@@ -196,15 +196,16 @@ module Agents
         config_path => generate_config(credentials).to_json
       }
       files["#{home_dir}/#{ONBOARDING_PATH}"] = CONSUMER_ONBOARDING.to_json if credentials["auth_method"] == "consumer"
-      files["#{home_dir}/#{HOOKS_PATH}"] = telemetry_hooks.to_json if workflow_config[:otel_endpoint].present?
+      files["#{home_dir}/#{HOOKS_PATH}"] = telemetry_hooks.to_json if workflow_config[:full_telemetry]
       files
     end
 
-    # agy exports no telemetry of its own to anyone but Google; its hooks see the prompt,
-    # the model's output per invocation, each tool call with its arguments and error, and
-    # the turn's end. Not a tool's result or tokens (1.5.0). A tool hook takes a matcher
-    # and its handlers; the others take handlers directly. A failing PreToolUse handler
-    # denies the tool, as does any stdout but none.
+    # agy exports no telemetry of its own to anyone but Google; for a session with full
+    # telemetry (TerminalSession#full_telemetry?) its hooks report the prompt, the model's
+    # output per invocation, each tool call with its arguments and error, and the turn's
+    # end. Not a tool's result or tokens (1.5.0). A tool hook takes a matcher and its
+    # handlers; the others take handlers directly. A failing PreToolUse handler denies the
+    # tool, as does any stdout but none.
     HOOKS_PATH = ".gemini/config/hooks.json"
     HOOK_EVENTS = %w[SessionStart PreInvocation PostInvocation PreToolUse PostToolUse Stop].freeze
     TOOL_HOOK_EVENTS = %w[PreToolUse PostToolUse].freeze

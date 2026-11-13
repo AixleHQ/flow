@@ -1,7 +1,8 @@
 # Agent telemetry: what each runtime sends
 
-Status: implemented — OpenTelemetry switches for the runtimes that export it (§1), lifecycle
-hooks for the ones that do not (§3).
+Status: implemented, off for every session — OpenTelemetry switches for the runtimes that
+export it (§1), lifecycle hooks for the ones that do not (§3), both behind one switch
+(§4).
 
 Every agent session reports to the platform's collector, `docker/otlp-ingest`, which
 accepts OTLP/HTTP logs, metrics and traces (protobuf or JSON) and forwards them as JSON
@@ -16,13 +17,15 @@ Two consumers read the stream:
 - **The Aixle Insights relay**, which forwards the whole stream of a project switched on
   for it.
 
-So each runtime is set to emit **every signal and every content switch it has**: what
-Flow does not read costs it a parse; what it does not emit is lost to Insights for good.
+So a session with **full telemetry** emits **every signal and every content switch its
+runtime has**: what Flow does not read costs it a parse; what it does not emit is lost to
+Insights for good. Every other session sends only what Flow's own usage reads (§4).
 
 ## 1. Switches per runtime
 
-Versions are the pins in `config/agent_runtimes.json`. Each switch is set only when the
-session has a collector (a runner session has none yet).
+Versions are the pins in `config/agent_runtimes.json`. What a session with full telemetry
+gets; each switch is set only when the session has a collector (a runner session has none
+yet).
 
 | Runtime | Signals | Content switches set | Flow's own usage reads |
 | --- | --- | --- | --- |
@@ -40,8 +43,8 @@ Notes:
 - **Volume.** Claude Code's raw API bodies resend the conversation with every request, each
   cut at `CLAUDE_CODE_OTEL_CONTENT_MAX_LENGTH` (60 KiB by default); they are most of a
   session's telemetry. `otlp-ingest` refuses a request over 10 MB.
-- **Codex metrics** default to OpenAI's Statsig. With a collector they come to Flow instead;
-  without one (a runner session) the default stays, and the MITM fallback of
+- **Codex metrics** default to OpenAI's Statsig. With full telemetry they come to Flow
+  instead; otherwise the default stays, and the MITM fallback of
   `CodexAdapter#collect_usage` still finds them.
 - **Grok** ignores `OTEL_RESOURCE_ATTRIBUTES`, so the session is named in
   `OTEL_EXPORTER_OTLP_HEADERS` (`X-Aixle-Session-Token`, `X-Aixle-Session-Key`), and
@@ -119,8 +122,8 @@ Left out on purpose: Cursor's shell, MCP and file events repeat its generic tool
 whole file; Kiro's file events repeat its write tool. Cursor's `beforeSubmitPrompt`, `stop`
 and `afterAgentResponse` do not fire under `-p`; Flow runs Cursor without it.
 
-A session without a collector (a runner session) gets neither the hooks file nor the
-variables.
+A session without full telemetry, or without a collector (a runner session), gets neither
+the hooks file nor the variables.
 
 ### Checked live (2026-11-13)
 
@@ -135,3 +138,23 @@ stand-in for the Rails endpoint that kept what it was sent:
 
 No hook process outlived its event and none was left a zombie. The first Cursor run sent
 nothing — the `//` finding above.
+
+## 4. The switch
+
+`TerminalSession#full_telemetry?` decides, once per session. It is `false` for every
+session: Flow keeps nothing but usage, so the rest stays off until something forwards it.
+The adapters read it in two places:
+
+- `default_env_vars(session, callbacks:)` asks the session — the environment switches,
+  Grok's export and the hooks' variables;
+- `config_files(credentials, workflow_config)` reads `workflow_config[:full_telemetry]`,
+  which `SessionContextService#credential_workflow_config` sets only for a session with a
+  collector — Codex's `[otel]` table, Gemini CLI's `telemetry`, and the hooks files.
+
+Both are written when the container starts, so a change reaches the next session, not a
+running one.
+
+Without full telemetry each runtime sends what Flow's usage reads and no content: Claude
+Code its metrics; Codex its logs; Gemini CLI logs and metrics, with `logPrompts` off and
+`traces` not set; Copilot CLI its spans and metrics without message content; Kiro its credit
+metrics. Grok exports nothing, and Kiro, Cursor and Antigravity get no hooks.

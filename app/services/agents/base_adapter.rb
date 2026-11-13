@@ -405,11 +405,12 @@ module Agents
     end
 
     # Where the hook posts and the session its records prove they belong to
-    # (UsageStatistics::SessionKey), inherited from the CLI's environment. The collector's
+    # (UsageStatistics::SessionKey), inherited from the CLI's environment; only for a
+    # session with full telemetry (TerminalSession#full_telemetry?). The collector's
     # URL stays out of the hook command: Cursor strips `//` comments from hooks.json before
     # parsing it, so an `http://` in a command drops the whole file (measured, 2026.10.22).
     def otlp_hook_env(session, endpoint)
-      return {} if endpoint.blank?
+      return {} if endpoint.blank? || !session.full_telemetry?
 
       { "AIXLE_OTLP_ENDPOINT" => endpoint,
         "AIXLE_OTLP_RESOURCE_ATTRIBUTES" => UsageStatistics::SessionKey.resource_attributes(session) }

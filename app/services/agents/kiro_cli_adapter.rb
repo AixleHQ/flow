@@ -364,12 +364,13 @@ module Agents
 
       state = decoded_state(credentials)
       files[state_path] = state if state.present?
-      files[hooks_path] = telemetry_hooks.to_json if workflow_config[:otel_endpoint].present?
+      files[hooks_path] = telemetry_hooks.to_json if workflow_config[:full_telemetry]
       files
     end
 
     # Kiro's own export carries credits only; its hooks see the prompts and every tool
-    # call with its input and result. A global hook (~/.kiro/hooks) runs next to any the
+    # call with its input and result, for a session with full telemetry
+    # (TerminalSession#full_telemetry?). A global hook (~/.kiro/hooks) runs next to any the
     # repository brings.
     HOOK_EVENTS = %w[SessionStart UserPromptSubmit PreToolUse PostToolUse Stop SessionEnd].freeze
 

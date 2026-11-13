@@ -829,28 +829,34 @@ module Agents
       end
 
       # The session's OTLP endpoint (SessionContextService#credential_workflow_config,
-      # from its runtime); nil for a runner session, which has none yet. Every signal and
-      # every content switch the CLI has (docs/design/agent-telemetry.md). Metrics would
-      # otherwise go to OpenAI's Statsig, their default; without an endpoint they still do,
-      # and #collect_usage reads them from the MITM log.
+      # from its runtime); nil for a runner session, which has none yet.
       otel_endpoint = workflow_config.fetch(:otel_endpoint)
       if otel_endpoint.present?
         toml << <<~TOML
 
           [otel]
           exporter = { otlp-http = { endpoint = "#{otel_endpoint}/v1/logs", protocol = "binary" } }
-          trace_exporter = { otlp-http = { endpoint = "#{otel_endpoint}/v1/traces", protocol = "binary" } }
-          metrics_exporter = { otlp-http = { endpoint = "#{otel_endpoint}/v1/metrics", protocol = "binary" } }
-          log_user_prompt = true
-          log_agent_responses = true
-          log_guardian_assessments = true
-
-          [otel.tool_result]
-          max_bytes = 65536
         TOML
+        toml << full_telemetry_toml(otel_endpoint) if workflow_config[:full_telemetry]
       end
 
       toml
+    end
+
+    # Full telemetry (TerminalSession#full_telemetry?): every signal and every content
+    # switch the CLI has (docs/design/agent-telemetry.md). Without it metrics go to
+    # OpenAI's Statsig, their default, and #collect_usage reads them from the MITM log.
+    def full_telemetry_toml(otel_endpoint)
+      <<~TOML
+        trace_exporter = { otlp-http = { endpoint = "#{otel_endpoint}/v1/traces", protocol = "binary" } }
+        metrics_exporter = { otlp-http = { endpoint = "#{otel_endpoint}/v1/metrics", protocol = "binary" } }
+        log_user_prompt = true
+        log_agent_responses = true
+        log_guardian_assessments = true
+
+        [otel.tool_result]
+        max_bytes = 65536
+      TOML
     end
   end
 end

@@ -222,14 +222,15 @@ module Agents
     end
 
     # The CLI's own OpenTelemetry — logs and metrics, with every content switch
-    # (docs/design/agent-telemetry.md) — for the Insights relay; Flow's usage still comes
-    # from the MITM log (#collect_usage). The CLI ignores OTEL_RESOURCE_ATTRIBUTES, so the
-    # session is named in headers, which otlp-ingest turns into the resource attributes the
-    # ingest checks. A session without a collector exports nothing.
+    # (docs/design/agent-telemetry.md) — for a session with full telemetry
+    # (TerminalSession#full_telemetry?); Flow's usage comes from the MITM log
+    # (#collect_usage). The CLI ignores OTEL_RESOURCE_ATTRIBUTES, so the session is named in
+    # headers, which otlp-ingest turns into the resource attributes the ingest checks. A
+    # session without a collector exports nothing.
     def telemetry_env(session, callbacks)
       endpoint = callbacks ? callbacks[:otel] : Settings.otel.endpoint.to_s
       token = session&.route_token
-      return {} if endpoint.blank? || token.blank?
+      return {} if endpoint.blank? || token.blank? || !session.full_telemetry?
 
       {
         "GROK_EXTERNAL_OTEL" => "1",
@@ -360,7 +361,7 @@ module Agents
     # =================================================================
 
     # Usage comes from the MITM log at cleanup, the same source CursorCli and Codex fall
-    # back to. The CLI's own OpenTelemetry (#telemetry_env) reaches the collector, but
+    # back to. The CLI's own OpenTelemetry (#telemetry_env), where a session sends it,
     # carries no cost, and its attribute keys are a fixed, audited set.
     #
     # Model traffic goes over HTTPS to api.x.ai (API-key login) or to

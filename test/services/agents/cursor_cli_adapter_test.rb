@@ -117,7 +117,7 @@ module Agents
     # No URL in a command: the CLI strips `//` comments from the file before parsing it,
     # and an `http://` in a command string silently drops every hook (measured on 2026.10.22).
     test "config_files installs a user hook per event that forwards it to the session's collector and answers {}" do
-      files = @adapter.config_files({ "accessToken" => "access" }, { otel_endpoint: "http://otlp-ingest:4318" })
+      files = @adapter.config_files({ "accessToken" => "access" }, { otel_endpoint: "http://otlp-ingest:4318", full_telemetry: true })
       config = JSON.parse(files["/home/cursor/.cursor/hooks.json"])
 
       assert_equal 1, config["version"]
@@ -127,14 +127,16 @@ module Agents
       assert_not_includes files["/home/cursor/.cursor/hooks.json"], "//"
     end
 
-    test "config_files installs no hooks for a session without a collector" do
-      files = @adapter.config_files({ "accessToken" => "access" }, { otel_endpoint: nil })
+    test "config_files installs no hooks without full telemetry" do
+      files = @adapter.config_files({ "accessToken" => "access" }, { otel_endpoint: "http://otlp-ingest:4318" })
 
       assert_not files.key?("/home/cursor/.cursor/hooks.json")
     end
 
-    test "default_env_vars gives the hooks the collector and the session, and only for a session with a collector" do
+    test "default_env_vars gives the hooks the collector and the session, with full telemetry and a collector" do
       session = build(:terminal_session, agent_type: "cursor_cli", route_token: "tok-123")
+      plain_env = @adapter.default_env_vars(session, callbacks: hosted_callbacks)
+      session.stubs(:full_telemetry?).returns(true)
 
       env = @adapter.default_env_vars(session, callbacks: hosted_callbacks)
       runner_env = @adapter.default_env_vars(session, callbacks: hosted_callbacks.merge(otel: nil))
@@ -142,6 +144,7 @@ module Agents
       assert_equal [ Settings.otel.endpoint, UsageStatistics::SessionKey.resource_attributes(session) ],
                    env.values_at("AIXLE_OTLP_ENDPOINT", "AIXLE_OTLP_RESOURCE_ATTRIBUTES")
       assert_empty runner_env.keys.grep(/\AAIXLE_OTLP/)
+      assert_empty plain_env.keys.grep(/\AAIXLE_OTLP/)
     end
 
     test "build_rpc_windows pairs http2 Run request and response by x-request-id" do

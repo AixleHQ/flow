@@ -153,11 +153,14 @@ module Agents
       refute env.key?("COPILOT_GITHUB_TOKEN")
     end
 
-    test "the session env asks for message content on the spans" do
+    test "the session env asks for message content on the spans only with full telemetry" do
+      plain_env = @adapter.default_env_vars(@session)
+      @session.stubs(:full_telemetry?).returns(true)
       env = @adapter.default_env_vars(@session)
 
       assert_equal "true", env["OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT"]
       assert_equal "SPAN_AND_EVENT", env["OTEL_INSTRUMENTATION_GENAI_CAPTURE_CONTENT"]
+      assert_empty plain_env.keys.grep(/CAPTURE/)
       refute @adapter.default_env_vars(@session, callbacks: { otel: nil }).key?("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT")
     end
 

@@ -1088,40 +1088,43 @@ module Agents
       }.merge(cloud_credential_env(session, callbacks)).compact
     end
 
-    # OTLP telemetry, to the session's collector: every signal and every content switch
-    # the CLI has (docs/design/agent-telemetry.md). Flow's own usage still comes from the
-    # metrics; logs and traces are for the Insights relay. None for a session without a
-    # collector (a runner session: there is no OTLP route through its proxy yet).
-    #
-    # Raw API bodies resend the conversation with every request, each cut at
-    # CLAUDE_CODE_OTEL_CONTENT_MAX_LENGTH (60 KiB by default): they are most of the volume.
+    # OTLP telemetry, to the session's collector: the metrics Flow's usage comes from, and
+    # for a session with full telemetry (TerminalSession#full_telemetry?) every other signal
+    # and content switch the CLI has (docs/design/agent-telemetry.md). None for a session
+    # without a collector (a runner session: there is no OTLP route through its proxy yet).
     def telemetry_env(session, endpoint)
       return {} if endpoint.nil?
 
-      {
+      env = {
         "CLAUDE_CODE_ENABLE_TELEMETRY" => "1",
-        "CLAUDE_CODE_ENHANCED_TELEMETRY_BETA" => "1",
         "OTEL_EXPORTER_OTLP_ENDPOINT" => endpoint,
         "OTEL_EXPORTER_OTLP_PROTOCOL" => "http/protobuf",
         "OTEL_METRICS_EXPORTER" => "otlp",
         "OTEL_METRIC_EXPORT_INTERVAL" => "2000",
-        "OTEL_LOGS_EXPORTER" => "otlp",
-        "OTEL_LOGS_EXPORT_INTERVAL" => "2000",
-        "OTEL_TRACES_EXPORTER" => "otlp",
-        "OTEL_TRACES_EXPORT_INTERVAL" => "2000",
-        "OTEL_LOG_USER_PROMPTS" => "1",
-        "OTEL_LOG_ASSISTANT_RESPONSES" => "1",
-        "OTEL_LOG_TOOL_DETAILS" => "1",
-        "OTEL_LOG_TOOL_CONTENT" => "1",
-        "OTEL_LOG_RAW_API_BODIES" => "1",
-        "OTEL_METRICS_INCLUDE_VERSION" => "true",
-        "OTEL_METRICS_INCLUDE_ENTRYPOINT" => "true",
-        "OTEL_METRICS_INCLUDE_REPOSITORY" => "true",
-        # The last batches of a session that ends must land before the container stops.
-        "CLAUDE_CODE_OTEL_SHUTDOWN_TIMEOUT_MS" => "5000",
         "OTEL_RESOURCE_ATTRIBUTES" => UsageStatistics::SessionKey.resource_attributes(session)
       }
+      session.full_telemetry? ? env.merge(FULL_TELEMETRY_ENV) : env
     end
+
+    # Raw API bodies resend the conversation with every request, each cut at
+    # CLAUDE_CODE_OTEL_CONTENT_MAX_LENGTH (60 KiB by default): they are most of the volume.
+    FULL_TELEMETRY_ENV = {
+      "CLAUDE_CODE_ENHANCED_TELEMETRY_BETA" => "1",
+      "OTEL_LOGS_EXPORTER" => "otlp",
+      "OTEL_LOGS_EXPORT_INTERVAL" => "2000",
+      "OTEL_TRACES_EXPORTER" => "otlp",
+      "OTEL_TRACES_EXPORT_INTERVAL" => "2000",
+      "OTEL_LOG_USER_PROMPTS" => "1",
+      "OTEL_LOG_ASSISTANT_RESPONSES" => "1",
+      "OTEL_LOG_TOOL_DETAILS" => "1",
+      "OTEL_LOG_TOOL_CONTENT" => "1",
+      "OTEL_LOG_RAW_API_BODIES" => "1",
+      "OTEL_METRICS_INCLUDE_VERSION" => "true",
+      "OTEL_METRICS_INCLUDE_ENTRYPOINT" => "true",
+      "OTEL_METRICS_INCLUDE_REPOSITORY" => "true",
+      # The last batches of a session that ends must land before the container stops.
+      "CLAUDE_CODE_OTEL_SHUTDOWN_TIMEOUT_MS" => "5000"
+    }.freeze
 
     # Only a session that actually vends gets a vending key. These go in process env
     # rather than the settings file because the helper is spawned by the AWS SDK, not by

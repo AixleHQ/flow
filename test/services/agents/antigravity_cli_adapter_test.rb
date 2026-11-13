@@ -51,7 +51,7 @@ module Agents
     end
 
     test "installs a hook per lifecycle event that forwards it to the session's collector" do
-      files = @adapter.config_files({ "access_token" => "tok-123" }, otel_endpoint: "http://otlp-ingest:4318")
+      files = @adapter.config_files({ "access_token" => "tok-123" }, otel_endpoint: "http://otlp-ingest:4318", full_telemetry: true)
       hooks = JSON.parse(files["/home/antigravity/.gemini/config/hooks.json"]).fetch("aixle-telemetry")
 
       assert_equal %w[SessionStart PreInvocation PostInvocation PreToolUse PostToolUse Stop], hooks.keys
@@ -63,8 +63,8 @@ module Agents
                    tool_hook["hooks"].sole["command"]
     end
 
-    test "installs no hooks for a session without a collector" do
-      files = @adapter.config_files({ "access_token" => "tok-123" }, otel_endpoint: nil)
+    test "installs no hooks without full telemetry" do
+      files = @adapter.config_files({ "access_token" => "tok-123" }, otel_endpoint: "http://otlp-ingest:4318")
 
       assert_not_includes files.keys, "/home/antigravity/.gemini/config/hooks.json"
     end
@@ -235,7 +235,9 @@ module Agents
 
     # Under its own name, not OTEL_RESOURCE_ATTRIBUTES: agy's telemetry goes to Google, and
     # an SDK that reads that variable would send the session key along.
-    test "default_env_vars gives the hooks the collector and the session, and only for a session with a collector" do
+    test "default_env_vars gives the hooks the collector and the session, with full telemetry and a collector" do
+      plain_env = @adapter.default_env_vars(@session, callbacks: hosted_callbacks)
+      @session.stubs(:full_telemetry?).returns(true)
       env = @adapter.default_env_vars(@session, callbacks: hosted_callbacks)
       runner_env = @adapter.default_env_vars(@session, callbacks: hosted_callbacks.merge(otel: nil))
 
@@ -243,6 +245,7 @@ module Agents
                    env.values_at("AIXLE_OTLP_ENDPOINT", "AIXLE_OTLP_RESOURCE_ATTRIBUTES")
       assert_not_includes env.keys, "OTEL_RESOURCE_ATTRIBUTES"
       assert_empty runner_env.keys.grep(/\AAIXLE_OTLP/)
+      assert_empty plain_env.keys.grep(/\AAIXLE_OTLP/)
     end
 
     # 51 production sessions in the 30 days to 2026-09-17 produced zero HTTP records,
