@@ -67,7 +67,7 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
   end
 
   test "without an override a runner session gets the public image, tagged latest" do
-    @runtime.create_container(spec(image: "aixle/claude-code:sha-b258cc1"))
+    @runtime.create_container(spec(image: "aixle/claude-code:sha-b258cc1")) # the strategy's hosted image is not used
 
     assert_equal [ "ghcr.io/aixlehq/flow-claude-code:latest" ], @host_runner.operations.map { |op| op[:payload]["image"] }
   end
@@ -278,7 +278,9 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     @host_runner.answer_with("container.start", "status" => "error",
                                                 "error" => { "class" => "image_pull_failed", "message" => "pull access denied" })
 
-    error = assert_raises(ContainerRuntime::CreateRefusedError) { @runtime.create_container(spec(image: "ghcr.io/aixlehq/nope:1")) }
+    @runner.update!(config: @runner.config.deep_merge("container" => { "image_override" => "ghcr.io/aixlehq/nope:1" }))
+
+    error = assert_raises(ContainerRuntime::CreateRefusedError) { @runtime.create_container(spec) }
 
     assert_match(%r{Could not pull ghcr.io/aixlehq/nope:1: container.start failed: image_pull_failed: pull access denied}, error.message)
     assert_equal @session.id, @environment.reload.current_session_id, "the cleanup frees the machine (AdmittedPhaseActivity)"
