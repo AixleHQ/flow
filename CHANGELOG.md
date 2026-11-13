@@ -13,6 +13,12 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Tasks**: agents using personal access can ask for the tasks assigned to you
+  — directly or through a project team you are on — across every project of one
+  company, or in one project (`list_my_tasks`). `list_projects` now names each
+  project's company (`company_id`).
+
 ### Fixed
 - **Workflows**: the preview before reverting a workflow no longer lists a
   repository, skill, connector or secret deleted since as coming back. The
