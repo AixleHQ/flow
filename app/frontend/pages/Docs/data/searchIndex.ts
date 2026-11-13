@@ -172,7 +172,7 @@ export const SEARCH_INDEX: SearchResult[] = [
     slug: 'runners',
     title: 'Runners',
     section: 'User guide',
-    desc: 'Runners send a session to a machine you control. Adding a machine to a manual runner, what the runner's status means (pending, connected, degraded, unreachable), and waiting for a free machine.',
+    desc: 'Runners send a session to a machine you control. Adding a machine to a manual runner, what a runner’s status means (pending, connected, degraded, unreachable), and waiting for a free machine.',
   },
   {
     slug: 'tools',
