@@ -44,7 +44,8 @@ const PROVIDER_INFO: Record<
     pitch: 'Let agents push and open pull requests as you.',
     notConfigured:
       "This installation has not configured the GitHub App's client id and secret, so accounts cannot be connected.",
-    disconnectNote: 'Agents can no longer act as you on GitHub, and the permissions you set for each project are removed.',
+    disconnectNote:
+      'Agents can no longer act as you on GitHub, and the permissions you set for each project are removed.',
   },
   gitlab: {
     name: 'GitLab',
@@ -52,7 +53,8 @@ const PROVIDER_INFO: Record<
     pitch: 'Let agents push and open merge requests as you.',
     notConfigured:
       "This installation has not configured GitLab's OAuth app (client id and secret), so accounts cannot be connected.",
-    disconnectNote: 'Agents can no longer act as you on GitLab, and the permissions you set for each project are removed.',
+    disconnectNote:
+      'Agents can no longer act as you on GitLab, and the permissions you set for each project are removed.',
   },
 };
 
@@ -99,9 +101,7 @@ function ProviderCard({
           <div>
             <Title order={4}>{info.name}</Title>
             <Text fz={14} c="dimmed">
-              {account?.login
-                ? `${account.name ?? account.login} (@${account.login})`
-                : info.pitch}
+              {account?.login ? `${account.name ?? account.login} (@${account.login})` : info.pitch}
             </Text>
           </div>
         </Group>

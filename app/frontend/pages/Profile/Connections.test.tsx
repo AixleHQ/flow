@@ -1,52 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-
-import { buildActAsConsent, buildUserConnection } from 'test/factories/userConnection';
-import { answerFetch } from 'test/fetchStub';
-import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
-
-import ConnectionsPage from './Connections';
-
-type PageProps = Parameters<typeof ConnectionsPage>[0];
-
-const renderPageWith = ({
-  available = { github: true, gitlab: true },
-  github = buildUserConnection(),
-  gitlab = null,
-  consents = {},
-}: {
-  available?: PageProps['available'];
-  github?: PageProps['connections']['github'];
-  gitlab?: PageProps['connections']['gitlab'];
-  consents?: Partial<PageProps['consents']>;
-} = {}) => {
-  const props: PageProps = {
-    available,
-    connections: { github, gitlab },
-    consents: { github: [buildActAsConsent()], gitlab: [buildActAsConsent({ provider: 'gitlab' })], ...consents },
-  };
-  return renderAuthedPage(<ConnectionsPage {...props} />, { props });
-};
-
-afterEach, describe, expect, it, vi } from 'vitest';
-
-import { buildActAsConsent, buildUserConnection } from 'test/factories/userConnection';
-import { answerFetch } from 'test/fetchStub';
-import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
-
-import ConnectionsPage from './Connections';
-
-const renderPageWith = ({
-  available = true,
-  github = buildUserConnection(),
-  consents = [buildActAsConsent()],
-}: Partial<Parameters<typeof ConnectionsPage>[0]> = {}) =>
-  renderAuthedPage(<ConnectionsPage available={available} github={github} consents={consents} />, {
-    props: { available, github, consents },
-  });
-
-afterEach(() => {
+import { afterEach(() => {
   vi.restoreAllMocks();
 });
 
@@ -59,7 +13,7 @@ describe('Profile Connected accounts tab', () => {
   });
 
   it('says so when the installation has not configured the GitHub App', () => {
-    renderPageWith({ github: null, available: false });
+    renderPageWith({ github: null, available: { github: false, gitlab: true } });
 
     expect(screen.queryByRole('button', { name: 'Connect GitHub' })).not.toBeInTheDocument();
     expect(screen.getByText(/has not configured the GitHub App/)).toBeInTheDocument();
