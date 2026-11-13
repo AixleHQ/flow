@@ -99,22 +99,13 @@ module ContainerStrategies
     # + tag), the name CI publishes it under, so an environment that publishes
     # the set to one registry overrides one value, not seven.
     # `agents.images.<runtime>` remains a per-runtime escape hatch.
-    #
-    # A session on an external runner takes `runners.agent_image_prefix` and
-    # `runners.agent_images` instead (public images by default: the machine
-    # cannot pull from the hosted, often private, registry), with `runners.agent_image_tag`.
-    # The runner's `container.image_override` is applied later, by
-    # ContainerRuntime::RunnerRuntime.
     def resolve_image
       agent_type = input[:agent_type].to_s
-      runner = current_terminal_session&.runner_id.present?
-      overrides = runner ? Settings.runners&.agent_images : Settings.agents&.images
-      override = overrides.to_h.transform_keys(&:to_s)[agent_type]
+      override = Settings.agents&.images.to_h.transform_keys(&:to_s)[agent_type]
       return override.to_s if override.present?
 
-      prefix = runner ? Settings.runners&.agent_image_prefix : Settings.agents&.image_prefix
-      name = "#{prefix}#{AgentRuntime.fetch(agent_type).image}"
-      tag = (runner ? Settings.runners&.agent_image_tag : Settings.agents&.image_tag).to_s.strip
+      name = "#{Settings.agents&.image_prefix}#{AgentRuntime.fetch(agent_type).image}"
+      tag = Settings.agents&.image_tag.to_s.strip
       tag.present? ? "#{name}:#{tag}" : name
     end
 

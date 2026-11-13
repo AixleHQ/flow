@@ -155,7 +155,8 @@ the images are built for arm64.
 
 ## Using your own agent image
 
-A runner starts every session in the stock image of the session's agent. To use
+A runner starts every session in the default image of the session's agent (see
+below). To use
 your own image (built `FROM` the Aixle base image), set **Image override** in
 the runner's settings.
 
@@ -168,3 +169,25 @@ only placeholder. The runner isn't saved if the override has another one, or
 isn't an image reference once `{agent}` is replaced. As in Docker, the first
 part of the path is a registry only when it has a `.` or a port, or is
 `localhost`; any other part must be lowercase, so `UPPER/flow-{agent}` is refused.
+
+---
+
+## Which agent image a machine pulls
+
+A session on a runner runs the platform's agent image for the session's agent
+runtime, and the machine pulls it. By default that is the public image,
+`ghcr.io/aixlehq/flow-<image>` (for example `ghcr.io/aixlehq/flow-claude-code`),
+so the machine needs no registry login. The tag is `latest`, unless the
+deployment sets `RUNNER_AGENT_IMAGE_TAG`. Hosted sessions are not affected: they
+keep their own images.
+
+To run another image on a runner's machines, set **`container.image_override`**
+in the runner's settings. It wins over the default and must be built `FROM` the
+platform's agent image. If that image is in a private registry, run
+`docker login` for that registry on each machine as the user that runs
+`aixle-runner`: the platform sends no registry credentials to a machine.
+
+A self-hosted deployment changes the default for all its runners with
+`RUNNER_AGENT_IMAGE_PREFIX`, `RUNNER_AGENT_IMAGE_TAG` (default `latest`) and the
+per-runtime `RUNNER_AGENT_IMAGE_<RUNTIME>` variables (see the configuration
+reference).

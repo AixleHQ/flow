@@ -185,8 +185,9 @@ ports: `container.start` sends a session's port, and the runner listens there.
 
 A session on an external runner gets its own default agent images, set apart
 from the hosted `AGENT_IMAGE_*` ones (a hosted prefix is often a private
-registry that a customer's machine cannot pull from). The tag is the hosted
-`AGENT_IMAGE_TAG`. A runner's `container.image_override` wins over both.
+registry that a customer's machine cannot pull from). The tag is
+`RUNNER_AGENT_IMAGE_TAG` (default `latest`), not the hosted `AGENT_IMAGE_TAG`. A
+runner's `container.image_override` wins over both.
 
 | Variable                                  | Required | Default                | Purpose                                                                 |
 | ----------------------------------------- | -------- | ---------------------- | ----------------------------------------------------------------------- |

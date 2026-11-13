@@ -551,16 +551,28 @@ module ContainerRuntime
       environment && "aixle-#{environment.key}-#{session.id}"
     end
 
-    # The image the runner pulls and starts: the runner's
-    # `container.image_override` where it sets one, else the strategy's, as it
-    # was given. `{agent}` in the override is the image name of the session's
-    # runtime.
-    def runner_image(config, image, session)
+    # The image the runner pulls and starts, chosen here and not by the
+    # strategy, whose (hosted) image a runner session does not use. In order:
+    # the runner's `container.image_override` (`{agent}` in it is the image name
+    # of the session's runtime), else `runners.agent_images.<runtime>`, else
+    # `runners.agent_image_prefix` + the runtime's image name + `runners.agent_image_tag`.
+    # The defaults are the public images, which a customer's machine can pull.
+    def runner_image(config, session)
+      image_name = AgentRuntime.fetch(session.agent_type).image
       override = setting(config, "container.image_override").presence
-      return image if override.nil?
-      return override unless override.include?("{agent}")
+      return Runners::ConfigSchema.image_reference(override, image_name) if override
 
-      Runners::ConfigSchema.image_reference(override, AgentRuntime.fetch(session.agent_type).image)
+      default_runner_image(session.agent_type, image_name)
+    end
+
+    def default_runner_image(agent_type, image_name)
+      settings = Settings.runners
+      configured = settings.agent_images.to_h.transform_keys(&:to_s)[agent_type.to_s]
+      return configured.to_s if configured.present?
+
+      name = "#{settings.agent_image_prefix}#{image_name}"
+      tag = settings.agent_image_tag.to_s.strip
+      tag.present? ? "#{name}:#{tag}" : name
     end
 
     # `proxy_port` is the session's port of its callback proxy, which the
@@ -570,7 +582,7 @@ module ContainerRuntime
     def container_payload(session, spec)
       config = session.runner&.config || {}
       {
-        "image" => runner_image(config, spec[:image], session),
+        "image" => runner_image(config, session),
         "env" => env_hash(spec[:env_vars]),
         "workspace_volume" => setting(config, "container.workspace_volume"),
         "mounts" => mounts(config),

@@ -91,42 +91,13 @@ module ContainerStrategies
       assert_equal "aixle/grok:latest", strategy.resolve_image
     end
 
-    # == Runner session images (#229) ==
-
-    def runner_strategy(agent_type: "claude_code")
-      session = create(:runner_session, agent_type: agent_type)
-      AgentAuthStrategy.new(
-        user_id: session.user_id,
-        agent_type: agent_type,
-        session_id: session.id,
-        route_token: session.route_token
-      )
-    end
-
-    test "a runner session gets the public image, tagged latest" do
-      assert_equal "ghcr.io/aixlehq/flow-claude-code:latest", runner_strategy.resolve_image
-    end
-
-    test "a runner session takes its own tag, not the hosted one" do
+    # The image of a session on a runner is chosen by
+    # ContainerRuntime::RunnerRuntime#runner_image (#229), not here.
+    test "a hosted session gets the hosted prefix and tag" do
+      Settings.agents.stubs(:image_prefix).returns("registry.example/aixle-app-")
       Settings.agents.stubs(:image_tag).returns("sha-b258cc1")
-      Settings.runners.stubs(:agent_image_tag).returns("1.2.3")
 
-      assert_equal "ghcr.io/aixlehq/flow-claude-code:1.2.3", runner_strategy.resolve_image
-      assert_equal "aixle/claude-code:sha-b258cc1", build_strategy.resolve_image
-    end
-
-    test "a runner session takes the runner image prefix" do
-      Settings.runners.stubs(:agent_image_prefix).returns("registry.example/agents/")
-
-      assert_equal "registry.example/agents/codex:latest", runner_strategy(agent_type: "codex").resolve_image
-      assert_equal "aixle/codex:latest", build_strategy(agent_type: "codex").resolve_image
-    end
-
-    test "a runner session takes the per-runtime runner override" do
-      Settings.runners.stubs(:agent_images).returns({ "claude_code" => "registry.example/claude@sha256:abc" })
-
-      assert_equal "registry.example/claude@sha256:abc", runner_strategy.resolve_image
-      assert_equal "aixle/claude-code:latest", build_strategy.resolve_image
+      assert_equal "registry.example/aixle-app-claude-code:sha-b258cc1", build_strategy.resolve_image
     end
 
     # The Grok login is the device-code flow: nothing in the container can open a
