@@ -228,6 +228,8 @@ class WorkflowRunTest < ActiveSupport::TestCase
                                               session_type: "workflow_step", state: "queued"))
 
     assert_includes WorkflowRun.waiting_for_slot_ids([ run.id ]), run.id
+    assert run.reload.waiting_for_slot?, "one run must get the same answer as a page of them"
+    assert_equal "queued", run.displayed_state
   end
 
   test "waiting_for_slot_ids leaves a run that is still executing alone" do
@@ -240,11 +242,24 @@ class WorkflowRunTest < ActiveSupport::TestCase
                                              session_type: "workflow_step", state: "queued"))
 
     assert_empty WorkflowRun.waiting_for_slot_ids([ run.id ])
+    assert_not run.reload.waiting_for_slot?
+    assert_equal "running", run.displayed_state
   end
 
   test "waiting_for_slot_ids answers for a whole page in one query" do
     assert_empty WorkflowRun.waiting_for_slot_ids([])
   end
+
+  test "waiting_for_slot? reads preloaded step sessions without a query" do
+    run = create(:workflow_run, :running)
+    step_run = create(:step_run, :running, workflow_run: run)
+    step_run.update!(terminal_session: create(:terminal_session, user: run.user, project: run.project,
+                                              session_type: "workflow_step", state: "queued"))
+    preloaded = WorkflowRun.includes(step_runs: :terminal_session).find(run.id)
+
+    assert_no_queries { assert preloaded.waiting_for_slot? }
+  end
+
   test "refuses input assets and repositories that belong to another tenant" do
     project = create(:project, :standalone)
     other = create(:project, :standalone)
