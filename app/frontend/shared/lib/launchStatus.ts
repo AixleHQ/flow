@@ -14,7 +14,8 @@
  * and this module is the single place that turns it into words.
  */
 
-export type LaunchPhase = 'queued_for_slot' | 'starting' | 'cluster_capacity' | 'namespace_quota' | 'runner_capacity' | 'running';
+export type LaunchPhase =
+  'queued_for_slot' | 'starting' | 'cluster_capacity' | 'namespace_quota' | 'runner_capacity' | 'running';
 
 /** True only when the session really is behind other sessions in its pool. */
 export function isWaitingForSlot(phase: string | null | undefined): boolean {
