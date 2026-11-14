@@ -55,6 +55,9 @@ class Runner < ApplicationRecord
   validate :config_matches_schema, if: -> { runner_type.present? && (new_record? || config_or_type_changing?) }
 
   scope :not_deleted, -> { where(deleted_at: nil) }
+  # Not disabled, revoked or deleted: the runners whose health is checked
+  # (Runners::HealthCheck).
+  scope :live, -> { not_deleted.where(status: RunnerStateMachine::HEALTH_STATES.map(&:to_s)) }
   # Never seen, or last seen before `time`.
   scope :not_seen_since, ->(time) { where(last_seen_at: nil).or(where(arel_table[:last_seen_at].lt(time))) }
   # What a picker offers: the company's runners and the project's own, live

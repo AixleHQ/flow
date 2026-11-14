@@ -1,0 +1,18 @@
+{
+  "description": "POST /heartbeat takes an access token and no body, and answers 204 with no body. It can be sent again at once, and the machine's polls go on as before.",
+  "steps": [
+    {"given": "registered_machine", "as": "m"},
+    {
+      "request": {"method": "POST", "path": "/runner/v1/heartbeat", "token": "{{m.access_token}}"},
+      "response": {"status": 204, "body": null}
+    },
+    {
+      "request": {"method": "POST", "path": "/runner/v1/heartbeat", "token": "{{m.access_token}}"},
+      "response": {"status": 204, "body": null}
+    },
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "{{m.access_token}}"},
+      "response": {"status": 200, "headers": {"Cache-Control": "no-store"}, "body": {"ops": []}}
+    }
+  ]
+}

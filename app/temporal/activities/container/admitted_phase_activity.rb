@@ -70,7 +70,7 @@ module Activities
       rescue ContainerService::PhaseError => e
         if e.original_error.is_a?(ContainerRuntime::CapacityError)
           operation&.update!(state: "retryable", error: e.message)
-          admission.update!(wait_reason: e.original_error.reason, last_error: e.message)
+          admission.update!(wait_reason: e.original_error.reason, last_error: e.original_error.message)
           return { "capacity_wait" => true }
         end
         record_failed_operation(operation, e)

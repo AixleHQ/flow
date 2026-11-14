@@ -24,16 +24,18 @@ var now = time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
 // poll returns the ops above `after` that have no result yet, and the first result
 // of an op wins.
 type gateway struct {
-	mu          sync.Mutex
-	ops         []protocol.Op
-	results     map[int64]protocol.Result
-	posts       map[int64]int
-	afters      []int64
-	tokens      []string
-	pollErrs    []error
-	resultErrs  []error
-	inFlight    int
-	maxInFlight int
+	mu            sync.Mutex
+	ops           []protocol.Op
+	results       map[int64]protocol.Result
+	posts         map[int64]int
+	afters        []int64
+	tokens        []string
+	pollErrs      []error
+	heartbeats    []string
+	heartbeatErrs []error
+	resultErrs    []error
+	inFlight      int
+	maxInFlight   int
 	// idle is called by a poll that has nothing to return, to end the test.
 	idle func()
 	// update is offered by every poll that has no ops.
@@ -93,6 +95,18 @@ func (g *gateway) PostResult(_ context.Context, access string, id int64, r proto
 		g.results[id] = r
 	}
 	return protocol.ResultState{ID: id, State: "completed"}, nil
+}
+
+func (g *gateway) Heartbeat(_ context.Context, access string) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.heartbeats = append(g.heartbeats, access)
+	if len(g.heartbeatErrs) > 0 {
+		err := g.heartbeatErrs[0]
+		g.heartbeatErrs = g.heartbeatErrs[1:]
+		return err
+	}
+	return nil
 }
 
 type memStore struct{ saved []credentials.Credentials }
@@ -549,5 +563,153 @@ func TestAnUpdateIsOfferedOnlyOnceTheOpsAreDone(t *testing.T) {
 	// The gateway offers an update only with no ops, and both ops ran before it.
 	if len(u.ranThen) != 1 || u.ranThen[0] != 2 || gw.posts[1] != 1 || gw.posts[2] != 1 {
 		t.Fatalf("offered after %v ops, posts %v", u.ranThen, gw.posts)
+	}
+}
+
+func TestSendsHeartbeatsWhileAnOpRunsAndNoneBetweenOps(t *testing.T) {
+	gw := newGateway(envOp(1, 1))
+	h := newHarness(t, t.TempDir(), gw)
+	h.loop.HeartbeatEvery = 5 * time.Millisecond
+	h.loop.Handlers["env.scrub"] = func(ctx context.Context, _ *int64, _ json.RawMessage) protocol.Result {
+		deadline := time.Now().Add(3 * time.Second)
+		for time.Now().Before(deadline) {
+			gw.mu.Lock()
+			n := len(gw.heartbeats)
+			gw.mu.Unlock()
+			if n >= 2 {
+				return protocol.Result{Status: protocol.StatusOK}
+			}
+			time.Sleep(time.Millisecond)
+		}
+		return protocol.ErrorResult("test", "no heartbeat while the op ran")
+	}
+	if err := h.run(); err != nil {
+		t.Fatal(err)
+	}
+	gw.mu.Lock()
+	defer gw.mu.Unlock()
+	if r := gw.results[1]; r.Status != protocol.StatusOK {
+		t.Fatalf("the op got no heartbeat while it ran: %+v", r)
+	}
+	for _, access := range gw.heartbeats {
+		if access != "aracc_first" {
+			t.Fatalf("a heartbeat carried %q, not the access token", access)
+		}
+	}
+}
+
+func TestSendsNoHeartbeatBeforeTheIntervalHasPassed(t *testing.T) {
+	gw := newGateway(envOp(1, 1))
+	h := newHarness(t, t.TempDir(), gw)
+	if err := h.run(); err != nil {
+		t.Fatal(err)
+	}
+	if len(gw.heartbeats) != 0 {
+		t.Fatalf("an op that ended at once sent %d heartbeats", len(gw.heartbeats))
+	}
+}
+
+func TestATerminalHeartbeatRefusalCancelsTheOpAndStopsTheLoop(t *testing.T) {
+	gw := newGateway(envOp(1, 1))
+	gw.heartbeatErrs = []error{refusal(protocol.EndpointHeartbeat, 401, "runner_revoked")}
+	h := newHarness(t, t.TempDir(), gw)
+	h.loop.HeartbeatEvery = 5 * time.Millisecond
+	cancelled := make(chan struct{})
+	h.loop.Handlers["env.scrub"] = func(ctx context.Context, _ *int64, _ json.RawMessage) protocol.Result {
+		select {
+		case <-ctx.Done():
+			close(cancelled)
+			return protocol.ErrorResult("scrub_failed", "cut short: "+ctx.Err().Error())
+		case <-time.After(3 * time.Second):
+			return protocol.Result{Status: protocol.StatusOK}
+		}
+	}
+	err := h.run()
+	if stop, ok := tokens.AsStop(err); !ok || stop.Action != protocol.ActionRevoked {
+		t.Fatalf("got %v", err)
+	}
+	select {
+	case <-cancelled:
+	default:
+		t.Fatal("the handler was not cancelled")
+	}
+	gw.mu.Lock()
+	defer gw.mu.Unlock()
+	if len(gw.results) != 0 {
+		t.Fatalf("posted %#v after the refusal", gw.results)
+	}
+	if e, ok := h.journal.Lookup(1); !ok || e.Result != nil {
+		t.Fatalf("journalled %#v", e)
+	}
+}
+
+func TestATransientHeartbeatFailureIsOnlyLogged(t *testing.T) {
+	gw := newGateway(envOp(1, 1))
+	gw.heartbeatErrs = []error{refusal(protocol.EndpointHeartbeat, 503, "")}
+	h := newHarness(t, t.TempDir(), gw)
+	h.loop.HeartbeatEvery = 5 * time.Millisecond
+	h.loop.Handlers["env.scrub"] = func(ctx context.Context, _ *int64, _ json.RawMessage) protocol.Result {
+		deadline := time.Now().Add(3 * time.Second)
+		for time.Now().Before(deadline) {
+			gw.mu.Lock()
+			n := len(gw.heartbeats)
+			gw.mu.Unlock()
+			if n >= 2 {
+				return protocol.Result{Status: protocol.StatusOK}
+			}
+			time.Sleep(time.Millisecond)
+		}
+		return protocol.ErrorResult("test", "heartbeats stopped after a failure")
+	}
+	if err := h.run(); err != nil {
+		t.Fatal(err)
+	}
+	if r := gw.results[1]; r.Status != protocol.StatusOK {
+		t.Fatalf("got %+v", r)
+	}
+}
+
+func TestHeartbeatsContinueWhileTheResultIsRetriedAndStopAfter(t *testing.T) {
+	gw := newGateway(envOp(1, 1))
+	gw.resultErrs = []error{refusal(protocol.EndpointResult, 503, ""), refusal(protocol.EndpointResult, 503, "")}
+	h := newHarness(t, t.TempDir(), gw)
+	h.loop.HeartbeatEvery = 5 * time.Millisecond
+	// Each failed post waits until two more heartbeats have been sent, so the retries
+	// span several heartbeat intervals.
+	var seen []int
+	h.loop.Sleep = func(ctx context.Context, _ time.Duration) error {
+		gw.mu.Lock()
+		target := len(gw.heartbeats) + 2
+		seen = append(seen, len(gw.heartbeats))
+		gw.mu.Unlock()
+		deadline := time.Now().Add(3 * time.Second)
+		for time.Now().Before(deadline) {
+			gw.mu.Lock()
+			n := len(gw.heartbeats)
+			gw.mu.Unlock()
+			if n >= target {
+				return nil
+			}
+			time.Sleep(time.Millisecond)
+		}
+		return errors.New("no heartbeat during the result retries")
+	}
+	if err := h.run(); err != nil {
+		t.Fatal(err)
+	}
+	gw.mu.Lock()
+	after := len(gw.heartbeats)
+	gw.mu.Unlock()
+	if gw.posts[1] != 3 || gw.results[1].Status != protocol.StatusOK || len(seen) != 2 {
+		t.Fatalf("posts %d, result %#v, retries %v", gw.posts[1], gw.results[1], seen)
+	}
+	if after < seen[0]+4 {
+		t.Fatalf("%d heartbeats by the end, %v at the retries", after, seen)
+	}
+	time.Sleep(30 * time.Millisecond)
+	gw.mu.Lock()
+	defer gw.mu.Unlock()
+	if len(gw.heartbeats) != after {
+		t.Fatalf("heartbeats went on after the result was accepted: %d, then %d", after, len(gw.heartbeats))
 	}
 }

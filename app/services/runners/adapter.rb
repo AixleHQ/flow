@@ -7,6 +7,11 @@ module Runners
   class Adapter
     class UnavailableType < StandardError; end
 
+    # What a type's health check finds (§2.5): one of Runner's health statuses,
+    # `pending` for a runner whose first machine has not registered yet, and the
+    # reason for people. Runners::HealthCheck applies it.
+    Health = Data.define(:status, :reason)
+
     REGISTRY = { "manual" => "Runners::ManualAdapter" }.freeze
 
     class << self
@@ -32,5 +37,9 @@ module Runners
     # calls their APIs. The config rules are not here: they are data and pure
     # functions in ConfigSchema, which `Runner`'s validation calls.
     def capabilities(_runner) = raise(NotImplementedError)
+
+    # The runner's health from what the platform already knows, with no
+    # outbound call for a `manual` runner (§2.5, §5). Returns a Health.
+    def check_health(_runner, now: Time.current) = raise(NotImplementedError)
   end
 end

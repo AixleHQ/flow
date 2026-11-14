@@ -47,6 +47,7 @@ type Handler func(ctx context.Context, sessionID *int64, payload json.RawMessage
 type Gateway interface {
 	PollOps(ctx context.Context, accessToken string, after int64, wait time.Duration) (protocol.Poll, error)
 	PostResult(ctx context.Context, accessToken string, opID int64, result protocol.Result) (protocol.ResultState, error)
+	Heartbeat(ctx context.Context, accessToken string) error
 }
 
 // Updater takes an update the platform offers (internal/update). It says whether
@@ -72,6 +73,10 @@ type Loop struct {
 	Backoff *backoff.Backoff
 	// Wait is the long-poll's wait. Zero means protocol.MaxWait.
 	Wait time.Duration
+	// HeartbeatEvery is how often a heartbeat is sent while an op runs or its
+	// result is posted, when no poll is outstanding. Zero means
+	// protocol.HeartbeatEvery.
+	HeartbeatEvery time.Duration
 	// Now and Sleep are replaced in tests.
 	Now   func() time.Time
 	Sleep func(ctx context.Context, d time.Duration) error
@@ -86,6 +91,9 @@ func (l *Loop) defaults() {
 	}
 	if l.Wait == 0 {
 		l.Wait = protocol.MaxWait
+	}
+	if l.HeartbeatEvery == 0 {
+		l.HeartbeatEvery = protocol.HeartbeatEvery
 	}
 	if l.Now == nil {
 		l.Now = time.Now
@@ -162,8 +170,17 @@ func (l *Loop) poll(ctx context.Context) (protocol.Poll, error) {
 	}
 }
 
-func (l *Loop) handle(ctx context.Context, op protocol.Op) error {
+func (l *Loop) handle(parent context.Context, op protocol.Op) (err error) {
 	log := l.Logger.With("op_id", op.ID, "sequence", op.Sequence, "op", op.Op)
+	ctx, hb := l.heartbeats(parent, log)
+	defer func() {
+		// A terminal refusal of a heartbeat ends the runner, as one of the poll, the
+		// result or the check-in does (PROTOCOL.md §3); it replaces whatever the
+		// cancelled op returned.
+		if stopErr := hb.stop(); stopErr != nil {
+			err = stopErr
+		}
+	}()
 	result, err := l.resultFor(ctx, op, log)
 	if err != nil {
 		return err
@@ -176,6 +193,57 @@ func (l *Loop) handle(ctx context.Context, op protocol.Op) error {
 		return err
 	}
 	return l.Journal.Acknowledge(op.ID)
+}
+
+// heartbeatSender is the goroutine of heartbeats(): stop ends it and returns the
+// terminal refusal it met, if any.
+type heartbeatSender struct {
+	cancel context.CancelFunc
+	done   chan struct{}
+	fatal  error // written before done is closed
+}
+
+// stop ends the sender, waits for it, and returns the *tokens.StopError that ended
+// it, or nil.
+func (h *heartbeatSender) stop() error {
+	h.cancel()
+	<-h.done
+	return h.fatal
+}
+
+// heartbeats sends a heartbeat every HeartbeatEvery until stop is called. The loop
+// runs one thing at a time, so while an op runs and its result is posted no poll
+// is outstanding and the platform would hear nothing (PROTOCOL.md §5.10). A failed
+// heartbeat is logged and not resent: the next one comes after the interval. A
+// terminal refusal (*tokens.StopError, §3) cancels the returned context, which the
+// op and its result post run under, and is returned by stop.
+func (l *Loop) heartbeats(parent context.Context, log *slog.Logger) (context.Context, *heartbeatSender) {
+	ctx, cancel := context.WithCancel(parent)
+	h := &heartbeatSender{cancel: cancel, done: make(chan struct{})}
+	go func() {
+		defer close(h.done)
+		ticker := time.NewTicker(l.HeartbeatEvery)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+			err := l.Tokens.Do(ctx, func(access string) error { return l.Gateway.Heartbeat(ctx, access) })
+			if err == nil || ctx.Err() != nil {
+				continue
+			}
+			if _, stop := tokens.AsStop(err); stop {
+				log.Error("heartbeat refused, stopping the runner", "error", err)
+				h.fatal = err
+				cancel()
+				return
+			}
+			log.Warn("heartbeat failed", "error", err)
+		}
+	}()
+	return ctx, h
 }
 
 // resultFor runs the op, or answers it from the journal. A nil result means the

@@ -92,18 +92,18 @@ class RunnerEnvironmentTest < ActiveSupport::TestCase
     assert_equal "offline", machine.display_state(now)
   end
 
-  test "display_state: a silent machine executing a delivered op within its deadline is not offline" do
+  test "display_state: a silent machine is offline whatever op it was delivered, until its heartbeat is heard" do
     now = Time.current
     machine = create(:runner_environment, runner: @runner, last_heartbeat_at: now - 5.minutes)
     session = create(:runner_session, :holding, environment: machine)
     operation = Runners::Operations.enqueue!(machine.reload, op: "exec", payload: { "cmd" => "true" }, session: session,
                                                              deadline_at: now + 10.minutes)
-
-    assert_equal "offline", machine.display_state(now), "an op that was not delivered does not count"
-
     operation.update!(state: :delivered, delivered_at: now - 4.minutes)
+
+    assert_equal "offline", RunnerEnvironment.find(machine.id).display_state(now)
+
+    machine.update!(last_heartbeat_at: now - 20.seconds)
     assert_equal "online", RunnerEnvironment.find(machine.id).display_state(now)
-    assert_equal "offline", RunnerEnvironment.find(machine.id).display_state(now + 11.minutes), "past the deadline it is offline again"
   end
 
   test "display_state: failed and gone machines show as such, however recently they were heard" do
@@ -113,13 +113,6 @@ class RunnerEnvironmentTest < ActiveSupport::TestCase
 
     assert_equal "gone", gone.display_state
     assert_equal "failed", failed.reload.display_state
-  end
-
-  test "display_state over includes(:delivered_operations) makes no query per machine" do
-    create_list(:runner_environment, 3, runner: @runner)
-    machines = @runner.environments.includes(:delivered_operations).order(:id).to_a
-
-    assert_no_queries_match(/runner_operations/) { machines.each(&:display_state) }
   end
 
   private

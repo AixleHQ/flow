@@ -51,6 +51,15 @@ class TerminalSessionResourceTest < ActiveSupport::TestCase
     assert_equal "cluster_capacity", payload(session)["launchPhase"]
   end
 
+  test "a wait for a free machine of an external runner is reported as itself, not as cluster capacity" do
+    session = create(:terminal_session, user: @user, project: @project)
+    SessionAdmissionService.enqueue!(session)
+    SessionAdmissionService.drain!
+    session.session_admission.update!(wait_reason: "runner_capacity")
+
+    assert_equal "runner_capacity", payload(session)["launchPhase"]
+  end
+
   test "a launch that is running reports neither a wait nor an error" do
     session = create(:terminal_session, user: @user, project: @project)
     SessionAdmissionService.enqueue!(session)
