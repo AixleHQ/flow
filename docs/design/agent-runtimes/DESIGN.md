@@ -1069,13 +1069,21 @@ seconds. A `manual` environment never goes through `tearing_down`: `gone` is set
 `manual` environment always takes the `resetting`/scrub arm, never the teardown arm,
 whatever `reuse_policy` says (§7.1).
 
-**As built (11a).** `manual` has `registered`, `resetting`, `failed` and `gone`.
+**As built (11a).** `manual` has `registered`, `resetting`, `failed` and `gone`, as
+`RunnerEnvironmentStateMachine` (`app/state_machines/`, AASM, `whiny_persistence`): every
+change of state is one of its events (`mark_failed`, `begin_return_to_service`,
+`finish_reset`, `unregister`), fired by `Runners::Machines` and `Runners::Registration` on
+a row they hold locked, and the event records the reason in `state_reason`. Return to
+service is refused for a machine of a runner that is not `manual`
+(`Runners::Machines::NotManual`).
 `registered → failed` after a failed reset, or when the session that ends is the
 `runners.max_consecutive_failures`th failed one in a row on the machine. Return to
 service, `failed → resetting → registered`, is `Runners::Machines.return_to_service!`: it
 sets `resetting` under the machine's lock and puts an `env.reset` on its queue with no
 session. The op's result settles the machine (`Runners::Machines.settle_resets!`, called
-wherever an op gets its outcome: its result, its expiry by the awaiting caller, the sweep):
+wherever an op gets its outcome: its result, its expiry by the awaiting caller, the sweep;
+it reads the machine's latest `env.reset` under the machine's lock, so a result of an
+earlier attempt never settles a later one):
 `registered`, free, with the streak at 0 when the reset succeeded, `failed` with the new
 reason when it failed or expired. A `resetting` machine takes no session. The action is in
 the Machines list of the runner page, company and project, under the policy that guards

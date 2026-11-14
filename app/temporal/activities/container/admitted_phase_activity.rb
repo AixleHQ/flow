@@ -138,11 +138,7 @@ module Activities
           state = collect_outputs(admission, session, state)
           # A session on a runner's machine that failed gets a reset, whatever
           # its policy (DESIGN.md §7.2), and counts toward the machine's streak.
-          if runtime.is_a?(ContainerRuntime::RunnerRuntime)
-            runtime.cleanup_session(admission.runtime_id, failed: session_failed?(session, state))
-          else
-            runtime.cleanup_session(admission.runtime_id)
-          end
+          runtime.cleanup_session(admission.runtime_id, failed: session_failed?(session, state))
           absent = runtime.session_absent?(admission.runtime_id)
         end
 
@@ -236,13 +232,15 @@ module Activities
                  .update_all(absent_since: nil, updated_at: Time.current)
       end
 
-      # Whether the session is ending as a failure: the phase state carries an
-      # error, or the session is already `failed`. A stop the person asked for, or
-      # a session that finished, is not one.
+      # Whether the session is ending as a failure: the state `finalize_session`
+      # is about to record for it is `failed`, decided by the same outcome
+      # (#outcome_error, #outcome_state), so cleanup and the session's final
+      # state never disagree. A stop the person asked for, a session that
+      # finished, and one that ends with only the queue's own generic error
+      # after a requested finish are not failures.
       def session_failed?(session, state)
-        return true if session.reload.failed?
-
-        state[:error].present? && !(session.cancelled? || session.finishing_at.present?)
+        session.reload
+        outcome_state(session, outcome_error(session, state[:error])) == "failed"
       end
 
       # Output collection walks the container filesystem and must not repeat on

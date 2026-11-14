@@ -35,7 +35,7 @@ module ContainerRuntime
   #
   # == Session
   #   session_identity(session)                  → String, the runtime_id the create will have
-  #   cleanup_session(id)                        → void, removes the session's objects
+  #   cleanup_session(id, failed: false)         → void, removes the session's objects
   #   session_absent?(id)                        → true/false
   #   cleanup_ready?(id)                         → true/false
   #
@@ -112,8 +112,10 @@ module ContainerRuntime
     end
 
     # Removes what the runtime holds for the session `id` names. Already gone
-    # counts as done.
-    def cleanup_session(_id)
+    # counts as done. `failed` says the session ended as a failure: a hint a
+    # runtime may use to clean up harder (a runner's machine is reset instead of
+    # scrubbed) and may ignore.
+    def cleanup_session(_id, failed: false)
       raise NotImplementedError, "#{self.class.name} must implement #cleanup_session"
     end
 

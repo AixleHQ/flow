@@ -10,7 +10,7 @@ module RunnerMachineReturn
   private
 
   # The flash for the redirect: the machine is `resetting` now, or it was not
-  # `failed`, and nothing was sent.
+  # `failed`, or its runner is not `manual`, and nothing was sent.
   def return_machine_to_service(runner)
     machine = runner.environments.find(params[:machine_id])
     name = Runners::Machines.label(machine)
@@ -19,5 +19,7 @@ module RunnerMachineReturn
     else
       { alert: "#{name} is not failed, so there is nothing to return to service." }
     end
+  rescue Runners::Machines::NotManual => e
+    { alert: e.message }
   end
 end

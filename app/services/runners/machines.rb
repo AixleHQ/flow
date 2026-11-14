@@ -46,6 +46,9 @@ module Runners
 
     UNREACHABLE = "runner_unreachable"
 
+    # Return to service of a machine whose runner is not `manual`.
+    class NotManual < StandardError; end
+
     # The wait reason of ContainerRuntime::CapacityError when every machine that
     # can take a session is busy (SessionAdmission::WAIT_REASONS, §10).
     RUNNER_CAPACITY = "runner_capacity"
@@ -79,13 +82,11 @@ module Runners
         next unless held
 
         streak = failed ? held.consecutive_failures + 1 : 0
+        held.consecutive_failures = streak
         if streak >= max_consecutive_failures
-          held.update_columns(state: "failed", current_session_id: nil, consecutive_failures: streak,
-                              state_reason: "#{label(held)} failed #{streak} sessions in a row".truncate(255),
-                              updated_at: Time.current)
+          held.mark_failed!("#{label(held)} failed #{streak} sessions in a row")
         else
-          held.update_columns(current_session_id: nil, state_reason: nil, consecutive_failures: streak,
-                              updated_at: Time.current)
+          held.update!(current_session_id: nil, state_reason: nil)
         end
       end
     end
@@ -97,10 +98,14 @@ module Runners
     # Without one (a reused refresh token), whoever holds it. A machine already
     # gone stays gone.
     def fail!(environment, reason, holder: nil)
-      scope = RunnerEnvironment.where(id: environment.id).where.not(state: "gone")
-      scope = scope.where(current_session_id: holder.id) if holder
-      scope.update_all(state: "failed", current_session_id: nil, state_reason: reason.to_s.truncate(255),
-                       updated_at: Time.current)
+      RunnerEnvironment.transaction do
+        scope = RunnerEnvironment.where(id: environment.id)
+        scope = scope.where(current_session_id: holder.id) if holder
+        locked = scope.lock.first
+        next unless locked&.may_mark_failed?
+
+        locked.mark_failed!(reason)
+      end
     end
 
     def held_by(session)
@@ -144,13 +149,17 @@ module Runners
     # Return to service (§5.2): a `failed` machine goes `resetting`, held by no
     # session, and an `env.reset` is put on its queue. It takes no session until
     # the op settles it (#settle_resets!). False for a machine that is not
-    # `failed`: pressing it twice sends one reset.
+    # `failed`: pressing it twice sends one reset. Only a `manual` runner's
+    # machine returns this way (NotManual): a `coder` machine's recovery may be
+    # a rebuild, not a reset (§7.2).
     def return_to_service!(environment)
-      RunnerEnvironment.transaction do
-        locked = RunnerEnvironment.where(id: environment.id, state: "failed").lock.first
-        next false unless locked
+      raise NotManual, "Only a machine of a manual runner is returned to service." unless environment.runner.manual?
 
-        locked.update_columns(state: "resetting", current_session_id: nil, state_reason: nil, updated_at: Time.current)
+      RunnerEnvironment.transaction do
+        locked = RunnerEnvironment.where(id: environment.id).lock.first
+        next false unless locked&.may_begin_return_to_service?
+
+        locked.begin_return_to_service!
         Runners::Operations.enqueue_reset!(locked, deadline_at: Settings.runners.lifecycle_op_timeout.to_f.seconds.from_now)
         true
       end
@@ -170,20 +179,23 @@ module Runners
       environment.display_name.presence || environment.key
     end
 
+    # The reset that settles the machine is the latest `env.reset` the machine
+    # has, read under its row lock: the Return to service that put it in
+    # `resetting` is the last one to have enqueued one (it did so under the same
+    # lock), so a result of an earlier reset can never settle a later attempt.
     def settle_reset!(machine)
-      operation = RunnerOperation.where(runner_environment_id: machine.id, op: "env.reset").order(:sequence).last
-      return if operation.nil? || operation.deliverable?
-
       RunnerEnvironment.transaction do
         locked = RunnerEnvironment.where(id: machine.id, state: "resetting").lock.first
         next unless locked
 
+        operation = RunnerOperation.where(runner_environment_id: locked.id, op: "env.reset").order(:sequence).last
+        next if operation.nil? || operation.deliverable?
+
         if operation.completed?
-          locked.update_columns(state: "registered", state_reason: nil, consecutive_failures: 0, updated_at: Time.current)
+          locked.finish_reset!
         else
           reason = operation.expired? ? "the runner did not answer" : failure_text(operation.result)
-          locked.update_columns(state: "failed", state_reason: "#{label(locked)} failed to reset on Return to service: #{reason}".truncate(255),
-                                updated_at: Time.current)
+          locked.mark_failed!("#{label(locked)} failed to reset on Return to service: #{reason}")
         end
       end
     end

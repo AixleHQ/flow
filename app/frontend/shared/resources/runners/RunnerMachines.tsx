@@ -24,9 +24,11 @@ const STATE_HINT: Record<RunnerMachine['state'], string> = {
 const platform = (machine: Pick<RunnerMachine, 'os' | 'arch'>): string =>
   [machine.os, machine.arch].filter(Boolean).join('/') || '—';
 
-/** What the page says of a failed machine (§8): why, and what to do. */
-const failedMessage = (machine: RunnerMachine): string =>
-  `${machine.stateReason ?? `${machine.displayName ?? machine.key} failed`}. Fix the machine and press Return to service.`;
+/** Why a machine failed (§8), as recorded: no mark is added, so a reason that ends in `?` or `.` keeps its own. */
+const failedReason = (machine: RunnerMachine): string =>
+  machine.stateReason ?? `${machine.displayName ?? machine.key} failed`;
+
+const FAILED_ACTION = 'Fix the machine and press Return to service.';
 
 interface RunnerMachinesProps {
   machines: RunnerMachine[];
@@ -95,9 +97,20 @@ export function RunnerMachines({ machines, runner, paths, canManage }: RunnerMac
             <Table.Td>
               <Stack gap={2} align="flex-start">
                 <StatusBadge state={machine.state} />
-                <Text fz="xs" c="dimmed">
-                  {machine.state === 'failed' ? failedMessage(machine) : STATE_HINT[machine.state]}
-                </Text>
+                {machine.state === 'failed' ? (
+                  <>
+                    <Text fz="xs" c="dimmed">
+                      {failedReason(machine)}
+                    </Text>
+                    <Text fz="xs" c="dimmed">
+                      {FAILED_ACTION}
+                    </Text>
+                  </>
+                ) : (
+                  <Text fz="xs" c="dimmed">
+                    {STATE_HINT[machine.state]}
+                  </Text>
+                )}
               </Stack>
             </Table.Td>
             <Table.Td>

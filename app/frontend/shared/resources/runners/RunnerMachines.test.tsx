@@ -71,9 +71,8 @@ describe('RunnerMachines', () => {
     expect(within(rows[2]).getByText('Offline')).toBeInTheDocument();
     expect(within(rows[2]).getByText('Never')).toBeInTheDocument();
     expect(within(rows[3]).getByText('Failed')).toBeInTheDocument();
-    expect(
-      within(rows[3]).getByText('env.reset failed. Fix the machine and press Return to service.'),
-    ).toBeInTheDocument();
+    expect(within(rows[3]).getByText('env.reset failed')).toBeInTheDocument();
+    expect(within(rows[3]).getByText('Fix the machine and press Return to service.')).toBeInTheDocument();
   });
 
   it('says so when no machine has registered', () => {
@@ -107,9 +106,8 @@ describe('RunnerMachines', () => {
     );
 
     expect(screen.getAllByRole('button', { name: 'Return to service' })).toHaveLength(1);
-    expect(
-      screen.getByText('bad-box failed to reset: boom. Fix the machine and press Return to service.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('bad-box failed to reset: boom')).toBeInTheDocument();
+    expect(screen.getByText('Fix the machine and press Return to service.')).toBeInTheDocument();
 
     await userEvent.setup().click(screen.getByRole('button', { name: 'Return to service' }));
 
@@ -118,6 +116,24 @@ describe('RunnerMachines', () => {
       {},
       expect.objectContaining({ preserveScroll: true }),
     );
+  });
+
+  it("shows a failed machine's reason as it is, with no second mark after a `?` or a `.`", () => {
+    renderAuthedPage(
+      <RunnerMachines
+        machines={[
+          machine({ id: 8, state: 'failed', stateReason: 'docker_error: Is the docker daemon running?' }),
+          machine({ id: 9, state: 'failed', stateReason: 'the runner did not answer.' }),
+        ]}
+        runner={runner}
+        paths={paths}
+        canManage
+      />,
+    );
+
+    expect(screen.getByText('docker_error: Is the docker daemon running?')).toBeInTheDocument();
+    expect(screen.getByText('the runner did not answer.')).toBeInTheDocument();
+    expect(screen.queryByText(/[?.]\./)).not.toBeInTheDocument();
   });
 
   it('shows no action to someone who cannot manage the runner', () => {

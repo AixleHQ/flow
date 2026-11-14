@@ -310,6 +310,19 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
     assert_empty RunnerOperation.all
   end
 
+  test "Return to service of a machine whose runner is not manual sends nothing" do
+    runner = create(:runner, :kubernetes, company: @company, created_by: @admin, name: "Cluster")
+    machine = create(:runner_environment, runner: runner)
+    Runners::Machines.fail!(machine, "boom")
+    sign_in_as(@admin)
+
+    post machine_return_to_service_company_settings_runner_path(runner, machine)
+
+    assert_equal "Only a machine of a manual runner is returned to service.", flash[:alert]
+    assert_equal "failed", machine.reload.state
+    assert_empty RunnerOperation.all
+  end
+
   test "a machine of another runner is not found by Return to service" do
     other = create(:runner_environment, runner: create(:runner, company: @company, created_by: @admin, name: "Other box"))
     Runners::Machines.fail!(other, "boom")

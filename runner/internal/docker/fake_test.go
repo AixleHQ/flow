@@ -76,6 +76,12 @@ type fakeEngine struct {
 	// removeBlocks keeps every container removal from answering until the
 	// client gives up, as a stalled daemon does.
 	removeBlocks bool
+	// removeBlocksRole keeps the removal of the containers with this role label
+	// from answering until the client gives up. removeBlocked is how long the
+	// last such removal was held, and onRemoveBlocked runs when one arrives.
+	removeBlocksRole string
+	removeBlocked    time.Duration
+	onRemoveBlocked  func()
 	// removeError refuses every container removal with a 500.
 	removeError string
 	// bindsNotVisible refuses every bind mount, as a daemon that does not see
@@ -317,7 +323,23 @@ func (f *fakeEngine) serveContainers(w http.ResponseWriter, r *http.Request, p s
 	if action == "" && r.Method == http.MethodDelete {
 		f.mu.Lock()
 		blocks := f.removeBlocks
+		blockedRole := false
+		if c := f.lookup(ref); c != nil && f.removeBlocksRole != "" && c.Config.Labels[LabelRole] == f.removeBlocksRole {
+			blockedRole = true
+		}
+		onBlocked := f.onRemoveBlocked
 		f.mu.Unlock()
+		if blockedRole {
+			arrived := time.Now()
+			if onBlocked != nil {
+				onBlocked()
+			}
+			<-r.Context().Done()
+			f.mu.Lock()
+			f.removeBlocked = time.Since(arrived)
+			f.mu.Unlock()
+			return
+		}
 		if blocks {
 			<-r.Context().Done()
 			return
