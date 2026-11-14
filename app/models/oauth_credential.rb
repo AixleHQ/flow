@@ -30,6 +30,13 @@ class OauthCredential < ApplicationRecord
   GITHUB_PROVIDER = "github"
   GITLAB_PROVIDER = "gitlab"
 
+  # Where each provider's connection keeps the account's identity in `metadata`, and
+  # which of its fields is the login. The provider modules read the key from here.
+  IDENTITY_FIELDS = {
+    GITHUB_PROVIDER => { metadata_key: "github_user", login: "login" },
+    GITLAB_PROVIDER => { metadata_key: "gitlab_user", login: "username" }
+  }.freeze
+
   # Consecutive refresh failures before the credential is escalated to status:error
   # (surfaced as a reconnect badge + notification). Below the threshold it stays
   # :active so the sweep keeps retrying — a transient provider blip self-heals.
@@ -44,7 +51,7 @@ class OauthCredential < ApplicationRecord
   # GitHub says an account's login can change but its numeric id cannot, so the webhook
   # for a revoked authorization finds credentials by the id stored in `metadata`.
   scope :for_github_user, ->(github_id) {
-    where(provider: GITHUB_PROVIDER).where("metadata -> 'github_user' ->> 'id' = ?", github_id.to_s)
+    where(provider: GITHUB_PROVIDER).where("metadata -> ? ->> 'id' = ?", IDENTITY_FIELDS.dig(GITHUB_PROVIDER, :metadata_key), github_id.to_s)
   }
   # The connection the profile page shows: the latest one, a revoked one included
   # (the page offers to reconnect it).
@@ -84,13 +91,6 @@ class OauthCredential < ApplicationRecord
   def on_other_gitlab_instance?
     provider == GITLAB_PROVIDER && oauth_client.issuer != Gitlab::Host.web_base
   end
-
-  # Where each provider's connection keeps the account's identity in `metadata`, and
-  # which of its fields is the login.
-  IDENTITY_FIELDS = {
-    GITHUB_PROVIDER => { metadata_key: "github_user", login: "login" },
-    GITLAB_PROVIDER => { metadata_key: "gitlab_user", login: "username" }
-  }.freeze
 
   # The account's identity as its provider reported it ({} when none is stored).
   def account_identity

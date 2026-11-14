@@ -13,6 +13,16 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Integrations**: agents can act as you on GitLab, as they can on GitHub.
+  Connect your GitLab account under **Profile → Connected accounts**, allow it
+  per project, and give a step the `gitlab_user_token` or `gitlab_user_token_for`
+  tool. Unlike GitHub's, the token is not limited to the session's repositories:
+  GitLab cannot do that, and the user guide says what bounds it instead. The
+  operator adds `<PROTOCOL>://<DOMAIN>/oauth/callback` as a redirect URI to the
+  deployment's GitLab OAuth application. Your concurrent sessions share one
+  GitLab token, which Flow replaces only in its last ten minutes.
+
 ### Changed
 - Runners: the platform now recommends `aixle-runner` 0.3.0 and
   serves it next to 0.1.0 and 0.2.0. It pins the `linux-amd64` and `linux-arm64`
@@ -29,14 +39,6 @@ governance, community health — carry none.
 ## [1.15.0] - 2026-11-14
 
 ### Added
-- **Integrations**: agents can act as you on GitLab, as they can on GitHub.
-  Connect your GitLab account under **Profile → Connected accounts**, allow it
-  per project, and give a step the `gitlab_user_token` or `gitlab_user_token_for`
-  tool. Unlike GitHub's, the token is not limited to the session's repositories:
-  GitLab cannot do that, and the user guide says what bounds it instead. The
-  operator adds `<PROTOCOL>://<DOMAIN>/oauth/callback` as a redirect URI to the
-  deployment's GitLab OAuth application. Your concurrent sessions share one
-  GitLab token, which Flow replaces only in its last ten minutes.
 - **Tasks**: agents using personal access can ask for the tasks assigned to you
   — directly or through a project team you are on — across every project of one
   company, or in one project (`list_my_tasks`). `list_projects` now names each
