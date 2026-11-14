@@ -96,6 +96,15 @@ class ChatConversation < ApplicationRecord
     retry
   end
 
+  # The name a team's General channel is kept under when the Connector, which
+  # lists it with no name, is all that named it.
+  GENERAL = "General"
+
+  # A team's General channel shares the team's id.
+  def unnamed_general?
+    provider == "teams" && channel? && team_external_id.present? && external_id == team_external_id && name == GENERAL
+  end
+
   # The other rows of this row's team, in the same registry.
   def teammates
     return self.class.none if team_external_id.blank?
@@ -138,7 +147,7 @@ class ChatConversation < ApplicationRecord
       next if channel["id"].blank?
 
       row = sibling(team_conversation, channel["id"])
-      row.update!(provider: "teams", kind: "channel", name: channel["name"].presence || row.name || "General",
+      row.update!(provider: "teams", kind: "channel", name: channel["name"].presence || row.name || GENERAL,
                   tenant_id: team_conversation.tenant_id, team_external_id: team_conversation.team_external_id,
                   team_aad_group_id: team_conversation.team_aad_group_id, team_name: team_conversation.team_name,
                   service_url: team_conversation.service_url, installed: true)
