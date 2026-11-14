@@ -13,6 +13,16 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Integrations**: agents can act as you on GitLab, as they can on GitHub.
+  Connect your GitLab account under **Profile → Connected accounts**, allow it
+  per project, and give a step the `gitlab_user_token` or `gitlab_user_token_for`
+  tool. Unlike GitHub's, the token is not limited to the session's repositories:
+  GitLab cannot do that, and the user guide says what bounds it instead. The
+  operator adds `<PROTOCOL>://<DOMAIN>/oauth/callback` as a redirect URI to the
+  deployment's GitLab OAuth application. Your concurrent sessions share one
+  GitLab token, which Flow replaces only in its last ten minutes.
+
 ### Changed
 - Runners: the runner pulls the agent images for its machine's own platform
   and falls back to `linux/amd64` when an image has no build for it, so a
@@ -29,16 +39,6 @@ governance, community health — carry none.
   `ephemeral` when it registers. Runner protocol 1 only, and no minimum runner
   version: 0.2.0 keeps working, but shows offline during an operation longer
   than 90 seconds because it sends no heartbeat.
-
-### Added
-- **Integrations**: agents can act as you on GitLab, as they can on GitHub.
-  Connect your GitLab account under **Profile → Connected accounts**, allow it
-  per project, and give a step the `gitlab_user_token` or `gitlab_user_token_for`
-  tool. Unlike GitHub's, the token is not limited to the session's repositories:
-  GitLab cannot do that, and the user guide says what bounds it instead. The
-  operator adds `<PROTOCOL>://<DOMAIN>/oauth/callback` as a redirect URI to the
-  deployment's GitLab OAuth application. Your concurrent sessions share one
-  GitLab token, which Flow replaces only in its last ten minutes.
 
 ## [1.15.0] - 2026-11-14
 

@@ -207,14 +207,14 @@ class Web::ProfileConnectionsTest < ActionDispatch::IntegrationTest
     github = create(:oauth_credential, :github_user, owner: @user)
     create(:act_as_consent, :own, user: @user, project: @project, provider: "gitlab")
     create(:act_as_consent, :own, user: @user, project: @project, provider: "github")
-    fake = FakeGitlab::UserTokenService.new
-    Gitlab::UserTokenService.stubs(:new).returns(fake)
+    resolve_hosts_publicly!
+    revocation = stub_request(:post, "#{Gitlab::Host.web_base}/oauth/revoke").to_return(status: 200, body: "{}")
 
     delete profile_connection_path("gitlab")
 
     assert_redirected_to profile_connections_path
     assert_equal "GitLab disconnected", flash[:notice]
-    assert fake.called?(:revoke)
+    assert_requested revocation
     assert_nil OauthCredential.find_by(id: gitlab.id)
     assert OauthCredential.exists?(github.id)
     assert_equal [ "github" ], ActAsConsent.where(user: @user).pluck(:provider)
@@ -222,9 +222,8 @@ class Web::ProfileConnectionsTest < ActionDispatch::IntegrationTest
 
   test "disconnecting GitLab still removes the connection when GitLab is unreachable" do
     credential = create(:oauth_credential, :gitlab_user, owner: @user)
-    Gitlab::UserTokenService.stubs(:new).returns(
-      FakeGitlab::UserTokenService.new(revoke_error: Gitlab::UserTokenService::Unavailable.new("down"))
-    )
+    resolve_hosts_publicly!
+    stub_request(:post, "#{Gitlab::Host.web_base}/oauth/revoke").to_return(status: 503, body: "down")
 
     delete profile_connection_path("gitlab")
 

@@ -8,9 +8,13 @@ module Gitlab
     PROVIDER = OauthCredential::GITLAB_PROVIDER
     LABEL = "GitLab"
     IDENTITY_TTL = 24.hours
-    METADATA_KEY = "gitlab_user"
 
     module_function
+
+    # Where this account's identity sits in the credential's metadata (the model owns it).
+    def metadata_key
+      OauthCredential::IDENTITY_FIELDS.dig(PROVIDER, :metadata_key)
+    end
 
     def configured?
       AppConfig.oauth_enabled?
@@ -19,7 +23,8 @@ module Gitlab
     # The endpoints and issuer follow GITLAB_ENDPOINT (Oauth::Providers#config merges them).
     def endpoints
       base = Host.web_base
-      { issuer: base, authorization_endpoint: "#{base}/oauth/authorize", token_endpoint: "#{base}/oauth/token" }
+      { issuer: base, authorization_endpoint: "#{base}/oauth/authorize", token_endpoint: "#{base}/oauth/token",
+        revocation_endpoint: "#{base}/oauth/revoke" }
     end
 
     # Called by the OAuth callback right after the token is stored. A failed lookup never
@@ -28,14 +33,14 @@ module Gitlab
     def record_identity!(credential)
       store_identity!(credential, UserTokenService.new.user(credential.access_token))
     rescue UserTokenService::Error
-      credential.update!(metadata: credential.metadata.to_h.except(METADATA_KEY))
+      credential.update!(metadata: credential.metadata.to_h.except(metadata_key))
       raise ::Oauth::TokenExchangeError, "gitlab identity unavailable"
     end
 
     # { "id", "username", "name", "avatar_url", "commit_email" } for a connected credential,
     # refetched when older than IDENTITY_TTL.
     def identity_for(credential)
-      stored = credential.metadata.to_h[METADATA_KEY]
+      stored = credential.metadata.to_h[metadata_key]
       fetched_at = stored && Time.zone.parse(stored["fetched_at"].to_s)
       return stored if stored && fetched_at && fetched_at > IDENTITY_TTL.ago
 
@@ -72,13 +77,13 @@ module Gitlab
         "avatar_url" => profile[:avatar_url], "commit_email" => profile[:commit_email],
         "fetched_at" => Time.current.iso8601
       }
-      credential.update!(metadata: credential.metadata.to_h.merge(METADATA_KEY => identity))
+      credential.update!(metadata: credential.metadata.to_h.merge(metadata_key => identity))
       identity
     end
 
     def revoke_grant(credential)
-      UserTokenService.new.revoke(credential.access_token)
-    rescue UserTokenService::Error, Encryptable::DecryptionError => e
+      ::Oauth::TokenService.revoke!(credential)
+    rescue ::Oauth::RevocationError, Encryptable::DecryptionError => e
       Rails.logger.warn("[Gitlab::UserConnection] could not revoke the grant: #{e.class}")
     end
   end

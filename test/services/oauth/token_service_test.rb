@@ -461,6 +461,42 @@ module Oauth
       assert_not_requested :post, "https://gitlab.corp.internal/oauth/token"
     end
 
+    # == revoke!: RFC 7009 through the provider's revocation endpoint ==
+
+    test "revoke! posts the token with the grant's client to the revocation endpoint of the registry" do
+      gitlab = build_client(client_id: "app-id", client_secret: "app-secret")
+      cred = build_credential(owner: @user, oauth_client: gitlab, provider: "gitlab", access_token: "glo-token")
+      stub = stub_request(:post, "#{Gitlab::Host.web_base}/oauth/revoke")
+             .with(body: { "token" => "glo-token", "client_id" => "app-id", "client_secret" => "app-secret" })
+             .to_return(status: 200, body: "{}")
+
+      assert Oauth::TokenService.revoke!(cred)
+      assert_requested stub
+    end
+
+    test "revoke! raises RevocationError without token material when the provider refuses" do
+      gitlab = build_client(client_id: "app-id", client_secret: "app-secret")
+      cred = build_credential(owner: @user, oauth_client: gitlab, provider: "gitlab", access_token: "glo-token")
+      stub_request(:post, "#{Gitlab::Host.web_base}/oauth/revoke").to_return(status: 500, body: "boom glo-token")
+
+      error = assert_raises(Oauth::RevocationError) { Oauth::TokenService.revoke!(cred) }
+      assert_not_includes error.message, "glo-token"
+    end
+
+    test "revoke! raises RevocationError when the host cannot be reached" do
+      gitlab = build_client(client_id: "app-id", client_secret: "app-secret")
+      cred = build_credential(owner: @user, oauth_client: gitlab, provider: "gitlab", access_token: "glo-token")
+      stub_request(:post, "#{Gitlab::Host.web_base}/oauth/revoke").to_timeout
+
+      assert_raises(Oauth::RevocationError) { Oauth::TokenService.revoke!(cred) }
+    end
+
+    test "revoke! raises RevocationError for a provider with no revocation endpoint" do
+      cred = build_credential(owner: @user, access_token: "valid-token")
+
+      assert_raises(Oauth::RevocationError) { Oauth::TokenService.revoke!(cred) }
+    end
+
     private
 
     def build_client(client_id: "public-client", client_secret: nil)
