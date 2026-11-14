@@ -8,7 +8,7 @@ class Web::Company::Runners::MachinesController < Web::Company::ApplicationContr
 
   # Return to service for a `failed` machine of a `manual` runner (§5.2, §7.2).
   def return_to_service
-    runner = company_runners.find(params[:runner_id])
+    runner = company_runners.find(params[:settings_runner_id])
     redirect_to company_settings_runner_path(runner), **return_machine_to_service(runner)
   end
 
