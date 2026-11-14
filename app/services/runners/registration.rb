@@ -72,7 +72,7 @@ module Runners
       RunnerEnvironment.transaction do
         Credentials.lock_live_runner!(environment.runner_id)
         environment.lock!
-        environment.update!(state: :gone, current_session_id: nil)
+        environment.unregister!
         now = Time.current
         environment.credentials.unrevoked.update_all(revoked_at: now, updated_at: now)
       end

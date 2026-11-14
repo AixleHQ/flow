@@ -37,8 +37,12 @@ module ContainerRuntime
   #   included, still runs cleanup_session and frees the machine.
   # - start_container and wait_for_ready wait for nothing more than the
   #   container running (`status`), as DockerRuntime#start_container does.
-  # - cleanup_session sends `container.stop` and `env.reset`, and frees the
-  #   machine once the reset succeeded; a failed reset moves it to `failed`.
+  # - cleanup_session sends `container.stop`, then `env.scrub` under the
+  #   runner's `reuse` policy or `env.reset` under `reset` (a reset after a
+  #   failed session too), and frees the machine once that succeeded. A failed
+  #   scrub is followed by a reset; a failed reset moves the machine to `failed`,
+  #   and so do `runners.max_consecutive_failures` failed sessions in a row
+  #   (§7.2).
   #   It waits for nothing queued: while an earlier op is unfinished on the
   #   machine the session holds (a `container.start` whose wait a stop cut
   #   short, or an `env.reset` of an earlier cleanup attempt), cleanup_ready?
@@ -134,13 +138,17 @@ module ContainerRuntime
       !RunnerOperation.deliverable.exists?(runner_environment_id: environment.id)
     end
 
-    # `container.stop`, then `env.reset`, which removes every container and the
-    # workspace and cache volumes of the machine, so nothing of the session
-    # reaches the next one (§7.2), and the machine is free again. A failed
-    # `container.stop` is logged, and the reset still runs. A failed reset, a
-    # machine that does not answer included, moves the machine to `failed`
-    # with the reason.
-    def cleanup_session(id)
+    # `container.stop`, then the runner's cleanup level (§7.1, §7.2). Under
+    # `reuse`, `env.scrub`: the machine's containers and the session's outputs go,
+    # the checkouts, caches and images stay. Under `reset`, or after a `failed`
+    # session under either policy, `env.reset`: the workspace and cache volumes go
+    # too. A failed scrub is followed by a reset, and the machine is free again
+    # once either succeeded. A failed reset, a machine that does not answer
+    # included, moves the machine to `failed` with the reason, and so does the
+    # session that is the `runners.max_consecutive_failures`th failed one in a
+    # row on it (Runners::Machines.release!). A failed `container.stop` is
+    # logged, and the cleanup goes on.
+    def cleanup_session(id, failed: false)
       session = session_for(id)
       environment = session && machine(session)
       return if environment.nil?
@@ -148,12 +156,20 @@ module ContainerRuntime
       stopped = call(session, "container.stop", {}, lifecycle: true)
       Rails.logger.warn("[RunnerRuntime] session #{session.id}: #{stopped.message}") unless stopped.ok?
 
+      if !failed && session.runner.reuse_policy == "reuse"
+        scrub = call(session, "env.scrub", { "image" => scrub_image(session) }, lifecycle: true)
+        return Runners::Machines.release!(environment, session, failed: failed) if scrub.ok?
+
+        Rails.logger.warn("[RunnerRuntime] session #{session.id}: #{scrub.message}; machine #{environment.key} is reset instead")
+      end
+
       reset = call(session, "env.reset", {}, lifecycle: true)
-      return Runners::Machines.release!(environment, session) if reset.ok?
+      return Runners::Machines.release!(environment, session, failed: failed) if reset.ok?
 
       Rails.logger.warn("[RunnerRuntime] session #{session.id}: #{reset.message}; machine #{environment.key} is failed")
-      reason = reset.expired? ? "the runner did not answer" : "#{reset.error_class}: #{reset.result&.dig('error', 'message')}"
-      Runners::Machines.fail!(environment, "env.reset failed after session #{session.id}: #{reason}", holder: session)
+      reason = reset.expired? ? "the runner did not answer" : Runners::Machines.failure_text(reset.result)
+      Runners::Machines.fail!(environment, "#{Runners::Machines.label(environment)} failed to reset after session #{session.id}: #{reason}",
+                              holder: session)
     end
 
     # -- Callbacks ------------------------------------------------------------
@@ -565,6 +581,12 @@ module ContainerRuntime
       return Runners::ConfigSchema.image_reference(override, image_name) if override
 
       default_runner_image(session.agent_type, image_name)
+    end
+
+    # The image `env.scrub` runs its short-lived container from: the one the
+    # session's `container.start` pulled.
+    def scrub_image(session)
+      runner_image(session.runner&.config || {}, session)
     end
 
     def default_runner_image(agent_type, image_name)

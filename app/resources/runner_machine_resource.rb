@@ -10,6 +10,6 @@ class RunnerMachineResource < ApplicationResource
 
   attributes :id, :key, :display_name, :os, :arch, :runner_version, :state_reason, :last_heartbeat_at, :created_at
 
-  typelize "'online' | 'idle' | 'offline' | 'failed' | 'gone'"
+  typelize "'online' | 'idle' | 'offline' | 'resetting' | 'failed' | 'gone'"
   attribute :state, &:display_state
 end

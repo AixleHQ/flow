@@ -601,6 +601,11 @@ scope module: :web, defaults: { format: :html } do
         post :revoke
         post :registration_token
       end
+      # A machine belongs to its runner. Return to service: a failed machine of
+      # the runner is reset (§5.2).
+      resources :machines, only: [], controller: "runners/machines" do
+        post :return_to_service, on: :member
+      end
     end
     # Stopping at the end of the billing period, and taking that back before
     # the date arrives.
@@ -726,6 +731,11 @@ scope module: :web, defaults: { format: :html } do
             post :enable
             post :revoke
             post :registration_token
+          end
+          # A machine belongs to its runner. Return to service: a failed machine
+          # of the project's runner is reset (§5.2).
+          resources :machines, only: [], controller: "runners/machines" do
+            post :return_to_service, on: :member
           end
         end
         resources :tools, only: %i[index create update destroy]

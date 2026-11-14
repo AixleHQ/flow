@@ -317,7 +317,7 @@ class Runners::CredentialsTest < ActiveSupport::TestCase
     assert_nil @environment.reload.current_session_id, "a failed machine is held by no session"
     session = create(:runner_session, environment: @environment, runner_environment: nil)
     error = assert_raises(Runners::Machines::NoMachine) { Runners::Machines.acquire!(session) }
-    assert_match(/its machine failed: .*\(credential reuse detected\)/, error.message)
+    assert_match(/its machine is out of rotation: .*\(credential reuse detected\)/, error.message)
     assert_nil session.reload.runner_environment_id
   end
 

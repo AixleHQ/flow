@@ -94,19 +94,41 @@ export const RUNNER_TYPE_COPY: Record<string, { title: string; description: stri
 
 export const runnerTypeTitle = (type: string): string => RUNNER_TYPE_COPY[type]?.title ?? humanize(type);
 
-/** What `reuse_policy` means on each type (§7.1). */
-export const REUSE_POLICY_COPY: Partial<Record<Runner['runnerType'], Record<Runner['reusePolicy'], string>>> = {
-  manual: {
-    reuse:
-      'The machine keeps the pulled images, the workspace volume and the cache volumes. Aixle scrubs after every session.',
-    fresh:
-      'Fresh on a manual runner wipes everything Aixle put on the machine after every session. It does not give you a new machine.',
-  },
-  coder: {
-    reuse: 'The workspace is kept, with its pulled image, repository clones and cache mounts.',
-    fresh: 'A new workspace is created for every session and destroyed after it.',
-  },
+/** What `reuse_policy` means on each type (§7.1), and the values the type offers. */
+export const REUSE_POLICY_COPY: Partial<Record<Runner['runnerType'], Partial<Record<Runner['reusePolicy'], string>>>> =
+  {
+    manual: {
+      reuse:
+        'A scrub after every session. Repository checkouts, package caches and pulled images stay on the machine. The session container, its home and credentials, and /workspace/outputs are removed.',
+      reset:
+        'A reset after every session. The workspace and cache volumes are wiped, so every session clones its repositories again. Pulled images stay, and so does the machine.',
+    },
+    kubernetes: { fresh: 'A new pod for every session.' },
+    coder: {
+      reuse: 'The workspace is kept, with its pulled image, repository clones and cache mounts.',
+      reset: 'The workspace and cache volumes are wiped after every session. Container mode only.',
+      fresh: 'A new workspace is created for every session and destroyed after it.',
+    },
+  };
+
+/** The values the runner form offers for a type; `kubernetes` has one. */
+export const REUSE_POLICIES: Record<Runner['runnerType'], Runner['reusePolicy'][]> = {
+  manual: ['reuse', 'reset'],
+  coder: ['reuse', 'reset', 'fresh'],
+  kubernetes: ['fresh'],
 };
+
+/**
+ * What a company runner's scrub keeps, and who sees it (§9.4). Shown on a `manual` runner's form and page:
+ * with `reuse` the next session on a machine may belong to another project of the company.
+ */
+export const SCRUB_NOTES: string[] = [
+  'A scrub removes the session container (the agent home, credential files, MCP config, prompt, context files, /tmp, the proxy CA and logs, every process) and empties /workspace/outputs. It keeps repository checkouts, package caches and pulled images.',
+  'On a company runner with reuse, the next session on a machine may belong to another project, and it sees what a scrub kept: the repository checkouts and caches. Use reset, or a project runner, to keep projects apart.',
+  'On a project runner, what is kept stays within that project.',
+  'A reset wipes the workspace and cache volumes after every session. A session that fails is followed by a reset whatever the policy, and a machine whose reset fails, or that fails three sessions in a row, is taken out of rotation until you press Return to service.',
+  'A writable host mount (home mount, an extra mount with :rw, a host-path cache mount) is outside every policy: a scrub removes what Aixle wrote there, not what the agent wrote.',
+];
 
 /** The type's own default when the runner does not set one (Runner::DEFAULT_REUSE_POLICY). */
 export const DEFAULT_REUSE_POLICY: Record<Runner['runnerType'], Runner['reusePolicy']> = {

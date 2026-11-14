@@ -236,8 +236,14 @@ func (e *Environment) emptyOutputs(ctx context.Context, ref string) (bool, error
 	if err != nil {
 		return false, err
 	}
+	// The removal runs under its own timeout, not under the op's context, which
+	// has ended or is about to: a stalled daemon then cannot hold up the serial
+	// ops loop. A helper that is left is found by the final check by label, as
+	// `scrub_failed`, and removed by the next scrub or reset.
 	defer func() {
-		_, _ = e.API.ContainerRemove(context.WithoutCancel(ctx), created.ID, client.ContainerRemoveOptions{Force: true, RemoveVolumes: true})
+		removeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), e.removeTimeout())
+		defer cancel()
+		_, _ = e.API.ContainerRemove(removeCtx, created.ID, client.ContainerRemoveOptions{Force: true, RemoveVolumes: true})
 	}()
 
 	wait := e.API.ContainerWait(ctx, created.ID, client.ContainerWaitOptions{Condition: container.WaitConditionNextExit})

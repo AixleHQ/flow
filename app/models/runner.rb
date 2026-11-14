@@ -7,11 +7,16 @@ class Runner < ApplicationRecord
   extend Enumerize
   include RunnerStateMachine
 
-  # §2.7: kubernetes has a fresh pod per session and nothing else.
+  # §2.7, §7.1. `reuse`: a scrub after every session. `reset`: a reset after
+  # every session, on the same machine. `fresh`: a new machine or workspace per
+  # session. `manual` takes the first two, `kubernetes` `fresh` only, and
+  # `coder` all three (container mode only for `reset`, §6.8) once it can be
+  # created (task 17).
+  # kubernetes has a fresh pod per session and nothing else.
   DEFAULT_REUSE_POLICY = { "manual" => "reuse", "coder" => "reuse", "kubernetes" => "fresh" }.freeze
 
   enumerize :runner_type, in: %i[manual coder kubernetes], predicates: true
-  enumerize :reuse_policy, in: %i[reuse fresh]
+  enumerize :reuse_policy, in: %i[reuse reset fresh]
 
   belongs_to :company
   belongs_to :project, optional: true
@@ -44,6 +49,7 @@ class Runner < ApplicationRecord
   validates :max_environments, numericality: { only_integer: true, greater_than: 0 }, allow_nil: true
   validates :max_environments, absence: true, if: :manual?
   validates :reuse_policy, inclusion: { in: %w[fresh], message: "must be fresh on a kubernetes runner" }, if: :kubernetes?
+  validates :reuse_policy, inclusion: { in: %w[reuse reset], message: "must be reuse or reset on a manual runner" }, if: :manual?
   validates :integration, presence: true, if: :coder?
   validates :integration, absence: true, unless: :coder?
   validate :name_unique_in_scope, if: -> { name.present? && company_id.present? && deleted_at.nil? }
@@ -55,6 +61,8 @@ class Runner < ApplicationRecord
   validate :config_matches_schema, if: -> { runner_type.present? && (new_record? || config_or_type_changing?) }
 
   scope :not_deleted, -> { where(deleted_at: nil) }
+  # The company's own runners, visible to every project: not a project's.
+  scope :company_level, -> { where(project_id: nil) }
   # Not disabled, revoked or deleted: the runners whose health is checked
   # (Runners::HealthCheck).
   scope :live, -> { not_deleted.where(status: RunnerStateMachine::HEALTH_STATES.map(&:to_s)) }
