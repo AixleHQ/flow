@@ -13,6 +13,19 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Changed
+- Runner compatibility: the platform now recommends `aixle-runner` 0.3.0 and
+  serves it next to 0.1.0 and 0.2.0. It pins the `linux-amd64` and `linux-arm64`
+  binaries of [runner-v0.3.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.3.0)
+  by their SHA-256. "Add machine" now offers 0.3.0, the binary and the
+  `ghcr.io/aixlehq/aixle-runner:0.3.0` image, and an idle machine on 0.2.0 that
+  has not opted out is offered the update. 0.3.0 sends a heartbeat while an
+  operation runs, so its machine stays online through a long one, such as a first
+  image pull, and stops on a terminal heartbeat refusal. It no longer sends
+  `ephemeral` when it registers. Runner protocol 1 only, and no minimum runner
+  version: 0.2.0 keeps working, but shows offline during an operation longer
+  than 90 seconds because it sends no heartbeat.
+
 ### Added
 - **Integrations**: agents can act as you on GitLab, as they can on GitHub.
   Connect your GitLab account under **Profile → Connected accounts**, allow it
