@@ -1,6 +1,6 @@
 # Agents act as the user on GitLab
 
-**Task:** #238 · **Status:** proposal · **Date:** 2026-11-13
+**Task:** #238 · **Status:** built · **Date:** 2026-11-13
 
 Builds on [github-user-identity.md](./github-user-identity.md) (#214, built). Read its
 §2.1–§2.3, §3 and §4.3 first: this document says only what GitLab changes. Anything not
@@ -122,23 +122,27 @@ the token response and `apply_token_response!` stores `expires_at`.
 **What the tool hands out.** The stored token itself, since GitLab cannot mint a narrower
 one (GitHub mints a new one per call). Steps:
 
-1. `Oauth::TokenService.fresh(credential, skew: MIN_LIFETIME)` with
-   `MIN_LIFETIME = 30.minutes`, so the agent never gets a token about to lapse. The
-   sweep and `fresh` refresh at 10 minutes left (`REFRESH_SKEW`), so a token is handed
-   out with at least 20 minutes of use before the platform replaces it.
+1. `Oauth::TokenService.fresh(credential, skew: Oauth::TokenService::REFRESH_SKEW)`:
+   the tool refreshes only within `REFRESH_SKEW` (10 minutes) of expiry, as the sweep
+   does, and not earlier. A token handed out may have only a few minutes left; the agent
+   asks again.
 2. The result's `expires_at` is the stored `expires_at` minus `REFRESH_SKEW`: the moment
-   to ask again, not GitLab's expiry. A refresh issues a new access token. Whether
-   GitLab's Doorkeeper revokes the previous access token at that moment is unverified
-   (R2), so the earlier time is the safe one to report.
+   to ask again, not GitLab's expiry. The tool's note adds that an agent whose token
+   GitLab refuses with 401 asks for it again.
 3. Two sessions of one user receive the same token value until the next refresh. Each
    gets its own issuance row.
 
-The 30-minute floor, not `PRE_START_SKEW` (one hour), keeps refreshes to about one per
-credential per two hours however many calls agents make.
+**R2 is settled.** GitLab's OAuth documentation says a refresh "invalidates the existing
+`access_token` and `refresh_token`" (https://docs.gitlab.com/api/oauth2/). A person has one
+token for all their sessions, so a refresh made early by one session would revoke a token
+another running session was told was valid for longer. The requirement is that no token
+handed out stops working before the `expires_at` the tool reported for it. Refreshing only
+inside `REFRESH_SKEW`, and reporting the expiry less `REFRESH_SKEW`, meets it: the platform
+refreshes no earlier than the moment the tool told every holder to ask again.
 
-**Alternative:** refresh on every call for a full two hours each time. It multiplies
-rotations, and if refreshing revokes the previous access token it would cut off other
-sessions of the same user. Rejected.
+**Alternative:** refresh early (a 30-minute floor) so the agent always gets a long-lived
+token. Rejected: the early refresh revokes the token other sessions hold, before the
+`expires_at` they were given.
 
 ### 2.4 Masking and audit: unchanged
 
@@ -169,23 +173,35 @@ covered repositories.
 (refetch when older than 24 hours), `disconnect!(user)`.
 
 `Gitlab::UserTokenService` (`app/services/gitlab/user_token_service.rb`) is the adapter
-for calls made with a user's token, using `Gitlab::Rest` against `Host.api_endpoint`
-(the endpoint is the deployment's, never a request's):
+for calls made with a user's token, using the `gitlab` gem (`::Gitlab.client(endpoint:
+Host.api_endpoint, private_token: token)`, the way `Gitlab::TokenService` and
+`Github::UserTokenService` use theirs; the endpoint is the deployment's, never a
+request's). The gem sends `Authorization: Bearer` for a token of 64 characters or more,
+which a GitLab OAuth token is; a test pins the header. No HTTP of our own stays in the
+adapter:
 
-- `user(token)`: `GET /user`, returns `{ id:, username:, name:, avatar_url:,
-  commit_email: }`. `commit_email` is the address GitLab itself uses for web commits (a
-  private `<id>-<username>@users.noreply.<host>` unless the person chose another), so a
-  self-managed instance gets its own domain without guessing it.
-- `project_access(token, full_path)`: `GET /projects/:id` with the project path encoded;
-  returns the effective `access_level` (the larger of `project_access` and
-  `group_access`) or `nil` for 404.
-- `revoke(token)`: `POST /oauth/revoke` with the app's client id and secret; best effort,
-  as for GitHub.
+- `user(token)`: `client.user` (`GET /user`), returns `{ id:, username:, name:,
+  avatar_url:, commit_email: }`. `commit_email` is the address GitLab itself uses for web
+  commits (a private `<id>-<username>@users.noreply.<host>` unless the person chose
+  another), so a self-managed instance gets its own domain without guessing it.
+- `project_access(token, full_path, user_id:)`: `client.project(full_path)`
+  (`GET /projects/:id` with `permissions`); returns the effective `access_level` (the
+  larger of `project_access` and `group_access`) or `nil` for 404. Below Developer it asks
+  `client.all_members(project_id, user_ids: [user_id])` (`/projects/:id/members/all`),
+  which also counts access through a shared group.
 
-Errors map to `InvalidToken` (401), `Forbidden` (403), `Unavailable` (5xx, network).
-`Gitlab::Rest` raises `Trackers::Error` with a code; the adapter translates, as
-`Github::UserTokenService` does for Octokit. A canonical fake,
-`FakeGitlab::UserTokenService`, goes in `test/support/fakes/` next to the GitHub one.
+Errors map to `InvalidToken` (401), `Forbidden` (403 and other refusals), `Unavailable`
+(5xx, network), from `::Gitlab::Error::*` and the network errors `Gitlab::TokenService`
+already lists. A canonical fake, `FakeGitlab::UserTokenService`, goes in
+`test/support/fakes/` next to the GitHub one.
+
+Revoking the grant is not API v4 but RFC 7009 token revocation, which the gem does not
+have, so it belongs to the OAuth engine: the `gitlab` registry entry names a
+`revocation_endpoint` (`<web base>/oauth/revoke`, derived from `GITLAB_ENDPOINT` like its
+other endpoints), and `Oauth::TokenService.revoke!(credential)` posts the token with the
+client the grant was issued to through `SafeHttp`, with the provider's trusted host, as it
+does the token exchange and the refresh. It raises `Oauth::RevocationError`;
+`Gitlab::UserConnection.disconnect!` treats a failure as non-fatal.
 
 `Gitlab::TokenService` reads the endpoint itself rather than through `Gitlab::Host`;
 that is #218's, and this design uses only `Gitlab::Host`.
@@ -318,7 +334,7 @@ contract tests).
 
 - **Adapter:** `test/services/gitlab/user_token_service_test.rb`, WebMock contract tests
   for `GET /user` (with and without `commit_email`), `GET /projects/:id` (project and
-  group access, 404), `POST /oauth/revoke`, and the error mappings. The payloads pin the
+  group access, 404), the error mappings (the revocation is covered in the engine's tests). The payloads pin the
   fake.
 - **Engine:** `test/services/oauth/providers_test.rb` for the resolver and the key
   names; the callback request test for a `User` owner connecting GitLab, storing
@@ -330,7 +346,7 @@ contract tests).
 - **Tools:** `gitlab_user_token_test.rb`, `gitlab_user_token_for_test.rb` in the shape
   of the GitHub ones: every error, the consent matrix, a user without Developer access in
   `skipped`, nothing covered refuses, a 401 marks the credential, the token floor
-  (a credential with under 30 minutes is refreshed first), issuance row, masking, no
+  (a credential with under `REFRESH_SKEW` left is refreshed first, one with more is not), issuance row, masking, no
   token in any error.
 - **Refactor guard:** the existing GitHub tool tests pass unchanged after the extraction.
 - **Requests / frontend:** `profile_connections_test.rb` for the new prop shape, a
@@ -340,7 +356,6 @@ contract tests).
     only Reporter on a repository gets it in `skipped`;
   - a token returned twice within a refresh window is the same value; after the sweep
     refreshes, ask again works;
-  - spike R2 (does a refresh revoke the previous access token?);
   - the same on a self-managed instance served over HTTPS on a private host.
 
 ## 7. Edge cases & risks
@@ -348,9 +363,10 @@ contract tests).
 - **R1. The token reaches every project the user can.** §2.1. The main residual risk, and
   accepted only with the reviewer's agreement (D1). A token in a model's context is
   already accepted for GitHub (its R6); here the blast radius is wider.
-- **R2. Does refreshing revoke the previous access token?** Unverified. If it does, a
-  token handed out stops working when the sweep refreshes. The reported `expires_at`
-  already allows for it (§2.3); the spike on staging decides whether the docs say more.
+- **R2. A refresh revokes the previous access token** (GitLab's OAuth documentation).
+  A person's concurrent sessions share one token, so the tool never refreshes early (§2.3):
+  a token handed out works until the `expires_at` reported for it, and an agent whose
+  token GitLab refuses with 401 asks again.
 - **R3. Commit email.** If the person's profile hides the email, `commit_email` still
   returns the noreply address. If GitLab returns none, the tool falls back to
   `<id>-<username>@users.noreply.<host>` built from the connection's host.
@@ -378,7 +394,7 @@ contract tests).
 | D1 | The token is the user's OAuth token with scope `api`, not narrowed to repositories, because GitLab offers no way to narrow it; the limits are consent, the user's own access, lifetime, the coverage check and masking. **For the reviewer to confirm.** | Task: "must answer how the token is limited"; GitLab OAuth scopes (§2.1) |
 | D2 | One shared GitLab OAuth app, with one added redirect URI. | Task: "through the unified OAuth engine"; `Gitlab::AppConfig`, `docs/user-guide/gitlab.md` |
 | D3 | Feature requires the OAuth app; absent, the tools are unavailable. | `Gitlab::AppConfig.oauth_enabled?` |
-| D4 | The stored access token is returned, refreshed when under 30 minutes remain; `expires_at` reported minus the 10-minute refresh skew. | §2.3 |
+| D4 | The stored access token is returned. The tool refreshes only within the 10-minute `REFRESH_SKEW` (no early refresh), and reports `expires_at` minus that skew, so no token stops working before its reported expiry (R2). | §2.3; GitLab OAuth docs |
 | D5 | The engine treats the operator's GitLab host as trusted for the token endpoint; a literal IP stays refused. | `Gitlab::Rest` trusts `GITLAB_ENDPOINT`; `SafeHttp` `trusted_hosts` |
 | D6 | Issuer is the GitLab web base, so connections belong to one instance; other-instance rows are ignored. | `Gitlab::Host`, one instance per deployment |
 | D7 | Both integration auth modes (PAT, service account) are covered; the integration's token is never used for the person's. | Task scope |
@@ -391,7 +407,7 @@ contract tests).
 ## 9. Deferred questions
 
 - **Revoking issued tokens at session end.** Revoking the shared stored token would end
-  the user's other sessions; a distinct token per issuance is impossible here. Waits on R2.
+  the user's other sessions; a distinct token per issuance is impossible here.
 - **Narrowing, if GitLab adds it.** A repository-scoped user token would replace §2.1's
   mitigations; the tool's result shape already has `repositories`.
 - **Private-CA trust for the token endpoint** and any other self-managed gap: #218.
