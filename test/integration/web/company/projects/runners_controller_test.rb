@@ -239,7 +239,7 @@ class Web::Company::Projects::RunnersControllerTest < ActionDispatch::Integratio
   test "only someone who manages the project's runners revokes one of its machines" do
     machine = create(:runner_environment, runner: @own)
 
-    assert_role_matrix(MANAGE_ROLES, transport: :web) do
+    assert_role_matrix(MANAGE_ROLES, transport: :web) do |role|
       post revoke_company_project_runner_machine_path(@project, @own, machine)
       machine.reload.update!(state: :registered) if role == :owner
     end

@@ -397,12 +397,12 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
     sign_in_as(@admin)
 
     get company_settings_runners_path
-    assert_inertia_props { |props| props[:runners].first[:machines] == { busy: 1, total: 1 } }
+    assert_inertia_props { |props| props[:runners].first.deep_symbolize_keys[:machines] == { busy: 1, total: 1 } }
 
     get company_settings_runner_path(@runner)
     assert_inertia_props do |props|
-      props[:runner][:machines] == { busy: 1, total: 1 } &&
-        props[:machines].any? { |m| m[:firstSeenIp] == "203.0.113.7" && m[:createdByName] == @admin.name }
+      props[:runner].deep_symbolize_keys[:machines] == { busy: 1, total: 1 } &&
+        props[:machines].map(&:deep_symbolize_keys).any? { |m| m[:firstSeenIp] == "203.0.113.7" && m[:createdByName] == @admin.name }
     end
   end
 end
