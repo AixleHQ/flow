@@ -6,6 +6,7 @@ module Gitlab
   # (docs/design/gitlab-user-identity.md §2.2, §4.1).
   module UserConnection
     PROVIDER = OauthCredential::GITLAB_PROVIDER
+    LABEL = "GitLab"
     IDENTITY_TTL = 24.hours
     METADATA_KEY = "gitlab_user"
 
@@ -49,11 +50,19 @@ module Gitlab
         "#{identity['id']}-#{identity['username']}@users.noreply.#{URI.parse(Host.web_base).host}"
     end
 
+    # The person's connection on this instance, a revoked one included, or nil.
+    def latest_connection_of(user)
+      OauthCredential.latest_gitlab_connection_of(user)
+    end
+
+    # Only a grant of the instance GITLAB_ENDPOINT names now is revoked there. One from a
+    # previous endpoint is deleted without a request: its token would go to the wrong host.
     def disconnect!(user)
-      OauthCredential.where(provider: PROVIDER).for_owner(user).find_each do |credential|
+      OauthCredential.gitlab_connections_of(user).each do |credential|
         revoke_grant(credential)
         credential.destroy!
       end
+      OauthCredential.for_owner(user).on_other_gitlab_instance.destroy_all
       ActAsConsent.where(user_id: user.id, provider: PROVIDER).delete_all
     end
 

@@ -246,9 +246,9 @@ class InternalTools::GitlabUserTokenTest < ActiveSupport::TestCase
     assert_not_includes result[:stderr], "glo-leak"
   end
 
-  test "refreshes a token with under 30 minutes left before handing it out" do
+  test "refreshes a token within the refresh skew of expiry before handing it out" do
     consent!(in_own_tasks: true)
-    @credential.update!(expires_at: 20.minutes.from_now, refresh_token: "glr_old")
+    @credential.update!(expires_at: 5.minutes.from_now, refresh_token: "glr_old")
     stub_request(:post, "#{Gitlab::Host.web_base}/oauth/token")
       .to_return(status: 200, headers: { "Content-Type" => "application/json" },
                  body: { access_token: "glo_refreshed", refresh_token: "glr_new", expires_in: 7200 }.to_json)
@@ -259,18 +259,19 @@ class InternalTools::GitlabUserTokenTest < ActiveSupport::TestCase
     assert_equal "glo_refreshed", @fake.calls_to(:project_access).sole[:token]
   end
 
-  test "does not refresh a token with more than 30 minutes left" do
+  test "does not refresh early: a token with more than the refresh skew left is handed out as it is" do
     consent!(in_own_tasks: true)
-    @credential.update!(expires_at: 45.minutes.from_now)
+    @credential.update!(expires_at: 20.minutes.from_now)
 
-    run_tool
+    token = JSON.parse(run_tool[:stdout])["tokens"].sole
 
+    assert_equal @credential.access_token, token["token"]
     assert_not_requested :post, "#{Gitlab::Host.web_base}/oauth/token"
   end
 
   test "asks to reconnect when a short-lived token cannot be refreshed" do
     consent!(in_own_tasks: true)
-    @credential.update!(expires_at: 20.minutes.from_now, refresh_token: nil)
+    @credential.update!(expires_at: 5.minutes.from_now, refresh_token: nil)
 
     assert_match(/needs to be renewed/, run_tool[:stderr])
     assert_empty @fake.calls_to(:project_access)

@@ -65,12 +65,50 @@ class OauthCredential < ApplicationRecord
                    .where(oauth_client_id: OauthClient.where(issuer: Gitlab::Host.web_base).select(:id))
   }
 
+  # GitLab credentials issued by an instance other than the one GITLAB_ENDPOINT names
+  # now. They are never refreshed, revoked or shown: they lapse (design D6).
+  scope :on_other_gitlab_instance, -> {
+    where(provider: GITLAB_PROVIDER)
+      .where.not(oauth_client_id: OauthClient.where(issuer: Gitlab::Host.web_base).select(:id))
+  }
+
   def self.latest_gitlab_connection_of(user)
     gitlab_connections_of(user).order(updated_at: :desc).first
   end
 
   def self.live_gitlab_connection_of(user)
     gitlab_connections_of(user).where.not(status: :revoked).order(updated_at: :desc).first
+  end
+
+  # Whether this is a GitLab credential of a previous GITLAB_ENDPOINT.
+  def on_other_gitlab_instance?
+    provider == GITLAB_PROVIDER && oauth_client.issuer != Gitlab::Host.web_base
+  end
+
+  # Where each provider's connection keeps the account's identity in `metadata`, and
+  # which of its fields is the login.
+  IDENTITY_FIELDS = {
+    GITHUB_PROVIDER => { metadata_key: "github_user", login: "login" },
+    GITLAB_PROVIDER => { metadata_key: "gitlab_user", login: "username" }
+  }.freeze
+
+  # The account's identity as its provider reported it ({} when none is stored).
+  def account_identity
+    fields = IDENTITY_FIELDS[provider]
+    fields ? metadata.to_h.fetch(fields[:metadata_key], {}) : {}
+  end
+
+  def account_login
+    fields = IDENTITY_FIELDS[provider]
+    fields && account_identity[fields[:login]]
+  end
+
+  def account_name
+    account_identity["name"]
+  end
+
+  def account_avatar_url
+    account_identity["avatar_url"]
   end
 
   # Sweep scope (Phase 2 consumes this; index [:status, :expires_at] backs it).
@@ -87,6 +125,7 @@ class OauthCredential < ApplicationRecord
   # them forever.
   scope :refresh_due, ->(within = 15.minutes) {
     with_status(:active).where(expires_at: ..within.from_now).with_authenticatable_owner
+                        .where.not(id: on_other_gitlab_instance.select(:id))
   }
   # A suspended or deleted account's grants are left to lapse rather than kept
   # alive; restoring the account brings them back to the sweep.

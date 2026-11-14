@@ -10,9 +10,6 @@ module UserConnections
     Gitlab::UserConnection::PROVIDER => Gitlab::UserConnection
   }.freeze
 
-  # What the profile page shows each provider as.
-  LABELS = { "github" => "GitHub", "gitlab" => "GitLab" }.freeze
-
   class Error < StandardError; end
 
   # The provider is not one a person can connect.
@@ -23,19 +20,38 @@ module UserConnections
 
   module_function
 
+  # Whether this installation can connect the provider's accounts.
   def available?(provider:)
     known!(provider)
     PROVIDERS.fetch(provider).configured?
+  end
+
+  # { provider => whether it can be connected }, for every provider a person can connect.
+  def available_providers
+    PROVIDERS.keys.index_with { |provider| available?(provider: provider) }
+  end
+
+  # What the profile page calls the provider.
+  def label(provider:)
+    known!(provider)
+    PROVIDERS.fetch(provider)::LABEL
   end
 
   # The person's connection at the provider, a revoked one included (the page
   # shows it as needing a reconnect), or nil.
   def connection(user:, provider:)
     known!(provider)
-    case provider
-    when Github::UserConnection::PROVIDER then OauthCredential.latest_github_connection_of(user)
-    else OauthCredential.latest_gitlab_connection_of(user)
-    end
+    PROVIDERS.fetch(provider).latest_connection_of(user)
+  end
+
+  # { provider => the person's connection or nil }.
+  def connections_of(user:)
+    PROVIDERS.keys.index_with { |provider| connection(user: user, provider: provider) }
+  end
+
+  # { provider => the person's consent rows for the company's projects }.
+  def consents_of(user:, company:)
+    PROVIDERS.keys.index_with { |provider| consents(user: user, company: company, provider: provider) }
   end
 
   # One row per project of the company the person can reach; a project without a

@@ -9,6 +9,10 @@ GitLab connects per Flow project in one of two ways:
 - **A token** you paste, which acts as whoever it belongs to. See
   [The token](#the-token).
 
+These two ways connect the *project's integration*. Your own GitLab account is
+separate: you connect it yourself, through OAuth, so that agents can act as you.
+See [Acting as yourself](#acting-as-yourself).
+
 From then on:
 
 - you attach the GitLab projects that person is a member of as
@@ -210,9 +214,16 @@ its own.
 Each tool returns the commit identity (`login`, `gitlab_id`, `name` and the
 `email` GitLab itself commits with) and a token, with the GitLab `host`, the
 `api_url`, the `git_username` (`oauth2`) and the repositories it was checked
-for. The token expires within two hours; `expires_at` says when to ask again.
-The agent should use it only in the command that needs it: it is masked in
-session logs, but it does enter the agent's context.
+for. The token expires within two hours; `expires_at` says when to ask again, and
+it is earlier than GitLab's own expiry. If GitLab refuses the token with 401, ask
+for it again. The agent should use it only in the command that needs it: it is
+masked in session logs, but it does enter the agent's context.
+
+**Your sessions share one token.** You have one GitLab token, not one per session,
+so your concurrent sessions are handed the same value. Flow replaces it only in
+the last ten minutes before it expires, because GitLab invalidates the previous
+token when it issues a new one. A token handed out then may have only a few
+minutes left: the agent asks again.
 
 **The token is not limited to the session's repositories.** GitLab cannot narrow
 an OAuth token to chosen repositories (GitHub can), and merge requests need the
@@ -404,8 +415,11 @@ because each request carries a key for that session. See
 
 ## Limits
 
-- The only way to connect is a personal access token, which acts as its owner.
-  There is no OAuth app and no group-level install.
+- A project's integration connects with a pasted token, which acts as its owner,
+  or through Sign in with GitLab, where a group Owner signs in through the OAuth
+  application and Flow creates a service account in that group. Your own account
+  connects only through OAuth, under **Profile → Connected accounts**; a personal
+  access token cannot be used for it.
 - Each deployment reaches one GitLab instance.
 - A repository attached before Flow kept track of each hook can leave its
   hook in GitLab when it is removed: Flow cannot tell that hook apart while

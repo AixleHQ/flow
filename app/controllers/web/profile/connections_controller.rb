@@ -10,25 +10,24 @@ class Web::Profile::ConnectionsController < Web::ApplicationController
 
   def index
     render inertia: "Profile/Connections", props: {
-      available: UserConnections::PROVIDERS.keys.index_with { |provider| UserConnections.available?(provider: provider) },
+      available: UserConnections.available_providers,
       connections: -> {
-        UserConnections::PROVIDERS.keys.index_with do |provider|
-          credential = UserConnections.connection(user: current_user, provider: provider)
+        UserConnections.connections_of(user: current_user).transform_values do |credential|
           credential && UserConnectionResource.new(credential).to_h
         end
       },
       consents: -> {
-        UserConnections::PROVIDERS.keys.index_with do |provider|
-          UserConnections.consents(user: current_user, company: current_company, provider: provider)
-                         .map { |consent| ActAsConsentResource.new(consent).to_h }
+        UserConnections.consents_of(user: current_user, company: current_company).transform_values do |rows|
+          rows.map { |consent| ActAsConsentResource.new(consent).to_h }
         end
       }
     }
   end
 
   def destroy
-    UserConnections.disconnect!(user: current_user, provider: params[:provider])
-    redirect_to profile_connections_path, notice: "#{UserConnections::LABELS.fetch(params[:provider])} disconnected"
+    provider = params[:provider]
+    UserConnections.disconnect!(user: current_user, provider: provider)
+    redirect_to profile_connections_path, notice: "#{UserConnections.label(provider: provider)} disconnected"
   rescue UserConnections::UnknownProvider
     head :not_found
   end

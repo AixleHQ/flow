@@ -380,6 +380,31 @@ class OauthCredentialTest < ActiveSupport::TestCase
     assert_equal [ mine ], OauthCredential.gitlab_connections_of(@user).to_a
   end
 
+  test "refresh_due leaves a GitLab grant of a previous GITLAB_ENDPOINT to lapse" do
+    current = create(:oauth_credential, :gitlab_user, owner: @user, expires_at: 5.minutes.from_now)
+    old_host = create(:oauth_client, :gitlab, issuer: "https://old.gitlab.example.com")
+    old = create(:oauth_credential, :gitlab_user, owner: @user, oauth_client: old_host, expires_at: 5.minutes.from_now)
+
+    assert_includes OauthCredential.refresh_due, current
+    assert_not_includes OauthCredential.refresh_due, old
+    assert_equal [ old ], OauthCredential.on_other_gitlab_instance.to_a
+    assert_predicate old, :on_other_gitlab_instance?
+    assert_not_predicate current, :on_other_gitlab_instance?
+  end
+
+  test "the account identity, login, name and avatar come from the provider's own metadata key" do
+    github = create(:oauth_credential, :github_user, owner: @user)
+    gitlab = create(:oauth_credential, :gitlab_user, owner: @user)
+    other = create(:oauth_credential, owner: @user, provider: "sentry", metadata: { "github_user" => { "login" => "x" } })
+
+    assert_equal [ "octo-user", "Octo User", "https://a.test/123" ],
+                 [ github.account_login, github.account_name, github.account_avatar_url ]
+    assert_equal [ "lab-user", "Lab User", "https://a.test/456" ],
+                 [ gitlab.account_login, gitlab.account_name, gitlab.account_avatar_url ]
+    assert_equal({}, other.account_identity)
+    assert_nil other.account_login
+  end
+
   test "latest_gitlab_connection_of returns a revoked connection, live_gitlab_connection_of does not" do
     revoked = create(:oauth_credential, :gitlab_user, owner: @user, status: :revoked)
 
