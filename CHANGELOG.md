@@ -13,13 +13,39 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-11-14
+
 ### Added
 - **Tasks**: agents using personal access can ask for the tasks assigned to you
   — directly or through a project team you are on — across every project of one
   company, or in one project (`list_my_tasks`). `list_projects` now names each
   project's company (`company_id`).
+- Runners: a manual runner's page lists its machines (name, state, version,
+  OS, last seen) and refreshes while open. A machine not heard from for 90
+  seconds is offline and gets no sessions; when every machine is offline, a
+  launch is refused naming the runner. The runner's status now follows its
+  machines' health, checked every minute.
+- Runners: a session waiting for a busy runner shows "Waiting for a free
+  machine" instead of "Waiting for cluster capacity". The platform accepts a
+  runner heartbeat (`POST /runner/v1/heartbeat`), which keeps a machine online
+  through a long operation.
+- Runners: sessions on an external runner use public agent images
+  (`ghcr.io/aixlehq/flow-<agent>:latest`) instead of the hosted ones a machine
+  may not be able to pull. Self-hosted: `RUNNER_AGENT_IMAGE_PREFIX`,
+  `RUNNER_AGENT_IMAGE_TAG` and `RUNNER_AGENT_IMAGE_<RUNTIME>` change them.
+
+### Changed
+- Runners: the `reconnect_grace` setting and `ephemeral` machine registration
+  are gone. A migration removes `reconnect_grace` from every runner's
+  configuration; a runner configuration naming either key is refused like any
+  other unknown key.
 
 ### Fixed
+- **Sessions & Runs**: agents whose image runs as root (Kiro CLI, Codex,
+  Gemini, Grok, Antigravity, Copilot, Cursor) no longer get "detected dubious
+  ownership" from git in an attached repository.
+- Browser Back and Forward on a form with unsaved changes now wait for the
+  "Discard unsaved changes?" answer; Keep editing keeps the form.
 - **Integrations**: a Microsoft Teams channel created after Aixle Flow joined
   its team can be connected. Its code was refused with "Posted in <channel>,
   but the code is for <team> / <channel>". Renaming a team now renames it on
@@ -1413,7 +1439,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.14.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.15.0...develop
+[1.15.0]: https://github.com/AixleHQ/flow/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/AixleHQ/flow/compare/v1.13.1...v1.14.0
 [1.13.1]: https://github.com/AixleHQ/flow/compare/v1.13.0...v1.13.1
 [1.13.0]: https://github.com/AixleHQ/flow/compare/v1.12.0...v1.13.0
