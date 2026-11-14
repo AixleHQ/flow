@@ -16,6 +16,7 @@ type API interface {
 	ServerVersion(ctx context.Context, options client.ServerVersionOptions) (client.ServerVersionResult, error)
 	Info(ctx context.Context, options client.InfoOptions) (client.SystemInfoResult, error)
 	ImagePull(ctx context.Context, refStr string, options client.ImagePullOptions) (client.ImagePullResponse, error)
+	ImageInspect(ctx context.Context, imageID string, inspectOpts ...client.ImageInspectOption) (client.ImageInspectResult, error)
 
 	ContainerCreate(ctx context.Context, options client.ContainerCreateOptions) (client.ContainerCreateResult, error)
 	ContainerStart(ctx context.Context, containerID string, options client.ContainerStartOptions) (client.ContainerStartResult, error)
