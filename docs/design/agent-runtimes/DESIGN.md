@@ -1694,9 +1694,8 @@ are unchanged. With `network: host` the host runner listens itself.
 
 - A long-poll or heartbeat every ≤ 25 s counts as a heartbeat; the host runner sends a
   `POST /runner/v1/heartbeat` whenever no poll is outstanding, which is while it runs an op
-  (task 12d). After 90 s without one the
-  environment is flagged `unreachable`. The session page shows no banner for it (removed from the
-  plan, Alex 2026-11-13).
+  (task 12d). After 90 s without one the environment is flagged `unreachable`. The session page
+  shows no banner for it (removed from the plan, Alex 2026-11-13).
 - **The agent keeps running while disconnected.** Its process tree belongs to
   `aixle-runner`, not to a request. The runner queues events. There is no log buffer: the log
   is not shipped as chunks (§6.5, Alex 2026-11-11).
@@ -2707,7 +2706,7 @@ per-session CA and its logs), the session's processes and its tmux server.
 | --- | --- | --- | --- |
 | **Scrub** (`env.scrub`) | The session container, removed with `docker rm -f`, which takes the agent home, credential files, MCP config, prompt, context files, `/tmp`, the MITM CA and logs, the tmux server and every process with it; then a check by label that no container of the session is left. `/workspace/outputs` on the volume. Anything the strategy itself wrote to a writable cache or home mount. On `kubernetes`, deleting the pod is the scrub | Repository checkouts, package caches, pulled images | **After every session on a reusable environment, always**, before it returns to `idle`. Not optional: it is what makes reuse safe. A failed scrub leads to a rebuild where the type is `rebuildable`, and to a reset on `manual` |
 | **Reset** (`env.reset`) | Scrub, plus the `aixle-ws-<key>` volume and every `aixle-cache-<key>-*` volume, including repository checkouts | Pulled images. On `manual`, everything on the machine that Aixle did not create | Not started by a user: there is no Reset action on a machine and no "Start from a clean workspace" for one run (removed, Alex 2026-11-13); **automatically after a failed session** on that environment; on `manual` with `reuse_policy: fresh`, after every session |
-| **Rebuild** (adapter `reset level: :rebuild`, `coder` only) | Everything: the workspace is deleted and re-created from the template | Nothing | Manually; automatically when a scrub or reset fails, after `runners.max_consecutive_failures` (default 3) failed sessions in a row on one environment, or when the environment is needed by another project (§9.4) |
+| **Rebuild** (adapter `reset level: :rebuild`, `coder` only) | Everything: the workspace is deleted and re-created from the template | Nothing | Manually; automatically when a scrub or reset fails, after `runners.max_consecutive_failures` (default 3) failed sessions in a row on one environment |
 
 The repository bootstrap that `SessionContextService` already does (clone, or fetch and
 repair) is what makes a kept checkout safe to reuse: an existing clone is fetched and reset
@@ -3004,14 +3003,6 @@ keeps under `reuse_policy: reuse` (repository checkouts, package caches, pulled 
 there for the next session, which may be another project's. The project scope is the way to
 keep a machine to one project: a project runner's machines take that project's sessions only.
 
-**Requirement for the `manual` user docs and the runner form, when scrub lands (task 11):**
-
-- explain what scrub removes and what it keeps;
-- say that on a company runner with `reuse`, the next session may belong to another project and
-  sees what scrub kept;
-- say that `fresh` resets the workspace and cache volumes after every session;
-- say that on a project runner, what is kept stays within that project.
-
 ### 9.5 Network surface
 
 The guarantee this design makes is about **inbound** connections. That is what carries the
@@ -3191,7 +3182,7 @@ runners. The limit logic may be revisited later (task row 9 of §15 is deferred)
 | **Company → Settings → Runners** (new tab in `pages/Company/Settings/SettingsTabs.tsx`) | List of company runners: name, type, status pill with reason, machines busy/total, last seen. "New runner" for admins. |
 | **Project → Runners** (new page next to Integrations, in the Resources group of the project sidebar) | Two sections: "From your company" (read-only, link to the company page for admins) and "This project". "New runner" for admins and the owner. |
 | **New runner form** | Step 1: pick a type (cards; the type list comes from the adapter registry filtered by the flags, so a new type shows up without UI work, and the Kubernetes card only with `external_runners_kubernetes`). Step 2: the type's form generated from `config_schema`. Manual: the `container` options from §6.8, offered first as "give the agent your toolchain", with the acknowledgement for writable host mounts (§7.2), reuse policy with the per-type wording of §7.1, auto-update. Coder: integration select (visible ones), template, parameters, the `container` options, reuse policy, max environments. Kubernetes: namespace, and the `container` resources and image override. The fields per type are exactly the keys of §2.7. Step 3: limits. Then **Connect**: Manual shows the GitHub-style sequence of §6.3 (download, **SHA-256 verification**, `aixle-runner configure --url … --token …`, `aixle-runner service install`) with a one-time token, and waits for the first machine with a live status; Coder runs the config checks + `check_health` inline; Kubernetes shows the one-time registration token and `helm install` command, and waits for the controller. |
-| **Runner page** | Status and health facts, capabilities, the container options that widen access (§6.8), environments table (state, current session link, last used, version; action Rebuild where `rebuildable`), Disable / Revoke / Delete. For `manual` the table is **Machines**: name, online / idle / offline, os/arch, first-seen IP, created by (`created_by_id`), runner version and auto-update; actions Return to service and per-machine Revoke; and "Add machine", which mints a new registration token. The runner page does not show the runner version against `recommended_version` (§14.2); the egress list (§9.5) and the §9.7 disclosure are in the user documentation only. It has no Rotate token, no Reset, no Force release, and no machine facts (Docker version, free disk, images present; check-in still collects them, §2.2). |
+| **Runner page** | Status and health facts, capabilities, the container options that widen access (§6.8), environments table (state, current session link, last used, version; action Rebuild where `rebuildable`), Disable / Revoke / Delete. For `manual` the table is **Machines**: name, online / idle / offline, os/arch, first-seen IP, created by (`created_by_id`), runner version and auto-update; actions Return to service, per-machine Revoke; and "Add machine", which mints a new registration token. The runner page does not show the runner version against `recommended_version` (§14.2), the egress list (§9.5) or the §9.7 disclosure: those two are in the user documentation only. It has no Rotate token, no Reset, no Force release, and no machine facts (Docker version, free disk, images present; check-in still collects them, §2.2). |
 | **Workflow builder → Base Resources** (`BaseResourcesTab.tsx`) | "Runner" select: `Hosted (default)` + visible runners with status. Inline warning when the referenced runner is not usable (§3.4). No warning for an interactive step on a runner without `interactive_terminal`: it is not built, for the reason in §4. |
 | **Run drawer** (`RunWorkflowDrawer.tsx`) | "Runs on" select defaulting to the workflow's runner. For an external runner a one-line note: "Your agent login is used on this runner, which is operated by *Company/Project*." |
 | **New session form** (`SessionNewForm.tsx`) | Same select and note. Interactive mode greys out every external runner until the tunnel (§4, §15 task 16). |

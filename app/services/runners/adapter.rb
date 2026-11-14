@@ -40,6 +40,6 @@ module Runners
 
     # The runner's health from what the platform already knows, with no
     # outbound call for a `manual` runner (§2.5, §5). Returns a Health.
-    def check_health(_runner) = raise(NotImplementedError)
+    def check_health(_runner, now: Time.current) = raise(NotImplementedError)
   end
 end
