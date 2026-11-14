@@ -44,7 +44,7 @@ class RunnerEnvironmentStateMachineTest < ActiveSupport::TestCase
 
   test "mark_failed releases the session's hold and records the reason, cut to the column" do
     machine = machine_in(:registered)
-    create(:runner_session, environment: machine)
+    create(:runner_session, :holding, environment: machine)
     assert machine.reload.current_session_id
 
     machine.mark_failed!("x" * 300)
