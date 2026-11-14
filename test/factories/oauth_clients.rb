@@ -8,5 +8,12 @@ FactoryBot.define do
     token_endpoint { "https://github.com/login/oauth/access_token" }
     source { "static" }
     scopes { "" }
+
+    trait :gitlab do
+      issuer { Gitlab::Host.web_base }
+      authorization_endpoint { "#{Gitlab::Host.web_base}/oauth/authorize" }
+      token_endpoint { "#{Gitlab::Host.web_base}/oauth/token" }
+      scopes { "api" }
+    end
   end
 end

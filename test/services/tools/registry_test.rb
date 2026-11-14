@@ -69,7 +69,7 @@ class Tools::RegistryTest < ActiveSupport::TestCase
   test "ui_groups offer one entry per visible tag, session tools only" do
     groups = Tools::Registry.ui_groups
 
-    assert_equal %w[board tracker chat coder github_identity assets session_supervision], groups.map { |g| g[:tag] }
+    assert_equal %w[board tracker chat coder github_identity gitlab_identity assets session_supervision], groups.map { |g| g[:tag] }
     assert_equal %w[chat_delete_message chat_post_message chat_read_thread chat_update_message],
                  groups.find { |g| g[:tag] == "chat" }[:tool_names]
 
