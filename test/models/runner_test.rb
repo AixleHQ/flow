@@ -123,12 +123,21 @@ class RunnerTest < ActiveSupport::TestCase
     assert_equal({ manual: "reuse", coder: "reuse", kubernetes: "fresh" }, defaults)
   end
 
-  test "a given reuse_policy is kept, except reuse on kubernetes, which is refused" do
-    assert_equal "fresh", create(:runner, :manual, company: @company, created_by: @user, reuse_policy: :fresh).reuse_policy
+  test "a manual runner takes reuse and reset, and refuses fresh" do
+    assert_equal "reset", create(:runner, :manual, company: @company, created_by: @user, reuse_policy: :reset).reuse_policy
+
+    manual = build(:runner, :manual, company: @company, created_by: @user, reuse_policy: :fresh)
+    assert_not manual.valid?
+    assert_includes manual.errors[:reuse_policy], "must be reuse or reset on a manual runner"
+  end
+
+  test "a given reuse_policy is kept, except reuse and reset on kubernetes, which are refused" do
+    assert_equal "fresh", create(:runner, :coder, company: @company, created_by: @user, reuse_policy: :fresh).reuse_policy
 
     kubernetes = build(:runner, :kubernetes, company: @company, created_by: @user, reuse_policy: :reuse)
     assert_not kubernetes.valid?
     assert_includes kubernetes.errors[:reuse_policy], "must be fresh on a kubernetes runner"
+    assert_not build(:runner, :kubernetes, company: @company, created_by: @user, reuse_policy: :reset).valid?
   end
 
   # == config ==

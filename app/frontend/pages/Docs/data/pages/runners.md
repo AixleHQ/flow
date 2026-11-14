@@ -11,8 +11,8 @@ Runners are behind the `external_runners` feature flag: without it the pages
 do not exist for your company.
 
 This page covers adding machines to a `manual` runner, what the runner's status
-means, and what a session shows while it waits for a free machine. The rest of
-the manual runner's guide (reuse policy, scrub) is not written yet.
+means, what a session shows while it waits for a free machine, the reuse policy
+and Return to service.
 
 ---
 
@@ -131,3 +131,58 @@ per-runtime `RUNNER_AGENT_IMAGE_<RUNTIME>` variables (see the configuration
 reference).
 `latest` moves with every stable release, so pin `RUNNER_AGENT_IMAGE_TAG` to the
 release the deployment runs in production.
+
+## Reuse policy, scrub and Return to service
+
+A `manual` runner's **reuse policy** decides what happens on a machine after
+every session. There are two values:
+
+| Policy | After every session | Stays on the machine |
+| --- | --- | --- |
+| **Reuse** (default) | A **scrub** | Repository checkouts, package caches and pulled images |
+| **Reset** | A **reset** | Pulled images, and the machine itself |
+
+A scrub removes the session's container, which takes the agent's home, its
+credential files, the MCP config, the prompt and context files, `/tmp`, the
+proxy CA and logs, and every process of the session. It also empties
+`/workspace/outputs`. A check confirms that no container of the session is left.
+The next session on the machine fetches the repository checkouts a scrub kept
+instead of cloning them again.
+
+A reset does what a scrub does and also removes the workspace volume and the
+cache volumes, so the next session clones its repositories again. It does not
+give you a new machine: it removes what Aixle put on the machine and nothing
+else.
+
+Two things apply whatever the policy:
+
+- **A session that fails is followed by a reset**, even under Reuse, and so is a
+  scrub that fails.
+- **A machine is taken out of rotation** (state **Failed**, with the reason) when
+  its reset fails, or when 3 sessions in a row fail on it.
+
+**Who sees what a scrub keeps.** A company runner's machines are shared by every
+project of the company. On a company runner with Reuse, the next session on a
+machine may belong to another project, and it sees what the scrub kept: the
+repository checkouts and the caches. Choose Reset, or use a project runner, to
+keep projects apart. On a project runner, what is kept stays within that project.
+
+**Writable host mounts are outside every policy.** A writable home mount, an
+extra mount with `:rw` and a host-path cache mount let the agent write to the
+machine outside Aixle's volumes. A scrub or a reset removes what Aixle wrote
+there, not what the agent wrote.
+
+### Return to service
+
+A **Failed** machine takes no session and shows why, for example *build-01
+failed to reset after session 12: reset_failed: …. Fix the machine and press
+Return to service.* Fix what the reason names (start Docker, free a volume that
+is in use), then press **Return to service** in the machine's row. The machine
+shows **Resetting** and takes no session meanwhile. When the reset succeeds the
+machine is **Idle** again. When it fails, the machine stays **Failed** with the
+new reason. Pressing the button is available to whoever can edit or revoke the
+runner: a company admin on a company runner, and a project admin or owner on a
+project runner.
+
+While every machine of a runner is Failed, a launch on it is refused with a
+message that points to Return to service.

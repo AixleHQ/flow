@@ -12,7 +12,7 @@ type RunnerMachine = {
   stateReason: string | null;
   lastHeartbeatAt: string | null;
   createdAt: string;
-  state: 'online' | 'idle' | 'offline' | 'failed' | 'gone';
+  state: 'online' | 'idle' | 'offline' | 'resetting' | 'failed' | 'gone';
 }
 
 export default RunnerMachine;

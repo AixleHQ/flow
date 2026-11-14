@@ -606,6 +606,8 @@ scope module: :web, defaults: { format: :html } do
         post :enable
         post :revoke
         post :registration_token
+        # Return to service: a failed machine of the runner is reset (§5.2).
+        post "machines/:machine_id/return_to_service", action: :return_to_service, as: :machine_return_to_service
       end
     end
     # Stopping at the end of the billing period, and taking that back before
@@ -737,6 +739,7 @@ scope module: :web, defaults: { format: :html } do
             post :enable
             post :revoke
             post :registration_token
+            post "machines/:machine_id/return_to_service", action: :return_to_service, as: :machine_return_to_service
           end
         end
         resources :tools, only: %i[index create update destroy]

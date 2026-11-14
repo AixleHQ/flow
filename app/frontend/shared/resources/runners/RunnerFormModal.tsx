@@ -22,7 +22,14 @@ import {
   type RunnerPaths,
   type RunnerTypeOption,
 } from './runnerConfig';
-import { DEFAULT_REUSE_POLICY, REUSE_POLICY_COPY, RUNNER_TYPE_COPY, runnerTypeTitle } from './runnerCopy';
+import {
+  DEFAULT_REUSE_POLICY,
+  REUSE_POLICIES,
+  REUSE_POLICY_COPY,
+  RUNNER_TYPE_COPY,
+  runnerTypeTitle,
+  SCRUB_NOTES,
+} from './runnerCopy';
 import { SchemaFields } from './SchemaFields';
 
 type Step = 'type' | 'config' | 'limits';
@@ -265,7 +272,7 @@ export function RunnerFormModal({ opened, onClose, runnerTypes, paths, runner }:
               onChange={(value) => update({ reusePolicy: value as Runner['reusePolicy'] })}
             >
               <Stack gap="xs" mt="xs">
-                {(['reuse', 'fresh'] as const).map((policy) => (
+                {(REUSE_POLICIES[draft.runnerType as Runner['runnerType']] ?? []).map((policy) => (
                   <Radio
                     key={policy}
                     value={policy}
@@ -275,6 +282,17 @@ export function RunnerFormModal({ opened, onClose, runnerTypes, paths, runner }:
                 ))}
               </Stack>
             </Radio.Group>
+            {draft.runnerType === 'manual' && (
+              <Alert variant="light" color="blue" title="What a scrub keeps">
+                <Stack gap={4}>
+                  {SCRUB_NOTES.map((note) => (
+                    <Text key={note} fz="sm">
+                      {note}
+                    </Text>
+                  ))}
+                </Stack>
+              </Alert>
+            )}
           </Stack>
         )}
 

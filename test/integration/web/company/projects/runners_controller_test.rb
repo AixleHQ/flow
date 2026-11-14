@@ -195,4 +195,31 @@ class Web::Company::Projects::RunnersControllerTest < ActionDispatch::Integratio
     assert_equal "runner_revoked", response.parsed_body["code"]
     assert_empty RunnerCredential.all
   end
+
+  test "a company admin or the project owner returns a failed machine of the project's runner to service" do
+    machine = create(:runner_environment, runner: @own, display_name: "build-01")
+    Runners::Machines.fail!(machine, "boom")
+
+    assert_role_matrix(MANAGE_ROLES, transport: :web) do
+      post machine_return_to_service_company_project_runner_path(@project, @own, machine)
+      Runners::Machines.fail!(machine.reload, "boom again") if machine.reload.state == "resetting"
+    end
+
+    RunnerOperation.delete_all
+    sign_in_as(@owner)
+    post machine_return_to_service_company_project_runner_path(@project, @own, machine)
+    assert_equal "resetting", machine.reload.state
+    assert_equal 1, RunnerOperation.where(runner_environment: machine, op: "env.reset", state: "pending").count
+  end
+
+  test "nobody returns a machine of a company runner to service from a project page" do
+    machine = create(:runner_environment, runner: @company_runner)
+    Runners::Machines.fail!(machine, "boom")
+    sign_in_as(@admin)
+
+    post machine_return_to_service_company_project_runner_path(@project, @company_runner, machine)
+
+    assert_response :not_found
+    assert_equal "failed", machine.reload.state
+  end
 end

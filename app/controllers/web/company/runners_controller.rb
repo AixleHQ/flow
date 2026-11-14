@@ -9,6 +9,7 @@
 class Web::Company::RunnersController < Web::Company::ApplicationController
   include RunnerRegistrationTokens
   include RunnerMachinesList
+  include RunnerMachineReturn
 
   requires_feature :external_runners
 
@@ -64,6 +65,12 @@ class Web::Company::RunnersController < Web::Company::ApplicationController
   # returned once (DESIGN.md §6.3).
   def registration_token
     render_registration_token(company_runners.find(params[:id]))
+  end
+
+  # Return to service for a `failed` machine of a `manual` runner (§5.2, §7.2).
+  def return_to_service
+    runner = company_runners.find(params[:id])
+    redirect_to company_settings_runner_path(runner), **return_machine_to_service(runner)
   end
 
   def disable = transition(:disable, "disabled")

@@ -58,9 +58,10 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     cleaned = run_phase(session, "cleanup")
 
     assert_not cleaned.key?(:cleanup_pending), "cleanup left #{cleaned.inspect}"
-    assert_equal %w[container.stop env.reset], @host_runner.ops.last(2)
+    assert_equal %w[container.stop env.scrub], @host_runner.ops.last(2), "a reuse runner scrubs after a session that ended well"
     assert_equal "finished", session.reload.state
-    assert_nil @machine.reload.current_session_id, "the machine is free after its reset"
+    assert_nil @machine.reload.current_session_id, "the machine is free after its scrub"
+    assert_equal 0, @machine.consecutive_failures
     assert admission.reload.released_at
     assert_ops_name_their_session(session)
     assert RunnerOperation.all.none?(&:deliverable?)
@@ -89,7 +90,7 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     assert_equal second.id, @machine.reload.current_session_id
   end
 
-  test "a pull that fails in container.start still runs the cleanup, which resets the machine and frees it" do
+  test "a pull that fails in container.start still runs the cleanup, which resets the machine, whatever the policy, and frees it" do
     @host_runner.answer_with("container.start", "status" => "error",
                                                 "error" => { "class" => "image_pull_failed", "message" => "pull access denied" })
     session = launch
@@ -99,11 +100,12 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     admission = session.session_admission.reload
     assert_equal "runner-session-#{session.id}", admission.runtime_id, "the identity was persisted before the create"
     assert_equal session.id, @machine.reload.current_session_id
-    cleaned = run_phase(session, "cleanup")
+    cleaned = run_phase(session, "cleanup", error: "Could not pull the image")
 
     assert_not cleaned.key?(:cleanup_pending), "cleanup left #{cleaned.inspect}"
-    assert_equal %w[container.stop env.reset], @host_runner.ops.last(2)
-    assert_nil @machine.reload.current_session_id, "the machine is free again"
+    assert_equal %w[container.stop env.reset], @host_runner.ops.last(2), "a failed session is reset even under reuse"
+    assert_equal 1, @machine.reload.consecutive_failures
+    assert_nil @machine.current_session_id, "the machine is free again"
     assert admission.reload.released_at
   end
 
@@ -133,7 +135,7 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     run_phase(session, "cleanup")
 
     assert_equal "container.start", @host_runner.ops.first
-    assert_equal %w[container.stop env.reset], @host_runner.ops.last(2), "the cleanup ran after the start's answer"
+    assert_equal %w[container.stop env.scrub], @host_runner.ops.last(2), "the cleanup ran after the start's answer"
     assert_nil @host_runner.machine.container, "the late start's container is gone"
     @machine.reload
     assert_equal [ "registered", nil ], [ @machine.state, @machine.current_session_id ], "the machine is free"
@@ -276,11 +278,11 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     phases.each { |phase| run_phase(session, phase) }
   end
 
-  def run_phase(session, phase)
+  def run_phase(session, phase, error: nil)
     admission = session.session_admission.reload
     activity = Activities::Container::AdmittedPhaseActivity.new
     if phase == "cleanup"
-      activity.run(Hashie::Mash.new(phase: phase, admission_id: admission.id))
+      activity.run(Hashie::Mash.new(phase: phase, admission_id: admission.id, error: error))
     else
       activity.run(Hashie::Mash.new(phase: phase, admission_id: admission.id, permit_token: admission.permit_token))
     end

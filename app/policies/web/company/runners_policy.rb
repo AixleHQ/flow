@@ -18,6 +18,8 @@ module Web
       def disable? = admin?
       def enable? = admin?
       def revoke? = admin?
+      # Return to service: a failed machine is reset and rejoins the rotation.
+      def return_to_service? = admin?
       # "Add machine": a registration token lets a machine join the runner.
       def registration_token? = admin?
     end
