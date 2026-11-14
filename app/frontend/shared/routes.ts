@@ -1752,9 +1752,9 @@ export function registrationTokenCompanySettingsRunnerPath(id: ScalarType, optio
   return "/" + "company" + "/" + "settings" + "/" + "runners" + "/" + id + "/" + "registration_token" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
-/** /company/settings/runners/:id/machines/:machine_id/return_to_service(.:format) */
-export function machineReturnToServiceCompanySettingsRunnerPath(id: ScalarType, machine_id: ScalarType, options?: object): string {
-  return "/" + "company" + "/" + "settings" + "/" + "runners" + "/" + id + "/" + "machines" + "/" + machine_id + "/" + "return_to_service" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","machine_id","format"]);
+/** /company/settings/runners/:settings_runner_id/machines/:id/return_to_service(.:format) */
+export function returnToServiceCompanySettingsRunnerMachinePath(settings_runner_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "settings" + "/" + "runners" + "/" + settings_runner_id + "/" + "machines" + "/" + id + "/" + "return_to_service" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["settings_runner_id","id","format"]);
 }
 
 /** /company/settings/runners(.:format) */
@@ -2152,9 +2152,9 @@ export function registrationTokenCompanyProjectRunnerPath(project_id: ScalarType
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "runners" + "/" + id + "/" + "registration_token" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
-/** /company/projects/:project_id/runners/:id/machines/:machine_id/return_to_service(.:format) */
-export function machineReturnToServiceCompanyProjectRunnerPath(project_id: ScalarType, id: ScalarType, machine_id: ScalarType, options?: object): string {
-  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "runners" + "/" + id + "/" + "machines" + "/" + machine_id + "/" + "return_to_service" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","machine_id","format"]);
+/** /company/projects/:project_id/runners/:runner_id/machines/:id/return_to_service(.:format) */
+export function returnToServiceCompanyProjectRunnerMachinePath(project_id: ScalarType, runner_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "runners" + "/" + runner_id + "/" + "machines" + "/" + id + "/" + "return_to_service" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","runner_id","id","format"]);
 }
 
 /** /company/projects/:project_id/runners(.:format) */

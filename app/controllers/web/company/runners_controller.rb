@@ -92,7 +92,7 @@ class Web::Company::RunnersController < Web::Company::ApplicationController
 
   # This page's own runners, which are all it lists and all it manages.
   def company_runners
-    current_company.runners.not_deleted.where(project_id: nil)
+    current_company.runners.not_deleted.company_level
   end
 
   def runners_policy
