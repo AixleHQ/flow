@@ -2669,7 +2669,7 @@ per-session CA and its logs), the session's processes and its tmux server.
 | --- | --- | --- | --- |
 | **Scrub** (`env.scrub`) | The session container, removed with `docker rm -f`, which takes the agent home, credential files, MCP config, prompt, context files, `/tmp`, the MITM CA and logs, the tmux server and every process with it; then a check by label that no container of the session is left. `/workspace/outputs` on the volume. Anything the strategy itself wrote to a writable cache or home mount. On `kubernetes`, deleting the pod is the scrub | Repository checkouts, package caches, pulled images | **After every session on a reusable environment, always**, before it returns to `idle`. Not optional: it is what makes reuse safe. A failed scrub leads to a rebuild where the type is `rebuildable`, and to a reset on `manual` |
 | **Reset** (`env.reset`) | Scrub, plus the `aixle-ws-<key>` volume and every `aixle-cache-<key>-*` volume, including repository checkouts | Pulled images. On `manual`, everything on the machine that Aixle did not create | Manually ("Reset" on an environment); forced for one run ("Start from a clean workspace" on the run drawer or session form, sets `reset_requested=reset` on the assigned environment before `exec`); **automatically after a failed session** on that environment; on `manual` with `reuse_policy: fresh`, after every session |
-| **Rebuild** (adapter `reset level: :rebuild`, `coder` only) | Everything: the workspace is deleted and re-created from the template | Nothing | Manually; automatically when a scrub or reset fails, after `runners.max_consecutive_failures` (default 3) failed sessions in a row on one environment, or when the environment is needed by another project (§9.4) |
+| **Rebuild** (adapter `reset level: :rebuild`, `coder` only) | Everything: the workspace is deleted and re-created from the template | Nothing | Manually; automatically when a scrub or reset fails, after `runners.max_consecutive_failures` (default 3) failed sessions in a row on one environment |
 
 The repository bootstrap that `SessionContextService` already does (clone, or fetch and
 repair) is what makes a kept checkout safe to reuse: an existing clone is fetched and reset
@@ -2963,14 +2963,6 @@ sessions of every project that can use the runner. Once scrub exists (task 11), 
 keeps under `reuse_policy: reuse` (repository checkouts, package caches, pulled images) is
 there for the next session, which may be another project's. The project scope is the way to
 keep a machine to one project: a project runner's machines take that project's sessions only.
-
-**Requirement for the `manual` user docs and the runner form, when scrub lands (task 11):**
-
-- explain what scrub removes and what it keeps;
-- say that on a company runner with `reuse`, the next session may belong to another project and
-  sees what scrub kept;
-- say that `fresh` resets the workspace and cache volumes after every session;
-- say that on a project runner, what is kept stays within that project.
 
 ### 9.5 Network surface
 

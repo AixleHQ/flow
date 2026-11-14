@@ -48,7 +48,7 @@ module Runners
       if runner.status == health.status
         return false if runner.status_reason == health.reason
 
-        runner.update!(status_reason: health.reason)
+        runner.refresh_status_reason!(health.reason)
         return true
       end
 

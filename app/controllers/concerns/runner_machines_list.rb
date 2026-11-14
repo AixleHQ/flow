@@ -12,6 +12,6 @@ module RunnerMachinesList
   def machines_prop(runner)
     return [] unless runner.manual?
 
-    runner.environments.order(:id).map { |machine| RunnerMachineResource.new(machine).to_h }
+    RunnerMachineResource.new(runner.environments.order(:id)).to_h
   end
 end

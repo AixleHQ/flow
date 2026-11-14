@@ -3,8 +3,8 @@
 module Runners
   # Which machine of a runner takes a session, until Runners::Allocator
   # (docs/design/agent-runtimes/DESIGN.md §7.3, §15 task 11) replaces it with
-  # affinity, project binding and the scrub escalation: a free registered
-  # machine, one session per machine (task 8a, decision 2).
+  # the scrub escalation: a free registered machine, one session per machine
+  # (task 8a, decision 2).
   #
   #   environment = Runners::Machines.acquire!(session)            # raises CapacityError when every machine is busy
   #   Runners::Machines.release!(environment, session)             # after its env.reset succeeded
