@@ -115,6 +115,7 @@ What the controllers return — no envelope around the resource:
 
 ### Backend (Rails)
 - **Services:** `app/services/` — all business logic
+- **API clients:** the library for that API (`octokit`, `gitlab`), used from the provider's service in `app/services/<provider>/`; our own client under `app/services/<provider>/` only when no library we use covers the API
 - **Strategies:** `app/services/container_strategies/` — Strategy pattern for container types
 - **Runtimes:** `app/services/container_runtime/` — Runtime abstraction for Docker/K8s
 - **Adapters:** `app/services/agents/` — per-agent credential/config logic
@@ -246,4 +247,6 @@ What the controllers return — no envelope around the resource:
 - **Never** make one decision at several call sites → one factory or polymorphism (`ContainerRuntime.for_session`)
 - **Never** write a query with a domain meaning at its call site → name it as a scope on the model it returns (a class method for a single record), and compose named scopes where it's used. A query has a domain meaning when it can be named (a person's live GitHub connection, a session's secret accesses, the projects of a company a person can reach), when it is needed in more than one place, or when it reaches into a column's structure (JSON paths, raw SQL). A lookup by id or by one plain attribute inside the request's scope stays inline. Ownership is still `TenantScope.owned`, never a model scope
 - **Never** compute a model's derived value outside the model and hand it to a serializer (`params: { states: … }`, a precomputed map) → a model method, serialized as an attribute; add `includes` (a scoped association where the full one would load too much) to avoid extra queries
+- **Never** make an HTTP request in a domain service (`Net::HTTP`, Faraday, HTTParty, a request built on `SafeHttp.http_for`, an API path written out, a status code read) → a client for that API makes the request; the service calls the client's named methods and maps the client's errors to its own named errors
+- **Never** hand-write a client for an API that a library we already use covers → before writing HTTP code, look in the `Gemfile` for a library for that API (`octokit`, `gitlab`) and use it. If the library lacks a call, use its generic request method for that call. Write our own client only when the library can't do the job, and say why in the PR. OAuth token exchange, refresh and revocation go through the OAuth engine, not through a provider's service; the OAuth engine (`Oauth::TokenService`) is the client for these calls. Examples: `Github::UserTokenService` on Octokit, `Gitlab::TokenService` on the `gitlab` gem, `Oauth::TokenService` for the OAuth calls
 - Existing code that breaks these rules is not a precedent: new code doesn't copy it
