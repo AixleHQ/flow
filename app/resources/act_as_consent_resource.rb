@@ -6,7 +6,7 @@
 class ActAsConsentResource < ApplicationResource
   typelize_from ActAsConsent
 
-  attributes :project_id, :in_own_tasks, :in_others_tasks
+  attributes :provider, :project_id, :in_own_tasks, :in_others_tasks
 
   typelize "string"
   attribute :project_name do |consent|

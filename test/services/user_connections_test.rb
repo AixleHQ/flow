@@ -73,10 +73,10 @@ class UserConnectionsTest < ActiveSupport::TestCase
   end
 
   test "every operation refuses an unknown provider" do
-    assert_raises(UserConnections::UnknownProvider) { UserConnections.connection(user: @user, provider: "gitlab") }
-    assert_raises(UserConnections::UnknownProvider) { UserConnections.disconnect!(user: @user, provider: "gitlab") }
+    assert_raises(UserConnections::UnknownProvider) { UserConnections.connection(user: @user, provider: "bitbucket") }
+    assert_raises(UserConnections::UnknownProvider) { UserConnections.disconnect!(user: @user, provider: "bitbucket") }
     assert_raises(UserConnections::UnknownProvider) do
-      UserConnections.update_consent!(user: @user, company: @company, provider: "gitlab", project_id: @alpha.id)
+      UserConnections.update_consent!(user: @user, company: @company, provider: "bitbucket", project_id: @alpha.id)
     end
   end
 
@@ -89,5 +89,74 @@ class UserConnectionsTest < ActiveSupport::TestCase
 
     assert_nil OauthCredential.find_by(id: credential.id)
     assert_equal 0, ActAsConsent.where(user: @user).count
+  end
+
+  test "connection finds a GitLab connection on the current host, apart from GitHub's" do
+    github = create(:oauth_credential, :github_user, owner: @user)
+    gitlab = create(:oauth_credential, :gitlab_user, owner: @user)
+
+    assert_equal github, UserConnections.connection(user: @user, provider: "github")
+    assert_equal gitlab, UserConnections.connection(user: @user, provider: "gitlab")
+  end
+
+  test "available? for gitlab follows the OAuth app's settings" do
+    Settings.gitlab.stubs(:oauth_client_id).returns("lab-cid")
+    Settings.gitlab.stubs(:oauth_client_secret).returns("lab-secret")
+
+    assert UserConnections.available?(provider: "gitlab")
+
+    Settings.gitlab.stubs(:oauth_client_secret).returns("")
+
+    assert_not UserConnections.available?(provider: "gitlab")
+  end
+
+  test "consents and update_consent! work per provider" do
+    UserConnections.update_consent!(user: @user, company: @company, provider: "gitlab", project_id: @alpha.id,
+                                    in_own_tasks: true)
+
+    gitlab_rows = UserConnections.consents(user: @user, company: @company, provider: "gitlab")
+    github_rows = UserConnections.consents(user: @user, company: @company, provider: "github")
+
+    assert gitlab_rows.find { |row| row.project_id == @alpha.id }.in_own_tasks
+    assert_not github_rows.any?(&:in_own_tasks)
+  end
+
+  test "disconnect! for gitlab leaves GitHub's connection and consents alone" do
+    gitlab = create(:oauth_credential, :gitlab_user, owner: @user)
+    github = create(:oauth_credential, :github_user, owner: @user)
+    create(:act_as_consent, :own, user: @user, project: @alpha, provider: "gitlab")
+    create(:act_as_consent, :own, user: @user, project: @alpha, provider: "github")
+    resolve_hosts_publicly!
+    stub_request(:post, "#{Gitlab::Host.web_base}/oauth/revoke").to_return(status: 200, body: "{}")
+
+    UserConnections.disconnect!(user: @user, provider: "gitlab")
+
+    assert_nil OauthCredential.find_by(id: gitlab.id)
+    assert OauthCredential.exists?(github.id)
+    assert_equal [ "github" ], ActAsConsent.where(user: @user).pluck(:provider)
+  end
+
+  test "disconnect! for gitlab revokes only the current host's grant and deletes an old host's without a request" do
+    current = create(:oauth_credential, :gitlab_user, owner: @user)
+    old_host = create(:oauth_client, :gitlab, issuer: "https://old.gitlab.example.com")
+    old = create(:oauth_credential, :gitlab_user, owner: @user, oauth_client: old_host)
+    resolve_hosts_publicly!
+    revocation = stub_request(:post, "#{Gitlab::Host.web_base}/oauth/revoke").to_return(status: 200, body: "{}")
+
+    UserConnections.disconnect!(user: @user, provider: "gitlab")
+
+    assert_requested revocation, times: 1
+    assert_nil OauthCredential.find_by(id: current.id)
+    assert_nil OauthCredential.find_by(id: old.id)
+  end
+
+  test "available_providers, connections_of, consents_of and label answer for every provider" do
+    github = create(:oauth_credential, :github_user, owner: @user)
+
+    assert_equal %w[github gitlab], UserConnections.available_providers.keys
+    assert_equal({ "github" => github, "gitlab" => nil }, UserConnections.connections_of(user: @user))
+    assert_equal %w[github gitlab], UserConnections.consents_of(user: @user, company: @company).keys
+    assert_equal "GitLab", UserConnections.label(provider: "gitlab")
+    assert_raises(UserConnections::UnknownProvider) { UserConnections.label(provider: "bitbucket") }
   end
 end

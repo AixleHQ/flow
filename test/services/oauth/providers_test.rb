@@ -13,10 +13,10 @@ class Oauth::ProvidersTest < ActiveSupport::TestCase
     assert Oauth::Providers.known?("sentry")
     assert Oauth::Providers.known?("railway")
     assert Oauth::Providers.known?("github")
-    refute Oauth::Providers.known?("gitlab")
+    assert Oauth::Providers.known?("gitlab")
     refute Oauth::Providers.known?(nil)
 
-    assert_equal %w[sentry railway github].sort, Oauth::Providers.provider_names.sort
+    assert_equal %w[sentry railway github gitlab].sort, Oauth::Providers.provider_names.sort
     assert_equal "https://sentry.io", Oauth::Providers.config("sentry")[:issuer]
   end
 
@@ -74,5 +74,45 @@ class Oauth::ProvidersTest < ActiveSupport::TestCase
     assert_equal "railway-cid", client.client_id
     assert_nil client.client_secret
     refute_predicate client, :confidential?, "a client without a secret is public (PKCE-only)"
+  end
+
+  test "the gitlab entry takes its endpoints and issuer from GITLAB_ENDPOINT" do
+    Settings.gitlab.stubs(:endpoint).returns("https://git.example.com/api/v4")
+
+    config = Oauth::Providers.config("gitlab")
+
+    assert_equal "https://git.example.com", config[:issuer]
+    assert_equal "https://git.example.com/oauth/authorize", config[:authorization_endpoint]
+    assert_equal "https://git.example.com/oauth/token", config[:token_endpoint]
+    assert_equal "api", config[:scopes]
+    assert_equal %w[User], config[:owner_types]
+  end
+
+  test "client_for reads the GitLab OAuth app's own setting names" do
+    Settings.gitlab.stubs(:endpoint).returns("https://git.example.com/api/v4")
+    Settings.gitlab.stubs(:oauth_client_id).returns("lab-cid")
+    Settings.gitlab.stubs(:oauth_client_secret).returns("lab-secret")
+
+    client = Oauth::Providers.client_for("gitlab")
+
+    assert_equal "https://git.example.com", client.issuer
+    assert_equal "lab-cid", client.client_id
+    assert_equal "lab-secret", client.client_secret
+    assert_equal "api", client.scopes
+  end
+
+  test "client_for raises MissingClientConfig when the GitLab OAuth app is not set" do
+    Settings.gitlab.stubs(:oauth_client_id).returns("")
+
+    assert_raises(Oauth::MissingClientConfig) { Oauth::Providers.client_for("gitlab") }
+  end
+
+  test "only gitlab trusts the operator's host for the token call" do
+    Settings.gitlab.stubs(:endpoint).returns("https://git.example.com/api/v4")
+
+    assert_equal [ "git.example.com" ], Oauth::Providers.trusted_hosts("gitlab")
+    assert_empty Oauth::Providers.trusted_hosts("github")
+    assert_empty Oauth::Providers.trusted_hosts("mcp:abc")
+    assert_empty Oauth::Providers.trusted_hosts(nil)
   end
 end
