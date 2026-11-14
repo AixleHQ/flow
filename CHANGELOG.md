@@ -29,6 +29,19 @@ governance, community health — carry none.
   machine on arm64 runs an image built for arm64 natively. `images.yml` builds
   the agent images for `linux/amd64` and `linux/arm64`, so the published images
   are multi-arch from the next image build.
+- Runners: the platform now recommends `aixle-runner` 0.4.0 and serves it next
+  to 0.1.0 to 0.3.0. It pins the `linux-amd64` and `linux-arm64` binaries of
+  [runner-v0.4.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.4.0)
+  by their SHA-256. "Add machine" now offers 0.4.0, the binary and the
+  `ghcr.io/aixlehq/aixle-runner:0.4.0` image, and an idle machine on an older
+  version that has not opted out is offered the update. 0.4.0 pulls and runs
+  the agent, sidecar and scrub containers for the machine's own platform when
+  the agent image has it, and `linux/amd64` otherwise, and bounds the removal of
+  the scrub helper container. Until the multi-arch agent images are published
+  (the application release with the arm64 build), it uses `linux/amd64` on
+  every machine, as 0.3.0 does. Runner protocol 1 only, and no minimum runner
+  version: 0.3.0 keeps working, but always runs `linux/amd64` images, under
+  emulation on an arm64 machine.
 - Runners: the platform now recommends `aixle-runner` 0.3.0 and
   serves it next to 0.1.0 and 0.2.0. It pins the `linux-amd64` and `linux-arm64`
   binaries of [runner-v0.3.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.3.0)
