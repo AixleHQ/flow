@@ -126,7 +126,8 @@ class UserConnectionsTest < ActiveSupport::TestCase
     github = create(:oauth_credential, :github_user, owner: @user)
     create(:act_as_consent, :own, user: @user, project: @alpha, provider: "gitlab")
     create(:act_as_consent, :own, user: @user, project: @alpha, provider: "github")
-    Gitlab::UserTokenService.stubs(:new).returns(FakeGitlab::UserTokenService.new)
+    resolve_hosts_publicly!
+    stub_request(:post, "#{Gitlab::Host.web_base}/oauth/revoke").to_return(status: 200, body: "{}")
 
     UserConnections.disconnect!(user: @user, provider: "gitlab")
 
