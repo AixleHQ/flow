@@ -27,6 +27,14 @@ class Runners::MachineRegistrationTest < ActiveSupport::TestCase
     end
   end
 
+  test "the token records the user who asked for it" do
+    user = create(:user)
+
+    Runners::MachineRegistration.issue!(@runner, gateway_url: GATEWAY, created_by: user)
+
+    assert_equal user, RunnerCredential.sole.created_by
+  end
+
   test "stores only the token's digest" do
     registration = Runners::MachineRegistration.issue!(@runner, gateway_url: GATEWAY)
 

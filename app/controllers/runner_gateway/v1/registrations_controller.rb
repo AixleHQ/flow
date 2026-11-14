@@ -29,7 +29,8 @@ module RunnerGateway
           name: body["name"], os: body["os"], arch: body["arch"],
           facts: body.fetch("facts", {}),
           auto_update: body.fetch("auto_update", true) != false,
-          runner_version: runner_version, protocol_version: protocol_version
+          runner_version: runner_version, protocol_version: protocol_version,
+          remote_ip: request.remote_ip
         )
         render_pair(result.pair, status: :created,
                                  environment: RunnerGatewayEnvironmentResource.new(result.environment).to_h)
@@ -37,8 +38,8 @@ module RunnerGateway
 
       # A machine unregistered during a session is not refused: `409 busy` is
       # not built (runner/protocol/PROTOCOL.md §8). The machine stops holding
-      # the session, whose next ops answer `no_session_container`, so the
-      # session fails as one whose container is gone (Runners::Registration).
+      # the session, which ends at once and has its admission released
+      # (Runners::Registration).
       def destroy
         Runners::Registration.unregister!(@credential.runner_environment)
         head :no_content

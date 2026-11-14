@@ -66,6 +66,14 @@ governance, community health — carry none.
   seconds is offline and gets no sessions; when every machine is offline, a
   launch is refused naming the runner. The runner's status now follows its
   machines' health, checked every minute.
+- Runners: a company admin, or a project admin or owner for a project runner,
+  can revoke a single machine from the Machines list. Its credentials stop
+  working, the machine shows **Gone**, and the session it held ends at once and
+  frees its slot. Revoking or deleting a runner now also ends its sessions: a
+  running one fails with the revoked message and one waiting for a machine ends,
+  instead of staying in **Finishing** or waiting. The Machines list shows the
+  first-seen IP and who added each machine, and the runners list shows machines
+  busy/total for a manual runner.
 - Runners: a session waiting for a busy runner shows "Waiting for a free
   machine" instead of "Waiting for cluster capacity". The platform accepts a
   runner heartbeat (`POST /runner/v1/heartbeat`), which keeps a machine online

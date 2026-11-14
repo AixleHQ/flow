@@ -8,8 +8,14 @@
 class RunnerMachineResource < ApplicationResource
   typelize_from RunnerEnvironment
 
-  attributes :id, :key, :display_name, :os, :arch, :runner_version, :state_reason, :last_heartbeat_at, :created_at
+  attributes :id, :key, :display_name, :os, :arch, :runner_version, :state_reason, :last_heartbeat_at, :created_at,
+             :first_seen_ip
 
   typelize "'online' | 'idle' | 'offline' | 'resetting' | 'failed' | 'gone'"
   attribute :state, &:display_state
+
+  typelize "string | null"
+  attribute :created_by_name do |machine|
+    machine.created_by&.name
+  end
 end

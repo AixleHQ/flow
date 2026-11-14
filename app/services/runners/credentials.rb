@@ -42,14 +42,16 @@ module Runners
     # this, and "Add machine" will (§15 task 12). Like every issuer, it locks
     # the runner first (lock_live_runner!), so a revoked or deleted runner gets
     # no token and a revocation running alongside revokes the one minted here.
-    def mint_registration!(runner)
+    # `created_by` is the user who asked for it; the machine that spends the
+    # token is recorded as added by them (Registration.register!).
+    def mint_registration!(runner, created_by: nil)
       raise ArgumentError, "registration tokens are minted for manual runners only" unless runner.manual?
 
       token = generate(:registration)
       RunnerCredential.transaction do
         live = lock_live_runner!(runner.id)
         RunnerCredential.create!(runner: live, kind: :registration, token_digest: RunnerCredential.digest(token),
-                                 expires_at: REGISTRATION_TTL.from_now)
+                                 expires_at: REGISTRATION_TTL.from_now, created_by: created_by)
       end
       token
     end
