@@ -181,7 +181,11 @@ describe('RunnerMachines', () => {
     vi.useRealTimers();
     renderAuthedPage(
       <RunnerMachines
-        machines={[machine({ id: 3 }), machine({ id: 4, state: 'failed', stateReason: 'boom' }), machine({ id: 5, state: 'gone' })]}
+        machines={[
+          machine({ id: 3 }),
+          machine({ id: 4, state: 'failed', stateReason: 'boom' }),
+          machine({ id: 5, state: 'gone' }),
+        ]}
         runner={runner}
         paths={paths}
         canManage
