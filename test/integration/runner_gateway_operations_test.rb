@@ -59,6 +59,33 @@ class RunnerGatewayOperationsTest < ActionDispatch::IntegrationTest
     assert_operator @environment.reload.last_heartbeat_at, :>, recorded
   end
 
+  test "a heartbeat records the machine's heartbeat, answers 204 with no body and has no ops" do
+    travel 16.seconds
+
+    post "/runner/v1/heartbeat", headers: headers_for(@pair["access_token"])
+
+    assert_response :no_content
+    assert_empty response.body
+    assert_in_delta Time.current, @environment.reload.last_heartbeat_at, 1
+    assert_in_delta Time.current, @runner.reload.last_seen_at, 1
+  end
+
+  test "a heartbeat is recorded at most every 15 seconds, and one with a refresh token records nothing" do
+    travel 16.seconds
+    post "/runner/v1/heartbeat", headers: headers_for(@pair["access_token"])
+    recorded = @environment.reload.last_heartbeat_at
+
+    travel 5.seconds
+    post "/runner/v1/heartbeat", headers: headers_for(@pair["access_token"])
+    assert_response :no_content
+    assert_equal recorded, @environment.reload.last_heartbeat_at
+
+    travel 20.seconds
+    post "/runner/v1/heartbeat", headers: headers_for(@pair["refresh_token"])
+    assert_response :unauthorized
+    assert_equal recorded, @environment.reload.last_heartbeat_at
+  end
+
   test "a refused request records nothing" do
     travel 1.minute
     recorded = @environment.reload.last_heartbeat_at

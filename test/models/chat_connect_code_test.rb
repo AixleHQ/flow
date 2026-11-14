@@ -58,4 +58,21 @@ class ChatConnectCodeTest < ActiveSupport::TestCase
     assert_nil chat.channel_mismatch(ChatConversation.new(provider: "teams", kind: "group", name: "launch crew", external_id: "19:g"))
     assert_equal "Name the team too for a Teams channel: Team / Channel", chat.channel_mismatch(general)
   end
+
+  test "a General channel the Connector listed without its name answers to the name its team shows, not another channel's" do
+    integration = Integration.create!(provider: :teams, company: @project.company, connected_by: @user, name: "Contoso",
+                                      status: :active)
+    team = ChatConversation.create!(integration: integration, provider: "teams", kind: "channel", external_id: "19:team@thread.tacv2",
+                                    team_external_id: "19:team@thread.tacv2", team_name: "flow-staging", service_url: TEAMS_SERVICE_URL)
+    ChatConversation.record_team_channels!(team, [ { "id" => "19:team@thread.tacv2" }, { "id" => "19:ops@thread.tacv2", "name" => "Ops" } ])
+    general = team.reload
+    ops = ChatConversation.find_by!(external_id: "19:ops@thread.tacv2")
+    code = ->(channel) { ChatConnectCode.issue!(project: @project, provider: "teams", user: @user, channel: channel).first }
+
+    assert_nil code.("flow-staging / flow-staging").channel_mismatch(general)
+    assert_nil code.("flow-staging / General").channel_mismatch(general)
+    assert_equal "Posted in General, but the code is for flow-staging / Ops", code.("flow-staging / Ops").channel_mismatch(general)
+    assert_equal "Posted in Ops, but the code is for flow-staging / flow-staging",
+                 code.("flow-staging / flow-staging").channel_mismatch(ops)
+  end
 end

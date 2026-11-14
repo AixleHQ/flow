@@ -13,10 +13,9 @@
 # has been reset after the session, and when it fails.
 #
 # `last_heartbeat_at` is the last time the platform heard from the machine
-# (Runners::Liveness.record!). A `registered` machine heard within
-# ONLINE_WINDOW, or executing a delivered op within its deadline (the host
-# runner does not poll during an op, §6.7), is `reachable`; any other is
-# offline and takes no new session (Runners::Machines).
+# (Runners::Liveness.record!): its polls, and its heartbeats while it runs an
+# op (§6.7). A `registered` machine heard within ONLINE_WINDOW is online; any
+# other is offline and takes no new session (Runners::Machines).
 #
 # `auto_update` is false for a machine configured with `aixle-runner configure
 # --no-auto-update`: it is never offered an update (Runners::Release.update_for,
@@ -35,19 +34,11 @@ class RunnerEnvironment < ApplicationRecord
   belongs_to :company
   belongs_to :current_session, class_name: "TerminalSession", optional: true
   has_many :credentials, class_name: "RunnerCredential", inverse_of: :runner_environment
-  # Only the delivered ops (few), not the machine's whole history, so a list of
-  # machines can `includes` it.
-  has_many :delivered_operations, -> { delivered }, class_name: "RunnerOperation", inverse_of: :runner_environment
 
   scope :free, -> { where(state: "registered", current_session_id: nil) }
   scope :heard, ->(now = Time.current) { where(last_heartbeat_at: (now - ONLINE_WINDOW)..) }
   # Never heard, or last heard at or before `time`.
   scope :not_heard_since, ->(time) { where(last_heartbeat_at: nil).or(where(arel_table[:last_heartbeat_at].lteq(time))) }
-  # Executing an op it was delivered, within the op's deadline.
-  scope :executing_op, ->(now = Time.current) {
-    where(id: RunnerOperation.delivered_before_deadline(now).select(:runner_environment_id))
-  }
-  scope :reachable, ->(now = Time.current) { heard(now).or(executing_op(now)) }
 
   before_validation { self.company_id ||= runner&.company_id }
 
@@ -60,23 +51,16 @@ class RunnerEnvironment < ApplicationRecord
   validate :facts_is_an_object
   validate :company_matches_runner, if: -> { runner && company_id }
 
-  def heard?(now = Time.current)
-    last_heartbeat_at.present? && last_heartbeat_at >= now - ONLINE_WINDOW
-  end
-
-  # Executing an op it was delivered, within the op's deadline (the Ruby side of
-  # `executing_op`); reads `delivered_operations`, so `includes` avoids a query
-  # per machine.
-  def executing_op?(now = Time.current)
-    delivered_operations.any? { |operation| operation.deadline_at > now }
+  def heard?(now = Time.current, within: ONLINE_WINDOW)
+    last_heartbeat_at.present? && last_heartbeat_at >= now - within
   end
 
   # How the machine shows on the runner page (§2.5): `failed` and `gone` as they
-  # are; a `registered` one is `offline` unless it is heard or executing an op,
-  # else `online` holding a session and `idle` without one.
+  # are; a `registered` one is `offline` unless it is heard, else `online`
+  # holding a session and `idle` without one.
   def display_state(now = Time.current)
     return state.to_s unless registered?
-    return "offline" unless heard?(now) || executing_op?(now)
+    return "offline" unless heard?(now)
 
     current_session_id ? "online" : "idle"
   end

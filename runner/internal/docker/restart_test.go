@@ -53,6 +53,8 @@ func (g *opsGateway) PostResult(_ context.Context, _ string, id int64, r protoco
 	return protocol.ResultState{ID: id, State: "completed"}, nil
 }
 
+func (g *opsGateway) Heartbeat(context.Context, string) error { return nil }
+
 // add enqueues an op. A session op's envelope names the session the tests run.
 func (g *opsGateway) add(id int64, name string, payload any) {
 	raw, _ := json.Marshal(payload)

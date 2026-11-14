@@ -2,10 +2,9 @@
 
 # A `manual` runner's machine as the runner page lists it, read-only
 # (docs/design/agent-runtimes/DESIGN.md §2.5, §11). `state` is the display
-# state (RunnerEnvironment#display_state), which depends on the clock and on the
-# machine's delivered ops: load a list with `includes(:delivered_operations)`.
+# state (RunnerEnvironment#display_state), which depends on the clock.
 #
-#   runner.environments.includes(:delivered_operations).map { |machine| RunnerMachineResource.new(machine).to_h }
+#   RunnerMachineResource.new(runner.environments.order(:id)).to_h
 class RunnerMachineResource < ApplicationResource
   typelize_from RunnerEnvironment
 
