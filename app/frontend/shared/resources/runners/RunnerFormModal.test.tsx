@@ -58,7 +58,9 @@ describe('RunnerFormModal', () => {
     expect(within(dialog).getByRole('radio', { name: /Reuse \(default\)/ })).toBeChecked();
     expect(within(dialog).getByRole('radio', { name: /^Reset/ })).not.toBeChecked();
     expect(within(dialog).queryByRole('radio', { name: /^Fresh/ })).not.toBeInTheDocument();
-    expect(within(dialog).getByText(/A reset after every session\. The workspace and cache volumes are wiped/)).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/A reset after every session\. The workspace and cache volumes are wiped/),
+    ).toBeInTheDocument();
     expect(within(dialog).getByText(/the next session on a machine may belong to another project/)).toBeInTheDocument();
   });
 

@@ -131,7 +131,7 @@ class Runners::MachinesTest < ActiveSupport::TestCase
     assert_equal "resetting", @machine.reload.state
     assert_equal %w[env.reset], host.ops
     error = assert_raises(Runners::Machines::NoMachine) { Runners::Machines.acquire!(runner_session) }
-    assert_match(/every machine is out of rotation|its machine is out of rotation: #{@machine.key} \(being returned to service\)/, error.message)
+    assert_match(/its machine is out of rotation: #{@machine.display_name} \(being returned to service\)/, error.message)
   ensure
     host&.stop
   end

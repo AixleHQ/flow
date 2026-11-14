@@ -95,19 +95,20 @@ export const RUNNER_TYPE_COPY: Record<string, { title: string; description: stri
 export const runnerTypeTitle = (type: string): string => RUNNER_TYPE_COPY[type]?.title ?? humanize(type);
 
 /** What `reuse_policy` means on each type (§7.1), and the values the type offers. */
-export const REUSE_POLICY_COPY: Partial<Record<Runner['runnerType'], Partial<Record<Runner['reusePolicy'], string>>>> = {
-  manual: {
-    reuse:
-      'A scrub after every session. Repository checkouts, package caches and pulled images stay on the machine. The session container, its home and credentials, and /workspace/outputs are removed.',
-    reset:
-      'A reset after every session. The workspace and cache volumes are wiped, so every session clones its repositories again. Pulled images stay, and so does the machine.',
-  },
-  coder: {
-    reuse: 'The workspace is kept, with its pulled image, repository clones and cache mounts.',
-    reset: 'The workspace and cache volumes are wiped after every session. Container mode only.',
-    fresh: 'A new workspace is created for every session and destroyed after it.',
-  },
-};
+export const REUSE_POLICY_COPY: Partial<Record<Runner['runnerType'], Partial<Record<Runner['reusePolicy'], string>>>> =
+  {
+    manual: {
+      reuse:
+        'A scrub after every session. Repository checkouts, package caches and pulled images stay on the machine. The session container, its home and credentials, and /workspace/outputs are removed.',
+      reset:
+        'A reset after every session. The workspace and cache volumes are wiped, so every session clones its repositories again. Pulled images stay, and so does the machine.',
+    },
+    coder: {
+      reuse: 'The workspace is kept, with its pulled image, repository clones and cache mounts.',
+      reset: 'The workspace and cache volumes are wiped after every session. Container mode only.',
+      fresh: 'A new workspace is created for every session and destroyed after it.',
+    },
+  };
 
 /** The values the runner form offers for a type; `kubernetes` has one. */
 export const REUSE_POLICIES: Record<Runner['runnerType'], Runner['reusePolicy'][]> = {
