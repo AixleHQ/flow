@@ -347,7 +347,7 @@ module ContainerRuntime
       "aixle-project-#{session.project_id}/terminal-#{session.route_token}"
     end
 
-    def cleanup_session(id)
+    def cleanup_session(id, failed: false)
       @cleaned_sessions << id
       nil
     end

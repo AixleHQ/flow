@@ -68,6 +68,15 @@ shared per-worker databases.
 
 `PARALLEL_WORKERS=1` forces a serial run when one is needed.
 
+## Generated files
+
+`app/frontend/types/generated/` (Typelizer) and `app/frontend/shared/routes.ts` (ts_routes) are generated. **Never edit them by hand**, not even for one union or one route: a later generation reverts the edit or shows the drift.
+
+- Regenerate types with `bin/rails typelizer:generate` after changing an Alba resource, or the enumerize / AASM values a resource exposes.
+- Regenerate routes with `bin/rails ts:routes` after changing routes.
+- Commit the output with the change that caused it.
+- Both need the migrated database schema, so run them in the `web` container (`docker compose exec -T web …`) or in a Coder workspace. If a generator can't run in your environment (no schema, route generation off), don't edit its output: run it where it works, or say in your result that it could not run.
+
 ## Writing commit messages
 
 Use [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>): <subject>`.

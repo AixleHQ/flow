@@ -219,4 +219,20 @@ describe('RunnerFormModal', () => {
       expect.anything(),
     );
   });
+
+  it('explains the one value a kubernetes runner has', async () => {
+    renderAuthedPage(
+      <RunnerFormModal
+        opened
+        onClose={vi.fn()}
+        runnerTypes={[buildRunnerTypeOption({ runnerType: 'kubernetes', configSchema: { type: 'object', properties: {} } })]}
+        paths={paths}
+        runner={buildRunner({ id: 6, name: 'cluster', runnerType: 'kubernetes', reusePolicy: 'fresh' })}
+      />,
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Edit cluster' });
+    expect(within(dialog).getByRole('radio', { name: /^Fresh/ })).toBeChecked();
+    expect(within(dialog).getByText('A new pod for every session.')).toBeInTheDocument();
+  });
 });

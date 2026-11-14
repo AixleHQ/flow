@@ -46,7 +46,7 @@ module ContainerRuntime
       "terminal-#{session.route_token}"
     end
 
-    def cleanup_session(id)
+    def cleanup_session(id, failed: false)
       container = Docker::Container.get(id)
       container.delete(force: true)
     rescue Docker::Error::NotFoundError

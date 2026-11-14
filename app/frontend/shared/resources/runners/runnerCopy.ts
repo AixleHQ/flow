@@ -103,6 +103,7 @@ export const REUSE_POLICY_COPY: Partial<Record<Runner['runnerType'], Partial<Rec
       reset:
         'A reset after every session. The workspace and cache volumes are wiped, so every session clones its repositories again. Pulled images stay, and so does the machine.',
     },
+    kubernetes: { fresh: 'A new pod for every session.' },
     coder: {
       reuse: 'The workspace is kept, with its pulled image, repository clones and cache mounts.',
       reset: 'The workspace and cache volumes are wiped after every session. Container mode only.',

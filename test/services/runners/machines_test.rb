@@ -165,6 +165,33 @@ class Runners::MachinesTest < ActiveSupport::TestCase
     assert_match(/failed to reset on Return to service: the runner did not answer/, @machine.state_reason)
   end
 
+  test "the result of an earlier reset does not settle a later Return to service" do
+    Runners::Machines.fail!(@machine, "boom")
+    Runners::Machines.return_to_service!(@machine)
+    first = RunnerOperation.where(runner_environment: @machine, op: "env.reset").order(:sequence).last
+    # Out of rotation again while the first reset is still open (a reused refresh token).
+    Runners::Machines.fail!(@machine, "refresh token reused")
+    assert Runners::Machines.return_to_service!(@machine)
+    second = RunnerOperation.where(runner_environment: @machine, op: "env.reset").order(:sequence).last
+    assert_not_equal first.id, second.id
+
+    Runners::Operations.record_result!(first, status: "ok")
+
+    assert_equal "resetting", @machine.reload.state, "the first reset is not the one this Return to service started"
+    Runners::Operations.record_result!(second, status: "ok")
+    assert_equal "registered", @machine.reload.state
+  end
+
+  test "Return to service is refused for a machine of a runner that is not manual" do
+    machine = create(:runner_environment, runner: create(:runner, :kubernetes))
+    Runners::Machines.fail!(machine, "boom")
+
+    assert_raises(Runners::Machines::NotManual) { Runners::Machines.return_to_service!(machine) }
+
+    assert_equal "failed", machine.reload.state
+    assert_empty RunnerOperation.where(runner_environment: machine)
+  end
+
   test "a capacity wait counts only the machines that can come back" do
     failed = create(:runner_environment, runner: @runner)
     Runners::Machines.fail!(failed, "env.reset failed after session 7: the runner did not answer")

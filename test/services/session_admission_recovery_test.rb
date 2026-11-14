@@ -91,7 +91,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     ContainerRuntime.stubs(:build).returns(runtime)
     # The workload outliving its cancelled workflow is the whole failure: the
     # reconciler used to skip these, so nothing ever deleted it.
-    runtime.expects(:cleanup_session).with("runtime-id")
+    runtime.expects(:cleanup_session).with("runtime-id", failed: false)
     runtime.stubs(:session_absent?).returns(false, true)
     stub_closed_workflow(session.workflow_id)
 
@@ -115,7 +115,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
 
     runtime = ContainerRuntime::DockerRuntime.new
     ContainerRuntime.stubs(:build).returns(runtime)
-    runtime.expects(:cleanup_session).with("runtime-id")
+    runtime.expects(:cleanup_session).with("runtime-id", failed: false)
     runtime.stubs(:session_absent?).returns(false, true)
     stub_closed_workflow(session.workflow_id)
 

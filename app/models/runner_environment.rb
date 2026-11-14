@@ -8,8 +8,9 @@
 # `failed` (Runners::Machines.fail!), with the reason in `state_reason`, and
 # takes no session until it is returned to service (Runners::Machines.return_to_service!):
 # an `env.reset` runs on it while it is `resetting`, and it is `registered` and
-# free again once that succeeds, or `failed` with the new reason. The rest of
-# the §5.2 state machine arrives with Runners::Allocator.
+# free again once that succeeds, or `failed` with the new reason. The states and
+# their events are RunnerEnvironmentStateMachine's; the rest of the §5.2 state
+# machine arrives with Runners::Allocator.
 #
 # `consecutive_failures` counts the failed sessions in a row on the machine; a
 # session that ends well sets it back to 0, and `runners.max_consecutive_failures`
@@ -29,10 +30,11 @@
 # §14.4).
 class RunnerEnvironment < ApplicationRecord
   extend Enumerize
+  include RunnerEnvironmentStateMachine
 
-  # Prefixed: origin and state share the value `registered`.
+  # Prefixed: origin and state share the value `registered`. The states are
+  # RunnerEnvironmentStateMachine's.
   enumerize :origin, in: %i[registered], predicates: { prefix: true }
-  enumerize :state, in: %i[registered resetting failed gone], predicates: true
 
   # §2.5: a machine not heard for this long is offline.
   ONLINE_WINDOW = 90.seconds

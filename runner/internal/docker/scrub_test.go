@@ -1,10 +1,12 @@
 package docker
 
 import (
+	"context"
 	"reflect"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aixlehq/aixle-runner/internal/protocol"
 )
@@ -114,6 +116,61 @@ func TestAFailedScrubSaysSo(t *testing.T) {
 	}
 	if r := h.runEnv(h.env.Scrub, map[string]any{}); r.Error == nil || r.Error.Class != ClassInvalidPayload {
 		t.Fatalf("%#v", r)
+	}
+}
+
+// A daemon that stalls in the removal of the scrub's helper container holds the
+// op for the removal's own timeout at most, and the helper that is left is found
+// by the final check by label.
+func TestARemovalOfTheScrubHelperThatBlocksReturnsWithinItsTimeout(t *testing.T) {
+	h := newEnvironment(t)
+	h.start(h.env, nil)
+	h.env.RemoveTimeout = 200 * time.Millisecond
+	h.engine.mu.Lock()
+	h.engine.removeBlocksRole = "scrub"
+	h.engine.mu.Unlock()
+
+	started := time.Now()
+	r := h.runEnv(h.env.Scrub, scrubPayload())
+	if elapsed := time.Since(started); elapsed > 5*time.Second {
+		t.Fatalf("env.scrub ran %s: the removal was not bounded", elapsed)
+	}
+	if r.Status != protocol.StatusError || r.Error.Class != ClassScrubFailed || !strings.Contains(r.Error.Message, "left") {
+		t.Fatalf("%#v %v", r, r.Error)
+	}
+	h.engine.mu.Lock()
+	defer h.engine.mu.Unlock()
+	if h.engine.removeBlocked < 150*time.Millisecond {
+		t.Fatalf("the removal was held %s: it did not run for its own timeout", h.engine.removeBlocked)
+	}
+}
+
+// The op's context ending does not end the helper's removal: it runs under a
+// fresh context with its own bound.
+func TestTheScrubHelperIsRemovedUnderAFreshContextWhenTheOpEnds(t *testing.T) {
+	h := newEnvironment(t)
+	h.start(h.env, nil)
+	h.env.RemoveTimeout = 200 * time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h.engine.mu.Lock()
+	h.engine.removeBlocksRole = "scrub"
+	h.engine.onRemoveBlocked = cancel
+	h.engine.mu.Unlock()
+
+	started := time.Now()
+	r := h.env.Scrub(ctx, mustJSON(t, scrubPayload()))
+	if elapsed := time.Since(started); elapsed > 5*time.Second {
+		t.Fatalf("env.scrub ran %s: the removal was not bounded", elapsed)
+	}
+	if r.Status != protocol.StatusError {
+		t.Fatalf("%#v", r)
+	}
+	h.engine.mu.Lock()
+	defer h.engine.mu.Unlock()
+	// Cancelled when the removal arrived, it was still held for its own bound.
+	if h.engine.removeBlocked < 150*time.Millisecond {
+		t.Fatalf("the removal was held %s: it ended with the op's context", h.engine.removeBlocked)
 	}
 }
 
