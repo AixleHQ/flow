@@ -25,7 +25,8 @@ const platform = (machine: Pick<RunnerMachine, 'os' | 'arch'>): string =>
   [machine.os, machine.arch].filter(Boolean).join('/') || '—';
 
 /** Why a machine failed (§8), as recorded: no mark is added, so a reason that ends in `?` or `.` keeps its own. */
-const failedReason = (machine: RunnerMachine): string => machine.stateReason ?? `${machine.displayName ?? machine.key} failed`;
+const failedReason = (machine: RunnerMachine): string =>
+  machine.stateReason ?? `${machine.displayName ?? machine.key} failed`;
 
 const FAILED_ACTION = 'Fix the machine and press Return to service.';
 

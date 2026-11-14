@@ -118,7 +118,7 @@ describe('RunnerMachines', () => {
     );
   });
 
-  it('shows a failed machine\'s reason as it is, with no second mark after a `?` or a `.`', () => {
+  it("shows a failed machine's reason as it is, with no second mark after a `?` or a `.`", () => {
     renderAuthedPage(
       <RunnerMachines
         machines={[

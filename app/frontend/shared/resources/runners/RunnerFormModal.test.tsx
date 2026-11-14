@@ -225,7 +225,9 @@ describe('RunnerFormModal', () => {
       <RunnerFormModal
         opened
         onClose={vi.fn()}
-        runnerTypes={[buildRunnerTypeOption({ runnerType: 'kubernetes', configSchema: { type: 'object', properties: {} } })]}
+        runnerTypes={[
+          buildRunnerTypeOption({ runnerType: 'kubernetes', configSchema: { type: 'object', properties: {} } }),
+        ]}
         paths={paths}
         runner={buildRunner({ id: 6, name: 'cluster', runnerType: 'kubernetes', reusePolicy: 'fresh' })}
       />,
