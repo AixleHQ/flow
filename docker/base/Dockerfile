@@ -241,6 +241,9 @@ RUN npm install -g @playwright/mcp@${PLAYWRIGHT_MCP_VERSION} && npm cache clean 
 # BUILD instead of failing a live session. It runs twice — as root, and as the
 # unprivileged `node` user added to AGENT_BROWSERS_GROUP — because the non-root
 # path is the one that broke when the browser tree was left root-only.
+# The probe runs for amd64 only: the arm64 image is built under QEMU in CI, where
+# Chromium aborts (GPU process, crashpad ptrace). Both builds install the same
+# pinned Playwright version, so the amd64 probe covers the channel resolution.
 COPY probe-browser.js /opt/probe-browser.js
 RUN set -eux; \
     apt-get update; \
@@ -260,9 +263,13 @@ RUN set -eux; \
     chmod -R 775 ${PLAYWRIGHT_BROWSERS_PATH}; \
     find ${PLAYWRIGHT_BROWSERS_PATH} -type d -exec chmod g+s {} +; \
     install -d -m 0777 /tmp/probe-root /tmp/probe-node; \
-    PROBE_CWD=/tmp/probe-root node /opt/probe-browser.js; \
     usermod -aG ${AGENT_BROWSERS_GROUP} node; \
-    su node -c "PROBE_CWD=/tmp/probe-node node /opt/probe-browser.js"; \
+    case "${TARGETARCH:-$(dpkg --print-architecture)}" in \
+        amd64) \
+            PROBE_CWD=/tmp/probe-root node /opt/probe-browser.js; \
+            su node -c "PROBE_CWD=/tmp/probe-node node /opt/probe-browser.js" ;; \
+        *) echo "probe-browser: skipped on ${TARGETARCH:-$(dpkg --print-architecture)} (Chromium aborts under QEMU emulation; the amd64 build runs it)" ;; \
+    esac; \
     npm cache clean --force; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/* /var/cache/debconf/*-old /tmp/* /root/.npm /root/.cache
