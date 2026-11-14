@@ -300,21 +300,46 @@ func TestContainerStartAlwaysPullsTheImageThenCreatesTheContainer(t *testing.T) 
 	}
 }
 
-// The agent images are linux/amd64 only, so a daemon on arm64 pulls and runs
-// them for that platform (under emulation) instead of failing on the manifest.
-func TestTheAgentImageIsPulledAndTheContainerCreatedForLinuxAmd64(t *testing.T) {
-	h := newEnvironment(t)
-	h.start(h.env, nil)
-	if len(h.engine.pullPlatforms) != 1 || h.engine.pullPlatforms[0] != "linux/amd64" {
-		t.Fatalf("pull platforms %q", h.engine.pullPlatforms)
+// An image built for the daemon's platform is pulled and run natively; one that
+// is not falls back to linux/amd64, which an arm64 daemon runs under emulation.
+func TestTheAgentImageIsPulledAndTheContainerCreatedForThePlatformOfTheDaemon(t *testing.T) {
+	cases := []struct {
+		name       string
+		daemonArch string
+		amd64Only  bool
+		pulls      []string
+		create     string
+	}{
+		{"an amd64 daemon", "x86_64", false, []string{"linux/amd64"}, "linux/amd64"},
+		{"a daemon that does not say", "", false, []string{"linux/amd64"}, "linux/amd64"},
+		{"an arm64 daemon and an image with arm64", "aarch64", false, []string{"linux/arm64"}, "linux/arm64"},
+		{"an arm64 daemon and an amd64-only image", "aarch64", true, []string{"linux/arm64", "linux/amd64"}, "linux/amd64"},
 	}
-	if len(h.engine.createPlatforms) == 0 {
-		t.Fatal("nothing was created")
-	}
-	for _, p := range h.engine.createPlatforms {
-		if p != "linux/amd64" {
-			t.Fatalf("create platforms %q: every container made from the agent image is for linux/amd64", h.engine.createPlatforms)
+	for _, c := range cases {
+		h := newEnvironment(t)
+		h.engine.daemonArch, h.engine.amd64Only = c.daemonArch, c.amd64Only
+		h.start(h.env, nil)
+		if !reflect.DeepEqual(h.engine.pullPlatforms, c.pulls) {
+			t.Fatalf("%s: pull platforms %q, want %q", c.name, h.engine.pullPlatforms, c.pulls)
 		}
+		if len(h.engine.createPlatforms) == 0 {
+			t.Fatalf("%s: nothing was created", c.name)
+		}
+		for _, p := range h.engine.createPlatforms {
+			if p != c.create {
+				t.Fatalf("%s: create platforms %q: every container made from the image is for %s", c.name, h.engine.createPlatforms, c.create)
+			}
+		}
+	}
+}
+
+// Only a platform the image lacks falls back: a refused pull stays refused.
+func TestAFailedPullOnArm64IsNotRetriedForAmd64(t *testing.T) {
+	h := newEnvironment(t)
+	h.engine.daemonArch, h.engine.pullStatus = "aarch64", 401
+	r := h.run(h.env.ContainerStart, startPayload(nil))
+	if r.Status != protocol.StatusError || len(h.engine.pullPlatforms) != 1 {
+		t.Fatalf("result %+v, pull platforms %q: a pull that failed for another reason is not retried", r, h.engine.pullPlatforms)
 	}
 }
 

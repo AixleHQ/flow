@@ -385,7 +385,7 @@ func (e *Environment) startAgent(ctx context.Context, name string, config *conta
 	if r := pastDeadline(ctx, "creating "+name); r != nil {
 		return *r
 	}
-	created, err := e.API.ContainerCreate(ctx, client.ContainerCreateOptions{Name: name, Config: config, HostConfig: host, Platform: AgentPlatform()})
+	created, err := e.API.ContainerCreate(ctx, client.ContainerCreateOptions{Name: name, Config: config, HostConfig: host, Platform: imagePlatform(ctx, e.API, config.Image)})
 	switch {
 	case err == nil:
 	case ctx.Err() != nil:

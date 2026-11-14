@@ -31,6 +31,17 @@ class AgentRuntimesRegistryTest < ActiveSupport::TestCase
     end
   end
 
+  test "a runtime's platforms are a subset of the two the images are built for, and keep linux/amd64" do
+    RUNTIMES.each do |runtime|
+      platforms = runtime["platforms"]
+      next if platforms.nil?
+
+      assert_empty platforms - %w[linux/amd64 linux/arm64], "#{runtime['id']}: unknown platform in #{platforms}"
+      assert_includes platforms, "linux/amd64", "#{runtime['id']}: every image has linux/amd64, the runner's fallback"
+      assert_equal platforms.uniq, platforms, "#{runtime['id']}: a platform is listed twice"
+    end
+  end
+
   test "every runtime has an image override setting and both launch commands" do
     ids = AgentRuntime.ids.sort
 

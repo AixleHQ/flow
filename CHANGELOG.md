@@ -14,6 +14,10 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Changed
+- Runners: the runner pulls the agent images for its machine's own platform
+  and falls back to `linux/amd64` when an image has no build for it, so a
+  machine on arm64 runs an image built for arm64 natively. Images are built for
+  arm64 once the `images.yml` patch in `docs/operations/patches` is applied.
 - Runners: the platform now recommends `aixle-runner` 0.3.0 and
   serves it next to 0.1.0 and 0.2.0. It pins the `linux-amd64` and `linux-arm64`
   binaries of [runner-v0.3.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.3.0)
