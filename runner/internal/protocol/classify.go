@@ -37,9 +37,9 @@ const (
 	// ActionNewRegistrationToken: register said `invalid_token`. The registration
 	// token is unknown, used or expired; the operator needs a new one.
 	ActionNewRegistrationToken
-	// ActionFixConfiguration: register refused the body (`invalid_registration`,
-	// `ephemeral_not_supported`). The token is not spent, so configure can be run
-	// again once the input is fixed.
+	// ActionFixConfiguration: register refused the body (`invalid_registration`).
+	// The token is not spent, so configure can be run again once the input is
+	// fixed.
 	ActionFixConfiguration
 )
 
@@ -104,7 +104,7 @@ func Classify(err error) Action {
 			return ActionDrop
 		}
 		return ActionBug
-	case "invalid_registration", "ephemeral_not_supported":
+	case "invalid_registration":
 		return ActionFixConfiguration
 	case "invalid_request", "invalid_result", "invalid_check_in":
 		return ActionBug

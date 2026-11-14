@@ -40,7 +40,6 @@ module Runners
       key("on_release", types: %w[coder], default: "delete", schema: { "enum" => %w[delete stop] }),
       key("namespace", types: %w[kubernetes], required: true,
                        schema: { "type" => "string", "maxLength" => 63, "pattern" => "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" }),
-      key("reconnect_grace", types: ALL, default: 900, schema: { "type" => "integer", "minimum" => 60, "maximum" => 7200 }),
       key("auto_update", types: %w[manual], default: true, schema: { "type" => "boolean" }),
       key("container.image_override", types: ALL, schema: { "type" => "string", "minLength" => 1 }),
       key("container.resources", types: ALL, schema: {
@@ -117,7 +116,6 @@ module Runners
     IMAGE_DOMAIN = "(?:#{IMAGE_HOST_LABEL}(?:\\.#{IMAGE_HOST_LABEL})+(?::[0-9]+)?|#{IMAGE_HOST_LABEL}:[0-9]+|localhost)"
     IMAGE_REFERENCE = %r{\A(?:#{IMAGE_DOMAIN}/)?#{IMAGE_COMPONENT}(?:/#{IMAGE_COMPONENT})*(?::\w[\w.-]{0,127})?(?:@[A-Za-z][A-Za-z0-9]*(?:[-_+.][A-Za-z][A-Za-z0-9]*)*:[0-9a-fA-F]{32,})?\z}
 
-    EPHEMERAL = "ephemeral is not a config key: it is set per machine at registration"
     TYPE_NAMES = { "string" => "a string", "integer" => "an integer", "number" => "a number", "boolean" => "true or false",
                    "object" => "an object", "array" => "a list", "null" => "null" }.freeze
 
@@ -204,7 +202,6 @@ module Runners
 
       def key_refusals(config, type)
         config.flat_map do |name, value|
-          next [ EPHEMERAL ] if name == "ephemeral"
           next [ refusal(name, type) ].compact unless GROUPS.include?(name)
           next [] unless value.is_a?(Hash)
 

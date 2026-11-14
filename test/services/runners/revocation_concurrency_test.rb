@@ -196,6 +196,6 @@ class Runners::RevocationConcurrencyTest < ActiveSupport::TestCase
 
   def register(credential)
     Runners::Registration.register!(credential, name: "build-01", os: "linux", arch: "amd64", facts: {},
-                                                ephemeral: false, auto_update: true, runner_version: "1.4.0", protocol_version: "1")
+                                                auto_update: true, runner_version: "1.4.0", protocol_version: "1")
   end
 end

@@ -10,7 +10,7 @@ require "test_helper"
 class RunnerGatewayCheckInTest < ActionDispatch::IntegrationTest
   include ProcessModeHelper::RunnerGateway
 
-  REGISTRATION = { name: "build-01", os: "linux", arch: "amd64", facts: { "docker" => "26.0.0" }, ephemeral: false }.freeze
+  REGISTRATION = { name: "build-01", os: "linux", arch: "amd64", facts: { "docker" => "26.0.0" } }.freeze
   AMD64 = "a" * 64
 
   setup do

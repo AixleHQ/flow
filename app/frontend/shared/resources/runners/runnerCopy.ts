@@ -58,10 +58,6 @@ export const FIELD_COPY: Record<string, { label: string; description?: string }>
     label: 'Mount the Docker socket',
     description: 'Lets the agent run Docker on the machine.',
   },
-  reconnect_grace: {
-    label: 'Reconnect grace (seconds)',
-    description: 'How long a session waits for a runner that lost its connection.',
-  },
   auto_update: { label: 'Auto-update', description: 'The runner updates itself to the recommended version.' },
 };
 
@@ -82,7 +78,6 @@ export const FIELD_ORDER = [
   'container.pid',
   'container.allow_privileged_mounts',
   'container.docker_socket',
-  'reconnect_grace',
   'auto_update',
 ];
 

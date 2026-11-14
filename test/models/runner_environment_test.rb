@@ -14,12 +14,11 @@ class RunnerEnvironmentTest < ActiveSupport::TestCase
     assert_equal @runner.company, environment.company
   end
 
-  test "a registered machine needs a name, and an ephemeral one is refused" do
-    environment = build(:runner_environment, runner: @runner, display_name: nil, ephemeral: true)
+  test "a registered machine needs a name" do
+    environment = build(:runner_environment, runner: @runner, display_name: nil)
 
     assert_not environment.valid?
     assert environment.errors.added?(:display_name, :blank)
-    assert environment.errors.of_kind?(:ephemeral, :inclusion)
   end
 
   test "facts are an object" do

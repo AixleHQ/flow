@@ -28,7 +28,7 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
   def canonical_url = "#{Settings.protocol}://#{Settings.domain}"
 
   def runner_params(**overrides)
-    { runner: { name: "Office Mac", runner_type: "manual", max_concurrency: 2, config: { reconnect_grace: 600 } }.merge(overrides) }
+    { runner: { name: "Office Mac", runner_type: "manual", max_concurrency: 2, config: { auto_update: false } }.merge(overrides) }
   end
 
   test "every route answers 404 for a company without the flag" do
@@ -69,7 +69,7 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
       props[:runners].pluck(:id) == [ @runner.id ] && !props[:runners].pluck(:id).include?(project_runner.id) &&
         props[:runners].first[:runnerType] == "manual" &&
         props[:runnerTypes].pluck(:runnerType) == %w[manual] &&
-        props[:runnerTypes].first[:configSchema][:properties].key?(:reconnect_grace) &&
+        props[:runnerTypes].first[:configSchema][:properties].key?(:auto_update) &&
         props[:canManage] == true
     end
 
@@ -117,7 +117,7 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
     runner = @company.runners.find_by!(name: "Box admin")
     assert_nil runner.project_id
     assert_equal @admin, runner.created_by
-    assert_equal({ "reconnect_grace" => 600 }, runner.config)
+    assert_equal({ "auto_update" => false }, runner.config)
     assert_equal({ "provisionable" => false, "rebuildable" => false }, runner.capabilities)
     assert_equal 1, @company.runners.where("name LIKE 'Box %'").count
   end

@@ -295,7 +295,7 @@ class Runners::CredentialsTest < ActiveSupport::TestCase
     rotation = assert_raises(Runners::Credentials::Refused) { Runners::Credentials.rotate!(refresh) }
     registering = assert_raises(Runners::Credentials::Refused) do
       Runners::Registration.register!(registration, name: "build-01", os: "linux", arch: "amd64", facts: {},
-                                                    ephemeral: false, auto_update: true,
+                                                    auto_update: true,
                                                     runner_version: "1.4.0", protocol_version: "1")
     end
 

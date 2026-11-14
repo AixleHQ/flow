@@ -61,7 +61,7 @@ commas), so that Ruby's `JSON` and Go's `encoding/json` both read it. Every file
         "method": "POST",
         "path": "/runner/v1/register",
         "token": "{{reg}}",
-        "body": { "name": "build-01", "os": "linux", "arch": "amd64", "facts": {}, "ephemeral": false }
+        "body": { "name": "build-01", "os": "linux", "arch": "amd64", "facts": {} }
       },
       "response": {
         "status": 201,
