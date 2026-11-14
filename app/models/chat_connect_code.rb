@@ -71,6 +71,9 @@ class ChatConnectCode < ApplicationRecord
     if provider == Chat::TeamsProvider::KEY && conversation.channel? && team_name.blank?
       return "Name the team too for a Teams channel: Team / Channel"
     end
+    if team_name.present? && conversation.team_name.blank?
+      return "Microsoft Teams did not say which team #{conversation.label} is in. Try again in a minute."
+    end
 
     matches = self.class.comparable(conversation.name) == self.class.comparable(channel_name) &&
               (team_name.blank? || self.class.comparable(conversation.team_name) == self.class.comparable(team_name))

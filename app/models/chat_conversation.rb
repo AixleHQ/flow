@@ -77,21 +77,57 @@ class ChatConversation < ApplicationRecord
                                                        channel_data.dig("channel", "id").present?
     return nil if external_id.blank?
 
+    team = channel_data["team"].to_h
     row = registry_row(integration, external_id)
     row.assign_attributes(
       provider: "teams",
       kind: Chat::TeamsProvider::CONVERSATION_TYPES.fetch(conversation["conversationType"].to_s, "group"),
       name: channel_data.dig("channel", "name").presence || row.name,
       tenant_id: channel_data.dig("tenant", "id") || conversation["tenantId"],
-      team_external_id: channel_data.dig("team", "id") || row.team_external_id,
-      team_name: channel_data.dig("team", "name").presence || row.team_name,
+      team_external_id: team["id"] || row.team_external_id,
       service_url: activity["serviceUrl"],
       last_activity_at: Time.current
     )
+    row.inherit_team
     row.save!
+    row.learn_team!(name: team["name"], aad_group_id: team["aadGroupId"])
     row
   rescue ActiveRecord::RecordNotUnique
     retry
+  end
+
+  # The other rows of this row's team, in the same registry.
+  def teammates
+    return self.class.none if team_external_id.blank?
+
+    registry = if chat_workspace_id
+      self.class.where(chat_workspace_id: chat_workspace_id)
+    else
+      self.class.where(integration_id: integration_id, chat_workspace_id: nil)
+    end
+    registry.where(provider: "teams", team_external_id: team_external_id).where.not(id: id)
+  end
+
+  # Microsoft names a team when the app is installed in it and when it is
+  # renamed. A channel created later, and every message, carry the team's id
+  # alone, so a channel takes what its team's other channels know.
+  def inherit_team
+    return if team_name.present? && team_aad_group_id.present?
+
+    known = teammates.where.not(team_name: [ nil, "" ]).order(updated_at: :desc).first
+    return if known.nil?
+
+    self.team_name = team_name.presence || known.team_name
+    self.team_aad_group_id = team_aad_group_id.presence || known.team_aad_group_id
+  end
+
+  # What Microsoft said about this row's team, for every channel of it.
+  def learn_team!(name:, aad_group_id: nil)
+    attributes = { team_name: name.presence, team_aad_group_id: aad_group_id.presence }.compact
+    return if attributes.empty?
+
+    update!(attributes)
+    teammates.update_all(attributes.merge(updated_at: Time.current))
   end
 
   # A team's channels as the Connector lists them, recorded beside the

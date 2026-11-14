@@ -41,6 +41,13 @@ governance, community health — carry none.
   project's company (`company_id`).
 
 ### Fixed
+- **Integrations**: a Microsoft Teams channel created after Aixle Flow joined
+  its team can be connected. Its code was refused with "Posted in <channel>,
+  but the code is for <team> / <channel>". Renaming a team now renames it on
+  every channel.
+- **Integrations**: when Microsoft stops an administrator approving a Teams
+  connection, the approval page shows Microsoft's reason instead of "sign-in
+  was cancelled", and names the administrator roles that can approve.
 - **Workflows**: the preview before reverting a workflow no longer lists a
   repository, skill, connector or secret deleted since as coming back. The
   revert leaves such a resource out, and the preview now says the same.

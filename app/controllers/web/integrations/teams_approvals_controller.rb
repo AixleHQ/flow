@@ -51,7 +51,7 @@ class Web::Integrations::TeamsApprovalsController < Web::ApplicationController
       return redirect_to(teams_link_callback_path(params.permit(:code, :state, :error).to_h))
     end
     return redirect_to(back, alert: "This Microsoft sign-in link is invalid or has expired") unless state&.dig("provider") == "teams"
-    return redirect_to(back, alert: "Microsoft sign-in was cancelled") if params[:error].present?
+    return redirect_to(back, alert: microsoft_refusal(state)) if params[:error].present?
 
     side = Oauth::State.consume(state["nonce"])
     return redirect_to(back, alert: "This Microsoft sign-in link was already used") if side.nil?
@@ -63,6 +63,7 @@ class Web::Integrations::TeamsApprovalsController < Web::ApplicationController
                                 with_files: state.dig("context", "files") == true)
     redirect_to back, notice: "Connected. Your organization's Teams can now start #{integration.company.name} workflows."
   rescue Teams::Connection::Refused, Teams::Error => e
+    Rails.logger.warn("[Teams approval] integration ##{state&.dig('owner_id')} refused: #{e.message}")
     redirect_to back, alert: e.message
   end
 
@@ -98,6 +99,14 @@ class Web::Integrations::TeamsApprovalsController < Web::ApplicationController
   end
 
   private
+
+  # Microsoft's own words, which name the AADSTS code: an administrator whose role
+  # cannot consent to what the app asks is sent back here with one.
+  def microsoft_refusal(state)
+    reason = params[:error_description].to_s.lines.first.to_s.strip.truncate(300)
+    Rails.logger.warn("[Teams approval] integration ##{state['owner_id']}: Microsoft answered #{params[:error]}: #{reason}")
+    reason.present? ? "Microsoft did not complete the sign-in: #{reason}" : "Microsoft sign-in was cancelled"
+  end
 
   # A sign-in counts only for the connection whose approval link this browser
   # opened: the signed state names it, and the session holds that link.
