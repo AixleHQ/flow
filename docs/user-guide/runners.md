@@ -118,14 +118,19 @@ machine appears as soon as it has run `configure`. Each row shows:
   - **Failed**: the machine is out of rotation after a failed reset or three
     failed sessions in a row, with the reason shown and a **Return to service**
     button (see below);
-  - **Gone**: the machine was unregistered;
+  - **Gone**: the machine was unregistered or revoked;
 - the runner **version** and the **OS / arch** it reported at `configure`
   (updated every time the runner starts);
+- the **first-seen IP**, the address the machine registered from, and **added
+  by**, the user who created the registration token with **Add machine**. A
+  machine registered before these were recorded shows a dash for both;
 - when it was **registered**;
 - its **last seen**: the last time the platform heard from it. The runner's own
   "Last seen" in the overview is the latest of its machines'.
 
-The list refreshes itself every 15 seconds while the page is open.
+The list refreshes itself every 15 seconds while the page is open. The runners
+list shows, for a manual runner, **machines busy/total**: the machines holding a
+session out of those registered and not gone.
 
 An **offline machine is given no new session**. While another machine of the
 runner is free, a session goes there. If every machine of the runner is
@@ -197,6 +202,31 @@ keep projects apart. On a project runner, what is kept stays within that project
 extra mount with `:rw` and a host-path cache mount let the agent write to the
 machine outside Aixle's volumes. A scrub or a reset removes what Aixle wrote
 there, not what the agent wrote.
+
+### Revoking a machine
+
+**Revoke** in a machine's row removes a machine for good: a lost or compromised
+machine, or one you no longer want on the runner. It works on a machine in any
+state but Gone. It is available to whoever can revoke the runner: a company admin
+on a company runner, and a project admin or owner on a project runner.
+
+- The machine shows **Gone** and stays in the list. Its credentials are revoked,
+  so `aixle-runner` on it is refused (`401`) on its next request and stops. The
+  other machines of the runner keep working.
+- If the machine held a session, the session ends at once with a message that
+  names the machine, and its slot is released. A session waiting for a machine on
+  the runner goes on waiting for its other machines.
+- **Aixle does not clean the machine.** Remove the Aixle containers and volumes
+  it left, and its service (`aixle-runner service uninstall`), yourself.
+  `aixle-runner unregister` on the machine does the same as Revoke.
+
+### What Revoke and Delete do to a runner's sessions
+
+Revoking a runner, and deleting it, which revokes it, ends its sessions: a
+session running on it fails with a message that says the runner was revoked, and
+one waiting for one of its machines ends with the message a launch gives for a
+revoked runner. Nothing stays in Finishing or waiting because its runner was
+revoked.
 
 ### Return to service
 

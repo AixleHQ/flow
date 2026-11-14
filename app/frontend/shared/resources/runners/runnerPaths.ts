@@ -11,7 +11,9 @@ import {
   registrationTokenCompanySettingsRunnerPath,
   returnToServiceCompanyProjectRunnerMachinePath,
   returnToServiceCompanySettingsRunnerMachinePath,
+  revokeCompanyProjectRunnerMachinePath,
   revokeCompanyProjectRunnerPath,
+  revokeCompanySettingsRunnerMachinePath,
   revokeCompanySettingsRunnerPath,
 } from 'shared/routes';
 
@@ -25,6 +27,7 @@ export const companyRunnerPaths = (): RunnerPaths => ({
   revoke: (id) => revokeCompanySettingsRunnerPath(id),
   registrationToken: (id) => registrationTokenCompanySettingsRunnerPath(id),
   returnToService: (id, machineId) => returnToServiceCompanySettingsRunnerMachinePath(id, machineId),
+  revokeMachine: (id, machineId) => revokeCompanySettingsRunnerMachinePath(id, machineId),
 });
 
 export const projectRunnerPaths = (projectId: number): RunnerPaths => ({
@@ -35,4 +38,5 @@ export const projectRunnerPaths = (projectId: number): RunnerPaths => ({
   revoke: (id) => revokeCompanyProjectRunnerPath(projectId, id),
   registrationToken: (id) => registrationTokenCompanyProjectRunnerPath(projectId, id),
   returnToService: (id, machineId) => returnToServiceCompanyProjectRunnerMachinePath(projectId, id, machineId),
+  revokeMachine: (id, machineId) => revokeCompanyProjectRunnerMachinePath(projectId, id, machineId),
 });

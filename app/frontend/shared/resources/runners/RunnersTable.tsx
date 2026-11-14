@@ -31,6 +31,7 @@ export function RunnersTable({ runners, pathFor }: { runners: Runner[]; pathFor:
             <ResourceTh>Name</ResourceTh>
             <ResourceTh>Type</ResourceTh>
             <ResourceTh>Status</ResourceTh>
+            <ResourceTh>Machines busy/total</ResourceTh>
             <ResourceTh>Last seen</ResourceTh>
           </Table.Tr>
         </Table.Thead>
@@ -47,6 +48,9 @@ export function RunnersTable({ runners, pathFor }: { runners: Runner[]; pathFor:
               </Table.Td>
               <Table.Td>
                 <RunnerStatus runner={runner} />
+              </Table.Td>
+              <Table.Td>
+                <Text fz="sm">{runner.machines ? `${runner.machines.busy}/${runner.machines.total}` : '—'}</Text>
               </Table.Td>
               <Table.Td>
                 <Text fz="sm" c="dimmed">

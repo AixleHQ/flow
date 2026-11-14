@@ -174,6 +174,88 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     assert_empty @host_runner.operations, "nothing is sent to a machine that left"
   end
 
+  test "revoking a machine ends the session it holds with a message that names it, and releases its admission" do
+    session = launch
+    run_phases(session, %w[pull_image create_container start_container exec])
+    admission = session.session_admission.reload
+    @host_runner.operations.clear
+
+    assert Runners::Registration.revoke!(@machine)
+
+    session.reload
+    assert_equal "failed", session.state
+    assert_equal "Machine \"#{@machine.display_name}\" of runner \"Build farm\" was revoked.", session.error_message
+    assert @machine.reload.gone?
+    assert_nil @machine.current_session_id
+    assert @machine.credentials.all?(&:revoked?)
+    cleaned = run_phase(session, "cleanup")
+    assert_not cleaned.key?(:cleanup_pending), "cleanup left #{cleaned.inspect}"
+    assert admission.reload.released_at, "its slot is released"
+    assert_empty @host_runner.operations, "nothing is sent to a machine that was revoked"
+  end
+
+  test "a session waiting on the runner starts on another machine once the busy one is revoked" do
+    first = launch
+    run_phases(first, %w[pull_image create_container])
+    waiting = launch
+    run_phases(waiting, %w[pull_image])
+    assert_equal({ "capacity_wait" => true }, run_phase(waiting, "create_container"))
+
+    Runners::Registration.revoke!(@machine)
+    run_phase(first, "cleanup")
+    other = create(:runner_environment, runner: @runner, key: "aixle-r#{@runner.id}-ffff0000")
+    ContainerRuntime::FakeHostRunner.new(other).tap do |host|
+      run_phase(waiting, "create_container")
+      host.stop
+    end
+
+    assert_equal other.id, waiting.reload.runner_environment_id
+    assert_equal waiting.id, other.reload.current_session_id
+    assert_equal "failed", first.reload.state
+  end
+
+  test "revoking a machine that is idle, or failed, makes it gone and leaves the others alone" do
+    failed = create(:runner_environment, runner: @runner)
+    Runners::Machines.fail!(failed, "boom")
+    idle = @machine
+
+    assert Runners::Registration.revoke!(failed)
+    assert Runners::Registration.revoke!(idle)
+
+    assert_equal %w[gone gone], [ failed.reload.state, idle.reload.state ]
+    assert_not Runners::Registration.revoke!(idle), "a machine that is gone has nothing left to revoke"
+  end
+
+  test "revoking a runner fails the session running on it and ends the one waiting for a machine" do
+    running = launch
+    run_phases(running, %w[pull_image create_container start_container exec])
+    waiting = launch
+    run_phases(waiting, %w[pull_image])
+    assert_equal({ "capacity_wait" => true }, run_phase(waiting, "create_container"))
+
+    @runner.revoke!
+
+    assert_equal "failed", running.reload.state
+    assert_equal "Runner \"Build farm\" was revoked, so the session running on it ended.", running.error_message
+    assert_equal "failed", waiting.reload.state
+    assert_equal "Runner \"Build farm\" is revoked. Pick another runner for the session.", waiting.error_message
+    assert_nil @machine.reload.current_session_id
+    assert_not run_phase(running, "cleanup").key?(:cleanup_pending)
+    assert running.session_admission.reload.released_at
+    assert run_phase(waiting, "cleanup")
+    assert waiting.session_admission.reload.released_at
+  end
+
+  test "deleting a runner ends its sessions as a revoke does" do
+    session = launch
+    run_phases(session, %w[pull_image create_container start_container exec])
+
+    @runner.soft_delete!
+
+    assert_equal "failed", session.reload.state
+    assert_nil @machine.reload.current_session_id
+  end
+
   test "a stop between the pull and the create takes no machine, and the cleanup sends nothing" do
     session = launch
     run_phases(session, %w[pull_image])
