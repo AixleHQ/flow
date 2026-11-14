@@ -140,7 +140,8 @@ step is within its time limit, even when it is silent.
 The agent images (`ghcr.io/aixlehq/flow-<image>`) are built for `linux/amd64`
 and `linux/arm64`, so on an arm64 machine (Apple Silicon, or an ARM Linux
 server, with the binary or with Docker) the runner pulls the arm64 image and the
-agent runs natively. An image published before arm64 builds existed, or a runtime
+agent runs natively. This needs `aixle-runner` 0.4.0 or later: 0.3.0 and
+earlier always pull `linux/amd64`, so every agent runs under emulation. An image published before arm64 builds existed, or a runtime
 whose CLI has no arm64 build, has `linux/amd64` only: the runner then pulls that
 and the agent starts under amd64 emulation, which is slower. OrbStack and Docker
 Desktop have emulation built in; on ARM Linux install it with binfmt (the
