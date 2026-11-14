@@ -689,6 +689,10 @@ runners:
     grok: <%= ENV['RUNNER_AGENT_IMAGE_GROK'] %>
     kiro_cli: <%= ENV['RUNNER_AGENT_IMAGE_KIRO_CLI'] %>
     copilot_cli: <%= ENV['RUNNER_AGENT_IMAGE_COPILOT_CLI'] %>
+  # How many sessions in a row may fail on one machine before it is taken out of
+  # rotation (`failed`, until someone presses Return to service). A session that
+  # ends well sets the count back to 0 (DESIGN.md §7.2).
+  max_consecutive_failures: 3
   # How long ContainerRuntime::RunnerRuntime first waits between two looks at
   # an op's result, in seconds. It doubles up to one second.
   op_poll_interval: 0.25

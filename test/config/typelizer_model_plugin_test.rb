@@ -21,7 +21,7 @@ class TypelizerModelPluginTest < ActiveSupport::TestCase
     plugin = plugin_for(Runner)
 
     assert_equal %w[manual coder kubernetes], plugin.enum_for(prop(:runner_type))
-    assert_equal %w[reuse fresh], plugin.enum_for(prop(:reuse_policy))
+    assert_equal %w[reuse reset fresh], plugin.enum_for(prop(:reuse_policy))
     assert_equal %w[pending connected degraded unreachable disabled revoked], plugin.enum_for(prop(:status))
   end
 

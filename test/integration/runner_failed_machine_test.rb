@@ -15,7 +15,7 @@ class RunnerFailedMachineTest < ActionDispatch::IntegrationTest
     @user = create(:user, :admin, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
     @project = create(:project, company: @company, owner: @user)
     create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
-    @runner = create(:runner, :manual, company: @company, created_by: @user, name: "Build farm")
+    @runner = create(:runner, :manual, company: @company, created_by: @user, name: "Build farm", reuse_policy: :reset)
     @machine = create(:runner_environment, runner: @runner, display_name: "build-01")
     @host_runner = ContainerRuntime::FakeHostRunner.new(@machine)
     stub_container_runtime("kubernetes")
@@ -53,7 +53,7 @@ class RunnerFailedMachineTest < ActionDispatch::IntegrationTest
     @host_runner.operations.clear
     next_session = launch
     assert_equal "failed", next_session.reload.state
-    assert_match(/\ARunner "Build farm" has no machine that can take a session: its machine failed: build-01 \(env.reset failed after session #{session.id}: reset_failed: volume aixle-ws-x is in use\)/,
+    assert_match(/\ARunner "Build farm" has no machine that can take a session: its machine is out of rotation: build-01 \(build-01 failed to reset after session #{session.id}: reset_failed: volume aixle-ws-x is in use\)/,
                  next_session.error_message)
     assert_raises(Runners::Machines::NoMachine) do
       Runners::Machines.acquire!(create(:runner_session, environment: @machine, runner_environment: nil))

@@ -1,11 +1,13 @@
 import { router } from '@inertiajs/react';
-import { Code, Stack, Table, Text } from '@mantine/core';
-import { useEffect } from 'react';
+import { Button, Code, Stack, Table, Text } from '@mantine/core';
+import { useEffect, useState } from 'react';
 
-import type { RunnerMachine } from '@/types/generated';
+import type { Runner, RunnerMachine } from '@/types/generated';
 
 import { formatDateTime } from 'shared/lib/formatDate';
 import { StatusBadge } from 'shared/ui/StatusBadge';
+
+import type { RunnerPaths } from './runnerConfig';
 
 /** How often the page asks for the machines again: a little above the platform's 15 s heartbeat write. */
 export const MACHINES_REFRESH_MS = 15_000;
@@ -14,6 +16,7 @@ const STATE_HINT: Record<RunnerMachine['state'], string> = {
   online: 'Running a session',
   idle: 'Connected, no session',
   offline: 'Not heard from for 90 seconds',
+  resetting: 'Being reset; takes no session until it succeeds',
   failed: 'Out of rotation',
   gone: 'Unregistered',
 };
@@ -21,12 +24,35 @@ const STATE_HINT: Record<RunnerMachine['state'], string> = {
 const platform = (machine: Pick<RunnerMachine, 'os' | 'arch'>): string =>
   [machine.os, machine.arch].filter(Boolean).join('/') || '—';
 
+/** What the page says of a failed machine (§8): why, and what to do. */
+const failedMessage = (machine: RunnerMachine): string =>
+  `${machine.stateReason ?? `${machine.displayName ?? machine.key} failed`}. Fix the machine and press Return to service.`;
+
+interface RunnerMachinesProps {
+  machines: RunnerMachine[];
+  runner: Pick<Runner, 'id'>;
+  paths: Pick<RunnerPaths, 'returnToService'>;
+  /** Who may press Return to service: the policy that guards update and revoke. */
+  canManage: boolean;
+}
+
 /**
- * The machines of a `manual` runner, read-only (DESIGN.md §2.5, §11). A machine's state and last
- * seen change while the page is open, so it asks for the runner and its machines again every
- * MACHINES_REFRESH_MS while the tab is visible.
+ * The machines of a `manual` runner (DESIGN.md §2.5, §11). A machine's state and last seen change
+ * while the page is open, so it asks for the runner and its machines again every MACHINES_REFRESH_MS
+ * while the tab is visible. A `failed` machine has Return to service, which resets it (§5.2).
  */
-export function RunnerMachines({ machines }: { machines: RunnerMachine[] }) {
+export function RunnerMachines({ machines, runner, paths, canManage }: RunnerMachinesProps) {
+  const [returning, setReturning] = useState<number | null>(null);
+
+  const returnToService = (machine: RunnerMachine) => {
+    setReturning(machine.id);
+    router.post(
+      paths.returnToService(runner.id, machine.id),
+      {},
+      { preserveScroll: true, onFinish: () => setReturning(null) },
+    );
+  };
+
   useEffect(() => {
     const timer = window.setInterval(() => {
       if (!document.hidden) router.reload({ only: ['runner', 'machines'] });
@@ -52,6 +78,7 @@ export function RunnerMachines({ machines }: { machines: RunnerMachine[] }) {
           <Table.Th>OS / arch</Table.Th>
           <Table.Th>Registered</Table.Th>
           <Table.Th>Last seen</Table.Th>
+          {canManage && <Table.Th aria-label="Actions" />}
         </Table.Tr>
       </Table.Thead>
       <Table.Tbody>
@@ -69,7 +96,7 @@ export function RunnerMachines({ machines }: { machines: RunnerMachine[] }) {
               <Stack gap={2} align="flex-start">
                 <StatusBadge state={machine.state} />
                 <Text fz="xs" c="dimmed">
-                  {machine.state === 'failed' && machine.stateReason ? machine.stateReason : STATE_HINT[machine.state]}
+                  {machine.state === 'failed' ? failedMessage(machine) : STATE_HINT[machine.state]}
                 </Text>
               </Stack>
             </Table.Td>
@@ -85,6 +112,20 @@ export function RunnerMachines({ machines }: { machines: RunnerMachine[] }) {
             <Table.Td>
               <Text fz="sm">{machine.lastHeartbeatAt ? formatDateTime(machine.lastHeartbeatAt) : 'Never'}</Text>
             </Table.Td>
+            {canManage && (
+              <Table.Td>
+                {machine.state === 'failed' && (
+                  <Button
+                    size="xs"
+                    variant="default"
+                    loading={returning === machine.id}
+                    onClick={() => returnToService(machine)}
+                  >
+                    Return to service
+                  </Button>
+                )}
+              </Table.Td>
+            )}
           </Table.Tr>
         ))}
       </Table.Tbody>

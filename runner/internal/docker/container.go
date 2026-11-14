@@ -425,11 +425,7 @@ const defaultRemoveTimeout = 30 * time.Second
 // the session still holds its machine, and the cleanup's `env.reset` removes a
 // container that is left (PROTOCOL.md §6.2).
 func (e *Environment) removeAfterFailedStart(ctx context.Context, ref string) string {
-	timeout := e.RemoveTimeout
-	if timeout <= 0 {
-		timeout = defaultRemoveTimeout
-	}
-	removeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), timeout)
+	removeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), e.removeTimeout())
 	defer cancel()
 	_, err := e.API.ContainerRemove(removeCtx, ref, client.ContainerRemoveOptions{Force: true, RemoveVolumes: true})
 	if err == nil || cerrdefs.IsNotFound(err) {
@@ -438,6 +434,15 @@ func (e *Environment) removeAfterFailedStart(ctx context.Context, ref string) st
 	e.logger().Warn("removing the container of a failed container.start failed; env.reset removes what is left",
 		"environment", e.Key, "container", ref, "error", err)
 	return fmt.Sprintf("removing what the daemon made failed (%v), and env.reset removes it", err)
+}
+
+// removeTimeout is the bound of a removal that runs under a fresh context:
+// RemoveTimeout, or defaultRemoveTimeout when it is zero.
+func (e *Environment) removeTimeout() time.Duration {
+	if e.RemoveTimeout <= 0 {
+		return defaultRemoveTimeout
+	}
+	return e.RemoveTimeout
 }
 
 // pastDeadline is the answer of a `container.start` whose deadline_at passed

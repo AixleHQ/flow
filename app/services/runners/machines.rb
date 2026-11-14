@@ -7,8 +7,9 @@ module Runners
   # (task 8a, decision 2).
   #
   #   environment = Runners::Machines.acquire!(session)            # raises CapacityError when every machine is busy
-  #   Runners::Machines.release!(environment, session)             # after its env.reset succeeded
+  #   Runners::Machines.release!(environment, session, failed:)    # after its env.scrub or env.reset succeeded
   #   Runners::Machines.fail!(environment, reason, holder: session) # its env.reset failed: out of rotation
+  #   Runners::Machines.return_to_service!(environment)            # a failed machine: env.reset, then free again
   #   Runners::Machines.availability(runner)                       # => Availability, for the launch's checks
   #
   # A machine is held through runner_environments.current_session_id, set
@@ -19,16 +20,19 @@ module Runners
   # not heard within 90 s (RunnerEnvironment.heard; a machine running an op
   # sends heartbeats, §6.7) is offline and is given no session (task 12c).
   #
-  # A machine whose reset failed is `failed` (§5.2) and held by no session, so
+  # A machine whose reset failed, or on which `runners.max_consecutive_failures`
+  # sessions in a row failed, is `failed` (§5.2) and held by no session, so
   # nothing that happens to the session, its deletion included, returns it to
-  # rotation. Return to service is task 11; until then the machine is brought
-  # back by unregistering it and configuring it again.
+  # rotation. Return to service (§5.2, §7.2) does: it sends `env.reset` with no
+  # session, the machine is `resetting` and takes no session meanwhile, and the
+  # result of the op settles it (#settle_resets!): `registered` and free, or
+  # `failed` with the new reason.
   module Machines
     # Whether a runner has a machine that can take a session: `:available`
     # (one registered and reachable, free or busy), `:all_offline` (some
     # registered, none reachable, with the offline machines for the message),
-    # `:none_registered`, or `:all_failed`, with the failed machines for the
-    # message.
+    # `:none_registered`, or `:all_failed`, with the machines that are out of
+    # rotation, `failed` or `resetting`, for the message.
     Availability = Data.define(:status, :failed, :offline) do
       def available? = status == :available
     end
@@ -63,10 +67,27 @@ module Runners
       held_by(session) || raise
     end
 
-    # Frees the machine once the session's `env.reset` succeeded.
-    def release!(environment, session)
-      RunnerEnvironment.where(id: environment.id, current_session_id: session.id, state: "registered")
-                       .update_all(current_session_id: nil, state_reason: nil, updated_at: Time.current)
+    # Frees the machine once the session's `env.scrub` or `env.reset` succeeded,
+    # and counts the session: a session that `failed` adds to the machine's
+    # streak, one that ended well sets it back to 0, and the machine whose
+    # streak reaches `runners.max_consecutive_failures` is `failed` instead of
+    # freed (§7.2), with the reason. Only while `session` holds the machine.
+    def release!(environment, session, failed: false)
+      RunnerEnvironment.transaction do
+        held = RunnerEnvironment.where(id: environment.id, current_session_id: session.id, state: "registered")
+                                .lock.first
+        next unless held
+
+        streak = failed ? held.consecutive_failures + 1 : 0
+        if streak >= max_consecutive_failures
+          held.update_columns(state: "failed", current_session_id: nil, consecutive_failures: streak,
+                              state_reason: "#{label(held)} failed #{streak} sessions in a row".truncate(255),
+                              updated_at: Time.current)
+        else
+          held.update_columns(current_session_id: nil, state_reason: nil, consecutive_failures: streak,
+                              updated_at: Time.current)
+        end
+      end
     end
 
     # Takes the machine out of rotation: `failed`, held by no session, with the
@@ -93,7 +114,7 @@ module Runners
       offline = registered.order(:id).to_a
       return Availability.new(status: :all_offline, failed: [], offline: offline) if offline.any?
 
-      failed = RunnerEnvironment.where(runner_id: runner.id, state: "failed").order(:id).to_a
+      failed = RunnerEnvironment.where(runner_id: runner.id, state: %w[failed resetting]).order(:id).to_a
       Availability.new(status: failed.empty? ? :none_registered : :all_failed, failed: failed, offline: [])
     end
 
@@ -111,15 +132,80 @@ module Runners
         "Runner \"#{runner.name}\" has no machine registered. Register a machine on it, or pick another runner#{elsewhere}."
       when :all_failed
         machines = availability.failed
-        listed = machines.map { |machine| "#{machine.display_name.presence || machine.key} (#{machine.state_reason.presence || 'no reason recorded'})" }
+        listed = machines.map { |machine| "#{label(machine)} (#{out_of_rotation_reason(machine)})" }
         "Runner \"#{runner.name}\" has no machine that can take a session: " \
-          "#{machines.one? ? 'its machine failed' : 'every machine failed'}: #{listed.join('; ')}. " \
-          "To bring a machine back, run `aixle-runner unregister` on it, then `aixle-runner configure` again, " \
-          "or pick another runner#{elsewhere}."
+          "#{machines.one? ? 'its machine is out of rotation' : 'every machine is out of rotation'}: #{listed.join('; ')}. " \
+          "Fix the machine and press Return to service on the runner page, or pick another runner#{elsewhere}."
       else
         raise ArgumentError, "runner \"#{runner.name}\" is available"
       end
     end
+
+    # Return to service (§5.2): a `failed` machine goes `resetting`, held by no
+    # session, and an `env.reset` is put on its queue. It takes no session until
+    # the op settles it (#settle_resets!). False for a machine that is not
+    # `failed`: pressing it twice sends one reset.
+    def return_to_service!(environment)
+      RunnerEnvironment.transaction do
+        locked = RunnerEnvironment.where(id: environment.id, state: "failed").lock.first
+        next false unless locked
+
+        locked.update_columns(state: "resetting", current_session_id: nil, state_reason: nil, updated_at: Time.current)
+        Runners::Operations.enqueue_reset!(locked, deadline_at: Settings.runners.lifecycle_op_timeout.to_f.seconds.from_now)
+        true
+      end
+    end
+
+    # Settles every `resetting` machine whose `env.reset` has an outcome: the
+    # machine is free again when it succeeded, `failed` with the new reason when
+    # it failed or expired. A machine whose op is still open stays `resetting`.
+    # Called wherever an op gets its outcome, so it is idempotent.
+    def settle_resets!(environment_ids = nil)
+      machines = RunnerEnvironment.where(state: "resetting")
+      machines = machines.where(id: environment_ids) if environment_ids
+      machines.find_each { |machine| settle_reset!(machine) }
+    end
+
+    def label(environment)
+      environment.display_name.presence || environment.key
+    end
+
+    def settle_reset!(machine)
+      operation = RunnerOperation.where(runner_environment_id: machine.id, op: "env.reset").order(:sequence).last
+      return if operation.nil? || operation.deliverable?
+
+      RunnerEnvironment.transaction do
+        locked = RunnerEnvironment.where(id: machine.id, state: "resetting").lock.first
+        next unless locked
+
+        if operation.completed?
+          locked.update_columns(state: "registered", state_reason: nil, consecutive_failures: 0, updated_at: Time.current)
+        else
+          reason = operation.expired? ? "the runner did not answer" : failure_text(operation.result)
+          locked.update_columns(state: "failed", state_reason: "#{label(locked)} failed to reset on Return to service: #{reason}".truncate(255),
+                                updated_at: Time.current)
+        end
+      end
+    end
+    private_class_method :settle_reset!
+
+    # "<class>: <message>" of an op result that carries an error.
+    def failure_text(result)
+      error = result&.dig("error") || {}
+      [ error["class"], error["message"] ].compact_blank.join(": ").presence || "no reason given"
+    end
+
+    def out_of_rotation_reason(machine)
+      return "being returned to service" if machine.resetting?
+
+      machine.state_reason.presence || "no reason recorded"
+    end
+    private_class_method :out_of_rotation_reason
+
+    def max_consecutive_failures
+      Settings.runners.max_consecutive_failures.to_i.clamp(1, 1_000)
+    end
+    private_class_method :max_consecutive_failures
 
     def take!(session)
       runner = session.runner

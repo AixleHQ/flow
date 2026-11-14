@@ -17,7 +17,7 @@ type Runner = {
   updatedAt: string;
   runnerType: 'manual' | 'coder' | 'kubernetes';
   status: 'pending' | 'connected' | 'degraded' | 'unreachable' | 'disabled' | 'revoked';
-  reusePolicy: 'reuse' | 'fresh';
+  reusePolicy: 'reuse' | 'reset' | 'fresh';
   scope: 'company' | 'project';
   config: Record<string, unknown>;
   capabilities: { provisionable: boolean; rebuildable: boolean };

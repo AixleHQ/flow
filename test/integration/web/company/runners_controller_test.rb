@@ -280,4 +280,44 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
     assert_response :not_found
     assert_empty RunnerCredential.where(kind: :registration)
   end
+
+  test "only a company admin returns a failed machine to service, which resets it" do
+    machine = create(:runner_environment, runner: @runner, display_name: "build-01")
+    Runners::Machines.fail!(machine, "build-01 failed to reset after session 7: boom")
+
+    assert_role_matrix(WRITE_ROLES, transport: :web) do
+      post machine_return_to_service_company_settings_runner_path(@runner, machine)
+      Runners::Machines.fail!(machine.reload, "boom again") if machine.reload.state == "resetting"
+    end
+
+    RunnerOperation.delete_all
+    sign_in_as(@admin)
+    post machine_return_to_service_company_settings_runner_path(@runner, machine)
+    assert_redirected_to company_settings_runner_path(@runner)
+    assert_equal "build-01 is being reset. It takes sessions again once the reset succeeds.", flash[:notice]
+    assert_equal "resetting", machine.reload.state
+    assert_equal 1, RunnerOperation.where(runner_environment: machine, op: "env.reset", state: "pending").count
+  end
+
+  test "Return to service on a machine that is not failed sends nothing" do
+    machine = create(:runner_environment, runner: @runner, display_name: "build-01")
+    sign_in_as(@admin)
+
+    post machine_return_to_service_company_settings_runner_path(@runner, machine)
+
+    assert_equal "build-01 is not failed, so there is nothing to return to service.", flash[:alert]
+    assert_equal "registered", machine.reload.state
+    assert_empty RunnerOperation.all
+  end
+
+  test "a machine of another runner is not found by Return to service" do
+    other = create(:runner_environment, runner: create(:runner, company: @company, created_by: @admin, name: "Other box"))
+    Runners::Machines.fail!(other, "boom")
+    sign_in_as(@admin)
+
+    post machine_return_to_service_company_settings_runner_path(@runner, other)
+
+    assert_response :not_found
+    assert_equal "failed", other.reload.state
+  end
 end

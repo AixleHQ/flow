@@ -40,6 +40,8 @@ export interface RunnerPaths {
   revoke: (id: number) => string;
   /** POST: mints a single-use registration token for "Add machine". */
   registrationToken: (id: number) => string;
+  /** POST: Return to service, a reset of a failed machine (§5.2). */
+  returnToService: (id: number, machineId: number) => string;
 }
 
 export const schemaTypes = (schema: JsonSchema): string[] =>

@@ -26,7 +26,7 @@ import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { AddMachine } from './AddMachine';
 import { accessWideners, humanize, setKeys, type RunnerPaths, type RunnerTypeOption } from './runnerConfig';
-import { DEFAULT_REUSE_POLICY, lastSeen, REUSE_POLICY_COPY, runnerTypeTitle } from './runnerCopy';
+import { DEFAULT_REUSE_POLICY, lastSeen, REUSE_POLICY_COPY, runnerTypeTitle, SCRUB_NOTES } from './runnerCopy';
 import { RunnerFormModal } from './RunnerFormModal';
 import { RunnerMachines } from './RunnerMachines';
 
@@ -168,7 +168,7 @@ export function RunnerDetails({ runner, machines, runnerTypes, canManage, paths,
 
       {runner.runnerType === 'manual' && (
         <Section title="Machines">
-          <RunnerMachines machines={machines} />
+          <RunnerMachines machines={machines} runner={runner} paths={paths} canManage={canManage} />
         </Section>
       )}
 
@@ -189,6 +189,15 @@ export function RunnerDetails({ runner, machines, runnerTypes, canManage, paths,
             )}
           </Fact>
         </SimpleGrid>
+        {runner.runnerType === 'manual' && (
+          <Stack gap={4} mt="md">
+            {SCRUB_NOTES.map((note) => (
+              <Text key={note} fz="xs" c="dimmed">
+                {note}
+              </Text>
+            ))}
+          </Stack>
+        )}
       </Section>
 
       <Section title="Capabilities">

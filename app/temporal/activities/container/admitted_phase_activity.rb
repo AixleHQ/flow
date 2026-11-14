@@ -136,7 +136,13 @@ module Activities
         # that request has its answer or its deadline.
         if !absent && runtime.cleanup_ready?(admission.runtime_id)
           state = collect_outputs(admission, session, state)
-          runtime.cleanup_session(admission.runtime_id)
+          # A session on a runner's machine that failed gets a reset, whatever
+          # its policy (DESIGN.md §7.2), and counts toward the machine's streak.
+          if runtime.is_a?(ContainerRuntime::RunnerRuntime)
+            runtime.cleanup_session(admission.runtime_id, failed: session_failed?(session, state))
+          else
+            runtime.cleanup_session(admission.runtime_id)
+          end
           absent = runtime.session_absent?(admission.runtime_id)
         end
 
@@ -228,6 +234,15 @@ module Activities
       def clear_absence_clock(admission)
         admission.session_runtime_operations.pinning.where.not(absent_since: nil)
                  .update_all(absent_since: nil, updated_at: Time.current)
+      end
+
+      # Whether the session is ending as a failure: the phase state carries an
+      # error, or the session is already `failed`. A stop the person asked for, or
+      # a session that finished, is not one.
+      def session_failed?(session, state)
+        return true if session.reload.failed?
+
+        state[:error].present? && !(session.cancelled? || session.finishing_at.present?)
       end
 
       # Output collection walks the container filesystem and must not repeat on

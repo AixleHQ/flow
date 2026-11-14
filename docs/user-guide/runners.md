@@ -11,8 +11,8 @@ Runners are behind the `external_runners` feature flag: without it the pages
 do not exist for your company.
 
 This page covers adding machines to a `manual` runner and reading the
-machines list on its page. The rest of the manual runner's guide (health,
-reuse policy) is not written yet.
+machines list on its page, the reuse policy and Return to service. The rest of
+the manual runner's guide (health) is not written yet.
 
 ---
 
@@ -113,8 +113,11 @@ machine appears as soon as it has run `configure`. Each row shows:
   - **Offline**: the platform has not heard from the machine for 90 seconds, or
     never has. Stop `aixle-runner` on a machine, or lose its network, and it
     turns offline within about two minutes;
-  - **Failed**: the machine is out of rotation after a failed reset, with the
-    reason shown;
+  - **Resetting**: a reset started by Return to service is running, and the
+    machine takes no session;
+  - **Failed**: the machine is out of rotation after a failed reset or three
+    failed sessions in a row, with the reason shown and a **Return to service**
+    button (see below);
   - **Gone**: the machine was unregistered;
 - the runner **version** and the **OS / arch** it reported at `configure`
   (updated every time the runner starts);
@@ -152,6 +155,61 @@ the images are built for arm64.
 - On a self-hosted installation the machine must reach the runner gateway
   (`/runner/v1`) on the platform's host. If the gateway is served on a private
   address, the machine has to be inside that network or on its VPN.
+
+## Reuse policy, scrub and Return to service
+
+A `manual` runner's **reuse policy** decides what happens on a machine after
+every session. There are two values:
+
+| Policy | After every session | Stays on the machine |
+| --- | --- | --- |
+| **Reuse** (default) | A **scrub** | Repository checkouts, package caches and pulled images |
+| **Reset** | A **reset** | Pulled images, and the machine itself |
+
+A scrub removes the session's container, which takes the agent's home, its
+credential files, the MCP config, the prompt and context files, `/tmp`, the
+proxy CA and logs, and every process of the session. It also empties
+`/workspace/outputs`. A check confirms that no container of the session is left.
+The next session on the machine fetches the repository checkouts a scrub kept
+instead of cloning them again.
+
+A reset does what a scrub does and also removes the workspace volume and the
+cache volumes, so the next session clones its repositories again. It does not
+give you a new machine: it removes what Aixle put on the machine and nothing
+else.
+
+Two things apply whatever the policy:
+
+- **A session that fails is followed by a reset**, even under Reuse, and so is a
+  scrub that fails.
+- **A machine is taken out of rotation** (state **Failed**, with the reason) when
+  its reset fails, or when 3 sessions in a row fail on it.
+
+**Who sees what a scrub keeps.** A company runner's machines are shared by every
+project of the company. On a company runner with Reuse, the next session on a
+machine may belong to another project, and it sees what the scrub kept: the
+repository checkouts and the caches. Choose Reset, or use a project runner, to
+keep projects apart. On a project runner, what is kept stays within that project.
+
+**Writable host mounts are outside every policy.** A writable home mount, an
+extra mount with `:rw` and a host-path cache mount let the agent write to the
+machine outside Aixle's volumes. A scrub or a reset removes what Aixle wrote
+there, not what the agent wrote.
+
+### Return to service
+
+A **Failed** machine takes no session and shows why, for example *build-01
+failed to reset after session 12: reset_failed: …. Fix the machine and press
+Return to service.* Fix what the reason names (start Docker, free a volume that
+is in use), then press **Return to service** in the machine's row. The machine
+shows **Resetting** and takes no session meanwhile. When the reset succeeds the
+machine is **Idle** again. When it fails, the machine stays **Failed** with the
+new reason. Pressing the button is available to whoever can edit or revoke the
+runner: a company admin on a company runner, and a project admin or owner on a
+project runner.
+
+While every machine of a runner is Failed, a launch on it is refused with a
+message that points to Return to service.
 
 ## Using your own agent image
 

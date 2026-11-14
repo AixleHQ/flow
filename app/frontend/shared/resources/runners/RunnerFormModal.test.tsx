@@ -16,6 +16,7 @@ const paths: RunnerPaths = {
   enable: (id) => `/company/settings/runners/${id}/enable`,
   revoke: (id) => `/company/settings/runners/${id}/revoke`,
   registrationToken: (id) => `/company/settings/runners/${id}/registration_token`,
+  returnToService: (id, machineId) => `/company/settings/runners/${id}/machines/${machineId}/return_to_service`,
 };
 
 const renderForm = (runner?: ReturnType<typeof buildRunner>) =>
@@ -55,9 +56,10 @@ describe('RunnerFormModal', () => {
     expect(within(dialog).getByRole('switch', { name: /^Auto-update/ })).toBeChecked();
     expect(within(dialog).queryByRole('textbox', { name: /Reconnect grace/ })).not.toBeInTheDocument();
     expect(within(dialog).getByRole('radio', { name: /Reuse \(default\)/ })).toBeChecked();
-    expect(
-      within(dialog).getByText(/Fresh on a manual runner wipes everything Aixle put on the machine/),
-    ).toBeInTheDocument();
+    expect(within(dialog).getByRole('radio', { name: /^Reset/ })).not.toBeChecked();
+    expect(within(dialog).queryByRole('radio', { name: /^Fresh/ })).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/A reset after every session\. The workspace and cache volumes are wiped/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/the next session on a machine may belong to another project/)).toBeInTheDocument();
   });
 
   it('sends only the keys the user set, with their §2.7 names', async () => {
@@ -191,7 +193,7 @@ describe('RunnerFormModal', () => {
 
   it('edits a runner without the type step, keeping its config and never sending its type', async () => {
     const user = userEvent.setup();
-    const runner = buildRunner({ id: 4, name: 'build-box', reusePolicy: 'fresh', config: { auto_update: false } });
+    const runner = buildRunner({ id: 4, name: 'build-box', reusePolicy: 'reset', config: { auto_update: false } });
     renderForm(runner);
 
     const dialog = await screen.findByRole('dialog', { name: 'Edit build-box' });
@@ -208,7 +210,7 @@ describe('RunnerFormModal', () => {
           name: 'build-box',
           max_concurrency: 2,
           max_environments: null,
-          reuse_policy: 'fresh',
+          reuse_policy: 'reset',
           config: { auto_update: false },
         },
       },
