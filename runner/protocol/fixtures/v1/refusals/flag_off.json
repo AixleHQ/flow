@@ -15,8 +15,7 @@
           "name": "build-01",
           "os": "linux",
           "arch": "amd64",
-          "facts": {"docker": "27.1.0"},
-          "ephemeral": false
+          "facts": {"docker": "27.1.0"}
         }
       },
       "response": {"status": 403, "body": {"error": "runners_disabled", "message": {"$type": "string"}}}
@@ -82,8 +81,7 @@
           "name": "build-01",
           "os": "linux",
           "arch": "amd64",
-          "facts": {"docker": "27.1.0"},
-          "ephemeral": false
+          "facts": {"docker": "27.1.0"}
         }
       },
       "response": {"status": 201}
