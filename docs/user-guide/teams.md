@@ -35,10 +35,13 @@ organization, who does not need a Flow account.
    for a company-wide connection); the old link stops working.
 3. The administrator opens the link, leaves **Also give access to files shared
    in Teams** checked or clears it, and selects **Sign in with Microsoft to
-   approve**. Microsoft shows one consent screen for everything Flow asks for. They must hold one of these directory roles: Global
-   Administrator, Privileged Role Administrator, Cloud Application
-   Administrator, Application Administrator, or Teams Administrator. A sign-in
-   without one of them binds nothing.
+   approve**. Microsoft shows one consent screen for everything Flow asks for.
+   Granting it takes a Global Administrator or Privileged Role Administrator;
+   with the box cleared, a Cloud Application Administrator or Application
+   Administrator can grant it too. Microsoft stops any other role, Teams
+   Administrator among them, at a screen asking for an administrator's
+   approval, and a request sent from there never reaches Flow. When a sign-in
+   binds nothing, the approval page shows Microsoft's or Flow's reason.
 4. The organization is now connected. The row on the **Integrations** page
    shows its domain and who approved it.
 
