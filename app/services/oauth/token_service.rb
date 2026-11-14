@@ -149,6 +149,32 @@ module Oauth
       raise ReauthRequired.new(cred, "refresh failed")
     end
 
+    # Ends a grant at its provider: RFC 7009 token revocation, posted to the provider's
+    # `revocation_endpoint` with the client the grant was issued to. The endpoint comes
+    # from the trusted registry, and only the provider's trusted host may resolve
+    # privately, as for the token call. The caller decides what a failure means.
+    # Raises Oauth::RevocationError (a class name or status only, never token material).
+    def revoke!(cred)
+      endpoint = Oauth::Providers.config(cred.provider)[:revocation_endpoint]
+      raise Oauth::RevocationError, "#{cred.provider} has no revocation endpoint" if endpoint.blank?
+
+      client = cred.oauth_client
+      uri = URI.parse(endpoint)
+      trusted = Oauth::Providers.trusted_hosts(cred.provider)
+      http = SafeHttp.http_for(uri, open_timeout: TOKEN_TIMEOUT, read_timeout: TOKEN_TIMEOUT, trusted_hosts: trusted)
+      req = Net::HTTP::Post.new(uri)
+      body = { token: cred.access_token, client_id: client.client_id }
+      body[:client_secret] = client.client_secret if client.confidential?
+      req.set_form_data(body)
+      response = http.request(req)
+      raise Oauth::RevocationError, "revocation status=#{response.code}" unless response.is_a?(Net::HTTPSuccess)
+
+      true
+    rescue SafeHttp::UnsafeUrl, URI::InvalidURIError, SocketError, SystemCallError, Net::OpenTimeout, Net::ReadTimeout,
+           OpenSSL::SSL::SSLError => e
+      raise Oauth::RevocationError, "revocation failed (#{e.class.name})"
+    end
+
     # POST token_endpoint, form-encoded refresh_token grant + client auth.
     # Returns parsed JSON (string keys). NEVER logs token material.
     def perform_refresh!(cred)

@@ -49,7 +49,8 @@ module Oauth
       },
       # A person's own GitLab account, through the deployment's GitLab OAuth app
       # (docs/design/gitlab-user-identity.md §2.2). The endpoints and the issuer follow
-      # GITLAB_ENDPOINT, so `endpoints` supplies them; the client id and secret are
+      # GITLAB_ENDPOINT, so `endpoints` supplies them (the revocation endpoint too, which
+      # the engine posts to when the person disconnects); the client id and secret are
       # the GitLab app's. The operator's host is trusted for the token call (a
       # self-managed GitLab is often on a private network).
       "gitlab" => {

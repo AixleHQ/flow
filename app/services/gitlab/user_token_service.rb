@@ -19,8 +19,8 @@ module Gitlab
 
     # @return [Hash] { id:, username:, name:, avatar_url:, commit_email: }
     def user(token)
-      data = translating { rest(token).get("/user") }
-      raise Unavailable, "GitLab returned no user" unless data.is_a?(Hash) && data["id"].present?
+      data = translating { client(token).user }.to_h
+      raise Unavailable, "GitLab returned no user" if data["id"].blank?
 
       { id: data["id"], username: data["username"], name: data["name"], avatar_url: data["avatar_url"],
         commit_email: data["commit_email"].presence }
@@ -33,53 +33,46 @@ module Gitlab
     # which counts inherited and invited members too.
     # @return [Integer, nil]
     def project_access(token, full_path, user_id: nil)
-      project = ERB::Util.url_encode(full_path.to_s)
-      data = translating(not_found: nil) { rest(token).get("/projects/#{project}") }
-      return nil unless data.is_a?(Hash)
+      project = translating(not_found: nil) { client(token).project(full_path.to_s) }
+      return nil if project.nil?
 
-      permissions = data["permissions"].to_h
+      project = project.to_h
+      permissions = project["permissions"].to_h
       level = %w[project_access group_access].filter_map { |key| permissions.dig(key, "access_level") }.max
       return level if level.to_i >= DEVELOPER || user_id.blank?
 
-      [ level.to_i, member_access(token, data["id"], user_id).to_i ].max.nonzero?
-    end
-
-    # Ends the grant. Callers treat a failure as non-fatal.
-    def revoke(token)
-      uri = URI.parse("#{Host.web_base}/oauth/revoke")
-      http = SafeHttp.http_for(uri, open_timeout: AppConfig.open_timeout, read_timeout: AppConfig.read_timeout,
-                                    trusted_hosts: [ uri.host ])
-      req = Net::HTTP::Post.new(uri)
-      req.set_form_data(client_id: AppConfig.oauth_client_id, client_secret: AppConfig.oauth_client_secret,
-                        token: token)
-      response = http.request(req)
-      raise Unavailable, "GitLab did not revoke the grant (#{response.code})" unless response.is_a?(Net::HTTPSuccess)
-
-      true
-    rescue SafeHttp::UnsafeUrl, SocketError, SystemCallError, Net::OpenTimeout, Net::ReadTimeout, OpenSSL::SSL::SSLError => e
-      raise Unavailable, "GitLab is unavailable (#{e.class.name})"
+      [ level.to_i, member_access(token, project["id"], user_id).to_i ].max.nonzero?
     end
 
     private
 
-    def rest(token) = Rest.new(token: token)
+    # The gem sends `Authorization: Bearer` for a token of 64 characters or more, which
+    # a GitLab OAuth token is (a shorter one would go as `PRIVATE-TOKEN`).
+    def client(token)
+      ::Gitlab.client(endpoint: Host.api_endpoint, private_token: token,
+                      httparty: { open_timeout: AppConfig.open_timeout, read_timeout: AppConfig.read_timeout })
+    end
 
     def member_access(token, project_id, user_id)
-      data = translating(not_found: nil) { rest(token).get("/projects/#{project_id.to_i}/members/all/#{user_id.to_i}") }
-      data.is_a?(Hash) ? data["access_level"] : nil
+      members = translating(not_found: nil) { client(token).all_members(project_id, user_ids: [ user_id.to_i ]) }
+      members.to_a.map(&:to_h).filter_map { |member| member["access_level"] if member["id"] == user_id.to_i }.max
     rescue Forbidden
       nil
     end
 
     def translating(not_found: :forbidden)
       yield
-    rescue Trackers::Error => e
-      case e.code
-      when "not_authorized" then raise InvalidToken, "GitLab does not accept this user token"
-      when "not_found" then not_found == :forbidden ? raise(Forbidden, "GitLab refused the request") : not_found
-      when "permission_denied", "validation_failed" then raise Forbidden, "GitLab refused the request"
-      else raise Unavailable, "GitLab is unavailable"
-      end
+    rescue ::Gitlab::Error::Unauthorized
+      raise InvalidToken, "GitLab does not accept this user token"
+    rescue ::Gitlab::Error::NotFound
+      not_found == :forbidden ? raise(Forbidden, "GitLab refused the request") : not_found
+    rescue ::Gitlab::Error::Forbidden, ::Gitlab::Error::BadRequest, ::Gitlab::Error::MethodNotAllowed,
+           ::Gitlab::Error::Conflict, ::Gitlab::Error::Unprocessable
+      raise Forbidden, "GitLab refused the request"
+    rescue ::Gitlab::Error::Error
+      raise Unavailable, "GitLab is unavailable"
+    rescue *TokenService::NETWORK_ERRORS => e
+      raise Unavailable, "GitLab is unavailable (#{e.class.name.demodulize})"
     end
   end
 end

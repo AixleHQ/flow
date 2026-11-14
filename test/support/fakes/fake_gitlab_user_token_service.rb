@@ -15,12 +15,11 @@ module FakeGitlab
     # @param access_error [Exception, nil] raised by #project_access when set
     # @param profile [Hash] what #user returns
     # @param profile_error [Exception, nil] raised by #user when set
-    def initialize(access: {}, access_error: nil, profile: DEFAULT_PROFILE, profile_error: nil, revoke_error: nil)
+    def initialize(access: {}, access_error: nil, profile: DEFAULT_PROFILE, profile_error: nil)
       @access = access
       @access_error = access_error
       @profile = profile.dup
       @profile_error = profile_error
-      @revoke_error = revoke_error
       @calls = []
     end
 
@@ -36,13 +35,6 @@ module FakeGitlab
       raise @access_error if @access_error
 
       @access.fetch(full_path, 40)
-    end
-
-    def revoke(token)
-      @calls << { method: :revoke, token: token }
-      raise @revoke_error if @revoke_error
-
-      true
     end
 
     def called?(method_name) = @calls.any? { |call| call[:method] == method_name }

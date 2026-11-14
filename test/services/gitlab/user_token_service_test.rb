@@ -6,6 +6,8 @@ require "test_helper"
 # FakeGitlab::UserTokenService returns the shapes pinned here.
 class Gitlab::UserTokenServiceTest < ActiveSupport::TestCase
   API = "https://gitlab.com/api/v4"
+  # GitLab's OAuth access tokens are long; the gem sends 64 characters or more as Bearer.
+  TOKEN = "glo-#{'a' * 64}".freeze
 
   setup do
     @service = Gitlab::UserTokenService.new
@@ -16,19 +18,29 @@ class Gitlab::UserTokenServiceTest < ActiveSupport::TestCase
   end
 
   test "user returns the identity with the address GitLab commits with" do
-    stub_request(:get, "#{API}/user").with(headers: { "Authorization" => "Bearer glo-token" }).to_return(json(
+    stub_request(:get, "#{API}/user").with(headers: { "Authorization" => "Bearer #{TOKEN}" }).to_return(json(
       id: 456, username: "lab-user", name: "Lab User", avatar_url: "https://a.test/456",
       commit_email: "456-lab-user@users.noreply.gitlab.com", email: "private@example.com"
     ))
 
     assert_equal({ id: 456, username: "lab-user", name: "Lab User", avatar_url: "https://a.test/456",
-                   commit_email: "456-lab-user@users.noreply.gitlab.com" }, @service.user("glo-token"))
+                   commit_email: "456-lab-user@users.noreply.gitlab.com" }, @service.user(TOKEN))
+  end
+
+  test "a token of 64 characters or more goes as a Bearer header and never as a PRIVATE-TOKEN" do
+    stub = stub_request(:get, "#{API}/user")
+           .with { |request| request.headers["Authorization"] == "Bearer #{TOKEN}" && request.headers["Private-Token"].nil? }
+           .to_return(json(id: 456, username: "lab-user", name: "Lab User"))
+
+    @service.user(TOKEN)
+
+    assert_requested stub
   end
 
   test "user leaves commit_email nil when GitLab sends none" do
     stub_request(:get, "#{API}/user").to_return(json(id: 456, username: "lab-user", name: "Lab User"))
 
-    assert_nil @service.user("glo-token")[:commit_email]
+    assert_nil @service.user(TOKEN)[:commit_email]
   end
 
   test "project_access is the larger of project and group access" do
@@ -36,45 +48,35 @@ class Gitlab::UserTokenServiceTest < ActiveSupport::TestCase
       id: 9, permissions: { project_access: { access_level: 20 }, group_access: { access_level: 40 } }
     ))
 
-    assert_equal 40, @service.project_access("glo-token", "group/sub/app")
+    assert_equal 40, @service.project_access(TOKEN, "group/sub/app")
   end
 
   test "project_access is nil for a project the person cannot see" do
     stub_request(:get, "#{API}/projects/group%2Fapp").to_return(json({ message: "404 Project Not Found" }, status: 404))
 
-    assert_nil @service.project_access("glo-token", "group/app")
+    assert_nil @service.project_access(TOKEN, "group/app")
   end
 
   test "project_access asks the member list when the project reports less than Developer" do
     stub_request(:get, "#{API}/projects/group%2Fapp").to_return(json(id: 9, permissions: { project_access: nil, group_access: nil }))
-    stub_request(:get, "#{API}/projects/9/members/all/456").to_return(json(id: 456, access_level: 30))
+    stub_request(:get, "#{API}/projects/9/members/all").with(query: { "user_ids" => [ "456" ] })
+                                                       .to_return(json([ { id: 456, access_level: 30 } ]))
 
-    assert_equal 30, @service.project_access("glo-token", "group/app", user_id: 456)
+    assert_equal 30, @service.project_access(TOKEN, "group/app", user_id: 456)
   end
 
   test "project_access is nil when neither the project nor its members show access" do
     stub_request(:get, "#{API}/projects/group%2Fapp").to_return(json(id: 9, permissions: { project_access: nil, group_access: nil }))
-    stub_request(:get, "#{API}/projects/9/members/all/456").to_return(json({ message: "404 Not found" }, status: 404))
+    stub_request(:get, "#{API}/projects/9/members/all").with(query: { "user_ids" => [ "456" ] })
+                                                       .to_return(json([]))
 
-    assert_nil @service.project_access("glo-token", "group/app", user_id: 456)
+    assert_nil @service.project_access(TOKEN, "group/app", user_id: 456)
   end
 
-  test "revoke posts the token with the app's credentials to GitLab" do
-    Settings.gitlab.stubs(:oauth_client_id).returns("app-id")
-    Settings.gitlab.stubs(:oauth_client_secret).returns("app-secret")
-    stub = stub_request(:post, "https://gitlab.com/oauth/revoke")
-           .with(body: { "client_id" => "app-id", "client_secret" => "app-secret", "token" => "glo-token" })
-           .to_return(status: 200, body: "{}")
+  test "a network failure is Unavailable" do
+    stub_request(:get, "#{API}/user").to_timeout
 
-    assert @service.revoke("glo-token")
-    assert_requested stub
-  end
-
-  test "revoke fails with Unavailable when GitLab refuses" do
-    stub_request(:post, "https://gitlab.com/oauth/revoke").to_return(status: 500, body: "boom glo-token")
-
-    error = assert_raises(Gitlab::UserTokenService::Unavailable) { @service.revoke("glo-token") }
-    assert_not_includes error.message, "glo-token"
+    assert_raises(Gitlab::UserTokenService::Unavailable) { @service.user(TOKEN) }
   end
 
   test "errors map to InvalidToken, Forbidden and Unavailable without a body or token" do
@@ -82,9 +84,9 @@ class Gitlab::UserTokenServiceTest < ActiveSupport::TestCase
                                      .to_return(json({ message: "nope" }, status: 403)).then
                                      .to_return(json({ error: "x" }, status: 503))
 
-    assert_raises(Gitlab::UserTokenService::InvalidToken) { @service.user("glo-token") }
-    assert_raises(Gitlab::UserTokenService::Forbidden) { @service.user("glo-token") }
-    error = assert_raises(Gitlab::UserTokenService::Unavailable) { Gitlab::UserTokenService.new.user("glo-token") }
-    assert_not_includes error.message, "glo-token"
+    assert_raises(Gitlab::UserTokenService::InvalidToken) { @service.user(TOKEN) }
+    assert_raises(Gitlab::UserTokenService::Forbidden) { @service.user(TOKEN) }
+    error = assert_raises(Gitlab::UserTokenService::Unavailable) { Gitlab::UserTokenService.new.user(TOKEN) }
+    assert_not_includes error.message, TOKEN
   end
 end

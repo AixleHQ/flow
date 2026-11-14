@@ -139,12 +139,12 @@ class UserConnectionsTest < ActiveSupport::TestCase
     current = create(:oauth_credential, :gitlab_user, owner: @user)
     old_host = create(:oauth_client, :gitlab, issuer: "https://old.gitlab.example.com")
     old = create(:oauth_credential, :gitlab_user, owner: @user, oauth_client: old_host)
-    fake = FakeGitlab::UserTokenService.new
-    Gitlab::UserTokenService.stubs(:new).returns(fake)
+    resolve_hosts_publicly!
+    revocation = stub_request(:post, "#{Gitlab::Host.web_base}/oauth/revoke").to_return(status: 200, body: "{}")
 
     UserConnections.disconnect!(user: @user, provider: "gitlab")
 
-    assert_equal 1, fake.calls_to(:revoke).size
+    assert_requested revocation, times: 1
     assert_nil OauthCredential.find_by(id: current.id)
     assert_nil OauthCredential.find_by(id: old.id)
   end

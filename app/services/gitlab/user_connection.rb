@@ -23,7 +23,8 @@ module Gitlab
     # The endpoints and issuer follow GITLAB_ENDPOINT (Oauth::Providers#config merges them).
     def endpoints
       base = Host.web_base
-      { issuer: base, authorization_endpoint: "#{base}/oauth/authorize", token_endpoint: "#{base}/oauth/token" }
+      { issuer: base, authorization_endpoint: "#{base}/oauth/authorize", token_endpoint: "#{base}/oauth/token",
+        revocation_endpoint: "#{base}/oauth/revoke" }
     end
 
     # Called by the OAuth callback right after the token is stored. A failed lookup never
@@ -81,8 +82,8 @@ module Gitlab
     end
 
     def revoke_grant(credential)
-      UserTokenService.new.revoke(credential.access_token)
-    rescue UserTokenService::Error, Encryptable::DecryptionError => e
+      ::Oauth::TokenService.revoke!(credential)
+    rescue ::Oauth::RevocationError, Encryptable::DecryptionError => e
       Rails.logger.warn("[Gitlab::UserConnection] could not revoke the grant: #{e.class}")
     end
   end

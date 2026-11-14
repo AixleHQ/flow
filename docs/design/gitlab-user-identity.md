@@ -173,23 +173,35 @@ covered repositories.
 (refetch when older than 24 hours), `disconnect!(user)`.
 
 `Gitlab::UserTokenService` (`app/services/gitlab/user_token_service.rb`) is the adapter
-for calls made with a user's token, using `Gitlab::Rest` against `Host.api_endpoint`
-(the endpoint is the deployment's, never a request's):
+for calls made with a user's token, using the `gitlab` gem (`::Gitlab.client(endpoint:
+Host.api_endpoint, private_token: token)`, the way `Gitlab::TokenService` and
+`Github::UserTokenService` use theirs; the endpoint is the deployment's, never a
+request's). The gem sends `Authorization: Bearer` for a token of 64 characters or more,
+which a GitLab OAuth token is; a test pins the header. No HTTP of our own stays in the
+adapter:
 
-- `user(token)`: `GET /user`, returns `{ id:, username:, name:, avatar_url:,
-  commit_email: }`. `commit_email` is the address GitLab itself uses for web commits (a
-  private `<id>-<username>@users.noreply.<host>` unless the person chose another), so a
-  self-managed instance gets its own domain without guessing it.
-- `project_access(token, full_path)`: `GET /projects/:id` with the project path encoded;
-  returns the effective `access_level` (the larger of `project_access` and
-  `group_access`) or `nil` for 404.
-- `revoke(token)`: `POST /oauth/revoke` with the app's client id and secret; best effort,
-  as for GitHub.
+- `user(token)`: `client.user` (`GET /user`), returns `{ id:, username:, name:,
+  avatar_url:, commit_email: }`. `commit_email` is the address GitLab itself uses for web
+  commits (a private `<id>-<username>@users.noreply.<host>` unless the person chose
+  another), so a self-managed instance gets its own domain without guessing it.
+- `project_access(token, full_path, user_id:)`: `client.project(full_path)`
+  (`GET /projects/:id` with `permissions`); returns the effective `access_level` (the
+  larger of `project_access` and `group_access`) or `nil` for 404. Below Developer it asks
+  `client.all_members(project_id, user_ids: [user_id])` (`/projects/:id/members/all`),
+  which also counts access through a shared group.
 
-Errors map to `InvalidToken` (401), `Forbidden` (403), `Unavailable` (5xx, network).
-`Gitlab::Rest` raises `Trackers::Error` with a code; the adapter translates, as
-`Github::UserTokenService` does for Octokit. A canonical fake,
-`FakeGitlab::UserTokenService`, goes in `test/support/fakes/` next to the GitHub one.
+Errors map to `InvalidToken` (401), `Forbidden` (403 and other refusals), `Unavailable`
+(5xx, network), from `::Gitlab::Error::*` and the network errors `Gitlab::TokenService`
+already lists. A canonical fake, `FakeGitlab::UserTokenService`, goes in
+`test/support/fakes/` next to the GitHub one.
+
+Revoking the grant is not API v4 but RFC 7009 token revocation, which the gem does not
+have, so it belongs to the OAuth engine: the `gitlab` registry entry names a
+`revocation_endpoint` (`<web base>/oauth/revoke`, derived from `GITLAB_ENDPOINT` like its
+other endpoints), and `Oauth::TokenService.revoke!(credential)` posts the token with the
+client the grant was issued to through `SafeHttp`, with the provider's trusted host, as it
+does the token exchange and the refresh. It raises `Oauth::RevocationError`;
+`Gitlab::UserConnection.disconnect!` treats a failure as non-fatal.
 
 `Gitlab::TokenService` reads the endpoint itself rather than through `Gitlab::Host`;
 that is #218's, and this design uses only `Gitlab::Host`.
@@ -322,7 +334,7 @@ contract tests).
 
 - **Adapter:** `test/services/gitlab/user_token_service_test.rb`, WebMock contract tests
   for `GET /user` (with and without `commit_email`), `GET /projects/:id` (project and
-  group access, 404), `POST /oauth/revoke`, and the error mappings. The payloads pin the
+  group access, 404), the error mappings (the revocation is covered in the engine's tests). The payloads pin the
   fake.
 - **Engine:** `test/services/oauth/providers_test.rb` for the resolver and the key
   names; the callback request test for a `User` owner connecting GitLab, storing
