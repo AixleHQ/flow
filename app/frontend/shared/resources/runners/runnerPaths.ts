@@ -7,10 +7,10 @@ import {
   disableCompanySettingsRunnerPath,
   enableCompanyProjectRunnerPath,
   enableCompanySettingsRunnerPath,
-  machineReturnToServiceCompanyProjectRunnerPath,
-  machineReturnToServiceCompanySettingsRunnerPath,
   registrationTokenCompanyProjectRunnerPath,
   registrationTokenCompanySettingsRunnerPath,
+  returnToServiceCompanyProjectRunnerMachinePath,
+  returnToServiceCompanySettingsRunnerMachinePath,
   revokeCompanyProjectRunnerPath,
   revokeCompanySettingsRunnerPath,
 } from 'shared/routes';
@@ -24,7 +24,7 @@ export const companyRunnerPaths = (): RunnerPaths => ({
   enable: (id) => enableCompanySettingsRunnerPath(id),
   revoke: (id) => revokeCompanySettingsRunnerPath(id),
   registrationToken: (id) => registrationTokenCompanySettingsRunnerPath(id),
-  returnToService: (id, machineId) => machineReturnToServiceCompanySettingsRunnerPath(id, machineId),
+  returnToService: (id, machineId) => returnToServiceCompanySettingsRunnerMachinePath(id, machineId),
 });
 
 export const projectRunnerPaths = (projectId: number): RunnerPaths => ({
@@ -34,5 +34,5 @@ export const projectRunnerPaths = (projectId: number): RunnerPaths => ({
   enable: (id) => enableCompanyProjectRunnerPath(projectId, id),
   revoke: (id) => revokeCompanyProjectRunnerPath(projectId, id),
   registrationToken: (id) => registrationTokenCompanyProjectRunnerPath(projectId, id),
-  returnToService: (id, machineId) => machineReturnToServiceCompanyProjectRunnerPath(projectId, id, machineId),
+  returnToService: (id, machineId) => returnToServiceCompanyProjectRunnerMachinePath(projectId, id, machineId),
 });

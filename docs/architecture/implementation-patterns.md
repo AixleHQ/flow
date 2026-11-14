@@ -12,11 +12,15 @@
 - **JSONB columns:** snake_case — `metadata`, `session_config`, `settings`
 - **Array columns:** plural — `models`, `tags`, `selected_agents`
 
-### API
+### API and Web routes
 - **Endpoints:** plural resources — `/api/v1/terminal_sessions`, `/api/v1/projects/:project_id/workflows/:id`
 - **Nested:** under the project that owns them — `/api/v1/projects/:project_id/board/tasks/:task_id/comments`
 - **Custom actions:** member/collection routes — `POST /api/v1/terminal_sessions/:id/finish`, `PATCH .../board/tasks/:id/move`
 - **Query params:** snake_case — `params[:q]` for Ransack search
+- **Web routes follow the same rules** (Inertia pages and their form posts): `resources`, nested under the record that owns them, custom actions as member or collection routes.
+- **A record that belongs to another one is a nested `resources`**, with its custom actions as member routes on it, and its own controller. Never a hand-written path with the record's id inside the parent's `member` block.
+  - Right: `resources :runners do resources :machines, only: [] do post :return_to_service, on: :member end end` → `Runners::MachinesController#return_to_service`.
+  - Wrong: `resources :runners do member do post "machines/:machine_id/return_to_service" end end`.
 
 ### Code
 
