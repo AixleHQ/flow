@@ -16,7 +16,7 @@ class Web::Company::Projects::RunnersController < Web::Company::Projects::Applic
 
   def index
     render inertia: "Projects/Runners/RunnersPage", props: {
-      runners: visible_runners.includes(:created_by).order(:name).map { |runner| RunnerResource.new(runner).to_h },
+      runners: runners_prop(visible_runners.includes(:created_by).order(:name).to_a),
       runner_types: Runners::Form.runner_types,
       can_manage: runners_policy.create?
     }

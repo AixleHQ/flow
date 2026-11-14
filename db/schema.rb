@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_14_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_14_110000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1278,7 +1278,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_100000) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "rotated_from_id"
+    t.bigint "created_by_id"
     t.index ["company_id"], name: "index_runner_credentials_on_company_id"
+    t.index ["created_by_id"], name: "index_runner_credentials_on_created_by_id"
     t.index ["family_id"], name: "index_runner_credentials_on_family_id"
     t.index ["rotated_from_id"], name: "index_runner_credentials_on_rotated_from_id"
     t.index ["runner_environment_id"], name: "index_runner_credentials_on_runner_environment_id"
@@ -1306,7 +1308,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_100000) do
     t.boolean "auto_update", default: true, null: false
     t.datetime "last_heartbeat_at"
     t.integer "consecutive_failures", default: 0, null: false
+    t.string "first_seen_ip"
+    t.bigint "created_by_id"
     t.index ["company_id"], name: "index_runner_environments_on_company_id"
+    t.index ["created_by_id"], name: "index_runner_environments_on_created_by_id"
     t.index ["current_session_id"], name: "index_runner_environments_on_current_session_id", unique: true
     t.index ["id", "runner_id"], name: "index_runner_environments_on_id_and_runner_id", unique: true
     t.index ["runner_id", "key"], name: "index_runner_environments_on_runner_id_and_key", unique: true
@@ -2534,11 +2539,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_100000) do
   add_foreign_key "runner_credentials", "runner_environments", on_delete: :cascade
   add_foreign_key "runner_credentials", "runners", column: ["runner_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runner_credentials_runner_company", on_delete: :cascade
   add_foreign_key "runner_credentials", "runners", on_delete: :cascade
+  add_foreign_key "runner_credentials", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "runner_environments", "companies", on_delete: :cascade
   add_foreign_key "runner_environments", "runners", column: ["runner_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runner_environments_runner_company", on_delete: :cascade
   add_foreign_key "runner_environments", "runners", on_delete: :cascade
   add_foreign_key "runner_environments", "terminal_sessions", column: "current_session_id", on_delete: :nullify
   add_foreign_key "runner_environments", "terminal_sessions", column: ["current_session_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_runner_environments_current_session_company", deferrable: :deferred
+  add_foreign_key "runner_environments", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "runner_operations", "companies", on_delete: :cascade
   add_foreign_key "runner_operations", "runner_environments", column: ["runner_environment_id", "runner_id"], primary_key: ["id", "runner_id"], name: "fk_runner_operations_environment_runner", on_delete: :cascade
   add_foreign_key "runner_operations", "runner_environments", on_delete: :cascade

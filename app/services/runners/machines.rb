@@ -175,6 +175,19 @@ module Runners
       machines.find_each { |machine| settle_reset!(machine) }
     end
 
+    # Busy: holding a session. Total: registered and not `gone`, `failed` and
+    # `resetting` ones included. For the runners page and list (§11).
+    Counts = Data.define(:busy, :total)
+
+    def counts(runners)
+      ids = runners.map(&:id)
+      rows = RunnerEnvironment.where(runner_id: ids).where.not(state: "gone")
+                              .group(:runner_id)
+                              .pluck(:runner_id, Arel.sql("COUNT(*)"), Arel.sql("COUNT(current_session_id)"))
+      by_runner = rows.to_h { |runner_id, total, busy| [ runner_id, Counts.new(busy: busy, total: total) ] }
+      ids.to_h { |id| [ id, by_runner.fetch(id) { Counts.new(busy: 0, total: 0) } ] }
+    end
+
     def label(environment)
       environment.display_name.presence || environment.key
     end

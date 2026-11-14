@@ -168,7 +168,12 @@ export function RunnerDetails({ runner, machines, runnerTypes, canManage, paths,
 
       {runner.runnerType === 'manual' && (
         <Section title="Machines">
-          <RunnerMachines machines={machines} runner={runner} paths={paths} canManage={canManage} />
+          <RunnerMachines
+            machines={machines}
+            runner={runner}
+            paths={paths}
+            canManage={canManage && runner.status !== 'revoked'}
+          />
         </Section>
       )}
 

@@ -1,5 +1,5 @@
 import { router } from '@inertiajs/react';
-import { Button, Code, Stack, Table, Text } from '@mantine/core';
+import { Button, Code, Group, Modal, Stack, Table, Text } from '@mantine/core';
 import { useEffect, useState } from 'react';
 
 import type { Runner, RunnerMachine } from '@/types/generated';
@@ -33,18 +33,21 @@ const FAILED_ACTION = 'Fix the machine and press Return to service.';
 interface RunnerMachinesProps {
   machines: RunnerMachine[];
   runner: Pick<Runner, 'id'>;
-  paths: Pick<RunnerPaths, 'returnToService'>;
-  /** Who may press Return to service: the policy that guards update and revoke. */
+  paths: Pick<RunnerPaths, 'returnToService' | 'revokeMachine'>;
+  /** Who may press Return to service and Revoke: the policy that guards update and revoke. */
   canManage: boolean;
 }
 
 /**
  * The machines of a `manual` runner (DESIGN.md §2.5, §11). A machine's state and last seen change
  * while the page is open, so it asks for the runner and its machines again every MACHINES_REFRESH_MS
- * while the tab is visible. A `failed` machine has Return to service, which resets it (§5.2).
+ * while the tab is visible. A `failed` machine has Return to service, which resets it (§5.2); any
+ * machine that is not `gone` has Revoke, which ends the session it holds (§9.3).
  */
 export function RunnerMachines({ machines, runner, paths, canManage }: RunnerMachinesProps) {
   const [returning, setReturning] = useState<number | null>(null);
+  const [revoking, setRevoking] = useState<RunnerMachine | null>(null);
+  const [revokeBusy, setRevokeBusy] = useState(false);
 
   const returnToService = (machine: RunnerMachine) => {
     setReturning(machine.id);
@@ -52,6 +55,21 @@ export function RunnerMachines({ machines, runner, paths, canManage }: RunnerMac
       paths.returnToService(runner.id, machine.id),
       {},
       { preserveScroll: true, onFinish: () => setReturning(null) },
+    );
+  };
+
+  const revoke = (machine: RunnerMachine) => {
+    setRevokeBusy(true);
+    router.post(
+      paths.revokeMachine(runner.id, machine.id),
+      {},
+      {
+        preserveScroll: true,
+        onFinish: () => {
+          setRevokeBusy(false);
+          setRevoking(null);
+        },
+      },
     );
   };
 
@@ -71,6 +89,7 @@ export function RunnerMachines({ machines, runner, paths, canManage }: RunnerMac
   }
 
   return (
+    <>
     <Table withTableBorder verticalSpacing="xs" aria-label="Machines">
       <Table.Thead>
         <Table.Tr>
@@ -78,6 +97,8 @@ export function RunnerMachines({ machines, runner, paths, canManage }: RunnerMac
           <Table.Th>State</Table.Th>
           <Table.Th>Version</Table.Th>
           <Table.Th>OS / arch</Table.Th>
+          <Table.Th>First seen IP</Table.Th>
+          <Table.Th>Added by</Table.Th>
           <Table.Th>Registered</Table.Th>
           <Table.Th>Last seen</Table.Th>
           {canManage && <Table.Th aria-label="Actions" />}
@@ -120,6 +141,12 @@ export function RunnerMachines({ machines, runner, paths, canManage }: RunnerMac
               <Text fz="sm">{platform(machine)}</Text>
             </Table.Td>
             <Table.Td>
+              <Text fz="sm">{machine.firstSeenIp ?? '—'}</Text>
+            </Table.Td>
+            <Table.Td>
+              <Text fz="sm">{machine.createdByName ?? '—'}</Text>
+            </Table.Td>
+            <Table.Td>
               <Text fz="sm">{formatDateTime(machine.createdAt)}</Text>
             </Table.Td>
             <Table.Td>
@@ -127,21 +154,50 @@ export function RunnerMachines({ machines, runner, paths, canManage }: RunnerMac
             </Table.Td>
             {canManage && (
               <Table.Td>
-                {machine.state === 'failed' && (
-                  <Button
-                    size="xs"
-                    variant="default"
-                    loading={returning === machine.id}
-                    onClick={() => returnToService(machine)}
-                  >
-                    Return to service
-                  </Button>
-                )}
+                <Group gap="xs" wrap="nowrap">
+                  {machine.state === 'failed' && (
+                    <Button
+                      size="xs"
+                      variant="default"
+                      loading={returning === machine.id}
+                      onClick={() => returnToService(machine)}
+                    >
+                      Return to service
+                    </Button>
+                  )}
+                  {machine.state !== 'gone' && (
+                    <Button size="xs" variant="default" color="red" onClick={() => setRevoking(machine)}>
+                      Revoke
+                    </Button>
+                  )}
+                </Group>
               </Table.Td>
             )}
           </Table.Tr>
         ))}
       </Table.Tbody>
     </Table>
+    <Modal
+      opened={revoking !== null}
+      onClose={() => setRevoking(null)}
+      title="Revoke machine"
+      size="sm"
+      centered
+    >
+      <Text fz="sm" c="dimmed" mb="md">
+        {revoking ? `${revoking.displayName ?? revoking.key} ` : ''}stops working for good: its credentials are revoked
+        and it cannot be registered again. The session it holds, if any, ends now. The platform does not clean the
+        machine: remove the Aixle containers and volumes it leaves, and its service, yourself.
+      </Text>
+      <Group justify="flex-end">
+        <Button variant="default" onClick={() => setRevoking(null)} disabled={revokeBusy}>
+          Cancel
+        </Button>
+        <Button color="red" onClick={() => revoking && revoke(revoking)} loading={revokeBusy}>
+          Revoke
+        </Button>
+      </Group>
+    </Modal>
+    </>
   );
 }

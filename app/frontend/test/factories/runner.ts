@@ -26,6 +26,7 @@ export const buildRunner = (overrides: Partial<Runner> = {}): Runner => ({
   config: {},
   capabilities: { provisionable: false, rebuildable: false },
   createdByName: 'Ada',
+  machines: null,
   ...overrides,
 });
 

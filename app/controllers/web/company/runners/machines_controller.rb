@@ -14,6 +14,12 @@ class Web::Company::Runners::MachinesController < Web::Company::ApplicationContr
     redirect_to company_settings_runner_path(runner), **return_machine_to_service(runner)
   end
 
+  # Revoke for a machine of a `manual` runner (§9.3).
+  def revoke
+    runner = company_runners.find(params[:settings_runner_id])
+    redirect_to company_settings_runner_path(runner), **revoke_machine(runner)
+  end
+
   private
 
   def company_runners

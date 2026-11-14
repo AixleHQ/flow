@@ -25,6 +25,10 @@
 # op (§6.7). A `registered` machine heard within ONLINE_WINDOW is online; any
 # other is offline and takes no new session (Runners::Machines).
 #
+# `first_seen_ip` is the address the machine registered from, recorded once, and
+# `created_by` the user who minted its registration token ("Add machine"). A
+# machine registered before they were recorded has neither (§12.2).
+#
 # `auto_update` is false for a machine configured with `aixle-runner configure
 # --no-auto-update`: it is never offered an update (Runners::Release.update_for,
 # §14.4).
@@ -42,6 +46,8 @@ class RunnerEnvironment < ApplicationRecord
   belongs_to :runner
   belongs_to :company
   belongs_to :current_session, class_name: "TerminalSession", optional: true
+  # The user who minted the registration token the machine registered with.
+  belongs_to :created_by, class_name: "User", optional: true
   has_many :credentials, class_name: "RunnerCredential", inverse_of: :runner_environment
 
   scope :free, -> { where(state: "registered", current_session_id: nil) }
@@ -56,7 +62,7 @@ class RunnerEnvironment < ApplicationRecord
   validates :state, presence: true
   # `aixle-runner configure --name`, the hostname by default (§2.2).
   validates :display_name, presence: true, if: :origin_registered?
-  validates :display_name, :os, :arch, :runner_version, :protocol_version, length: { maximum: 255 }
+  validates :display_name, :os, :arch, :runner_version, :protocol_version, :first_seen_ip, length: { maximum: 255 }
   validate :facts_is_an_object
   validate :company_matches_runner, if: -> { runner && company_id }
 
