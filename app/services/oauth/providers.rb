@@ -2,8 +2,9 @@
 
 module Oauth
   # Registry of known OAuth providers (Phase 1: Sentry, Railway). Authorization/
-  # token endpoints and default scopes are STATIC (hard-coded, trusted); only the
-  # per-deployment client_id/secret come from Settings.<settings_key>. #client_for
+  # token endpoints and default scopes are STATIC (hard-coded, trusted) or named by
+  # an `endpoints` callable of the deployment's own config; only the per-deployment
+  # client id and secret come from the entry's `oauth_app` callable. #client_for
   # reconciles (find-or-update) a `source: "static"` OauthClient row from that
   # config so the rest of the flow can treat every provider uniformly.
   #
@@ -22,14 +23,14 @@ module Oauth
         authorization_endpoint: "https://sentry.io/oauth/authorize/",
         token_endpoint: "https://sentry.io/oauth/token/",
         scopes: "org:read project:read event:read",
-        settings_key: :sentry_oauth
+        oauth_app: -> { app_from_settings(:sentry_oauth) }
       },
       "railway" => {
         issuer: "https://railway.app",
         authorization_endpoint: "https://railway.app/oauth/authorize",
         token_endpoint: "https://backboard.railway.app/oauth/token",
         scopes: "read",
-        settings_key: :railway_oauth
+        oauth_app: -> { app_from_settings(:railway_oauth) }
       },
       # The GitHub App's user OAuth flow (docs/design/github-user-identity.md §4.1).
       # A GitHub App takes its permissions from the App, so no scopes are requested.
@@ -42,9 +43,25 @@ module Oauth
         authorization_endpoint: "https://github.com/login/oauth/authorize",
         token_endpoint: "https://github.com/login/oauth/access_token",
         scopes: "",
-        settings_key: :github,
+        oauth_app: -> { app_from_settings(:github) },
         owner_types: %w[User],
-        after_connect: "Github::UserConnection"
+        after_connect: ->(credential) { Github::UserConnection.record_identity!(credential) }
+      },
+      # A person's own GitLab account, through the deployment's GitLab OAuth app
+      # (docs/design/gitlab-user-identity.md §2.2). The endpoints and the issuer follow
+      # GITLAB_ENDPOINT, so `endpoints` supplies them (the revocation endpoint too, which
+      # the engine posts to when the person disconnects); the client id and secret are
+      # the GitLab app's. The operator's host is trusted for the token call (a
+      # self-managed GitLab is often on a private network).
+      "gitlab" => {
+        endpoints: -> { Gitlab::UserConnection.endpoints },
+        scopes: "api",
+        oauth_app: -> {
+          { client_id: Gitlab::AppConfig.oauth_client_id, client_secret: Gitlab::AppConfig.oauth_client_secret }
+        },
+        owner_types: %w[User],
+        after_connect: ->(credential) { Gitlab::UserConnection.record_identity!(credential) },
+        trust_endpoint_host: true
       }
     }.freeze
 
@@ -54,8 +71,26 @@ module Oauth
       REGISTRY.key?(provider.to_s)
     end
 
+    # The registry entry, with the endpoints its resolver names (if any) merged in.
     def config(provider)
-      REGISTRY.fetch(provider.to_s)
+      entry = REGISTRY.fetch(provider.to_s)
+      resolver = entry[:endpoints]
+      resolver ? entry.merge(resolver.call) : entry
+    end
+
+    # Hosts the token call may reach although they resolve privately: the operator's
+    # own host, for a provider whose entry says so. Empty for every other provider
+    # (and for an MCP one, which is not in the registry).
+    def trusted_hosts(provider)
+      return [] unless known?(provider)
+
+      cfg = config(provider)
+      return [] unless cfg[:trust_endpoint_host]
+
+      host = URI.parse(cfg[:token_endpoint].to_s).host.to_s.downcase
+      host.empty? ? [] : [ host ]
+    rescue URI::InvalidURIError
+      []
     end
 
     def provider_names
@@ -75,7 +110,7 @@ module Oauth
       hook = REGISTRY.dig(provider.to_s, :after_connect)
       return unless hook
 
-      hook.constantize.record_identity!(credential)
+      hook.call(credential)
     end
 
     # Reconcile and return the OauthClient for a static provider.
@@ -86,8 +121,8 @@ module Oauth
     # translate this into a user-facing "not configured" message, never a 500.
     def client_for(provider)
       cfg = config(provider)
-      creds = provider_settings(cfg[:settings_key])
-      client_id = creds&.client_id.presence
+      app = cfg.fetch(:oauth_app).call
+      client_id = app[:client_id].presence
       raise Oauth::MissingClientConfig, provider.to_s if client_id.blank?
 
       client = OauthClient.find_or_initialize_by(issuer: cfg[:issuer], client_id: client_id)
@@ -95,19 +130,24 @@ module Oauth
       client.token_endpoint = cfg[:token_endpoint]
       client.scopes = cfg[:scopes]
       client.source = "static"
-      secret = creds.respond_to?(:client_secret) ? creds.client_secret.presence : nil
+      secret = app[:client_secret].presence
       client.client_secret = secret if secret
       client.save!
       client
     end
 
-    # Read the provider's Settings block. The `config` gem returns nil for a
+    # The client id and secret in a Settings block. The `config` gem returns nil for a
     # missing top-level key; the rescue guards a deployment that opts into
-    # fail-on-missing so an unconfigured provider still degrades to nil.
-    def provider_settings(settings_key)
-      Settings.public_send(settings_key)
-    rescue NoMethodError, KeyError
-      nil
+    # fail-on-missing so an unconfigured provider still degrades to nil values.
+    def app_from_settings(settings_key)
+      settings = begin
+        Settings.public_send(settings_key)
+      rescue NoMethodError, KeyError
+        nil
+      end
+      return { client_id: nil, client_secret: nil } unless settings
+
+      { client_id: settings.client_id, client_secret: settings.respond_to?(:client_secret) ? settings.client_secret : nil }
     end
   end
 end

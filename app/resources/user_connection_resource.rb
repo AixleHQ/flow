@@ -14,17 +14,17 @@ class UserConnectionResource < ApplicationResource
 
   typelize "string | null"
   attribute :login do |credential|
-    credential.metadata.to_h.dig("github_user", "login")
+    credential.account_login
   end
 
   typelize "string | null"
   attribute :name do |credential|
-    credential.metadata.to_h.dig("github_user", "name")
+    credential.account_name
   end
 
   typelize "string | null"
   attribute :avatar_url do |credential|
-    credential.metadata.to_h.dig("github_user", "avatar_url")
+    credential.account_avatar_url
   end
 
   typelize "string"

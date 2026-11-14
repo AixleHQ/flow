@@ -13,7 +13,7 @@ class ActAsConsent < ApplicationRecord
   belongs_to :project
   belongs_to :company
 
-  enumerize :provider, in: %w[github]
+  enumerize :provider, in: %w[github gitlab]
 
   validates :provider, presence: true
   validates :project_id, uniqueness: { scope: %i[user_id provider] }
