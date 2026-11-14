@@ -2410,13 +2410,19 @@ The details task 8 fills in:
   check. The dev `local` adapter keeps its binary and state in `RUNNER_LOCAL_DIR`, a directory
   of the machine mounted at the same path, for this reason, and so does the published image
   when it is run as a host runner (§14.4).
-- **A daemon on arm64** (task 12b, Alex, 2026-11-12): the agent images are OCI indexes with
-  `linux/amd64` only (native arm64 images are task #226). The pull and the creation of the
-  agent container, of the proxy sidecar (the same image) and of the scrub container ask for
-  `linux/amd64`, so an arm64 daemon runs them under emulation: built into OrbStack and Docker
-  Desktop, `binfmt` on ARM Linux. Without emulation the container fails to start with the
-  daemon's own words. The sidecar's entrypoint is the runner's native binary, which the kernel
-  runs natively.
+- **A daemon on arm64** (task 12b, Alex, 2026-11-12; native images, task #226): the agent images
+  are OCI indexes for `linux/amd64` and `linux/arm64`, except a runtime recorded as amd64-only
+  (`platforms` in `config/agent_runtimes.json`, none today). `container.start` asks the daemon
+  for its architecture (`/info`) and pulls that platform; when the image has none (the pull
+  answers "no matching manifest" or that the image "does not provide the specified platform"),
+  it pulls `linux/amd64` instead, and an arm64 daemon then runs the image under emulation:
+  built into OrbStack and Docker Desktop, `binfmt` on ARM Linux. Any other pull failure is
+  reported as it is, without a second pull. The agent container, the proxy sidecar (the same
+  image) and the scrub container are created for the platform of the image the daemon holds
+  under that reference, which is the one the last pull left, so they run what was pulled. A
+  daemon that does not say its architecture is an amd64 one. Without emulation an amd64-only
+  image fails to start on arm64 with the daemon's own words. The sidecar's entrypoint is the
+  runner's native binary, which the kernel runs natively.
 
 #### 6.9.4 Question 3: the live log and how a session ends (§6.5, task 8)
 
@@ -3941,6 +3947,7 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 20 | 7 | `host` execution mode (§6.8): `config.execution_mode: host` and `config.host.cli_source` declared in the §2.7 schema, the host-side CLI with `cli_source` (prototype `docker create` + `docker cp` first), the host-generated CA trusted in three stores and passed into the MITM container, the `NODE_OPTIONS` instrumentation, host-side ttyd/IDE/watcher for the tunnel, the redaction path, the per-session OS user and its scrub (§7.2), toolcache session kits, P2. Likely several tasks when it is cut. **Decided (§6.9, Alex, 2026-11-06): mode 2, on Coder only, with one session per workspace.** The agent CLI runs on the workspace's machine; the services that can run in Docker (`mitmdump`, the callback proxy and the others) run in containers with their ports published on the machine, so that the runner and the agent reach them. The reason: a full development machine with no container around the agent, for example to run `docker compose up`. The workspace is the unit of isolation, so the per-session OS user and the airtight scrub of §7.2, written for `manual`, are not needed. The `host` mode is not planned for `manual`. |
 | 21 | 5 | **Runner sessions' default agent images (#229, Alex, 2026-11-12).** `Settings.runners.agent_image_prefix` (default `ghcr.io/aixlehq/flow-`) and `agent_images.<runtime>`, from `RUNNER_AGENT_IMAGE_*`; `ContainerRuntime::RunnerRuntime#runner_image` chooses them (the override, then `agent_images.<runtime>`, then prefix, runtime image and tag), and `AgentBaseStrategy#resolve_image` is unchanged for hosted `agents.*`; the tag is `runners.agent_image_tag` (`RUNNER_AGENT_IMAGE_TAG`, default `latest`; GHCR has no `sha-*` tags); `container.image_override` still wins (§2.7, §6.8). Docs: configuration reference, runners user guide. |
 | 22 | 7 | **`{agent}` in `container.image_override` (Alex, 2026-11-12).** `Runners::ConfigSchema` accepts the placeholder `{agent}` and refuses any other, and a value that is not an image reference once replaced; `RunnerRuntime#runner_image` replaces it with `AgentRuntime.fetch(session.agent_type).image` at `container.start`; an override without a placeholder works as before. The runner form's help text says what `{agent}` is replaced with. Default images for runner sessions are not part of it. |
+| 23 | 5 | **Agent images for `linux/arm64` (#226, Alex, 2026-11-14).** The agent base image and every runtime image are built as one index for `linux/amd64` and `linux/arm64`; the registry's optional `platforms` field narrows a runtime whose CLI has no arm64 build (none today: every CLI installs for arm64). The runner pulls the daemon's own platform and falls back to `linux/amd64`, and creates the agent, sidecar and scrub containers for the platform it pulled (§6.9.3, `runner/internal/docker/image.go`). The `images.yml` change (QEMU, `platforms`, a cache scope per image) is a patch, `docs/operations/patches/images-arm64.patch`, for Alex to apply: agents cannot push `.github/workflows/`. Until it is applied and an image build has run, the published images stay amd64-only and arm64 machines run them under emulation as before. |
 
 ---
 
