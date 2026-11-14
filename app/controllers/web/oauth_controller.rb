@@ -46,7 +46,7 @@ class Web::OauthController < Web::ApplicationController
   def authorize
     provider = params[:provider].to_s
     return redirect_to(root_path, alert: "Unknown OAuth provider") unless Oauth::Providers.known?(provider)
-    return redirect_to(safe_return_to(params[:return_to]), alert: IMPERSONATION_ALERT) if refuse_github_connect?(provider)
+    return redirect_to(safe_return_to(params[:return_to]), alert: IMPERSONATION_ALERT) if refuse_user_connect?(provider)
 
     owner = resolve_owner(params[:owner_type], params[:owner_id])
     return redirect_to(root_path, alert: "Not permitted") unless owner && may_connect?(owner)
@@ -107,7 +107,7 @@ class Web::OauthController < Web::ApplicationController
 
     provider = payload["provider"].to_s
     # A connect started before the impersonation began must not store the credential either.
-    return redirect_to(return_to, alert: IMPERSONATION_ALERT) if refuse_github_connect?(provider)
+    return redirect_to(return_to, alert: IMPERSONATION_ALERT) if refuse_user_connect?(provider)
 
     # (5) owner authorization — even though state is signed, re-bind to a record
     # the CURRENT user may act for, with the right to connect it now.
@@ -254,7 +254,7 @@ class Web::OauthController < Web::ApplicationController
   # No GitHub or GitLab credential is stored for a person during an impersonation: it
   # decides what agents may do as them (docs/design/github-user-identity.md §4.2).
   # Other providers, MCP connections included, are left as they are.
-  def refuse_github_connect?(provider)
+  def refuse_user_connect?(provider)
     impersonated? && UserConnections::PROVIDERS.key?(provider)
   end
 
@@ -405,7 +405,7 @@ class Web::OauthController < Web::ApplicationController
   # any non-2xx response, network error, or unparseable body. NEVER interpolates
   # the code or any token into logs or exception messages. When present, the RFC
   # 8707 `resource` indicator (canonical MCP URL) is bound to the exchange.
-  def exchange_code!(client, code:, code_verifier:, resource: nil, provider: nil)
+  def exchange_code!(client, code:, code_verifier:, provider:, resource: nil)
     # SECURITY (oauth-unification §5): a source:"dcr" token_endpoint is
     # attacker-authored (discovered from an untrusted MCP server). Re-validate at
     # time-of-use — a persisted endpoint is no more trustworthy than a freshly
@@ -448,7 +448,7 @@ class Web::OauthController < Web::ApplicationController
   # endpoints come from the trusted registry and pass unchanged. Raises
   # Oauth::TokenExchangeError (no endpoint interpolated) so the callback surfaces a
   # generic failure and never contacts the unsafe host.
-  def guard_token_endpoint!(client, provider = nil)
+  def guard_token_endpoint!(client, provider)
     errs = UrlSafetyValidator.errors_for(client.token_endpoint, require_https: true,
                                                                 trusted_hosts_override: Oauth::Providers.trusted_hosts(provider))
     raise Oauth::TokenExchangeError, "unsafe token_endpoint" if errs.any?

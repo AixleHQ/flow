@@ -36,7 +36,14 @@ const PROVIDERS: Provider[] = ['github', 'gitlab'];
 
 const PROVIDER_INFO: Record<
   Provider,
-  { name: string; icon: typeof IconBrandGithub; pitch: string; notConfigured: string; disconnectNote: string }
+  {
+    name: string;
+    icon: typeof IconBrandGithub;
+    pitch: string;
+    notConfigured: string;
+    disconnectNote: string;
+    consentWarning?: string;
+  }
 > = {
   github: {
     name: 'GitHub',
@@ -55,6 +62,8 @@ const PROVIDER_INFO: Record<
       "This installation has not configured GitLab's OAuth app (client id and secret), so accounts cannot be connected.",
     disconnectNote:
       'Agents can no longer act as you on GitLab, and the permissions you set for each project are removed.',
+    consentWarning:
+      "A token handed out in a project can do anything you can on GitLab, not only in that project's repositories.",
   },
 };
 
@@ -113,11 +122,17 @@ function ProviderCard({
           )}
           {available && account?.status !== 'connected' && (
             <Button size="compact-sm" loading={connecting} onClick={connect}>
-              {account ? 'Reconnect' : `Connect ${info.name}`}
+              {account ? `Reconnect ${info.name}` : `Connect ${info.name}`}
             </Button>
           )}
           {account && (
-            <Button size="compact-sm" variant="default" color="red" onClick={confirmDisconnect}>
+            <Button
+              size="compact-sm"
+              variant="default"
+              color="red"
+              aria-label={`Disconnect ${info.name}`}
+              onClick={confirmDisconnect}
+            >
               Disconnect
             </Button>
           )}
@@ -133,6 +148,7 @@ function ProviderCard({
 }
 
 function ConsentsCard({ provider, consents }: { provider: Provider; consents: ActAsConsent[] }) {
+  const info = PROVIDER_INFO[provider];
   const [saving, setSaving] = useState<string | null>(null);
 
   const change = async (consent: ActAsConsent, field: Switchable, value: boolean) => {
@@ -149,11 +165,16 @@ function ConsentsCard({ provider, consents }: { provider: Provider; consents: Ac
   return (
     <Card p={24}>
       <Title order={4} mb={4}>
-        What agents may do as you on {PROVIDER_INFO[provider].name}
+        What agents may do as you on {info.name}
       </Title>
       <Text fz={14} c="dimmed" mb="md">
         Decide per project. Both are off until you turn them on.
       </Text>
+      {info.consentWarning && (
+        <Text fz={14} mb="md">
+          {info.consentWarning}
+        </Text>
+      )}
       {consents.length === 0 ? (
         <Text fz={14}>You have no projects in this company yet.</Text>
       ) : (
@@ -172,7 +193,7 @@ function ConsentsCard({ provider, consents }: { provider: Provider; consents: Ac
                 {(['inOwnTasks', 'inOthersTasks'] as const).map((field) => (
                   <Table.Td key={field}>
                     <Switch
-                      aria-label={`${field === 'inOwnTasks' ? 'In my tasks' : "In tasks that aren't mine"} — ${consent.projectName}`}
+                      aria-label={`${info.name}: ${field === 'inOwnTasks' ? 'In my tasks' : "In tasks that aren't mine"} — ${consent.projectName}`}
                       checked={consent[field]}
                       disabled={saving === `${consent.projectId}:${field}`}
                       onChange={(event) => change(consent, field, event.currentTarget.checked)}

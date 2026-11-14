@@ -6,6 +6,7 @@ module Github
   # (docs/design/github-user-identity.md §2.1, §4.1).
   module UserConnection
     PROVIDER = OauthCredential::GITHUB_PROVIDER
+    LABEL = "GitHub"
     IDENTITY_TTL = 24.hours
 
     module_function
@@ -36,6 +37,11 @@ module Github
       store_identity!(credential, UserTokenService.new.user(credential.access_token))
     rescue UserTokenService::Error
       stored
+    end
+
+    # The person's connection, a revoked one included, or nil.
+    def latest_connection_of(user)
+      OauthCredential.latest_github_connection_of(user)
     end
 
     def disconnect!(user)

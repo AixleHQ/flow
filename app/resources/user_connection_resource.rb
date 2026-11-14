@@ -14,28 +14,21 @@ class UserConnectionResource < ApplicationResource
 
   typelize "string | null"
   attribute :login do |credential|
-    identity = UserConnectionResource.identity_of(credential)
-    identity["login"] || identity["username"]
+    credential.account_login
   end
 
   typelize "string | null"
   attribute :name do |credential|
-    UserConnectionResource.identity_of(credential)["name"]
+    credential.account_name
   end
 
   typelize "string | null"
   attribute :avatar_url do |credential|
-    UserConnectionResource.identity_of(credential)["avatar_url"]
+    credential.account_avatar_url
   end
 
   typelize "string"
   attribute :connected_at do |credential|
     credential.created_at.iso8601
-  end
-
-  # The account's identity as the provider reported it, whichever provider this is.
-  def self.identity_of(credential)
-    metadata = credential.metadata.to_h
-    metadata["github_user"] || metadata["gitlab_user"] || {}
   end
 end

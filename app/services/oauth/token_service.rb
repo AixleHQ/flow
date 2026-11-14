@@ -99,6 +99,10 @@ module Oauth
     def fresh(cred, skew: REFRESH_SKEW, wait: true)
       return cred.access_token unless cred.expired?(skew)
 
+      # A GitLab grant of a previous GITLAB_ENDPOINT is left to lapse, not kept alive
+      # (and its refresh token is not sent to the instance now configured).
+      raise ReauthRequired.new(cred, "issued by another GitLab instance") if cred.on_other_gitlab_instance?
+
       # Nothing to refresh from. Record it like any other refresh failure so the
       # credential escalates to status:error (and notifies the owner to reconnect)
       # through the ONE existing path, instead of sitting :active until its access

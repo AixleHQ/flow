@@ -20,7 +20,8 @@ governance, community health — carry none.
   tool. Unlike GitHub's, the token is not limited to the session's repositories:
   GitLab cannot do that, and the user guide says what bounds it instead. The
   operator adds `<PROTOCOL>://<DOMAIN>/oauth/callback` as a redirect URI to the
-  deployment's GitLab OAuth application.
+  deployment's GitLab OAuth application. Your concurrent sessions share one
+  GitLab token, which Flow replaces only in its last ten minutes.
 - **Tasks**: agents using personal access can ask for the tasks assigned to you
   — directly or through a project team you are on — across every project of one
   company, or in one project (`list_my_tasks`). `list_projects` now names each

@@ -4,19 +4,21 @@ module InternalTools
   module Concerns
     # GitLab's part of the user-token steps (docs/design/gitlab-user-identity.md §4.2;
     # the shared steps are in UserTokenContext). GitLab cannot narrow a token to
-    # repositories, so the tool hands out the person's own OAuth token (refreshed when
-    # little life remains) and checks, with that token, which of the session's
-    # repositories the person can push to.
+    # repositories, so the tool hands out the person's own OAuth token and checks, with
+    # that token, which of the session's repositories the person can push to.
+    #
+    # A refresh at GitLab invalidates the previous access token (R2), and a person has one
+    # token for all their sessions. So the tool refreshes only within
+    # Oauth::TokenService::REFRESH_SKEW of expiry, as the platform's sweep does, and
+    # reports the expiry less that skew: no token stops working before the `expires_at`
+    # it was handed out with.
     module GitlabUserTokenContext
       extend ActiveSupport::Concern
       include UserTokenContext
 
-      # A token handed out has at least this long to live; the platform refreshes at
-      # Oauth::TokenService::REFRESH_SKEW, so the agent has the difference to work with.
-      MIN_LIFETIME = 30.minutes
       SCOPES = %w[api].freeze
       NOTE = "Use the token only in the command that needs it. Do not echo it, write it to a file, or paste it " \
-             "anywhere. Ask again when it expires. The token is not limited to these repositories: it can do " \
+             "anywhere. Ask again when it expires, or when GitLab refuses it with 401. The token is not limited to these repositories: it can do " \
              "whatever this person can on GitLab, so use it for these repositories only."
       UNAVAILABLE = "Connecting GitLab accounts is not configured on this installation."
       NO_REPOSITORIES = "This session has no GitLab repositories on an active GitLab connection."
@@ -31,7 +33,7 @@ module InternalTools
       def provider_name = Gitlab::UserConnection::PROVIDER
       def live_connection_of(user) = OauthCredential.live_gitlab_connection_of(user)
       def no_repositories_message = NO_REPOSITORIES
-      def token_skew = MIN_LIFETIME
+      def token_skew = Oauth::TokenService::REFRESH_SKEW
 
       def identity_of(credential) = Gitlab::UserConnection.identity_for(credential)
 
@@ -86,7 +88,7 @@ module InternalTools
       end
 
       # When to ask again: the stored expiry less the refresh skew, since a refresh issues a
-      # new access token and GitLab may revoke the old one at that moment.
+      # new access token and GitLab revokes the old one at that moment.
       def reported_expiry(credential)
         credential.expires_at && (credential.expires_at - Oauth::TokenService::REFRESH_SKEW)
       end

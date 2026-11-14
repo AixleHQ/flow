@@ -134,4 +134,28 @@ class UserConnectionsTest < ActiveSupport::TestCase
     assert OauthCredential.exists?(github.id)
     assert_equal [ "github" ], ActAsConsent.where(user: @user).pluck(:provider)
   end
+
+  test "disconnect! for gitlab revokes only the current host's grant and deletes an old host's without a request" do
+    current = create(:oauth_credential, :gitlab_user, owner: @user)
+    old_host = create(:oauth_client, :gitlab, issuer: "https://old.gitlab.example.com")
+    old = create(:oauth_credential, :gitlab_user, owner: @user, oauth_client: old_host)
+    fake = FakeGitlab::UserTokenService.new
+    Gitlab::UserTokenService.stubs(:new).returns(fake)
+
+    UserConnections.disconnect!(user: @user, provider: "gitlab")
+
+    assert_equal 1, fake.calls_to(:revoke).size
+    assert_nil OauthCredential.find_by(id: current.id)
+    assert_nil OauthCredential.find_by(id: old.id)
+  end
+
+  test "available_providers, connections_of, consents_of and label answer for every provider" do
+    github = create(:oauth_credential, :github_user, owner: @user)
+
+    assert_equal %w[github gitlab], UserConnections.available_providers.keys
+    assert_equal({ "github" => github, "gitlab" => nil }, UserConnections.connections_of(user: @user))
+    assert_equal %w[github gitlab], UserConnections.consents_of(user: @user, company: @company).keys
+    assert_equal "GitLab", UserConnections.label(provider: "gitlab")
+    assert_raises(UserConnections::UnknownProvider) { UserConnections.label(provider: "bitbucket") }
+  end
 end

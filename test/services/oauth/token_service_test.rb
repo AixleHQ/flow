@@ -96,6 +96,21 @@ module Oauth
       assert_requested(:post, TOKEN_ENDPOINT) { |req| !req.body.include?("client_secret") }
     end
 
+    # == fresh: a GitLab grant of a previous GITLAB_ENDPOINT ==
+
+    test "does not refresh a GitLab grant issued by another instance, and does not mark it" do
+      old_host = create(:oauth_client, :gitlab, issuer: "https://old.gitlab.example.com", token_endpoint: TOKEN_ENDPOINT)
+      cred = create(:oauth_credential, :gitlab_user, owner: @user, oauth_client: old_host,
+                                                     expires_at: 1.minute.from_now)
+
+      assert_raises(Oauth::ReauthRequired) { Oauth::TokenService.fresh(cred) }
+      assert_equal :error, Oauth::TokenService.refresh_credential(cred)
+
+      assert_not_requested :post, TOKEN_ENDPOINT
+      assert_equal 0, cred.reload.refresh_failure_count
+      assert_predicate cred, :active?
+    end
+
     # == fresh: reauth-required paths ==
 
     test "raises ReauthRequired without a network call when the credential is unrefreshable" do
