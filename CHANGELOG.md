@@ -45,6 +45,9 @@ governance, community health — carry none.
   its team can be connected. Its code was refused with "Posted in <channel>,
   but the code is for <team> / <channel>". Renaming a team now renames it on
   every channel.
+- **Integrations**: a team's General channel that carries another name in
+  Microsoft Teams, such as the first channel new Teams asks to name when a team
+  is created, can be connected under the name people see.
 - **Integrations**: when Microsoft stops an administrator approving a Teams
   connection, the approval page shows Microsoft's reason instead of "sign-in
   was cancelled", and names the administrator roles that can approve.
