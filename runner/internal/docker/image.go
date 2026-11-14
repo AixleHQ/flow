@@ -15,14 +15,59 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
-// AgentPlatform is the platform the agent images are built for: the images
-// (ghcr.io/aixlehq/flow-<image>) are OCI indexes with linux/amd64 only. The pull
-// and the creation of every container made from one ask for it, so a daemon on
-// arm64 runs them under amd64 emulation instead of failing with "no matching
-// manifest for linux/arm64/v8" (DESIGN.md §6.9.3). Native arm64 images, when
-// they exist, make this the daemon's own platform again.
-func AgentPlatform() *ocispec.Platform {
-	return &ocispec.Platform{OS: "linux", Architecture: "amd64"}
+// The agent images (ghcr.io/aixlehq/flow-<image>) are OCI indexes for
+// linux/amd64 and linux/arm64; a runtime whose CLI has no arm64 build is
+// amd64-only (config/agent_runtimes.json, `platforms`). The runner pulls the
+// daemon's own platform when the image has it, and linux/amd64 otherwise, which an
+// arm64 daemon runs under emulation: built into OrbStack and Docker Desktop,
+// binfmt on ARM Linux (DESIGN.md §6.9.3).
+
+// fallbackPlatform is the platform every agent image has.
+func fallbackPlatform() ocispec.Platform {
+	return ocispec.Platform{OS: "linux", Architecture: "amd64"}
+}
+
+// nativePlatform is the platform of the machine's Docker daemon, as the image
+// index names it: arm64 for an arm64 daemon, and linux/amd64 for anything else,
+// or when the daemon does not say.
+func nativePlatform(ctx context.Context, api API) ocispec.Platform {
+	info, err := api.Info(ctx, client.InfoOptions{})
+	if err != nil {
+		return fallbackPlatform()
+	}
+	switch strings.ToLower(info.Info.Architecture) {
+	case "aarch64", "arm64":
+		return ocispec.Platform{OS: "linux", Architecture: "arm64"}
+	}
+	return fallbackPlatform()
+}
+
+// imagePlatform is the platform of the image the daemon holds under ref, which is
+// the one the last pull left there: every container made from the image is
+// created for it. Nil, the daemon's own choice, when the daemon does not say.
+func imagePlatform(ctx context.Context, api API, ref string) *ocispec.Platform {
+	inspected, err := api.ImageInspect(ctx, ref)
+	if err != nil || inspected.Architecture == "" {
+		return nil
+	}
+	osName := inspected.Os
+	if osName == "" {
+		osName = "linux"
+	}
+	return &ocispec.Platform{OS: osName, Architecture: inspected.Architecture}
+}
+
+// lacksPlatform reports whether err is the registry's or the daemon's answer to a
+// pull of a platform the image does not have, in the wording of the classic image
+// store and of containerd's.
+func lacksPlatform(err error) bool {
+	msg := strings.ToLower(err.Error())
+	for _, s := range []string{"no matching manifest", "does not provide the specified platform", "no match for platform"} {
+		if strings.Contains(msg, s) {
+			return true
+		}
+	}
+	return false
 }
 
 // Result error classes shared by the ops (runner/protocol/PROTOCOL.md §6).
@@ -55,8 +100,9 @@ func imageReference(image string) (string, error) {
 }
 
 // pull pulls ref through the Docker Engine API, with the credentials of its
-// registry (registryAuth). It always pulls, so a tag that moved is followed, and
-// the daemon downloads only the layers it lacks. A pull that fails returns the
+// registry (registryAuth), for the daemon's own platform, or for linux/amd64 when
+// the image has no build for it. It always pulls, so a tag that moved is followed,
+// and the daemon downloads only the layers it lacks. A pull that fails returns the
 // registry's or the daemon's own words (DESIGN.md §8, "Agent image cannot be
 // pulled"), even when the daemon has an older copy.
 func pull(ctx context.Context, api API, ref string) error {
@@ -64,7 +110,16 @@ func pull(ctx context.Context, api API, ref string) error {
 	if err != nil {
 		return err
 	}
-	resp, err := api.ImagePull(ctx, ref, client.ImagePullOptions{RegistryAuth: auth, Platforms: []ocispec.Platform{*AgentPlatform()}})
+	native := nativePlatform(ctx, api)
+	err = pullFor(ctx, api, ref, auth, native)
+	if err != nil && native.Architecture != fallbackPlatform().Architecture && lacksPlatform(err) {
+		err = pullFor(ctx, api, ref, auth, fallbackPlatform())
+	}
+	return err
+}
+
+func pullFor(ctx context.Context, api API, ref, auth string, platform ocispec.Platform) error {
+	resp, err := api.ImagePull(ctx, ref, client.ImagePullOptions{RegistryAuth: auth, Platforms: []ocispec.Platform{platform}})
 	if err != nil {
 		return err
 	}
