@@ -53,6 +53,19 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Build box", @runner.reload.name
   end
 
+  test "Return to service answers 404 for a company without the flag" do
+    machine = create(:runner_environment, runner: @runner)
+    Runners::Machines.fail!(machine, "boom")
+    FeatureFlagOverride.where(company: @company).delete_all
+    sign_in_as(@admin)
+
+    post return_to_service_company_settings_runner_machine_path(@runner, machine)
+
+    assert_response :not_found
+    assert_equal "failed", machine.reload.state
+    assert_empty RunnerOperation.all
+  end
+
   test "every member lists and views the company's runners" do
     assert_role_matrix(READ_ROLES, transport: :web) { get company_settings_runners_path }
     assert_role_matrix(READ_ROLES, transport: :web) { get company_settings_runner_path(@runner) }

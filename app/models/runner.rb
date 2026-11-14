@@ -61,6 +61,8 @@ class Runner < ApplicationRecord
   validate :config_matches_schema, if: -> { runner_type.present? && (new_record? || config_or_type_changing?) }
 
   scope :not_deleted, -> { where(deleted_at: nil) }
+  # The company's own runners, visible to every project: not a project's.
+  scope :company_level, -> { where(project_id: nil) }
   # Not disabled, revoked or deleted: the runners whose health is checked
   # (Runners::HealthCheck).
   scope :live, -> { not_deleted.where(status: RunnerStateMachine::HEALTH_STATES.map(&:to_s)) }

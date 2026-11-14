@@ -43,6 +43,19 @@ class Web::Company::Projects::RunnersControllerTest < ActionDispatch::Integratio
     assert_equal "pending", @own.reload.status
   end
 
+  test "Return to service answers 404 for a company without the flag" do
+    machine = create(:runner_environment, runner: @own)
+    Runners::Machines.fail!(machine, "boom")
+    FeatureFlagOverride.where(company: @company).delete_all
+    sign_in_as(@owner)
+
+    post return_to_service_company_project_runner_machine_path(@project, @own, machine)
+
+    assert_response :not_found
+    assert_equal "failed", machine.reload.state
+    assert_empty RunnerOperation.all
+  end
+
   test "project readers see the project's runners and the company's" do
     other = create(:runner, :project_runner, company: @company, created_by: @admin)
 

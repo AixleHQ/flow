@@ -6,6 +6,8 @@
 class Web::Company::Runners::MachinesController < Web::Company::ApplicationController
   include RunnerMachineReturn
 
+  requires_feature :external_runners
+
   # Return to service for a `failed` machine of a `manual` runner (§5.2, §7.2).
   def return_to_service
     runner = company_runners.find(params[:settings_runner_id])
@@ -15,6 +17,6 @@ class Web::Company::Runners::MachinesController < Web::Company::ApplicationContr
   private
 
   def company_runners
-    current_company.runners.not_deleted.where(project_id: nil)
+    current_company.runners.not_deleted.company_level
   end
 end
