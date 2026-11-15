@@ -20,6 +20,12 @@ class TerminalSessionTest < ActiveSupport::TestCase
                  TerminalSession.preferred_error_message("Some earlier failure", "Agent container vanished")
   end
 
+  test "preferred_error_message keeps a diagnosed reason when the reconciler's workflow-ended text arrives" do
+    assert_equal "Runner environment lost contact for 15 minutes.",
+                 TerminalSession.preferred_error_message("Runner environment lost contact for 15 minutes.",
+                                                         TerminalSession::WORKFLOW_ENDED_ERROR)
+  end
+
   test "preferred_error_message keeps what it has when nothing new arrives" do
     assert_equal "Agent container vanished", TerminalSession.preferred_error_message("Agent container vanished", nil)
   end
@@ -607,6 +613,17 @@ class TerminalSessionTest < ActiveSupport::TestCase
     ids = TerminalSession.where(id: sessions.values.map(&:id)).not_ended.pluck(:id)
 
     assert_equal [ sessions["running"].id, sessions["finishing"].id ].sort, ids.sort
+  end
+
+  test "mark_contact_lost! and clear_contact_lost! set and remove what contact_lost? reads" do
+    session = create(:terminal_session, user: @user)
+    assert_not session.contact_lost?
+
+    session.mark_contact_lost!(Time.current)
+    assert session.reload.contact_lost?
+
+    session.clear_contact_lost!
+    assert_not session.reload.contact_lost?
   end
 
   test "concluded? is true for finished and failed, not for cancelled" do

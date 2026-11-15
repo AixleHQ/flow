@@ -32,9 +32,17 @@ class TerminalSession < ApplicationRecord
   # connection, a revoked credential — outranks it.
   LAUNCH_ABANDONED_ERROR = "Launch abandoned before the container started"
 
-  GENERIC_ERROR_MESSAGES = [ "Workflow cancelled", "Session admission is closed", LAUNCH_ABANDONED_ERROR ].freeze
+  # What the reconciler says of a session whose container workflow closed under it. It is the
+  # queue's own vocabulary too: a reason already on the session (the runner's 15-minute
+  # contact loss, for one) outranks it.
+  WORKFLOW_ENDED_ERROR = "Container workflow ended"
+
+  GENERIC_ERROR_MESSAGES = [ "Workflow cancelled", "Session admission is closed", LAUNCH_ABANDONED_ERROR, WORKFLOW_ENDED_ERROR ].freeze
 
   TERMINAL_STATES = %w[finished failed cancelled].freeze
+  # The metadata key that marks a session failed by Runners::ContactLoss.
+  CONTACT_LOST_KEY = "contact_lost_at"
+  private_constant :CONTACT_LOST_KEY
   # A launch that has run its course: the container is up and the session is
   # being used or wound up. `running` is not here, since it is set when the
   # launch starts, before a runner's machine is taken.
@@ -258,6 +266,22 @@ class TerminalSession < ApplicationRecord
 
   def workflow_step?
     self.class.workflow_step_type?(session_type)
+  end
+
+  # Failed because its runner's machine stopped answering (Runners::ContactLoss).
+  # Its machine is not given back until it is heard again.
+  def contact_lost?
+    metadata.is_a?(Hash) && metadata.key?(CONTACT_LOST_KEY)
+  end
+
+  # Marks the session as lost to silence, before it is failed (Runners::ContactLoss).
+  def mark_contact_lost!(at)
+    merge_jsonb!(:metadata, CONTACT_LOST_KEY => at.iso8601)
+  end
+
+  # Takes the mark off a session that was not failed after all.
+  def clear_contact_lost!
+    remove_jsonb_keys!(:metadata, CONTACT_LOST_KEY)
   end
 
   # The key the session's container holds for the aixle-tools MCP server. A

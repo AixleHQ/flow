@@ -64,6 +64,15 @@ module Activities
 
         candidate_sessions.find_each do |session|
           checked += 1
+          # A machine that is not heard is asked nothing: that case belongs to
+          # the grace (Runners::ContactLoss), not to this scan.
+          environment = unheard_machine(session)
+          if environment
+            clear_marker(session)
+            failed += 1 if Runners::ContactLoss.fail_if_lapsed!(session, environment)
+            next
+          end
+
           # A runner session's ops are capped, so a machine that does not answer
           # cannot hold up the sweep.
           runtime = ContainerRuntime.for_session(session, op_timeout: Settings.runners.scan_op_timeout)
@@ -82,6 +91,15 @@ module Activities
       end
 
       private
+
+      # The machine of a runner session when its runner's adapter cannot see the
+      # session's container (`:unknown`), else nil.
+      def unheard_machine(session)
+        environment = session.runner_environment
+        return nil if session.runner_id.nil? || environment.nil?
+
+        environment if Runners::Adapter.for(session.runner).observe(environment) == :unknown
+      end
 
       def candidate_sessions
         TerminalSession
