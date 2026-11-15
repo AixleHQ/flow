@@ -112,8 +112,9 @@ class WorkflowRun < ApplicationRecord
 
   scope :active, -> { where(state: %w[pending running paused]) }
   # Started and not yet ended: running or paused.
-  scope :in_progress, -> { where(state: %w[running paused]) }
-  scope :failed_or_cancelled, -> { where(state: %w[failed cancelled]) }
+  scope :underway, -> { where(state: %w[running paused]) }
+  # Failed or cancelled: it ended without finishing.
+  scope :aborted, -> { where(state: %w[failed cancelled]) }
   scope :stop_requested, -> { where.not(stop_requested_at: nil) }
   scope :not_stop_requested, -> { where(stop_requested_at: nil) }
   # A stop was requested and the run has not failed or completed since: its steps

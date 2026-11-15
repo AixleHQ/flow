@@ -652,14 +652,14 @@ class TerminalSessionTest < ActiveSupport::TestCase
     assert_not TerminalSession.workflow_step_type?(nil)
   end
 
-  test "the state scopes split sessions into ended, not ended and in progress" do
+  test "the state scopes split sessions into ended, not ended and container up" do
     sessions = %w[queued running ready finishing finished failed cancelled].index_with do |state|
       create(:terminal_session, :with_user).tap { |session| session.update_columns(state: state) }
     end
     scope = TerminalSession.where(id: sessions.values.map(&:id))
 
     assert_equal %w[finished failed cancelled].map { |s| sessions[s].id }.sort, scope.ended.pluck(:id).sort
-    assert_equal %w[running ready].map { |s| sessions[s].id }.sort, scope.in_progress.pluck(:id).sort
+    assert_equal %w[running ready].map { |s| sessions[s].id }.sort, scope.container_up.pluck(:id).sort
   end
 
   test "the type scopes pick workflow steps and leave out auth setups" do

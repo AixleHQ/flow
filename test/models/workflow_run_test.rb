@@ -302,8 +302,8 @@ class WorkflowRunTest < ActiveSupport::TestCase
     scope = WorkflowRun.where(id: runs.values.map(&:id))
     ids = ->(*states) { states.map { |state| runs[state].id }.sort }
 
-    assert_equal ids.call("running", "paused"), scope.in_progress.pluck(:id).sort
-    assert_equal ids.call("failed", "cancelled"), scope.failed_or_cancelled.pluck(:id).sort
+    assert_equal ids.call("running", "paused"), scope.underway.pluck(:id).sort
+    assert_equal ids.call("failed", "cancelled"), scope.aborted.pluck(:id).sort
     assert_equal [ stopped.id ], scope.stop_requested.pluck(:id)
     assert_not_includes scope.not_stop_requested.pluck(:id), stopped.id
     assert_equal [ stopped.id ], scope.cancellation_in_flight.pluck(:id)
