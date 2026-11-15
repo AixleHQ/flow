@@ -194,7 +194,7 @@ class TerminalSession < ApplicationRecord
   scope :not_auth_sessions, -> { where.not(session_type: "auth_setup") }
   scope :workflow_steps, -> { where(session_type: "workflow_step") }
   # The container is up and in use: running or ready.
-  scope :in_progress, -> { where(state: %w[running ready]) }
+  scope :container_up, -> { where(state: %w[running ready]) }
   scope :active, -> { where(state: %w[not_started queued running ready]) }
   scope :finishing, -> { where(state: "finishing") }
   # Waiting for its agent's login to be renewed (Sessions::AuthPause).

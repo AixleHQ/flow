@@ -19,8 +19,8 @@ class WorkflowRunStatsService
     end
 
     completed   = base.completed.count
-    in_progress = base.in_progress.count
-    failed      = base.failed_or_cancelled.count
+    in_progress = base.underway.count
+    failed      = base.aborted.count
     queued      = base.pending.count
     total       = completed + in_progress + failed + queued
 

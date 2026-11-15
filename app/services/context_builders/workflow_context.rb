@@ -243,7 +243,8 @@ module ContextBuilders
     def completed_step_runs
       @completed_step_runs ||= begin
         completed = workflow_run.step_runs
-          .where(step_id: upstream_step_ids, state: %w[completed skipped])
+          .where(step_id: upstream_step_ids)
+          .done
         latest_ids = completed.group(:step_id).select("MAX(step_runs.id)")
 
         completed.where(id: latest_ids)

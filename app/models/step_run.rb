@@ -22,6 +22,8 @@ class StepRun < ApplicationRecord
   # A step that has not ended: waiting to start, running, or waiting for input.
   UNFINISHED_STATES = %w[pending running waiting_input].freeze
   scope :unfinished, -> { where(state: UNFINISHED_STATES) }
+  # Completed or skipped: nothing left for the agent to do on it.
+  scope :done, -> { where(state: %w[completed skipped]) }
 
   HISTORY_ERROR_LIMIT = 2_000
 
