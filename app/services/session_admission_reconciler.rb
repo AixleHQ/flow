@@ -59,7 +59,7 @@ class SessionAdmissionReconciler
   def self.cleanup_error(admission)
     session = admission.terminal_session
     return nil if session.finished?
-    return "Container workflow ended" if session.started_at || admission.runtime_id.present?
+    return TerminalSession::WORKFLOW_ENDED_ERROR if session.started_at || admission.runtime_id.present?
 
     TerminalSession::LAUNCH_ABANDONED_ERROR
   end
