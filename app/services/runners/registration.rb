@@ -82,7 +82,7 @@ module Runners
     # Revoke of one machine from the platform (§9.3): what `unregister!` does,
     # for a machine in any state but `gone`. False for one already `gone`.
     def revoke!(environment)
-      return false if RunnerEnvironment.where(id: environment.id, state: "gone").exists?
+      return false if RunnerEnvironment.gone.exists?(environment.id)
 
       unregister!(environment, ended_by: "revoked")
       true

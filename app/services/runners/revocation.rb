@@ -14,18 +14,15 @@ module Runners
   # cleanup finds the machine absent and releases its admission at once, instead
   # of waiting for ops that a revoked runner never answers (PROTOCOL.md §8).
   module Revocation
-    # A session that is not holding a machine and is not past its launch is
-    # waiting for one, whatever its state says: `running` is set when the
-    # launch starts, before a machine is taken.
-    RUNNING_STATES = %w[ready finishing].freeze
-
     module_function
 
     def end_sessions!(runner)
-      held = RunnerEnvironment.where(runner_id: runner.id).where.not(current_session_id: nil).pluck(:current_session_id)
+      held = RunnerEnvironment.where(runner_id: runner.id).holding_session.pluck(:current_session_id)
 
-      TerminalSession.where(runner_id: runner.id).where.not(state: TerminalSession::TERMINAL_STATES).find_each do |session|
-        end_session(runner, session, running: held.include?(session.id) || session.state.in?(RUNNING_STATES))
+      # A session that holds no machine and is not past its launch is waiting for
+      # one, whatever its state says: `running` is set before a machine is taken.
+      TerminalSession.where(runner_id: runner.id).not_ended.find_each do |session|
+        end_session(runner, session, running: held.include?(session.id) || session.launched?)
       rescue StandardError => e
         # One session that cannot end must not keep the others waiting.
         Rails.logger.error("[Runners::Revocation] session #{session.id} of runner #{runner.id}: #{e.class}: #{e.message}")
@@ -46,7 +43,7 @@ module Runners
     def message(runner, session, running)
       return "Runner \"#{runner.name}\" was revoked, so the session running on it ended." if running
 
-      pick_from = session.session_type == "workflow_step" ? "on the workflow" : "for the session"
+      pick_from = session.workflow_step? ? "on the workflow" : "for the session"
       Resolver.check_status!(runner, pick_from)
       "Runner \"#{runner.name}\" is revoked. Pick another runner #{pick_from}."
     rescue Resolver::Refused => e

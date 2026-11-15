@@ -115,6 +115,16 @@ class RunnerEnvironmentTest < ActiveSupport::TestCase
     assert_equal "failed", failed.reload.display_state
   end
 
+  test "busy? is true while the machine holds a session, and holding_session finds those machines" do
+    idle = create(:runner_environment)
+    holder = create(:runner_environment)
+    create(:runner_session, :holding, environment: holder)
+
+    assert_not idle.reload.busy?
+    assert holder.reload.busy?
+    assert_equal [ holder.id ], RunnerEnvironment.where(id: [ idle.id, holder.id ]).holding_session.pluck(:id)
+  end
+
   private
 
   def check_session_company_key

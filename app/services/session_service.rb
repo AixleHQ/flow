@@ -163,7 +163,7 @@ class SessionService
     # @return [Boolean] whether the session was failed
     def fail_session_if(session:, expected_state: nil, error_message: nil, &guard)
       still = lambda do |locked|
-        in_state = expected_state.nil? ? TerminalSession::TERMINAL_STATES.exclude?(locked.state) : locked.state == expected_state.to_s
+        in_state = expected_state.nil? ? !locked.ended? : locked.state == expected_state.to_s
         in_state && (guard.nil? || guard.call(locked))
       end
 

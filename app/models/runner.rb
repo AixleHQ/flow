@@ -91,7 +91,7 @@ class Runner < ApplicationRecord
     return unless manual?
 
     live = environments.reject(&:gone?)
-    { busy: live.count { |machine| machine.current_session_id.present? }, total: live.size }
+    { busy: live.count(&:busy?), total: live.size }
   end
 
   private
