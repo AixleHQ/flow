@@ -180,10 +180,10 @@ class RunnerGatewayCheckInTest < ActionDispatch::IntegrationTest
   end
 
   test "the report is recorded as the service takes it, with named parameters and no request" do
-    result = Runners::CheckIn.check_in!(@environment, runner_version: "0.3.0", protocol_version: "1",
+    result = Runners::CheckIn.check_in!(@environment, runner_version: "0.4.0", protocol_version: "1",
                                                       report: { "os" => "linux", "arch" => "arm64", "facts" => { "a" => 1 }, "other" => "ignored" })
 
-    assert_equal "0.3.0", result.environment.runner_version
+    assert_equal "0.4.0", result.environment.runner_version
     assert_equal({ "upload_max_bytes" => Settings.runners.upload_limit }, result.config)
     assert_nil result.update
   end
