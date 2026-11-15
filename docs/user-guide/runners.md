@@ -252,6 +252,29 @@ project runner.
 While every machine of a runner is Failed, a launch on it is refused with a
 message that points to Return to service.
 
+## A machine that stops answering
+
+A session keeps running on a machine that loses its network or whose
+`aixle-runner` stops, because the agent belongs to the runner on the machine.
+The machine shows **Offline** after 90 seconds, and the platform asks it
+nothing while it is offline.
+
+- **The machine is back within 15 minutes.** If the agent is still running, the
+  session goes on and can finish. If the agent exited meanwhile, the session
+  fails within a few minutes of the machine's return, as a session whose
+  container died does.
+- **The machine is away for 15 minutes.** The session fails with *Runner
+  environment lost contact for 15 minutes.* A session that has already finished
+  keeps its outcome.
+- **The slot stays with the machine.** The failed session still holds the
+  machine, so no other session takes it and the session's slot is not
+  released. When the machine is heard again, the platform stops the session's
+  leftover container, resets the machine, and releases the slot. The machine
+  shows **Idle**, and a session waiting for it starts. To give the slot up
+  without waiting, revoke the machine.
+- **A revoked or deleted runner** never hears its machines again, so its session
+  fails after the 15 minutes and its slot is released then.
+
 ## What you take on with a `manual` machine
 
 The platform holds no credential into your machine, so what happens on it is
@@ -309,29 +332,6 @@ documentation of what the runner and the agent use, and it can grow.
   does not retry it on that machine. The listener is on the machine's own
   `127.0.0.1`, so any local user or process can reach it. A session key is still
   required.
-
-## A machine that stops answering
-
-A session keeps running on a machine that loses its network or whose
-`aixle-runner` stops, because the agent belongs to the runner on the machine.
-The machine shows **Offline** after 90 seconds, and the platform asks it
-nothing while it is offline.
-
-- **The machine is back within 15 minutes.** If the agent is still running, the
-  session goes on and can finish. If the agent exited meanwhile, the session
-  fails within a few minutes of the machine's return, as a session whose
-  container died does.
-- **The machine is away for 15 minutes.** The session fails with *Runner
-  environment lost contact for 15 minutes.* A session that has already finished
-  keeps its outcome.
-- **The slot stays with the machine.** The failed session still holds the
-  machine, so no other session takes it and the session's slot is not
-  released. When the machine is heard again, the platform stops the session's
-  leftover container, resets the machine, and releases the slot. The machine
-  shows **Idle**, and a session waiting for it starts. To give the slot up
-  without waiting, revoke the machine.
-- **A revoked or deleted runner** never hears its machines again, so its session
-  fails after the 15 minutes and its slot is released then.
 
 ## Using your own agent image
 
