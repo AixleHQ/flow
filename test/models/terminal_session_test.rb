@@ -571,4 +571,41 @@ class TerminalSessionTest < ActiveSupport::TestCase
 
     assert session.valid?, session.errors.full_messages.to_sentence
   end
+
+  test "ended? and ended_state? are true for finished, failed and cancelled only" do
+    %w[finished failed cancelled].each do |state|
+      assert TerminalSession.ended_state?(state), state
+      assert TerminalSession.new(state: state).ended?, state
+    end
+    %w[not_started queued running ready finishing].each do |state|
+      assert_not TerminalSession.ended_state?(state), state
+      assert_not TerminalSession.new(state: state).ended?, state
+    end
+  end
+
+  test "launched? and launched_state? are true for ready and finishing only" do
+    %w[ready finishing].each do |state|
+      assert TerminalSession.launched_state?(state), state
+      assert TerminalSession.new(state: state).launched?, state
+    end
+    %w[not_started queued running finished failed cancelled].each do |state|
+      assert_not TerminalSession.launched_state?(state), state
+      assert_not TerminalSession.new(state: state).launched?, state
+    end
+  end
+
+  test "workflow_step? is true for a workflow step session only" do
+    assert TerminalSession.new(session_type: "workflow_step").workflow_step?
+    assert_not TerminalSession.new(session_type: "agent_session").workflow_step?
+  end
+
+  test "not_ended leaves out the sessions that finished, failed or were cancelled" do
+    sessions = %w[running finishing finished failed cancelled].index_with do |state|
+      create(:terminal_session, :with_user).tap { |session| session.update_columns(state: state) }
+    end
+
+    ids = TerminalSession.where(id: sessions.values.map(&:id)).not_ended.pluck(:id)
+
+    assert_equal [ sessions["running"].id, sessions["finishing"].id ].sort, ids.sort
+  end
 end

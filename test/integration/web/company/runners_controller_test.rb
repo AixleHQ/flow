@@ -346,4 +346,63 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
     assert_response :not_found
     assert_equal "failed", other.reload.state
   end
+
+  test "only a company admin revokes a machine, which ends the session it holds" do
+    machine = create(:runner_environment, runner: @runner, display_name: "build-02")
+    session = create(:runner_session, :holding, environment: machine)
+
+    assert_role_matrix(WRITE_ROLES, transport: :web) do
+      post revoke_company_settings_runner_machine_path(@runner, machine)
+    end
+
+    assert machine.reload.gone?
+    assert_equal "failed", session.reload.state
+    assert_includes session.error_message, "build-02"
+  end
+
+  test "Revoke on a machine that is already gone changes nothing" do
+    machine = create(:runner_environment, runner: @runner, display_name: "build-01", state: :gone)
+    sign_in_as(@admin)
+
+    post revoke_company_settings_runner_machine_path(@runner, machine)
+
+    assert_equal "build-01 is already gone.", flash[:alert]
+  end
+
+  test "a machine of another runner is not found by Revoke" do
+    other = create(:runner_environment, runner: create(:runner, company: @company, created_by: @admin, name: "Other box"))
+    sign_in_as(@admin)
+
+    post revoke_company_settings_runner_machine_path(@runner, other)
+
+    assert_response :not_found
+    assert other.reload.registered?
+  end
+
+  test "Revoke answers 404 for a company without the flag" do
+    machine = create(:runner_environment, runner: @runner)
+    FeatureFlagOverride.where(company: @company).delete_all
+    sign_in_as(@admin)
+
+    post revoke_company_settings_runner_machine_path(@runner, machine)
+
+    assert_response :not_found
+    assert machine.reload.registered?
+  end
+
+  test "the list shows machines busy/total of a manual runner, and the machine list who added it and from where" do
+    admin_machine = create(:runner_environment, runner: @runner, created_by: @admin, first_seen_ip: "203.0.113.7")
+    create(:runner_session, :holding, environment: admin_machine)
+    create(:runner_environment, runner: @runner, state: :gone)
+    sign_in_as(@admin)
+
+    get company_settings_runners_path
+    assert_inertia_props { |props| props[:runners].first.deep_symbolize_keys[:machines] == { busy: 1, total: 1 } }
+
+    get company_settings_runner_path(@runner)
+    assert_inertia_props do |props|
+      props[:runner].deep_symbolize_keys[:machines] == { busy: 1, total: 1 } &&
+        props[:machines].map(&:deep_symbolize_keys).any? { |m| m[:firstSeenIp] == "203.0.113.7" && m[:createdByName] == @admin.name }
+    end
+  end
 end

@@ -155,6 +155,23 @@ What the controllers return — no envelope around the resource:
   - **TerminalSession:** `state` (not_started/queued/running/ready/finishing/finished/failed/cancelled)
   - **WorkflowRun:** `state` (pending/running/paused/completed/failed/cancelled)
 
+### Model Predicates
+
+What a model's state, type or columns mean is decided in the model. Other code asks the model and doesn't compare its attributes with literals or with its constants.
+
+- **Record predicate:** one question about one record, named for its meaning: `session.ended?` rather than `TerminalSession::TERMINAL_STATES.include?(session.state)`, `machine.busy?` rather than `machine.current_session_id.present?`, `session.workflow_step?` rather than `session.session_type == "workflow_step"`.
+- **Class predicate:** the same question for a raw value, where there is no record at hand (a plucked column, a value from a payload): `TerminalSession.ended_state?(state)`. The record predicate calls it, so the meaning is written once.
+- **Query:** the same meaning as a named scope (`TerminalSession.not_ended`, `RunnerEnvironment.holding_session`), as the query rule in Anti-Patterns says. The scope and the predicates read one constant.
+- **Constants** such as `TERMINAL_STATES` and `LAUNCHED_STATES` are the model's detail: its predicates and scopes read them, and other code calls those.
+- **Already named:** a generated predicate is used as it is, not wrapped: `session.failed?` (AASM), `runner.manual?` (enumerize `predicates: true`).
+- **Naming:** name the meaning, not the mechanism (`busy?`, not `current_session_id_present?`). Don't take a name that Rails or our libraries generate: the new method silently replaces the generated one, often with a different meaning.
+  - AASM: `<state>?` for every state and `may_<event>?` for every event. `TerminalSession#running?` means the state is `running`, so "ready or finishing" needs a name of its own (`launched?`).
+  - enumerize with `predicates: true`: `<value>?` for every value.
+  - ActiveRecord: `<column>?` for every column, `<column>_changed?`, `saved_change_to_<column>?`, `will_save_change_to_<column>?`, `new_record?`, `persisted?`, `destroyed?`, `valid?`.
+  - Ruby and ActiveSupport: `nil?`, `present?`, `blank?`, `in?`, `frozen?`.
+
+  Before adding a predicate, check that `Model.new.respond_to?(:name?)` is false. Also check that an existing predicate with a close name doesn't mean a different set: `TerminalSession#active?` leaves out `finishing`, so it doesn't mean "not ended" (`ended?`).
+
 ### Polymorphic Scoping
 - Agent, Tool, Workflow, MCPServer, Skill, Asset, ConfigItem, Repository
 - `scope_type` + `scope_id` → Company or Project
@@ -251,6 +268,7 @@ What the controllers return — no envelope around the resource:
 - **Never** make one decision at several call sites → one factory or polymorphism (`ContainerRuntime.for_session`)
 - **Never** write a query with a domain meaning at its call site → name it as a scope on the model it returns (a class method for a single record), and compose named scopes where it's used. A query has a domain meaning when it can be named (a person's live GitHub connection, a session's secret accesses, the projects of a company a person can reach), when it is needed in more than one place, or when it reaches into a column's structure (JSON paths, raw SQL). A lookup by id or by one plain attribute inside the request's scope stays inline. Ownership is still `TenantScope.owned`, never a model scope
 - **Never** compute a model's derived value outside the model and hand it to a serializer (`params: { states: … }`, a precomputed map) → a model method, serialized as an attribute; add `includes` (a scoped association where the full one would load too much) to avoid extra queries
+- **Never** decide what a model's state, type or columns mean outside the model (`session.state.in?(%w[ready finishing])`, `TerminalSession::TERMINAL_STATES.exclude?(state)`, `machine.current_session_id.present?`, `session.session_type == "workflow_step"`) → a predicate on the model that names the meaning, and a class method for a raw value; the model's constants stay behind them (see Process Patterns → Model Predicates)
 - **Never** make an HTTP request in a domain service (`Net::HTTP`, Faraday, HTTParty, a request built on `SafeHttp.http_for`, an API path written out, a status code read) → a client for that API makes the request; the service calls the client's named methods and maps the client's errors to its own named errors
 - **Never** hand-write a client for an API that a library we already use covers → before writing HTTP code, look in the `Gemfile` for a library for that API (`octokit`, `gitlab`) and use it. If the library lacks a call, use its generic request method for that call. Write our own client only when the library can't do the job, and say why in the PR. OAuth token exchange, refresh and revocation go through the OAuth engine, not through a provider's service; the OAuth engine (`Oauth::TokenService`) is the client for these calls. Examples: `Github::UserTokenService` on Octokit, `Gitlab::TokenService` on the `gitlab` gem, `Oauth::TokenService` for the OAuth calls
 - Existing code that breaks these rules is not a precedent: new code doesn't copy it

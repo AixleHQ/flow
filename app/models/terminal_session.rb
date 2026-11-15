@@ -35,6 +35,21 @@ class TerminalSession < ApplicationRecord
   GENERIC_ERROR_MESSAGES = [ "Workflow cancelled", "Session admission is closed", LAUNCH_ABANDONED_ERROR ].freeze
 
   TERMINAL_STATES = %w[finished failed cancelled].freeze
+  # A launch that has run its course: the container is up and the session is
+  # being used or wound up. `running` is not here, since it is set when the
+  # launch starts, before a runner's machine is taken.
+  LAUNCHED_STATES = %w[ready finishing].freeze
+
+  # Whether `state` is an end state (finished, failed or cancelled), for a raw
+  # value with no record at hand. #ended? calls it.
+  def self.ended_state?(state)
+    TERMINAL_STATES.include?(state.to_s)
+  end
+
+  # Whether `state` is one a launch has got past, for a raw value.
+  def self.launched_state?(state)
+    LAUNCHED_STATES.include?(state.to_s)
+  end
 
   # A specific reason always outranks a generic one, whichever arrives last.
   def self.preferred_error_message(existing, incoming)
@@ -161,6 +176,7 @@ class TerminalSession < ApplicationRecord
   # Scopes
   scope :auth_sessions, -> { where(session_type: "auth_setup") }
   scope :agent_sessions, -> { where(session_type: "agent_session") }
+  scope :not_ended, -> { where.not(state: TERMINAL_STATES) }
   scope :active, -> { where(state: %w[not_started queued running ready]) }
   scope :finishing, -> { where(state: "finishing") }
   # Waiting for its agent's login to be renewed (Sessions::AuthPause).
@@ -189,6 +205,20 @@ class TerminalSession < ApplicationRecord
 
   def active?
     state.in?(%w[not_started queued running ready])
+  end
+
+  # Finished, failed or cancelled. Not the opposite of #active?, which leaves `finishing` out.
+  def ended?
+    self.class.ended_state?(state)
+  end
+
+  # Ready or finishing: the launch is over, whether or not a runner's machine holds the session.
+  def launched?
+    self.class.launched_state?(state)
+  end
+
+  def workflow_step?
+    session_type == "workflow_step"
   end
 
   # The key the session's container holds for the aixle-tools MCP server. A

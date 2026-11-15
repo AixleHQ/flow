@@ -32,6 +32,16 @@ class Runners::MachinesTest < ActiveSupport::TestCase
                  error.message
   end
 
+  test "a revoked or deleted runner takes no session, with the message a launch gives" do
+    session = runner_session
+    @runner.revoke!
+
+    error = assert_raises(Runners::Machines::NoMachine) { Runners::Machines.acquire!(session) }
+
+    assert_equal "Runner \"Build farm\" is revoked. Pick another runner for the session.", error.message
+    assert_nil @machine.reload.current_session_id
+  end
+
   test "every machine busy is a capacity wait" do
     Runners::Machines.acquire!(runner_session)
 

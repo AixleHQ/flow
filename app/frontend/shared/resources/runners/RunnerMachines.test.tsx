@@ -10,8 +10,9 @@ import type { RunnerPaths } from './runnerConfig';
 import { MACHINES_REFRESH_MS, RunnerMachines } from './RunnerMachines';
 
 const runner = { id: 5 };
-const paths: Pick<RunnerPaths, 'returnToService'> = {
+const paths: Pick<RunnerPaths, 'returnToService' | 'revokeMachine'> = {
   returnToService: (id, machineId) => `/company/settings/runners/${id}/machines/${machineId}/return_to_service`,
+  revokeMachine: (id, machineId) => `/company/settings/runners/${id}/machines/${machineId}/revoke`,
 };
 
 const machine = (overrides: Partial<RunnerMachine> = {}): RunnerMachine => ({
@@ -24,6 +25,8 @@ const machine = (overrides: Partial<RunnerMachine> = {}): RunnerMachine => ({
   stateReason: null,
   lastHeartbeatAt: '2026-11-12T10:00:00Z',
   createdAt: '2026-11-12T09:00:00Z',
+  firstSeenIp: '203.0.113.7',
+  createdByName: 'Dana Admin',
   state: 'idle',
   ...overrides,
 });
@@ -156,5 +159,59 @@ describe('RunnerMachines', () => {
 
     expect(screen.getByText('Being reset; takes no session until it succeeds')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Return to service' })).not.toBeInTheDocument();
+  });
+
+  it('shows the first-seen IP and who added a machine, and a dash for a machine that has neither', () => {
+    renderAuthedPage(
+      <RunnerMachines
+        machines={[machine(), machine({ id: 2, firstSeenIp: null, createdByName: null })]}
+        runner={runner}
+        paths={paths}
+        canManage
+      />,
+    );
+
+    const rows = screen.getAllByRole('row').slice(1);
+    expect(within(rows[0]).getByText('203.0.113.7')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('Dana Admin')).toBeInTheDocument();
+    expect(within(rows[1]).queryByText('203.0.113.7')).not.toBeInTheDocument();
+  });
+
+  it('offers Revoke on every machine that is not gone, and posts after the confirmation', async () => {
+    vi.useRealTimers();
+    renderAuthedPage(
+      <RunnerMachines
+        machines={[
+          machine({ id: 3 }),
+          machine({ id: 4, state: 'failed', stateReason: 'boom' }),
+          machine({ id: 5, state: 'gone' }),
+        ]}
+        runner={runner}
+        paths={paths}
+        canManage
+      />,
+    );
+
+    expect(screen.getAllByRole('button', { name: 'Revoke' })).toHaveLength(2);
+
+    const user = userEvent.setup();
+    await user.click(within(screen.getAllByRole('row')[1]).getByRole('button', { name: 'Revoke' }));
+
+    expect(await screen.findByText(/The session it holds, if any, ends now/)).toBeInTheDocument();
+    expect(router.post).not.toHaveBeenCalled();
+
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Revoke' }));
+
+    expect(router.post).toHaveBeenCalledWith(
+      '/company/settings/runners/5/machines/3/revoke',
+      {},
+      expect.objectContaining({ preserveScroll: true }),
+    );
+  });
+
+  it('shows no Revoke to someone who cannot manage the runner', () => {
+    renderAuthedPage(<RunnerMachines machines={[machine()]} runner={runner} paths={paths} canManage={false} />);
+
+    expect(screen.queryByRole('button', { name: 'Revoke' })).not.toBeInTheDocument();
   });
 });

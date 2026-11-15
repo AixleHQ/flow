@@ -24,6 +24,23 @@ class Runners::RegistrationTest < ActiveSupport::TestCase
     assert Runners::Credentials.usable(result.pair.access_token, kind: :access)
   end
 
+  test "the machine records the address it registered from and the user who minted its token" do
+    user = create(:user)
+    token = Runners::Credentials.mint_registration!(@runner, created_by: user)
+    credential = RunnerCredential.find_by_token(token, kind: :registration)
+
+    environment = register(credential: credential, remote_ip: "203.0.113.7").environment
+
+    assert_equal [ "203.0.113.7", user ], [ environment.first_seen_ip, environment.created_by ]
+  end
+
+  test "a machine registered with neither shows neither" do
+    environment = register.environment
+
+    assert_nil environment.first_seen_ip
+    assert_nil environment.created_by
+  end
+
   test "a token registers one machine only" do
     register
 
@@ -68,9 +85,9 @@ class Runners::RegistrationTest < ActiveSupport::TestCase
 
   private
 
-  def register(**changes)
+  def register(credential: @credential, **changes)
     Runners::Registration.register!(
-      @credential,
+      credential,
       **{ name: "build-01", os: "linux", arch: "amd64", facts: { "docker" => "27.1.0" },
           auto_update: true, runner_version: "1.4.0", protocol_version: "1" }.merge(changes)
     )

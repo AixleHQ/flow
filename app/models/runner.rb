@@ -40,6 +40,9 @@ class Runner < ApplicationRecord
   # runner's row. Issuers lock that row first (Runners::Credentials.lock_live_runner!),
   # so no pair issued concurrently survives the revocation.
   after_save :revoke_credentials, if: -> { saved_change_to_status?(to: "revoked") }
+  # §9.3: and its sessions end once that has committed, since failing a session
+  # takes locks of its own and wakes workflows.
+  after_save :end_sessions, if: -> { saved_change_to_status?(to: "revoked") }
 
   validates :created_by, presence: true, on: :create
   validates :name, presence: true
@@ -80,11 +83,26 @@ class Runner < ApplicationRecord
     project ? "#{company.name}/#{project.name}" : company.name
   end
 
+  # A `manual` runner's machines busy/total (§11): busy holds a session, total
+  # is every machine not `gone`, `failed` and `resetting` ones included. Counted
+  # over the loaded machines, so a list loads them with `includes(:environments)`.
+  # Nil for another type.
+  def machine_counts
+    return unless manual?
+
+    live = environments.reject(&:gone?)
+    { busy: live.count(&:busy?), total: live.size }
+  end
+
   private
 
   def revoke_credentials
     now = Time.current
     credentials.unrevoked.update_all(revoked_at: now, updated_at: now)
+  end
+
+  def end_sessions
+    ActiveRecord.after_all_transactions_commit { Runners::Revocation.end_sessions!(self) }
   end
 
   def default_reuse_policy

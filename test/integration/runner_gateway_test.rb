@@ -30,6 +30,7 @@ class RunnerGatewayTest < ActionDispatch::IntegrationTest
                  body["environment"])
     assert_equal %w[registered linux amd64 1.4.0], [ environment.origin, environment.os, environment.arch, environment.runner_version ]
     assert_equal({ "docker" => "27.1.0" }, environment.facts)
+    assert_equal "127.0.0.1", environment.first_seen_ip
     assert_equal "no-store", response.headers["Cache-Control"]
     assert_nil response.headers["Set-Cookie"]
     assert_equal environment, Runners::Credentials.usable(body["access_token"], kind: :access).runner_environment

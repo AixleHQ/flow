@@ -42,6 +42,8 @@ export interface RunnerPaths {
   registrationToken: (id: number) => string;
   /** POST: Return to service, a reset of a failed machine (§5.2). */
   returnToService: (id: number, machineId: number) => string;
+  /** POST: Revoke one machine, which ends the session it holds (§9.3). */
+  revokeMachine: (id: number, machineId: number) => string;
 }
 
 export const schemaTypes = (schema: JsonSchema): string[] =>

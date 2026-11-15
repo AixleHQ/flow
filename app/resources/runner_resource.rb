@@ -36,4 +36,11 @@ class RunnerResource < ApplicationResource
   attribute :created_by_name do |runner|
     runner.created_by&.name
   end
+
+  # A `manual` runner's machines busy/total (DESIGN.md §11), from the
+  # machines the list loaded (`includes(:environments)`).
+  typelize "{ busy: number; total: number } | null"
+  attribute :machines do |runner|
+    runner.machine_counts
+  end
 end

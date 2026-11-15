@@ -254,6 +254,26 @@ class RunnerTest < ActiveSupport::TestCase
     assert Integration.exists?(integration.id)
   end
 
+  test "machine_counts: busy holds a session, total is every machine that is not gone" do
+    runner = create(:runner, :manual)
+    other = create(:runner, :manual)
+    busy = create(:runner_environment, runner: runner)
+    create(:runner_session, :holding, environment: busy)
+    create(:runner_environment, runner: runner)
+    failed = create(:runner_environment, runner: runner)
+    Runners::Machines.fail!(failed, "boom")
+    create(:runner_environment, runner: runner, state: :gone)
+
+    counts = Runner.includes(:environments).where(id: [ runner.id, other.id ]).index_by(&:id)
+
+    assert_equal({ busy: 1, total: 3 }, counts[runner.id].machine_counts)
+    assert_equal({ busy: 0, total: 0 }, counts[other.id].machine_counts)
+  end
+
+  test "machine_counts is nil for a runner that is not manual" do
+    assert_nil build(:runner, :kubernetes).machine_counts
+  end
+
   test "not_seen_since holds the runners never seen or last seen before the time" do
     now = Time.current
     never = create(:runner, company: @company, created_by: @user)

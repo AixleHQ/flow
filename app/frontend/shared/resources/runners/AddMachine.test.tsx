@@ -16,6 +16,7 @@ const paths: RunnerPaths = {
   revoke: (id) => `/company/settings/runners/${id}/revoke`,
   registrationToken: (id) => `/company/settings/runners/${id}/registration_token`,
   returnToService: (id, machineId) => `/company/settings/runners/${id}/machines/${machineId}/return_to_service`,
+  revokeMachine: (id, machineId) => `/company/settings/runners/${id}/machines/${machineId}/revoke`,
 };
 
 const registration = {

@@ -235,4 +235,25 @@ class Web::Company::Projects::RunnersControllerTest < ActionDispatch::Integratio
     assert_response :not_found
     assert_equal "failed", machine.reload.state
   end
+
+  test "only someone who manages the project's runners revokes one of its machines" do
+    machine = create(:runner_environment, runner: @own)
+
+    assert_role_matrix(MANAGE_ROLES, transport: :web) do |role|
+      post revoke_company_project_runner_machine_path(@project, @own, machine)
+      machine.reload.update!(state: :registered) if role == :owner
+    end
+
+    assert machine.reload.gone?
+  end
+
+  test "nobody revokes a machine of a company runner from a project page" do
+    machine = create(:runner_environment, runner: @company_runner)
+    sign_in_as(@admin)
+
+    post revoke_company_project_runner_machine_path(@project, @company_runner, machine)
+
+    assert_response :not_found
+    assert machine.reload.registered?
+  end
 end

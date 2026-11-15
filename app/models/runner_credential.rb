@@ -19,6 +19,8 @@ class RunnerCredential < ApplicationRecord
   belongs_to :company
   belongs_to :runner_environment, optional: true
   belongs_to :rotated_from, class_name: "RunnerCredential", optional: true
+  # The user who minted a registration token; null for the rest, and once the user is deleted.
+  belongs_to :created_by, class_name: "User", optional: true
 
   before_validation { self.company_id ||= runner&.company_id }
 

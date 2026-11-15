@@ -13,6 +13,7 @@ const runners = [
     status: 'degraded',
     statusReason: 'Docker daemon not reachable',
     lastSeenAt: '2026-10-27T09:30:00Z',
+    machines: { busy: 1, total: 3 },
   }),
 ];
 
@@ -38,6 +39,7 @@ describe('Company/Settings/RunnersPage', () => {
     expect(within(row).getByText('Degraded')).toBeInTheDocument();
     expect(within(row).getByText('Docker daemon not reachable')).toBeInTheDocument();
     expect(within(row).queryByText('Never')).not.toBeInTheDocument();
+    expect(within(row).getByText('1/3')).toBeInTheDocument();
   });
 
   it('opens the new-runner form for someone who may manage runners', async () => {

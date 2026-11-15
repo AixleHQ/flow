@@ -41,7 +41,7 @@ describe('Company/Settings/RunnerPage', () => {
     expect(screen.getByText('container.network')).toBeInTheDocument();
   });
 
-  it('lists the machines of a manual runner, read-only', () => {
+  it('lists the machines of a manual runner, with Revoke on each', () => {
     render({
       machines: [
         {
@@ -54,6 +54,8 @@ describe('Company/Settings/RunnerPage', () => {
           stateReason: null,
           lastHeartbeatAt: '2026-11-12T10:00:00Z',
           createdAt: '2026-11-12T09:00:00Z',
+          firstSeenIp: '203.0.113.7',
+          createdByName: 'Grace Hopper',
           state: 'idle',
         },
       ],
@@ -62,7 +64,9 @@ describe('Company/Settings/RunnerPage', () => {
     const machines = screen.getByRole('table', { name: 'Machines' });
     expect(within(machines).getByText('mac-studio')).toBeInTheDocument();
     expect(within(machines).getByText('Idle')).toBeInTheDocument();
-    expect(within(machines).queryByRole('button')).not.toBeInTheDocument();
+    expect(within(machines).getByText('203.0.113.7')).toBeInTheDocument();
+    expect(within(machines).getAllByRole('button')).toHaveLength(1);
+    expect(within(machines).getByRole('button', { name: 'Revoke' })).toBeInTheDocument();
   });
 
   it('disables a runner for someone who may manage it', async () => {
