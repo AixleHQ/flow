@@ -33,6 +33,11 @@ class CompanyMembership < ApplicationRecord
   # breaks ties.
   scope :default_order, -> { order(Arel.sql("accepted_at ASC NULLS FIRST"), :id) }
 
+  # Every membership still on the books: invited, active or suspended.
+  scope :not_revoked, -> { where.not(state: "revoked") }
+  # Invited, suspended or revoked: everything but a member in good standing.
+  scope :not_active, -> { where.not(state: "active") }
+
   # Per-company role lives ONLY here (platform-level super_admin is users.super_admin)
   enumerize :role, in: %i[employee admin viewer], default: :employee, predicates: true, scope: true
   enumerize :position, in: POSITIONS, predicates: true

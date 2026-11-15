@@ -157,7 +157,7 @@ class Workflow < ApplicationRecord
   end
 
   def has_active_runs?
-    runs.where(state: %w[running paused]).exists?
+    runs.in_progress.exists?
   end
 
   def scope_indicator

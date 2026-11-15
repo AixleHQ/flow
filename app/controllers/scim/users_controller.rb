@@ -29,6 +29,6 @@ class Scim::UsersController < Scimitar::ActiveRecordBackedResourcesController
     company = ScimCurrent.company
     raise Scimitar::AuthenticationError if company.nil?
 
-    CompanyMembership.where(company: company).where.not(state: "revoked")
+    CompanyMembership.where(company: company).not_revoked
   end
 end

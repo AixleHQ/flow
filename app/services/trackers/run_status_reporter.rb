@@ -58,7 +58,7 @@ module Trackers
     end
 
     def failure_summary(run)
-      step = run.step_runs.where(state: "failed").order(:updated_at).last
+      step = run.step_runs.with_state(:failed).order(:updated_at).last
       [ step&.step&.name, step&.error_message.to_s.truncate(300).presence ].compact.join(": ").presence ||
         run.failure_reason.to_s.humanize.presence
     end

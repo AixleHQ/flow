@@ -105,7 +105,7 @@ class SessionAdmissionService
         admission = session.session_admission&.lock!
         next unless admission
         admission.update!(stop_requested_at: admission.stop_requested_at || Time.current)
-        verdict = session.reload.state.in?(TerminalSession::TERMINAL_STATES) ? nil : outcome
+        verdict = session.reload.ended? ? nil : outcome
         if admission.admitted_at.nil? || (admission.launch_state == "pending" && admission.claimed_at.nil?)
           close_queued!(admission, verdict)
         elsif verdict
@@ -126,7 +126,7 @@ class SessionAdmissionService
         next false unless admission
 
         session.lock!
-        next false if session.state.in?(TerminalSession::TERMINAL_STATES) || !yield(session)
+        next false if session.ended? || !yield(session)
 
         admission.update!(stop_requested_at: admission.stop_requested_at || Time.current)
         session.update!(error_message: error_message) if error_message.present?
@@ -200,7 +200,7 @@ class SessionAdmissionService
 
     def ensure_run_active!(session)
       run = session.step_run&.workflow_run
-      raise Stopped, "Workflow cancelled" if run && (run.stop_requested_at || run.state.in?(%w[cancelled failed completed]))
+      raise Stopped, "Workflow cancelled" if run && (run.stop_requested? || run.ended?)
     end
 
     private

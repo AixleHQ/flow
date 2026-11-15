@@ -47,7 +47,7 @@ module Sessions
       def self.applies_to?(session)
         settled_step?(session) &&
           session.mode == "non_interactive" &&
-          session.state == "ready" &&
+          session.ready? &&
           !Sessions::AuthPause.paused?(session)
       end
 

@@ -189,7 +189,7 @@ module Jira
     def after_connect(integration)
       Trackers::Provisioning.ensure_for!(integration)
       covered = Array(integration.settings.to_h["jira_projects"]).map { |p| p["id"].to_s }
-      integration.project_trackers.where.not(status: "detached").where.not(external_scope_id: covered).find_each(&:detach!)
+      integration.project_trackers.attached.where.not(external_scope_id: covered).find_each(&:detach!)
       if integration.settings.to_h["auth_mode"] == "service_account" || awaited?(integration)
         Trackers::Jira::Subscriptions.new(integration).ensure!
       end

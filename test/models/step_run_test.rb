@@ -59,4 +59,13 @@ class StepRunTest < ActiveSupport::TestCase
     @step_run.reload
     assert_nil @step_run.error_category
   end
+
+  test "unfinished covers pending, running and waiting_input steps only" do
+    run = create(:workflow_run)
+    steps = %w[pending running waiting_input completed failed skipped cancelled].index_with do |state|
+      create(:step_run, workflow_run: run).tap { |step_run| step_run.update_columns(state: state) }
+    end
+
+    assert_equal %w[pending running waiting_input].map { |s| steps[s].id }.sort, run.step_runs.unfinished.pluck(:id).sort
+  end
 end
