@@ -54,7 +54,7 @@ class CompanySessionCostTokenUsageService
   attr_reader :company, :user, :scope, :range, :period
 
   def base_sessions
-    scope_sessions.where(created_at: range, session_type: AnalyticsPeriod::USAGE_SESSION_TYPES)
+    scope_sessions.work_sessions.where(created_at: range)
   end
 
   def scope_sessions

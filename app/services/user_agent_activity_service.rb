@@ -45,7 +45,7 @@ class UserAgentActivityService
     scope = user.terminal_sessions
                 .joins(:project)
                 .where(projects: { company_id: company.id })
-                .where(created_at: range, session_type: AnalyticsPeriod::USAGE_SESSION_TYPES)
+                .work_sessions.where(created_at: range)
     project_id ? scope.where(project_id:) : scope
   end
 end

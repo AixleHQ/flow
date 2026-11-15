@@ -53,9 +53,6 @@
 module Activities
   module Container
     class SweepOrphanedResourcesActivity < ::Activities::Base
-      # A session in any of these states may still be using its objects.
-      LIVE_STATES = %w[not_started running ready finishing].freeze
-
       # Startup takes tens of seconds (pod schedule + image pull + readiness +
       # Traefik route propagation), and teardown is a handful of API calls. Fifteen
       # minutes is an order of magnitude clear of both, which is the point: the
@@ -74,7 +71,7 @@ module Activities
         reapable, kept = owned.partition { |resource| reapable?(sessions[resource.route_token], cutoff) }
         # Everything in `kept` has a session row — a missing one is reapable —
         # so the split below is safe to index without a nil guard.
-        live, finalizing = kept.partition { |resource| LIVE_STATES.include?(sessions[resource.route_token].state) }
+        live, finalizing = kept.partition { |resource| sessions[resource.route_token].using_runtime? }
 
         deleted, failed = reap(reapable, sessions)
 
@@ -114,7 +111,7 @@ module Activities
       # the node-died case the sweep exists for.
       def reapable?(session, cutoff)
         return true if session.nil?
-        return false if LIVE_STATES.include?(session.state)
+        return false if session.using_runtime?
 
         finalized_at = session.finished_at || session.updated_at
         finalized_at.present? && finalized_at < cutoff

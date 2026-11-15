@@ -41,7 +41,7 @@ class UserSessionCostTokenUsageService
   def base_sessions
     scope = user.terminal_sessions
                 .where(company_id: company.id)
-                .where(created_at: range, session_type: AnalyticsPeriod::USAGE_SESSION_TYPES)
+                .work_sessions.where(created_at: range)
     project_id ? scope.where(project_id:) : scope
   end
 end
