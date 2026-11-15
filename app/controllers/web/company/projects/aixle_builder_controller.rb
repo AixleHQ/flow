@@ -15,7 +15,7 @@ class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::A
                        .order(created_at: :desc)
                        .limit(20)
 
-    active_session = sessions.find { |s| %w[not_started queued running ready].include?(s.state) }
+    active_session = sessions.find(&:active?)
 
     render inertia: "Projects/AixleBuilder/LandingPage", props: {
       sessions: -> { sessions.map { |s| TerminalSessionResource.new(s, params: { viewer: current_user }).to_h } },

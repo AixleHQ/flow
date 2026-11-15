@@ -1134,7 +1134,7 @@ module Agents
       connected = block.present? && block["credential_process"].present?
       # An auth container gets the vending env even with no connection: reporting that
       # none exists is the helper's whole job there.
-      return {} unless connected || session.session_type == "auth_setup"
+      return {} unless connected || session.auth_setup?
 
       {
         "AIXLE_CLOUD_CREDENTIALS_URL" => callbacks[:cloud_credentials],

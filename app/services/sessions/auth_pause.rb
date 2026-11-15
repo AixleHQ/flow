@@ -273,7 +273,7 @@ module Sessions
     end
 
     def interactive_session?
-      session.session_type != "workflow_step"
+      !session.workflow_step?
     end
 
     # The jsonb writes skip callbacks, so the session's page would not hear about them.

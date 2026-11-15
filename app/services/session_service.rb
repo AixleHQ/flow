@@ -87,7 +87,7 @@ class SessionService
         raise SessionAdmissionService::Stopped, "Company membership revoked"
       end
       preflight_company_active!(SessionCompany.company_for(session))
-      if session.session_type != "auth_setup" && session.session_credential.nil?
+      if !session.auth_setup? && session.session_credential.nil?
         raise SessionAdmissionService::Stopped, "Agent credential unavailable"
       end
       preflight_oauth!(session.user, session.mcp_server_ids)
@@ -200,7 +200,7 @@ class SessionService
         step_run.lock!
         step_run.terminal_session || begin
           run = step_run.workflow_run
-          raise SessionAdmissionService::Stopped, "Workflow cancelled" if run.stop_requested_at || run.state == "cancelled"
+          raise SessionAdmissionService::Stopped, "Workflow cancelled" if run.stopped?
           preflight_company_active!(run.project&.company)
           # Before the build, like the credential preflight: a refused runner
           # leaves no session behind (LaunchStepSessionActivity fails the step).
@@ -408,7 +408,7 @@ class SessionService
     # so without it the "is another container holding these tokens?" test would find this
     # session and refuse every launch it was asked to check.
     def preflight_agent_credential!(user, company, agent_type, session_type: nil, excluding_session_id: nil)
-      return if session_type == "auth_setup"
+      return if TerminalSession.auth_setup_type?(session_type)
       return unless agent_type.present? && company.present?
 
       credentials = AgentCredential.where(user_id: user.id, company_id: company.id)

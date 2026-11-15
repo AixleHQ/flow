@@ -23,8 +23,6 @@ module PersonalTools
       runner["type"] = %w[integer null]
     end
 
-    ACTIVE_RUN_STATES = %w[pending running paused].freeze
-
     def execute
       project = find_project!
       authorize!(project, :trigger_workflow?, policy: Api::V1::Projects::Board::TasksPolicy, project: project)
@@ -69,7 +67,7 @@ module PersonalTools
     def runner_pick = params.key?(:runner_id) ? { runner_id: params[:runner_id] } : {}
 
     def active_run_for(task)
-      task.workflow_runs.where(state: ACTIVE_RUN_STATES).order(created_at: :desc).first
+      task.workflow_runs.active.order(created_at: :desc).first
     end
   end
 end

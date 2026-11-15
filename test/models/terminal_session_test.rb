@@ -608,4 +608,66 @@ class TerminalSessionTest < ActiveSupport::TestCase
 
     assert_equal [ sessions["running"].id, sessions["finishing"].id ].sort, ids.sort
   end
+
+  test "concluded? is true for finished and failed, not for cancelled" do
+    assert TerminalSession.new(state: "finished").concluded?
+    assert TerminalSession.new(state: "failed").concluded?
+    %w[not_started queued running ready finishing cancelled].each do |state|
+      assert_not TerminalSession.new(state: state).concluded?, state
+    end
+  end
+
+  test "aborted? is true for failed and cancelled, not for finished" do
+    assert TerminalSession.new(state: "failed").aborted?
+    assert TerminalSession.new(state: "cancelled").aborted?
+    %w[not_started queued running ready finishing finished].each do |state|
+      assert_not TerminalSession.new(state: state).aborted?, state
+    end
+  end
+
+  test "deletable? is true for a session not started or ended, not for one in flight" do
+    %w[not_started finished failed cancelled].each do |state|
+      assert TerminalSession.new(state: state).deletable?, state
+    end
+    %w[queued running ready finishing].each do |state|
+      assert_not TerminalSession.new(state: state).deletable?, state
+    end
+  end
+
+  test "auth_setup? and auth_setup_type? are true for an auth_setup session only" do
+    assert TerminalSession.new(session_type: "auth_setup").auth_setup?
+    assert TerminalSession.auth_setup_type?("auth_setup")
+    assert_not TerminalSession.new(session_type: "agent_session").auth_setup?
+    assert_not TerminalSession.auth_setup_type?(nil)
+  end
+
+  test "agent_session? is true for an agent session only" do
+    assert TerminalSession.new(session_type: "agent_session").agent_session?
+    assert_not TerminalSession.new(session_type: "workflow_step").agent_session?
+  end
+
+  test "workflow_step_type? is true for workflow_step only" do
+    assert TerminalSession.workflow_step_type?("workflow_step")
+    assert_not TerminalSession.workflow_step_type?("agent_session")
+    assert_not TerminalSession.workflow_step_type?(nil)
+  end
+
+  test "the state scopes split sessions into ended, not ended and container up" do
+    sessions = %w[queued running ready finishing finished failed cancelled].index_with do |state|
+      create(:terminal_session, :with_user).tap { |session| session.update_columns(state: state) }
+    end
+    scope = TerminalSession.where(id: sessions.values.map(&:id))
+
+    assert_equal %w[finished failed cancelled].map { |s| sessions[s].id }.sort, scope.ended.pluck(:id).sort
+    assert_equal %w[running ready].map { |s| sessions[s].id }.sort, scope.container_up.pluck(:id).sort
+  end
+
+  test "the type scopes pick workflow steps and leave out auth setups" do
+    step = create(:terminal_session, :with_user).tap { |session| session.update_columns(session_type: "workflow_step") }
+    auth = create(:terminal_session, :with_user).tap { |session| session.update_columns(session_type: "auth_setup") }
+    scope = TerminalSession.where(id: [ step.id, auth.id ])
+
+    assert_equal [ step.id ], scope.workflow_steps.pluck(:id)
+    assert_equal [ step.id ], scope.not_auth_sessions.pluck(:id)
+  end
 end

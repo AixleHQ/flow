@@ -155,7 +155,7 @@ class Web::ProfileController < Web::ApplicationController
               .with_cached_resource_counts
               .includes(:user, :project, :session_admission,
                         :tools, :skills, :mcp_servers, :input_assets, :repositories, :config_items, :runner)
-              .where.not(session_type: "auth_setup")
+              .not_auth_sessions
               .order(created_at: :desc)
               .limit(per_page)
               .map { |s| TerminalSessionResource.new(s, params: { viewer: current_user }).to_h }
@@ -224,7 +224,7 @@ class Web::ProfileController < Web::ApplicationController
 
   # Leaving a company you own projects in hands them over first.
   def project_handovers
-    current_user.company_memberships.where.not(state: "revoked")
+    current_user.company_memberships.not_revoked
                 .where(company_id: current_user.owned_projects.select(:company_id))
                 .includes(:company).map do |m|
       { membership_id: m.id, **ProjectHandover.for_company(m.company, owner: current_user) }

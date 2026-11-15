@@ -7,7 +7,7 @@ module Tools
   module InjectionRules
     RULES = {
       # kind :workflow — board_*, list_sub_steps, mark_sub_step, chat_post_message
-      workflow_step_session: ->(ctx) { ctx.session_type == "workflow_step" },
+      workflow_step_session: ->(ctx) { TerminalSession.workflow_step_type?(ctx.session_type) },
       # kind :internal — read_tool_result, needed to poll async container tools
       container_tools_present: ->(ctx) { ctx.candidate_tools.any? { |t| t.execution_mode.container? } },
       # kind :internal — finish_session/fail_session lifecycle tools

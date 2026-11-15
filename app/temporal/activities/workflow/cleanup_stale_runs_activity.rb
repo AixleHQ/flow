@@ -59,7 +59,7 @@ module Activities
       end
 
       def mark_stopped(run)
-        return if run.stop_requested_at
+        return if run.stop_requested?
 
         SessionAdmissionService.transaction do
           run.lock!
