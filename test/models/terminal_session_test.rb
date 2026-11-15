@@ -608,4 +608,15 @@ class TerminalSessionTest < ActiveSupport::TestCase
 
     assert_equal [ sessions["running"].id, sessions["finishing"].id ].sort, ids.sort
   end
+
+  test "mark_contact_lost! and clear_contact_lost! set and remove what contact_lost? reads" do
+    session = create(:terminal_session, user: @user)
+    assert_not session.contact_lost?
+
+    session.mark_contact_lost!(Time.current)
+    assert session.reload.contact_lost?
+
+    session.clear_contact_lost!
+    assert_not session.reload.contact_lost?
+  end
 end
