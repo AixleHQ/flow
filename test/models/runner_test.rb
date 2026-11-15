@@ -186,6 +186,14 @@ class RunnerTest < ActiveSupport::TestCase
     assert deleted.revoked?
   end
 
+  test "retired? is true for a revoked or deleted runner, and false for the others, disabled included" do
+    assert_not build(:runner).retired?
+    assert_not create(:runner, :manual, company: @company, created_by: @user).tap(&:disable!).retired?
+    assert create(:runner, :manual, company: @company, created_by: @user).tap(&:revoke!).retired?
+    assert create(:runner, :manual, company: @company, created_by: @user).tap(&:soft_delete!).retired?
+    assert Runner.new(deleted_at: Time.current).retired?
+  end
+
   # == the tenant rule (TenantScope) ==
 
   test "TenantScope owns the company's company-level runners and the project's own, deleted ones included" do

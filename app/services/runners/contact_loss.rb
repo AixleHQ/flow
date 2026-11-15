@@ -29,11 +29,14 @@ module Runners
     def fail_if_lapsed!(session, environment, now: Time.current)
       return false unless lapsed?(environment, now: now)
 
-      session.merge_jsonb!(:metadata, TerminalSession::CONTACT_LOST_KEY => now.iso8601)
-      release_machine(session) if session.runner.revoked? || session.runner.deleted?
+      session.mark_contact_lost!(now)
       # A compare-and-set: a session that finished or was cancelled meanwhile keeps its outcome.
       failed = SessionService.fail_session_if(session: session, expected_state: session.state, error_message: MESSAGE)
-      session.remove_jsonb_keys!(:metadata, TerminalSession::CONTACT_LOST_KEY) unless failed
+      if failed
+        release_machine(session) if session.runner.retired?
+      else
+        session.clear_contact_lost!
+      end
       failed
     end
 

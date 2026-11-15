@@ -254,7 +254,7 @@ module Runners
     private_class_method :take!
 
     def refuse_revoked!(runner, session)
-      return unless runner.revoked? || runner.deleted?
+      return unless runner.retired?
 
       pick_from = session.workflow_step? ? "on the workflow" : "for the session"
       Resolver.check_status!(runner, pick_from)

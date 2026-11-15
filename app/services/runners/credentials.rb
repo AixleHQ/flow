@@ -191,7 +191,7 @@ module Runners
     # issuers of one runner run side by side; only the revocation waits.
     def lock_live_runner!(runner_id)
       runner = Runner.lock("FOR SHARE").find(runner_id)
-      raise Refused.new("runner_revoked", "The runner is revoked or deleted.") if runner.revoked? || runner.deleted?
+      raise Refused.new("runner_revoked", "The runner is revoked or deleted.") if runner.retired?
 
       runner
     end
