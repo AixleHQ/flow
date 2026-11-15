@@ -175,19 +175,6 @@ module Runners
       machines.find_each { |machine| settle_reset!(machine) }
     end
 
-    # Busy: holding a session. Total: registered and not `gone`, `failed` and
-    # `resetting` ones included. For the runners page and list (§11).
-    Counts = Data.define(:busy, :total)
-
-    def counts(runners)
-      ids = runners.map(&:id)
-      rows = RunnerEnvironment.where(runner_id: ids).where.not(state: "gone")
-                              .group(:runner_id)
-                              .pluck(:runner_id, Arel.sql("COUNT(*)"), Arel.sql("COUNT(current_session_id)"))
-      by_runner = rows.to_h { |runner_id, total, busy| [ runner_id, Counts.new(busy: busy, total: total) ] }
-      ids.to_h { |id| [ id, by_runner.fetch(id) { Counts.new(busy: 0, total: 0) } ] }
-    end
-
     def label(environment)
       environment.display_name.presence || environment.key
     end
@@ -232,11 +219,17 @@ module Runners
     end
     private_class_method :max_consecutive_failures
 
+    # The runner is locked first, in the one order every issuer and revoker
+    # uses (runner, then environment): a Revoke either waits for this
+    # acquisition and finds the hold it made, or commits first and the
+    # acquisition refuses a revoked or deleted runner with the Resolver's
+    # message (§9.3).
     def take!(session)
-      runner = session.runner
       # A savepoint of its own, so a lost race on the hold's unique index
       # leaves a caller's transaction usable for #acquire!'s second look.
       RunnerEnvironment.transaction(requires_new: true) do
+        runner = Runner.lock("FOR SHARE").find(session.runner_id)
+        refuse_revoked!(runner, session)
         environment = RunnerEnvironment.free.heard.where(runner_id: runner.id).order(:id)
                                        .lock("FOR UPDATE SKIP LOCKED").first
         if environment.nil?
@@ -259,5 +252,15 @@ module Runners
       end
     end
     private_class_method :take!
+
+    def refuse_revoked!(runner, session)
+      return unless runner.revoked? || runner.deleted?
+
+      pick_from = session.workflow_step? ? "on the workflow" : "for the session"
+      Resolver.check_status!(runner, pick_from)
+    rescue Resolver::Refused => e
+      raise NoMachine, e.message
+    end
+    private_class_method :refuse_revoked!
   end
 end

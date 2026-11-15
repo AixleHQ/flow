@@ -246,6 +246,37 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     assert waiting.session_admission.reload.released_at
   end
 
+  test "a session that finished or was cancelled before a machine or runner Revoke keeps its outcome" do
+    finished = launch
+    run_phases(finished, %w[pull_image create_container start_container exec])
+    finished.update_columns(state: "finished", error_message: nil)
+
+    Runners::Registration.revoke!(@machine)
+
+    assert_equal [ "finished", nil ], [ finished.reload.state, finished.error_message ]
+
+    other = create(:runner_environment, runner: @runner)
+    cancelled = create(:runner_session, :holding, environment: other)
+    cancelled.update_columns(state: "cancelled")
+
+    @runner.revoke!
+
+    assert_equal [ "cancelled", nil ], [ cancelled.reload.state, cancelled.error_message ]
+  end
+
+  test "a session the fan-out cannot end is reported to Sentry and the others still end" do
+    broken = create(:runner_session, :holding, environment: @machine)
+    other_machine = create(:runner_environment, runner: @runner)
+    fine = create(:runner_session, :holding, environment: other_machine)
+    SessionService.stubs(:fail_session_if).with { |args| args[:session].id == broken.id }.raises(StandardError, "boom")
+    SessionService.stubs(:fail_session_if).with { |args| args[:session].id == fine.id }.returns(true)
+    Sentry.expects(:capture_exception).with(instance_of(StandardError), extra: { runner_id: @runner.id, session_id: broken.id }).once
+
+    @runner.revoke!
+
+    assert_nil other_machine.reload.current_session_id
+  end
+
   test "deleting a runner ends its sessions as a revoke does" do
     session = launch
     run_phases(session, %w[pull_image create_container start_container exec])

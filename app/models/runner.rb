@@ -83,6 +83,17 @@ class Runner < ApplicationRecord
     project ? "#{company.name}/#{project.name}" : company.name
   end
 
+  # A `manual` runner's machines busy/total (§11): busy holds a session, total
+  # is every machine not `gone`, `failed` and `resetting` ones included. Counted
+  # over the loaded machines, so a list loads them with `includes(:environments)`.
+  # Nil for another type.
+  def machine_counts
+    return unless manual?
+
+    live = environments.reject(&:gone?)
+    { busy: live.count(&:busy?), total: live.size }
+  end
+
   private
 
   def revoke_credentials

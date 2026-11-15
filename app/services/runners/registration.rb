@@ -82,7 +82,7 @@ module Runners
     # Revoke of one machine from the platform (§9.3): what `unregister!` does,
     # for a machine in any state but `gone`. False for one already `gone`.
     def revoke!(environment)
-      return false if RunnerEnvironment.where(id: environment.id, state: "gone").exists?
+      return false if RunnerEnvironment.gone.exists?(environment.id)
 
       unregister!(environment, ended_by: "revoked")
       true
@@ -104,9 +104,10 @@ module Runners
 
     def end_session(environment, session_id, ended_by)
       session = TerminalSession.find_by(id: session_id)
-      return if session.nil? || session.state.in?(TerminalSession::TERMINAL_STATES)
+      return if session.nil?
 
-      SessionService.fail_session(
+      # A compare-and-set: a session that finished or was cancelled meanwhile keeps its outcome.
+      SessionService.fail_session_if(
         session: session,
         error_message: "Machine \"#{Machines.label(environment)}\" of runner \"#{environment.runner.name}\" was #{ended_by}."
       )

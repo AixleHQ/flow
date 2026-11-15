@@ -51,6 +51,7 @@ class RunnerEnvironment < ApplicationRecord
   has_many :credentials, class_name: "RunnerCredential", inverse_of: :runner_environment
 
   scope :free, -> { where(state: "registered", current_session_id: nil) }
+  scope :holding_session, -> { where.not(current_session_id: nil) }
   scope :heard, ->(now = Time.current) { where(last_heartbeat_at: (now - ONLINE_WINDOW)..) }
   # Never heard, or last heard at or before `time`.
   scope :not_heard_since, ->(time) { where(last_heartbeat_at: nil).or(where(arel_table[:last_heartbeat_at].lteq(time))) }
@@ -66,6 +67,11 @@ class RunnerEnvironment < ApplicationRecord
   validate :facts_is_an_object
   validate :company_matches_runner, if: -> { runner && company_id }
 
+  # Holds a session. A `registered` machine that is not busy is free.
+  def busy?
+    current_session_id.present?
+  end
+
   def heard?(now = Time.current, within: ONLINE_WINDOW)
     last_heartbeat_at.present? && last_heartbeat_at >= now - within
   end
@@ -77,7 +83,7 @@ class RunnerEnvironment < ApplicationRecord
     return state.to_s unless registered?
     return "offline" unless heard?(now)
 
-    current_session_id ? "online" : "idle"
+    busy? ? "online" : "idle"
   end
 
   private

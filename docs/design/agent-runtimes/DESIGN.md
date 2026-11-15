@@ -3325,7 +3325,7 @@ and the pages `Company/Settings/RunnersPage`, `Company/Settings/RunnerPage`,
   `register`) and "Added by" (`created_by`, the user who minted the registration token), a dash
   for a machine registered before they were recorded (no backfill, §12.2), and a Revoke button on
   every machine that is not `gone`, with a confirmation. The runners list has a "Machines
-  busy/total" column for a `manual` runner (`RunnerResource#machines`, `Runners::Machines.counts`):
+  busy/total" column for a `manual` runner (`RunnerResource#machines`, from `Runner#machine_counts` over the loaded machines):
   busy is holding a session, total is every machine that is not `gone`.
 
 **What v1 has so far (§15 task 4).** Behind the same flag, the selects and the badges, built from

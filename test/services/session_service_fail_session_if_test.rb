@@ -78,4 +78,45 @@ class SessionServiceFailSessionIfTest < ActiveSupport::TestCase
     assert_equal "stuck", session.error_message
     assert_not_nil admission.reload.stop_requested_at
   end
+
+  # A revoked runner or machine ends a session whatever it is doing, but never one that has
+  # ended meanwhile: the condition is "not finished, failed or cancelled", not one state.
+  test "without an expected state, a session in any unfinished state is failed" do
+    session = ready_session
+    TerminalSession.find(session.id).update_columns(state: "finishing")
+    TemporalService.expects(:send_signal).once
+
+    assert SessionService.fail_session_if(session: session, error_message: "revoked")
+
+    assert_equal [ "failed", "revoked" ], [ session.reload.state, session.error_message ]
+  end
+
+  %w[finished cancelled failed].each do |outcome|
+    test "without an expected state, a stale copy of a session that is now #{outcome} keeps its outcome and message" do
+      session = ready_session
+      TerminalSession.find(session.id).update_columns(state: outcome, error_message: "its own")
+      TemporalService.expects(:send_signal).never
+
+      refute SessionService.fail_session_if(session: session, error_message: "revoked")
+
+      assert_equal [ outcome, "its own" ], [ session.reload.state, session.error_message ]
+    end
+  end
+
+  test "without an expected state, an admitted session that has ended keeps its outcome" do
+    with_scope_defaults(project: 1)
+    session = create(:terminal_session, user: @user, project: @project)
+    SessionAdmissionService.enqueue!(session)
+    SessionAdmissionService.drain!
+    session.session_admission.reload.update!(launch_state: "claimed", claimed_at: Time.current)
+    session.update_columns(state: "ready")
+    stale = TerminalSession.find(session.id)
+    session.update_columns(state: "cancelled")
+    TemporalService.stubs(:cancel_workflow)
+
+    refute SessionService.fail_session_if(session: stale, error_message: "revoked")
+
+    assert_equal "cancelled", session.reload.state
+    assert_nil session.error_message
+  end
 end
