@@ -44,6 +44,13 @@ module Runners
       health("degraded", degraded_reason(offline, failed))
     end
 
+    # `:running` while the machine is heard (RunnerEnvironment::ONLINE_WINDOW, as
+    # Liveness counts it), `:unknown` after. Never `:missing`: a machine that
+    # is powered off cannot be told from one that was removed (§5.1).
+    def observe(environment, now: Time.current)
+      environment.heard?(now) ? :running : :unknown
+    end
+
     private
 
     def health(status, reason = nil) = Health.new(status: status, reason: reason&.truncate(REASON_LIMIT))

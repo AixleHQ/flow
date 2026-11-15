@@ -352,6 +352,114 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     assert_empty @hosted.execs
   end
 
+  # == A machine that stops answering (DESIGN.md §6.7) ==
+
+  def scan = Activities::Session::ScanDeadContainersActivity.new.run
+
+  def running_session
+    session = launch
+    run_phases(session, %w[pull_image create_container start_container exec])
+    session.update_columns(started_at: 1.hour.ago)
+    @host_runner.operations.clear
+    session
+  end
+
+  test "the scan sends no status op to a machine that is not heard, and the session goes on within the grace" do
+    session = running_session
+    @machine.update_columns(last_heartbeat_at: 5.minutes.ago)
+
+    result = scan
+
+    assert_empty @host_runner.operations, "no op for a machine that is not heard"
+    assert_equal 0, result[:failed]
+    assert_equal "ready", session.reload.state
+  end
+
+  test "a machine back within the grace with its agent running leaves the session going, and one whose agent exited fails it as dead" do
+    session = running_session
+    @machine.update_columns(last_heartbeat_at: 14.minutes.ago)
+    scan
+    @machine.update_columns(last_heartbeat_at: Time.current)
+
+    scan
+
+    assert_equal "ready", session.reload.state
+    assert_equal %w[status], @host_runner.ops
+
+    @host_runner.machine.exit!(137)
+    scan
+    travel(Activities::Session::ScanDeadContainersActivity::CONFIRMATION_DELAY + 1.minute) do
+      @machine.update_columns(last_heartbeat_at: Time.current)
+      scan
+    end
+
+    assert_equal "failed", session.reload.state
+    assert_match(/stopped before the session finished/, session.error_message)
+  end
+
+  test "a machine not heard for 15 minutes fails the session, which keeps its machine until the machine is heard again" do
+    session = running_session
+    admission = session.session_admission.reload
+    @machine.update_columns(last_heartbeat_at: 16.minutes.ago)
+
+    result = scan
+
+    assert_equal 1, result[:failed]
+    assert_equal "failed", session.reload.state
+    assert_equal "Runner environment lost contact for 15 minutes.", session.error_message
+    assert session.contact_lost?
+    assert_equal "offline", @machine.reload.display_state
+
+    cleaned = run_phase(session, "cleanup")
+
+    assert cleaned[:cleanup_pending], "the cleanup waits for the machine"
+    assert_empty @host_runner.operations, "nothing is sent to a machine that is away"
+    assert_equal session.id, @machine.reload.current_session_id, "the machine is still held"
+    assert_nil admission.reload.released_at, "the slot is kept"
+
+    @machine.update_columns(last_heartbeat_at: Time.current)
+    cleaned = run_phase(session, "cleanup")
+
+    assert_not cleaned.key?(:cleanup_pending), "cleanup left #{cleaned.inspect}"
+    assert_equal %w[container.stop env.reset], @host_runner.ops.last(2), "a failed session resets the machine"
+    assert_nil @machine.reload.current_session_id
+    assert_equal "idle", @machine.display_state
+    assert admission.reload.released_at, "the slot comes back with the machine"
+  end
+
+  test "a session whose machine is back just before the 15 minutes are up is not failed" do
+    session = running_session
+    @machine.update_columns(last_heartbeat_at: 14.minutes.ago)
+
+    assert_equal 0, scan[:failed]
+    assert_equal "ready", session.reload.state
+    assert_not session.contact_lost?
+  end
+
+  test "a session that is already finishing is left to finish when its machine is not heard" do
+    session = running_session
+    session.update_columns(state: "finishing", finishing_at: Time.current)
+    @machine.update_columns(last_heartbeat_at: 1.hour.ago)
+
+    assert_equal 0, scan[:failed]
+    assert_equal "finishing", session.reload.state
+  end
+
+  test "a session left running on a revoked runner fails by the grace and its slot is released then" do
+    session = running_session
+    admission = session.session_admission.reload
+    @runner.update_columns(status: "revoked")
+    @machine.update_columns(last_heartbeat_at: 16.minutes.ago)
+
+    assert_equal 1, scan[:failed]
+    assert_equal "Runner environment lost contact for 15 minutes.", session.reload.error_message
+    cleaned = run_phase(session, "cleanup")
+
+    assert_not cleaned.key?(:cleanup_pending), "cleanup left #{cleaned.inspect}"
+    assert_empty @host_runner.operations
+    assert admission.reload.released_at
+  end
+
   test "a hosted session in the same company stays on the hosted runtime" do
     session = with_feature(:external_runners, true, company: @company) do
       SessionService.create_and_start(user: @user, project: @project, session_type: "agent_session",

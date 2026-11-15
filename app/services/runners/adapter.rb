@@ -41,5 +41,11 @@ module Runners
     # The runner's health from what the platform already knows, with no
     # outbound call for a `manual` runner (§2.5, §5). Returns a Health.
     def check_health(_runner, now: Time.current) = raise(NotImplementedError)
+
+    # What the platform knows of a machine's session container without asking
+    # the machine (§5.1): `:running` while the machine is heard, `:unknown` when
+    # it is not, and `:missing` for a type that can tell a removed machine from
+    # one that is off. Runners::ContactLoss and the dead-container scan read it.
+    def observe(_environment, now: Time.current) = raise(NotImplementedError)
   end
 end

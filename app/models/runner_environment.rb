@@ -76,6 +76,11 @@ class RunnerEnvironment < ApplicationRecord
     last_heartbeat_at.present? && last_heartbeat_at >= now - within
   end
 
+  # Not heard for `period` or more. A machine never heard counts from its creation.
+  def silent_for?(period, now = Time.current)
+    (last_heartbeat_at || created_at) <= now - period
+  end
+
   # How the machine shows on the runner page (§2.5): `resetting`, `failed` and
   # `gone` as they are; a `registered` one is `offline` unless it is heard, else `online`
   # holding a session and `idle` without one.
