@@ -64,7 +64,7 @@ class RunListEntryResource < ApplicationResource
 
   typelize :number
   attribute :steps_completed do |run|
-    ordered_step_runs(run).count { |sr| sr.state.to_s == "completed" }
+    ordered_step_runs(run).count(&:completed?)
   end
 
   typelize :number

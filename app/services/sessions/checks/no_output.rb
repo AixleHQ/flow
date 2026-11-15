@@ -43,8 +43,8 @@ module Sessions
       SCREEN_CHANGED_AT_KEY = "screen_changed_at"
 
       def self.applies_to?(session)
-        session.session_type == "workflow_step" &&
-          session.state == "ready" &&
+        session.workflow_step? &&
+          session.ready? &&
           session.mode != "interactive" &&
           session.container_id.present? &&
           !Sessions::AuthPause.paused?(session)

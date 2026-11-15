@@ -15,7 +15,7 @@ class CompanyOverviewService
   def call
     Result.new(
       sessions_launched: sessions_scope.count,
-      sessions_running: sessions_scope.where(state: %w[running ready]).count,
+      sessions_running: sessions_scope.container_up.count,
       total_tokens: sessions_scope.sum(:total_tokens),
       session_seconds: sessions_scope.sum(Arel.sql(TerminalSession::DURATION_SECONDS_SQL)).to_i,
       workflows_count: workflows_scope.count,

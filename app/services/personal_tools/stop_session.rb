@@ -16,12 +16,10 @@ module PersonalTools
       param :reason, type: :string, description: "Recorded as the session's error message when forcing."
     end
 
-    STOPPABLE_STATES = %w[not_started queued running ready finishing].freeze
-
     def execute
       session = find_session!
       return error("Read-only members cannot stop sessions") if read_only_member?(session)
-      unless session.state.in?(STOPPABLE_STATES)
+      if session.ended?
         return error("Session #{session.id} is already #{session.state}")
       end
 

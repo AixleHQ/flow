@@ -204,7 +204,7 @@ module ContextBuilders
 
       completed_step_runs.each do |sr|
         prev_step = sr.step
-        icon = sr.state == "skipped" ? "⏭️" : "✅"
+        icon = sr.skipped? ? "⏭️" : "✅"
         lines << "### #{prev_step.position}. #{icon} #{prev_step.name} [#{sr.state}]"
 
         if sr.step_note.present?
@@ -212,11 +212,11 @@ module ContextBuilders
           lines << sr.step_note.truncate(500)
         end
 
-        completed_sub_runs = sr.sub_step_runs.select { |ssr| ssr.state.in?(%w[completed skipped]) }
+        completed_sub_runs = sr.sub_step_runs.select(&:done?)
         if completed_sub_runs.any?
           lines << ""
           completed_sub_runs.each do |ssr|
-            sub_icon = ssr.state == "skipped" ? "⏭️" : "✅"
+            sub_icon = ssr.skipped? ? "⏭️" : "✅"
             line = "- #{sub_icon} #{ssr.sub_step.name}"
             line += " — #{ssr.note.truncate(150)}" if ssr.note.present?
             lines << line
@@ -243,7 +243,8 @@ module ContextBuilders
     def completed_step_runs
       @completed_step_runs ||= begin
         completed = workflow_run.step_runs
-          .where(step_id: upstream_step_ids, state: %w[completed skipped])
+          .where(step_id: upstream_step_ids)
+          .done
         latest_ids = completed.group(:step_id).select("MAX(step_runs.id)")
 
         completed.where(id: latest_ids)

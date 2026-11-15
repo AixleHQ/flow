@@ -111,6 +111,15 @@ class WorkflowRun < ApplicationRecord
   }
 
   scope :active, -> { where(state: %w[pending running paused]) }
+  # Started and not yet ended: running or paused.
+  scope :underway, -> { where(state: %w[running paused]) }
+  # Failed or cancelled: it ended without finishing.
+  scope :aborted, -> { where(state: %w[failed cancelled]) }
+  scope :stop_requested, -> { where.not(stop_requested_at: nil) }
+  scope :not_stop_requested, -> { where(stop_requested_at: nil) }
+  # A stop was requested and the run has not failed or completed since: its steps
+  # may still be running (SessionAdmissionReconciler repairs the cancellation).
+  scope :cancellation_in_flight, -> { stop_requested.where(state: %w[running paused cancelled]) }
   # What the run cost: the usage of every session its step runs ran in. A session
   # shared by several step runs is counted once, which a JOIN would not do.
   scope :with_total_cost_cents, -> {
@@ -190,6 +199,22 @@ class WorkflowRun < ApplicationRecord
     waiting ? "queued" : state
   end
 
+  # Somebody asked for the run to stop (cancel was requested), whether or not it
+  # has reached `cancelled` yet.
+  def stop_requested?
+    stop_requested_at.present?
+  end
+
+  # Stop requested, or cancelled already: the run is being or has been stopped.
+  def stopped?
+    stop_requested? || cancelled?
+  end
+
+  # Completed, failed or cancelled.
+  def ended?
+    completed? || failed? || cancelled?
+  end
+
   def can_run_non_interactive?
     workflow.steps.not_deleted.all?(&:allow_non_interactive)
   end
@@ -202,12 +227,12 @@ class WorkflowRun < ApplicationRecord
   end
 
   def current_step_run
-    step_runs.where(state: %w[pending running waiting_input]).order(:created_at).last
+    step_runs.unfinished.order(:created_at).last
   end
 
   # Latest failed step the user may retry via API (current_step_run excludes failed — that caused 404 on retry).
   def latest_failed_step_run
-    step_runs.where(state: :failed).order(updated_at: :desc).first
+    step_runs.with_state(:failed).order(updated_at: :desc).first
   end
 
   # May `viewer` STEER this run — cancel it, or approve / retry / skip one of its

@@ -280,4 +280,32 @@ class WorkflowRunTest < ActiveSupport::TestCase
 
     assert run.valid?, run.errors.full_messages.to_sentence
   end
+
+  test "stop_requested?, stopped? and ended? read the stop marker and the state" do
+    assert_not WorkflowRun.new(state: "running").stop_requested?
+    assert WorkflowRun.new(state: "running", stop_requested_at: Time.current).stop_requested?
+
+    assert_not WorkflowRun.new(state: "running").stopped?
+    assert WorkflowRun.new(state: "running", stop_requested_at: Time.current).stopped?
+    assert WorkflowRun.new(state: "cancelled").stopped?
+    assert_not WorkflowRun.new(state: "failed").stopped?
+
+    %w[completed failed cancelled].each { |state| assert WorkflowRun.new(state: state).ended?, state }
+    %w[pending running paused].each { |state| assert_not WorkflowRun.new(state: state).ended?, state }
+  end
+
+  test "state and stop scopes pick the runs they name" do
+    runs = %w[pending running paused completed failed cancelled].index_with do |state|
+      create(:workflow_run, workflow: @workflow).tap { |run| run.update_columns(state: state) }
+    end
+    stopped = runs["running"].tap { |run| run.update_columns(stop_requested_at: Time.current) }
+    scope = WorkflowRun.where(id: runs.values.map(&:id))
+    ids = ->(*states) { states.map { |state| runs[state].id }.sort }
+
+    assert_equal ids.call("running", "paused"), scope.underway.pluck(:id).sort
+    assert_equal ids.call("failed", "cancelled"), scope.aborted.pluck(:id).sort
+    assert_equal [ stopped.id ], scope.stop_requested.pluck(:id)
+    assert_not_includes scope.not_stop_requested.pluck(:id), stopped.id
+    assert_equal [ stopped.id ], scope.cancellation_in_flight.pluck(:id)
+  end
 end

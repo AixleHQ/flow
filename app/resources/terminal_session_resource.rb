@@ -136,7 +136,7 @@ class TerminalSessionResource < ApplicationResource
   # as an empty state.
   typelize "string | null"
   attribute :terminal_log_url do |session|
-    next nil unless session.state.in?(%w[finished failed])
+    next nil unless session.concluded?
 
     "/api/v1/terminal_sessions/#{session.id}/terminal_log"
   end
@@ -145,7 +145,7 @@ class TerminalSessionResource < ApplicationResource
   attribute :watcher_url do |session|
     next nil if session.queued? || session.cancelled?
     next nil unless session.route_token.present?
-    next nil unless session.session_type == "auth_setup"
+    next nil unless session.auth_setup?
 
     with_ticket("#{Settings.traefik.http_base}/t/#{session.route_token}/fs", session)
   end
@@ -157,7 +157,7 @@ class TerminalSessionResource < ApplicationResource
   # false forever on this path.
   typelize :boolean
   attribute :cloud_connect_requested do |session|
-    next false unless session.session_type == "auth_setup"
+    next false unless session.auth_setup?
 
     session.metadata&.dig("cloud_connect_requested_at").present?
   end

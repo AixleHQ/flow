@@ -11,8 +11,9 @@ Runners are behind the `external_runners` feature flag: without it the pages
 do not exist for your company.
 
 This page covers adding machines to a `manual` runner and reading the
-machines list on its page, the reuse policy and Return to service. The rest of
-the manual runner's guide (health) is not written yet.
+machines list on its page, the reuse policy and Return to service, what you take
+on with a `manual` machine, what it reaches outbound and its known limits. The
+rest of the manual runner's guide (health) is not written yet.
 
 ---
 
@@ -204,6 +205,13 @@ extra mount with `:rw` and a host-path cache mount let the agent write to the
 machine outside Aixle's volumes. A scrub or a reset removes what Aixle wrote
 there, not what the agent wrote.
 
+The runner's form asks you to confirm each one. For every writable host mount
+(a writable home mount, an extra mount with `:rw`, a cache mount that is a path
+on the machine) it shows a checkbox, *I understand the agent can write to
+`<path>` on this machine*, and saves the choice in
+`container.acknowledged_writable_mounts`. A runner with a writable host mount
+that is not ticked is refused at the field.
+
 ### Revoking a machine
 
 **Revoke** in a machine's row removes a machine for good: a lost or compromised
@@ -266,6 +274,64 @@ nothing while it is offline.
   without waiting, revoke the machine.
 - **A revoked or deleted runner** never hears its machines again, so its session
   fails after the 15 minutes and its slot is released then.
+
+## What you take on with a `manual` machine
+
+The platform holds no credential into your machine, so what happens on it is
+yours to run and secure. Know this before you add one:
+
+- **The machine keeps the sessions' work between sessions.** Each session runs
+  in a new container, removed when the session ends together with its
+  credentials, agent home, MCP config, prompt and `/tmp`. Under **Reuse** (the
+  default) the workspace volume with the repository checkouts, the cache
+  volumes and the pulled images stay on the machine's disk. So the code of every
+  repository a session worked on stays there, readable by anyone with root or
+  `docker` access on the machine, and the next session starts from those
+  checkouts and caches. **Reset** wipes the workspace and cache volumes after
+  every session, at the cost of a fresh clone each time. A session that fails
+  gets a reset under either policy (see
+  [Reuse policy, scrub and Return to service](#reuse-policy-scrub-and-return-to-service)).
+- **The launching user's agent login reaches the machine.** The session runs
+  with the credentials of the user who started it, as on every runner.
+- **On a company runner the machine is reused across projects.** What a scrub
+  keeps is there for the next session, whichever project it belongs to. A
+  project runner keeps it within the project. The reuse section says what a
+  scrub keeps.
+- **The `docker` group is root-equivalent.** `service install` puts the
+  `aixle-runner` user in it, because the runner starts containers. Anyone who
+  controls that user controls the machine.
+- **The runner updates its own binary.** It replaces the binary, which the
+  `aixle-runner` user owns, with one whose SHA-256 the platform pins. To allow
+  no software change you did not make, run `configure` with `--no-auto-update`
+  (the **Turn off self-update** box in **Add machine**), or set
+  `config.auto_update: false` to turn it off for the whole runner.
+- **Use a dedicated machine,** not a shared developer box.
+
+## What the machine reaches outbound
+
+Nothing inbound is opened: the machine connects out, and the platform never
+connects in. If you filter egress, allow at least the following. The list is
+documentation of what the runner and the agent use, and it can grow.
+
+- the platform host, on port 443;
+- `github.com` and `objects.githubusercontent.com`, for runner binaries;
+- `ghcr.io`, for the agent images and the runner image;
+- the git hosts of the repositories the sessions use;
+- the model provider, or your Bedrock when the agent uses it;
+- whatever the agent's own work needs, such as package registries.
+
+## Known limits
+
+- **A bind source can't be under the machine's `/tmp` or `/var/tmp`** when the
+  runner runs as the service. The unit has `PrivateTmp=true`, so the runner does
+  not see those directories and refuses the bind with `forbidden_mount`. Mount a
+  directory elsewhere.
+- **With `network: host`, a session's proxy port can collide.** The port is
+  `20000 + session id mod 10000`. When another session or service on the
+  machine holds it, the session fails with `proxy_port_in_use`, and the platform
+  does not retry it on that machine. The listener is on the machine's own
+  `127.0.0.1`, so any local user or process can reach it. A session key is still
+  required.
 
 ## Using your own agent image
 

@@ -43,7 +43,7 @@ class QueueHealthCheck
     end
 
     def snapshot(now: Time.current)
-      unstarted = WorkflowRun.where(state: "pending", stop_requested_at: nil)
+      unstarted = WorkflowRun.pending.not_stop_requested
                              .where(created_at: ..(now - UNSTARTED_RUN_THRESHOLD))
       undispatched = WorkflowRun.stuck_for_relay(now)
       waiting = SessionAdmission.unreleased.where(admitted_at: nil, stop_requested_at: nil)

@@ -9,7 +9,7 @@ module Admin
     before_action :set_company
 
     def new
-      @memberships = @company.company_memberships.where.not(state: "revoked")
+      @memberships = @company.company_memberships.not_revoked
                              .joins(:user).where(users: { deleted_at: nil })
                              .includes(:user, :invited_by)
                              .order(created_at: :desc)
@@ -25,7 +25,7 @@ module Admin
     end
 
     def resend
-      membership = @company.company_memberships.where.not(state: "revoked").find(params[:id])
+      membership = @company.company_memberships.not_revoked.find(params[:id])
       unless membership.invited?
         return redirect_to(new_admin_company_invitation_path(@company), alert: "Only pending invitations can be re-sent.")
       end

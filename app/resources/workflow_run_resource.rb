@@ -54,9 +54,9 @@ class WorkflowRunResource < ApplicationResource
   typelize :number
   attribute :steps_completed do |run|
     if run.association(:step_runs).loaded?
-      run.step_runs.to_a.count { |sr| sr.state.to_s == "completed" }
+      run.step_runs.to_a.count(&:completed?)
     else
-      run.step_runs.where(state: :completed).count
+      run.step_runs.with_state(:completed).count
     end
   end
 

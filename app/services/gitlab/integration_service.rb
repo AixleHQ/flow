@@ -151,7 +151,7 @@ module Gitlab
 
       integration.update!(settings: integration.settings.to_h.merge("gitlab_trackers" => chosen))
       Trackers::Provisioning.ensure_for!(integration)
-      integration.project_trackers.where.not(status: "detached").where.not(external_scope_id: chosen.pluck("id")).find_each(&:detach!)
+      integration.project_trackers.attached.where.not(external_scope_id: chosen.pluck("id")).find_each(&:detach!)
       Trackers::Provider.for(integration).ensure_event_delivery!
       integration
     rescue Trackers::Error => e

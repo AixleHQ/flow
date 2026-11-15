@@ -54,7 +54,7 @@ class RecentActivityService
   def session_items
     scope = TerminalSession
       .joins(:user)
-      .where(session_type: "agent_session")
+      .agent_sessions
       .order(created_at: :desc)
       .limit(SESSION_FETCH_LIMIT)
       .preload(:user)

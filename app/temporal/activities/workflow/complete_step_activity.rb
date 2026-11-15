@@ -16,7 +16,7 @@ module Activities
         # must never read as done. Treating cancelled as "not a failure" is what let a
         # killed session fall through to mark_completed! — 53 step runs in the 14 days
         # to 2026-09-17 completed on a session that had been cancelled or failed.
-        if session && %w[failed cancelled].include?(session.state)
+        if session && session.aborted?
           # Why it ended matters as much as that it did: an expired login is a banner in
           # the terminal and nothing else, so without this the step reports "no output for
           # 30 minutes" for what is really "this agent needs signing in again".
@@ -92,7 +92,7 @@ module Activities
       # cleanup (CleanupStaleActivity#full_cleanup). AdmittedPhaseActivity#outcome_state
       # and #outcome_error read finishing_at the same way, as a requested finish.
       def finish_requested?(session)
-        session.state == "finished" && session.finishing_at.present?
+        session.finished? && session.finishing_at.present?
       end
 
       # An expired login is silent: the CLI prints its banner, renders a prompt nobody

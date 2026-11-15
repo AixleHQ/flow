@@ -124,7 +124,7 @@ module Youtrack
     def after_connect(integration)
       Trackers::Provisioning.ensure_for!(integration)
       covered = Array(integration.settings.to_h["youtrack_projects"]).map { |p| p["id"].to_s }
-      integration.project_trackers.where.not(status: "detached").where.not(external_scope_id: covered).find_each(&:detach!)
+      integration.project_trackers.attached.where.not(external_scope_id: covered).find_each(&:detach!)
       Trackers::Youtrack::Subscriptions.new(integration).ensure!
       integration
     end

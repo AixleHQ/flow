@@ -163,7 +163,7 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
   # in this project — plus this user's month-to-date spend across the company.
   def session_cost_hint
     finished = current_project.terminal_sessions
-                              .where(state: "finished")
+                              .finished
                               .where("terminal_sessions.created_at > ?", 30.days.ago)
                               .where("cost_cents > 0")
 
