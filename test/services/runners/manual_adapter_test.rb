@@ -19,6 +19,19 @@ class Runners::ManualAdapterTest < ActiveSupport::TestCase
     assert_equal({ provisionable: false, rebuildable: false }, capabilities.to_h)
   end
 
+  # == observe (DESIGN.md §5.1) ==
+
+  test "observe is running while the machine is heard within 90 seconds, and unknown after, never missing" do
+    now = Time.current
+    adapter = Runners::ManualAdapter.new
+    runner = create(:runner, :manual)
+
+    assert_equal :running, adapter.observe(create(:runner_environment, runner: runner, last_heartbeat_at: now - 89.seconds), now: now)
+    assert_equal :unknown, adapter.observe(create(:runner_environment, runner: runner, last_heartbeat_at: now - 91.seconds), now: now)
+    assert_equal :unknown, adapter.observe(create(:runner_environment, runner: runner, last_heartbeat_at: nil), now: now)
+    assert_equal :unknown, adapter.observe(create(:runner_environment, runner: runner, state: :gone, last_heartbeat_at: now - 1.day), now: now)
+  end
+
   # == check_health (DESIGN.md §2.5) ==
 
   test "a runner whose first machine has not registered is pending, with no reason" do

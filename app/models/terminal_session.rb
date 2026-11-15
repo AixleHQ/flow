@@ -35,6 +35,8 @@ class TerminalSession < ApplicationRecord
   GENERIC_ERROR_MESSAGES = [ "Workflow cancelled", "Session admission is closed", LAUNCH_ABANDONED_ERROR ].freeze
 
   TERMINAL_STATES = %w[finished failed cancelled].freeze
+  # The metadata key Runners::ContactLoss sets on a session it fails.
+  CONTACT_LOST_KEY = "contact_lost_at"
   # A launch that has run its course: the container is up and the session is
   # being used or wound up. `running` is not here, since it is set when the
   # launch starts, before a runner's machine is taken.
@@ -219,6 +221,12 @@ class TerminalSession < ApplicationRecord
 
   def workflow_step?
     session_type == "workflow_step"
+  end
+
+  # Failed because its runner's machine stopped answering (Runners::ContactLoss).
+  # Its machine is not given back until it is heard again.
+  def contact_lost?
+    metadata.is_a?(Hash) && metadata.key?(CONTACT_LOST_KEY)
   end
 
   # The key the session's container holds for the aixle-tools MCP server. A

@@ -134,6 +134,10 @@ module ContainerRuntime
       session = session_for(id)
       environment = session && machine(session)
       return true if environment.nil?
+      # A session failed because its machine stopped answering keeps the
+      # machine, and so its slot, until the machine is heard again
+      # (Runners::ContactLoss): its ops would only expire.
+      return false if session.contact_lost? && !environment.heard?
 
       !RunnerOperation.deliverable.exists?(runner_environment_id: environment.id)
     end

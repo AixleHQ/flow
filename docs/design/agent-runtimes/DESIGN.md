@@ -40,8 +40,8 @@ place and are not a new numbered revision:
   first-seen IP, `created_by_id` and "machines busy/total" are built, task 12e). `max_concurrency` stays on
   the runner, not enforced while task 9 is deferred (§10).
 - **Task 11 is split:** 11a is #242 (scrub, `reuse_policy`, the reset escalation, Return to
-  service); 11b is reconciliation (the running-session summary in the heartbeat,
-  heartbeat-based `observe`, the fixed 15-minute grace and the slot release on reconnect).
+  service); 11b is reconciliation (heartbeat-based `observe`, the fixed 15-minute grace and the
+  slot release on reconnect; the running-session summary in the heartbeat was removed from the plan).
   Task 13 is empty after this, so its row is gone (§15).
 
 **Decisions of 2026-10-30, after task 4** (#193, PR #614). They amend revision 5 in place
@@ -1016,7 +1016,7 @@ The per-type mapping:
 | `reset :reset` | Runner op `env.reset`: **scrub ops only**, the full wipe of §7.2 | Runner op `env.reset` (§7.2) | n/a |
 | `reset :rebuild` | **Does not exist** (`rebuildable: false`) | Delete and recreate the workspace from the template | n/a |
 | `teardown` | **No-op** on the machine. Removing a machine is `aixle-runner unregister` or Revoke (§9.3); the platform side only marks the row `gone` | Delete the workspace (or stop it, per `config.on_release`) | `controller.teardown {key}` |
-| `observe` | **Heartbeat-based** (task 11): `:running` while heartbeats arrive, `:unknown` after 90 s, never `:missing` (we cannot tell a powered-off machine from a removed one) | Workspace build status | Controller's pod list |
+| `observe` | **Heartbeat-based. Built in 11b** (`Runners::ManualAdapter#observe(environment)`): `:running` while the machine is heard (within 90 s, as `Runners::Liveness` counts it), `:unknown` after, never `:missing` (we cannot tell a powered-off machine from a removed one) | Workspace build status | Controller's pod list |
 
 **Decided (§6.9.2):** `inject_bootstrap` on `kubernetes` mounts no bootstrap Secret and runs
 no init container. The bootstrap token travels in the `provision` op to the controller, which
@@ -1720,20 +1720,31 @@ are unchanged. With `network: host` the host runner listens itself.
   case that kube-exec has.
 - **Resume:** on reconnect the runner refreshes its token if needed, polls with
   `after=<last acked seq>`, and posts the session summary (agent running or exited with a
-  code; the summary rides on the heartbeat, which task 11 adds together with reconciliation,
-  and the heartbeat's body is empty until then). The platform reconciles: an exit the platform did not know about is handled like a
-  dead container today (`DeadContainerScan` semantics) and fails the session with "agent
-  exited (code N)" unless `finish_session` already ran.
-- **Grace:** after a fixed 15 minutes without contact (a constant: `reconnect_grace` is not a
-  runner setting, Alex 2026-11-13, and reconciliation, task 11b, uses the constant), the session fails with *"Runner environment lost contact for 15
-  minutes"*, and the environment is marked `failed` and torn down if the adapter can still
-  reach it. The admission slot stays held until the adapter confirms teardown or `observe`
-  returns `missing`, per AD-4 "unknown creation retains capacity", and is otherwise released
-  by the reconciliation sweep. On `manual` there is no teardown and `observe` never says
-  `missing`: the slot is released when the machine reconnects and reports the session's
-  container gone (it then gets the automatic reset of §7.2 before it is `idle` again), or
-  when an admin revokes the machine (per-machine Revoke, §9.3, which also frees the slot
-  held by a lost machine's session; there is no Force release).
+  code; no summary rides on the heartbeat, whose body stays empty: see the grace below). The
+  platform reconciles through the dead-container scan, which asks the connected machine for
+  the session's `status`: an exit the platform did not know about fails the session as a dead
+  container does, unless `finish_session` already ran.
+- **Grace. Built in 11b** (`Runners::ContactLoss`; the running-session summary in the heartbeat is
+  removed from the plan, Alex 2026-11-15: a connected machine answers the dead-container scan's
+  `status` op, so an exit is caught within a few minutes without it, and the heartbeat's body
+  stays empty). A runner session whose machine has not been heard for 15 minutes (a constant,
+  `Runners::ContactLoss::GRACE`; `reconnect_grace` is not a runner setting) fails with *"Runner
+  environment lost contact for 15 minutes."*, unless `finish_session` already ran (the session
+  is then `finishing`, which the scan does not look at). The dead-container scan applies it, and
+  it asks no `status` op of a machine whose `observe` is `:unknown`. A machine back within the
+  grace goes on as before: with the agent running the session continues, with the agent exited
+  the scan fails it as a dead container. A session on a revoked or deleted runner is ended by the
+  same grace, which is what ends one that the runner's revocation failed to end.
+- **The slot (AD-4 "unknown creation retains capacity").** The failed session keeps its
+  machine, and so its admission slot, while the machine is away: the session is marked
+  (`TerminalSession#contact_lost?`) and its cleanup waits (`RunnerRuntime#cleanup_ready?`, so the
+  workflow retries, then the reconciler every minute) and sends nothing. When the machine is
+  heard again, the cleanup stops the leftover container, resets the machine (§7.2, a failed
+  session always gets `env.reset`) and releases the slot; the machine takes no other session
+  before then. On `manual` `observe` never says `missing`, so the other ways out are an admin
+  revoking the machine (§9.3, which also frees the slot held by a lost machine's session; there is
+  no Force release), and the runner being revoked or deleted: its machines never come back, so
+  the grace lets the machine go when it fails the session and the slot is released then.
 - `finish_session`/`fail_session` go through the proxy (§6.6). If the proxy is down at that
   moment, the MCP call fails, the agent retries as it does on any network error, and the
   runner keeps the agent alive until the call lands or the 15-minute grace expires.
@@ -3241,14 +3252,16 @@ runners. The limit logic may be revisited later (task row 9 of §15 is deferred)
     for it.
 - **Release** follows AD-4 and the confirmed-release rule. The slot is freed when cleanup
   completes (scrub ok and the environment back to `idle`, or teardown confirmed). An
-  environment the platform lost contact with keeps the slot until `observe` says `missing`
-  or an admin forces release from the runner page. That is the external equivalent of
-  "unknown creation retains capacity".
+  environment the platform lost contact with keeps the slot, once the grace has failed its
+  session (§6.7), until the machine is heard again and has been reset (**built in 11b**), or an
+  admin revokes the machine (§9.3); the slot of a session on a revoked or deleted runner is
+  released when the grace fails it. That is the external equivalent of "unknown creation
+  retains capacity".
 - **Reconciliation and the scanners.** The hosted scanners are not changed to skip runner
   sessions. Since row 8a, `ScanDeadContainersActivity` asks the session's own runtime
   (`ContainerRuntime.for_session`), so a runner session is checked through its runner.
-  Comparing `runner_environments` with `adapter.observe` and with heartbeats belongs to
-  the allocator (row 11).
+  Since row 11b the scan asks `adapter.observe` first and sends no `status` op to a machine that
+  is not heard; that case belongs to the grace (§6.7).
 
 ---
 
@@ -4011,7 +4024,7 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 9 | 2 | **Deferred (Alex, 2026-11-11): runners don't change session admission for now; see §10.** Runner sessions are admitted like any other session. |
 | 10 | 2 | **Done.** Runner release lane: `runner-release.yml` for `runner-v*` (binaries, `checksums.txt`, GHCR image, from `docker/runner/Dockerfile`), applied by Alex from the task's patch since agents cannot push `.github/workflows/`. The pins file read through `Settings.runners.release` and checked by `Runners::Release` at boot (since task #220 the `runners.release` block of `config/settings.yml`). The `/runner/v1/releases` redirect and checksums endpoints, public and with `schemas/v1/releases.params.json`. The `min_version` refusal at `register` (`400 runner_version_unsupported`), strict SemVer 2.0 for `X-Aixle-Runner-Version` and `protocol_supported` for `X-Aixle-Runner-Protocol`. The "Runner compatibility" and "Releasing the runner" sections in `docs/operations/releasing.md` (§14.2). Self-update with the opt-out (`config.auto_update: false`, `configure --no-auto-update` as `runner_environments.auto_update`, §14.4), moved from task 6. **Decisions (Alex, 2026-11-09):** (1) the first runner version is `0.1.0`, and `1.0.0` comes with the extract or the first customer; (2) a runner learns of an update from the answer of `GET /runner/v1/ops` without ops, which carries `update: {version, sha256}` only while the machine holds no session and runs below `recommended_version`, unless it opted out, and 8c's `check-in` adds the same field; (3) the binary lives in `/var/lib/aixle-runner/bin`, owned by the `aixle-runner` user, `service install` installs it there and points `ExecStart` at it, and an update downloads there, verifies the SHA-256, switches atomically and exits for systemd to restart (`Restart=always`), with no root helper and no package manager; (4) `runner-release.yml` also runs by `workflow_dispatch` as a dry run that builds and checks the binaries and the image and pushes and releases nothing. As built: §14.2 "What v1 has", §14.4 "What v1 has", §6.3. Alex tags `runner-v0.1.0` after this merges, and a follow-up PR pins `0.1.0` and its digests (task #220: done, with the pins moved into `config/settings.yml`). **Fix CR round 1 (Alex, 2026-11-10):** no update reservation, and `update.DownloadTimeout` is 2 minutes, so a `container.start` queued during an update outlives it (§14.4); the release requests carry neither protocol header, and the Go conformance harness checks each fixture header's presence or absence; a `download_url` template that `format` cannot fill in fails boot; a runner version over 255 characters is `invalid_registration` before the `min_version` refusal; the published image sets `AIXLE_RUNNER_NO_SELF_UPDATE=1` and does not update itself (§14.4); the parsed pins are memoized. **Fix CR round 2 (Alex, 2026-11-10):** every answer of the release endpoints, the `400` and `404` refusals included, has `Cache-Control: no-store`; the `update` offer drops `url` and is `{version, sha256}`, since the runner builds its release requests from its own configured platform URL (protocol 1 is unreleased, so nothing is kept for compatibility); `configure` treats `AIXLE_RUNNER_NO_SELF_UPDATE` as `--no-auto-update`, so a machine configured from the published image registers `auto_update: false`; the host runner computes its effective self-update setting once, for the start line and the updater. |
 | 11a | 3 | **Built in #242:** `reuse_policy` as `reuse` / `reset` / `fresh` (§7.1, `manual` takes the first two, a migration moved its `fresh` to `reset`), the cleanup by policy and the reset escalation in `RunnerRuntime#cleanup_session` (§7.2), `runner_environments.consecutive_failures` with `Settings.runners.max_consecutive_failures`, Return to service with the `resetting` state (§5.2), the bounded removal of `env.scrub`'s helper container, the runner form's choices and the user guide. The rest of the row below is what the task was written as: `Runners::Allocator` and the capacity path of §10 stay with it. (#242 is its scrub, `reuse_policy`, reset escalation and Return to service.) `Runners::Allocator` and environment state machine, including the self-registering entry path (§5.2): no step 4 on non-`provisionable` types, `reuse_policy` per §7.1, scrub and reset escalation without rebuild, Return to service, and, when scrub lands, the user docs and runner-form copy of §9.4 about what scrub keeps on a company runner (affinity, project binding and Release to company are removed from the plan, Alex 2026-11-13), and the capacity path of §10: a `ContainerRuntime::CapacityError` from the allocator (the runner at `max_environments`, or the provider out of capacity) becomes `capacity_wait` with the wait reason `runner_capacity`, reservation kept. When `env.scrub` is first sent, the removal of its helper container in `runner/internal/docker/scrub.go` gets a bounded timeout under a fresh context, as `container.start`'s removal on failure did in 8a's Fix CR round 6; in 8a its code is unchanged, because `env.scrub` is not sent yet (Alex, Fix CR round 7). |
-| 11b | 3 | **Reconciliation.** The running-session summary in the heartbeat (§6.2, §6.7), heartbeat-based `observe` (§5.1), the fixed 15-minute grace (a constant; `reconnect_grace` is not a runner setting, §6.7) and the release of the admission slot when the machine reconnects, or when the machine is revoked (§9.3). Split from task 11 (Alex, 2026-11-13). |
+| 11b | 3 | **Done** (#248, Alex, 2026-11-15). (1) `Runners::ManualAdapter#observe` (§5.1): `:running` while the machine is heard, `:unknown` after, never `:missing`. (2) The grace (§6.7), `Runners::ContactLoss`, applied by `ScanDeadContainersActivity`: a runner session whose machine was not heard for 15 minutes (a constant) fails with "Runner environment lost contact for 15 minutes.", a revoked or deleted runner's session included; the scan sends no `status` op to a machine whose `observe` is `:unknown`. (3) The slot (§10): the failed session keeps its machine (`TerminalSession#contact_lost?`, `RunnerRuntime#cleanup_ready?`) until the machine is heard, then the container is stopped, the machine reset and the slot released; a revoked or deleted runner's slot is released when the grace fails the session. **Removed from the plan:** the running-session summary in the heartbeat (§6.2, §6.7): the scan's `status` op catches an exit on a connected machine, so the protocol and the Go runner are unchanged. |
 | 12a | 3 | **Done.** "Add machine", brought forward from row 12 on its own (Alex, 2026-11-12, task #225) so that QA can register a staging machine and exercise the runner paths that need a machine's credentials (8c and after). The button on a live `manual` runner's page, company and project, offered under the policy that guards update and revoke (`registration_token?`); `POST .../runners/:id/registration_token` mints a single-use token (1 h) through `Runners::Credentials.mint_registration!` (`Runners::MachineRegistration.issue!`) and returns it once, with the recommended version and, per platform, the binary's URL on the platform's own host and its SHA-256 from the pins; the dialog shows the §6.3 sequence (download and verify, `configure --url --token --name`, `service install` and `service start`) with a choice of `linux-amd64` or `linux-arm64`, a machine name and `--no-auto-update`. A revoked runner offers no button and is refused with `runner_revoked`. The "Adding a machine" section of `docs/user-guide/runners.md`. As built: §6.3. Row 12 keeps the rest. |
 | 12b | 3 | **Done.** A Docker choice in "Add machine" (the published image as a host runner: its entrypoint keeps the binary and the state in `AIXLE_RUNNER_DIR`, a directory of the machine mounted at the same path; restart policy `unless-stopped` and the Docker socket; removal by `unregister`) and machines on arm64: the agent container, the sidecar and the scrub container are pulled and created for `linux/amd64`, so an arm64 daemon runs them under emulation until native images (#226). User guide: "Adding a machine". As built: §6.3, §6.9.3, §14.4. Decided by Alex, 2026-11-12. |
 | 12c | 3 | **Done.** What 12's Machines table needed to be useful, brought forward on its own (Alex, 2026-11-12, task #231): (1) **liveness**: `runner_environments.last_heartbeat_at` (§2.2) is written by every authenticated request of a machine (polls, op results, `check-in`, token refresh and `register`) at most once every 15 s (`Runners::Liveness.record!`), and `runners.last_seen_at` is raised to it; (2) **the machine's state** for display, online / idle / offline (§2.5), with the op-deadline exception (a machine executing a delivered op is not offline before its deadline) and `failed` / `gone` shown as such; (3) **placement**: `Runners::Machines.take!` skips an offline machine, and a runner whose every registered machine is offline is refused at launch as `runner_unreachable` with a message that names the runner and says its machines are offline; (4) **the Machines section** on the runner page, company and project, read-only (§11). Row 12d took the runner's status from health, `POST /runner/v1/heartbeat` and the `runner_capacity` wait. Row 12 keeps the rest: the writable-mount acknowledgement, and the `manual` user docs with the §9.7 disclosure and the egress list. `reuse_policy` is task 11a; heartbeat-based `observe` is task 11b. |
