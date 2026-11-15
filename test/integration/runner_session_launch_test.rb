@@ -394,7 +394,7 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     end
 
     assert_equal "failed", session.reload.state
-    assert_match(/no longer running/, session.error_message)
+    assert_match(/stopped before the session finished/, session.error_message)
   end
 
   test "a machine not heard for 15 minutes fails the session, which keeps its machine until the machine is heard again" do

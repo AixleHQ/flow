@@ -27,7 +27,7 @@ module Runners
     end
 
     def fail_if_lapsed!(session, environment, now: Time.current)
-      return false unless lapsed?(environment, now)
+      return false unless lapsed?(environment, now: now)
 
       session.merge_jsonb!(:metadata, TerminalSession::CONTACT_LOST_KEY => now.iso8601)
       release_machine(session) if session.runner.revoked? || session.runner.deleted?
