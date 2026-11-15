@@ -687,4 +687,38 @@ class TerminalSessionTest < ActiveSupport::TestCase
     assert_equal [ step.id ], scope.workflow_steps.pluck(:id)
     assert_equal [ step.id ], scope.not_auth_sessions.pluck(:id)
   end
+
+  test "container_up?, live?, using_runtime? and waiting? and their state predicates read one set each" do
+    {
+      container_up: %w[running ready],
+      live: %w[running ready finishing],
+      using_runtime: %w[not_started running ready finishing],
+      waiting: %w[not_started queued]
+    }.each do |name, states|
+      %w[not_started queued running ready finishing finished failed cancelled].each do |state|
+        expected = states.include?(state)
+        assert_equal expected, TerminalSession.public_send(:"#{name}_state?", state), "#{name}_state? #{state}"
+        assert_equal expected, TerminalSession.new(state: state).public_send(:"#{name}?"), "#{name}? #{state}"
+      end
+    end
+  end
+
+  test "the live, using_runtime and waiting scopes and work_sessions pick the sessions their predicates name" do
+    sessions = %w[not_started queued running ready finishing finished].index_with do |state|
+      create(:terminal_session, :with_user).tap { |session| session.update_columns(state: state) }
+    end
+    scope = TerminalSession.where(id: sessions.values.map(&:id))
+    ids = ->(states) { states.map { |s| sessions[s].id }.sort }
+
+    assert_equal ids.call(%w[running ready finishing]), scope.live.pluck(:id).sort
+    assert_equal ids.call(%w[not_started running ready finishing]), scope.using_runtime.pluck(:id).sort
+    assert_equal ids.call(%w[not_started queued]), scope.waiting.pluck(:id).sort
+
+    agent = sessions["running"]
+    auth = sessions["queued"].tap { |session| session.update_columns(session_type: "auth_setup") }
+    step = sessions["ready"].tap { |session| session.update_columns(session_type: "workflow_step") }
+    agent.update_columns(session_type: "agent_session")
+    assert_equal [ agent.id, step.id ].sort, scope.work_sessions.pluck(:id).sort
+    assert_not_includes scope.work_sessions.pluck(:id), auth.id
+  end
 end

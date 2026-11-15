@@ -21,8 +21,6 @@ module Sessions
       # Sessions that just started: their container or tmux may not be up yet.
       MIN_AGE = 1.minute
 
-      ACTIVE_STATES = %w[running ready].freeze
-
       class << self
         def applies_to?(_session) = raise(NotImplementedError, "#{name}.applies_to?")
 
@@ -34,7 +32,7 @@ module Sessions
         # quota scan has always read.
         def settled_step?(session)
           session.workflow_step? &&
-            session.state.in?(ACTIVE_STATES) &&
+            session.container_up? &&
             session.container_id.present? &&
             (session.started_at || session.created_at) < MIN_AGE.ago
         end

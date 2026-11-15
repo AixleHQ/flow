@@ -22,7 +22,7 @@ class ActivityHeatmapService
   def call
     day = Arel.sql("date_trunc('day', terminal_sessions.created_at)")
     @scope
-      .where(created_at: @since.., session_type: AnalyticsPeriod::USAGE_SESSION_TYPES)
+      .work_sessions.where(created_at: @since..)
       .group(day)
       .order(day)
       .pluck(day, Arel.sql("COUNT(terminal_sessions.id)"))

@@ -129,8 +129,8 @@ module Usage
     end
 
     def outcomes_between(slice_start, slice_end)
-      TerminalSession.where(finished_at: slice_start...slice_end, state: OUTCOMES.keys,
-                            session_type: AnalyticsPeriod::USAGE_SESSION_TYPES)
+      TerminalSession.work_sessions
+                     .where(finished_at: slice_start...slice_end, state: OUTCOMES.keys)
                      .where.not(company_id: nil)
                      .pluck(:company_id, :state, :finished_at)
                      .each_with_object({}) do |(company_id, state, finished_at), counts|

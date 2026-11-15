@@ -6,12 +6,6 @@ module ProjectMove
   # loses access. The admin reads it before confirming; the Mover reads it again
   # under the project lock and acts on that second reading.
   class Preflight
-    # A container is up and an agent may be working in it. The move would pull its
-    # credentials, repositories and tenant out from under it, so it waits.
-    LIVE_SESSION_STATES = %w[running ready finishing].freeze
-    # Nothing has started yet: cancelling loses no work.
-    WAITING_SESSION_STATES = %w[not_started queued].freeze
-
     attr_reader :project, :source, :target
 
     def initialize(project:, target:)
@@ -59,7 +53,7 @@ module ProjectMove
     end
 
     def live_sessions
-      @live_sessions ||= project.terminal_sessions.where(state: LIVE_SESSION_STATES).order(:id).to_a
+      @live_sessions ||= project.terminal_sessions.live.order(:id).to_a
     end
 
     def runs_to_cancel
@@ -74,7 +68,7 @@ module ProjectMove
     end
 
     def waiting_sessions
-      project.terminal_sessions.where(state: WAITING_SESSION_STATES).order(:id)
+      project.terminal_sessions.waiting.order(:id)
     end
 
     def cancellations? = runs_to_cancel.any? || sessions_to_cancel.any?
