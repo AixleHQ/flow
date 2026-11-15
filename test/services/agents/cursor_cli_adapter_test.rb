@@ -412,8 +412,8 @@ module Agents
 
     test "fetch_subscription_usage maps the plan, model pools and on-demand windows" do
       Cursor::Api.expects(:usage_summary).with(access_token: "tok").returns({
-        "billingCycleStart" => 1_722_408_000, # 30 days before end
-        "billingCycleEnd" => 1_725_000_000,   # 2024-08-30T06:40:00Z
+        "billingCycleStart" => "2024-07-31T06:40:00.000Z",
+        "billingCycleEnd" => "2024-08-30T06:40:00.000Z",
         "membershipType" => "pro",
         "isUnlimited" => false,
         "individualUsage" => {
@@ -439,8 +439,8 @@ module Agents
 
     test "fetch_subscription_usage prefers the overall pool when the plan pool is disabled" do
       Cursor::Api.expects(:usage_summary).with(access_token: "tok").returns({
-        "billingCycleStart" => 1_722_408_000,
-        "billingCycleEnd" => 1_725_000_000,
+        "billingCycleStart" => "2024-07-31T06:40:00.000Z",
+        "billingCycleEnd" => "2024-08-30T06:40:00.000Z",
         "individualUsage" => {
           "plan" => { "enabled" => false, "totalPercentUsed" => 99.0 },
           "overall" => { "enabled" => true, "totalPercentUsed" => 10.0, "autoPercentUsed" => 5.0, "apiPercentUsed" => 5.0 }
@@ -455,8 +455,8 @@ module Agents
 
     test "fetch_subscription_usage omits disabled on-demand and absent pools" do
       Cursor::Api.expects(:usage_summary).with(access_token: "tok").returns({
-        "billingCycleStart" => 1_722_408_000,
-        "billingCycleEnd" => 1_725_000_000,
+        "billingCycleStart" => "2024-07-31T06:40:00.000Z",
+        "billingCycleEnd" => "2024-08-30T06:40:00.000Z",
         "individualUsage" => {
           "plan" => { "enabled" => true, "totalPercentUsed" => 12.0 },
           "onDemand" => { "enabled" => false, "totalPercentUsed" => 88.0 }
@@ -466,6 +466,20 @@ module Agents
       usage = @adapter.fetch_subscription_usage({ "accessToken" => "tok" })
 
       assert_equal %w[cursor_plan], usage[:windows].pluck(:key)
+    end
+
+    test "fetch_subscription_usage still maps epoch cycle bounds from older endpoints" do
+      Cursor::Api.expects(:usage_summary).with(access_token: "tok").returns({
+        "billingCycleStart" => 1_722_408_000,
+        "billingCycleEnd" => 1_725_000_000,
+        "individualUsage" => { "plan" => { "enabled" => true, "totalPercentUsed" => 20.0 } }
+      })
+
+      usage = @adapter.fetch_subscription_usage({ "accessToken" => "tok" })
+
+      plan = usage[:windows].find { |w| w[:key] == "cursor_plan" }
+      assert_equal "2024-08-30T06:40:00Z", plan[:resets_at]
+      assert_equal 43_200, plan[:window_duration_mins]
     end
 
     test "fetch_subscription_usage exposes authentication, throttling and transport states" do

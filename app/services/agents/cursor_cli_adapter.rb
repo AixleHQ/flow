@@ -383,14 +383,21 @@ module Agents
       primary.is_a?(Hash) ? primary : fallback
     end
 
-    # Cursor's dashboard mixes epoch seconds and milliseconds for the billing
-    # cycle bounds.
+    # Cursor's billing-cycle bounds arrive as ISO 8601 strings from the dashboard
+    # (`"2026-11-01T00:00:00.000Z"`); older endpoints reported epoch seconds or
+    # milliseconds. Answer epoch milliseconds for either shape.
     def cursor_epoch_ms(value)
       return nil if value.blank?
 
-      seconds = value.to_f
-      seconds > 1e12 ? seconds : seconds * 1000
-    rescue StandardError
+      if value.is_a?(Numeric)
+        value > 1e12 ? value.to_f : value.to_f * 1000
+      elsif (text = value.to_s).match?(/\A\d+\z/)
+        numeric = text.to_f
+        numeric > 1e12 ? numeric : numeric * 1000
+      else
+        (Time.iso8601(value.to_s).to_f * 1000).round
+      end
+    rescue ArgumentError, TypeError
       nil
     end
 
