@@ -208,7 +208,7 @@ class TaskService
         return { error: "No workflow binding on current column" }
       end
 
-      if task.workflow_runs.where(state: %w[pending running paused]).exists?
+      if task.workflow_runs.active.exists?
         return { error: "Active workflow run already exists for this task" }
       end
 

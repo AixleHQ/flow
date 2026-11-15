@@ -16,7 +16,7 @@ module Api
         # owner/collaborator/company-admin access.
         project = session_params[:project_id] ? Project.for_user(current_user).find(session_params[:project_id]) : nil
 
-        if session_params[:session_type] != "auth_setup" && viewer_for?(project)
+        if !TerminalSession.auth_setup_type?(session_params[:session_type]) && viewer_for?(project)
           return render json: { error: "Viewers cannot launch sessions" }, status: :forbidden
         end
 
@@ -59,7 +59,7 @@ module Api
 
       def destroy
         session = find_session(params[:id])
-        unless session.state.in?(%w[not_started finished failed cancelled])
+        unless session.deletable?
           render json: { error: "Cannot delete active session" }, status: :bad_request
           return
         end
@@ -96,7 +96,7 @@ module Api
       # @summary Stream a finished session's captured terminal log (raw ANSI bytes)
       def terminal_log
         session = find_readable_session(params[:id])
-        return head :not_found unless session.state.in?(%w[finished failed])
+        return head :not_found unless session.concluded?
 
         log = session.session_logs.find_by(name: "terminal_output.log")
         return head :not_found unless log&.file

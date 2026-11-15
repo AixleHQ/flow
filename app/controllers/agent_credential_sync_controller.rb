@@ -56,7 +56,7 @@ class AgentCredentialSyncController < ActionController::API
     # An auth_setup session is a login in progress: AgentAuthStrategy owns what it captures
     # and how (the design-login merge rules, the completion gate). A write-back racing that
     # would resurrect exactly the stale blocks it exists to drop.
-    return head :conflict if @session.session_type == "auth_setup"
+    return head :conflict if @session.auth_setup?
 
     @credential = SessionCompany.agent_credentials_for(@session).find_by(agent_type: @session.agent_type)
     head :not_found if @credential.nil?

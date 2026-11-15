@@ -56,7 +56,7 @@ class CloudCredentialsController < ActionController::API
   end
 
   def withhold_from_auth_session?(session)
-    return false unless session.session_type == "auth_setup"
+    return false unless session.auth_setup?
 
     credential = CloudAuth::CredentialLookup.for_session(session)
     return false if credential.nil?

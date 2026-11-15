@@ -3,7 +3,7 @@
 class Web::Company::MembersController < Web::Company::ApplicationController
   def index
     memberships = current_company.company_memberships
-                                 .where.not(state: "revoked")
+                                 .not_revoked
                                  # Soft-deleted accounts are gone from the
                                  # product; their membership row stays for
                                  # history but must not be listed or actionable.
@@ -92,7 +92,7 @@ class Web::Company::MembersController < Web::Company::ApplicationController
   # Revoked rows are invisible to member management (they are re-invitable via
   # #create only) — matching them here would let update/destroy act on ghosts.
   def member_membership
-    current_company.company_memberships.where.not(state: "revoked").find_by!(user_id: params[:id])
+    current_company.company_memberships.not_revoked.find_by!(user_id: params[:id])
   end
 
   def create_params

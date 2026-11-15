@@ -53,6 +53,17 @@ class TerminalSession < ApplicationRecord
     LAUNCHED_STATES.include?(state.to_s)
   end
 
+  # Whether `session_type` is `auth_setup`, for a raw value (a request param, a
+  # context's type). #auth_setup? calls it.
+  def self.auth_setup_type?(session_type)
+    session_type.to_s == "auth_setup"
+  end
+
+  # Whether `session_type` is `workflow_step`, for a raw value. #workflow_step? calls it.
+  def self.workflow_step_type?(session_type)
+    session_type.to_s == "workflow_step"
+  end
+
   # A specific reason always outranks a generic one, whichever arrives last.
   def self.preferred_error_message(existing, incoming)
     return existing if incoming.blank?
@@ -179,6 +190,11 @@ class TerminalSession < ApplicationRecord
   scope :auth_sessions, -> { where(session_type: "auth_setup") }
   scope :agent_sessions, -> { where(session_type: "agent_session") }
   scope :not_ended, -> { where.not(state: TERMINAL_STATES) }
+  scope :ended, -> { where(state: TERMINAL_STATES) }
+  scope :not_auth_sessions, -> { where.not(session_type: "auth_setup") }
+  scope :workflow_steps, -> { where(session_type: "workflow_step") }
+  # The container is up and in use: running or ready.
+  scope :in_progress, -> { where(state: %w[running ready]) }
   scope :active, -> { where(state: %w[not_started queued running ready]) }
   scope :finishing, -> { where(state: "finishing") }
   # Waiting for its agent's login to be renewed (Sessions::AuthPause).
@@ -219,8 +235,31 @@ class TerminalSession < ApplicationRecord
     self.class.launched_state?(state)
   end
 
+  # Finished or failed: it ran to its end, and was not cancelled. Not `ended?`.
+  def concluded?
+    finished? || failed?
+  end
+
+  # Failed or cancelled: it ended without finishing.
+  def aborted?
+    failed? || cancelled?
+  end
+
+  # Not started yet, or ended: nothing is running or waiting on it.
+  def deletable?
+    not_started? || ended?
+  end
+
+  def auth_setup?
+    self.class.auth_setup_type?(session_type)
+  end
+
+  def agent_session?
+    session_type == "agent_session"
+  end
+
   def workflow_step?
-    session_type == "workflow_step"
+    self.class.workflow_step_type?(session_type)
   end
 
   # Failed because its runner's machine stopped answering (Runners::ContactLoss).
@@ -233,10 +272,6 @@ class TerminalSession < ApplicationRecord
   # session launched before keys were derived keeps the random one it was given.
   def mcp_key
     self[:mcp_key].presence || (MCP::SessionKey.generate(self) if persisted?)
-  end
-
-  def finishing?
-    state == "finishing"
   end
 
   # May `viewer` open this session — its live terminal/editor while it runs, or
@@ -258,7 +293,7 @@ class TerminalSession < ApplicationRecord
   def visible_to?(viewer)
     return false if viewer.nil?
     return true if user_id == viewer.id
-    return false if session_type == "auth_setup"
+    return false if auth_setup?
     return false if user.nil?
 
     active? || finishing? ? user.share_active_sessions? : user.share_completed_sessions?
@@ -459,7 +494,7 @@ class TerminalSession < ApplicationRecord
     sr = step_run
     return unless sr&.workflow_run_id
     # A run being stopped was already told so (workflow_cancelled); its steps end with it.
-    return if sr.workflow_run.stop_requested_at.present?
+    return if sr.workflow_run.stop_requested?
 
     WorkflowService.notify_container_finished(step_run: sr)
   rescue StandardError => e

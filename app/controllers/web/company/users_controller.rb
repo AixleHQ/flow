@@ -69,7 +69,7 @@ class Web::Company::UsersController < Web::Company::ApplicationController
   # from that list would be dead.
   def member_membership
     @member_membership ||= current_company.company_memberships
-                                          .where.not(state: "revoked")
+                                          .not_revoked
                                           .joins(:user).where(users: { deleted_at: nil })
                                           .find_by!(user_id: params[:id])
   end
