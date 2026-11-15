@@ -600,15 +600,12 @@ class TerminalSessionTest < ActiveSupport::TestCase
   end
 
   test "not_ended leaves out the sessions that finished, failed or were cancelled" do
-    running = create(:terminal_session, state: "running")
-    finishing = create(:terminal_session, state: "finishing")
-    done = create(:terminal_session, state: "running")
-    done.update_columns(state: "finished")
-    failed = create(:terminal_session, state: "running")
-    failed.update_columns(state: "failed")
+    sessions = %w[running finishing finished failed cancelled].index_with do |state|
+      create(:terminal_session, :with_user).tap { |session| session.update_columns(state: state) }
+    end
 
-    ids = TerminalSession.where(id: [ running, finishing, done, failed ].map(&:id)).not_ended.pluck(:id)
+    ids = TerminalSession.where(id: sessions.values.map(&:id)).not_ended.pluck(:id)
 
-    assert_equal [ running.id, finishing.id ].sort, ids.sort
+    assert_equal [ sessions["running"].id, sessions["finishing"].id ].sort, ids.sort
   end
 end
