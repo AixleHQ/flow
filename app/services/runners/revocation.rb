@@ -27,7 +27,9 @@ module Runners
       TerminalSession.where(runner_id: runner.id).where.not(state: TerminalSession::TERMINAL_STATES).find_each do |session|
         end_session(runner, session, running: held.include?(session.id) || session.state.in?(RUNNING_STATES))
       rescue StandardError => e
+        # One session that cannot end must not keep the others waiting.
         Rails.logger.error("[Runners::Revocation] session #{session.id} of runner #{runner.id}: #{e.class}: #{e.message}")
+        Sentry.capture_exception(e, extra: { runner_id: runner.id, session_id: session.id })
       end
     end
 
@@ -36,7 +38,8 @@ module Runners
         RunnerEnvironment.where(runner_id: runner.id, current_session_id: session.id)
                          .update_all(current_session_id: nil, updated_at: Time.current)
       end
-      SessionService.fail_session(session: session, error_message: message(runner, session, running))
+      # A compare-and-set: a session that finished or was cancelled meanwhile keeps its outcome.
+      SessionService.fail_session_if(session: session, error_message: message(runner, session, running))
     end
     private_class_method :end_session
 

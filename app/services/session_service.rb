@@ -157,9 +157,15 @@ class SessionService
     # an auth pause cannot land between them. The container workflow is woken after the
     # commit, as by fail_session.
     #
+    # Without `expected_state`, the condition is "not finished, failed or cancelled yet", for
+    # a caller that ends whatever the session is doing (a revoked runner or machine).
+    #
     # @return [Boolean] whether the session was failed
-    def fail_session_if(session:, expected_state:, error_message: nil, &guard)
-      still = ->(locked) { locked.state == expected_state.to_s && (guard.nil? || guard.call(locked)) }
+    def fail_session_if(session:, expected_state: nil, error_message: nil, &guard)
+      still = lambda do |locked|
+        in_state = expected_state.nil? ? TerminalSession::TERMINAL_STATES.exclude?(locked.state) : locked.state == expected_state.to_s
+        in_state && (guard.nil? || guard.call(locked))
+      end
 
       if unreleased_admission?(session)
         return false unless SessionAdmissionService.fail_if!(session, error_message: error_message, &still)

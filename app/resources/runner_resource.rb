@@ -37,14 +37,10 @@ class RunnerResource < ApplicationResource
     runner.created_by&.name
   end
 
-  # A `manual` runner's machines: those holding a session out of those
-  # registered and not `gone` (DESIGN.md §11). `params[:machine_counts]` is
-  # Runners::Machines.counts for a list, one query for all of them.
+  # A `manual` runner's machines busy/total (DESIGN.md §11), from the
+  # machines the list loaded (`includes(:environments)`).
   typelize "{ busy: number; total: number } | null"
   attribute :machines do |runner|
-    next unless runner.manual?
-
-    counts = (params[:machine_counts] || Runners::Machines.counts([ runner ])).fetch(runner.id)
-    { busy: counts.busy, total: counts.total }
+    runner.machine_counts
   end
 end

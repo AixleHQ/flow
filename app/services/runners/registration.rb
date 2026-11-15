@@ -104,9 +104,10 @@ module Runners
 
     def end_session(environment, session_id, ended_by)
       session = TerminalSession.find_by(id: session_id)
-      return if session.nil? || session.state.in?(TerminalSession::TERMINAL_STATES)
+      return if session.nil?
 
-      SessionService.fail_session(
+      # A compare-and-set: a session that finished or was cancelled meanwhile keeps its outcome.
+      SessionService.fail_session_if(
         session: session,
         error_message: "Machine \"#{Machines.label(environment)}\" of runner \"#{environment.runner.name}\" was #{ended_by}."
       )

@@ -22,20 +22,6 @@ class Runners::MachinesTest < ActiveSupport::TestCase
     assert_equal @machine, Runners::Machines.acquire!(session), "the session keeps the machine it holds"
   end
 
-  test "counts: busy holds a session, total is every machine that is not gone" do
-    other = create(:runner, :manual)
-    Runners::Machines.acquire!(runner_session)
-    create(:runner_environment, runner: @runner)
-    failed = create(:runner_environment, runner: @runner)
-    Runners::Machines.fail!(failed, "boom")
-    create(:runner_environment, runner: @runner, state: :gone)
-
-    counts = Runners::Machines.counts([ @runner, other ])
-
-    assert_equal [ 1, 3 ], [ counts[@runner.id].busy, counts[@runner.id].total ]
-    assert_equal [ 0, 0 ], [ counts[other.id].busy, counts[other.id].total ]
-  end
-
   test "no machine registered fails with a message that names the runner" do
     @machine.update!(state: :gone)
 
@@ -44,6 +30,16 @@ class Runners::MachinesTest < ActiveSupport::TestCase
     assert_equal "runner_unreachable", error.reason
     assert_equal "Runner \"Build farm\" has no machine registered. Register a machine on it, or pick another runner.",
                  error.message
+  end
+
+  test "a revoked or deleted runner takes no session, with the message a launch gives" do
+    session = runner_session
+    @runner.revoke!
+
+    error = assert_raises(Runners::Machines::NoMachine) { Runners::Machines.acquire!(session) }
+
+    assert_equal "Runner \"Build farm\" is revoked. Pick another runner for the session.", error.message
+    assert_nil @machine.reload.current_session_id
   end
 
   test "every machine busy is a capacity wait" do
