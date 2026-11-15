@@ -32,7 +32,12 @@ class TerminalSession < ApplicationRecord
   # connection, a revoked credential — outranks it.
   LAUNCH_ABANDONED_ERROR = "Launch abandoned before the container started"
 
-  GENERIC_ERROR_MESSAGES = [ "Workflow cancelled", "Session admission is closed", LAUNCH_ABANDONED_ERROR ].freeze
+  # What the reconciler says of a session whose container workflow closed under it. It is the
+  # queue's own vocabulary too: a reason already on the session (the runner's 15-minute
+  # contact loss, for one) outranks it.
+  WORKFLOW_ENDED_ERROR = "Container workflow ended"
+
+  GENERIC_ERROR_MESSAGES = [ "Workflow cancelled", "Session admission is closed", LAUNCH_ABANDONED_ERROR, WORKFLOW_ENDED_ERROR ].freeze
 
   TERMINAL_STATES = %w[finished failed cancelled].freeze
   # The metadata key that marks a session failed by Runners::ContactLoss.

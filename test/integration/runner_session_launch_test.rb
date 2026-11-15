@@ -453,11 +453,13 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
 
     assert_equal 1, scan[:failed]
     assert_equal "Runner environment lost contact for 15 minutes.", session.reload.error_message
-    cleaned = run_phase(session, "cleanup")
+    cleaned = run_phase(session, "cleanup", error: SessionAdmissionReconciler.cleanup_error(admission))
 
     assert_not cleaned.key?(:cleanup_pending), "cleanup left #{cleaned.inspect}"
     assert_empty @host_runner.operations
     assert admission.reload.released_at
+    assert_equal "Runner environment lost contact for 15 minutes.", session.reload.error_message,
+                 "the reconciler's cleanup must not overwrite the grace's message"
   end
 
   test "a hosted session in the same company stays on the hosted runtime" do
