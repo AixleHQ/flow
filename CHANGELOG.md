@@ -32,6 +32,19 @@ governance, community health — carry none.
   operator adds `<PROTOCOL>://<DOMAIN>/oauth/callback` as a redirect URI to the
   deployment's GitLab OAuth application. Your concurrent sessions share one
   GitLab token, which Flow replaces only in its last ten minutes.
+- **Integrations**: connect the company to an Aixle Insights organization with
+  the one-time pairing code an Insights owner creates, then switch on the
+  projects whose agents Insights should see. From their next session those
+  agents send their full telemetry, and everything they report over
+  OpenTelemetry — usage, prompts, replies, tool calls — is forwarded within a
+  minute, tagged with the person, project and session; only the session's own
+  secrets are masked. The connection is a row of the Integrations list; its
+  **This project** dialog holds the switch and shows what is still waiting and
+  the last problem.
+  Operators: set `INSIGHTS_URL`, `INSIGHTS_DEPLOYMENT_ID` and
+  `INSIGHTS_DEPLOYMENT_SECRET` (issued by Insights); the integration stays hidden
+  until all three are set. Insights' answer to a batch is final unless
+  `INSIGHTS_RESEND=true`, which sends again what it failed to take.
 
 ### Changed
 - Runners: a machine recovers from a network outage within about a minute. The
@@ -39,6 +52,10 @@ governance, community health — carry none.
   needs the next runner release (0.4.1), and a machine whose reset goes
   unanswered while it reconnects after a lost-contact session is reset when it
   is heard again, not marked Failed.
+- **Sessions & Runs**: an automatic Claude Code session writes its prompt cache
+  for 5 minutes instead of an hour, which costs less of the connected
+  subscription: its requests come seconds apart, so the cache stays warm.
+  Interactive sessions keep the one-hour cache.
 - Runners: the runner pulls the agent images for its machine's own platform
   and falls back to `linux/amd64` when an image has no build for it, so a
   machine on arm64 runs an image built for arm64 natively. `images.yml` builds
@@ -76,6 +93,9 @@ governance, community health — carry none.
   existing directory and working on a stale checkout. A path that holds
   another repository or a broken clone is cloned again. A kept checkout keeps
   only its objects and refs: its config and hooks are rebuilt, never reused.
+- **Assets**: a step can promote a file it wrote to `/workspace/outputs` to a
+  project asset while it is still running. Before, `promote_asset` found only
+  outputs of earlier steps and failed with "No workflow output asset named …".
 
 ## [1.15.0] - 2026-11-14
 

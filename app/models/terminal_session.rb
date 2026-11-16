@@ -136,6 +136,7 @@ class TerminalSession < ApplicationRecord
   belongs_to :runner_environment, optional: true
   validate :runner_environment_is_the_runners, if: -> { runner_environment_id && will_save_change_to_runner_environment_id? }
   has_one :usage_statistic, dependent: :destroy
+  has_many :insights_otlp_batches, dependent: :delete_all
   has_many :session_logs, dependent: :destroy
   has_many :output_assets, class_name: "Asset", foreign_key: :terminal_session_id
   has_one :step_run, dependent: :nullify
@@ -466,8 +467,12 @@ class TerminalSession < ApplicationRecord
   # Whether the agent sends its collector everything its telemetry offers — logs and
   # traces with prompts, replies and tool content, and the lifecycle hooks
   # (docs/design/agent-telemetry.md) — rather than only the usage Flow counts. Flow keeps
-  # nothing but usage, so the rest stays off until something forwards it.
-  def full_telemetry? = false
+  # nothing but usage, so only a session of a project exported to Insights gets it: the
+  # relay forwards the rest (docs/design/insights-otlp-relay.md).
+  def full_telemetry?
+    @full_telemetry = project&.exports_to_insights? || false if @full_telemetry.nil?
+    @full_telemetry
+  end
 
   def available_tools(ctx: nil)
     ctx ||= Tools::Context.for_session(self)
