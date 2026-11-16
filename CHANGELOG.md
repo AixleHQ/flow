@@ -32,6 +32,19 @@ governance, community health — carry none.
   operator adds `<PROTOCOL>://<DOMAIN>/oauth/callback` as a redirect URI to the
   deployment's GitLab OAuth application. Your concurrent sessions share one
   GitLab token, which Flow replaces only in its last ten minutes.
+- **Integrations**: connect the company to an Aixle Insights organization with
+  the one-time pairing code an Insights owner creates, then switch on the
+  projects whose agents Insights should see. From their next session those
+  agents send their full telemetry, and everything they report over
+  OpenTelemetry — usage, prompts, replies, tool calls — is forwarded within a
+  minute, tagged with the person, project and session; only the session's own
+  secrets are masked. The connection is a row of the Integrations list; its
+  **This project** dialog holds the switch and shows what is still waiting and
+  the last problem.
+  Operators: set `INSIGHTS_URL`, `INSIGHTS_DEPLOYMENT_ID` and
+  `INSIGHTS_DEPLOYMENT_SECRET` (issued by Insights); the integration stays hidden
+  until all three are set. Insights' answer to a batch is final unless
+  `INSIGHTS_RESEND=true`, which sends again what it failed to take.
 
 ### Changed
 - **Sessions & Runs**: an automatic Claude Code session writes its prompt cache

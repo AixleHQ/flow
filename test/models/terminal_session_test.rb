@@ -35,6 +35,17 @@ class TerminalSessionTest < ActiveSupport::TestCase
     @project = create(:project, company: @company, owner: @user)
   end
 
+  test "full telemetry is a session's only when its project is exported to a configured Insights" do
+    exported = create(:terminal_session, user: @user, project: @project)
+    other = create(:terminal_session, user: @user, project: create(:project, company: @company, owner: @user))
+    connect_to_insights!(@project)
+
+    assert exported.full_telemetry?
+    assert_not other.full_telemetry?
+    Settings.stubs(:insights).returns(OpenStruct.new(url: "", deployment_id: "", deployment_secret: ""))
+    assert_not TerminalSession.find(exported.id).full_telemetry?
+  end
+
   # == session_config JSONB (config_files only) ==
 
   test "valid with empty session_config" do
