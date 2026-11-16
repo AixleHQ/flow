@@ -15,7 +15,7 @@ class ProjectTeamResource < ApplicationResource
   end
 
   typelize "Array<{ id: number; name: string; email: string; " \
-           "status: { state: 'ready' | 'on_hold' | 'unavailable'; until: string | null; detail: string | null }; " \
+           "status: { state: 'ready' | 'on_hold' | 'signed_out' | 'unavailable'; until: string | null; detail: string | null }; " \
            "runtimes: Array<{ agentType: string; label: string; quotaExhaustedUntil: string | null }> }>"
   attribute :members do |team|
     skipped = preview(team).skipped.index_by { |skip| skip.user.id }
@@ -28,8 +28,7 @@ class ProjectTeamResource < ApplicationResource
       {
         id: user.id, name: user.name, email: user.email,
         status: if skip
-                  { state: skip.held_until ? "on_hold" : "unavailable", until: skip.held_until&.iso8601,
-                    detail: skip.reason }
+                  { state: skip_state(skip), until: skip.held_until&.iso8601, detail: skip.reason }
                 else
                   { state: "ready", until: nil, detail: nil }
                 end,
@@ -71,6 +70,13 @@ class ProjectTeamResource < ApplicationResource
   end
 
   private
+
+  def skip_state(skip)
+    if skip.held_until then "on_hold"
+    elsif skip.signed_out then "signed_out"
+    else "unavailable"
+    end
+  end
 
   def preview(team)
     params[:context]&.dig(:previews, team.id) || (@preview ||= ProjectTeams::Picker.preview(team))

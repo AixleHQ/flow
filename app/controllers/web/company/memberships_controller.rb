@@ -9,7 +9,7 @@ class Web::Company::MembershipsController < Web::Company::ApplicationController
   def destroy
     # Revoke is legal from invited/active/suspended — a SUSPENDED member must
     # still be able to leave (`.active.find` would 404 them forever).
-    membership = current_user.company_memberships.where.not(state: "revoked").find(params[:id])
+    membership = current_user.company_memberships.not_revoked.find(params[:id])
 
     if membership.revoke_with_handover(handover_params)
       reset_membership_memoization

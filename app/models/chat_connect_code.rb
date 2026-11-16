@@ -71,10 +71,25 @@ class ChatConnectCode < ApplicationRecord
     if provider == Chat::TeamsProvider::KEY && conversation.channel? && team_name.blank?
       return "Name the team too for a Teams channel: Team / Channel"
     end
+    if team_name.present? && conversation.team_name.blank?
+      return "Microsoft Teams did not say which team #{conversation.label} is in. Try again in a minute."
+    end
 
-    matches = self.class.comparable(conversation.name) == self.class.comparable(channel_name) &&
+    matches = names_channel?(conversation) &&
               (team_name.blank? || self.class.comparable(conversation.team_name) == self.class.comparable(team_name))
     matches ? nil : "Posted in #{conversation.label}, but the code is for #{channel_label}"
+  end
+
+  # A team's General channel may carry another name — new Teams asks for it when
+  # the team is created — but the Connector lists it with none, so it is kept as
+  # "General" (ChatConversation#unnamed_general?). It answers to that, or to a
+  # name none of its team's other channels has.
+  def names_channel?(conversation)
+    wanted = self.class.comparable(channel_name)
+    return true if self.class.comparable(conversation.name) == wanted
+    return false unless conversation.unnamed_general?
+
+    conversation.teammates.none? { |channel| self.class.comparable(channel.name) == wanted }
   end
 
   # Why `install`, the company's install of the workspace the code was posted

@@ -244,6 +244,47 @@ function stepNames(...snapshots: (Snapshot | null)[]): Map<string, string> {
   return names;
 }
 
+function withPath(source: Snapshot, path: string, value: unknown): Snapshot {
+  const [head, ...rest] = path.split('.');
+  return { ...source, [head]: rest.length ? withPath(asRecord(source[head]), rest.join('.'), value) : value };
+}
+
+/**
+ * `snapshot` as a revert writes it back. A revert drops each reference to a row
+ * that no longer exists (Versions::Snapshots::Workflow.restore!), so its preview
+ * must not list one as coming back.
+ */
+export function restorableSnapshot(schema: FieldSpec[], snapshot: Snapshot, references: References): Snapshot {
+  return schema.reduce((memo, spec) => {
+    const value = getPath(memo, spec.key);
+    const exists = (model: string, id: unknown) => Boolean(references[model]?.[String(id)]);
+    switch (spec.kind) {
+      case 'refs':
+        return Array.isArray(value)
+          ? withPath(
+              memo,
+              spec.key,
+              value.filter((id) => exists(spec.model, id)),
+            )
+          : memo;
+      case 'ref':
+        return value === null || value === undefined || exists(spec.model, value)
+          ? memo
+          : withPath(memo, spec.key, null);
+      case 'collection':
+        return Array.isArray(value)
+          ? withPath(
+              memo,
+              spec.key,
+              value.map((item) => restorableSnapshot(spec.fields, asRecord(item), references)),
+            )
+          : memo;
+      default:
+        return memo;
+    }
+  }, snapshot);
+}
+
 /** Every change from `before` to `after`. A null `before` (the first version) diffs against an empty entity. */
 export function diffSnapshots(
   schema: FieldSpec[],

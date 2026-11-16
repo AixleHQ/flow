@@ -228,6 +228,8 @@ class WorkflowRunTest < ActiveSupport::TestCase
                                               session_type: "workflow_step", state: "queued"))
 
     assert_includes WorkflowRun.waiting_for_slot_ids([ run.id ]), run.id
+    assert run.reload.waiting_for_slot?, "one run must get the same answer as a page of them"
+    assert_equal "queued", run.displayed_state
   end
 
   test "waiting_for_slot_ids leaves a run that is still executing alone" do
@@ -240,11 +242,24 @@ class WorkflowRunTest < ActiveSupport::TestCase
                                              session_type: "workflow_step", state: "queued"))
 
     assert_empty WorkflowRun.waiting_for_slot_ids([ run.id ])
+    assert_not run.reload.waiting_for_slot?
+    assert_equal "running", run.displayed_state
   end
 
   test "waiting_for_slot_ids answers for a whole page in one query" do
     assert_empty WorkflowRun.waiting_for_slot_ids([])
   end
+
+  test "waiting_for_slot? reads preloaded step sessions without a query" do
+    run = create(:workflow_run, :running)
+    step_run = create(:step_run, :running, workflow_run: run)
+    step_run.update!(terminal_session: create(:terminal_session, user: run.user, project: run.project,
+                                              session_type: "workflow_step", state: "queued"))
+    preloaded = WorkflowRun.includes(step_runs: :terminal_session).find(run.id)
+
+    assert_no_queries { assert preloaded.waiting_for_slot? }
+  end
+
   test "refuses input assets and repositories that belong to another tenant" do
     project = create(:project, :standalone)
     other = create(:project, :standalone)
@@ -264,5 +279,33 @@ class WorkflowRunTest < ActiveSupport::TestCase
       repository_ids: [ create(:repository, scope: project).id ])
 
     assert run.valid?, run.errors.full_messages.to_sentence
+  end
+
+  test "stop_requested?, stopped? and ended? read the stop marker and the state" do
+    assert_not WorkflowRun.new(state: "running").stop_requested?
+    assert WorkflowRun.new(state: "running", stop_requested_at: Time.current).stop_requested?
+
+    assert_not WorkflowRun.new(state: "running").stopped?
+    assert WorkflowRun.new(state: "running", stop_requested_at: Time.current).stopped?
+    assert WorkflowRun.new(state: "cancelled").stopped?
+    assert_not WorkflowRun.new(state: "failed").stopped?
+
+    %w[completed failed cancelled].each { |state| assert WorkflowRun.new(state: state).ended?, state }
+    %w[pending running paused].each { |state| assert_not WorkflowRun.new(state: state).ended?, state }
+  end
+
+  test "state and stop scopes pick the runs they name" do
+    runs = %w[pending running paused completed failed cancelled].index_with do |state|
+      create(:workflow_run, workflow: @workflow).tap { |run| run.update_columns(state: state) }
+    end
+    stopped = runs["running"].tap { |run| run.update_columns(stop_requested_at: Time.current) }
+    scope = WorkflowRun.where(id: runs.values.map(&:id))
+    ids = ->(*states) { states.map { |state| runs[state].id }.sort }
+
+    assert_equal ids.call("running", "paused"), scope.underway.pluck(:id).sort
+    assert_equal ids.call("failed", "cancelled"), scope.aborted.pluck(:id).sort
+    assert_equal [ stopped.id ], scope.stop_requested.pluck(:id)
+    assert_not_includes scope.not_stop_requested.pluck(:id), stopped.id
+    assert_equal [ stopped.id ], scope.cancellation_in_flight.pluck(:id)
   end
 end

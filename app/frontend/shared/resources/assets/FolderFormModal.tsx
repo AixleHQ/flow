@@ -69,7 +69,7 @@ export function FolderFormModal({
               : null;
 
   const errorText = clientError ?? serverError ?? null;
-  const requestClose = useUnsavedChanges({ opened, dirty: trimmed !== seededName, onClose });
+  const requestClose = useUnsavedChanges({ opened, dirty: trimmed !== seededName, saving: submitting, onClose });
 
   const submit = () => {
     setTouched(true);

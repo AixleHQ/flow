@@ -82,6 +82,7 @@ export const FeedbackModal = ({ opened, onClose }: FeedbackModalProps) => {
   const requestClose = useUnsavedChanges({
     opened,
     dirty: data.message.trim() !== '' || data.attachments.length > 0,
+    saving: processing,
     onClose: handleClose,
   });
 

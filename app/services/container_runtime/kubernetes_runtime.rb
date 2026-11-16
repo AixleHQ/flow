@@ -81,7 +81,7 @@ module ContainerRuntime
       "#{namespace_for(project_id: session.project_id, user_id: session.user_id)}/terminal-#{session.route_token}"
     end
 
-    def cleanup_session(id)
+    def cleanup_session(id, failed: false)
       handle = session_locator(id)
       session_objects(handle).each do |_kind, plural, client_key, object|
         metadata = object.metadata

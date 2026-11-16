@@ -57,7 +57,7 @@ two.
 | **Resources** | What the agent gets on top of the workflow's **Base Resources**: wrappers, connectors, skills, assets, secrets & variables, and repositories |
 | **Dependencies** | Which other sessions must finish first. Sessions with no dependency between them run at the same time |
 | **Data Flow** | Input and output asset specs — the files this session expects, and the files it is expected to leave behind, matched by pattern |
-| **Behavior** | **On Failure**: Fail, Retry, or Skip. **Skip Policy**: Never, If outputs exist, or Manual. **Auto-run available**: whether the session starts without waiting for a person |
+| **Behavior** | **On Failure**: Fail, Retry, or Skip — a step stopped by its owner's agent quota is retried only in a run a team handed out, as the team's next member. **Skip Policy**: Never, If outputs exist, or Manual. **Auto-run available**: whether the session starts without waiting for a person |
 
 > info Dependencies are what make a run parallel. Two sessions that both depend
 > only on "plan" will run side by side, each in its own container, and the run

@@ -58,9 +58,10 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     cleaned = run_phase(session, "cleanup")
 
     assert_not cleaned.key?(:cleanup_pending), "cleanup left #{cleaned.inspect}"
-    assert_equal %w[container.stop env.reset], @host_runner.ops.last(2)
+    assert_equal %w[container.stop env.scrub], @host_runner.ops.last(2), "a reuse runner scrubs after a session that ended well"
     assert_equal "finished", session.reload.state
-    assert_nil @machine.reload.current_session_id, "the machine is free after its reset"
+    assert_nil @machine.reload.current_session_id, "the machine is free after its scrub"
+    assert_equal 0, @machine.consecutive_failures
     assert admission.reload.released_at
     assert_ops_name_their_session(session)
     assert RunnerOperation.all.none?(&:deliverable?)
@@ -76,8 +77,11 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     run_phases(second, %w[pull_image])
 
     assert_equal({ "capacity_wait" => true }, run_phase(second, "create_container"))
-    assert_match(/Waiting for a free machine on runner "Build farm" \(1 of 1 busy\)/,
-                 second.session_admission.reload.last_error)
+    assert_equal 'Waiting for a free machine on runner "Build farm" (1 of 1 busy).',
+                 second.session_admission.reload.last_error, "a wait reads as a wait, with no phase-failure prefix"
+    assert_equal "runner_capacity", second.session_admission.wait_reason
+    assert_equal "runner_capacity", second.session_admission.launch_phase
+    assert_includes SessionAdmission.waiting.pluck(:id), second.session_admission.id
 
     run_phases(first, %w[start_container exec cleanup])
     run_phases(second, %w[create_container])
@@ -86,7 +90,7 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     assert_equal second.id, @machine.reload.current_session_id
   end
 
-  test "a pull that fails in container.start still runs the cleanup, which resets the machine and frees it" do
+  test "a pull that fails in container.start still runs the cleanup, which resets the machine, whatever the policy, and frees it" do
     @host_runner.answer_with("container.start", "status" => "error",
                                                 "error" => { "class" => "image_pull_failed", "message" => "pull access denied" })
     session = launch
@@ -96,11 +100,12 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     admission = session.session_admission.reload
     assert_equal "runner-session-#{session.id}", admission.runtime_id, "the identity was persisted before the create"
     assert_equal session.id, @machine.reload.current_session_id
-    cleaned = run_phase(session, "cleanup")
+    cleaned = run_phase(session, "cleanup", error: "Could not pull the image")
 
     assert_not cleaned.key?(:cleanup_pending), "cleanup left #{cleaned.inspect}"
-    assert_equal %w[container.stop env.reset], @host_runner.ops.last(2)
-    assert_nil @machine.reload.current_session_id, "the machine is free again"
+    assert_equal %w[container.stop env.reset], @host_runner.ops.last(2), "a failed session is reset even under reuse"
+    assert_equal 1, @machine.reload.consecutive_failures
+    assert_nil @machine.current_session_id, "the machine is free again"
     assert admission.reload.released_at
   end
 
@@ -130,7 +135,7 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     run_phase(session, "cleanup")
 
     assert_equal "container.start", @host_runner.ops.first
-    assert_equal %w[container.stop env.reset], @host_runner.ops.last(2), "the cleanup ran after the start's answer"
+    assert_equal %w[container.stop env.scrub], @host_runner.ops.last(2), "the cleanup ran after the start's answer"
     assert_nil @host_runner.machine.container, "the late start's container is gone"
     @machine.reload
     assert_equal [ "registered", nil ], [ @machine.state, @machine.current_session_id ], "the machine is free"
@@ -167,6 +172,119 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     assert_not cleaned.key?(:cleanup_pending), "cleanup left #{cleaned.inspect}"
     assert admission.reload.released_at
     assert_empty @host_runner.operations, "nothing is sent to a machine that left"
+  end
+
+  test "revoking a machine ends the session it holds with a message that names it, and releases its admission" do
+    session = launch
+    run_phases(session, %w[pull_image create_container start_container exec])
+    admission = session.session_admission.reload
+    @host_runner.operations.clear
+
+    assert Runners::Registration.revoke!(@machine)
+
+    session.reload
+    assert_equal "failed", session.state
+    assert_equal "Machine \"#{@machine.display_name}\" of runner \"Build farm\" was revoked.", session.error_message
+    assert @machine.reload.gone?
+    assert_nil @machine.current_session_id
+    assert @machine.credentials.all?(&:revoked?)
+    cleaned = run_phase(session, "cleanup")
+    assert_not cleaned.key?(:cleanup_pending), "cleanup left #{cleaned.inspect}"
+    assert admission.reload.released_at, "its slot is released"
+    assert_empty @host_runner.operations, "nothing is sent to a machine that was revoked"
+  end
+
+  test "a session waiting on the runner starts on another machine once the busy one is revoked" do
+    first = launch
+    run_phases(first, %w[pull_image create_container])
+    waiting = launch
+    run_phases(waiting, %w[pull_image])
+    assert_equal({ "capacity_wait" => true }, run_phase(waiting, "create_container"))
+
+    Runners::Registration.revoke!(@machine)
+    run_phase(first, "cleanup")
+    other = create(:runner_environment, runner: @runner, key: "aixle-r#{@runner.id}-ffff0000")
+    ContainerRuntime::FakeHostRunner.new(other).tap do |host|
+      run_phase(waiting, "create_container")
+      host.stop
+    end
+
+    assert_equal other.id, waiting.reload.runner_environment_id
+    assert_equal waiting.id, other.reload.current_session_id
+    assert_equal "failed", first.reload.state
+  end
+
+  test "revoking a machine that is idle, or failed, makes it gone and leaves the others alone" do
+    failed = create(:runner_environment, runner: @runner)
+    Runners::Machines.fail!(failed, "boom")
+    idle = @machine
+
+    assert Runners::Registration.revoke!(failed)
+    assert Runners::Registration.revoke!(idle)
+
+    assert_equal %w[gone gone], [ failed.reload.state, idle.reload.state ]
+    assert_not Runners::Registration.revoke!(idle), "a machine that is gone has nothing left to revoke"
+  end
+
+  test "revoking a runner fails the session running on it and ends the one waiting for a machine" do
+    running = launch
+    run_phases(running, %w[pull_image create_container start_container exec])
+    waiting = launch
+    run_phases(waiting, %w[pull_image])
+    assert_equal({ "capacity_wait" => true }, run_phase(waiting, "create_container"))
+
+    @runner.revoke!
+
+    assert_equal "failed", running.reload.state
+    assert_equal "Runner \"Build farm\" was revoked, so the session running on it ended.", running.error_message
+    assert_equal "failed", waiting.reload.state
+    assert_equal "Runner \"Build farm\" is revoked. Pick another runner for the session.", waiting.error_message
+    assert_nil @machine.reload.current_session_id
+    assert_not run_phase(running, "cleanup").key?(:cleanup_pending)
+    assert running.session_admission.reload.released_at
+    assert run_phase(waiting, "cleanup")
+    assert waiting.session_admission.reload.released_at
+  end
+
+  test "a session that finished or was cancelled before a machine or runner Revoke keeps its outcome" do
+    finished = launch
+    run_phases(finished, %w[pull_image create_container start_container exec])
+    finished.update_columns(state: "finished", error_message: nil)
+
+    Runners::Registration.revoke!(@machine)
+
+    assert_equal [ "finished", nil ], [ finished.reload.state, finished.error_message ]
+
+    other = create(:runner_environment, runner: @runner)
+    cancelled = create(:runner_session, :holding, environment: other)
+    cancelled.update_columns(state: "cancelled")
+
+    @runner.revoke!
+
+    assert_equal [ "cancelled", nil ], [ cancelled.reload.state, cancelled.error_message ]
+  end
+
+  test "a session the fan-out cannot end is reported to Sentry and the others still end" do
+    broken = create(:runner_session, :holding, environment: @machine)
+    other_machine = create(:runner_environment, runner: @runner)
+    fine = create(:runner_session, :holding, environment: other_machine)
+    SessionService.stubs(:fail_session_if).with { |args| args[:session].id == broken.id }.raises(StandardError, "boom")
+    SessionService.stubs(:fail_session_if).with { |args| args[:session].id == fine.id }.returns(true)
+    Sentry.expects(:capture_exception).with(instance_of(StandardError), extra: { runner_id: @runner.id, session_id: broken.id }).once
+
+    @runner.revoke!
+
+    assert_nil other_machine.reload.current_session_id
+  end
+
+  test "deleting a runner ends its sessions as a revoke does" do
+    session = launch
+    run_phases(session, %w[pull_image create_container start_container exec])
+
+    @runner.soft_delete!
+
+    assert_equal "failed", session.reload.state
+    assert_nil @machine.reload.current_session_id
   end
 
   test "a stop between the pull and the create takes no machine, and the cleanup sends nothing" do
@@ -234,6 +352,116 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     assert_empty @hosted.execs
   end
 
+  # == A machine that stops answering (DESIGN.md §6.7) ==
+
+  def scan = Activities::Session::ScanDeadContainersActivity.new.run
+
+  def running_session
+    session = launch
+    run_phases(session, %w[pull_image create_container start_container exec])
+    session.update_columns(started_at: 1.hour.ago)
+    @host_runner.operations.clear
+    session
+  end
+
+  test "the scan sends no status op to a machine that is not heard, and the session goes on within the grace" do
+    session = running_session
+    @machine.update_columns(last_heartbeat_at: 5.minutes.ago)
+
+    result = scan
+
+    assert_empty @host_runner.operations, "no op for a machine that is not heard"
+    assert_equal 0, result[:failed]
+    assert_equal "ready", session.reload.state
+  end
+
+  test "a machine back within the grace with its agent running leaves the session going, and one whose agent exited fails it as dead" do
+    session = running_session
+    @machine.update_columns(last_heartbeat_at: 14.minutes.ago)
+    scan
+    @machine.update_columns(last_heartbeat_at: Time.current)
+
+    scan
+
+    assert_equal "ready", session.reload.state
+    assert_equal %w[status], @host_runner.ops
+
+    @host_runner.machine.exit!(137)
+    scan
+    travel(Activities::Session::ScanDeadContainersActivity::CONFIRMATION_DELAY + 1.minute) do
+      @machine.update_columns(last_heartbeat_at: Time.current)
+      scan
+    end
+
+    assert_equal "failed", session.reload.state
+    assert_match(/stopped before the session finished/, session.error_message)
+  end
+
+  test "a machine not heard for 15 minutes fails the session, which keeps its machine until the machine is heard again" do
+    session = running_session
+    admission = session.session_admission.reload
+    @machine.update_columns(last_heartbeat_at: 16.minutes.ago)
+
+    result = scan
+
+    assert_equal 1, result[:failed]
+    assert_equal "failed", session.reload.state
+    assert_equal "Runner environment lost contact for 15 minutes.", session.error_message
+    assert session.contact_lost?
+    assert_equal "offline", @machine.reload.display_state
+
+    cleaned = run_phase(session, "cleanup")
+
+    assert cleaned[:cleanup_pending], "the cleanup waits for the machine"
+    assert_empty @host_runner.operations, "nothing is sent to a machine that is away"
+    assert_equal session.id, @machine.reload.current_session_id, "the machine is still held"
+    assert_nil admission.reload.released_at, "the slot is kept"
+
+    @machine.update_columns(last_heartbeat_at: Time.current)
+    cleaned = run_phase(session, "cleanup")
+
+    assert_not cleaned.key?(:cleanup_pending), "cleanup left #{cleaned.inspect}"
+    assert_equal %w[container.stop env.reset], @host_runner.ops.last(2), "a failed session resets the machine"
+    assert_nil @machine.reload.current_session_id
+    assert_equal "idle", @machine.display_state
+    assert admission.reload.released_at, "the slot comes back with the machine"
+  end
+
+  test "a session whose machine is back just before the 15 minutes are up is not failed" do
+    session = running_session
+    @machine.update_columns(last_heartbeat_at: 14.minutes.ago)
+
+    assert_equal 0, scan[:failed]
+    assert_equal "ready", session.reload.state
+    assert_not session.contact_lost?
+  end
+
+  test "a session that is already finishing is left to finish when its machine is not heard" do
+    session = running_session
+    session.update_columns(state: "finishing", finishing_at: Time.current)
+    @machine.update_columns(last_heartbeat_at: 1.hour.ago)
+
+    assert_equal 0, scan[:failed]
+    assert_equal "finishing", session.reload.state
+  end
+
+  test "a session left running on a revoked runner fails by the grace and its slot is released then" do
+    session = running_session
+    admission = session.session_admission.reload
+    @runner.update_columns(status: "revoked")
+    @machine.update_columns(last_heartbeat_at: 16.minutes.ago)
+
+    assert_equal 1, scan[:failed]
+    assert_equal "Runner environment lost contact for 15 minutes.", session.reload.error_message
+    cleaned = run_phase(session, "cleanup", error: SessionAdmissionReconciler.cleanup_error(admission))
+
+    assert_not cleaned.key?(:cleanup_pending), "cleanup left #{cleaned.inspect}"
+    assert_empty @host_runner.operations
+    assert admission.reload.released_at
+    assert_equal "Runner environment lost contact for 15 minutes.", session.reload.error_message,
+                 "the reconciler's cleanup must not overwrite the grace's message"
+  end
+
   test "a hosted session in the same company stays on the hosted runtime" do
     session = with_feature(:external_runners, true, company: @company) do
       SessionService.create_and_start(user: @user, project: @project, session_type: "agent_session",
@@ -273,11 +501,11 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     phases.each { |phase| run_phase(session, phase) }
   end
 
-  def run_phase(session, phase)
+  def run_phase(session, phase, error: nil)
     admission = session.session_admission.reload
     activity = Activities::Container::AdmittedPhaseActivity.new
     if phase == "cleanup"
-      activity.run(Hashie::Mash.new(phase: phase, admission_id: admission.id))
+      activity.run(Hashie::Mash.new(phase: phase, admission_id: admission.id, error: error))
     else
       activity.run(Hashie::Mash.new(phase: phase, admission_id: admission.id, permit_token: admission.permit_token))
     end

@@ -61,6 +61,23 @@ module RunnerStateMachine
     deleted_at.present?
   end
 
+  # Revoked or deleted: its credentials are dead and its machines are never
+  # heard again. A deleted runner is revoked in the data too, so this is the
+  # same set as `revoked?` in practice, named for the meaning where the code
+  # means both. Not `live`'s complement: a disabled runner is not retired.
+  def retired?
+    revoked? || deleted?
+  end
+
+  # The health check's new reason for a status that stays the same (the machines
+  # that are offline changed, the status did not). The machine stays the only
+  # writer of `status_reason`: a `connected` runner has none.
+  def refresh_status_reason!(reason)
+    return unless degraded? || unreachable?
+
+    update!(status_reason: reason)
+  end
+
   private
 
   def record_status_reason(reason = nil)

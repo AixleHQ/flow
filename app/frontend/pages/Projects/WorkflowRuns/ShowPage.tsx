@@ -55,10 +55,11 @@ interface Props {
   cableStream: string;
 }
 
-const ACTIVE_STATES = new Set(['pending', 'running', 'paused', 'waiting_input']);
+const ACTIVE_STATES = new Set(['pending', 'queued', 'running', 'paused', 'waiting_input']);
 
 const RUN_STATE_LABELS: Record<string, string> = {
   completed: 'Completed',
+  queued: 'Queued',
   running: 'Running',
   paused: 'Paused',
   failed: 'Failed',

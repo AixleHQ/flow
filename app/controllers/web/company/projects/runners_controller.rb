@@ -10,12 +10,13 @@
 # is not found by a write from this page.
 class Web::Company::Projects::RunnersController < Web::Company::Projects::ApplicationController
   include RunnerRegistrationTokens
+  include RunnerMachinesList
 
   requires_feature :external_runners
 
   def index
     render inertia: "Projects/Runners/RunnersPage", props: {
-      runners: visible_runners.includes(:created_by).order(:name).map { |runner| RunnerResource.new(runner).to_h },
+      runners: visible_runners.includes(:created_by, :environments).order(:name).map { |runner| RunnerResource.new(runner).to_h },
       runner_types: Runners::Form.runner_types,
       can_manage: runners_policy.create?
     }
@@ -26,6 +27,7 @@ class Web::Company::Projects::RunnersController < Web::Company::Projects::Applic
 
     render inertia: "Projects/Runners/RunnerPage", props: {
       runner: RunnerResource.new(runner).to_h,
+      machines: machines_prop(runner),
       runner_types: Runners::Form.runner_types,
       can_manage: runners_policy.update? && runner.project_id == current_project.id
     }

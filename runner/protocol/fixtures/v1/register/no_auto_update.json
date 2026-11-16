@@ -32,7 +32,6 @@
           "facts": {
             "docker": "27.1.0"
           },
-          "ephemeral": false,
           "auto_update": "no"
         }
       },
@@ -58,7 +57,6 @@
           "facts": {
             "docker": "27.1.0"
           },
-          "ephemeral": false,
           "auto_update": false
         }
       },

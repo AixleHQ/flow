@@ -17,7 +17,8 @@ class CompanyUsageHour < ApplicationRecord
   #   blocked      the free allowance is spent, or the subscription ended
   #   trial        spending the free allowance
   #   unlimited    no limit for the whole hour, so there is nothing to meter
-  #   no_customer  billable, but no Stripe customer to send the minutes to
+  #   no_customer  billable, but nobody to send the minutes to: no Stripe
+  #                customer, or, for a company AWS bills, no metered licence
   #   paying       billed through Stripe or AWS Marketplace
   #
   # unlimited and no_customer are a company running free without being managed,

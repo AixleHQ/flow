@@ -132,7 +132,7 @@ class PersonalMCPTest < ActionDispatch::IntegrationTest
 
     body = rpc("tools/call", { name: "list_projects", arguments: {} })
     projects = JSON.parse(body.dig("result", "content").first["text"])["projects"]
-    assert_equal [ @project.id ], projects.map { |p| p["id"] }
+    assert_equal [ [ @project.id, @company.id ] ], projects.map { |p| p.values_at("id", "company_id") }
   end
 
   # An employee who is not the owner and not a company admin used to pay

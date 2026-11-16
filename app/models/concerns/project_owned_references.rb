@@ -22,19 +22,24 @@ module ProjectOwnedReferences
     config_items: ->(project) { ConfigItem.for_project(project) }
   }.freeze
 
-  def self.foreign_ids(project, kind, ids)
+  # `lenient:` passes an id whose row is gone, as TenantScope.foreign_existing_ids
+  # does: a resource list links only ids with a row, so such an id is dropped
+  # from it rather than refused.
+  def self.foreign_ids(project, kind, ids, lenient: false)
     ids = Array(ids).compact_blank.map(&:to_i).uniq
     return [] if ids.empty?
     return ids if project.nil?
 
-    ids - OWNERS.fetch(kind).call(project).where(id: ids).pluck(:id)
+    owners = OWNERS.fetch(kind).call(project)
+    ids = owners.klass.unscoped.where(id: ids).pluck(:id) if lenient
+    ids - owners.where(id: ids).pluck(:id)
   end
 
   private
 
-  def validate_owned_ids(project, kind, attribute, before, after, label: nil)
+  def validate_owned_ids(project, kind, attribute, before, after, label: nil, lenient: false)
     added = Array(after).compact_blank.map(&:to_i) - Array(before).compact_blank.map(&:to_i)
-    foreign = ProjectOwnedReferences.foreign_ids(project, kind, added)
+    foreign = ProjectOwnedReferences.foreign_ids(project, kind, added, lenient: lenient)
     return if foreign.empty?
 
     errors.add(attribute, [ label, "contains ids outside this project: #{foreign.sort.join(', ')}" ].compact.join(" "))

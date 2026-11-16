@@ -24,6 +24,7 @@ const (
 	EndpointToken        Endpoint = "token"
 	EndpointCheckIn      Endpoint = "check-in"
 	EndpointOps          Endpoint = "ops"
+	EndpointHeartbeat    Endpoint = "heartbeat"
 	EndpointResult       Endpoint = "result"
 	EndpointReleases     Endpoint = "releases"
 	EndpointProxy        Endpoint = "proxy"
@@ -138,6 +139,12 @@ func (c *Client) PollOps(ctx context.Context, accessToken string, after int64, w
 		out.Ops = []Op{}
 	}
 	return out, nil
+}
+
+// Heartbeat tells the platform the runner is alive while no poll is outstanding
+// (§5.10). The request has no body and the answer is `204`.
+func (c *Client) Heartbeat(ctx context.Context, accessToken string) error {
+	return c.do(ctx, EndpointHeartbeat, http.MethodPost, "/runner/v1/heartbeat", accessToken, nil, http.StatusNoContent, nil)
 }
 
 // Checksums reads the pinned digests of a release (§5.7). It takes no token.

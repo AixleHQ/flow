@@ -37,12 +37,14 @@ module Billing
     # Nil when nobody invoices the company: one we carry, one that has not paid
     # yet, or any company of a self-hosted installation. `billing_provider` is
     # left as it was when a company becomes ours, so it is not read for one.
+    # It also turns to Stripe as soon as card entry is opened, which creates the
+    # customer before any card is given, so Stripe takes a subscription as well.
     def billing_method
       return "self_hosted_aws_marketplace" if Deployment.aws_marketplace?
       return if !Deployment.saas? || @company.managed_by_aixle?
 
       case @company.billing_provider
-      when Company::BILLING_PROVIDER_STRIPE then "saas_stripe"
+      when Company::BILLING_PROVIDER_STRIPE then "saas_stripe" if @company.stripe_subscription_id.present?
       when Company::BILLING_PROVIDER_AWS_MARKETPLACE then "saas_aws_marketplace"
       end
     end

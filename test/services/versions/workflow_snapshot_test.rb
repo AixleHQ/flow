@@ -25,6 +25,18 @@ class Versions::WorkflowSnapshotTest < ActiveSupport::TestCase
                  snapshot["steps"].first["sub_steps"]
   end
 
+  test "the snapshot names only the resources that still exist" do
+    kept, deleted = create_list(:repository, 2, scope: @project)
+    @workflow.merge_config!("base_repository_ids" => [ deleted.id, kept.id ])
+    @build.update!(repository_ids: [ deleted.id, kept.id ])
+
+    deleted.destroy!
+    snapshot = Versions::Snapshot.dump(@workflow.reload)
+
+    assert_equal [ kept.id ], snapshot["config"]["base_repository_ids"]
+    assert_equal [ kept.id ], snapshot["steps"].first["repository_ids"]
+  end
+
   test "revert brings back deleted steps and sub-steps by id and retires steps added since" do
     Versions.save!(@workflow, actor: @actor) { @workflow.update!(description: "v1") }
     v1 = @workflow.latest_version
@@ -94,6 +106,24 @@ class Versions::WorkflowSnapshotTest < ActiveSupport::TestCase
     assert_equal "fail", @build.on_failure, "a NOT NULL column comes back as its default"
     assert_equal 0, @build.max_retries
     assert @check.reload.required, "a sub-step column comes back as its default"
+  end
+
+  test "reverting to a snapshot without a resource list empties that list" do
+    Versions.save!(@workflow, actor: @actor) { @workflow.update!(description: "bare") }
+    bare = @workflow.latest_version
+    legacy = bare.snapshot.merge("config" => bare.snapshot["config"].except("base_repository_ids"),
+                                 "steps" => bare.snapshot["steps"].map { |step| step.except("config_item_ids") })
+    EntityVersion.where(id: bare.id).update_all(snapshot: legacy)
+
+    Versions.save!(@workflow, actor: @actor) do
+      @workflow.merge_config!("base_repository_ids" => [ create(:repository, scope: @project).id ])
+      @build.update!(config_item_ids: [ create(:config_item, scope: @project).id ])
+    end
+
+    Versions.revert!(@workflow, to: bare.reload, actor: @actor)
+
+    assert_empty @workflow.reload.base_repository_ids
+    assert_empty @build.reload.config_item_ids
   end
 
   test "revert restores a dependency chain whatever order the steps were saved in" do

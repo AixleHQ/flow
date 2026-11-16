@@ -1,0 +1,38 @@
+{
+  "description": "A heartbeat without a token, with an unknown one or with a token of another kind is 401 invalid_token. Revoking the runner revokes the machine's token, and turning the flag off is 403 runners_disabled until it is back on.",
+  "steps": [
+    {"given": "registered_machine", "as": "m"},
+    {"given": "registration_token", "as": "reg"},
+    {
+      "request": {"method": "POST", "path": "/runner/v1/heartbeat"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "POST", "path": "/runner/v1/heartbeat", "token": "aracc_not-a-token"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "POST", "path": "/runner/v1/heartbeat", "token": "{{m.refresh_token}}"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "POST", "path": "/runner/v1/heartbeat", "token": "{{reg}}"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {"given": "flag_off"},
+    {
+      "request": {"method": "POST", "path": "/runner/v1/heartbeat", "token": "{{m.access_token}}"},
+      "response": {"status": 403, "body": {"error": "runners_disabled", "message": {"$type": "string"}}}
+    },
+    {"given": "flag_on"},
+    {
+      "request": {"method": "POST", "path": "/runner/v1/heartbeat", "token": "{{m.access_token}}"},
+      "response": {"status": 204, "body": null}
+    },
+    {"given": "runner_revoked"},
+    {
+      "request": {"method": "POST", "path": "/runner/v1/heartbeat", "token": "{{m.access_token}}"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    }
+  ]
+}

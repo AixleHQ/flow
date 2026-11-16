@@ -4,7 +4,8 @@
 # (docs/design/github-user-identity.md §3.2). It is the audit trail, and the
 # source of the values a session's log redaction masks: served logs are redacted
 # when they are read, long after the tool call, so the token itself is kept.
-# Rows are immutable. The token is the scoped one, never the user's own.
+# Rows are immutable. For GitHub the token is the scoped one, never the user's own; GitLab cannot
+# narrow a token, so its row holds the user's own OAuth token (docs/design/gitlab-user-identity.md §2.4).
 class UserTokenIssuance < ApplicationRecord
   include Encryptable
 

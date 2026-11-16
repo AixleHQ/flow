@@ -17,7 +17,7 @@ get. Both sides run them:
   be absent. An exchange the client never sends (a protocol header other than `1`, a release
   request that carries the protocol headers, a malformed `after`, an invalid result body) is
   skipped, because it tests the gateway's
-  checks, which the Rails side runs. The test fails if no register, check-in, token, unregister, ops,
+  checks, which the Rails side runs. The test fails if no register, check-in, token, unregister, heartbeat, ops,
   releases or proxy exchange was driven, and it fails for a fixture of which it drives no exchange
   at all, unless the fixture is on its `gatewayOnly` list with the reason (empty today). It runs in
   the Go CI job. `runner/internal/docker/fixtures_test.go` also
@@ -61,7 +61,7 @@ commas), so that Ruby's `JSON` and Go's `encoding/json` both read it. Every file
         "method": "POST",
         "path": "/runner/v1/register",
         "token": "{{reg}}",
-        "body": { "name": "build-01", "os": "linux", "arch": "amd64", "facts": {}, "ephemeral": false }
+        "body": { "name": "build-01", "os": "linux", "arch": "amd64", "facts": {} }
       },
       "response": {
         "status": 201,
@@ -121,7 +121,7 @@ step's arguments.
 | `flag_off` | none | Turns `external_runners` off for the company. | nothing |
 | `flag_on` | none | Turns it back on. | nothing |
 | `time_passes` | `seconds` (an integer) | Moves the gateway's clock forward. | nothing |
-| `release_pins` | `min_version`, `recommended_version` (each optional, a version string; absent means null), `binaries` (optional, the `binaries` map of the platform's pins, `runners.release` in `config/settings.yml`: `{"1.5.0": {"linux-amd64": {"sha256": "<64 hex>"}}}`; absent means none) | Replaces the platform's runner pins for the rest of the scenario: the committed `runners.release` block, its `protocol_supported` and `download_url` kept, with these three keys in place of its own. Without this step a scenario runs on the committed pins, which pin no minimum and recommend `0.1.0` with its binaries, below the version the scenarios' requests report (`1.4.0`), so they offer no update. | nothing |
+| `release_pins` | `min_version`, `recommended_version` (each optional, a version string; absent means null), `binaries` (optional, the `binaries` map of the platform's pins, `runners.release` in `config/settings.yml`: `{"1.5.0": {"linux-amd64": {"sha256": "<64 hex>"}}}`; absent means none) | Replaces the platform's runner pins for the rest of the scenario: the committed `runners.release` block, its `protocol_supported` and `download_url` kept, with these three keys in place of its own. Without this step a scenario runs on the committed pins, which pin no minimum, recommend `0.2.0`, and pin the binaries of `0.1.0` and `0.2.0`, all below the version the scenarios' requests report (`1.4.0`), so they offer no update. | nothing |
 
 ## Exchanges
 

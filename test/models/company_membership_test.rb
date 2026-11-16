@@ -614,4 +614,21 @@ class CompanyMembershipTest < ActiveSupport::TestCase
     assert membership.save, membership.errors.full_messages.to_sentence
     assert_equal "step2", membership.reload.onboarding_state
   end
+
+  test "not_revoked leaves out revoked memberships" do
+    kept = [ :invited, :suspended, nil ].map { |state| create(:company_membership, *state, user: create(:user), company: @company) }
+    revoked = create(:company_membership, :revoked, user: create(:user), company: @company)
+    scope = @company.company_memberships
+
+    assert_equal kept.map(&:id).sort, scope.not_revoked.pluck(:id).sort
+    assert_not_includes scope.not_revoked, revoked
+  end
+
+  test "not_active is everything but an active membership" do
+    active = create(:company_membership, user: create(:user), company: @company)
+    invited = create(:company_membership, :invited, user: create(:user), company: @company)
+
+    assert_not_includes @company.company_memberships.not_active, active
+    assert_includes @company.company_memberships.not_active, invited
+  end
 end

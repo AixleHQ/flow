@@ -91,7 +91,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     ContainerRuntime.stubs(:build).returns(runtime)
     # The workload outliving its cancelled workflow is the whole failure: the
     # reconciler used to skip these, so nothing ever deleted it.
-    runtime.expects(:cleanup_session).with("runtime-id")
+    runtime.expects(:cleanup_session).with("runtime-id", failed: false)
     runtime.stubs(:session_absent?).returns(false, true)
     stub_closed_workflow(session.workflow_id)
 
@@ -115,7 +115,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
 
     runtime = ContainerRuntime::DockerRuntime.new
     ContainerRuntime.stubs(:build).returns(runtime)
-    runtime.expects(:cleanup_session).with("runtime-id")
+    runtime.expects(:cleanup_session).with("runtime-id", failed: false)
     runtime.stubs(:session_absent?).returns(false, true)
     stub_closed_workflow(session.workflow_id)
 
@@ -359,6 +359,19 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     admission = admit(session)
     session.update!(state: "running", started_at: 2.hours.ago)
     admission.update!(wait_reason: "cluster_capacity")
+    TemporalService.expects(:cancel_workflow).never
+
+    Activities::Session::CleanupStaleActivity.new.run
+
+    assert_equal "running", session.reload.state
+    assert_nil admission.reload.released_at
+  end
+
+  test "the stale reaper leaves a reservation that is waiting for a free machine of its runner alone" do
+    session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 2.hours.ago)
+    admission = admit(session)
+    session.update!(state: "running", started_at: 2.hours.ago)
+    admission.update!(wait_reason: "runner_capacity")
     TemporalService.expects(:cancel_workflow).never
 
     Activities::Session::CleanupStaleActivity.new.run

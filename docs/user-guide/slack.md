@@ -192,8 +192,10 @@ match it.
 
 ### Who the run belongs to
 
-A Slack-started run belongs to the person who added the trigger, shown as
-**Runs as** on the trigger, and it uses their credentials. Flow does not check
+A Slack-started run belongs to whoever **Runs as** names on the trigger — the
+person who added it, unless the project owner or an admin pointed it at another
+member or at a [team](../design/project-teams.md), which hands each run to one of its members — and it uses
+their credentials. Flow does not check
 who wrote the Slack message. Anyone who can mention the app in an accepted
 channel can start the run.
 

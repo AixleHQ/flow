@@ -32,6 +32,16 @@ class Runners::MachinesTest < ActiveSupport::TestCase
                  error.message
   end
 
+  test "a revoked or deleted runner takes no session, with the message a launch gives" do
+    session = runner_session
+    @runner.revoke!
+
+    error = assert_raises(Runners::Machines::NoMachine) { Runners::Machines.acquire!(session) }
+
+    assert_equal "Runner \"Build farm\" is revoked. Pick another runner for the session.", error.message
+    assert_nil @machine.reload.current_session_id
+  end
+
   test "every machine busy is a capacity wait" do
     Runners::Machines.acquire!(runner_session)
 
@@ -63,17 +73,133 @@ class Runners::MachinesTest < ActiveSupport::TestCase
     assert_raises(Runners::Machines::NoMachine) { Runners::Machines.acquire!(runner_session) }
   end
 
-  test "a runner whose every machine failed fails the launch at once, naming the machines and how to bring one back" do
+  test "a runner whose every machine failed fails the launch at once, naming the machines and pointing to Return to service" do
     @machine.update!(display_name: "build-01")
     Runners::Machines.fail!(@machine, "env.reset failed after session 7: reset_failed: volume in use")
 
     error = assert_raises(Runners::Machines::NoMachine) { Runners::Machines.acquire!(runner_session) }
 
     assert_equal "runner_unreachable", error.reason
-    assert_equal "Runner \"Build farm\" has no machine that can take a session: its machine failed: " \
+    assert_equal "Runner \"Build farm\" has no machine that can take a session: its machine is out of rotation: " \
                  "build-01 (env.reset failed after session 7: reset_failed: volume in use). " \
-                 "To bring a machine back, run `aixle-runner unregister` on it, then `aixle-runner configure` again, " \
-                 "or pick another runner.", error.message
+                 "Fix the machine and press Return to service on the runner page, or pick another runner.", error.message
+  end
+
+  test "a failed session adds to the machine's streak, and a session that ends well sets it back to 0" do
+    first = runner_session
+    Runners::Machines.acquire!(first)
+    Runners::Machines.release!(@machine, first, failed: true)
+    assert_equal 1, @machine.reload.consecutive_failures
+
+    second = runner_session
+    Runners::Machines.acquire!(second)
+    Runners::Machines.release!(@machine, second, failed: true)
+    assert_equal [ "registered", 2 ], [ @machine.reload.state, @machine.consecutive_failures ]
+
+    third = runner_session
+    Runners::Machines.acquire!(third)
+    Runners::Machines.release!(@machine, third)
+    assert_equal 0, @machine.reload.consecutive_failures
+  end
+
+  test "the third failed session in a row takes the machine out of rotation, with the reason" do
+    @machine.update!(display_name: "build-01")
+    3.times do
+      session = runner_session
+      Runners::Machines.acquire!(session) if @machine.reload.state == "registered"
+      Runners::Machines.release!(@machine, session, failed: true)
+    end
+
+    @machine.reload
+    assert_equal [ "failed", nil, 3 ], [ @machine.state, @machine.current_session_id, @machine.consecutive_failures ]
+    assert_equal "build-01 failed 3 sessions in a row", @machine.state_reason
+  end
+
+  test "Return to service resets a failed machine with no session, and an op that succeeds frees it" do
+    @machine.update!(consecutive_failures: 3)
+    Runners::Machines.fail!(@machine, "build-01 failed 3 sessions in a row")
+    host = ContainerRuntime::FakeHostRunner.new(@machine)
+
+    assert Runners::Machines.return_to_service!(@machine)
+
+    @machine.reload
+    assert_equal [ %w[env.reset], [ nil ] ], [ host.ops, host.operations.pluck(:session_id) ]
+    assert_equal [ "registered", nil, nil, 0 ], [ @machine.state, @machine.state_reason, @machine.current_session_id, @machine.consecutive_failures ]
+    assert_equal @machine, Runners::Machines.acquire!(runner_session)
+  ensure
+    host&.stop
+  end
+
+  test "a machine that is resetting takes no session, and a second press sends nothing" do
+    Runners::Machines.fail!(@machine, "boom")
+    host = ContainerRuntime::FakeHostRunner.new(@machine)
+    host.answer_with("env.reset", :none)
+
+    assert Runners::Machines.return_to_service!(@machine)
+    assert_not Runners::Machines.return_to_service!(@machine), "it is not failed any more"
+
+    assert_equal "resetting", @machine.reload.state
+    assert_equal %w[env.reset], host.ops
+    error = assert_raises(Runners::Machines::NoMachine) { Runners::Machines.acquire!(runner_session) }
+    assert_match(/its machine is out of rotation: #{@machine.display_name} \(being returned to service\)/, error.message)
+  ensure
+    host&.stop
+  end
+
+  test "a Return to service whose reset fails leaves the machine failed with the new reason" do
+    @machine.update!(display_name: "build-01")
+    Runners::Machines.fail!(@machine, "old reason")
+    host = ContainerRuntime::FakeHostRunner.new(@machine)
+    host.answer_with("env.reset", "status" => "error", "error" => { "class" => "reset_failed", "message" => "volume in use" })
+
+    Runners::Machines.return_to_service!(@machine)
+
+    @machine.reload
+    assert_equal "failed", @machine.state
+    assert_equal "build-01 failed to reset on Return to service: reset_failed: volume in use", @machine.state_reason
+  ensure
+    host&.stop
+  end
+
+  test "a Return to service that nobody answers fails the machine when the op expires" do
+    Runners::Machines.fail!(@machine, "old reason")
+    Runners::Machines.return_to_service!(@machine)
+    assert_equal "resetting", @machine.reload.state
+
+    travel_to 20.minutes.from_now do
+      assert_equal 1, Runners::Operations.expire_overdue!
+    end
+
+    @machine.reload
+    assert_equal "failed", @machine.state
+    assert_match(/failed to reset on Return to service: the runner did not answer/, @machine.state_reason)
+  end
+
+  test "the result of an earlier reset does not settle a later Return to service" do
+    Runners::Machines.fail!(@machine, "boom")
+    Runners::Machines.return_to_service!(@machine)
+    first = RunnerOperation.where(runner_environment: @machine, op: "env.reset").order(:sequence).last
+    # Out of rotation again while the first reset is still open (a reused refresh token).
+    Runners::Machines.fail!(@machine, "refresh token reused")
+    assert Runners::Machines.return_to_service!(@machine)
+    second = RunnerOperation.where(runner_environment: @machine, op: "env.reset").order(:sequence).last
+    assert_not_equal first.id, second.id
+
+    Runners::Operations.record_result!(first, status: "ok")
+
+    assert_equal "resetting", @machine.reload.state, "the first reset is not the one this Return to service started"
+    Runners::Operations.record_result!(second, status: "ok")
+    assert_equal "registered", @machine.reload.state
+  end
+
+  test "Return to service is refused for a machine of a runner that is not manual" do
+    machine = create(:runner_environment, runner: create(:runner, :kubernetes))
+    Runners::Machines.fail!(machine, "boom")
+
+    assert_raises(Runners::Machines::NotManual) { Runners::Machines.return_to_service!(machine) }
+
+    assert_equal "failed", machine.reload.state
+    assert_empty RunnerOperation.where(runner_environment: machine)
   end
 
   test "a capacity wait counts only the machines that can come back" do
@@ -113,6 +239,63 @@ class Runners::MachinesTest < ActiveSupport::TestCase
 
     @machine.update!(state: :gone)
     assert_equal :none_registered, Runners::Machines.availability(@runner).status
+  end
+
+  test "an offline machine is skipped while another is free" do
+    @machine.update!(last_heartbeat_at: 2.minutes.ago)
+    online = create(:runner_environment, runner: @runner)
+
+    assert_equal online, Runners::Machines.acquire!(runner_session)
+  end
+
+  test "every machine offline refuses the launch with a message that names the runner" do
+    @machine.update!(last_heartbeat_at: 2.minutes.ago)
+
+    error = assert_raises(Runners::Machines::NoMachine) { Runners::Machines.acquire!(runner_session) }
+
+    assert_equal "runner_unreachable", error.reason
+    assert_match(/\ARunner "Build farm" has no machine online: its machine is offline \(#{@machine.display_name}\)/, error.message)
+    assert_nil @machine.reload.current_session_id
+  end
+
+  test "an offline machine does not count as busy: the only reachable one busy is a capacity wait" do
+    create(:runner_environment, runner: @runner, last_heartbeat_at: 2.minutes.ago)
+    Runners::Machines.acquire!(runner_session)
+
+    error = assert_raises(ContainerRuntime::CapacityError) { Runners::Machines.acquire!(runner_session) }
+
+    assert_equal "Waiting for a free machine on runner \"Build farm\" (1 of 1 busy).", error.message
+  end
+
+  test "a busy machine that keeps sending heartbeats while it runs an op stays online, and a silent one is offline whatever op it holds" do
+    holder = runner_session
+    Runners::Machines.acquire!(holder)
+    operation = Runners::Operations.enqueue!(@machine.reload, op: "exec", payload: { "cmd" => "true" }, session: holder,
+                                                              deadline_at: 5.minutes.from_now)
+    operation.update!(state: :delivered, delivered_at: Time.current)
+
+    @machine.update!(last_heartbeat_at: 30.seconds.ago)
+    assert Runners::Machines.availability(@runner).available?
+
+    @machine.update!(last_heartbeat_at: 5.minutes.ago)
+    assert_equal :all_offline, Runners::Machines.availability(@runner).status, "a delivered op within its deadline no longer counts as heard"
+  end
+
+  test "the wait for a free machine carries the runner_capacity reason, not the cluster's" do
+    Runners::Machines.acquire!(runner_session)
+
+    error = assert_raises(ContainerRuntime::CapacityError) { Runners::Machines.acquire!(runner_session) }
+
+    assert_equal "runner_capacity", error.reason
+  end
+
+  test "availability reports every machine offline, and failed machines only when none is registered" do
+    @machine.update!(last_heartbeat_at: 2.minutes.ago)
+    offline = Runners::Machines.availability(@runner)
+    assert_equal [ :all_offline, [ @machine ] ], [ offline.status, offline.offline ]
+
+    Runners::Machines.fail!(@machine, "env.reset failed")
+    assert_equal :all_failed, Runners::Machines.availability(@runner).status
   end
 
   test "a gone machine stays gone when it fails" do

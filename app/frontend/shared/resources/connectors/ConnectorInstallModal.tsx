@@ -60,7 +60,7 @@ export const ConnectorInstallModal: FC<ConnectorInstallModalProps> = ({
 
   const prefilled = declaredDefaults(target);
   const dirty = Object.keys({ ...prefilled, ...values }).some((key) => (values[key] ?? '') !== (prefilled[key] ?? ''));
-  const requestClose = useUnsavedChanges({ opened: !!connector, dirty, onClose });
+  const requestClose = useUnsavedChanges({ opened: !!connector, dirty, saving: submitting, onClose });
 
   const missingRequired = (target?.inputs ?? []).filter((i) => i.required && !values[i.key]?.trim());
 

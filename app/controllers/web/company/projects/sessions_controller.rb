@@ -149,7 +149,7 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
   # execution mode. It reads id, name, and those step fields only — WorkflowResource
   # would count and load every run of every workflow.
   def runnable_workflows
-    Workflow.visible_for_project(current_project).includes(steps: :sub_steps).map do |workflow|
+    Workflow.visible_for_project(current_project).includes(steps: %i[sub_steps resource_links]).map do |workflow|
       {
         id: workflow.id,
         name: workflow.name,
@@ -163,7 +163,7 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
   # in this project — plus this user's month-to-date spend across the company.
   def session_cost_hint
     finished = current_project.terminal_sessions
-                              .where(state: "finished")
+                              .finished
                               .where("terminal_sessions.created_at > ?", 30.days.ago)
                               .where("cost_cents > 0")
 

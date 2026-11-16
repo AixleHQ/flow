@@ -14,12 +14,11 @@ class RunnerEnvironmentTest < ActiveSupport::TestCase
     assert_equal @runner.company, environment.company
   end
 
-  test "a registered machine needs a name, and an ephemeral one is refused" do
-    environment = build(:runner_environment, runner: @runner, display_name: nil, ephemeral: true)
+  test "a registered machine needs a name" do
+    environment = build(:runner_environment, runner: @runner, display_name: nil)
 
     assert_not environment.valid?
     assert environment.errors.added?(:display_name, :blank)
-    assert environment.errors.of_kind?(:ephemeral, :inclusion)
   end
 
   test "facts are an object" do
@@ -66,6 +65,64 @@ class RunnerEnvironmentTest < ActiveSupport::TestCase
 
     assert_nothing_raised { check_session_company_key }
     assert_nil environment.reload.current_session_id
+  end
+
+  test "not_heard_since holds the machines never heard or last heard at or before the time" do
+    now = Time.current
+    never = create(:runner_environment, runner: @runner, last_heartbeat_at: nil)
+    stale = create(:runner_environment, runner: @runner, last_heartbeat_at: now - 1.minute)
+    at_time = create(:runner_environment, runner: @runner, last_heartbeat_at: now)
+    create(:runner_environment, runner: @runner, last_heartbeat_at: now + 1.second)
+
+    assert_equal [ never.id, stale.id, at_time.id ].sort, RunnerEnvironment.not_heard_since(now).pluck(:id).sort
+  end
+
+  test "display_state: idle without a session and online with one while heard, offline after 90 seconds or never" do
+    now = Time.current
+    machine = create(:runner_environment, runner: @runner, last_heartbeat_at: now - 89.seconds)
+    assert_equal "idle", machine.display_state(now)
+
+    machine.update!(current_session: create(:runner_session, environment: machine, runner_environment: nil))
+    assert_equal "online", machine.display_state(now)
+
+    machine.update!(last_heartbeat_at: now - 91.seconds)
+    assert_equal "offline", machine.display_state(now)
+
+    machine.update!(last_heartbeat_at: nil)
+    assert_equal "offline", machine.display_state(now)
+  end
+
+  test "display_state: a silent machine is offline whatever op it was delivered, until its heartbeat is heard" do
+    now = Time.current
+    machine = create(:runner_environment, runner: @runner, last_heartbeat_at: now - 5.minutes)
+    session = create(:runner_session, :holding, environment: machine)
+    operation = Runners::Operations.enqueue!(machine.reload, op: "exec", payload: { "cmd" => "true" }, session: session,
+                                                             deadline_at: now + 10.minutes)
+    operation.update!(state: :delivered, delivered_at: now - 4.minutes)
+
+    assert_equal "offline", RunnerEnvironment.find(machine.id).display_state(now)
+
+    machine.update!(last_heartbeat_at: now - 20.seconds)
+    assert_equal "online", RunnerEnvironment.find(machine.id).display_state(now)
+  end
+
+  test "display_state: failed and gone machines show as such, however recently they were heard" do
+    gone = create(:runner_environment, runner: @runner, state: :gone)
+    failed = create(:runner_environment, runner: @runner)
+    Runners::Machines.fail!(failed, "env.reset failed")
+
+    assert_equal "gone", gone.display_state
+    assert_equal "failed", failed.reload.display_state
+  end
+
+  test "busy? is true while the machine holds a session, and holding_session finds those machines" do
+    idle = create(:runner_environment)
+    holder = create(:runner_environment)
+    create(:runner_session, :holding, environment: holder)
+
+    assert_not idle.reload.busy?
+    assert holder.reload.busy?
+    assert_equal [ holder.id ], RunnerEnvironment.where(id: [ idle.id, holder.id ]).holding_session.pluck(:id)
   end
 
   private

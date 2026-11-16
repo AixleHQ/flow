@@ -26,7 +26,7 @@ module Trackers
     private
 
     def trackers
-      @trackers ||= ProjectTracker.for_project(@project).where.not(status: :detached).includes(:integration).order(:id).to_a
+      @trackers ||= ProjectTracker.for_project(@project).attached.includes(:integration).order(:id).to_a
     end
 
     def explicit!(requested)

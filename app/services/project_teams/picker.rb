@@ -8,10 +8,11 @@ module ProjectTeams
   # credential for every runtime the run will need: each step's pinned runtime,
   # plus — when some step pins none — the runtime SessionService would fall back
   # to for them (the run's, else their own default, else their newest
-  # credential). A credential whose quota is exhausted does not count.
+  # credential). A credential whose login has expired, or whose quota is
+  # exhausted, does not count.
   class Picker
-    Skip = Data.define(:user, :reason, :held_until) do
-      def initialize(user:, reason:, held_until: nil) = super
+    Skip = Data.define(:user, :reason, :held_until, :signed_out) do
+      def initialize(user:, reason:, held_until: nil, signed_out: false) = super
     end
 
     Result = Data.define(:team, :user, :skipped) do
@@ -84,34 +85,46 @@ module ProjectTeams
       skipped = []
       memberships.each do |member|
         user = member.user
-        reason, needed, held_until = assess(user, company_memberships[user.id], credentials.fetch(user.id, []))
-        if reason
-          skipped << Skip.new(user: user, reason: reason, held_until: held_until)
+        verdict = assess(user, company_memberships[user.id], credentials.fetch(user.id, []))
+        if verdict.is_a?(Skip)
+          skipped << verdict
         else
-          candidates << Candidate.new(user: user, credentials: needed)
+          candidates << Candidate.new(user: user, credentials: verdict)
         end
       end
       [ candidates, skipped ]
     end
 
-    # [reason, nil] when the member cannot take the run; [nil, credentials it needs] otherwise.
+    # A Skip when the member cannot take the run; the credentials it needs otherwise.
     def assess(user, membership, credentials)
-      return [ "was passed over for this run", nil ] if @exclude_user_ids.include?(user.id)
-      return [ "is no longer an active member of the company", nil ] if membership.nil?
-      return [ "is a viewer, and viewers can't start runs", nil ] if membership.viewer?
-      return [ "no longer has access to the project", nil ] unless project.accessible_by?(user)
-      return [ "has no agent connected in this company", nil ] if credentials.empty?
+      skip = ->(reason, **details) { Skip.new(user: user, reason: reason, **details) }
+      return skip.call("was passed over for this run") if @exclude_user_ids.include?(user.id)
+      return skip.call("is no longer an active member of the company") if membership.nil?
+      return skip.call("is a viewer, and viewers can't start runs") if membership.viewer?
+      return skip.call("no longer has access to the project") unless project.accessible_by?(user)
+      return skip.call("has no agent connected in this company") if credentials.empty?
 
       by_type = credentials.index_by(&:agent_type)
       runtimes = needed_runtimes(membership, credentials)
       missing = runtimes.reject { |runtime| by_type.key?(runtime) }
-      return [ "has no #{labels(missing)} connected", nil ] if missing.any?
+      return skip.call("has no #{labels(missing)} connected") if missing.any?
 
       needed = runtimes.map { |runtime| by_type.fetch(runtime) }
-      exhausted = needed.select(&:quota_exhausted?)
-      return [ exhausted_reason(exhausted), nil, exhausted.map(&:quota_exhausted_until).min ] if exhausted.any?
+      signed_out = needed.select { |credential| signed_out?(credential) }
+      return skip.call(signed_out_reason(signed_out), signed_out: true) if signed_out.any?
 
-      [ nil, needed ]
+      exhausted = needed.select(&:quota_exhausted?)
+      if exhausted.any?
+        return skip.call(exhausted_reason(exhausted), held_until: exhausted.map(&:quota_exhausted_until).min)
+      end
+
+      needed
+    end
+
+    # The test SessionService's launch preflight applies: a run handed to a member
+    # whose login it would refuse dies at launch instead of going to someone else.
+    def signed_out?(credential)
+      !credential.active? || credential.unrecoverably_expired?
     end
 
     def needed_runtimes(membership, credentials)
@@ -134,6 +147,10 @@ module ProjectTeams
     end
 
     def labels(runtimes) = runtimes.map { |runtime| AgentRuntime.label_for(runtime) }.to_sentence
+
+    def signed_out_reason(credentials)
+      "#{labels(credentials.map(&:agent_type))} login expired — sign in again in Profile settings"
+    end
 
     def exhausted_reason(credentials)
       credentials.map do |credential|

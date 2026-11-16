@@ -102,11 +102,12 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
   # --- Workflow Resolution (stub level for 29.1) ---
 
   test "workflow session returns step tool_ids" do
-    session = build_workflow_session(step_tool_ids: [ 10, 20 ])
+    tools = project_tools(2)
+    session = build_workflow_session(step_tool_ids: tools)
 
     result = SessionConfigResolver.resolve(session)
 
-    assert_equal [ 10, 20 ], result[:tool_ids]
+    assert_equal tools, result[:tool_ids]
   end
 
   test "workflow session returns agent_runtime from workflow_run" do
@@ -192,6 +193,19 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
     assert_equal [ run_repo.id, base_repo.id, step_repo.id ].sort, result[:repository_ids].sort
   end
 
+  test "a deleted repository is no longer the step's choice, so the project-wide fallback applies" do
+    deleted = create_project_repository
+    other = create_project_repository
+    session = build_workflow_session(
+      workflow_config: { "inherit_all_project_resources" => true },
+      step_repository_ids: [ deleted.id ]
+    )
+
+    deleted.destroy!
+
+    assert_equal [ other.id ], SessionConfigResolver.resolve(session)[:repository_ids]
+  end
+
   # The whole point of choosing a repository is to get THAT repository. Adding the
   # project's other repositories on top would make the choice meaningless.
   test "an explicit choice narrows instead of adding to the project-wide fallback" do
@@ -268,44 +282,48 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
   # === Story 29.2: Additive Resource Resolution ===
 
   test "workflow session merges workflow base + step tools" do
+    first, second, third = project_tools(3)
     session = build_workflow_session(
-      workflow_config: { "base_tool_ids" => [ 1, 2 ] },
-      step_tool_ids: [ 2, 3 ]
+      workflow_config: { "base_tool_ids" => [ first, second ] },
+      step_tool_ids: [ second, third ]
     )
 
     result = SessionConfigResolver.resolve(session)
 
-    assert_equal [ 1, 2, 3 ], result[:tool_ids].sort
+    assert_equal [ first, second, third ], result[:tool_ids].sort
   end
 
   test "workflow session merges workflow base + step skills" do
+    base, own = Array.new(2) { create(:skill, scope: @project).id }
     session = build_workflow_session(
-      workflow_config: { "base_skill_ids" => [ 10 ] },
-      step_skill_ids: [ 11 ]
+      workflow_config: { "base_skill_ids" => [ base ] },
+      step_skill_ids: [ own ]
     )
 
     result = SessionConfigResolver.resolve(session)
 
-    assert_equal [ 10, 11 ], result[:skill_ids].sort
+    assert_equal [ base, own ], result[:skill_ids].sort
   end
 
   test "workflow session returns workflow base mcp when step has none" do
+    server = create(:mcp_server, scope: @project).id
     session = build_workflow_session(
-      workflow_config: { "base_mcp_server_ids" => [ 20 ] },
+      workflow_config: { "base_mcp_server_ids" => [ server ] },
       step_mcp_server_ids: []
     )
 
     result = SessionConfigResolver.resolve(session)
 
-    assert_equal [ 20 ], result[:mcp_server_ids]
+    assert_equal [ server ], result[:mcp_server_ids]
   end
 
   test "workflow session returns step tools when no workflow base" do
-    session = build_workflow_session(step_tool_ids: [ 7 ])
+    tools = project_tools(1)
+    session = build_workflow_session(step_tool_ids: tools)
 
     result = SessionConfigResolver.resolve(session)
 
-    assert_equal [ 7 ], result[:tool_ids]
+    assert_equal tools, result[:tool_ids]
   end
 
   # === Story 29.3: Workflow inherit_all_project_resources ===
@@ -323,15 +341,15 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
   end
 
   test "inherit_all false excludes project tools" do
-    create(:tool, scope: @project)
+    picked, = project_tools(2)
     session = build_workflow_session(
       workflow_config: { "inherit_all_project_resources" => false },
-      step_tool_ids: [ 99 ]
+      step_tool_ids: [ picked ]
     )
 
     result = SessionConfigResolver.resolve(session)
 
-    assert_equal [ 99 ], result[:tool_ids]
+    assert_equal [ picked ], result[:tool_ids]
   end
 
   test "inherit_all adds project skills" do
@@ -365,15 +383,16 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
 
   test "inherit_all with step tools are additive" do
     project_tool = create(:tool, scope: @project)
+    platform_tool = create(:tool, :system)
     session = build_workflow_session(
       workflow_config: { "inherit_all_project_resources" => true },
-      step_tool_ids: [ 999 ]
+      step_tool_ids: [ platform_tool.id ]
     )
 
     result = SessionConfigResolver.resolve(session)
 
     assert_includes result[:tool_ids], project_tool.id
-    assert_includes result[:tool_ids], 999
+    assert_includes result[:tool_ids], platform_tool.id
   end
 
   # === Config items: additive cascade (spec-session-config-item-access) ===
@@ -556,14 +575,15 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
   end
 
   test "workflow session deduplicates assets shared across base and step" do
+    shared, own = project_assets(2)
     session = build_workflow_session(
-      workflow_config: { "base_asset_ids" => [ 100 ] },
-      step_asset_ids: [ 100, 200 ]
+      workflow_config: { "base_asset_ids" => [ shared ] },
+      step_asset_ids: [ shared, own ]
     )
 
     result = SessionConfigResolver.resolve(session)
 
-    assert_equal [ 100, 200 ], result[:input_asset_ids]
+    assert_equal [ shared, own ], result[:input_asset_ids]
   end
 
   # === Story 29.7: Config Resolution Traceability ===
@@ -596,16 +616,17 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
   end
 
   test "resolve_with_breakdown returns tool breakdown for workflow" do
+    base, *own = project_tools(3)
     session = build_workflow_session(
-      workflow_config: { "base_tool_ids" => [ 1 ] },
-      step_tool_ids: [ 2, 3 ]
+      workflow_config: { "base_tool_ids" => [ base ] },
+      step_tool_ids: own
     )
 
     result = SessionConfigResolver.resolve_with_breakdown(session)
 
-    assert_equal [ 1 ], result[:tools][:from_workflow_base]
-    assert_equal [ 2, 3 ], result[:tools][:from_step]
-    assert_equal [ 1, 2, 3 ], result[:tools][:resolved].sort
+    assert_equal [ base ], result[:tools][:from_workflow_base]
+    assert_equal own, result[:tools][:from_step]
+    assert_equal [ base, *own ], result[:tools][:resolved].sort
   end
 
   test "resolve_with_breakdown returns input_asset breakdown" do
@@ -764,6 +785,10 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
     Array.new(count) { create(:asset, scope: @project).id }
   end
 
+  def project_tools(count)
+    Array.new(count) { create(:tool, scope: @project).id }
+  end
+
   def build_workflow_session(step_tool_ids: [], step_skill_ids: [], step_mcp_server_ids: [],
                              step_asset_ids: [],
                              agent_runtime: "claude_code", step_agent: nil,
@@ -776,14 +801,19 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
     # Scoped to @project, the same project the run and the session belong to —
     # config item attachments are validated against the workflow's own project,
     # so a workflow in some other project could not name them.
-    # The resolver merges whatever ids are stored; ownership is the models' job, so
-    # the id lists are planted past validation.
+    # The resolver merges whatever ids are linked; ownership is the models' job, so
+    # the links are planted past validation.
     workflow = create(:workflow, scope: @project)
     workflow.update_column(:config, workflow_config)
+    ResourceLink::COLUMNS.each do |list, column|
+      WorkflowResourceLink.replace!(workflow, column, workflow_config["base_#{list}"])
+    end
     step = create(:step, workflow: workflow, agent: step_agent, config_item_ids: step_config_item_ids,
       required_agent_runtime: step_required_agent_runtime, bmad_enabled: step_bmad_enabled)
-    step.update_columns(tool_ids: step_tool_ids, skill_ids: step_skill_ids, mcp_server_ids: step_mcp_server_ids,
-      asset_ids: step_asset_ids, repository_ids: step_repository_ids)
+    { tool_id: step_tool_ids, skill_id: step_skill_ids, mcp_server_id: step_mcp_server_ids,
+      asset_id: step_asset_ids, repository_id: step_repository_ids }.each do |column, ids|
+      StepResourceLink.replace!(step, column, ids)
+    end
     workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user,
       agent_runtime: agent_runtime, mode: run_mode, repository_ids: run_repository_ids,
       input_asset_ids: run_input_asset_ids, board_task: board_task)

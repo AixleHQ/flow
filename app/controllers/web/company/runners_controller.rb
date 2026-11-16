@@ -8,12 +8,13 @@
 # a project's runner is not found here.
 class Web::Company::RunnersController < Web::Company::ApplicationController
   include RunnerRegistrationTokens
+  include RunnerMachinesList
 
   requires_feature :external_runners
 
   def index
     render inertia: "Company/Settings/RunnersPage", props: {
-      runners: company_runners.includes(:created_by).order(:name).map { |runner| RunnerResource.new(runner).to_h },
+      runners: company_runners.includes(:created_by, :environments).order(:name).map { |runner| RunnerResource.new(runner).to_h },
       runner_types: Runners::Form.runner_types,
       can_manage: runners_policy.create?
     }
@@ -24,6 +25,7 @@ class Web::Company::RunnersController < Web::Company::ApplicationController
 
     render inertia: "Company/Settings/RunnerPage", props: {
       runner: RunnerResource.new(runner).to_h,
+      machines: machines_prop(runner),
       runner_types: Runners::Form.runner_types,
       can_manage: runners_policy.update?
     }
@@ -83,7 +85,7 @@ class Web::Company::RunnersController < Web::Company::ApplicationController
 
   # This page's own runners, which are all it lists and all it manages.
   def company_runners
-    current_company.runners.not_deleted.where(project_id: nil)
+    current_company.runners.not_deleted.company_level
   end
 
   def runners_policy

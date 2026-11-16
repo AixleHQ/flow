@@ -33,7 +33,7 @@ module Sessions
         # A live workflow step whose container should be up by now: the sessions the
         # quota scan has always read.
         def settled_step?(session)
-          session.session_type == "workflow_step" &&
+          session.workflow_step? &&
             session.state.in?(ACTIVE_STATES) &&
             session.container_id.present? &&
             (session.started_at || session.created_at) < MIN_AGE.ago

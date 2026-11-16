@@ -99,6 +99,10 @@ module Oauth
     def fresh(cred, skew: REFRESH_SKEW, wait: true)
       return cred.access_token unless cred.expired?(skew)
 
+      # A GitLab grant of a previous GITLAB_ENDPOINT is left to lapse, not kept alive
+      # (and its refresh token is not sent to the instance now configured).
+      raise ReauthRequired.new(cred, "issued by another GitLab instance") if cred.on_other_gitlab_instance?
+
       # Nothing to refresh from. Record it like any other refresh failure so the
       # credential escalates to status:error (and notifies the owner to reconnect)
       # through the ONE existing path, instead of sitting :active until its access
@@ -145,6 +149,32 @@ module Oauth
       raise ReauthRequired.new(cred, "refresh failed")
     end
 
+    # Ends a grant at its provider: RFC 7009 token revocation, posted to the provider's
+    # `revocation_endpoint` with the client the grant was issued to. The endpoint comes
+    # from the trusted registry, and only the provider's trusted host may resolve
+    # privately, as for the token call. The caller decides what a failure means.
+    # Raises Oauth::RevocationError (a class name or status only, never token material).
+    def revoke!(cred)
+      endpoint = Oauth::Providers.config(cred.provider)[:revocation_endpoint]
+      raise Oauth::RevocationError, "#{cred.provider} has no revocation endpoint" if endpoint.blank?
+
+      client = cred.oauth_client
+      uri = URI.parse(endpoint)
+      trusted = Oauth::Providers.trusted_hosts(cred.provider)
+      http = SafeHttp.http_for(uri, open_timeout: TOKEN_TIMEOUT, read_timeout: TOKEN_TIMEOUT, trusted_hosts: trusted)
+      req = Net::HTTP::Post.new(uri)
+      body = { token: cred.access_token, client_id: client.client_id }
+      body[:client_secret] = client.client_secret if client.confidential?
+      req.set_form_data(body)
+      response = http.request(req)
+      raise Oauth::RevocationError, "revocation status=#{response.code}" unless response.is_a?(Net::HTTPSuccess)
+
+      true
+    rescue SafeHttp::UnsafeUrl, URI::InvalidURIError, SocketError, SystemCallError, Net::OpenTimeout, Net::ReadTimeout,
+           OpenSSL::SSL::SSLError => e
+      raise Oauth::RevocationError, "revocation failed (#{e.class.name})"
+    end
+
     # POST token_endpoint, form-encoded refresh_token grant + client auth.
     # Returns parsed JSON (string keys). NEVER logs token material.
     def perform_refresh!(cred)
@@ -157,14 +187,16 @@ module Oauth
       # no more trustworthy than a freshly discovered one (TOCTOU). Static endpoints
       # come from the trusted registry and pass. Raised as StandardError so `fresh`
       # marks the credential errored and surfaces ReauthRequired.
-      uri_errs = UrlSafetyValidator.errors_for(client.token_endpoint, require_https: true)
+      trusted = Oauth::Providers.trusted_hosts(cred.provider)
+      uri_errs = UrlSafetyValidator.errors_for(client.token_endpoint, require_https: true,
+                                                                      trusted_hosts_override: trusted)
       raise "unsafe token_endpoint" if uri_errs.any?
 
       # RFC 8707 resource indicator: the one the grant was issued for.
       body[:resource] = cred.resource.presence || cred.mcp_server.url if cred.mcp_server_id.present?
 
       uri = URI.parse(client.token_endpoint)
-      http = SafeHttp.http_for(uri, open_timeout: TOKEN_TIMEOUT, read_timeout: TOKEN_TIMEOUT)
+      http = SafeHttp.http_for(uri, open_timeout: TOKEN_TIMEOUT, read_timeout: TOKEN_TIMEOUT, trusted_hosts: trusted)
       req = Net::HTTP::Post.new(uri)
       req["Accept"] = "application/json"
       req.set_form_data(body)

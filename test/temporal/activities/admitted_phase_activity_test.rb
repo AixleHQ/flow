@@ -137,7 +137,7 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
     # Refusing to delete was a deadlock: the workload kept the slot honestly
     # occupied, and the operation could never resolve because the deletion that
     # would prove absence was the thing being refused.
-    @runtime.expects(:cleanup_session).with("runtime-id")
+    @runtime.expects(:cleanup_session).with("runtime-id", failed: false)
     @runtime.stubs(:session_absent?).returns(false, true)
 
     result = cleanup
@@ -156,7 +156,7 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
     @admission.stubs(:terminal_session).returns(@session)
     @admission.session_runtime_operations.create!(phase: "exec", state: "in_flight")
     strategy.stubs(:before_cleanup).returns({})
-    @runtime.expects(:cleanup_session).with("runtime-id")
+    @runtime.expects(:cleanup_session).with("runtime-id", failed: false)
     @runtime.stubs(:session_absent?).returns(false, true)
 
     result = cleanup
@@ -186,7 +186,7 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
     @admission.stubs(:terminal_session).returns(@session)
     strategy.expects(:before_cleanup).returns({})
     @runtime.expects(:session_absent?).with("runtime-id").returns(false).twice
-    @runtime.expects(:cleanup_session).with("runtime-id")
+    @runtime.expects(:cleanup_session).with("runtime-id", failed: false)
 
     result = cleanup
 
@@ -260,6 +260,37 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
 
     assert_equal "failed", @session.reload.state
     assert_equal "Agent image could not be pulled", @session.error_message
+  end
+
+  # Cleanup and `finalize_session` decide whether the session failed from the
+  # same outcome: a runner machine is reset after a failure, and counts it.
+  def stub_cleanup_of_finishing_session
+    strategy = mock("strategy")
+    @session.stubs(:strategy).returns(strategy)
+    SessionAdmission.stubs(:find).with(@admission.id).returns(@admission)
+    @admission.stubs(:terminal_session).returns(@session)
+    strategy.stubs(:before_cleanup).returns({})
+    @runtime.stubs(:session_absent?).returns(false, true)
+    @session.update!(state: "running", finishing_at: Time.current, ready_at: 1.minute.ago)
+  end
+
+  test "a session finished with a real error is cleaned up as a failure" do
+    stub_cleanup_of_finishing_session
+    @runtime.expects(:cleanup_session).with("runtime-id", failed: true)
+
+    @activity.run(Hashie::Mash.new(phase: "cleanup", admission_id: @admission.id, error: "Agent image could not be pulled"))
+
+    assert_equal "failed", @session.reload.state
+  end
+
+  test "a session finished with only the generic closed-permit error is not cleaned up as a failure" do
+    stub_cleanup_of_finishing_session
+    @runtime.expects(:cleanup_session).with("runtime-id", failed: false)
+
+    @activity.run(Hashie::Mash.new(phase: "cleanup", admission_id: @admission.id,
+                                   error: TerminalSession::GENERIC_ERROR_MESSAGES.first))
+
+    assert_equal "finished", @session.reload.state
   end
 
   test "output collection does not repeat when cleanup is retried" do

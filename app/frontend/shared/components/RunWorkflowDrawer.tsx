@@ -188,7 +188,7 @@ export function RunWorkflowDrawer({
     selectedAssetIds.length > 0 ||
     requestedModel !== null ||
     runnerId !== workflowRunnerId;
-  const requestClose = useUnsavedChanges({ opened, dirty, onClose });
+  const requestClose = useUnsavedChanges({ opened, dirty, saving: starting, onClose });
 
   const handleSubmit = () => {
     if (!canSubmit || !workflow) return;

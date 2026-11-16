@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isWaitingForCluster, isWaitingForSlot, launchWaitMessage } from './launchStatus';
+import { isWaitingForCluster, isWaitingForRunner, isWaitingForSlot, launchWaitMessage } from './launchStatus';
 
 describe('launchWaitMessage', () => {
   it('blames the queue only when the session is actually behind others', () => {
@@ -20,6 +20,14 @@ describe('launchWaitMessage', () => {
     expect(launchWaitMessage('cluster_capacity')).toBe('Waiting for cluster capacity');
     expect(launchWaitMessage('namespace_quota')).toBe('Waiting for cluster capacity');
     expect(isWaitingForCluster('namespace_quota')).toBe(true);
+  });
+
+  it("names a free machine, not the cluster, when every machine of the session's runner is busy", () => {
+    expect(launchWaitMessage('runner_capacity')).toBe('Waiting for a free machine');
+    expect(launchWaitMessage('runner_capacity', 'authentication')).toBe('Waiting for a free machine');
+    expect(isWaitingForRunner('runner_capacity')).toBe(true);
+    expect(isWaitingForCluster('runner_capacity')).toBe(false);
+    expect(isWaitingForRunner('cluster_capacity')).toBe(false);
   });
 
   it('does not invent a queue for a session with no admission at all', () => {

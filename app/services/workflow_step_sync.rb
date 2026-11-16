@@ -17,7 +17,8 @@
 # is validated, then set again in dependency order so a transient cycle is
 # never seen by the cycle validation.
 class WorkflowStepSync
-  STEP_COLUMNS = (Versions::Snapshots::Workflow::STEP_FIELDS - %w[id depends_on_step_ids]).freeze
+  STEP_COLUMNS = (Versions::Snapshots::Workflow::STEP_FIELDS + Versions::Snapshots::Workflow::STEP_REFERENCES.keys -
+                  %w[id depends_on_step_ids]).freeze
   SUB_STEP_COLUMNS = (Versions::Snapshots::Workflow::SUB_STEP_FIELDS - %w[id]).freeze
 
   # Ids of rows that still exist, in the given order. A reference to a row that
@@ -38,7 +39,7 @@ class WorkflowStepSync
   end
 
   def sync!
-    rows = @workflow.steps.unscope(:order).includes(:sub_steps).lock.to_a.index_by(&:id)
+    rows = @workflow.steps.unscope(:order).includes(:sub_steps, :resource_links).lock.to_a.index_by(&:id)
     park_positions(rows.values)
     steps = write_steps(rows)
     key_map = steps.transform_values(&:id)

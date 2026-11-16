@@ -40,7 +40,9 @@ const Pending = ({ workspace, requestedBy, signInUrl }: Props) => {
       </Text>
       <Alert color="yellow" variant="light">
         Approve only if you know this workspace: messages addressed to Aixle Flow in your organization will go to it.
-        You need to be a Global, Privileged Role, Cloud Application, Application or Teams Administrator.
+        Approving takes a Global or Privileged Role Administrator; without file access, a Cloud Application or
+        Application Administrator can approve too. If Microsoft asks you to request approval instead, your role cannot
+        grant what Aixle asks for.
       </Alert>
       <Checkbox
         checked={withFiles}

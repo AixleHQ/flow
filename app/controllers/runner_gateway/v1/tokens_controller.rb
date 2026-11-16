@@ -9,7 +9,9 @@ module RunnerGateway
       before_action { authenticate(:refresh) }
 
       def create
-        render_pair(Runners::Credentials.rotate!(@credential))
+        pair = Runners::Credentials.rotate!(@credential)
+        record_heartbeat
+        render_pair(pair)
       end
     end
   end

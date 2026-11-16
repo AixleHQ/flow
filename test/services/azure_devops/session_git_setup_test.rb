@@ -38,6 +38,13 @@ module AzureDevops
       assert_equal 0o600, attrs[:mode]
     end
 
+    test "the clone marks the checkout as safe in the system git config" do
+      @setup.clone(@repository, "/workspace/repo/api", 1001)
+
+      script = @runtime.execs.map { |cmd| Array(cmd).join(" ") }.find { |c| c.include?("clone --filter=blob:none") }
+      assert_includes script, "git config --system --add safe.directory /workspace/repo/api"
+    end
+
     # Baked into the agent image, the helper made the platform and every image a
     # matched pair: an image predating it produced a checkout configured to call
     # a file that was not there, and every push failed with "could not read

@@ -11,8 +11,7 @@
           "name": " ",
           "os": "linux",
           "arch": "amd64",
-          "facts": {"docker": "27.1.0"},
-          "ephemeral": false
+          "facts": {"docker": "27.1.0"}
         }
       },
       "response": {"status": 422, "body": {"error": "invalid_registration", "message": {"$type": "string"}}}
@@ -22,7 +21,7 @@
         "method": "POST",
         "path": "/runner/v1/register",
         "token": "{{reg}}",
-        "body": {"os": "linux", "arch": "amd64", "facts": {"docker": "27.1.0"}, "ephemeral": false}
+        "body": {"os": "linux", "arch": "amd64", "facts": {"docker": "27.1.0"}}
       },
       "response": {"status": 422, "body": {"error": "invalid_registration", "message": {"$type": "string"}}}
     },
@@ -31,7 +30,7 @@
         "method": "POST",
         "path": "/runner/v1/register",
         "token": "{{reg}}",
-        "body": {"name": "build-01", "os": "linux", "arch": "amd64", "facts": "docker", "ephemeral": false}
+        "body": {"name": "build-01", "os": "linux", "arch": "amd64", "facts": "docker"}
       },
       "response": {"status": 422, "body": {"error": "invalid_registration", "message": {"$type": "string"}}}
     },
@@ -40,7 +39,7 @@
         "method": "POST",
         "path": "/runner/v1/register",
         "token": "{{reg}}",
-        "body": {"name": "build-01", "os": "linux", "arch": "amd64", "facts": null, "ephemeral": false}
+        "body": {"name": "build-01", "os": "linux", "arch": "amd64", "facts": null}
       },
       "response": {"status": 422, "body": {"error": "invalid_registration", "message": {"$type": "string"}}}
     },
@@ -53,8 +52,7 @@
           "name": "build-01",
           "os": "linux",
           "arch": "amd64",
-          "facts": {"docker": "27.1.0"},
-          "ephemeral": false
+          "facts": {"docker": "27.1.0"}
         }
       },
       "response": {"status": 201}

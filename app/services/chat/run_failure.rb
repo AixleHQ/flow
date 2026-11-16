@@ -13,7 +13,7 @@ module Chat
         return "#{run.failed_agent_credential&.agent_type || 'The connected account'} ran out of credits."
       end
 
-      step = run.step_runs.where(state: "failed").order(:updated_at).last
+      step = run.step_runs.with_state(:failed).order(:updated_at).last
       [ step&.step&.name, step&.error_message.to_s.truncate(400).presence ].compact.join(": ").presence ||
         run.failure_reason.to_s.humanize.presence
     end

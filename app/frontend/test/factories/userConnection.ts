@@ -12,6 +12,7 @@ export const buildUserConnection = (overrides: Partial<UserConnection> = {}): Us
 });
 
 export const buildActAsConsent = (overrides: Partial<ActAsConsent> = {}): ActAsConsent => ({
+  provider: 'github',
   projectId: 7,
   projectName: 'Acme',
   inOwnTasks: false,

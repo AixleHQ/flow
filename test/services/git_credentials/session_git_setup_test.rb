@@ -58,7 +58,68 @@ module GitCredentials
       assert_raises(SessionGitSetup::HelperNotInstalled) { @setup.install_helper!(1001) }
     end
 
+    test "a clone marks the checkout as safe in the system git config, once" do
+      @setup.clone(@repository, "/workspace/repo/my-app", 1001)
+
+      script = clone_script
+      assert_includes script, "git config --system --add safe.directory /workspace/repo/my-app"
+      assert_includes script, "grep -qxF -- /workspace/repo/my-app"
+      assert_operator script.index("chown -R"), :<, script.index("safe.directory")
+    end
+
+    test "reconfiguring an existing checkout adds the entry too" do
+      script = @setup.reconfigure_script(@repository, "/workspace/repo/my-app", 1001)
+
+      assert_includes script, "git config --system --add safe.directory /workspace/repo/my-app"
+      assert_includes script, "grep -qxF -- /workspace/repo/my-app"
+    end
+
+    test "the entry is added to a real system config once, and a failed write does not fail the script" do
+      Dir.mktmpdir do |dir|
+        env = { "GIT_CONFIG_SYSTEM" => File.join(dir, "gitconfig"), "GIT_CONFIG_NOSYSTEM" => nil }
+        script = GitCredentials::SafeDirectory.script("/workspace/repo/my app", scope: :system)
+
+        2.times { assert system(env, "sh", "-c", script) }
+        out = IO.popen(env, [ "git", "config", "--system", "--get-all", "safe.directory" ], &:read)
+        assert_equal "/workspace/repo/my app\n", out
+
+        unwritable = { "GIT_CONFIG_SYSTEM" => File.join(dir, "missing", "gitconfig") }
+        assert system(unwritable, "sh", "-c", script, err: File::NULL)
+      end
+    end
+
+    test "the global scope is added to a real global config once, and a failed write does not fail the script" do
+      Dir.mktmpdir do |dir|
+        env = { "HOME" => dir, "GIT_CONFIG_GLOBAL" => File.join(dir, ".gitconfig") }
+        script = GitCredentials::SafeDirectory.script("/root/my app", scope: :global)
+
+        2.times { assert system(env, "sh", "-c", script) }
+        out = IO.popen(env, [ "git", "config", "--global", "--get-all", "safe.directory" ], &:read)
+        assert_equal "/root/my app\n", out
+
+        unwritable = { "HOME" => dir, "GIT_CONFIG_GLOBAL" => File.join(dir, "missing", ".gitconfig") }
+        assert system(unwritable, "sh", "-c", script, err: File::NULL)
+      end
+    end
+
+    test "an unknown or missing scope is refused" do
+      assert_raises(ArgumentError) { GitCredentials::SafeDirectory.script("/p", scope: :local) }
+      assert_raises(ArgumentError) { GitCredentials::SafeDirectory.script("/p", scope: "system") }
+      assert_raises(ArgumentError) { GitCredentials::SafeDirectory.script("/p") }
+    end
+
+    test "chained after a failing command the fragment keeps that exit code" do
+      script = "false && #{GitCredentials::SafeDirectory.script('/p', scope: :system)}"
+
+      assert_not system("sh", "-c", script)
+      assert_equal 1, $?.exitstatus
+    end
+
     private
+
+    def clone_script
+      @runtime.execs.map { |cmd| Array(cmd).join(" ") }.find { |c| c.include?("clone --filter=blob:none") }
+    end
 
     def git_clone_ran? = @runtime.execs.any? { |cmd| Array(cmd).join(" ").include?("clone --filter=blob:none") }
   end

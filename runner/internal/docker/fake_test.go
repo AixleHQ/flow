@@ -47,6 +47,14 @@ type fakeEngine struct {
 	pullPlatforms   []string
 	createPlatforms []string
 	rootDir         string
+	// daemonArch is the Architecture of /info, as the daemon spells it
+	// ("aarch64" on arm64), "" when it does not say.
+	daemonArch string
+	// amd64Only makes the registry answer a pull for any other platform as it does
+	// for an index without it.
+	amd64Only bool
+	// imageArch is the architecture of the image the last pull left, "" for amd64.
+	imageArch string
 
 	containers map[string]*fakeContainer
 	execs      map[string]*fakeExec
@@ -68,6 +76,12 @@ type fakeEngine struct {
 	// removeBlocks keeps every container removal from answering until the
 	// client gives up, as a stalled daemon does.
 	removeBlocks bool
+	// removeBlocksRole keeps the removal of the containers with this role label
+	// from answering until the client gives up. removeBlocked is how long the
+	// last such removal was held, and onRemoveBlocked runs when one arrives.
+	removeBlocksRole string
+	removeBlocked    time.Duration
+	onRemoveBlocked  func()
 	// removeError refuses every container removal with a 500.
 	removeError string
 	// bindsNotVisible refuses every bind mount, as a daemon that does not see
@@ -153,7 +167,7 @@ func (f *fakeEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case p == "/version":
 		writeJSON(w, http.StatusOK, map[string]any{"Version": "27.1.0", "ApiVersion": f.apiVersion, "MinAPIVersion": "1.24", "Os": "linux", "Arch": "amd64"})
 	case p == "/info":
-		writeJSON(w, http.StatusOK, map[string]any{"DockerRootDir": f.rootDir})
+		writeJSON(w, http.StatusOK, map[string]any{"DockerRootDir": f.rootDir, "Architecture": f.daemonArch})
 	case strings.HasPrefix(p, "/images/"):
 		f.serveImages(w, r, p)
 	case strings.HasPrefix(p, "/containers/"):
@@ -181,7 +195,11 @@ func (f *fakeEngine) serveImages(w http.ResponseWriter, r *http.Request, p strin
 			writeJSON(w, http.StatusNotFound, map[string]any{"message": "No such image: " + ref})
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"Id": "sha256:" + strings.Repeat("0", 64), "RepoDigests": []string{ref}})
+		arch := f.imageArch
+		if arch == "" {
+			arch = "amd64"
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"Id": "sha256:" + strings.Repeat("0", 64), "RepoDigests": []string{ref}, "Os": "linux", "Architecture": arch})
 	case p == "/images/create" && r.Method == http.MethodPost:
 		// The SDK sends a digest as the `tag`, as the daemon's API takes it.
 		tag := r.URL.Query().Get("tag")
@@ -200,6 +218,12 @@ func (f *fakeEngine) serveImages(w http.ResponseWriter, r *http.Request, p strin
 				return
 			}
 		}
+		platform := r.URL.Query().Get("platform")
+		if f.amd64Only && platform != "" && platform != "linux/amd64" {
+			writeJSON(w, http.StatusNotFound, map[string]any{"message": "no matching manifest for " + platform + "/v8 in the manifest list entries"})
+			return
+		}
+		f.imageArch = strings.TrimPrefix(platform, "linux/")
 		if f.pullStatus != 0 {
 			writeJSON(w, f.pullStatus, map[string]any{"message": "pull access denied for " + r.URL.Query().Get("fromImage")})
 			return
@@ -299,7 +323,23 @@ func (f *fakeEngine) serveContainers(w http.ResponseWriter, r *http.Request, p s
 	if action == "" && r.Method == http.MethodDelete {
 		f.mu.Lock()
 		blocks := f.removeBlocks
+		blockedRole := false
+		if c := f.lookup(ref); c != nil && f.removeBlocksRole != "" && c.Config.Labels[LabelRole] == f.removeBlocksRole {
+			blockedRole = true
+		}
+		onBlocked := f.onRemoveBlocked
 		f.mu.Unlock()
+		if blockedRole {
+			arrived := time.Now()
+			if onBlocked != nil {
+				onBlocked()
+			}
+			<-r.Context().Done()
+			f.mu.Lock()
+			f.removeBlocked = time.Since(arrived)
+			f.mu.Unlock()
+			return
+		}
 		if blocks {
 			<-r.Context().Done()
 			return

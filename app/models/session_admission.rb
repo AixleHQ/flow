@@ -3,7 +3,13 @@
 class SessionAdmission < ApplicationRecord
   # Reasons a reservation is deliberately not making progress. None of them is
   # staleness, so the reapers must leave them alone (AD-7, AD-8).
-  WAIT_REASONS = %w[concurrency_limit namespace_quota cluster_capacity].freeze
+  #
+  # `runner_capacity` is a session on an external runner whose every machine is
+  # busy (Runners::Machines::RUNNER_CAPACITY): a wait like `cluster_capacity`,
+  # for a machine instead of a pod.
+  WAIT_REASONS = %w[concurrency_limit namespace_quota cluster_capacity runner_capacity].freeze
+  # The reasons the launch itself waits on, which a screen names.
+  LAUNCH_WAITS = %w[namespace_quota cluster_capacity runner_capacity].freeze
 
   belongs_to :terminal_session
   belongs_to :session_admission_pool
@@ -25,7 +31,7 @@ class SessionAdmission < ApplicationRecord
   # second still told the user to wait for capacity.
   def launch_phase
     return "queued_for_slot" if admitted_at.nil?
-    return wait_reason if wait_reason.in?(%w[namespace_quota cluster_capacity])
+    return wait_reason if wait_reason.in?(LAUNCH_WAITS)
     return "starting" unless launch_state == "acknowledged"
 
     "running"

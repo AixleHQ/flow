@@ -24,6 +24,147 @@ governance, community health — carry none.
   the Usage limits card, read from the CLI's own `/usage` view at the end of each
   session (its quota is not reachable by the server, so the card shows the last
   session's reading).
+- **Integrations**: agents can act as you on GitLab, as they can on GitHub.
+  Connect your GitLab account under **Profile → Connected accounts**, allow it
+  per project, and give a step the `gitlab_user_token` or `gitlab_user_token_for`
+  tool. Unlike GitHub's, the token is not limited to the session's repositories:
+  GitLab cannot do that, and the user guide says what bounds it instead. The
+  operator adds `<PROTOCOL>://<DOMAIN>/oauth/callback` as a redirect URI to the
+  deployment's GitLab OAuth application. Your concurrent sessions share one
+  GitLab token, which Flow replaces only in its last ten minutes.
+
+### Changed
+- Runners: the runner pulls the agent images for its machine's own platform
+  and falls back to `linux/amd64` when an image has no build for it, so a
+  machine on arm64 runs an image built for arm64 natively. `images.yml` builds
+  the agent images for `linux/amd64` and `linux/arm64`, so the published images
+  are multi-arch from the next image build.
+- Runners: the platform now recommends `aixle-runner` 0.4.0 and serves it next
+  to 0.1.0 to 0.3.0. It pins the `linux-amd64` and `linux-arm64` binaries of
+  [runner-v0.4.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.4.0)
+  by their SHA-256. "Add machine" now offers 0.4.0, the binary and the
+  `ghcr.io/aixlehq/aixle-runner:0.4.0` image, and an idle machine on an older
+  version that has not opted out is offered the update. 0.4.0 pulls and runs
+  the agent, sidecar and scrub containers for the machine's own platform when
+  the agent image has it, and `linux/amd64` otherwise, and bounds the removal of
+  the scrub helper container. Until the multi-arch agent images are published
+  (the application release with the arm64 build), it uses `linux/amd64` on
+  every machine, as 0.3.0 does. Runner protocol 1 only, and no minimum runner
+  version: 0.3.0 keeps working, but always runs `linux/amd64` images, under
+  emulation on an arm64 machine.
+- Runners: the platform now recommends `aixle-runner` 0.3.0 and
+  serves it next to 0.1.0 and 0.2.0. It pins the `linux-amd64` and `linux-arm64`
+  binaries of [runner-v0.3.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.3.0)
+  by their SHA-256. "Add machine" now offers 0.3.0, the binary and the
+  `ghcr.io/aixlehq/aixle-runner:0.3.0` image, and an idle machine on 0.2.0 that
+  has not opted out is offered the update. 0.3.0 sends a heartbeat while an
+  operation runs, so its machine stays online through a long one, such as a first
+  image pull, and stops on a terminal heartbeat refusal. It no longer sends
+  `ephemeral` when it registers. Runner protocol 1 only, and no minimum runner
+  version: 0.2.0 keeps working, but shows offline during an operation longer
+  than 90 seconds because it sends no heartbeat.
+
+## [1.15.0] - 2026-11-14
+
+### Added
+- **Tasks**: agents using personal access can ask for the tasks assigned to you
+  — directly or through a project team you are on — across every project of one
+  company, or in one project (`list_my_tasks`). `list_projects` now names each
+  project's company (`company_id`).
+- Runners: a manual runner's page lists its machines (name, state, version,
+  OS, last seen) and refreshes while open. A machine not heard from for 90
+  seconds is offline and gets no sessions; when every machine is offline, a
+  launch is refused naming the runner. The runner's status now follows its
+  machines' health, checked every minute.
+- Runners: a company admin, or a project admin or owner for a project runner,
+  can revoke a single machine from the Machines list. Its credentials stop
+  working, the machine shows **Gone**, and the session it held ends at once and
+  frees its slot. Revoking or deleting a runner now also ends its sessions: a
+  running one fails with the revoked message and one waiting for a machine ends,
+  instead of staying in **Finishing** or waiting. The Machines list shows the
+  first-seen IP and who added each machine, and the runners list shows machines
+  busy/total for a manual runner.
+- Runners: a session waiting for a busy runner shows "Waiting for a free
+  machine" instead of "Waiting for cluster capacity". The platform accepts a
+  runner heartbeat (`POST /runner/v1/heartbeat`), which keeps a machine online
+  through a long operation.
+- Runners: sessions on an external runner use public agent images
+  (`ghcr.io/aixlehq/flow-<agent>:latest`) instead of the hosted ones a machine
+  may not be able to pull. Self-hosted: `RUNNER_AGENT_IMAGE_PREFIX`,
+  `RUNNER_AGENT_IMAGE_TAG` and `RUNNER_AGENT_IMAGE_<RUNTIME>` change them.
+
+### Changed
+- Runners: the `reconnect_grace` setting and `ephemeral` machine registration
+  are gone. A migration removes `reconnect_grace` from every runner's
+  configuration; a runner configuration naming either key is refused like any
+  other unknown key.
+
+### Fixed
+- **Sessions & Runs**: agents whose image runs as root (Kiro CLI, Codex,
+  Gemini, Grok, Antigravity, Copilot, Cursor) no longer get "detected dubious
+  ownership" from git in an attached repository.
+- Browser Back and Forward on a form with unsaved changes now wait for the
+  "Discard unsaved changes?" answer; Keep editing keeps the form.
+- **Integrations**: a Microsoft Teams channel created after Aixle Flow joined
+  its team can be connected. Its code was refused with "Posted in <channel>,
+  but the code is for <team> / <channel>". Renaming a team now renames it on
+  every channel.
+- **Integrations**: a team's General channel that carries another name in
+  Microsoft Teams, such as the first channel new Teams asks to name when a team
+  is created, can be connected under the name people see.
+- **Integrations**: when Microsoft stops an administrator approving a Teams
+  connection, the approval page shows Microsoft's reason instead of "sign-in
+  was cancelled", and names the administrator roles that can approve.
+- **Workflows**: the preview before reverting a workflow no longer lists a
+  repository, skill, connector or secret deleted since as coming back. The
+  revert leaves such a resource out, and the preview now says the same.
+
+## [1.14.0] - 2026-11-13
+
+### Added
+- **Tasks**: in bulk mode, **Select all** picks every card the board shows, so
+  filtering the board to one person and then choosing **Assign** moves all of
+  their cards to a team at once.
+
+### Changed
+- **Docs**: project teams have their own page, *Project teams*, next to *Team &
+  access*, and it and *Microsoft Teams* each point to the other, so a search for
+  "teams" no longer lands only on the chat integration.
+- **Teams**: when a step of a team's run stops on its owner's agent quota or on a
+  failed login, it runs again as the team's next member whatever the step's On
+  Failure setting, and without using up a retry. Before, the step had to be set
+  to retry, which also retried every ordinary failure.
+
+### Fixed
+- **Teams**: a member whose agent login has expired is passed over instead of
+  being handed runs that then fail at launch, and the Teams page marks them
+  **Login expired**.
+- **Sessions & Runs**: a run waiting for a free session slot now reads Queued on
+  its own page and in the task's Runs tab, as it already did on the board card,
+  instead of Running while nothing is executing yet.
+- **Sessions & Runs**: the web log no longer prints, on every request, the
+  OpenTelemetry spans a Copilot CLI session sends every couple of seconds.
+- **Workflows**: a repository, skill, connector or secret deleted from the
+  project drops out of every workflow and step that used it, instead of staying
+  behind in the builder as a bare id. A step whose only repository was deleted
+  now gets the project's repositories when its workflow inherits project
+  resources, rather than starting with none, and a deleted secret no longer
+  makes saving the step or workflow fail.
+
+## [1.13.1] - 2026-11-13
+
+### Fixed
+- **Integrations**: Connect GitHub under Profile → Connected accounts no longer
+  fails with "The authorization came back from a different server". GitHub names
+  itself `https://github.com/login/oauth` in its authorization response, and the
+  connection now expects that.
+
+## [1.13.0] - 2026-11-13
+
+### Added
+- Runner image override: `container.image_override` may contain `{agent}`,
+  replaced at launch with the session agent's image name, so one override such
+  as `ghcr.io/aixlehq/flow-{agent}:develop` serves every agent on the runner.
 - **Integrations**: you can connect your own GitHub account under Profile →
   Connected accounts and allow agents to act as you, per project. An agent given
   `github_user_token` gets a token limited to the session's repositories, plus
@@ -37,10 +178,32 @@ governance, community health — carry none.
 - **Tasks**: each file on a task's Assets tab shows when it was uploaded.
 
 ### Changed
+- Runner compatibility: the platform now recommends `aixle-runner` 0.2.0 and
+  serves it next to 0.1.0. It pins the `linux-amd64` and `linux-arm64` binaries
+  of [runner-v0.2.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.2.0)
+  by their SHA-256. "Add machine" now offers 0.2.0, the binary and the
+  `ghcr.io/aixlehq/aixle-runner:0.2.0` image, and an idle machine on 0.1.0 that
+  has not opted out is offered the update. 0.2.0 brings the callback proxy,
+  `check-in` and uploads over 1 MiB, and the published image as a host runner
+  in Docker. Runner protocol 1 only, and no minimum runner version.
 - **Sign-in & onboarding**: any member, not only an admin, can skip connecting an
   agent during onboarding ("Skip for now", then confirm) and look around first.
   Workflows, sessions and the Builder stay blocked until they connect an agent in
   Profile settings.
+
+### Fixed
+- **Sessions & Runs**: starting a session from the New session drawer opens it
+  instead of asking "Discard unsaved changes?". Answering "Keep editing" there
+  left the started session running and let a second Start launch a duplicate.
+- **Integrations**: Slack no longer switches itself off when Slack reports that
+  a member's own token was revoked, for example when someone leaves the
+  workspace. Only removing the app, or revoking its bot token, disconnects the
+  workspace now.
+- **Admin**: on the dashboard, a company that pays through AWS Marketplace is
+  counted as paying, not as "Not billed · no Stripe customer". The Companies tile
+  now groups companies by the same Account status, Account type and Billing method
+  as the table. A trial that opened card entry but never finished it no longer
+  shows "SaaS – Stripe" as its billing method.
 
 ## [1.12.0] - 2026-11-12
 
@@ -1335,7 +1498,11 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.12.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.15.0...develop
+[1.15.0]: https://github.com/AixleHQ/flow/compare/v1.14.0...v1.15.0
+[1.14.0]: https://github.com/AixleHQ/flow/compare/v1.13.1...v1.14.0
+[1.13.1]: https://github.com/AixleHQ/flow/compare/v1.13.0...v1.13.1
+[1.13.0]: https://github.com/AixleHQ/flow/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/AixleHQ/flow/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/AixleHQ/flow/compare/v1.10.0...v1.11.0
 [1.10.0]: https://github.com/AixleHQ/flow/compare/v1.9.0...v1.10.0

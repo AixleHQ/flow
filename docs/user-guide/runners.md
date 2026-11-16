@@ -10,8 +10,10 @@ admin or the project's owner manages the project's own.
 Runners are behind the `external_runners` feature flag: without it the pages
 do not exist for your company.
 
-This page covers adding machines to a `manual` runner. The rest of the manual
-runner's guide (machines table, health, reuse policy) is not written yet.
+This page covers adding machines to a `manual` runner and reading the
+machines list on its page, the reuse policy and Return to service, what you take
+on with a `manual` machine, what it reaches outbound and its known limits. The
+rest of the manual runner's guide (health) is not written yet.
 
 ---
 
@@ -98,15 +100,59 @@ macOS works through Docker: OrbStack is checked, Docker Desktop as far as
 checked. Rootless Docker and Podman (another socket path) and Windows are not
 covered.
 
+## The machines list
+
+The page of a `manual` runner, in company settings and in the project alike,
+has a **Machines** section: a read-only list with one row per machine. A
+machine appears as soon as it has run `configure`. Each row shows:
+
+- the machine's **name** (the `--name` it was configured with, the hostname by
+  default) and its **key**;
+- its **state**:
+  - **Online**: the machine is connected and running a session;
+  - **Idle**: the machine is connected and has no session;
+  - **Offline**: the platform has not heard from the machine for 90 seconds, or
+    never has. Stop `aixle-runner` on a machine, or lose its network, and it
+    turns offline within about two minutes;
+  - **Resetting**: a reset started by Return to service is running, and the
+    machine takes no session;
+  - **Failed**: the machine is out of rotation after a failed reset or three
+    failed sessions in a row, with the reason shown and a **Return to service**
+    button (see below);
+  - **Gone**: the machine was unregistered or revoked;
+- the runner **version** and the **OS / arch** it reported at `configure`
+  (updated every time the runner starts);
+- the **first-seen IP**, the address the machine registered from, and **added
+  by**, the user who created the registration token with **Add machine**. A
+  machine registered before these were recorded shows a dash for both;
+- when it was **registered**;
+- its **last seen**: the last time the platform heard from it. The runner's own
+  "Last seen" in the overview is the latest of its machines'.
+
+The list refreshes itself every 15 seconds while the page is open. The runners
+list shows, for a manual runner, **machines busy/total**: the machines holding a
+session out of those registered and not gone.
+
+An **offline machine is given no new session**. While another machine of the
+runner is free, a session goes there. If every machine of the runner is
+offline, the session is refused at launch with a message naming the runner and
+saying its machines are offline: start `aixle-runner` on one of them (a machine
+returns to **Idle** on its next poll, within seconds), or pick another runner.
+A machine that is busy running a long step is not treated as offline while that
+step is within its time limit, even when it is silent.
+
 ### Machines on arm64
 
 The agent images (`ghcr.io/aixlehq/flow-<image>`) are built for `linux/amd64`
-only, so on an arm64 machine (Apple Silicon, or an ARM Linux server, with the
-binary or with Docker) the runner starts them under amd64 emulation. OrbStack
-and Docker Desktop have it built in; on ARM Linux install it with binfmt (the
-`tonistiigi/binfmt` image installs it). Without it, the session fails to start
-with the Docker daemon's own message. Sessions are slower under emulation until
-the images are built for arm64.
+and `linux/arm64`, so on an arm64 machine (Apple Silicon, or an ARM Linux
+server, with the binary or with Docker) the runner pulls the arm64 image and the
+agent runs natively. This needs `aixle-runner` 0.4.0 or later: 0.3.0 and
+earlier always pull `linux/amd64`, so every agent runs under emulation. An image published before arm64 builds existed, or a runtime
+whose CLI has no arm64 build, has `linux/amd64` only: the runner then pulls that
+and the agent starts under amd64 emulation, which is slower. OrbStack and Docker
+Desktop have emulation built in; on ARM Linux install it with binfmt (the
+`tonistiigi/binfmt` image installs it). Without it, a session that needs it fails
+to start with the Docker daemon's own message.
 
 ### If something goes wrong
 
@@ -118,3 +164,212 @@ the images are built for arm64.
 - On a self-hosted installation the machine must reach the runner gateway
   (`/runner/v1`) on the platform's host. If the gateway is served on a private
   address, the machine has to be inside that network or on its VPN.
+
+## Reuse policy, scrub and Return to service
+
+A `manual` runner's **reuse policy** decides what happens on a machine after
+every session. There are two values:
+
+| Policy | After every session | Stays on the machine |
+| --- | --- | --- |
+| **Reuse** (default) | A **scrub** | Repository checkouts, package caches and pulled images |
+| **Reset** | A **reset** | Pulled images, and the machine itself |
+
+A scrub removes the session's container, which takes the agent's home, its
+credential files, the MCP config, the prompt and context files, `/tmp`, the
+proxy CA and logs, and every process of the session. It also empties
+`/workspace/outputs`. A check confirms that no container of the session is left.
+The next session on the machine fetches the repository checkouts a scrub kept
+instead of cloning them again.
+
+A reset does what a scrub does and also removes the workspace volume and the
+cache volumes, so the next session clones its repositories again. It does not
+give you a new machine: it removes what Aixle put on the machine and nothing
+else.
+
+Two things apply whatever the policy:
+
+- **A session that fails is followed by a reset**, even under Reuse, and so is a
+  scrub that fails.
+- **A machine is taken out of rotation** (state **Failed**, with the reason) when
+  its reset fails, or when 3 sessions in a row fail on it.
+
+**Who sees what a scrub keeps.** A company runner's machines are shared by every
+project of the company. On a company runner with Reuse, the next session on a
+machine may belong to another project, and it sees what the scrub kept: the
+repository checkouts and the caches. Choose Reset, or use a project runner, to
+keep projects apart. On a project runner, what is kept stays within that project.
+
+**Writable host mounts are outside every policy.** A writable home mount, an
+extra mount with `:rw` and a host-path cache mount let the agent write to the
+machine outside Aixle's volumes. A scrub or a reset removes what Aixle wrote
+there, not what the agent wrote.
+
+The runner's form asks you to confirm each one. For every writable host mount
+(a writable home mount, an extra mount with `:rw`, a cache mount that is a path
+on the machine) it shows a checkbox, *I understand the agent can write to
+`<path>` on this machine*, and saves the choice in
+`container.acknowledged_writable_mounts`. A runner with a writable host mount
+that is not ticked is refused at the field.
+
+### Revoking a machine
+
+**Revoke** in a machine's row removes a machine for good: a lost or compromised
+machine, or one you no longer want on the runner. It works on a machine in any
+state but Gone. It is available to whoever can revoke the runner: a company admin
+on a company runner, and a project admin or owner on a project runner.
+
+- The machine shows **Gone** and stays in the list. Its credentials are revoked,
+  so `aixle-runner` on it is refused (`401`) on its next request and stops. The
+  other machines of the runner keep working.
+- If the machine held a session, the session ends at once with a message that
+  names the machine, and its slot is released. A session waiting for a machine on
+  the runner goes on waiting for its other machines.
+- **Aixle does not clean the machine.** Remove the Aixle containers and volumes
+  it left, and its service (`aixle-runner service uninstall`), yourself.
+  `aixle-runner unregister` on the machine does the same as Revoke.
+
+### What Revoke and Delete do to a runner's sessions
+
+Revoking a runner, and deleting it, which revokes it, ends its sessions: a
+session running on it fails with a message that says the runner was revoked, and
+one waiting for one of its machines ends with the message a launch gives for a
+revoked runner. Nothing stays in Finishing or waiting because its runner was
+revoked.
+
+### Return to service
+
+A **Failed** machine takes no session and shows why, for example *build-01
+failed to reset after session 12: reset_failed: …. Fix the machine and press
+Return to service.* Fix what the reason names (start Docker, free a volume that
+is in use), then press **Return to service** in the machine's row. The machine
+shows **Resetting** and takes no session meanwhile. When the reset succeeds the
+machine is **Idle** again. When it fails, the machine stays **Failed** with the
+new reason. Pressing the button is available to whoever can edit or revoke the
+runner: a company admin on a company runner, and a project admin or owner on a
+project runner.
+
+While every machine of a runner is Failed, a launch on it is refused with a
+message that points to Return to service.
+
+## A machine that stops answering
+
+A session keeps running on a machine that loses its network or whose
+`aixle-runner` stops, because the agent belongs to the runner on the machine.
+The machine shows **Offline** after 90 seconds, and the platform asks it
+nothing while it is offline.
+
+- **The machine is back within 15 minutes.** If the agent is still running, the
+  session goes on and can finish. If the agent exited meanwhile, the session
+  fails within a few minutes of the machine's return, as a session whose
+  container died does.
+- **The machine is away for 15 minutes.** The session fails with *Runner
+  environment lost contact for 15 minutes.* A session that has already finished
+  keeps its outcome.
+- **The slot stays with the machine.** The failed session still holds the
+  machine, so no other session takes it and the session's slot is not
+  released. When the machine is heard again, the platform stops the session's
+  leftover container, resets the machine, and releases the slot. The machine
+  shows **Idle**, and a session waiting for it starts. To give the slot up
+  without waiting, revoke the machine.
+- **A revoked or deleted runner** never hears its machines again, so its session
+  fails after the 15 minutes and its slot is released then.
+
+## What you take on with a `manual` machine
+
+The platform holds no credential into your machine, so what happens on it is
+yours to run and secure. Know this before you add one:
+
+- **The machine keeps the sessions' work between sessions.** Each session runs
+  in a new container, removed when the session ends together with its
+  credentials, agent home, MCP config, prompt and `/tmp`. Under **Reuse** (the
+  default) the workspace volume with the repository checkouts, the cache
+  volumes and the pulled images stay on the machine's disk. So the code of every
+  repository a session worked on stays there, readable by anyone with root or
+  `docker` access on the machine, and the next session starts from those
+  checkouts and caches. **Reset** wipes the workspace and cache volumes after
+  every session, at the cost of a fresh clone each time. A session that fails
+  gets a reset under either policy (see
+  [Reuse policy, scrub and Return to service](#reuse-policy-scrub-and-return-to-service)).
+- **The launching user's agent login reaches the machine.** The session runs
+  with the credentials of the user who started it, as on every runner.
+- **On a company runner the machine is reused across projects.** What a scrub
+  keeps is there for the next session, whichever project it belongs to. A
+  project runner keeps it within the project. The reuse section says what a
+  scrub keeps.
+- **The `docker` group is root-equivalent.** `service install` puts the
+  `aixle-runner` user in it, because the runner starts containers. Anyone who
+  controls that user controls the machine.
+- **The runner updates its own binary.** It replaces the binary, which the
+  `aixle-runner` user owns, with one whose SHA-256 the platform pins. To allow
+  no software change you did not make, run `configure` with `--no-auto-update`
+  (the **Turn off self-update** box in **Add machine**), or set
+  `config.auto_update: false` to turn it off for the whole runner.
+- **Use a dedicated machine,** not a shared developer box.
+
+## What the machine reaches outbound
+
+Nothing inbound is opened: the machine connects out, and the platform never
+connects in. If you filter egress, allow at least the following. The list is
+documentation of what the runner and the agent use, and it can grow.
+
+- the platform host, on port 443;
+- `github.com` and `objects.githubusercontent.com`, for runner binaries;
+- `ghcr.io`, for the agent images and the runner image;
+- the git hosts of the repositories the sessions use;
+- the model provider, or your Bedrock when the agent uses it;
+- whatever the agent's own work needs, such as package registries.
+
+## Known limits
+
+- **A bind source can't be under the machine's `/tmp` or `/var/tmp`** when the
+  runner runs as the service. The unit has `PrivateTmp=true`, so the runner does
+  not see those directories and refuses the bind with `forbidden_mount`. Mount a
+  directory elsewhere.
+- **With `network: host`, a session's proxy port can collide.** The port is
+  `20000 + session id mod 10000`. When another session or service on the
+  machine holds it, the session fails with `proxy_port_in_use`, and the platform
+  does not retry it on that machine. The listener is on the machine's own
+  `127.0.0.1`, so any local user or process can reach it. A session key is still
+  required.
+
+## Using your own agent image
+
+A runner starts every session in the default image of the session's agent (see
+below). To use
+your own image (built `FROM` the Aixle base image), set **Image override** in
+the runner's settings.
+
+The override is one image for every session on the runner. A runner that serves
+several agents puts `{agent}` in it, which is replaced when the session starts
+with the image name of the session's agent (`claude-code`, `cursor-cli`,
+`codex`, …). For example `ghcr.io/aixlehq/flow-{agent}:develop` starts a Claude
+Code session in `ghcr.io/aixlehq/flow-claude-code:develop`. `{agent}` is the
+only placeholder. The runner isn't saved if the override has another one, or
+isn't an image reference once `{agent}` is replaced. As in Docker, the first
+part of the path is a registry only when it has a `.` or a port, or is
+`localhost`; any other part must be lowercase, so `UPPER/flow-{agent}` is refused.
+
+---
+
+## Which agent image a machine pulls
+
+A session on a runner runs the platform's agent image for the session's agent
+runtime, and the machine pulls it. By default that is the public image,
+`ghcr.io/aixlehq/flow-<image>` (for example `ghcr.io/aixlehq/flow-claude-code`),
+so the machine needs no registry login. The tag is `latest`, unless the
+deployment sets `RUNNER_AGENT_IMAGE_TAG`. Hosted sessions are not affected: they
+keep their own images.
+
+To run another image on a runner's machines, set **`container.image_override`**
+in the runner's settings. It wins over the default and must be built `FROM` the
+platform's agent image. If that image is in a private registry, run
+`docker login` for that registry on each machine as the user that runs
+`aixle-runner`: the platform sends no registry credentials to a machine.
+
+A self-hosted deployment changes the default for all its runners with
+`RUNNER_AGENT_IMAGE_PREFIX`, `RUNNER_AGENT_IMAGE_TAG` (default `latest`) and the
+per-runtime `RUNNER_AGENT_IMAGE_<RUNTIME>` variables (see the configuration
+reference).
+`latest` moves with every stable release, so pin `RUNNER_AGENT_IMAGE_TAG` to the
+release the deployment runs in production.

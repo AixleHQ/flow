@@ -1,5 +1,9 @@
 # Connecting Microsoft Teams
 
+This page is about the Microsoft Teams chat app. Teams of project members that
+share runs between their agent subscriptions are
+[Project teams](/docs/project-teams).
+
 Microsoft Teams connects for the whole **company** or for **one project**. A
 company-wide connection serves every project in the company; a project
 connection serves that project alone. From then on:
@@ -31,10 +35,13 @@ organization, who does not need a Flow account.
    for a company-wide connection); the old link stops working.
 3. The administrator opens the link, leaves **Also give access to files shared
    in Teams** checked or clears it, and selects **Sign in with Microsoft to
-   approve**. Microsoft shows one consent screen for everything Flow asks for. They must hold one of these directory roles: Global
-   Administrator, Privileged Role Administrator, Cloud Application
-   Administrator, Application Administrator, or Teams Administrator. A sign-in
-   without one of them binds nothing.
+   approve**. Microsoft shows one consent screen for everything Flow asks for.
+   Granting it takes a Global Administrator or Privileged Role Administrator;
+   with the box cleared, a Cloud Application Administrator or Application
+   Administrator can grant it too. Microsoft stops any other role, Teams
+   Administrator among them, at a screen asking for an administrator's
+   approval, and a request sent from there never reaches Flow. When a sign-in
+   binds nothing, the approval page shows Microsoft's or Flow's reason.
 4. The organization is now connected. The row on the **Integrations** page
    shows its domain and who approved it.
 
@@ -225,8 +232,10 @@ failure instead, and **Nothing** keeps the thread quiet.
 
 ### Who the run belongs to
 
-A Teams-started run belongs to the person who added the trigger, and it uses
-their credentials, as with Slack. Anyone in the organization who can address
+A Teams-started run belongs to whoever **Runs as** names on the trigger — the
+person who added it, unless it was pointed at another member or at a [team](/docs/project-teams),
+which hands each run to one of its members — and it uses their credentials, as
+with Slack. Anyone in the organization who can address
 the app in an accepted conversation can start it. Flow records who asked: it is
 shown on the run page, and an agent sees the sender's name. A sender who signs
 in to Flow with Microsoft, or has linked their Teams account, is recognized as

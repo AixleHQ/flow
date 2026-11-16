@@ -353,7 +353,7 @@ describe('SessionNewForm', () => {
 
   it('reports a pristine form as clean, even with a default runtime and a preselected project', async () => {
     const user = userEvent.setup();
-    const onDirtyChange = vi.fn();
+    const onStateChange = vi.fn();
     renderAuthedPage(
       <SessionNewForm
         {...makeProps({
@@ -362,7 +362,7 @@ describe('SessionNewForm', () => {
             { id: 2, name: 'Beta' },
           ],
           preSelectedProjectId: 1,
-          onDirtyChange,
+          onStateChange,
         })}
       />,
       {
@@ -373,28 +373,68 @@ describe('SessionNewForm', () => {
     );
 
     expect(screen.getByRole('combobox', { name: 'Project' })).toHaveValue('Alpha');
-    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(onStateChange).toHaveBeenLastCalledWith({ dirty: false, saving: false });
 
     await user.click(screen.getByRole('combobox', { name: 'Project' }));
     await user.click(await screen.findByRole('option', { name: 'Beta' }));
 
-    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+    expect(onStateChange).toHaveBeenLastCalledWith({ dirty: true, saving: false });
   });
 
   it('reports a typed prompt as unsaved, and clean again once the form unmounts', async () => {
     const user = userEvent.setup();
-    const onDirtyChange = vi.fn();
-    const { unmount } = renderAuthedPage(<SessionNewForm {...makeProps({ onDirtyChange })} />, {
+    const onStateChange = vi.fn();
+    const { unmount } = renderAuthedPage(<SessionNewForm {...makeProps({ onStateChange })} />, {
       props: authProps(['claude_code']),
     });
 
     await user.click(screen.getByRole('radio', { name: /Automatic/ }));
     await user.type(screen.getByRole('textbox', { name: /initial prompt/i }), 'Refactor the auth module');
-    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+    expect(onStateChange).toHaveBeenLastCalledWith({ dirty: true, saving: false });
 
     unmount();
 
-    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+    expect(onStateChange).toHaveBeenLastCalledWith({ dirty: false, saving: false });
+  });
+
+  it('reports the form as saving once Start is pressed, and keeps saying so through the visit to the new session', async () => {
+    const user = userEvent.setup();
+    const onStateChange = vi.fn();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: { id: 'sess-77' } }),
+    } as Response);
+    renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 42, onStateChange })} />, {
+      props: authProps(['claude_code']),
+    });
+
+    await user.click(screen.getByText('Claude Code'));
+    expect(onStateChange).toHaveBeenLastCalledWith({ dirty: true, saving: false });
+
+    await user.click(screen.getByRole('button', { name: /start session/i }));
+    await waitFor(() => expect(router.visit).toHaveBeenCalledWith('/sessions/sess-77?project=42'));
+
+    expect(onStateChange).toHaveBeenLastCalledWith({ dirty: true, saving: true });
+    fetchSpy.mockRestore();
+  });
+
+  it('is dirty and no longer saving after a refused start', async () => {
+    const user = userEvent.setup();
+    const onStateChange = vi.fn();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false,
+      json: () => Promise.resolve({ errors: ['Quota exceeded'] }),
+    } as Response);
+    renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 1, onStateChange })} />, {
+      props: authProps(['codex']),
+    });
+
+    await user.click(screen.getByText('Codex'));
+    await user.click(screen.getByRole('button', { name: /start session/i }));
+
+    await screen.findAllByText('Quota exceeded');
+    expect(onStateChange).toHaveBeenLastCalledWith({ dirty: true, saving: false });
+    fetchSpy.mockRestore();
   });
 
   describe('default model label', () => {

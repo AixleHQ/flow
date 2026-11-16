@@ -136,8 +136,9 @@ export function AddMachine({ runner, paths }: AddMachineProps) {
                 />
                 <Text fz="xs" c="dimmed">
                   A runner in Docker does not update itself: update it by running the image of the new version. On an
-                  arm64 machine (Apple Silicon, ARM Linux) sessions run the amd64 agent images under emulation, which
-                  OrbStack and Docker Desktop include and ARM Linux needs binfmt for.
+                  arm64 machine (Apple Silicon, ARM Linux) sessions run an agent image natively when it is published for
+                  arm64, and the amd64 image under emulation otherwise. OrbStack and Docker Desktop include emulation,
+                  and ARM Linux needs binfmt for it.
                 </Text>
               </Stack>
             ) : (

@@ -87,13 +87,9 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
     assert_equal @project.id, MCPServer.find(new_step.mcp_server_ids.first).scope_id
     assert_equal @project.id, Tool.find(new_step.tool_ids.first).scope_id
 
-    # config.base_*_ids are remapped and never nil.
-    assert_equal new_step.tool_ids, copy.config["base_tool_ids"]
-    assert_equal new_step.skill_ids, copy.config["base_skill_ids"]
-    assert_equal new_step.mcp_server_ids, copy.config["base_mcp_server_ids"]
-    [ "base_tool_ids", "base_skill_ids", "base_mcp_server_ids" ].each do |key|
-      assert_not_nil copy.config[key]
-    end
+    assert_equal new_step.tool_ids, copy.base_tool_ids
+    assert_equal new_step.skill_ids, copy.base_skill_ids
+    assert_equal new_step.mcp_server_ids, copy.base_mcp_server_ids
   end
 
   test "a copied skill keeps what it is: a hand-written one stays manual, a registry one keeps its files" do
@@ -275,7 +271,7 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
                                          headers: { "Authorization" => "Bearer theirs" })
     workflow = create(:workflow, scope: @source_project, name: "Legacy")
     step = create(:step, workflow: workflow)
-    step.update_column(:mcp_server_ids, [ foreign_server.id ])
+    StepResourceLink.replace!(step, :mcp_server_id, [ foreign_server.id ])
 
     copy = WorkflowDuplicator.new(workflow, target_scope: @project, name: "Legacy copy").duplicate!
 

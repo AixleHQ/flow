@@ -96,6 +96,82 @@ class Runners::MachinesConcurrencyTest < ActiveSupport::TestCase
     [ first, second ].compact.each(&:join)
   end
 
+  # The revocation takes the runner's row first and holds it open until the
+  # acquisition is seen waiting on it; the acquisition is then refused with the
+  # Resolver's message, and no machine is held (DESIGN.md §9.3).
+  test "an acquisition that waits on a runner's revocation is refused and holds no machine" do
+    session = @sessions.first
+    revoked = Queue.new
+    release = Queue.new
+    revoker = Thread.new do
+      ActiveRecord::Base.connection_pool.with_connection do
+        ActiveRecord::Base.transaction do
+          Runner.find(@runner.id).revoke!
+          revoked << true
+          release.pop
+        end
+      end
+    end
+    revoked.pop(timeout: LOCK_WAIT_TIMEOUT) || flunk("the revocation never finished")
+    pid = Queue.new
+    taker = Thread.new do
+      ActiveRecord::Base.connection_pool.with_connection do
+        pid << ActiveRecord::Base.connection.select_value("SELECT pg_backend_pid()")
+        Runners::Machines.acquire!(TerminalSession.find(session.id))
+      rescue Runners::Machines::NoMachine => e
+        e
+      end
+    end
+    wait_until_waiting_on_lock(pid.pop(timeout: LOCK_WAIT_TIMEOUT))
+    release << true
+    revoker.value
+
+    error = taker.value
+    assert_instance_of Runners::Machines::NoMachine, error
+    assert_equal "Runner \"#{@runner.name}\" is revoked. Pick another runner for the session.", error.message
+    assert_nil @machine.reload.current_session_id
+    assert_nil session.reload.runner_environment_id
+  ensure
+    release << true
+    [ revoker, taker ].compact.each(&:join)
+  end
+
+  # The acquisition commits its hold first; the revocation, waiting on the
+  # runner's row, then finds the hold and ends the session that took it.
+  test "a revocation that waits on an acquisition ends the session that took the machine" do
+    session = @sessions.first
+    taken = Queue.new
+    release = Queue.new
+    taker = Thread.new do
+      ActiveRecord::Base.connection_pool.with_connection do
+        ActiveRecord::Base.transaction do
+          Runners::Machines.acquire!(TerminalSession.find(session.id)).tap do
+            taken << true
+            release.pop
+          end
+        end
+      end
+    end
+    taken.pop(timeout: LOCK_WAIT_TIMEOUT) || flunk("the acquisition never took a machine")
+    pid = Queue.new
+    revoker = Thread.new do
+      ActiveRecord::Base.connection_pool.with_connection do
+        pid << ActiveRecord::Base.connection.select_value("SELECT pg_backend_pid()")
+        Runner.find(@runner.id).revoke!
+      end
+    end
+    wait_until_waiting_on_lock(pid.pop(timeout: LOCK_WAIT_TIMEOUT))
+    release << true
+    taker.value
+    revoker.value
+
+    assert_nil @machine.reload.current_session_id
+    assert_equal "failed", session.reload.state
+  ensure
+    release << true
+    [ taker, revoker ].compact.each(&:join)
+  end
+
   private
 
   # Uncached: the test runs inside the executor, whose query cache would answer

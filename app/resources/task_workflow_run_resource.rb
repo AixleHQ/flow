@@ -3,7 +3,12 @@
 class TaskWorkflowRunResource < ApplicationResource
   typelize_from WorkflowRun
 
-  attributes :id, :state, :mode, :started_at, :completed_at, :created_at, :runner_id
+  attributes :id
+
+  typelize :string
+  attribute :state, &:displayed_state
+
+  attributes :mode, :started_at, :completed_at, :created_at, :runner_id
 
   # Where it runs (DESIGN.md §11): null is hosted, or, with `runner_id` set, a
   # runner outside the record's tenant, which is never serialized. A list

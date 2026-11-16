@@ -281,6 +281,7 @@ export const IntegrationsContent = ({
   const requestCloseGitlab = useUnsavedChanges({
     opened: gitlabOpen,
     dirty: gitlabPat !== '',
+    saving: gitlabLoading,
     onClose: closeGitlabModal,
   });
 
@@ -297,6 +298,7 @@ export const IntegrationsContent = ({
   const requestCloseToken = useUnsavedChanges({
     opened: !!tokenTarget,
     dirty: replacementToken !== '',
+    saving: tokenLoading,
     onClose: closeTokenModal,
   });
 
@@ -338,6 +340,7 @@ export const IntegrationsContent = ({
       coderDefaultTemplate !== '' ||
       coderMachinePrefix !== '' ||
       coderLockTtlMinutes !== DEFAULT_CODER_LOCK_TTL,
+    saving: coderLoading,
     onClose: closeCoderModal,
   });
 
@@ -349,6 +352,7 @@ export const IntegrationsContent = ({
       (coderEditTemplate !== (coderEditTarget.coderDefaultTemplate ?? '') ||
         coderEditPrefix !== (coderEditTarget.coderMachinePrefix ?? '') ||
         coderEditTtl !== (coderEditTarget.coderLockTtlMinutes ?? DEFAULT_CODER_LOCK_TTL)),
+    saving: coderEditLoading,
     onClose: closeCoderSettings,
   });
 

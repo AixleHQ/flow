@@ -74,7 +74,7 @@ const VerifyConnectionButton = ({ providerId }: { providerId: number }) => (
 
 function ConnectionForm({ onDone }: { onDone: () => void }) {
   const form = useForm({ name: '', issuer: '', clientId: '', client_secret: '', tenantId: '' });
-  useUnsavedChanges({ dirty: form.isDirty && !form.processing });
+  useUnsavedChanges({ dirty: form.isDirty, saving: form.processing });
 
   return (
     <form

@@ -43,6 +43,19 @@ class Web::Company::Projects::RunnersControllerTest < ActionDispatch::Integratio
     assert_equal "pending", @own.reload.status
   end
 
+  test "Return to service answers 404 for a company without the flag" do
+    machine = create(:runner_environment, runner: @own)
+    Runners::Machines.fail!(machine, "boom")
+    FeatureFlagOverride.where(company: @company).delete_all
+    sign_in_as(@owner)
+
+    post return_to_service_company_project_runner_machine_path(@project, @own, machine)
+
+    assert_response :not_found
+    assert_equal "failed", machine.reload.state
+    assert_empty RunnerOperation.all
+  end
+
   test "project readers see the project's runners and the company's" do
     other = create(:runner, :project_runner, company: @company, created_by: @admin)
 
@@ -140,6 +153,18 @@ class Web::Company::Projects::RunnersControllerTest < ActionDispatch::Integratio
     assert_inertia_props { |props| props[:canManage] == false }
   end
 
+  test "show lists the same machines for a project's runner and for a company runner" do
+    own_machine = create(:runner_environment, runner: @own, display_name: "own-mac")
+    company_machine = create(:runner_environment, runner: @company_runner, display_name: "shared-mac", last_heartbeat_at: 10.minutes.ago)
+    sign_in_as(@owner)
+
+    get company_project_runner_path(@project, @own)
+    assert_inertia_props { |props| props[:machines].map { |m| [ m[:id], m[:state] ] } == [ [ own_machine.id, "idle" ] ] }
+
+    get company_project_runner_path(@project, @company_runner)
+    assert_inertia_props { |props| props[:machines].map { |m| [ m[:id], m[:state] ] } == [ [ company_machine.id, "offline" ] ] }
+  end
+
   test "another project's runner is not found by a write from this page" do
     other = create(:runner, :project_runner, company: @company, created_by: @admin)
     sign_in_as(@admin)
@@ -182,5 +207,53 @@ class Web::Company::Projects::RunnersControllerTest < ActionDispatch::Integratio
     assert_response :conflict
     assert_equal "runner_revoked", response.parsed_body["code"]
     assert_empty RunnerCredential.all
+  end
+
+  test "a company admin or the project owner returns a failed machine of the project's runner to service" do
+    machine = create(:runner_environment, runner: @own, display_name: "build-01")
+    Runners::Machines.fail!(machine, "boom")
+
+    assert_role_matrix(MANAGE_ROLES, transport: :web) do
+      post return_to_service_company_project_runner_machine_path(@project, @own, machine)
+      Runners::Machines.fail!(machine.reload, "boom again") if machine.reload.state == "resetting"
+    end
+
+    RunnerOperation.delete_all
+    sign_in_as(@owner)
+    post return_to_service_company_project_runner_machine_path(@project, @own, machine)
+    assert_equal "resetting", machine.reload.state
+    assert_equal 1, RunnerOperation.where(runner_environment: machine, op: "env.reset", state: "pending").count
+  end
+
+  test "nobody returns a machine of a company runner to service from a project page" do
+    machine = create(:runner_environment, runner: @company_runner)
+    Runners::Machines.fail!(machine, "boom")
+    sign_in_as(@admin)
+
+    post return_to_service_company_project_runner_machine_path(@project, @company_runner, machine)
+
+    assert_response :not_found
+    assert_equal "failed", machine.reload.state
+  end
+
+  test "only someone who manages the project's runners revokes one of its machines" do
+    machine = create(:runner_environment, runner: @own)
+
+    assert_role_matrix(MANAGE_ROLES, transport: :web) do |role|
+      post revoke_company_project_runner_machine_path(@project, @own, machine)
+      machine.reload.update!(state: :registered) if role == :owner
+    end
+
+    assert machine.reload.gone?
+  end
+
+  test "nobody revokes a machine of a company runner from a project page" do
+    machine = create(:runner_environment, runner: @company_runner)
+    sign_in_as(@admin)
+
+    post revoke_company_project_runner_machine_path(@project, @company_runner, machine)
+
+    assert_response :not_found
+    assert machine.reload.registered?
   end
 end

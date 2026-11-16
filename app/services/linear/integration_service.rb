@@ -160,7 +160,7 @@ module Linear
     def after_connect(integration)
       Trackers::Provisioning.ensure_for!(integration)
       covered = Array(integration.settings.to_h["linear_teams"]).map { |t| t["id"].to_s }
-      integration.project_trackers.where.not(status: "detached").where.not(external_scope_id: covered).find_each(&:detach!)
+      integration.project_trackers.attached.where.not(external_scope_id: covered).find_each(&:detach!)
       Trackers::Linear::Subscriptions.new(integration).ensure! if integration.settings.to_h["auth_mode"] == "oauth" || awaited?(integration)
       integration
     end

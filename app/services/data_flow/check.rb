@@ -44,14 +44,14 @@ module DataFlow
     SPEC_FIELDS = { inputs: [ "inputAssetSpecs", "input" ], outputs: [ "outputAssetSpecs", "output" ] }.freeze
 
     def self.for_workflow(workflow, project:, run_input_asset_ids: nil)
-      nodes = workflow.steps.not_deleted.order(:position).map do |step|
+      nodes = workflow.steps.not_deleted.order(:position).includes(:resource_links).map do |step|
         Node.new(key: step.id.to_s, name: step.name, instructions: step.instructions.to_s,
                  depends_on: Array(step.depends_on_step_ids).map(&:to_s),
                  asset_ids: integers(step.asset_ids),
                  attached: RESOURCES.transform_values { |r| integers(step.public_send(r.column)) },
                  inputs: step.input_specs, outputs: step.output_specs)
       end
-      new(project: project, nodes: nodes, config: workflow.config.to_h, run_input_asset_ids: run_input_asset_ids)
+      new(project: project, nodes: nodes, config: workflow.linked_config, run_input_asset_ids: run_input_asset_ids)
     end
 
     # @param payload [Hash] the builder's Save body (WorkflowAggregateSave)
@@ -65,7 +65,7 @@ module DataFlow
                  attached: RESOURCES.transform_values { |r| integers(step[r.column]) },
                  inputs: AssetSpec.list(step["input_asset_specs"]), outputs: AssetSpec.list(step["output_asset_specs"]))
       end
-      new(project: project, nodes: nodes, config: workflow.config.to_h.merge(payload["config"].to_h))
+      new(project: project, nodes: nodes, config: workflow.linked_config.merge(payload["config"].to_h))
     end
 
     def self.integers(ids) = Array(ids).compact_blank.map(&:to_i)

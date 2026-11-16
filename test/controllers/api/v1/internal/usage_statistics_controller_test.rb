@@ -13,6 +13,13 @@ module Api
           @session = create(:terminal_session, :running, :with_user, :with_project, user: @user, project: @project)
         end
 
+        test "no OTLP signal reaches the request log" do
+          filter = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters)
+          payload = { "resourceLogs" => [ {} ], "resourceMetrics" => [ {} ], "resourceSpans" => [ {} ] }
+
+          assert_equal [ "[FILTERED]" ], filter.filter(payload).values.uniq
+        end
+
         test "#create returns ok when service persists" do
           result = UsageStatisticsService::Result.new(status: :ok)
           UsageStatisticsService.stubs(:process).returns(result)

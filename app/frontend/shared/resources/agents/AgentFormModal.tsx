@@ -129,7 +129,7 @@ export const AgentFormModal: FC<AgentFormModalProps> = ({ opened, onClose, editA
 
   const dirty = form.isDirty();
   const unsaved = isEditMode && dirty;
-  const requestClose = useUnsavedChanges({ opened, dirty, onClose });
+  const requestClose = useUnsavedChanges({ opened, dirty, saving: submitting, onClose });
 
   return (
     <ResourceDrawer

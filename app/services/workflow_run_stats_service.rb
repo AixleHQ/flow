@@ -18,10 +18,10 @@ class WorkflowRunStatsService
       WorkflowRun.joins(:project).where(projects: { company_id: company.id })
     end
 
-    completed   = base.where(state: "completed").count
-    in_progress = base.where(state: %w[running paused]).count
-    failed      = base.where(state: %w[failed cancelled]).count
-    queued      = base.where(state: "pending").count
+    completed   = base.completed.count
+    in_progress = base.underway.count
+    failed      = base.aborted.count
+    queued      = base.pending.count
     total       = completed + in_progress + failed + queued
 
     Result.new(

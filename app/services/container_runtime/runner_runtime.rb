@@ -22,11 +22,13 @@ module ContainerRuntime
   # The phases:
   #
   # - pull_image does nothing, as KubernetesRuntime#pull_image: the runner
-  #   pulls the image in `container.start`.
+  #   pulls the image in `container.start`. The image is the one this runtime
+  #   chooses (runner_image), not the hosted image the strategy resolves.
   # - create_container takes a free machine of the session's runner, the first
   #   phase that needs one (Runners::Machines; every machine busy is a
   #   CapacityError, so the session waits), and sends `container.start` with
-  #   the image reference as it was given, a tag or a digest: the runner always
+  #   the image runner_image chooses (the runner's override, else the runner
+  #   default), as the reference was given, a tag or a digest: the runner always
   #   pulls it, then creates and starts the container in one op, as a
   #   Kubernetes pod is created running. The container's environment, which
   #   carries the session's secrets, exists only in this phase
@@ -35,8 +37,12 @@ module ContainerRuntime
   #   included, still runs cleanup_session and frees the machine.
   # - start_container and wait_for_ready wait for nothing more than the
   #   container running (`status`), as DockerRuntime#start_container does.
-  # - cleanup_session sends `container.stop` and `env.reset`, and frees the
-  #   machine once the reset succeeded; a failed reset moves it to `failed`.
+  # - cleanup_session sends `container.stop`, then `env.scrub` under the
+  #   runner's `reuse` policy or `env.reset` under `reset` (a reset after a
+  #   failed session too), and frees the machine once that succeeded. A failed
+  #   scrub is followed by a reset; a failed reset moves the machine to `failed`,
+  #   and so do `runners.max_consecutive_failures` failed sessions in a row
+  #   (§7.2).
   #   It waits for nothing queued: while an earlier op is unfinished on the
   #   machine the session holds (a `container.start` whose wait a stop cut
   #   short, or an `env.reset` of an earlier cleanup attempt), cleanup_ready?
@@ -128,17 +134,25 @@ module ContainerRuntime
       session = session_for(id)
       environment = session && machine(session)
       return true if environment.nil?
+      # A session failed because its machine stopped answering keeps the
+      # machine, and so its slot, until the machine is heard again
+      # (Runners::ContactLoss): its ops would only expire.
+      return false if session.contact_lost? && !environment.heard?
 
       !RunnerOperation.deliverable.exists?(runner_environment_id: environment.id)
     end
 
-    # `container.stop`, then `env.reset`, which removes every container and the
-    # workspace and cache volumes of the machine, so nothing of the session
-    # reaches the next one (§7.2), and the machine is free again. A failed
-    # `container.stop` is logged, and the reset still runs. A failed reset, a
-    # machine that does not answer included, moves the machine to `failed`
-    # with the reason.
-    def cleanup_session(id)
+    # `container.stop`, then the runner's cleanup level (§7.1, §7.2). Under
+    # `reuse`, `env.scrub`: the machine's containers and the session's outputs go,
+    # the checkouts, caches and images stay. Under `reset`, or after a `failed`
+    # session under either policy, `env.reset`: the workspace and cache volumes go
+    # too. A failed scrub is followed by a reset, and the machine is free again
+    # once either succeeded. A failed reset, a machine that does not answer
+    # included, moves the machine to `failed` with the reason, and so does the
+    # session that is the `runners.max_consecutive_failures`th failed one in a
+    # row on it (Runners::Machines.release!). A failed `container.stop` is
+    # logged, and the cleanup goes on.
+    def cleanup_session(id, failed: false)
       session = session_for(id)
       environment = session && machine(session)
       return if environment.nil?
@@ -146,12 +160,20 @@ module ContainerRuntime
       stopped = call(session, "container.stop", {}, lifecycle: true)
       Rails.logger.warn("[RunnerRuntime] session #{session.id}: #{stopped.message}") unless stopped.ok?
 
+      if !failed && session.runner.reuse_policy == "reuse"
+        scrub = call(session, "env.scrub", { "image" => scrub_image(session) }, lifecycle: true)
+        return Runners::Machines.release!(environment, session, failed: failed) if scrub.ok?
+
+        Rails.logger.warn("[RunnerRuntime] session #{session.id}: #{scrub.message}; machine #{environment.key} is reset instead")
+      end
+
       reset = call(session, "env.reset", {}, lifecycle: true)
-      return Runners::Machines.release!(environment, session) if reset.ok?
+      return Runners::Machines.release!(environment, session, failed: failed) if reset.ok?
 
       Rails.logger.warn("[RunnerRuntime] session #{session.id}: #{reset.message}; machine #{environment.key} is failed")
-      reason = reset.expired? ? "the runner did not answer" : "#{reset.error_class}: #{reset.result&.dig('error', 'message')}"
-      Runners::Machines.fail!(environment, "env.reset failed after session #{session.id}: #{reason}", holder: session)
+      reason = reset.expired? ? "the runner did not answer" : Runners::Machines.failure_text(reset.result)
+      Runners::Machines.fail!(environment, "#{Runners::Machines.label(environment)} failed to reset after session #{session.id}: #{reason}",
+                              holder: session)
     end
 
     # -- Callbacks ------------------------------------------------------------
@@ -169,7 +191,7 @@ module ContainerRuntime
     def pull_image(image)
       raise ArgumentError, "image is required" if image.blank?
 
-      Rails.logger.info("[RunnerRuntime] Pull image is a no-op: the runner pulls #{image} in container.start")
+      Rails.logger.info("[RunnerRuntime] Pull image is a no-op: the runner pulls the image runner_image chooses in container.start")
       { status: :skipped, image: image, duration_seconds: 0 }
     end
 
@@ -551,11 +573,34 @@ module ContainerRuntime
       environment && "aixle-#{environment.key}-#{session.id}"
     end
 
-    # The image the runner pulls and starts: the runner's
-    # `container.image_override` where it sets one, else the strategy's, as it
-    # was given.
-    def runner_image(config, image)
-      setting(config, "container.image_override").presence || image
+    # The image the runner pulls and starts, chosen here and not by the
+    # strategy, whose (hosted) image a runner session does not use. In order:
+    # the runner's `container.image_override` (`{agent}` in it is the image name
+    # of the session's runtime), else `runners.agent_images.<runtime>`, else
+    # `runners.agent_image_prefix` + the runtime's image name + `runners.agent_image_tag`.
+    # The defaults are the public images, which a customer's machine can pull.
+    def runner_image(config, session)
+      image_name = AgentRuntime.fetch(session.agent_type).image
+      override = setting(config, "container.image_override").presence
+      return Runners::ConfigSchema.image_reference(override, image_name) if override
+
+      default_runner_image(session.agent_type, image_name)
+    end
+
+    # The image `env.scrub` runs its short-lived container from: the one the
+    # session's `container.start` pulled.
+    def scrub_image(session)
+      runner_image(session.runner&.config || {}, session)
+    end
+
+    def default_runner_image(agent_type, image_name)
+      settings = Settings.runners
+      configured = settings.agent_images.to_h.transform_keys(&:to_s)[agent_type.to_s]
+      return configured.to_s if configured.present?
+
+      name = "#{settings.agent_image_prefix}#{image_name}"
+      tag = settings.agent_image_tag.to_s.strip
+      tag.present? ? "#{name}:#{tag}" : name
     end
 
     # `proxy_port` is the session's port of its callback proxy, which the
@@ -565,7 +610,7 @@ module ContainerRuntime
     def container_payload(session, spec)
       config = session.runner&.config || {}
       {
-        "image" => runner_image(config, spec[:image]),
+        "image" => runner_image(config, session),
         "env" => env_hash(spec[:env_vars]),
         "workspace_volume" => setting(config, "container.workspace_volume"),
         "mounts" => mounts(config),

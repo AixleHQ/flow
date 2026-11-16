@@ -1279,7 +1279,7 @@ function ProfilePage({
     void save();
   };
 
-  useUnsavedChanges({ dirty: isDirty && !processing, onSave: isFormValid ? save : undefined });
+  useUnsavedChanges({ dirty: isDirty, saving: processing, onSave: isFormValid ? save : undefined });
 
   if (!profile) {
     return (

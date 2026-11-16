@@ -782,6 +782,18 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_not context_service(session).credential_workflow_config(nil, []).key?(:reasoning_effort)
   end
 
+  test "credential_workflow_config asks for full telemetry only of a session that has it and a collector" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "claude_code")
+    runner = mock("runtime")
+    on_runner = context_service(session, runtime: runner)
+    runner.stubs(:callback_url).with(:otel, anything).returns(nil)
+
+    refute context_service(session).credential_workflow_config(nil, [])[:full_telemetry]
+    session.stubs(:full_telemetry?).returns(true)
+    assert context_service(session).credential_workflow_config(nil, [])[:full_telemetry]
+    refute on_runner.credential_workflow_config(nil, [])[:full_telemetry]
+  end
+
   test "assemble_session_context orchestrates all steps in order" do
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
                      mode: "interactive")
@@ -1043,6 +1055,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
                            "https://github.com/acme/my-app.git /workspace/repo/my-app"
     assert_includes clone, "credential.https://github.com/acme/my-app.git.helper /workspace/.aixle/git-credential-aixle"
     assert_includes clone, "chown -R 1001:1001 /workspace/repo/my-app"
+    assert_includes clone, "git config --system --add safe.directory /workspace/repo/my-app"
     assert commands.none? { |c| c.include?("ghs_test_token") }, "the token must never be part of a command"
 
     header_file = runtime.fs.keys.find { |path| path.start_with?("/tmp/.aixle-git-") }
@@ -1129,6 +1142,30 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     repo.reload
     assert_not_nil repo.last_fetched_at
     assert_nil session.reload.metadata["failed_repos"]
+  end
+
+  # The safe.directory fragment is chained with `&&` after the clone and chown. A
+  # failed clone has to keep its exit code, or the retry and record_failed_repo
+  # never run and the agent starts with no checkout.
+  test "a public clone that fails exits non-zero through the real shell command" do
+    repo = create(:repository, :public_source, full_name: "rails/rails", source_branch: "main",
+                  clone_url: "https://github.com/rails/rails.git", scope: @project)
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    captured = nil
+    runtime = Object.new
+    runtime.define_singleton_method(:exec) { |_ctr, cmd| (captured = cmd) && [ [], [], 0 ] }
+
+    context_service(session, "ctr1", runtime: runtime).send(:exec_clone_command, repo, nil, nil, 1001, "/tmp/never-cloned")
+
+    Dir.mktmpdir do |dir|
+      stub = File.join(dir, "git")
+      File.write(stub, "#!/bin/sh\nexit 128\n")
+      File.chmod(0o755, stub)
+      env = { "PATH" => "#{dir}:#{ENV['PATH']}", "GIT_CONFIG_SYSTEM" => File.join(dir, "gitconfig") }
+
+      assert_not system(env, *captured, err: File::NULL), "a failed clone must not exit 0"
+      assert_equal 128, $?.exitstatus
+    end
   end
 
   test "inject_repositories skips inactive integration" do

@@ -28,7 +28,7 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
   def canonical_url = "#{Settings.protocol}://#{Settings.domain}"
 
   def runner_params(**overrides)
-    { runner: { name: "Office Mac", runner_type: "manual", max_concurrency: 2, config: { reconnect_grace: 600 } }.merge(overrides) }
+    { runner: { name: "Office Mac", runner_type: "manual", max_concurrency: 2, config: { auto_update: false } }.merge(overrides) }
   end
 
   test "every route answers 404 for a company without the flag" do
@@ -53,6 +53,19 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Build box", @runner.reload.name
   end
 
+  test "Return to service answers 404 for a company without the flag" do
+    machine = create(:runner_environment, runner: @runner)
+    Runners::Machines.fail!(machine, "boom")
+    FeatureFlagOverride.where(company: @company).delete_all
+    sign_in_as(@admin)
+
+    post return_to_service_company_settings_runner_machine_path(@runner, machine)
+
+    assert_response :not_found
+    assert_equal "failed", machine.reload.state
+    assert_empty RunnerOperation.all
+  end
+
   test "every member lists and views the company's runners" do
     assert_role_matrix(READ_ROLES, transport: :web) { get company_settings_runners_path }
     assert_role_matrix(READ_ROLES, transport: :web) { get company_settings_runner_path(@runner) }
@@ -69,7 +82,7 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
       props[:runners].pluck(:id) == [ @runner.id ] && !props[:runners].pluck(:id).include?(project_runner.id) &&
         props[:runners].first[:runnerType] == "manual" &&
         props[:runnerTypes].pluck(:runnerType) == %w[manual] &&
-        props[:runnerTypes].first[:configSchema][:properties].key?(:reconnect_grace) &&
+        props[:runnerTypes].first[:configSchema][:properties].key?(:auto_update) &&
         props[:canManage] == true
     end
 
@@ -77,6 +90,36 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
     get company_settings_runner_path(@runner)
     assert_inertia_page "Company/Settings/RunnerPage"
     assert_inertia_props { |props| props[:runner][:name] == "Build box" && props[:canManage] == false }
+  end
+
+  test "show lists the machines with their display state, and the runner's last seen" do
+    idle = create(:runner_environment, runner: @runner, display_name: "mac", os: "darwin", arch: "arm64", runner_version: "0.2.0")
+    silent = create(:runner_environment, runner: @runner, display_name: "gone-quiet", last_heartbeat_at: 5.minutes.ago)
+    busy = create(:runner_environment, runner: @runner, display_name: "busy",
+                                       current_session: create(:runner_session, environment: idle, runner_environment: nil))
+    seen = Time.current.change(usec: 0)
+    @runner.update!(last_seen_at: seen)
+    sign_in_as(@owner)
+
+    get company_settings_runner_path(@runner)
+
+    assert_inertia_props do |props|
+      machines = props[:machines].index_by { |machine| machine[:id] }
+      props[:runner][:lastSeenAt].present? &&
+        machines.keys == [ idle.id, silent.id, busy.id ] &&
+        machines[idle.id].values_at(:displayName, :state, :os, :arch, :runnerVersion) == %w[mac idle darwin arm64 0.2.0] &&
+        machines[silent.id][:state] == "offline" && machines[busy.id][:state] == "online" &&
+        machines[idle.id][:key] == idle.key && machines[idle.id][:lastHeartbeatAt].present?
+    end
+  end
+
+  test "a runner that is not manual has no machines" do
+    runner = create(:runner, :kubernetes, company: @company, created_by: @admin)
+    sign_in_as(@owner)
+
+    get company_settings_runner_path(runner)
+
+    assert_inertia_props { |props| props[:machines] == [] }
   end
 
   test "only a company admin creates a company runner, and the request decides its scope and author" do
@@ -87,7 +130,7 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
     runner = @company.runners.find_by!(name: "Box admin")
     assert_nil runner.project_id
     assert_equal @admin, runner.created_by
-    assert_equal({ "reconnect_grace" => 600 }, runner.config)
+    assert_equal({ "auto_update" => false }, runner.config)
     assert_equal({ "provisionable" => false, "rebuildable" => false }, runner.capabilities)
     assert_equal 1, @company.runners.where("name LIKE 'Box %'").count
   end
@@ -249,5 +292,117 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :not_found
     assert_empty RunnerCredential.where(kind: :registration)
+  end
+
+  test "only a company admin returns a failed machine to service, which resets it" do
+    machine = create(:runner_environment, runner: @runner, display_name: "build-01")
+    Runners::Machines.fail!(machine, "build-01 failed to reset after session 7: boom")
+
+    assert_role_matrix(WRITE_ROLES, transport: :web) do
+      post return_to_service_company_settings_runner_machine_path(@runner, machine)
+      Runners::Machines.fail!(machine.reload, "boom again") if machine.reload.state == "resetting"
+    end
+
+    RunnerOperation.delete_all
+    sign_in_as(@admin)
+    post return_to_service_company_settings_runner_machine_path(@runner, machine)
+    assert_redirected_to company_settings_runner_path(@runner)
+    assert_equal "build-01 is being reset. It takes sessions again once the reset succeeds.", flash[:notice]
+    assert_equal "resetting", machine.reload.state
+    assert_equal 1, RunnerOperation.where(runner_environment: machine, op: "env.reset", state: "pending").count
+  end
+
+  test "Return to service on a machine that is not failed sends nothing" do
+    machine = create(:runner_environment, runner: @runner, display_name: "build-01")
+    sign_in_as(@admin)
+
+    post return_to_service_company_settings_runner_machine_path(@runner, machine)
+
+    assert_equal "build-01 is not failed, so there is nothing to return to service.", flash[:alert]
+    assert_equal "registered", machine.reload.state
+    assert_empty RunnerOperation.all
+  end
+
+  test "Return to service of a machine whose runner is not manual sends nothing" do
+    runner = create(:runner, :kubernetes, company: @company, created_by: @admin, name: "Cluster")
+    machine = create(:runner_environment, runner: runner)
+    Runners::Machines.fail!(machine, "boom")
+    sign_in_as(@admin)
+
+    post return_to_service_company_settings_runner_machine_path(runner, machine)
+
+    assert_equal "Only a machine of a manual runner is returned to service.", flash[:alert]
+    assert_equal "failed", machine.reload.state
+    assert_empty RunnerOperation.all
+  end
+
+  test "a machine of another runner is not found by Return to service" do
+    other = create(:runner_environment, runner: create(:runner, company: @company, created_by: @admin, name: "Other box"))
+    Runners::Machines.fail!(other, "boom")
+    sign_in_as(@admin)
+
+    post return_to_service_company_settings_runner_machine_path(@runner, other)
+
+    assert_response :not_found
+    assert_equal "failed", other.reload.state
+  end
+
+  test "only a company admin revokes a machine, which ends the session it holds" do
+    machine = create(:runner_environment, runner: @runner, display_name: "build-02")
+    session = create(:runner_session, :holding, environment: machine)
+
+    assert_role_matrix(WRITE_ROLES, transport: :web) do
+      post revoke_company_settings_runner_machine_path(@runner, machine)
+    end
+
+    assert machine.reload.gone?
+    assert_equal "failed", session.reload.state
+    assert_includes session.error_message, "build-02"
+  end
+
+  test "Revoke on a machine that is already gone changes nothing" do
+    machine = create(:runner_environment, runner: @runner, display_name: "build-01", state: :gone)
+    sign_in_as(@admin)
+
+    post revoke_company_settings_runner_machine_path(@runner, machine)
+
+    assert_equal "build-01 is already gone.", flash[:alert]
+  end
+
+  test "a machine of another runner is not found by Revoke" do
+    other = create(:runner_environment, runner: create(:runner, company: @company, created_by: @admin, name: "Other box"))
+    sign_in_as(@admin)
+
+    post revoke_company_settings_runner_machine_path(@runner, other)
+
+    assert_response :not_found
+    assert other.reload.registered?
+  end
+
+  test "Revoke answers 404 for a company without the flag" do
+    machine = create(:runner_environment, runner: @runner)
+    FeatureFlagOverride.where(company: @company).delete_all
+    sign_in_as(@admin)
+
+    post revoke_company_settings_runner_machine_path(@runner, machine)
+
+    assert_response :not_found
+    assert machine.reload.registered?
+  end
+
+  test "the list shows machines busy/total of a manual runner, and the machine list who added it and from where" do
+    admin_machine = create(:runner_environment, runner: @runner, created_by: @admin, first_seen_ip: "203.0.113.7")
+    create(:runner_session, :holding, environment: admin_machine)
+    create(:runner_environment, runner: @runner, state: :gone)
+    sign_in_as(@admin)
+
+    get company_settings_runners_path
+    assert_inertia_props { |props| props[:runners].first.deep_symbolize_keys[:machines] == { busy: 1, total: 1 } }
+
+    get company_settings_runner_path(@runner)
+    assert_inertia_props do |props|
+      props[:runner].deep_symbolize_keys[:machines] == { busy: 1, total: 1 } &&
+        props[:machines].map(&:deep_symbolize_keys).any? { |m| m[:firstSeenIp] == "203.0.113.7" && m[:createdByName] == @admin.name }
+    end
   end
 end

@@ -89,6 +89,24 @@ describe('Dashboard', () => {
     expect(tile('Projects').getByText('5')).toBeInTheDocument();
   });
 
+  it('counts companies by the same account columns as the table, whichever provider bills them', () => {
+    const accounts = {
+      ...data,
+      tenants: [
+        ...data.tenants,
+        buildTenant({ id: 3, name: 'Initech', billingMethod: 'saas_aws_marketplace' }),
+        buildTenant({ id: 4, name: 'Hooli', accountStatus: 'trial_active', billingMethod: null }),
+        buildTenant({ id: 5, name: 'Umbrella', accountStatus: 'canceled', billingMethod: 'saas_aws_marketplace' }),
+      ],
+      days: [...data.days, buildUsageDay({ companyId: 3, day: '2026-10-15' })],
+      snapshot: { ...data.snapshot, companies: 5 },
+    };
+    render(<Dashboard data={accounts} now={now} />);
+
+    expect(tile('Companies').getByText('5')).toBeInTheDocument();
+    expect(tile('Companies').getByText('2 paying · 1 trial · 1 canceled · 1 managed')).toBeInTheDocument();
+  });
+
   it('shows what the period used in tiles, and how much of it nobody pays for', () => {
     render(<Dashboard data={data} now={now} />);
 

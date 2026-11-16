@@ -13,7 +13,7 @@ class WorkflowResourceTest < ActiveSupport::TestCase
   end
 
   test "run stats serialize from the attached aggregate without querying workflow runs" do
-    preloaded = Workflow.attach_run_stats(Workflow.where(id: @workflow.id).includes(:steps)).first
+    preloaded = Workflow.attach_run_stats(Workflow.where(id: @workflow.id).includes(:steps, :base_resource_links)).first
 
     payload = nil
     assert_no_queries do
@@ -24,5 +24,16 @@ class WorkflowResourceTest < ActiveSupport::TestCase
     assert_equal "completed", payload["lastRunStatus"]
     refute payload["hasActiveRuns"]
     assert_in_delta @latest.reload.created_at, Time.zone.parse(payload["lastRunAt"].to_s), 1
+  end
+
+  test "config carries the base lists, read from the links" do
+    repository = create(:repository, scope: @project)
+    @workflow.merge_config!("base_repository_ids" => [ repository.id ], "inherit_all_project_resources" => true)
+
+    config = WorkflowResource.new(@workflow.reload).to_h["config"]
+
+    assert_equal [ repository.id ], config["baseRepositoryIds"]
+    assert config["inheritAllProjectResources"]
+    assert_equal [], config["baseToolIds"]
   end
 end

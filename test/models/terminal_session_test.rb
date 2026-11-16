@@ -20,6 +20,12 @@ class TerminalSessionTest < ActiveSupport::TestCase
                  TerminalSession.preferred_error_message("Some earlier failure", "Agent container vanished")
   end
 
+  test "preferred_error_message keeps a diagnosed reason when the reconciler's workflow-ended text arrives" do
+    assert_equal "Runner environment lost contact for 15 minutes.",
+                 TerminalSession.preferred_error_message("Runner environment lost contact for 15 minutes.",
+                                                         TerminalSession::WORKFLOW_ENDED_ERROR)
+  end
+
   test "preferred_error_message keeps what it has when nothing new arrives" do
     assert_equal "Agent container vanished", TerminalSession.preferred_error_message("Agent container vanished", nil)
   end
@@ -570,5 +576,115 @@ class TerminalSessionTest < ActiveSupport::TestCase
                                        requested_model: "claude-opus-4-8", reasoning_effort: "high")
 
     assert session.valid?, session.errors.full_messages.to_sentence
+  end
+
+  test "ended? and ended_state? are true for finished, failed and cancelled only" do
+    %w[finished failed cancelled].each do |state|
+      assert TerminalSession.ended_state?(state), state
+      assert TerminalSession.new(state: state).ended?, state
+    end
+    %w[not_started queued running ready finishing].each do |state|
+      assert_not TerminalSession.ended_state?(state), state
+      assert_not TerminalSession.new(state: state).ended?, state
+    end
+  end
+
+  test "launched? and launched_state? are true for ready and finishing only" do
+    %w[ready finishing].each do |state|
+      assert TerminalSession.launched_state?(state), state
+      assert TerminalSession.new(state: state).launched?, state
+    end
+    %w[not_started queued running finished failed cancelled].each do |state|
+      assert_not TerminalSession.launched_state?(state), state
+      assert_not TerminalSession.new(state: state).launched?, state
+    end
+  end
+
+  test "workflow_step? is true for a workflow step session only" do
+    assert TerminalSession.new(session_type: "workflow_step").workflow_step?
+    assert_not TerminalSession.new(session_type: "agent_session").workflow_step?
+  end
+
+  test "not_ended leaves out the sessions that finished, failed or were cancelled" do
+    sessions = %w[running finishing finished failed cancelled].index_with do |state|
+      create(:terminal_session, :with_user).tap { |session| session.update_columns(state: state) }
+    end
+
+    ids = TerminalSession.where(id: sessions.values.map(&:id)).not_ended.pluck(:id)
+
+    assert_equal [ sessions["running"].id, sessions["finishing"].id ].sort, ids.sort
+  end
+
+  test "mark_contact_lost! and clear_contact_lost! set and remove what contact_lost? reads" do
+    session = create(:terminal_session, user: @user)
+    assert_not session.contact_lost?
+
+    session.mark_contact_lost!(Time.current)
+    assert session.reload.contact_lost?
+
+    session.clear_contact_lost!
+    assert_not session.reload.contact_lost?
+  end
+
+  test "concluded? is true for finished and failed, not for cancelled" do
+    assert TerminalSession.new(state: "finished").concluded?
+    assert TerminalSession.new(state: "failed").concluded?
+    %w[not_started queued running ready finishing cancelled].each do |state|
+      assert_not TerminalSession.new(state: state).concluded?, state
+    end
+  end
+
+  test "aborted? is true for failed and cancelled, not for finished" do
+    assert TerminalSession.new(state: "failed").aborted?
+    assert TerminalSession.new(state: "cancelled").aborted?
+    %w[not_started queued running ready finishing finished].each do |state|
+      assert_not TerminalSession.new(state: state).aborted?, state
+    end
+  end
+
+  test "deletable? is true for a session not started or ended, not for one in flight" do
+    %w[not_started finished failed cancelled].each do |state|
+      assert TerminalSession.new(state: state).deletable?, state
+    end
+    %w[queued running ready finishing].each do |state|
+      assert_not TerminalSession.new(state: state).deletable?, state
+    end
+  end
+
+  test "auth_setup? and auth_setup_type? are true for an auth_setup session only" do
+    assert TerminalSession.new(session_type: "auth_setup").auth_setup?
+    assert TerminalSession.auth_setup_type?("auth_setup")
+    assert_not TerminalSession.new(session_type: "agent_session").auth_setup?
+    assert_not TerminalSession.auth_setup_type?(nil)
+  end
+
+  test "agent_session? is true for an agent session only" do
+    assert TerminalSession.new(session_type: "agent_session").agent_session?
+    assert_not TerminalSession.new(session_type: "workflow_step").agent_session?
+  end
+
+  test "workflow_step_type? is true for workflow_step only" do
+    assert TerminalSession.workflow_step_type?("workflow_step")
+    assert_not TerminalSession.workflow_step_type?("agent_session")
+    assert_not TerminalSession.workflow_step_type?(nil)
+  end
+
+  test "the state scopes split sessions into ended, not ended and container up" do
+    sessions = %w[queued running ready finishing finished failed cancelled].index_with do |state|
+      create(:terminal_session, :with_user).tap { |session| session.update_columns(state: state) }
+    end
+    scope = TerminalSession.where(id: sessions.values.map(&:id))
+
+    assert_equal %w[finished failed cancelled].map { |s| sessions[s].id }.sort, scope.ended.pluck(:id).sort
+    assert_equal %w[running ready].map { |s| sessions[s].id }.sort, scope.container_up.pluck(:id).sort
+  end
+
+  test "the type scopes pick workflow steps and leave out auth setups" do
+    step = create(:terminal_session, :with_user).tap { |session| session.update_columns(session_type: "workflow_step") }
+    auth = create(:terminal_session, :with_user).tap { |session| session.update_columns(session_type: "auth_setup") }
+    scope = TerminalSession.where(id: [ step.id, auth.id ])
+
+    assert_equal [ step.id ], scope.workflow_steps.pluck(:id)
+    assert_equal [ step.id ], scope.not_auth_sessions.pluck(:id)
   end
 end

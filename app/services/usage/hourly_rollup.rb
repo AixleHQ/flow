@@ -71,6 +71,7 @@ module Usage
       opening = opening_limits(slice_start)
       changes = limit_changes_between(slice_start, slice_end)
       companies = companies_for(admissions.keys + outcomes.keys.map(&:first))
+      metered_by_aws = MarketplaceLicense.metered.where(company_id: companies.map(&:id)).pluck(:company_id).to_set
       computed_at = Time.current
 
       rows = hours(slice_start, slice_end).flat_map do |hour|
@@ -88,7 +89,7 @@ module Usage
           }
           next unless company.active? || used?(row)
 
-          row.merge(billing_class: billing_class(company, limits), computed_at: computed_at)
+          row.merge(billing_class: billing_class(company, limits, metered_by_aws), computed_at: computed_at)
         end
       end
       return 0 if rows.empty?
@@ -106,7 +107,7 @@ module Usage
     # one appears only for an hour in which something of it still ran.
     def companies_for(ids_with_activity)
       Company.active.or(Company.where(id: ids_with_activity.uniq))
-             .select(:id, :state, :billing_state, :managed_by_aixle, :stripe_customer_id)
+             .select(:id, :state, :billing_state, :managed_by_aixle, :stripe_customer_id, :billing_provider)
              .to_a
     end
 
@@ -227,7 +228,7 @@ module Usage
       }
     end
 
-    def billing_class(company, limits)
+    def billing_class(company, limits, metered_by_aws)
       return "not_metered" if @mode == Deployment::SELF_HOSTED
       return "inactive" unless company.active?
       return "paying" if @mode == Deployment::AWS_MARKETPLACE
@@ -235,9 +236,19 @@ module Usage
       return "blocked" if company.billing_blocked?
       return "trial" if company.billing_trialing?
       return "unlimited" if limits[:limit_max].nil?
-      return "no_customer" if company.stripe_customer_id.blank?
+      return "no_customer" unless invoiced?(company, metered_by_aws)
 
       "paying"
+    end
+
+    # Whether the hour has somewhere to go: the provider the company's column
+    # names, the same way each meter picks its companies.
+    def invoiced?(company, metered_by_aws)
+      if company.billing_provider == Company::BILLING_PROVIDER_AWS_MARKETPLACE
+        metered_by_aws.include?(company.id)
+      else
+        company.stripe_customer_id.present?
+      end
     end
   end
 end

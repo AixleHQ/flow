@@ -154,7 +154,7 @@ Every area above is documented in one chapter of
 | Connectors | 13. Connectors |
 | Repositories, Trackers, Integrations | 14. Repositories & Integrations |
 | Aixle Builder | 15. AI Builder |
-| Members | 16. Team |
+| Members, Teams | 16. Team |
 | Secrets & Variables | 17. Secrets & Variables |
 | Analytics | 18. Analytics |
 | Settings | 19. Settings |

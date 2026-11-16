@@ -57,6 +57,56 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert_equal [ "registry.internal/agents/claude:7" ], @host_runner.operations.map { |op| op[:payload]["image"] }
   end
 
+  test "{agent} in the override is the image name of the session's runtime" do
+    @runner.update!(config: @runner.config.deep_merge("container" => { "image_override" => "ghcr.io/aixlehq/flow-{agent}:develop" }))
+    @session.update!(agent_type: "codex")
+
+    @runtime.create_container(spec)
+
+    assert_equal [ "ghcr.io/aixlehq/flow-codex:develop" ], @host_runner.operations.map { |op| op[:payload]["image"] }
+  end
+
+  test "without an override a runner session gets the public image, tagged latest" do
+    @runtime.create_container(spec(image: "aixle/claude-code:sha-b258cc1")) # the strategy's hosted image is not used
+
+    assert_equal [ "ghcr.io/aixlehq/flow-claude-code:latest" ], @host_runner.operations.map { |op| op[:payload]["image"] }
+  end
+
+  test "a runner session takes its own tag, not the hosted one" do
+    Settings.agents.stubs(:image_tag).returns("sha-b258cc1")
+    Settings.runners.stubs(:agent_image_tag).returns("1.2.3")
+
+    @runtime.create_container(spec)
+
+    assert_equal [ "ghcr.io/aixlehq/flow-claude-code:1.2.3" ], @host_runner.operations.map { |op| op[:payload]["image"] }
+  end
+
+  test "a runner session takes the runner image prefix" do
+    Settings.runners.stubs(:agent_image_prefix).returns("registry.example/agents/")
+    @session.update!(agent_type: "codex")
+
+    @runtime.create_container(spec)
+
+    assert_equal [ "registry.example/agents/codex:latest" ], @host_runner.operations.map { |op| op[:payload]["image"] }
+  end
+
+  test "a runner session takes the per-runtime runner override" do
+    Settings.runners.stubs(:agent_images).returns({ "claude_code" => "registry.example/claude@sha256:abc" })
+
+    @runtime.create_container(spec)
+
+    assert_equal [ "registry.example/claude@sha256:abc" ], @host_runner.operations.map { |op| op[:payload]["image"] }
+  end
+
+  test "the runner's image override wins over the runner defaults" do
+    Settings.runners.stubs(:agent_images).returns({ "claude_code" => "registry.example/claude@sha256:abc" })
+    @runner.update!(config: @runner.config.deep_merge("container" => { "image_override" => "registry.internal/agents/claude:7" }))
+
+    @runtime.create_container(spec)
+
+    assert_equal [ "registry.internal/agents/claude:7" ], @host_runner.operations.map { |op| op[:payload]["image"] }
+  end
+
   test "create_container takes a free machine and starts the container with the strategy's env and the runner's options" do
     spec = spec(env_vars: [ "SESSION_ID=#{@session.id}", "TTYD_CMD=bash", "A=b=c" ],
                 host_config: { "Memory" => 4.gigabytes, "CpuPeriod" => 100_000, "CpuQuota" => 200_000, "PidsLimit" => 4096 })
@@ -159,16 +209,88 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert_empty @host_runner.operations
   end
 
-  test "cleanup stops the container, resets the machine and frees it" do
+  test "under reuse, cleanup stops the container, scrubs the machine with the session's image and frees it" do
     handle = start_session
-    assert_not @runtime.session_absent?(handle), "a held machine still needs its reset"
+    assert_not @runtime.session_absent?(handle), "a held machine still needs its scrub"
+
+    @runtime.cleanup_session(handle)
+
+    assert_equal %w[container.stop env.scrub], @host_runner.ops.last(2)
+    assert_equal [ @session.id, nil ], @host_runner.operations.last(2).pluck(:session_id)
+    assert_equal({ "image" => IMAGE }, @host_runner.operations.last[:payload].slice("image"))
+    assert_nil @environment.reload.current_session_id
+    assert_equal 0, @environment.consecutive_failures
+    assert @runtime.session_absent?(handle)
+  end
+
+  test "under reset, cleanup stops the container, resets the machine and frees it" do
+    @runner.update!(reuse_policy: :reset)
+    handle = start_session
 
     @runtime.cleanup_session(handle)
 
     assert_equal %w[container.stop env.reset], @host_runner.ops.last(2)
-    assert_equal [ @session.id, nil ], @host_runner.operations.last(2).pluck(:session_id)
     assert_nil @environment.reload.current_session_id
-    assert @runtime.session_absent?(handle)
+    assert_equal "registered", @environment.state
+  end
+
+  test "a failed session is followed by a reset even under reuse, and counts toward the machine's streak" do
+    handle = start_session
+
+    @runtime.cleanup_session(handle, failed: true)
+
+    assert_equal %w[container.stop env.reset], @host_runner.ops.last(2)
+    @environment.reload
+    assert_nil @environment.current_session_id
+    assert_equal "registered", @environment.state
+    assert_equal 1, @environment.consecutive_failures
+  end
+
+  test "a failed scrub is followed by a reset, and the machine is freed when it succeeds" do
+    handle = start_session
+    @host_runner.answer_with("env.scrub", "status" => "error",
+                                          "error" => { "class" => "scrub_failed", "message" => "emptying outputs failed" })
+
+    @runtime.cleanup_session(handle)
+
+    assert_equal %w[container.stop env.scrub env.reset], @host_runner.ops.last(3)
+    @environment.reload
+    assert_equal "registered", @environment.state
+    assert_nil @environment.current_session_id
+  end
+
+  test "a failed scrub and a failed reset make the machine failed" do
+    handle = start_session
+    @host_runner.answer_with("env.scrub", "status" => "error", "error" => { "class" => "scrub_failed", "message" => "no" })
+    @host_runner.answer_with("env.reset", "status" => "error", "error" => { "class" => "reset_failed", "message" => "volume in use" })
+
+    @runtime.cleanup_session(handle)
+
+    @environment.reload
+    assert_equal "failed", @environment.state
+    assert_match(/failed to reset after session #{@session.id}: reset_failed: volume in use/, @environment.state_reason)
+  end
+
+  test "the session that is the third failed one in a row takes the machine out of rotation after its reset" do
+    @environment.update!(consecutive_failures: 2)
+    handle = start_session
+
+    @runtime.cleanup_session(handle, failed: true)
+
+    @environment.reload
+    assert_equal "failed", @environment.state
+    assert_nil @environment.current_session_id
+    assert_equal 3, @environment.consecutive_failures
+    assert_match(/failed 3 sessions in a row/, @environment.state_reason)
+  end
+
+  test "a session that ends well sets the streak back to 0" do
+    @environment.update!(consecutive_failures: 2)
+    handle = start_session
+
+    @runtime.cleanup_session(handle)
+
+    assert_equal 0, @environment.reload.consecutive_failures
   end
 
   test "the cleanup identity finds the session as its container's name does" do
@@ -177,11 +299,12 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert_not @runtime.session_absent?(@identity)
     @runtime.cleanup_session(@identity)
 
-    assert_equal %w[container.stop env.reset], @host_runner.ops.last(2)
+    assert_equal %w[container.stop env.scrub], @host_runner.ops.last(2)
     assert_nil @environment.reload.current_session_id
   end
 
   test "a failed reset moves the machine to failed, with the reason, and the session's cleanup is over" do
+    @runner.update!(reuse_policy: :reset)
     handle = start_session
     @host_runner.answer_with("env.reset", "status" => "error",
                                           "error" => { "class" => "reset_failed", "message" => "volume aixle-ws-x is in use" })
@@ -191,19 +314,20 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     @environment.reload
     assert_equal "failed", @environment.state
     assert_nil @environment.current_session_id, "the session no longer holds it"
-    assert_equal "env.reset failed after session #{@session.id}: reset_failed: volume aixle-ws-x is in use", @environment.state_reason
+    assert_equal "#{@environment.display_name} failed to reset after session #{@session.id}: reset_failed: volume aixle-ws-x is in use",
+                 @environment.state_reason
     assert @runtime.session_absent?(handle)
     assert_raises(Runners::Machines::NoMachine) { Runners::Machines.acquire!(another_session) }
   end
 
-  test "a failed container.stop is logged and the reset still runs" do
+  test "a failed container.stop is logged and the scrub still runs" do
     handle = start_session
     @host_runner.answer_with("container.stop", "status" => "error",
                                                "error" => { "class" => "docker_error", "message" => "the daemon refused" })
 
     @runtime.cleanup_session(handle)
 
-    assert_equal %w[container.stop env.reset], @host_runner.ops.last(2)
+    assert_equal %w[container.stop env.scrub], @host_runner.ops.last(2)
     assert_nil @environment.reload.current_session_id
     assert_equal "registered", @environment.state
   end
@@ -228,7 +352,9 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     @host_runner.answer_with("container.start", "status" => "error",
                                                 "error" => { "class" => "image_pull_failed", "message" => "pull access denied" })
 
-    error = assert_raises(ContainerRuntime::CreateRefusedError) { @runtime.create_container(spec(image: "ghcr.io/aixlehq/nope:1")) }
+    @runner.update!(config: @runner.config.deep_merge("container" => { "image_override" => "ghcr.io/aixlehq/nope:1" }))
+
+    error = assert_raises(ContainerRuntime::CreateRefusedError) { @runtime.create_container(spec) }
 
     assert_match(%r{Could not pull ghcr.io/aixlehq/nope:1: container.start failed: image_pull_failed: pull access denied}, error.message)
     assert_equal @session.id, @environment.reload.current_session_id, "the cleanup frees the machine (AdmittedPhaseActivity)"
@@ -329,7 +455,7 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     @runtime.container_status(@identity)
     @runtime.cleanup_session(@identity)
     assert_empty other_runner.operations, "no call of the session reached the other session's machine"
-    assert_equal %w[container.start status container.stop env.reset], @host_runner.ops
+    assert_equal %w[container.start status container.stop env.scrub], @host_runner.ops
     assert_equal other.id, other_environment.reload.current_session_id
     assert_equal :running, @runtime.container_status(others_container)
   ensure
@@ -581,6 +707,7 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
   # The wait for an op ends at its deadline, inside the activity, so an
   # unanswered reset reaches the machine's failure before the activity ends.
   test "cleanup inside an activity with an unanswered env.reset ends with the machine failed and the reason" do
+    @runner.update!(reuse_policy: :reset)
     handle = start_session
     @host_runner.answer_with("env.reset", :none)
 
@@ -589,7 +716,8 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     @environment.reload
     assert_equal "failed", @environment.state
     assert_nil @environment.current_session_id
-    assert_equal "env.reset failed after session #{@session.id}: the runner did not answer", @environment.state_reason
+    assert_equal "#{@environment.display_name} failed to reset after session #{@session.id}: the runner did not answer",
+                 @environment.state_reason
     assert RunnerOperation.find_by(op: "env.reset").expired?
   end
 

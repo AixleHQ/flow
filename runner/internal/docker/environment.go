@@ -65,7 +65,8 @@ type Environment struct {
 	// Now is replaced in tests.
 	Now func() time.Time
 	// RemoveTimeout bounds the removal after a failed or cut-short
-	// `container.start`. Zero is 30 seconds.
+	// `container.start`, and the removal of `env.scrub`'s helper container.
+	// Zero is 30 seconds.
 	RemoveTimeout time.Duration
 	// Logger receives what an op cannot put in its answer. Nil is slog.Default().
 	Logger *slog.Logger

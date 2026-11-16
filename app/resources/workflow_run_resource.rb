@@ -1,8 +1,12 @@
 # frozen_string_literal: true
 
 class WorkflowRunResource < ApplicationResource
-  attributes :id, :workflow_id, :project_id, :user_id,
-             :state, :started_at, :execution_started_at, :completed_at,
+  attributes :id, :workflow_id, :project_id, :user_id
+
+  typelize :string
+  attribute :state, &:displayed_state
+
+  attributes :started_at, :execution_started_at, :completed_at,
              :created_at, :updated_at,
              :failure_reason, :failed_agent_credential_id, :runner_id
 
@@ -50,9 +54,9 @@ class WorkflowRunResource < ApplicationResource
   typelize :number
   attribute :steps_completed do |run|
     if run.association(:step_runs).loaded?
-      run.step_runs.to_a.count { |sr| sr.state.to_s == "completed" }
+      run.step_runs.to_a.count(&:completed?)
     else
-      run.step_runs.where(state: :completed).count
+      run.step_runs.with_state(:completed).count
     end
   end
 

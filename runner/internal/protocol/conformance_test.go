@@ -352,6 +352,9 @@ func clientCall(t *testing.T, method, path, token string, headers map[string]*st
 	case method == http.MethodDelete && path == "/runner/v1/registration" && body == nil:
 		c.endpoint = "unregister"
 		c.run = func(ctx context.Context, cl *protocol.Client) (any, error) { return nil, cl.Unregister(ctx, token) }
+	case method == http.MethodPost && path == "/runner/v1/heartbeat" && body == nil:
+		c.endpoint = "heartbeat"
+		c.run = func(ctx context.Context, cl *protocol.Client) (any, error) { return nil, cl.Heartbeat(ctx, token) }
 	case method == http.MethodGet && opsPath.MatchString(path) && body == nil:
 		m := opsPath.FindStringSubmatch(path)
 		after, err1 := strconv.ParseInt(m[1], 10, 64)
@@ -569,7 +572,7 @@ func TestConformanceFixtures(t *testing.T) {
 	}
 
 	// The scenarios the client uses must really have been driven.
-	for _, endpoint := range []string{"register", "check-in", "token", "unregister", "ops", "releases", "proxy"} {
+	for _, endpoint := range []string{"register", "check-in", "token", "unregister", "heartbeat", "ops", "releases", "proxy"} {
 		if cov.driven[endpoint] == 0 {
 			t.Errorf("no %s exchange was driven through the client", endpoint)
 		}

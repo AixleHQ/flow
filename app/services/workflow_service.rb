@@ -371,7 +371,7 @@ class WorkflowService
     end
 
     def cancel_active_step_runs(run)
-      run.step_runs.where(state: %w[pending running waiting_input]).find_each do |sr|
+      run.step_runs.unfinished.find_each do |sr|
         session = sr.terminal_session
         SessionService.cancel(session: session) if session
         # Read after the cancel: the session is where a diagnosed reason lives, and
@@ -395,7 +395,7 @@ class WorkflowService
         next false unless run.pending?
 
         run.update!(failure_reason: e.reason)
-        run.step_runs.where(state: "pending").find_each { |step_run| step_run.mark_failed!(e.message) }
+        run.step_runs.with_state(:pending).find_each { |step_run| step_run.mark_failed!(e.message) }
         run.fail_before_start!
         true
       end
@@ -422,7 +422,7 @@ class WorkflowService
       end
       if failed
         record_activity(run, :workflow_failed)
-        post_failure_comment(run, run.step_runs.where(state: "failed").pick(:error_message))
+        post_failure_comment(run, run.step_runs.with_state(:failed).pick(:error_message))
         broadcast_task_updated(run)
       end
       true
@@ -453,9 +453,9 @@ class WorkflowService
     # failed, so an unfinished step failed with it. Its session is stopped first
     # so the container is not left running behind a dead run.
     def fail_active_step_runs(run)
-      run.step_runs.where(state: %w[pending running waiting_input]).find_each do |sr|
+      run.step_runs.unfinished.find_each do |sr|
         session = sr.terminal_session
-        SessionService.fail_session(session: session) if session && !session.state.in?(%w[failed cancelled finished])
+        SessionService.fail_session(session: session) if session && !session.ended?
         sr.mark_failed!(diagnosed_reason(session) || "Run failed while this step was in flight")
       rescue StandardError => e
         Rails.logger.warn("[WorkflowService] Failed to fail step_run ##{sr.id}: #{e.message}")

@@ -20,6 +20,7 @@ const render = (props: Record<string, unknown> = {}) =>
   renderAuthedPage(<RunnerPage />, {
     props: {
       runner,
+      machines: [],
       runnerTypes: [buildRunnerTypeOption()],
       canManage: true,
       features: { externalRunners: true },
@@ -38,6 +39,34 @@ describe('Company/Settings/RunnerPage', () => {
     expect(screen.getByText('Shares the machine’s network (network: host)')).toBeInTheDocument();
     expect(screen.getByText('Mounts /opt at /opt, read-only')).toBeInTheDocument();
     expect(screen.getByText('container.network')).toBeInTheDocument();
+  });
+
+  it('lists the machines of a manual runner, with Revoke on each', () => {
+    render({
+      machines: [
+        {
+          id: 1,
+          key: 'aixle-r5-ab12cd34',
+          displayName: 'mac-studio',
+          os: 'darwin',
+          arch: 'arm64',
+          runnerVersion: '0.2.0',
+          stateReason: null,
+          lastHeartbeatAt: '2026-11-12T10:00:00Z',
+          createdAt: '2026-11-12T09:00:00Z',
+          firstSeenIp: '203.0.113.7',
+          createdByName: 'Grace Hopper',
+          state: 'idle',
+        },
+      ],
+    });
+
+    const machines = screen.getByRole('table', { name: 'Machines' });
+    expect(within(machines).getByText('mac-studio')).toBeInTheDocument();
+    expect(within(machines).getByText('Idle')).toBeInTheDocument();
+    expect(within(machines).getByText('203.0.113.7')).toBeInTheDocument();
+    expect(within(machines).getAllByRole('button')).toHaveLength(1);
+    expect(within(machines).getByRole('button', { name: 'Revoke' })).toBeInTheDocument();
   });
 
   it('disables a runner for someone who may manage it', async () => {

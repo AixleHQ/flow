@@ -32,6 +32,19 @@ class Web::Company::Projects::TeamsControllerTest < ActionDispatch::IntegrationT
     assert inertia.props[:canManage]
   end
 
+  test "a member whose login expired is listed as signed out, with what to do" do
+    ProjectTeams::Management.new(project: @project, actor: @owner).create!(name: "Planner", member_ids: [ @anna.id ])
+    AgentCredential.find_by!(user: @anna).update!(status: :error)
+    sign_in_as(@owner)
+
+    get company_project_teams_path(@project)
+
+    member = inertia.props[:teams].sole[:members].sole
+    assert_equal({ "state" => "signed_out", "until" => nil,
+                   "detail" => "Kiro CLI login expired — sign in again in Profile settings" }, member[:status])
+    assert_nil inertia.props[:teams].sole[:nextMemberId]
+  end
+
   test "the owner creates and edits a team" do
     sign_in_as(@owner)
 

@@ -1,9 +1,14 @@
 # frozen_string_literal: true
 
 class WorkflowResource < ApplicationResource
-  typelize config: "Record<string, unknown>"
-  attributes :id, :name, :description, :config, :scope_type, :scope_id, :published_at, :current_version_number,
-             :created_at, :updated_at, :runner_id
+  attributes :id, :name, :description
+
+  typelize "Record<string, unknown>"
+  attribute :config do |workflow|
+    workflow.linked_config
+  end
+
+  attributes :scope_type, :scope_id, :published_at, :current_version_number, :created_at, :updated_at, :runner_id
 
   typelize "string | null"
   attribute :archived_at do |workflow|

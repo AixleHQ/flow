@@ -34,6 +34,8 @@ import Tiles from './Tiles';
 import type { BillingClass, DashboardData } from './types';
 import { useTenantP95 } from './useTenantP95';
 
+const UNBILLED: BillingClass[] = ['unlimited', 'no_customer'];
+
 type SortKey = 'name' | 'createdAt' | 'accountStatus' | 'accountType' | 'billingMethod' | DeltaField;
 type Direction = 'ascending' | 'descending';
 
@@ -213,12 +215,22 @@ export default function Dashboard({
     return latest;
   }, [data.days]);
 
+  const unbilledAmong = (ids: number[]) =>
+    ids.filter((id) => {
+      const latest = latestClass.get(id);
+      return latest !== undefined && UNBILLED.includes(latest);
+    }).length;
   const companies = filtering
     ? {
         count: filtered.length,
-        latestClasses: filtered.flatMap((row) => latestClass.get(row.tenantId) ?? []),
+        accounts: filtered,
+        unbilled: unbilledAmong(filtered.map((row) => row.tenantId)),
       }
-    : { count: data.snapshot.companies, latestClasses: Array.from(latestClass.values()) };
+    : {
+        count: data.snapshot.companies,
+        accounts: data.tenants,
+        unbilled: unbilledAmong(Array.from(latestClass.keys())),
+      };
 
   const tiles = (
     <Tiles

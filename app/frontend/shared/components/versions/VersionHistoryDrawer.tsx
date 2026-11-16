@@ -7,7 +7,7 @@ import type { EntityVersion, EntityVersionDetail } from '@/types/generated';
 
 import { ApiError, apiRequest, notifyApiFailure } from 'shared/lib/apiFetch';
 import { formatDateTime } from 'shared/lib/formatDate';
-import { diffSnapshots } from 'shared/lib/versionDiff';
+import { diffSnapshots, restorableSnapshot } from 'shared/lib/versionDiff';
 import { describeVersion, revertWarnings } from 'shared/lib/versionHistory';
 import { VERSION_SCHEMAS, type VersionableType } from 'shared/lib/versionSchemas';
 
@@ -176,7 +176,15 @@ export function VersionHistoryDrawer({
   }, [detail, compareWith, schema]);
 
   const revertChanges = useMemo(
-    () => (detail ? diffSnapshots(schema, detail.currentSnapshot, detail.snapshot, detail.references) : []),
+    () =>
+      detail
+        ? diffSnapshots(
+            schema,
+            detail.currentSnapshot,
+            restorableSnapshot(schema, detail.snapshot, detail.references),
+            detail.references,
+          )
+        : [],
     [detail, schema],
   );
   const warnings = useMemo(

@@ -12,11 +12,15 @@
 - **JSONB columns:** snake_case — `metadata`, `session_config`, `settings`
 - **Array columns:** plural — `models`, `tags`, `selected_agents`
 
-### API
+### API and Web routes
 - **Endpoints:** plural resources — `/api/v1/terminal_sessions`, `/api/v1/projects/:project_id/workflows/:id`
 - **Nested:** under the project that owns them — `/api/v1/projects/:project_id/board/tasks/:task_id/comments`
 - **Custom actions:** member/collection routes — `POST /api/v1/terminal_sessions/:id/finish`, `PATCH .../board/tasks/:id/move`
 - **Query params:** snake_case — `params[:q]` for Ransack search
+- **Web routes follow the same rules** (Inertia pages and their form posts): `resources`, nested under the record that owns them, custom actions as member or collection routes.
+- **A record that belongs to another one is a nested `resources`**, with its custom actions as member routes on it, and its own controller. Never a hand-written path with the record's id inside the parent's `member` block.
+  - Right: `resources :runners do resources :machines, only: [] do post :return_to_service, on: :member end end` → `Runners::MachinesController#return_to_service`.
+  - Wrong: `resources :runners do member do post "machines/:machine_id/return_to_service" end end`.
 
 ### Code
 
@@ -115,6 +119,7 @@ What the controllers return — no envelope around the resource:
 
 ### Backend (Rails)
 - **Services:** `app/services/` — all business logic
+- **API clients:** the library for that API (`octokit`, `gitlab`), used from the provider's service in `app/services/<provider>/`; our own client under `app/services/<provider>/` only when no library we use covers the API
 - **Strategies:** `app/services/container_strategies/` — Strategy pattern for container types
 - **Runtimes:** `app/services/container_runtime/` — Runtime abstraction for Docker/K8s
 - **Adapters:** `app/services/agents/` — per-agent credential/config logic
@@ -149,6 +154,23 @@ What the controllers return — no envelope around the resource:
   - **Company:** `state` (active/suspended/archived)
   - **TerminalSession:** `state` (not_started/queued/running/ready/finishing/finished/failed/cancelled)
   - **WorkflowRun:** `state` (pending/running/paused/completed/failed/cancelled)
+
+### Model Predicates
+
+What a model's state, type or columns mean is decided in the model. Other code asks the model and doesn't compare its attributes with literals or with its constants.
+
+- **Record predicate:** one question about one record, named for its meaning: `session.ended?` rather than `TerminalSession::TERMINAL_STATES.include?(session.state)`, `machine.busy?` rather than `machine.current_session_id.present?`, `session.workflow_step?` rather than `session.session_type == "workflow_step"`.
+- **Class predicate:** the same question for a raw value, where there is no record at hand (a plucked column, a value from a payload): `TerminalSession.ended_state?(state)`. The record predicate calls it, so the meaning is written once.
+- **Query:** the same meaning as a named scope (`TerminalSession.not_ended`, `RunnerEnvironment.holding_session`), as the query rule in Anti-Patterns says. The scope and the predicates read one constant.
+- **Constants** such as `TERMINAL_STATES` and `LAUNCHED_STATES` are the model's detail: its predicates and scopes read them, and other code calls those.
+- **Already named:** a generated predicate is used as it is, not wrapped: `session.failed?` (AASM), `runner.manual?` (enumerize `predicates: true`).
+- **Naming:** name the meaning, not the mechanism (`busy?`, not `current_session_id_present?`). Don't take a name that Rails or our libraries generate: the new method silently replaces the generated one, often with a different meaning.
+  - AASM: `<state>?` for every state and `may_<event>?` for every event. `TerminalSession#running?` means the state is `running`, so "ready or finishing" needs a name of its own (`launched?`).
+  - enumerize with `predicates: true`: `<value>?` for every value.
+  - ActiveRecord: `<column>?` for every column, `<column>_changed?`, `saved_change_to_<column>?`, `will_save_change_to_<column>?`, `new_record?`, `persisted?`, `destroyed?`, `valid?`.
+  - Ruby and ActiveSupport: `nil?`, `present?`, `blank?`, `in?`, `frozen?`.
+
+  Before adding a predicate, check that `Model.new.respond_to?(:name?)` is false. Also check that an existing predicate with a close name doesn't mean a different set: `TerminalSession#active?` leaves out `finishing`, so it doesn't mean "not ended" (`ended?`).
 
 ### Polymorphic Scoping
 - Agent, Tool, Workflow, MCPServer, Skill, Asset, ConfigItem, Repository
@@ -205,9 +227,9 @@ What the controllers return — no envelope around the resource:
   `bin/temporal_worker`, which runs after `config/environment`).
 
 ### Error Handling
-- **A service takes named parameters, never the request, its body or its headers,** so another service, a CLI command or a controller can call it. E.g. `Runners::Registration.register!(credential, name:, os:, arch:, facts:, ephemeral:, auto_update:, runner_version:, protocol_version:)` and `Runners::Operations.record_result!(operation, status:, exit_code:, stdout:, stderr:, data:, error:)`.
+- **A service takes named parameters, never the request, its body or its headers,** so another service, a CLI command or a controller can call it. E.g. `Runners::Registration.register!(credential, name:, os:, arch:, facts:, auto_update:, runner_version:, protocol_version:)` and `Runners::Operations.record_result!(operation, status:, exit_code:, stdout:, stderr:, data:, error:)`.
 - **The controller turns the request into parameters.** It checks the headers (their presence, their form, and a rule on a header's value such as the runner gateway's version over 255 characters or below `min_version`), authentication, and the body's shape against its schema (`Runners::ProtocolSchema.valid?`), and refuses itself when one fails. It then maps the body to the service's parameters, defaults included.
-- **The service makes the domain checks and raises a named error.** Examples: `WorkflowAggregateSave::Invalid`, `Chat::ConnectCodes::Refused`, `Templates::Package` (checks `template.yaml` against its schema itself), and the runner gateway's `Runners::Credentials::Refused` (e.g. `ephemeral_not_supported`, or a machine whose validations fail).
+- **The service makes the domain checks and raises a named error.** Examples: `WorkflowAggregateSave::Invalid`, `Chat::ConnectCodes::Refused`, `Templates::Package` (checks `template.yaml` against its schema itself), and the runner gateway's `Runners::Credentials::Refused` (e.g. `runner_revoked`, or `invalid_registration` for a machine whose validations fail).
 - **The controller maps a service's named error to a status,** through `rescue_from` (the runner gateway's `Runners::Credentials::Refused` → `REFUSAL_STATUS`, whose codes the controllers' own refusals use too) or a `rescue` in the action (`aggregates_controller.rb`, `chat_connect_codes_controller.rb`).
 - **Controllers:** `rescue_from` in the base controllers — `Api::V1::ApplicationController` (JSON 403, 404, and 422 for invalid records and CSRF failures) and `Web::Company::ApplicationController` (Pundit refusals)
 - **Services:** custom exceptions → `Temporalio::Error::ApplicationError`
@@ -245,4 +267,8 @@ What the controllers return — no envelope around the resource:
 - **Never** pass data back through an argument (a collector array or hash the caller passed in, an object the caller reads afterwards) → return it, and let the caller combine the results. A method changes an argument only when changing it is what the method is for, and its name says so
 - **Never** make one decision at several call sites → one factory or polymorphism (`ContainerRuntime.for_session`)
 - **Never** write a query with a domain meaning at its call site → name it as a scope on the model it returns (a class method for a single record), and compose named scopes where it's used. A query has a domain meaning when it can be named (a person's live GitHub connection, a session's secret accesses, the projects of a company a person can reach), when it is needed in more than one place, or when it reaches into a column's structure (JSON paths, raw SQL). A lookup by id or by one plain attribute inside the request's scope stays inline. Ownership is still `TenantScope.owned`, never a model scope
+- **Never** compute a model's derived value outside the model and hand it to a serializer (`params: { states: … }`, a precomputed map) → a model method, serialized as an attribute; add `includes` (a scoped association where the full one would load too much) to avoid extra queries
+- **Never** decide what a model's state, type or columns mean outside the model (`session.state.in?(%w[ready finishing])`, `TerminalSession::TERMINAL_STATES.exclude?(state)`, `machine.current_session_id.present?`, `session.session_type == "workflow_step"`) → a predicate on the model that names the meaning, and a class method for a raw value; the model's constants stay behind them (see Process Patterns → Model Predicates)
+- **Never** make an HTTP request in a domain service (`Net::HTTP`, Faraday, HTTParty, a request built on `SafeHttp.http_for`, an API path written out, a status code read) → a client for that API makes the request; the service calls the client's named methods and maps the client's errors to its own named errors
+- **Never** hand-write a client for an API that a library we already use covers → before writing HTTP code, look in the `Gemfile` for a library for that API (`octokit`, `gitlab`) and use it. If the library lacks a call, use its generic request method for that call. Write our own client only when the library can't do the job, and say why in the PR. OAuth token exchange, refresh and revocation go through the OAuth engine, not through a provider's service; the OAuth engine (`Oauth::TokenService`) is the client for these calls. Examples: `Github::UserTokenService` on Octokit, `Gitlab::TokenService` on the `gitlab` gem, `Oauth::TokenService` for the OAuth calls
 - Existing code that breaks these rules is not a precedent: new code doesn't copy it

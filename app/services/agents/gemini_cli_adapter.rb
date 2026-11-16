@@ -86,7 +86,7 @@ module Agents
       {
         "#{home_dir}/.gemini/settings.json" => generate_settings(
           model: workflow_config[:model], effort: workflow_config[:reasoning_effort], auth_type: "gemini-api-key",
-          otel_endpoint: workflow_config.fetch(:otel_endpoint)
+          otel_endpoint: workflow_config.fetch(:otel_endpoint), full_telemetry: workflow_config[:full_telemetry]
         ).to_json
       }.merge(trusted_folders_files(workspace))
     end
@@ -277,8 +277,11 @@ module Agents
     private
 
     # `otel_endpoint` is the session's OTLP endpoint; nil (a runner session, which has
-    # none yet) turns the CLI's telemetry off.
-    def generate_settings(otel_endpoint:, model: nil, auth_type: "gemini-api-key", effort: nil)
+    # none yet) turns the CLI's telemetry off. `full_telemetry`
+    # (TerminalSession#full_telemetry?) turns on every content switch and the traces
+    # (docs/design/agent-telemetry.md): prompts, request and response text, tool
+    # arguments and results.
+    def generate_settings(otel_endpoint:, model: nil, auth_type: "gemini-api-key", effort: nil, full_telemetry: false)
       settings = {
         "security" => {
           "auth" => { "selectedType" => auth_type },
@@ -318,8 +321,9 @@ module Agents
                            "target" => "local",
                            "otlpEndpoint" => otel_endpoint.to_s,
                            "otlpProtocol" => "http",
-                           "logPrompts" => false
-                         }
+                           "logPrompts" => full_telemetry.present?,
+                           "traces" => (true if full_telemetry)
+                         }.compact
                        end,
         # Tools - auto approve all operations (container is the sandbox)
         "tools" => {

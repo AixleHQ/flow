@@ -134,7 +134,7 @@ module Templates
     end
 
     def export_steps(workflow)
-      steps = workflow.steps.not_deleted.order(:position).to_a
+      steps = workflow.steps.not_deleted.includes(:resource_links).order(:position).to_a
       step_keys = steps.to_h { |step| [ step.id, key_for("steps:#{workflow.id}", step.id, step.name) ] }
       steps.map do |step|
         where = "workflow #{workflow.name} step #{step.name}"

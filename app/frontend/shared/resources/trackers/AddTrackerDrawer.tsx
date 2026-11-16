@@ -93,7 +93,7 @@ export const AddTrackerDrawer = ({ opened, onClose, basePath, availableScopes }:
   };
 
   const serverError = errors && Object.values(errors)[0];
-  const requestClose = useUnsavedChanges({ opened, dirty: form.isDirty(), onClose });
+  const requestClose = useUnsavedChanges({ opened, dirty: form.isDirty(), saving: loading, onClose });
 
   return (
     <ResourceDrawer

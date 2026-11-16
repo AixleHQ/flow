@@ -93,7 +93,6 @@ func TestClassify(t *testing.T) {
 		{"check-in invalid_token", refusal(EndpointCheckIn, 401, "invalid_token"), ActionRefresh},
 		{"check-in below the minimum", refusal(EndpointCheckIn, 400, "runner_version_unsupported"), ActionUpdate},
 		{"400 without the JSON shape", refusal(EndpointResult, 400, ""), ActionBug},
-		{"ephemeral_not_supported", refusal(EndpointRegister, 422, "ephemeral_not_supported"), ActionFixConfiguration},
 		{"invalid_registration", refusal(EndpointRegister, 422, "invalid_registration"), ActionFixConfiguration},
 		{"result not_found", refusal(EndpointResult, 404, "not_found"), ActionDrop},
 		{"502 from a proxy", refusal(EndpointOps, 502, ""), ActionBackoff},

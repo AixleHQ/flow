@@ -60,6 +60,16 @@ class TaskWorkflowRunResourceTest < ActiveSupport::TestCase
     end
   end
 
+  test "a run waiting for a session slot reads as queued, as it does on the board card" do
+    @run.update_columns(state: "running")
+    create(:step_run, workflow_run: @run, step: create(:step, workflow: @workflow),
+                      terminal_session: create(:terminal_session, project: @project, user: @user,
+                                                                  session_type: "workflow_step", state: "queued"))
+
+    assert_equal "queued", TaskWorkflowRunResource.new(@run.reload).to_h["state"]
+    assert_equal "running", @run.reload.state, "the run's own state is untouched"
+  end
+
   test "steps keep creation order so the drawer can pick the most recent session" do
     first = create(:step_run, workflow_run: @run, step: create(:step, workflow: @workflow, name: "Analysis"),
                               terminal_session: create(:terminal_session, project: @project, user: @user))

@@ -249,8 +249,15 @@ sessions can also run on their own). They share a single list.
   **Employee** works within projects; **Viewer** looks without touching.
 - **What you do.** Invite people by email, set their role, add them to
   projects.
+- **Teams.** A project's **Teams** page groups its members so a card can be
+  assigned to a team and a trigger can run as one; each run goes to one member,
+  picked by the team's strategy (**Priority**, **Round robin**, **Most quota
+  left**), on that member's own agent. A member whose agent ran out of quota is
+  passed over until it resets; anyone can leave a team, or keep out of teams
+  from their profile.
 - *Afterwards:* each person sees what their role allows — admins additionally
-  see company-wide analytics and sessions.
+  see company-wide analytics and sessions — and work keeps moving when one
+  person's agent runs out of quota.
 
 ## 17. Secrets & Variables
 

@@ -78,6 +78,20 @@ class Web::Integrations::TeamsApprovalTest < ActionDispatch::IntegrationTest
     assert_equal "inactive", @integration.reload.status
   end
 
+  test "a sign-in Microsoft refused shows Microsoft's reason" do
+    get teams_approval_path(@token)
+    state = sign_in_state
+
+    get teams_sign_in_callback_path, params: {
+      error: "access_denied", state: state,
+      error_description: "AADSTS90094: The grant requires admin permission.\r\nTrace ID: 5b1f"
+    }
+
+    assert_redirected_to teams_approval_path(@token)
+    assert_equal "Microsoft did not complete the sign-in: AADSTS90094: The grant requires admin permission.", flash[:alert]
+    assert_equal "inactive", @integration.reload.status
+  end
+
   test "a sign-in counts only in the browser that opened the approval link" do
     get teams_approval_path(@token)
     state = sign_in_state

@@ -404,7 +404,8 @@ export function TriggerFormPanel({
   });
   const [initialValues] = useState(values);
   const requestClose = useUnsavedChanges({
-    dirty: values !== initialValues && !created && !saving,
+    dirty: values !== initialValues && !created,
+    saving,
     onClose: dismiss,
   });
 

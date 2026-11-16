@@ -20,7 +20,6 @@ class Runners::ConfigSchemaTest < ActiveSupport::TestCase
   test "a config that sets nothing is valid on manual, and every v1 key with a valid value passes" do
     assert_empty errors({})
     assert_empty errors(
-      "reconnect_grace" => 120,
       "auto_update" => false,
       "container" => {
         "image_override" => "ghcr.io/acme/agent:1",
@@ -56,14 +55,13 @@ class Runners::ConfigSchemaTest < ActiveSupport::TestCase
     assert_equal [ "host.cli_source is not supported yet" ], errors("host" => { "cli_source" => "managed" })
   end
 
-  test "ephemeral is refused as a per-machine registration setting" do
-    assert_equal [ "ephemeral is not a config key: it is set per machine at registration" ], errors("ephemeral" => true)
+  test "ephemeral and reconnect_grace are refused like any other unknown key" do
+    assert_equal [ "ephemeral is not a known setting" ], errors("ephemeral" => true)
+    assert_equal [ "reconnect_grace is not a known setting" ], errors("reconnect_grace" => 900)
   end
 
   test "values are checked against the key's type and range" do
-    assert_equal [ "reconnect_grace must be between 60 and 7200" ], errors("reconnect_grace" => 30)
-    assert_equal [ "reconnect_grace must be between 60 and 7200" ], errors("reconnect_grace" => 7201)
-    assert_equal [ "reconnect_grace must be an integer" ], errors("reconnect_grace" => "900")
+    assert_equal [ "auto_update must be true or false" ], errors("auto_update" => "yes")
     assert_equal [ "container.extra_mounts[0].source must be an absolute path" ],
                  errors("container" => { "extra_mounts" => [ { "source" => "data", "target" => "/data" } ] })
     assert_equal [ "container.network must be one of bridge, host" ], errors("container" => { "network" => "none" })
@@ -89,6 +87,28 @@ class Runners::ConfigSchemaTest < ActiveSupport::TestCase
                  errors("container" => { "cache_mounts" => [ { "name" => "pip\n", "target" => "/cache" } ] })
   end
 
+  test "image_override accepts {agent}, and refuses an unknown placeholder or a non-reference" do
+    assert_empty errors("container" => { "image_override" => "ghcr.io/aixlehq/flow-{agent}:develop" })
+    assert_empty errors("container" => { "image_override" => "registry.internal:5000/{agent}" })
+    assert_match(/unknown placeholder \{model\}/, errors("container" => { "image_override" => "acme/{model}" }).sole)
+    assert_match(/must be an image reference/, errors("container" => { "image_override" => "Acme/Flow-{agent}" }).sole)
+    assert_match(/must be an image reference/, errors("container" => { "image_override" => "acme/{agent" }).sole)
+  end
+
+  test "image_override follows Docker: the first component is a registry only with a dot, a port or localhost" do
+    %w[ghcr.io/acme/flow-{agent}:develop localhost:5000/flow-{agent} localhost/flow-{agent} acme/flow-{agent} flow-{agent}].each do |value|
+      assert_empty errors("container" => { "image_override" => value }), value
+    end
+    %w[UPPER/flow-{agent}:x Acme/flow-{agent} ghcr.io/Acme/flow-{agent}].each do |value|
+      assert_match(/must be an image reference/, errors("container" => { "image_override" => value }).sole, value)
+    end
+  end
+
+  test "image_reference replaces {agent} and leaves a plain value as it is" do
+    assert_equal "acme/flow-codex:1", Runners::ConfigSchema.image_reference("acme/flow-{agent}:1", "codex")
+    assert_equal "acme/agent:1", Runners::ConfigSchema.image_reference("acme/agent:1", "codex")
+  end
+
   test "keys a type requires are required" do
     assert_equal [ "template_id is required" ], errors({}, "coder")
     assert_equal [ "namespace is required" ], errors({}, "kubernetes")
@@ -98,7 +118,7 @@ class Runners::ConfigSchemaTest < ActiveSupport::TestCase
     manual = Runners::ConfigSchema.for_type("manual")
 
     assert_equal false, manual["additionalProperties"] # rubocop:disable Minitest/RefuteFalse
-    assert_equal 900, manual.dig("properties", "reconnect_grace", "default")
+    assert manual.dig("properties", "auto_update", "default")
     assert_equal "bridge", manual.dig("properties", "container", "properties", "network", "default")
     assert_not manual["properties"].key?("namespace")
     assert_not manual["properties"].key?("execution_mode")
@@ -110,7 +130,7 @@ class Runners::ConfigSchemaTest < ActiveSupport::TestCase
     runner = create(:runner, :manual, config: { "container" => { "network" => "host" } })
 
     assert_equal({ "container" => { "network" => "host" } }, runner.reload.config)
-    assert_equal 900, Runners::ConfigSchema.value(runner.config, "reconnect_grace")
+    assert Runners::ConfigSchema.value(runner.config, "auto_update")
     assert_equal "host", Runners::ConfigSchema.value(runner.config, "container.network")
     assert_equal "private", Runners::ConfigSchema.value(runner.config, "container.pid")
   end

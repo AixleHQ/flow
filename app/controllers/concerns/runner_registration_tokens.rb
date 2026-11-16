@@ -20,7 +20,7 @@ module RunnerRegistrationTokens
   # X-Forwarded-Host: the live token is sent to it by `configure`. The runner
   # gateway answers on the same host (/runner/v1).
   def render_registration_token(runner)
-    registration = Runners::MachineRegistration.issue!(runner, gateway_url: gateway_url)
+    registration = Runners::MachineRegistration.issue!(runner, gateway_url: gateway_url, created_by: current_user)
     response.headers["Cache-Control"] = "no-store"
     render json: RunnerRegistrationResource.new(registration).to_h, status: :created
   rescue Runners::Credentials::Refused => e

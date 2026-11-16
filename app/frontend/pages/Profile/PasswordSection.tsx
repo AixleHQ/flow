@@ -52,7 +52,7 @@ export function PasswordSection({ password }: { password: PasswordState }) {
     form.reset();
     setOpen(false);
   };
-  const requestClose = useUnsavedChanges({ opened: open, dirty: form.isDirty() && !saving, onClose: close });
+  const requestClose = useUnsavedChanges({ opened: open, dirty: form.isDirty(), saving, onClose: close });
 
   const save = (values: FormValues) => {
     setSaving(true);

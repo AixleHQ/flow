@@ -188,6 +188,7 @@ const WorkflowsPage = () => {
   const requestCloseEdit = useUnsavedChanges({
     opened: !!editWorkflow,
     dirty: editForm.isDirty(),
+    saving: loading,
     onClose: () => setEditWorkflow(null),
   });
 

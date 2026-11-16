@@ -123,12 +123,21 @@ class RunnerTest < ActiveSupport::TestCase
     assert_equal({ manual: "reuse", coder: "reuse", kubernetes: "fresh" }, defaults)
   end
 
-  test "a given reuse_policy is kept, except reuse on kubernetes, which is refused" do
-    assert_equal "fresh", create(:runner, :manual, company: @company, created_by: @user, reuse_policy: :fresh).reuse_policy
+  test "a manual runner takes reuse and reset, and refuses fresh" do
+    assert_equal "reset", create(:runner, :manual, company: @company, created_by: @user, reuse_policy: :reset).reuse_policy
+
+    manual = build(:runner, :manual, company: @company, created_by: @user, reuse_policy: :fresh)
+    assert_not manual.valid?
+    assert_includes manual.errors[:reuse_policy], "must be reuse or reset on a manual runner"
+  end
+
+  test "a given reuse_policy is kept, except reuse and reset on kubernetes, which are refused" do
+    assert_equal "fresh", create(:runner, :coder, company: @company, created_by: @user, reuse_policy: :fresh).reuse_policy
 
     kubernetes = build(:runner, :kubernetes, company: @company, created_by: @user, reuse_policy: :reuse)
     assert_not kubernetes.valid?
     assert_includes kubernetes.errors[:reuse_policy], "must be fresh on a kubernetes runner"
+    assert_not build(:runner, :kubernetes, company: @company, created_by: @user, reuse_policy: :reset).valid?
   end
 
   # == config ==
@@ -175,6 +184,14 @@ class RunnerTest < ActiveSupport::TestCase
     assert revoked.reload.revoked?
     assert deleted.reload.deleted?
     assert deleted.revoked?
+  end
+
+  test "retired? is true for a revoked or deleted runner, and false for the others, disabled included" do
+    assert_not build(:runner).retired?
+    assert_not create(:runner, :manual, company: @company, created_by: @user).tap(&:disable!).retired?
+    assert create(:runner, :manual, company: @company, created_by: @user).tap(&:revoke!).retired?
+    assert create(:runner, :manual, company: @company, created_by: @user).tap(&:soft_delete!).retired?
+    assert Runner.new(deleted_at: Time.current).retired?
   end
 
   # == the tenant rule (TenantScope) ==
@@ -243,6 +260,37 @@ class RunnerTest < ActiveSupport::TestCase
     assert_not integration.destroy
     assert integration.errors.of_kind?(:base, :"restrict_dependent_destroy.has_many")
     assert Integration.exists?(integration.id)
+  end
+
+  test "machine_counts: busy holds a session, total is every machine that is not gone" do
+    runner = create(:runner, :manual)
+    other = create(:runner, :manual)
+    busy = create(:runner_environment, runner: runner)
+    create(:runner_session, :holding, environment: busy)
+    create(:runner_environment, runner: runner)
+    failed = create(:runner_environment, runner: runner)
+    Runners::Machines.fail!(failed, "boom")
+    create(:runner_environment, runner: runner, state: :gone)
+
+    counts = Runner.includes(:environments).where(id: [ runner.id, other.id ]).index_by(&:id)
+
+    assert_equal({ busy: 1, total: 3 }, counts[runner.id].machine_counts)
+    assert_equal({ busy: 0, total: 0 }, counts[other.id].machine_counts)
+  end
+
+  test "machine_counts is nil for a runner that is not manual" do
+    assert_nil build(:runner, :kubernetes).machine_counts
+  end
+
+  test "not_seen_since holds the runners never seen or last seen before the time" do
+    now = Time.current
+    never = create(:runner, company: @company, created_by: @user)
+    stale = create(:runner, company: @company, created_by: @user, last_seen_at: now - 1.minute)
+    at_time = create(:runner, company: @company, created_by: @user, last_seen_at: now)
+    create(:runner, company: @company, created_by: @user, last_seen_at: now + 1.minute)
+
+    assert_equal [ never.id, stale.id ].sort, Runner.not_seen_since(now).pluck(:id).sort
+    assert_not_includes Runner.not_seen_since(now).pluck(:id), at_time.id
   end
 
   test "the database accepts a runner with a deleted runner's name" do

@@ -82,7 +82,7 @@ module Users
     # Sessions stay as history, and history is finished: a running one would be
     # left running with nobody to own it.
     def ensure_no_live_sessions!
-      live = TerminalSession.where(user_id: @user.id).where.not(state: TerminalSession::TERMINAL_STATES).count
+      live = TerminalSession.where(user_id: @user.id).not_ended.count
       return if live.zero?
 
       raise LiveSessionsError,

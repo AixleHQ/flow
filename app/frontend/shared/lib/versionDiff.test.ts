@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { MAX_DIFF_LINES, diffLines, diffSnapshots } from './versionDiff';
+import { MAX_DIFF_LINES, diffLines, diffSnapshots, restorableSnapshot } from './versionDiff';
 import { VERSION_SCHEMAS } from './versionSchemas';
 
 describe('diffLines', () => {
@@ -196,5 +196,25 @@ describe('diffSnapshots', () => {
       { files: [{ path: '/w/a.yml', content: 'x: 1\n', file_data: null }] },
     );
     expect(changes).toEqual([]);
+  });
+});
+
+describe('restorableSnapshot', () => {
+  it('leaves out every reference to a row that no longer exists, keeping archived ones', () => {
+    const snapshot = {
+      runner_id: 9,
+      config: { base_repository_ids: [1, 2], inherit_all_project_resources: true },
+      steps: [{ id: 10, name: 'Build', agent_id: 4, tool_ids: [5, 6], depends_on_step_ids: [11], sub_steps: [] }],
+    };
+    const references = {
+      Repository: { '1': { name: 'acme/app', archived: false } },
+      Tool: { '6': { name: 'Lint', archived: true } },
+    };
+
+    expect(restorableSnapshot(VERSION_SCHEMAS.Workflow, snapshot, references)).toEqual({
+      runner_id: null,
+      config: { base_repository_ids: [1], inherit_all_project_resources: true },
+      steps: [{ id: 10, name: 'Build', agent_id: null, tool_ids: [6], depends_on_step_ids: [11], sub_steps: [] }],
+    });
   });
 });

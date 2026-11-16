@@ -93,4 +93,12 @@ class ProjectTrackerTest < ActiveSupport::TestCase
     refute_predicate tracker.reload, :usable?
     refute_includes ProjectTracker.usable, tracker
   end
+
+  test "attached leaves out detached trackers" do
+    tracker = create(:project_tracker, integration: @integration)
+    detached = create(:project_tracker, :detached, integration: @integration, external_scope_id: "gone")
+
+    assert_includes ProjectTracker.attached, tracker
+    assert_not_includes ProjectTracker.attached, detached
+  end
 end

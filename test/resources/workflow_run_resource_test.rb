@@ -62,6 +62,16 @@ class WorkflowRunResourceTest < ActiveSupport::TestCase
     assert_nil WorkflowRunResource.new(@run).to_h["chatOrigin"]
   end
 
+  test "the run page heads a run waiting for a session slot as queued, and a working one as running" do
+    @run.update_columns(state: "running")
+
+    assert_equal "running", WorkflowRunResource.new(@run.reload).to_h["state"]
+
+    @session.update_columns(state: "queued")
+
+    assert_equal "queued", WorkflowRunResource.new(@run.reload).to_h["state"]
+  end
+
   # == the "Runs on" badge (DESIGN.md §11) ==
 
   test "the badge names a runner of the run's company" do

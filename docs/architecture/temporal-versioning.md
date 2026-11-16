@@ -89,6 +89,7 @@ Patches in use:
 | `step-state-decides-without-signal` | `WorkflowExecutionWorkflowV2` | a Skip or Approve that is written to the step counts even if its signal is lost |
 | `mark-policy-skipped-step-runs` | `WorkflowExecutionWorkflow` (and V2) | a step its skip policy skips gets its step run marked `skipped`, with the reason, instead of left `pending` |
 | `team-quota-retry` | `WorkflowExecutionWorkflow` (and V2) | a step of a team's run that stopped on its owner's quota and is set to retry is handed to the team's next member (`workflow_reassign_run_owner_activity`) and retried, instead of failing the run |
+| `team-handoff` | `WorkflowExecutionWorkflow` (and V2) | a step of a team's run that stopped on its owner's quota or login is handed to the team's next member and run again whatever its `on_failure`, without spending a retry; supersedes `team-quota-retry` for new executions |
 
 ## The replay test
 
@@ -112,6 +113,10 @@ The label says which code recorded the history:
   scenarios it changes.
 - `2026-11-11-before-team-quota-retry` and `2026-11-11`: the
   `quota_failure_retried_by_policy` scenario before and after `team-quota-retry`.
+- `2026-11-13-before-team-handoff` and `2026-11-13`: the
+  `quota_failure_handed_to_team_member` and `login_failure_handed_to_team_member`
+  scenarios before and after `team-handoff`, and `quota_failure_retried_by_policy`
+  after it.
 
 ### When you change workflow code
 

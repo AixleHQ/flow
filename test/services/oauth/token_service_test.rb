@@ -96,6 +96,21 @@ module Oauth
       assert_requested(:post, TOKEN_ENDPOINT) { |req| !req.body.include?("client_secret") }
     end
 
+    # == fresh: a GitLab grant of a previous GITLAB_ENDPOINT ==
+
+    test "does not refresh a GitLab grant issued by another instance, and does not mark it" do
+      old_host = create(:oauth_client, :gitlab, issuer: "https://old.gitlab.example.com", token_endpoint: TOKEN_ENDPOINT)
+      cred = create(:oauth_credential, :gitlab_user, owner: @user, oauth_client: old_host,
+                                                     expires_at: 1.minute.from_now)
+
+      assert_raises(Oauth::ReauthRequired) { Oauth::TokenService.fresh(cred) }
+      assert_equal :error, Oauth::TokenService.refresh_credential(cred)
+
+      assert_not_requested :post, TOKEN_ENDPOINT
+      assert_equal 0, cred.reload.refresh_failure_count
+      assert_predicate cred, :active?
+    end
+
     # == fresh: reauth-required paths ==
 
     test "raises ReauthRequired without a network call when the credential is unrefreshable" do
@@ -418,6 +433,68 @@ module Oauth
 
       assert_equal :error, Oauth::TokenService.refresh_credential(cred)
       assert_equal 1, cred.reload.refresh_failure_count
+    end
+
+    # == a self-managed GitLab on a private network (docs/design/gitlab-user-identity.md §2.2) ==
+
+    test "a gitlab credential refreshes against the operator's host although it resolves privately" do
+      Settings.gitlab.stubs(:endpoint).returns("https://gitlab.corp.internal/api/v4")
+      UrlSafetyValidator.stubs(:resolved_addresses).returns([ IPAddr.new("10.0.0.5") ])
+      client = create(:oauth_client, :gitlab)
+      cred = build_credential(owner: @user, oauth_client: client, provider: "gitlab", access_token: "old",
+                              refresh_token: "old-refresh", expires_at: 1.minute.from_now)
+      stub_request(:post, "https://gitlab.corp.internal/oauth/token")
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                   body: { access_token: "new", refresh_token: "new-refresh", expires_in: 7200 }.to_json)
+
+      assert_equal "new", Oauth::TokenService.fresh(cred)
+    end
+
+    test "the same private host under another provider stays refused" do
+      UrlSafetyValidator.stubs(:resolved_addresses).returns([ IPAddr.new("10.0.0.5") ])
+      client = build_client(client_id: "other")
+      client.update!(token_endpoint: "https://gitlab.corp.internal/oauth/token")
+      cred = build_credential(owner: @user, oauth_client: client, provider: "sentry", access_token: "old",
+                              refresh_token: "old-refresh", expires_at: 1.minute.from_now)
+
+      assert_raises(Oauth::ReauthRequired) { Oauth::TokenService.fresh(cred) }
+      assert_not_requested :post, "https://gitlab.corp.internal/oauth/token"
+    end
+
+    # == revoke!: RFC 7009 through the provider's revocation endpoint ==
+
+    test "revoke! posts the token with the grant's client to the revocation endpoint of the registry" do
+      gitlab = build_client(client_id: "app-id", client_secret: "app-secret")
+      cred = build_credential(owner: @user, oauth_client: gitlab, provider: "gitlab", access_token: "glo-token")
+      stub = stub_request(:post, "#{Gitlab::Host.web_base}/oauth/revoke")
+             .with(body: { "token" => "glo-token", "client_id" => "app-id", "client_secret" => "app-secret" })
+             .to_return(status: 200, body: "{}")
+
+      assert Oauth::TokenService.revoke!(cred)
+      assert_requested stub
+    end
+
+    test "revoke! raises RevocationError without token material when the provider refuses" do
+      gitlab = build_client(client_id: "app-id", client_secret: "app-secret")
+      cred = build_credential(owner: @user, oauth_client: gitlab, provider: "gitlab", access_token: "glo-token")
+      stub_request(:post, "#{Gitlab::Host.web_base}/oauth/revoke").to_return(status: 500, body: "boom glo-token")
+
+      error = assert_raises(Oauth::RevocationError) { Oauth::TokenService.revoke!(cred) }
+      assert_not_includes error.message, "glo-token"
+    end
+
+    test "revoke! raises RevocationError when the host cannot be reached" do
+      gitlab = build_client(client_id: "app-id", client_secret: "app-secret")
+      cred = build_credential(owner: @user, oauth_client: gitlab, provider: "gitlab", access_token: "glo-token")
+      stub_request(:post, "#{Gitlab::Host.web_base}/oauth/revoke").to_timeout
+
+      assert_raises(Oauth::RevocationError) { Oauth::TokenService.revoke!(cred) }
+    end
+
+    test "revoke! raises RevocationError for a provider with no revocation endpoint" do
+      cred = build_credential(owner: @user, access_token: "valid-token")
+
+      assert_raises(Oauth::RevocationError) { Oauth::TokenService.revoke!(cred) }
     end
 
     private

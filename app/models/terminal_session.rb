@@ -32,9 +32,43 @@ class TerminalSession < ApplicationRecord
   # connection, a revoked credential — outranks it.
   LAUNCH_ABANDONED_ERROR = "Launch abandoned before the container started"
 
-  GENERIC_ERROR_MESSAGES = [ "Workflow cancelled", "Session admission is closed", LAUNCH_ABANDONED_ERROR ].freeze
+  # What the reconciler says of a session whose container workflow closed under it. It is the
+  # queue's own vocabulary too: a reason already on the session (the runner's 15-minute
+  # contact loss, for one) outranks it.
+  WORKFLOW_ENDED_ERROR = "Container workflow ended"
+
+  GENERIC_ERROR_MESSAGES = [ "Workflow cancelled", "Session admission is closed", LAUNCH_ABANDONED_ERROR, WORKFLOW_ENDED_ERROR ].freeze
 
   TERMINAL_STATES = %w[finished failed cancelled].freeze
+  # The metadata key that marks a session failed by Runners::ContactLoss.
+  CONTACT_LOST_KEY = "contact_lost_at"
+  private_constant :CONTACT_LOST_KEY
+  # A launch that has run its course: the container is up and the session is
+  # being used or wound up. `running` is not here, since it is set when the
+  # launch starts, before a runner's machine is taken.
+  LAUNCHED_STATES = %w[ready finishing].freeze
+
+  # Whether `state` is an end state (finished, failed or cancelled), for a raw
+  # value with no record at hand. #ended? calls it.
+  def self.ended_state?(state)
+    TERMINAL_STATES.include?(state.to_s)
+  end
+
+  # Whether `state` is one a launch has got past, for a raw value.
+  def self.launched_state?(state)
+    LAUNCHED_STATES.include?(state.to_s)
+  end
+
+  # Whether `session_type` is `auth_setup`, for a raw value (a request param, a
+  # context's type). #auth_setup? calls it.
+  def self.auth_setup_type?(session_type)
+    session_type.to_s == "auth_setup"
+  end
+
+  # Whether `session_type` is `workflow_step`, for a raw value. #workflow_step? calls it.
+  def self.workflow_step_type?(session_type)
+    session_type.to_s == "workflow_step"
+  end
 
   # A specific reason always outranks a generic one, whichever arrives last.
   def self.preferred_error_message(existing, incoming)
@@ -161,6 +195,12 @@ class TerminalSession < ApplicationRecord
   # Scopes
   scope :auth_sessions, -> { where(session_type: "auth_setup") }
   scope :agent_sessions, -> { where(session_type: "agent_session") }
+  scope :not_ended, -> { where.not(state: TERMINAL_STATES) }
+  scope :ended, -> { where(state: TERMINAL_STATES) }
+  scope :not_auth_sessions, -> { where.not(session_type: "auth_setup") }
+  scope :workflow_steps, -> { where(session_type: "workflow_step") }
+  # The container is up and in use: running or ready.
+  scope :container_up, -> { where(state: %w[running ready]) }
   scope :active, -> { where(state: %w[not_started queued running ready]) }
   scope :finishing, -> { where(state: "finishing") }
   # Waiting for its agent's login to be renewed (Sessions::AuthPause).
@@ -191,14 +231,63 @@ class TerminalSession < ApplicationRecord
     state.in?(%w[not_started queued running ready])
   end
 
+  # Finished, failed or cancelled. Not the opposite of #active?, which leaves `finishing` out.
+  def ended?
+    self.class.ended_state?(state)
+  end
+
+  # Ready or finishing: the launch is over, whether or not a runner's machine holds the session.
+  def launched?
+    self.class.launched_state?(state)
+  end
+
+  # Finished or failed: it ran to its end, and was not cancelled. Not `ended?`.
+  def concluded?
+    finished? || failed?
+  end
+
+  # Failed or cancelled: it ended without finishing.
+  def aborted?
+    failed? || cancelled?
+  end
+
+  # Not started yet, or ended: nothing is running or waiting on it.
+  def deletable?
+    not_started? || ended?
+  end
+
+  def auth_setup?
+    self.class.auth_setup_type?(session_type)
+  end
+
+  def agent_session?
+    session_type == "agent_session"
+  end
+
+  def workflow_step?
+    self.class.workflow_step_type?(session_type)
+  end
+
+  # Failed because its runner's machine stopped answering (Runners::ContactLoss).
+  # Its machine is not given back until it is heard again.
+  def contact_lost?
+    metadata.is_a?(Hash) && metadata.key?(CONTACT_LOST_KEY)
+  end
+
+  # Marks the session as lost to silence, before it is failed (Runners::ContactLoss).
+  def mark_contact_lost!(at)
+    merge_jsonb!(:metadata, CONTACT_LOST_KEY => at.iso8601)
+  end
+
+  # Takes the mark off a session that was not failed after all.
+  def clear_contact_lost!
+    remove_jsonb_keys!(:metadata, CONTACT_LOST_KEY)
+  end
+
   # The key the session's container holds for the aixle-tools MCP server. A
   # session launched before keys were derived keeps the random one it was given.
   def mcp_key
     self[:mcp_key].presence || (MCP::SessionKey.generate(self) if persisted?)
-  end
-
-  def finishing?
-    state == "finishing"
   end
 
   # May `viewer` open this session — its live terminal/editor while it runs, or
@@ -220,7 +309,7 @@ class TerminalSession < ApplicationRecord
   def visible_to?(viewer)
     return false if viewer.nil?
     return true if user_id == viewer.id
-    return false if session_type == "auth_setup"
+    return false if auth_setup?
     return false if user.nil?
 
     active? || finishing? ? user.share_active_sessions? : user.share_completed_sessions?
@@ -314,6 +403,12 @@ class TerminalSession < ApplicationRecord
   def aixle_builder?
     metadata&.dig("aixle_builder") == true
   end
+
+  # Whether the agent sends its collector everything its telemetry offers — logs and
+  # traces with prompts, replies and tool content, and the lifecycle hooks
+  # (docs/design/agent-telemetry.md) — rather than only the usage Flow counts. Flow keeps
+  # nothing but usage, so the rest stays off until something forwards it.
+  def full_telemetry? = false
 
   def available_tools(ctx: nil)
     ctx ||= Tools::Context.for_session(self)
@@ -415,7 +510,7 @@ class TerminalSession < ApplicationRecord
     sr = step_run
     return unless sr&.workflow_run_id
     # A run being stopped was already told so (workflow_cancelled); its steps end with it.
-    return if sr.workflow_run.stop_requested_at.present?
+    return if sr.workflow_run.stop_requested?
 
     WorkflowService.notify_container_finished(step_run: sr)
   rescue StandardError => e

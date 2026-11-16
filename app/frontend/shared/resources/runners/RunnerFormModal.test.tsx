@@ -3,7 +3,8 @@ import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { buildRunner, buildRunnerTypeOption } from 'test/factories/runner';
-import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
+import { visitHeld } from 'test/inertiaVisit';
+import { act, renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
 
 import type { RunnerPaths } from './runnerConfig';
 import { RunnerFormModal } from './RunnerFormModal';
@@ -15,6 +16,8 @@ const paths: RunnerPaths = {
   enable: (id) => `/company/settings/runners/${id}/enable`,
   revoke: (id) => `/company/settings/runners/${id}/revoke`,
   registrationToken: (id) => `/company/settings/runners/${id}/registration_token`,
+  returnToService: (id, machineId) => `/company/settings/runners/${id}/machines/${machineId}/return_to_service`,
+  revokeMachine: (id, machineId) => `/company/settings/runners/${id}/machines/${machineId}/revoke`,
 };
 
 const renderForm = (runner?: ReturnType<typeof buildRunner>) =>
@@ -52,12 +55,14 @@ describe('RunnerFormModal', () => {
     expect(within(fieldset).getByRole('radio', { name: 'bridge (default)' })).toBeChecked();
     expect(within(fieldset).getByRole('radio', { name: 'private (default)' })).toBeChecked();
     expect(within(dialog).getByRole('switch', { name: /^Auto-update/ })).toBeChecked();
-    expect(within(dialog).getByRole('textbox', { name: /Reconnect grace/ })).toHaveAttribute('placeholder', '900');
-    expect(within(dialog).getByText('Default: 900.')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('textbox', { name: /Reconnect grace/ })).not.toBeInTheDocument();
     expect(within(dialog).getByRole('radio', { name: /Reuse \(default\)/ })).toBeChecked();
+    expect(within(dialog).getByRole('radio', { name: /^Reset/ })).not.toBeChecked();
+    expect(within(dialog).queryByRole('radio', { name: /^Fresh/ })).not.toBeInTheDocument();
     expect(
-      within(dialog).getByText(/Fresh on a manual runner wipes everything Aixle put on the machine/),
+      within(dialog).getByText(/A reset after every session\. The workspace and cache volumes are wiped/),
     ).toBeInTheDocument();
+    expect(within(dialog).getByText(/the next session on a machine may belong to another project/)).toBeInTheDocument();
   });
 
   it('sends only the keys the user set, with their §2.7 names', async () => {
@@ -150,10 +155,7 @@ describe('RunnerFormModal', () => {
       options.onError?.({
         name: ['has already been taken'],
         maxConcurrency: ['must be greater than 0'],
-        config: [
-          'container.network must be one of bridge, host',
-          'ephemeral is not a config key: it is set per machine at registration',
-        ],
+        config: ['container.network must be one of bridge, host', 'bogus is not a supported config key'],
       });
     });
     const user = userEvent.setup();
@@ -164,18 +166,37 @@ describe('RunnerFormModal', () => {
 
     // The first step with an error is the configuration.
     expect(await within(dialog).findByText('container.network must be one of bridge, host')).toBeInTheDocument();
-    expect(
-      within(dialog).getByText('ephemeral is not a config key: it is set per machine at registration'),
-    ).toBeInTheDocument();
+    expect(within(dialog).getByText('bogus is not a supported config key')).toBeInTheDocument();
 
     await user.click(within(dialog).getByRole('button', { name: 'Next' }));
     expect(within(dialog).getByText('has already been taken')).toBeInTheDocument();
     expect(within(dialog).getByText('must be greater than 0')).toBeInTheDocument();
   });
 
+  it('does not ask to discard while a create is in flight, and asks again once it is refused', async () => {
+    let options: { onError?: (errors: Record<string, unknown>) => void; onFinish?: () => void } = {};
+    vi.mocked(router.post).mockImplementationOnce((...args: unknown[]) => {
+      options = args[2] as typeof options;
+    });
+    const user = userEvent.setup();
+    renderForm();
+    const dialog = await pickManual(user);
+    await fillLimits(user, dialog);
+
+    expect(visitHeld('/company/settings/runners/1')).toBe(true);
+    await user.click(within(dialog).getByRole('button', { name: 'Create runner' }));
+    expect(visitHeld('/company/settings/runners/1')).toBe(false);
+
+    act(() => {
+      options.onError?.({ name: ['has already been taken'] });
+      options.onFinish?.();
+    });
+    expect(visitHeld('/company/settings/runners/1')).toBe(true);
+  });
+
   it('edits a runner without the type step, keeping its config and never sending its type', async () => {
     const user = userEvent.setup();
-    const runner = buildRunner({ id: 4, name: 'build-box', reusePolicy: 'fresh', config: { auto_update: false } });
+    const runner = buildRunner({ id: 4, name: 'build-box', reusePolicy: 'reset', config: { auto_update: false } });
     renderForm(runner);
 
     const dialog = await screen.findByRole('dialog', { name: 'Edit build-box' });
@@ -192,11 +213,29 @@ describe('RunnerFormModal', () => {
           name: 'build-box',
           max_concurrency: 2,
           max_environments: null,
-          reuse_policy: 'fresh',
+          reuse_policy: 'reset',
           config: { auto_update: false },
         },
       },
       expect.anything(),
     );
+  });
+
+  it('explains the one value a kubernetes runner has', async () => {
+    renderAuthedPage(
+      <RunnerFormModal
+        opened
+        onClose={vi.fn()}
+        runnerTypes={[
+          buildRunnerTypeOption({ runnerType: 'kubernetes', configSchema: { type: 'object', properties: {} } }),
+        ]}
+        paths={paths}
+        runner={buildRunner({ id: 6, name: 'cluster', runnerType: 'kubernetes', reusePolicy: 'fresh' })}
+      />,
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Edit cluster' });
+    expect(within(dialog).getByRole('radio', { name: /^Fresh/ })).toBeChecked();
+    expect(within(dialog).getByText('A new pod for every session.')).toBeInTheDocument();
   });
 });

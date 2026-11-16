@@ -50,7 +50,7 @@ module ProjectMove
     # suspended, revoked or never accepted there; adding them would overrule that.
     def inactive_target_memberships
       @inactive_target_memberships ||=
-        target.company_memberships.where(user_id: missing_members.map(&:id)).where.not(state: "active")
+        target.company_memberships.where(user_id: missing_members.map(&:id)).not_active
               .pluck(:user_id, :state).to_h
     end
 
@@ -118,7 +118,7 @@ module ProjectMove
     # company's tracker into the moved project. Providers only accept a project's
     # own integration today; this is the guard for a row that predates that rule.
     def detached_trackers
-      @detached_trackers ||= project.project_trackers.where.not(status: "detached")
+      @detached_trackers ||= project.project_trackers.attached
                                     .where.not(integration_id: project.integrations.select(:id))
                                     .order(:name).to_a
     end
@@ -230,11 +230,10 @@ module ProjectMove
 
     def referenced_asset_ids
       steps = Step.unscoped.where(workflow_id: workflow_ids)
-      ids = steps.pluck(:asset_ids, :instructions).flat_map do |asset_ids, instructions|
-        Array(asset_ids).map(&:to_i) + InstructionReferences.ids(instructions, "asset")
-      end
+      ids = StepResourceLink.where(step_id: steps.select(:id)).where.not(asset_id: nil).pluck(:asset_id)
+      ids += WorkflowResourceLink.where(workflow_id: workflow_ids).where.not(asset_id: nil).pluck(:asset_id)
+      ids += steps.pluck(:instructions).flat_map { |text| InstructionReferences.ids(text, "asset") }
       ids += SubStep.where(step_id: steps.select(:id)).pluck(:instructions).flat_map { |text| InstructionReferences.ids(text, "asset") }
-      ids += Workflow.where(id: workflow_ids).map(&:base_asset_ids).flatten.map(&:to_i)
       ids.uniq
     end
 

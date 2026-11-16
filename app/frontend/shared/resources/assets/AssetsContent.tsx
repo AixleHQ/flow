@@ -414,6 +414,7 @@ export function AssetsContent({
   const requestCloseUpload = useUnsavedChanges({
     opened: uploadOpen,
     dirty: isUploading || uploadedFiles.length > 0,
+    saving: isSaving,
     onClose: handleCloseUpload,
   });
 

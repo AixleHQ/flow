@@ -22,7 +22,7 @@ module InternalTools
       return error("This tool needs a project") if project.nil?
 
       pinned = workflow_run&.shared_context.to_h.dig("tracker", "project_tracker_id")
-      trackers = ProjectTracker.for_project(project).where.not(status: :detached).includes(:integration).order(:id).map do |t|
+      trackers = ProjectTracker.for_project(project).attached.includes(:integration).order(:id).map do |t|
         {
           handle: t.handle, provider: t.provider, name: t.name, external_project: t.external_scope_id,
           primary: t.primary, access: t.access, usable: t.usable?, started_this_run: t.id == pinned.to_i

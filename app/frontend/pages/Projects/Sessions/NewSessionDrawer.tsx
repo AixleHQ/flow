@@ -20,15 +20,15 @@ interface Props {
  */
 export function NewSessionDrawer({ projectId, opened, onClose }: Props) {
   const options = useCreateOptions(opened);
-  const [dirty, setDirty] = useState(false);
-  const requestClose = useUnsavedChanges({ opened, dirty, onClose });
+  const [formState, setFormState] = useState({ dirty: false, saving: false });
+  const requestClose = useUnsavedChanges({ opened, ...formState, onClose });
 
   return (
     <ResourceDrawer opened={opened} onClose={requestClose} title="New session" bare>
       {options ? (
         <SessionNewForm
           layout="drawer"
-          onDirtyChange={setDirty}
+          onStateChange={setFormState}
           projectId={projectId}
           agentModels={options.agentModels}
           agents={options.agents}

@@ -8,6 +8,42 @@ says about them is design, not code yet.
 **Task:** #163 "Tech design: external agent runtimes (pluggable runners)"
 **Baseline:** `origin/develop` @ `a837d6fd` (the feature flag chain #166–#172 is in)
 
+**Decisions of 2026-11-13: the plan is trimmed** (Alex, task #243). They amend revision 5 in
+place and are not a new numbered revision:
+
+- **No compatibility with earlier versions of the runner feature until it has users** (§12.2).
+  Nobody outside our test company has the `external_runners` flag, and nobody will until
+  phase 4. Until then a change to runner data or behaviour keeps no shims: a migration may
+  rewrite or drop runner rows, and the only such data is on staging.
+- **Removed from the plan:**
+  - "Start from a clean workspace" for one run, on the run drawer and the session form (§7.2);
+  - the facts (Docker version, free disk, images present) in the Machines list; check-in
+    still collects them, as built (§2.2, §11);
+  - the Reset action on a machine (§7.2, §11);
+  - Force release: per-machine Revoke takes its place, and also frees the slot held by a lost
+    machine's session (§6.7, §9.3);
+  - the "runner connection lost, agent still running" banner on the session page (§6.7, §11);
+  - the machine's own cleanup of its containers and volumes on Revoke: credentials are revoked
+    at once and the operator removes what is left (§9.3);
+  - the runners and environments dashboards in Administrate (§11);
+  - the runner version against `recommended_version` on the runner page (§11, §14.2);
+  - Rotate token on the runner page (§3.2, §9.2, §11);
+  - `config.reconnect_grace` as a runner setting: the grace is fixed at 15 minutes, and
+    reconciliation (task 11b) uses that constant (§2.7, §6.7);
+  - the ephemeral registration (§6.3), with its column and its refusal; a register request
+    that still sends `ephemeral` registers, because the schema ignores unknown fields;
+  - task 15 of §15 as a task of its own (§12.3 keeps the exit condition and the trigger), and
+    §12.4 step 12 (removing the flag mid-session).
+- **In the docs only, not on the runner page:** the §9.7 disclosure and the egress list (§9.5).
+- **Kept in task 12's remaining part:** the writable-mount acknowledgement and the
+  `manual` user docs with the §9.7 disclosure and the egress list (per-machine Revoke, the
+  first-seen IP, `created_by_id` and "machines busy/total" are built, task 12e). `max_concurrency` stays on
+  the runner, not enforced while task 9 is deferred (§10).
+- **Task 11 is split:** 11a is #242 (scrub, `reuse_policy`, the reset escalation, Return to
+  service); 11b is reconciliation (heartbeat-based `observe`, the fixed 15-minute grace and the
+  slot release on reconnect; the running-session summary in the heartbeat was removed from the plan).
+  Task 13 is empty after this, so its row is gone (§15).
+
 **Decisions of 2026-10-30, after task 4** (#193, PR #614). They amend revision 5 in place
 and are not a new numbered revision:
 
@@ -282,7 +318,7 @@ workflow version, a run or a step.
 | `config` | jsonb, not null, default `{}` | Non-secret, per-type schema validated by the adapter's `config_schema`. Every key, its default and the types it applies to are in **§2.7**, the authoritative table. There is no `execution_mode` key in v1: container mode is the only one, and the key arrives with the `host` mode (§6.8). |
 | `max_concurrency` | integer, not null | The runner's concurrency limit. Not enforced by admission while row 9 is deferred (§10). Must be > 0. |
 | `max_environments` | integer, null | `coder`: environment pool size, null means equal to `max_concurrency`. `manual`: always null. Its capacity is the number of registered machines, a physical fact and not a setting (§7.3, §10). Check constraints: null when `runner_type = 'manual'`, and > 0 when set. |
-| `reuse_policy` | string, not null | `reuse` or `fresh`. What each value does depends on the type (§7.1). Until the adapters exist, `Runner` defaults it by type: `reuse` on `manual` and `coder`, `fresh` (the only allowed value) on `kubernetes` (§2.7). |
+| `reuse_policy` | string, not null | `reuse`, `reset` or `fresh`, the same names on every type (Alex, 2026-11-13, §7.1). `reuse`: a scrub after every session. `reset`: a reset after every session, on the same machine or workspace. `fresh`: a new machine or workspace for every session. Which values a type takes: `manual` `reuse` and `reset` (a `fresh` it had before 11a became `reset`), `coder` all three (`reset` in container mode only, §6.8), `kubernetes` `fresh` only. `Runner` defaults it by type: `reuse` on `manual` and `coder`, `fresh` on `kubernetes` (§2.7). |
 | `capabilities` | jsonb, not null, default `{}` | Computed by the adapter from type and config (§4), cached for the UI. |
 | `health` | jsonb, not null, default `{}` | Last health-check facts and timestamp. |
 | `last_seen_at` | datetime, null | Last controller heartbeat (`kubernetes`), last heartbeat of any registered machine (`manual`), or last successful health check (`coder`). |
@@ -298,27 +334,27 @@ with the first runner type that needs one.
 | Column | Notes |
 | --- | --- |
 | `runner_id`, `company_id` | |
-| `project_id` | **Bound project**. Set on first assignment and never changed afterwards (§9.4). |
 | `key` | Adapter idempotency key, unique per runner, e.g. `aixle-r12-e7f3a`. It is the Coder workspace name or the pod name. For `manual` it is generated at registration. |
 | `external_id` | Coder workspace UUID or pod UID. Null for `manual`. |
 | `display_name` | `manual`: the name the operator gave in `aixle-runner configure --name` (default: the hostname). Shown on the runner page. Null for the other types. |
 | `origin` | `allocated` (created by `Runners::Allocator`, `coder` and `kubernetes`) or `registered` (created by `POST /runner/v1/register`, `manual`). Decides the entry path into the state machine (§5.2). |
-| `ephemeral` | boolean, default false. Reserved for an ephemeral registration (one session, then the runner exits, §6.3). Always false in v1. |
 | `state` | §5.2. |
 | `reusable` | Copied from the runner's reuse policy when the environment was created. |
 | `runner_version`, `protocol_version`, `os`, `arch` | Reported at check-in or registration. |
-| `facts` | jsonb: prerequisites found, disk free, the Docker daemon version and agent images present. |
+| `facts` | jsonb: prerequisites found, disk free, the Docker daemon version and agent images present. Check-in collects them, as built; the Machines list does not show them (§11). |
 | `auto_update` | `manual`: copied from the runner's `config.auto_update`, overridable per machine with `aixle-runner configure --no-auto-update` (§14.4). |
 | `current_session_id` | The `terminal_sessions` row it is executing. At most one (§7.3). |
-| `last_workflow_id` | Affinity for warm-cache reuse (§7.3). |
-| `last_heartbeat_at`, `checked_in_at`, `sessions_count`, `consecutive_failures` | |
+| `last_heartbeat_at` | The last time the platform heard from the machine: any authenticated request (a poll, a heartbeat, an op result, `check-in`, a token refresh, `register`), written at most once every 15 s (`Runners::Liveness.record!`). Null until the machine is first heard. Task 12c (below). |
+| `checked_in_at`, `sessions_count` | |
+| `consecutive_failures` | Built in 11a: the failed sessions in a row on the machine. A session that ends well sets it to 0; `Settings.runners.max_consecutive_failures` (default 3) of them take the machine out of rotation (`failed`, §7.2). |
 | `reset_requested` | `none`, `reset` or `rebuild` (§7.2). |
+
+**Removed from the plan (Alex, 2026-11-13): affinity and project binding.** The table had a bound `project_id` (set on first assignment, never changed) and `last_workflow_id` (warm-cache affinity). They are not needed for now, so neither column is planned, and §7.3 steps 1 to 3, §9.4's bound project with Release to company and their mention in §15 task 11 are gone with them.
 
 **What v1 has so far (§15 task 5a).** `db/migrate/20261030140000_create_runner_environments_and_credentials.rb`
 creates `runner_environments` with the columns registration writes: `runner_id`,
 `company_id`, `key` (unique per runner, `aixle-r<runner id>-<8 hex>` for a registered
-machine), `origin`, `display_name`, `ephemeral` (default false, and `RunnerEnvironment`
-refuses true), `state`, `state_reason`, `os`, `arch`, `facts` (jsonb, an object),
+machine), `origin`, `display_name`, `state`, `state_reason`, `os`, `arch`, `facts` (jsonb, an object),
 `runner_version` and `protocol_version`. Both company and runner keys cascade, and the §2
 composite key `(runner_id, company_id) → runners (id, company_id)` ties the environment's
 company to its runner's. `origin` has one value so far, `registered`, and `state` has the
@@ -327,9 +363,13 @@ values, and the §5.2 state machine replaces that with task 11. `state_reason` h
 "credential reuse detected" (§9.2). Since task 8a the machine is also `failed`
 (`Runners::Credentials.rotate!` through `Runners::Machines.fail!`), held by no session, so it is
 given no session, besides its revoked credentials keeping it out.
-`project_id`, `external_id`, `reusable`, `auto_update`, `current_session_id`,
-`last_workflow_id`, the heartbeat and check-in columns and `reset_requested` land with their
-first reader. `auto_update` landed with task 10 (boolean, default true; false for a machine
+`external_id`, `reusable`, `auto_update`, `current_session_id`,
+`checked_in_at`, the other counters and `reset_requested` land with their
+first reader. `last_heartbeat_at` landed with task 12c: every authenticated request of a
+machine records its time (`Runners::Liveness.record!`, from the gateway's `authenticate` and
+from `Runners::Registration.register!`), and `runners.last_seen_at` is raised to it, so a
+runner's last seen is the latest of its machines'. Both are plain writes that leave
+`updated_at` alone, and a machine is written at most once every 15 s. `auto_update` landed with task 10 (boolean, default true; false for a machine
 registered with `configure --no-auto-update`, which is then never offered an update, §14.4).
 
 ### 2.3 `runner_credentials` and `runner_operations`
@@ -349,8 +389,9 @@ pair (task 19) by `runner_environment_id`. `bootstrap` joins the list with tasks
 A registration token has no family. Once used, it names the environment it created. The
 §2 key `(runner_id, company_id) → runners` ties the company, and
 `(runner_environment_id, runner_id) → runner_environments (id, runner_id)` ties a
-credential's environment to its runner. `last_used_at`, `last_used_ip` (the runner page's
-first-seen IP) and `created_by_id` come with the Machines table and "Add machine" (task 12).
+credential's environment to its runner. `last_used_at` and `last_used_ip` are not built. The
+first-seen IP is `runner_environments.first_seen_ip`, recorded once at registration, and
+`created_by_id` is on the registration token and copied to the machine it registers (task 12e).
 
 `runner_operations`: the durable queue between Temporal activities and `aixle-runner`.
 
@@ -491,19 +532,72 @@ implements them:
   has registered yet.
 - `connected`: health check passed within the last 5 minutes. For Kubernetes this also
   requires a controller heartbeat within the last 60 s. For Manual, every registered
-  machine has heartbeated within the last 90 s.
+  machine was heard within the last 90 s and none has failed.
 - `degraded`: reachable, but something is wrong: a template parameter is invalid, the
   controller reports missing RBAC, the controller version is below the recommended one, or
-  some (not all) of a manual runner's machines are offline. New sessions are still
-  admitted, and the reason is shown.
+  some (not all) of a manual runner's machines are offline or `failed`. New sessions are
+  still admitted, and the reason, which names those machines, is shown.
 - `unreachable`: the health check failed, the controller has been silent for more than
-  3 minutes, or every machine of a manual runner has been offline for more than 3 minutes.
-  New sessions fail at launch (§8). Running sessions follow §6.7.
+  3 minutes, or no registered machine of a manual runner has been heard for more than
+  3 minutes, or no machine of a manual runner can take a session: every one is `failed`
+  (the failures are the reason), or every one is `gone` ("No machine registered."). A
+  manual runner whose first machine has never registered stays `pending`. New sessions
+  fail at launch (§8). Running sessions follow §6.7.
 
 For `manual`, the UI also shows each machine as **online** (connected and running a
 session, environment `busy`), **idle** (connected, no session, environment `idle`) or
 **offline** (no heartbeat for 90 s, the `unreachable` overlay of §5.2), in the spirit of
 GitHub's self-hosted runner list.
+
+**Built in task 12c.** The machine's display state (`RunnerEnvironment#display_state`) is:
+
+- **online**: heard within 90 s (`RunnerEnvironment::ONLINE_WINDOW`) and holding a session;
+- **idle**: heard within 90 s, no session;
+- **offline**: not heard for 90 s, or never heard;
+- `failed` and `gone` machines show as such, whatever their last heartbeat.
+
+**The op-deadline exception is removed (Alex, 2026-11-13).** Task 12c counted a machine
+executing a delivered op as heard until the op's deadline, because the host runner is
+silent while it runs one (§6.7). With `POST /runner/v1/heartbeat` (task 12d) it is not: the
+host runner sends a heartbeat at least every 25 s while an op runs, so a machine is
+reachable when it was heard within 90 s, and nothing else. `RunnerEnvironment.executing_op`,
+`#executing_op?`, `.reachable` and the `delivered_operations` association are gone. A machine
+on an older `aixle-runner` shows offline during a long op until it updates itself.
+
+**Placement.** A machine that was not heard within 90 s (`RunnerEnvironment.heard`) is given
+no new session: `Runners::Machines.take!` skips it, and a launch against a runner whose every
+registered machine is offline is refused as `runner_unreachable` with
+"Runner \"X\" has no machine online: every machine is offline (…). Start aixle-runner on one
+of them, or pick another runner" (`Runners::Resolver`, and `NoMachine` where the machine is
+taken), as it is when every machine has failed. A runner whose heard machines are all
+busy is not refused: its session waits for a free one (§10). **The launch refusal stays on the
+machines' availability** (`Runners::Resolver#resolve!` and `Runners::Machines.take!`, through
+`Runners::Machines.availability`): the runner's health status below is for display and
+refuses nothing.
+
+**Built in task 12d: the runner's status from its machines' health.**
+`Runners::ManualAdapter#check_health(runner)` returns a status and a reason from the runner's
+machines alone, with no outbound call:
+
+- `pending`: no machine has ever registered. The runner keeps its status;
+- `connected`: every registered machine was heard within 90 s, and none has `failed`;
+- `degraded`: some registered machines are offline or `failed`. The reason names them
+  ("Offline: build-02. Failed: build-03 (refresh token reused)."). This includes every
+  registered machine silent for more than 90 s but not for 3 minutes;
+- `unreachable`: no registered machine was heard for more than 3 minutes, or no machine can
+  take a session: every machine is `failed` (the failures are the reason), or every one is
+  `gone` ("No machine registered.").
+
+One periodic check sets the status (`runner_health_check_workflow` in
+`app/temporal/schedules.yml`, every minute, `Runners::HealthCheck`): it calls the adapter for
+every live runner (`Runner.live`: not disabled, revoked or deleted) and applies the result
+through `RunnerStateMachine` (`mark_connected`, `mark_degraded`, `mark_unreachable`), storing
+`status_reason`. **Nothing else sets it**: not the gateway when a heartbeat arrives, and not
+a machine's registration. So the status may lag a machine by up to a minute: a runner whose
+first machine registers is `pending` until the next check, then `connected`. The status is
+applied under the runner's row lock, on the row as it is then, so a runner disabled or revoked
+meanwhile is left alone, and a status and reason that did not change write nothing. A runner
+page and the runners list already show the status and its reason.
 - `disabled`: switched off by a user. No new sessions. Running sessions are left to finish.
 - `revoked`: every credential is invalidated immediately and running sessions fail (§9.3).
   This is terminal: to get it back, create a new runner.
@@ -541,7 +635,7 @@ every key below, with its JSON Schema, default, types and whether it arrives lat
 `Runners::ConfigSchema.for_type(type)` is the JSON Schema of one type, the one the form
 renders from, and `Runner` validates `config` against it for all three types (§15 task 2).
 A key that a type requires (`template_id`, `namespace`) is required by that type's schema.
-`ephemeral` is refused with "not a config key: it is set per machine at registration".
+An `ephemeral` key is refused like any other unknown key: there is no ephemeral registration (§6.3).
 `Runners::ConfigSchema.value(config, key)` reads a key with its default applied.
 
 **Validation rules, for every type:**
@@ -562,7 +656,7 @@ constrained in SQL:
 | `integration_id` | Coder `Integration` id | required | `coder` | §2.6 |
 | `max_concurrency` | integer > 0 | required | all | §10 |
 | `max_environments` | integer > 0, or null | null (= `max_concurrency`) | `coder`; always null on `manual` (check constraint); unused on `kubernetes` | §7.3 |
-| `reuse_policy` | `reuse` \| `fresh` | `reuse` on `manual` and `coder`; `fresh` (the only value) on `kubernetes` | all, with per-type meaning | §7.1 |
+| `reuse_policy` | `reuse` \| `reset` \| `fresh` | `reuse` on `manual` and `coder`; `fresh` (the only value) on `kubernetes` | all: `manual` takes `reuse` and `reset`, `coder` all three (`reset` in container mode only), `kubernetes` `fresh` | §7.1 |
 
 **`config` keys in v1:**
 
@@ -574,9 +668,8 @@ constrained in SQL:
 | `parameters` | object, string → string | `{}` | `coder`; validated against the template's parameters | §2.6, §5.1 |
 | `on_release` | `delete` \| `stop` | `delete` | `coder`; what `teardown` does to the workspace | §5.1 |
 | `namespace` | string | required | `kubernetes`; must equal the namespace the controller reports at registration | §5.1, §9.6 |
-| `reconnect_grace` | integer, seconds, 60–7200 | `900` (15 min) | all | §6.7 |
 | `auto_update` | boolean | `true` | `manual`; overridable per machine with `aixle-runner configure --no-auto-update` (`runner_environments.auto_update`) | §14.4 |
-| `container.image_override` | string, image reference | null (the stock image of `AgentRuntime`) | all; must be built `FROM` our base image, checked at check-in | §6.8 |
+| `container.image_override` | string, image reference; `{agent}` is replaced at launch with the image name of the session's runtime (`config/agent_runtimes.json`), so `ghcr.io/aixlehq/flow-{agent}:develop` serves every agent; any other placeholder is refused, and so is a value that is no image reference once replaced | null (the runner default image of the session's runtime, §6.8) | all; must be built `FROM` our base image, checked at check-in | §6.8 |
 | `container.resources` | `{cpus, memory}` | from the hosted pod spec | all; `--cpus`/`--memory` on `manual` and `coder`, pod requests and limits on `kubernetes` | §6.8 |
 | `container.workspace_volume` | boolean | `true` | `manual`, `coder` | §6.8, §7.1 |
 | `container.cache_mounts` | array of `{name}` (named volume `aixle-cache-<key>-<name>`) or `{host_path}`, each with `target` | `[]` | `manual`, `coder` | §6.8, §7.2 |
@@ -594,7 +687,6 @@ constrained in SQL:
 | --- | --- | --- | --- | --- |
 | `execution_mode` | `container` \| `host` | `container` | `manual`, `coder` (a pod has no host to run a CLI on) | Phase 7, the `host` mode (§6.8, §15 task 20) |
 | `host.cli_source` | `managed` \| `template` | `managed` | `manual`, `coder`, only with `execution_mode: host` | Phase 7 (§6.8) |
-| `ephemeral` | boolean | `false` | `manual`. **Not a `config` key**: it is per machine, sent in the `register` body and stored in `runner_environments.ephemeral` | Ephemeral registration (§6.3), not scheduled |
 
 **Not runner configuration, listed so nobody looks for them in `config`:**
 
@@ -621,8 +713,8 @@ Aixle Builder) have no project, so they can only use `hosted`.
 | Action | Company runner | Project runner |
 | --- | --- | --- |
 | List and view status | Any active company member | Anyone with `project_accessible?` |
-| Create, edit, rotate token, disable, delete, revoke | Company `admin?` | Company `admin?` **or the project owner** |
-| Reset or rebuild an environment | Company `admin?` | Company `admin?` or the project owner |
+| Create, edit, disable, delete, revoke | Company `admin?` | Company `admin?` **or the project owner** |
+| Rebuild an environment | Company `admin?` | Company `admin?` or the project owner |
 | Select on a workflow, run or session | `project_writable?` in a project that can see it | `project_writable?` |
 
 This is stricter than project integrations, where any non-viewer can connect them, and the
@@ -792,8 +884,8 @@ container mode, so they are the same across the three external types; the `host`
 | Flag | `hosted` (today) | `manual` | `coder` | `kubernetes` | Used by |
 | --- | --- | --- | --- | --- | --- |
 | `provisionable` | true | **false**: the platform cannot create a machine | true | true | Allocator step 4 (§7.3), waiting-session copy (§10) |
-| `rebuildable` | n/a | **false**: we do not own the machine | true | n/a (ephemeral) | Reset escalation (§7.2), cross-project rebinding (§9.4) |
-| `reusable` | false | true | true | false (v1) | Lifecycle (§7), affinity, scrub |
+| `rebuildable` | n/a | **false**: we do not own the machine | true | n/a (ephemeral) | Reset escalation (§7.2) |
+| `reusable` | false | true | true | false (v1) | Lifecycle (§7), scrub |
 | `persistent_disk` | false | true | true (mounted volumes only) | false (a PVC option is later) | Reset semantics, UI copy |
 | `human_accessible` | false | true (it is the operator's machine; there is no link to open) | true (Coder's own SSH, web terminal, IDE) | false | "Open in Coder" link on the session, when there is a link |
 | `interactive_terminal` | true | false until the tunnel (§12.2, phase 4), then true | same | same | Not declared or read in v1. Its first reader comes with the tunnel (§15 task 16); until then interactive standalone sessions refuse every external runner unconditionally (below) |
@@ -917,14 +1009,14 @@ The per-type mapping:
 | Method | `manual` (nothing to call) | `coder` (outside, Coder API via `Coder::Api`) | `kubernetes` (via controller ops) |
 | --- | --- | --- | --- |
 | Config checks (`Runners::ConfigSchema`, no IO) | `config.container` options only (§2.7, §6.8) | Parameters valid, `config.container` options; the integration usable is `Runner`'s own validation | Namespace, `config.container.resources` and `image_override` valid |
-| `check_health` | Derived from machine heartbeats (§2.5). No outbound call | Coder API reachable, template exists and is valid | Controller heartbeat and its RBAC report |
+| `check_health` | Derived from the machines' last heartbeats and states (§2.5, built in task 12d). No outbound call | Coder API reachable, template exists and is valid | Controller heartbeat and its RBAC report |
 | `provision` | **No-op.** Never called: `provisionable: false` | `WorkspaceService` create from `config.template_id` with `config.parameters`, name = `key` | `controller.provision {key, image, resources, labels}`. The controller creates Pod, ServiceAccount and Secret (bootstrap) in its namespace |
 | `prepare` | **No-op**, returns `:ready`: the machine is the operator's and is already running | Await build. Start the workspace if it is stopped | Await pod `Ready` (controller reports) |
 | `inject_bootstrap` | **No-op**: the operator installed the runner (§14.4) | `Coder::SshRunner`-style `coder ssh <ws> -- sh -s` with the install script **on stdin**, so the token never appears in argv or `ps`. It installs and starts `aixle-runner --mode host` (§6.8) | No-op: the controller mounts the bootstrap Secret and the pod's init container installs the runner (§9.6) |
-| `reset :reset` | Runner op `env.reset`: **scrub ops only**, the full wipe of §7.2 | Runner op `env.reset` (§7.2) | n/a (ephemeral) |
+| `reset :reset` | Runner op `env.reset`: **scrub ops only**, the full wipe of §7.2 | Runner op `env.reset` (§7.2) | n/a |
 | `reset :rebuild` | **Does not exist** (`rebuildable: false`) | Delete and recreate the workspace from the template | n/a |
 | `teardown` | **No-op** on the machine. Removing a machine is `aixle-runner unregister` or Revoke (§9.3); the platform side only marks the row `gone` | Delete the workspace (or stop it, per `config.on_release`) | `controller.teardown {key}` |
-| `observe` | **Heartbeat-based**: `:running` while heartbeats arrive, `:unknown` after 90 s, never `:missing` (we cannot tell a powered-off machine from a removed one) | Workspace build status | Controller's pod list |
+| `observe` | **Heartbeat-based. Built in 11b** (`Runners::ManualAdapter#observe(environment)`): `:running` while the machine is heard (within 90 s, as `Runners::Liveness` counts it), `:unknown` after, never `:missing` (we cannot tell a powered-off machine from a removed one) | Workspace build status | Controller's pod list |
 
 **Decided (§6.9.2):** `inject_bootstrap` on `kubernetes` mounts no bootstrap Secret and runs
 no init container. The bootstrap token travels in the `provision` op to the controller, which
@@ -941,8 +1033,8 @@ does the pod's check-in itself (§9.2).
   (admission capacity wait)   failed ◀──────────────┘                                    ▼  │
                                 ▲                                       assign ──▶   busy ──┘
                                 │                                                    │
-                    scrub/reset │ fails                                              │ release (ephemeral)
-                                │                                                    │ or reset_requested=rebuild
+                    scrub/reset │ fails                                              │ reset_requested=rebuild
+                                │                                                    │
                             resetting ◀── release with reset_requested=reset ───────┤
                                 │ ok ──▶ idle                                        ▼
                                                                                 tearing_down ──▶ gone
@@ -964,9 +1056,29 @@ does the pod's check-in itself (§9.2).
 `registered` lasts as long as it takes the host runner to report its facts, normally
 seconds. A `manual` environment never goes through `tearing_down`: `gone` is set by
 `unregister` or revocation, and the machine itself is left as it is. Release on a
-`manual` environment always takes the `resetting`/scrub arm, never the ephemeral
-teardown arm, whatever `reuse_policy` says (§7.1). The one future exception is an
-`ephemeral` registration (§6.3), which goes from release straight to `gone`.
+`manual` environment always takes the `resetting`/scrub arm, never the teardown arm,
+whatever `reuse_policy` says (§7.1).
+
+**As built (11a).** `manual` has `registered`, `resetting`, `failed` and `gone`, as
+`RunnerEnvironmentStateMachine` (`app/state_machines/`, AASM, `whiny_persistence`): every
+change of state is one of its events (`mark_failed`, `begin_return_to_service`,
+`finish_reset`, `unregister`), fired by `Runners::Machines` and `Runners::Registration` on
+a row they hold locked, and the event records the reason in `state_reason`. Return to
+service is refused for a machine of a runner that is not `manual`
+(`Runners::Machines::NotManual`).
+`registered → failed` after a failed reset, or when the session that ends is the
+`runners.max_consecutive_failures`th failed one in a row on the machine. Return to
+service, `failed → resetting → registered`, is `Runners::Machines.return_to_service!`: it
+sets `resetting` under the machine's lock and puts an `env.reset` on its queue with no
+session. The op's result settles the machine (`Runners::Machines.settle_resets!`, called
+wherever an op gets its outcome: its result, its expiry by the awaiting caller, the sweep;
+it reads the machine's latest `env.reset` under the machine's lock, so a result of an
+earlier attempt never settles a later one):
+`registered`, free, with the streak at 0 when the reset succeeded, `failed` with the new
+reason when it failed or expired. A `resetting` machine takes no session. The action is in
+the Machines list of the runner page, company and project, under the policy that guards
+update and revoke (a company admin; a project admin or owner), and a second press on a
+machine that is not `failed` sends nothing.
 
 - One session at a time per environment (`concurrency_per_environment = 1`). `busy` holds
   `current_session_id`.
@@ -980,9 +1092,9 @@ teardown arm, whatever `reuse_policy` says (§7.1). The one future exception is 
   `state_reason`, as text for people only (`Runners::Machines.fail!`). A free machine is
   `registered` with no session, so a `failed` one is excluded by its state, and nothing that
   happens to the session, its deletion included, returns it to rotation. The gateway keeps
-  accepting its credentials (only `gone` is refused), so that Return to service (task 11) can
-  reach it. Until then the machine is brought back by running `aixle-runner unregister` on it,
-  then `configure` again, which registers a new environment.
+  accepting its credentials (only `gone` is refused), so that Return to service (task 11a) can
+  reach it. 11a built it, above; before it the machine was brought back by running
+  `aixle-runner unregister` on it, then `configure` again.
 - `unreachable` is an overlay on `idle` or `busy`, not a separate lifecycle. It is entered
   when heartbeats are missed and left on reconnect (§6.7).
 - The state machine is a `state_machines/` class like the others, and transitions are
@@ -1033,7 +1145,7 @@ session per machine.
 | `create_container` | Takes a free machine, the first phase that needs one (every machine busy is a `CapacityError`, so the session waits in `capacity_wait`; no machine registered, or every machine `failed`, is refused at launch by `Runners::Resolver` and fails the phase with a message that names the machines and how to bring one back), then `container.start`, with the image reference as the user gave it, a tag or a digest, `container.image_override` included, the strategy's env and the runner's `config.container`. The runner always pulls the image, then creates and starts the container (Docker's create API does not pull); a failed pull is the op's `image_pull_failed`. The runner pulls with the Docker credentials of the user it runs as, credential helpers included, Docker Hub's under `https://index.docker.io/v1/` as the Docker CLI looks them up, so an operator runs `docker login`, or configures a credential helper, as that user; the platform never contacts a registry. The pull, the volumes, the create and the start run until the op's `deadline_at` at most, and past it the runner creates nothing. A refusal the runner answered is a `ContainerRuntime::CreateRefusedError`, which pins no reservation; an expired or unanswered start stays uncertain (AD-5). The container's env carries the session's secrets and exists only in this phase (`ContainerService::CREATE_ONLY_KEYS`), so the runner creates and starts the container in this one op, as a Kubernetes pod is created running. A retry that finds its own container running adopts it. The container's name, which becomes the admission's `runtime_id`, is the platform's, `aixle-<machine key>-<session id>`: an answer that names another container is an error, and the create stays uncertain. The admission's identity (`runner-session-<id>`) is persisted before this phase, as for every runtime, so a failure or a stop in it, the pull included, still runs the cleanup below. The agent session's budget for this phase is 600 s, since the pull runs in it (§12.3) |
 | `start_container` | `status` until the container runs, as `DockerRuntime#start_container` and `#wait_for_ready` wait for nothing more |
 | `exec` | The same strategy code; each `exec`, `write_file` and `read_file` is an op |
-| `cleanup` | Nothing while any op is unfinished (`pending` or `delivered`) on the machine the session holds, a `container.start` a stop cut short or an `env.reset` of an earlier attempt for one (the session holds the machine, so every op on it is the session's): the runner runs a machine's ops in order, so a cleanup op would wait behind it and expire. The cleanup answers `cleanup_pending` and the existing timer retries it, until the op is answered or expires (`BaseRuntime#cleanup_ready?`). Then the same collection through `read_file` and `exec`, `container.stop` (a failure is logged, and the reset still runs) and `env.reset`, and the machine is free again. A machine whose reset failed, or was not answered, is `failed` (§5.2) and held by no session, and takes no session until it is returned to service (task 11); the failure applies only while the session still holds the machine (`Runners::Machines.fail!(…, holder:)`) |
+| `cleanup` | Nothing while any op is unfinished (`pending` or `delivered`) on the machine the session holds, a `container.start` a stop cut short or an `env.reset` of an earlier attempt for one (the session holds the machine, so every op on it is the session's): the runner runs a machine's ops in order, so a cleanup op would wait behind it and expire. The cleanup answers `cleanup_pending` and the existing timer retries it, until the op is answered or expires (`BaseRuntime#cleanup_ready?`). Then the same collection through `read_file` and `exec`, `container.stop` (a failure is logged, and the reset still runs) and `env.reset`, and the machine is free again. A machine whose reset failed, or was not answered, is `failed` (§5.2) and held by no session, and takes no session until it is returned to service (task 11a); the failure applies only while the session still holds the machine (`Runners::Machines.fail!(…, holder:)`) |
 
 The live log and the scanners read a runner session through `exec` and `status` ops, as hosted
 reads through `exec`, and they keep doing so (Alex, 2026-11-11, §6.5). A session's ops go to its machine only while the
@@ -1184,15 +1296,13 @@ named parameters and never see the request.
   A failure is the endpoint's own refusal (`invalid_registration`, `invalid_result`,
   `invalid_request`). It then maps the body to the service's named parameters by the
   protocol's wire rules (an absent `os` or `arch` `nil`, `facts` `{}` and `auto_update` true
-  when absent, `ephemeral` true only for the JSON boolean `true`, `exit_code` an Integer), and
+  when absent, `exit_code` an Integer), and
   maps a service's refusal, `Runners::Credentials::Refused`, to its status through
-  `REFUSAL_STATUS`. The schemas are strict about types: `os` and `arch` are strings and
-  `ephemeral` a JSON boolean, and any other value is the endpoint's refusal, not cast.
+  `REFUSAL_STATUS`. The schemas are strict about types: `os` and `arch` are strings
+  and `auto_update` a JSON boolean, and any other value is the endpoint's refusal, not cast. A field a schema does not know
+  is ignored, so `aixle-runner` 0.2.0, which still sends `"ephemeral": false`, registers.
 - **The service** (`Runners::Registration.register!`, `Runners::Operations.record_result!`)
-  makes the domain refusals and raises `Runners::Credentials::Refused`: `ephemeral: true` is
-  `ephemeral_not_supported`, which is why `register.request.json` lets a body with
-  `ephemeral: true` pass whatever the rest of it holds, so that the refusal order of `PROTOCOL.md`
-  §5.1 stays the same.
+  makes the domain refusals and raises `Runners::Credentials::Refused`.
 
 A rule that needs the value itself stays where it is: a `name` blank once trimmed, and a value
 over its column, are `RunnerEnvironment`'s validations, as is the shape of `facts`. Every new
@@ -1210,15 +1320,15 @@ All requests are `Authorization: Bearer <token>`,
 
 | Endpoint | Caller | Purpose |
 | --- | --- | --- |
-| `POST /runner/v1/register` | controller, `manual` host runner | Exchange a registration token for long-lived credentials: controller credentials (`kubernetes`), or environment credentials for the environment the call creates (`manual`). Body: `{name, os, arch, facts, ephemeral: false}`. `ephemeral: true` is defined and refused in v1 with `ephemeral_not_supported` (§6.3). |
+| `POST /runner/v1/register` | controller, `manual` host runner | Exchange a registration token for long-lived credentials: controller credentials (`kubernetes`), or environment credentials for the environment the call creates (`manual`). Body: `{name, os, arch, facts, auto_update}`; fields it does not know are ignored (§6.3). |
 | `DELETE /runner/v1/registration` | `manual` host runner | `aixle-runner unregister`: marks the environment `gone` and revokes its credential family. Refused with `409 busy` while a session runs, unless `--force`, which fails that session. |
-| `POST /runner/v1/check-in` | host runner (`coder`, and `manual` after every start), session runner (`kubernetes` pod) | Coder and Kubernetes: exchange the bootstrap token for environment credentials. `manual`: authenticated with the environment credential, no token exchanged. All: report os/arch and facts, and the version in `X-Aixle-Runner-Version`. The response carries the environment, config (so far the upload limit; the heartbeat interval comes with `heartbeat`, task 12; there are no log limits, since there is no log endpoint) and `update` (§14.4). **Built for `manual` (task 8c)**, below. |
+| `POST /runner/v1/check-in` | host runner (`coder`, and `manual` after every start), session runner (`kubernetes` pod) | Coder and Kubernetes: exchange the bootstrap token for environment credentials. `manual`: authenticated with the environment credential, no token exchanged. All: report os/arch and facts, and the version in `X-Aixle-Runner-Version`. The response carries the environment, config (so far the upload limit; there are no log limits, since there is no log endpoint) and `update` (§14.4). **Built for `manual` (task 8c)**, below. |
 | `POST /runner/v1/token` | both | Refresh-token rotation. |
 | `GET  /runner/v1/ops?after=<seq>&wait=25` | both | Long-poll. Returns ops with `sequence > after`, batched. An empty 200 after `wait` doubles as the heartbeat. |
 | `POST /runner/v1/ops/:id/result` | both | Op outcome. Idempotent on op id. |
 | ~~`POST /runner/v1/sessions/:id/log`~~ | | **Not built (Alex, 2026-11-11):** a runner session's terminal is read through `exec` (§6.5). |
 | `POST /runner/v1/sessions/:id/events` | session runner | `agent_exited {code}`, `agent_started`, `disk_low`, … |
-| `POST /runner/v1/heartbeat` | both | Only when no poll is outstanding, e.g. while uploading. Includes the running-session summary. |
+| `POST /runner/v1/heartbeat` | both | Only when no poll is outstanding, e.g. while an op runs. Empty body, `204`. **Built for `manual` (task 12d)**, below. The running-session summary it was to carry moves to task 11, together with reconciliation, which reads it. |
 | `ANY  /runner/v1/proxy/:route/*` | session runner | The callback proxy (§6.6). |
 | `GET  /runner/v1/releases/:version/:os-:arch` | both | The binary's documented, stable URL. It answers `302` to the GitHub Release asset and sends the expected SHA-256 in `X-Aixle-Runner-Sha256` (§14.3). |
 | `GET  /runner/v1/releases/:version/checksums` | both | The `sha256  file` list for that version, from the platform's pins (`runners.release` in `config/settings.yml`). |
@@ -1244,8 +1354,9 @@ implementation choices behind them:
   row first is committed before the poll reads it, so an op with a result is never returned.
   After a positive `wait` the access checks run again, read past the request's query cache
   and its local copy of `Rails.cache`, so a revocation or the flag turned off during the wait
-  answers the refusal without the payload. Recording the empty answer as a heartbeat comes
-  with task 12.
+  answers the refusal without the payload. Since task 12c every authenticated request of a
+  machine, the poll and its empty answer included, is recorded as a heartbeat (§2.2,
+  `Runners::Liveness.record!`), at most once every 15 s per machine.
 - **`POST ops/:id/result`** (§15 task 5b) stores the fields other than `status` in `result`,
   encrypted with `runners_key` (§2.3), and the same update nulls the payload. No
   `/runner/v1/*` request has its params in the request log (`config/application.rb`), as
@@ -1272,7 +1383,14 @@ failing check-in route does not stop a machine that can work. A refusal that end
 What the wire does is `runner/protocol/PROTOCOL.md` §5.9. The bootstrap-token exchange comes
 with the `coder` and `kubernetes` types.
 
-The other rows of the table are later tasks: `heartbeat` (task 12), session events and the
+**What v1 has (§15 task 12d): `heartbeat` for a `manual` machine.** `POST /runner/v1/heartbeat` is
+authenticated like the other machine endpoints, with an empty body, and answers `204`. It records
+liveness through `Runners::Liveness.record!`, as every authenticated request already does, and
+nothing else. The host runner sends one at least every 25 s (it sends one every 20 s) while an op
+runs and its result is posted, when it makes no poll; a heartbeat that fails is not retried. The
+wire is `runner/protocol/PROTOCOL.md` §5.10, with fixtures in `heartbeat/`.
+
+The other rows of the table are later tasks: session events and the
 proxy in task 8 and later, and the releases endpoints and `install.sh` in tasks 10 and 17.
 
 **Decided (§6.9.6), the callers.** No endpoint is called from the agent container. The
@@ -1313,12 +1431,9 @@ ends as on hosted (§6.9.4).
   dedicated `aixle-runner` system user, which it creates and adds to the `docker` group
   (§9.7). A machine needs one token each; a token that leaked after use opens nothing.
   Removal is `aixle-runner unregister` on the machine, or Revoke on the runner page (§9.3).
-- **Ephemeral registration, defined but not in v1.** `register` takes
-  `ephemeral: true` (`configure --ephemeral`, GitHub's `--ephemeral`): the environment
-  takes one session, then the platform marks it `gone`, revokes its credentials, and the
-  runner exits. That lets a customer script their own scaling (a VM per session from
-  their own autoscaler). v1 refuses the flag, but the field, the `ephemeral` column (§2.2)
-  and the release arm in §5.2 are there, so adding it needs no protocol bump.
+- **No ephemeral registration.** Removed from the plan (Alex, 2026-11-13): there is no
+  `ephemeral` field in `register`, no `ephemeral` column and no release arm for it in §5.2.
+  A body that still carries `ephemeral` registers, because the schema ignores fields it does not know.
 - **No labels or runner groups.** Selection is explicit on the workflow or session (§3.3),
   and the company/project scope already does what runner groups do. The os/arch/facts
   report at registration and every check-in stays, so a machine that cannot run the agent
@@ -1589,9 +1704,10 @@ are unchanged. With `network: host` the host runner listens itself.
 
 ### 6.7 Heartbeat, reconnect and resume
 
-- A long-poll or heartbeat every ≤ 25 s counts as a heartbeat. After 90 s without one the
-  environment is flagged `unreachable`, and the session page shows "runner connection lost,
-  agent still running".
+- A long-poll or heartbeat every ≤ 25 s counts as a heartbeat; the host runner sends a
+  `POST /runner/v1/heartbeat` whenever no poll is outstanding, which is while it runs an op
+  (task 12d). After 90 s without one the environment is flagged `unreachable`. The session page
+  shows no banner for it (removed from the plan, Alex 2026-11-13).
 - **The agent keeps running while disconnected.** Its process tree belongs to
   `aixle-runner`, not to a request. The runner queues events. There is no log buffer: the log
   is not shipped as chunks (§6.5, Alex 2026-11-11).
@@ -1604,21 +1720,34 @@ are unchanged. With `network: host` the host runner listens itself.
   case that kube-exec has.
 - **Resume:** on reconnect the runner refreshes its token if needed, polls with
   `after=<last acked seq>`, and posts the session summary (agent running or exited with a
-  code). The platform reconciles: an exit the platform did not know about is handled like a
-  dead container today (`DeadContainerScan` semantics) and fails the session with "agent
-  exited (code N)" unless `finish_session` already ran.
-- **Grace:** after `config.reconnect_grace` (default 15 min, configurable per runner up to
-  2 h, §2.7) without contact, the session fails with *"Runner environment lost contact for 15
-  minutes"*, and the environment is marked `failed` and torn down if the adapter can still
-  reach it. The admission slot stays held until the adapter confirms teardown or `observe`
-  returns `missing`, per AD-4 "unknown creation retains capacity", and is otherwise released
-  by the reconciliation sweep. On `manual` there is no teardown and `observe` never says
-  `missing`: the slot is released when the machine reconnects and reports the session's
-  container gone (it then gets the automatic reset of §7.2 before it is `idle` again), or
-  when an admin presses Force release on the runner page.
+  code; no summary rides on the heartbeat, whose body stays empty: see the grace below). The
+  platform reconciles through the dead-container scan, which asks the connected machine for
+  the session's `status`: an exit the platform did not know about fails the session as a dead
+  container does, unless `finish_session` already ran.
+- **Grace. Built in 11b** (`Runners::ContactLoss`; the running-session summary in the heartbeat is
+  removed from the plan, Alex 2026-11-15: a connected machine answers the dead-container scan's
+  `status` op, so an exit is caught within a few minutes without it, and the heartbeat's body
+  stays empty). A runner session whose machine has not been heard for 15 minutes (a constant,
+  `Runners::ContactLoss::GRACE`; `reconnect_grace` is not a runner setting) fails with *"Runner
+  environment lost contact for 15 minutes."*, unless `finish_session` already ran (the session
+  is then `finishing`, which the scan does not look at). The dead-container scan applies it, and
+  it asks no `status` op of a machine whose `observe` is `:unknown`. A machine back within the
+  grace goes on as before: with the agent running the session continues, with the agent exited
+  the scan fails it as a dead container. A session on a revoked or deleted runner is ended by the
+  same grace, which is what ends one that the runner's revocation failed to end.
+- **The slot (AD-4 "unknown creation retains capacity").** The failed session keeps its
+  machine, and so its admission slot, while the machine is away: the session is marked
+  (`TerminalSession#contact_lost?`) and its cleanup waits (`RunnerRuntime#cleanup_ready?`, so the
+  workflow retries, then the reconciler every minute) and sends nothing. When the machine is
+  heard again, the cleanup stops the leftover container, resets the machine (§7.2, a failed
+  session always gets `env.reset`) and releases the slot; the machine takes no other session
+  before then. On `manual` `observe` never says `missing`, so the other ways out are an admin
+  revoking the machine (§9.3, which also frees the slot held by a lost machine's session; there is
+  no Force release), and the runner being revoked or deleted: its machines never come back, so
+  the grace lets the machine go when it fails the session and the slot is released then.
 - `finish_session`/`fail_session` go through the proxy (§6.6). If the proxy is down at that
   moment, the MCP call fails, the agent retries as it does on any network error, and the
-  runner keeps the agent alive until the call lands or the grace expires.
+  runner keeps the agent alive until the call lands or the 15-minute grace expires.
 
 **Decided (§6.9.6):** the journal belongs to the environment's owner on
 every type, the controller on `kubernetes` instead of a session runner in the pod. The agent's
@@ -1638,6 +1767,23 @@ This is **container mode**, and it is the only execution mode in v1. A Docker da
 prerequisite on `manual` and `coder`, reported at check-in (§8) rather than discovered
 mid-session. Revision 3's Coder `native` mode is dropped (see "Dropped" below).
 
+**Which image a runner session gets (Alex, 2026-11-12, #229).** A session on a runner gets
+its own default agent images, set apart from the hosted ones: the hosted prefix
+(`AGENT_IMAGE_PREFIX`) is a private registry on staging and production, which a customer's
+machine cannot pull from (`image_pull_failed`). The defaults are the public images,
+`ghcr.io/aixlehq/flow-<image>`. `Settings.runners.agent_image_prefix`
+(`RUNNER_AGENT_IMAGE_PREFIX`) and `Settings.runners.agent_images.<runtime>`
+(`RUNNER_AGENT_IMAGE_<RUNTIME>`) change them, as `agents.image_prefix` and `agents.images`
+do for hosted sessions; the tag is `Settings.runners.agent_image_tag`
+(`RUNNER_AGENT_IMAGE_TAG`, default `latest`), not the hosted `agents.image_tag`, which can be
+a build tag (`sha-…`) that GHCR does not carry (QA, #229). The runner's
+`container.image_override` wins over the default; hosted sessions are unchanged. The choice
+is made in one place, `ContainerRuntime::RunnerRuntime#runner_image`, next to the override:
+`container.image_override` (with `{agent}`), else `runners.agent_images.<runtime>`, else the
+prefix, the runtime's image name and the tag. The strategy's (hosted) image is not used for a
+session on a runner. A private
+image needs `docker login` on the machine: no registry credentials are sent to it.
+
 **Decided (§6.9):** `aixle-runner` is not PID 1 on any type, and nothing of it is in the
 agent container. The image's `entrypoint.sh` is PID 1, as in a hosted pod. The session ops,
 the live log and the tunnel's relay are the environment owner's (the host runner on `manual`
@@ -1647,7 +1793,8 @@ a sidecar in the agent's network namespace.
 **Decided (Alex, 2026-11-06), container mode on Coder (§15 row 17).** v1 supports only Coder
 workspaces that are virtual machines (§2.6). A workspace runs one session at a time; a second
 concurrent session gets another workspace, up to the runner's limit. `reuse` (the default)
-keeps the workspace warm between sessions, and `fresh` gives each session a new workspace and
+keeps the workspace warm between sessions, `reset` (container mode only) wipes the workspace and
+cache volumes after every session, and `fresh` gives each session a new workspace and
 deletes it afterwards (§7.1). The reason for the type: it moves load from our cluster to the
 customer's machines, and the customer can run the machines in their own subnet, with access to
 private resources that are never exposed.
@@ -1909,7 +2056,7 @@ option does; types, defaults and per-type applicability are in §2.7. All of the
 | `pid` | `private` | `host` drops PID isolation. |
 | `extra_mounts` | `[]` | Arbitrary `src:dst[:ro]` bind mounts, validated as absolute paths. Read-only unless `:rw` is written out. |
 | `resources` | from the hosted pod spec | `--cpus` / `--memory`, so a session cannot starve the machine. Pod requests and limits on `kubernetes`. |
-| `image_override` | none | An image built `FROM` our base image instead of the stock one, prerequisites checked at check-in. |
+| `image_override` | none | An image built `FROM` our base image instead of the stock one, prerequisites checked at check-in. It is one image for every session on the runner, unless it contains `{agent}`, which is replaced at launch with the session agent's image name (`claude-code`, `codex`, …): `ghcr.io/aixlehq/flow-{agent}:develop` starts each agent in its own image. `{agent}` is the only placeholder; `Runners::ConfigSchema` refuses an unknown one, or a value that is not an image reference once replaced, when the runner is saved. |
 
 The container receives the same environment variables the hosted pod spec sets for the
 image, with the callback addresses of the session's local proxy (§6.6). On
@@ -2287,13 +2434,19 @@ The details task 8 fills in:
   check. The dev `local` adapter keeps its binary and state in `RUNNER_LOCAL_DIR`, a directory
   of the machine mounted at the same path, for this reason, and so does the published image
   when it is run as a host runner (§14.4).
-- **A daemon on arm64** (task 12b, Alex, 2026-11-12): the agent images are OCI indexes with
-  `linux/amd64` only (native arm64 images are task #226). The pull and the creation of the
-  agent container, of the proxy sidecar (the same image) and of the scrub container ask for
-  `linux/amd64`, so an arm64 daemon runs them under emulation: built into OrbStack and Docker
-  Desktop, `binfmt` on ARM Linux. Without emulation the container fails to start with the
-  daemon's own words. The sidecar's entrypoint is the runner's native binary, which the kernel
-  runs natively.
+- **A daemon on arm64** (task 12b, Alex, 2026-11-12; native images, task #226): the agent images
+  are OCI indexes for `linux/amd64` and `linux/arm64`, except a runtime recorded as amd64-only
+  (`platforms` in `config/agent_runtimes.json`, none today). `container.start` asks the daemon
+  for its architecture (`/info`) and pulls that platform; when the image has none (the pull
+  answers "no matching manifest" or that the image "does not provide the specified platform"),
+  it pulls `linux/amd64` instead, and an arm64 daemon then runs the image under emulation:
+  built into OrbStack and Docker Desktop, `binfmt` on ARM Linux. Any other pull failure is
+  reported as it is, without a second pull. The agent container, the proxy sidecar (the same
+  image) and the scrub container are created for the platform of the image the daemon holds
+  under that reference, which is the one the last pull left, so they run what was pulled. A
+  daemon that does not say its architecture is an amd64 one. Without emulation an amd64-only
+  image fails to start on arm64 with the daemon's own words. The sidecar's entrypoint is the
+  runner's native binary, which the kernel runs natively.
 
 #### 6.9.4 Question 3: the live log and how a session ends (§6.5, task 8)
 
@@ -2549,19 +2702,33 @@ cases.** Each case is weighed on two scales.
 ### 7.1 Fresh vs. reused, and what `reuse_policy` means per type
 
 The agent container (or pod) is **fresh per session on every type**. `reuse_policy` decides
-what survives around it, and that differs per type:
+what survives around it. **Decided (Alex, 2026-11-13): it has three values, with the same
+names on every type.**
 
-| Type | `reuse` | `fresh` |
-| --- | --- | --- |
-| `kubernetes` | Not offered | Always: a new pod per session. The image provides the warm state. |
-| `coder` | Default. The workspace is kept: the pulled agent image, the `aixle-ws-<key>` volume with its repository clones, and any cache mounts stay warm. | A new workspace is created per session and destroyed after it, for hosted-like isolation with the cold start accepted. |
-| `manual` | Default. The machine keeps the pulled images, the workspace volume and the cache volumes. Scrub after every session. | **Cannot mean a new machine.** It means the full wipe scope per session: a new container (always), a **Reset** of the workspace and cache volumes after every session instead of a scrub (§7.2), and, once host-side execution exists (phase 7), a new OS user. Pulled images stay; they are public, the same for every session, and every session pulls its image reference again before it starts. The form says: "Fresh on a manual runner wipes everything Aixle put on the machine after every session. It does not give you a new machine." |
+- **`reuse`**: a scrub after every session (§7.2). Repository checkouts, package caches and
+  pulled images stay.
+- **`reset`**: a reset after every session. The workspace and cache volumes are wiped, the
+  pulled images stay, and the machine stays the same. It does not give a new machine.
+- **`fresh`**: a new machine or workspace for every session.
+
+| Type | `reuse` | `reset` | `fresh` |
+| --- | --- | --- | --- |
+| `kubernetes` | Not offered | Not offered | Always: a new pod per session. The image provides the warm state. |
+| `coder` | Default. The workspace is kept: the pulled agent image, the `aixle-ws-<key>` volume with its repository clones, and any cache mounts stay warm. | Container mode only: in the `host` mode the workspace is the unit of isolation (§6.8). The workspace and cache volumes are wiped after every session. | A new workspace is created per session and destroyed after it, for hosted-like isolation with the cold start accepted. |
+| `manual` | Default. The machine keeps the pulled images, the workspace volume and the cache volumes. Scrub after every session. | A new container (always), and a **Reset** of the workspace and cache volumes after every session instead of a scrub (§7.2). Pulled images stay; they are public, the same for every session, and every session pulls its image reference again before it starts. What `fresh` meant on `manual` until 11a. | Not offered: Aixle cannot give a new machine. A `manual` runner that had `fresh` has `reset` (a migration, 11a; there is no compatibility with earlier states, §12.2). |
+
+The `manual` form says what each value does, what a scrub removes and keeps, and the
+cross-project note of §9.4 (the form's `reset` copy: "A reset after every session. The workspace and
+cache volumes are wiped, so every session clones its repositories again. Pulled images stay, and
+so does the machine.").
 
 **Decided (§6.9, Alex, 2026-11-06), `coder`.** v1 supports only Coder workspaces that are
 virtual machines, and a workspace runs one session at a time; a second concurrent session gets
 another workspace, up to the runner's limit. `reuse` and `fresh` mean the same in both
 execution modes: in the `host` mode the workspace is the unit of isolation, so `fresh` deletes
-it after the session and there is no per-session OS user (§6.8).
+it after the session and there is no per-session OS user (§6.8), and `reset` is not offered
+there. The `coder` rules are recorded here only: the `coder` type cannot be created until
+task 17.
 
 ### 7.2 Setup, cleanup, scrub, reset, rebuild
 
@@ -2581,9 +2748,9 @@ per-session CA and its logs), the session's processes and its tmux server.
 
 | Level | What it wipes | What it keeps | When |
 | --- | --- | --- | --- |
-| **Scrub** (`env.scrub`) | The session container, removed with `docker rm -f`, which takes the agent home, credential files, MCP config, prompt, context files, `/tmp`, the MITM CA and logs, the tmux server and every process with it; then a check by label that no container of the session is left. `/workspace/outputs` on the volume. Anything the strategy itself wrote to a writable cache or home mount. On `kubernetes`, deleting the pod is the scrub | Repository checkouts, package caches, pulled images | **After every session on a reusable environment, always**, before it returns to `idle`. Not optional: it is what makes reuse safe. A failed scrub leads to a rebuild where the type is `rebuildable`, and to a reset on `manual` |
-| **Reset** (`env.reset`) | Scrub, plus the `aixle-ws-<key>` volume and every `aixle-cache-<key>-*` volume, including repository checkouts | Pulled images. On `manual`, everything on the machine that Aixle did not create | Manually ("Reset" on an environment); forced for one run ("Start from a clean workspace" on the run drawer or session form, sets `reset_requested=reset` on the assigned environment before `exec`); **automatically after a failed session** on that environment; on `manual` with `reuse_policy: fresh`, after every session |
-| **Rebuild** (adapter `reset level: :rebuild`, `coder` only) | Everything: the workspace is deleted and re-created from the template | Nothing | Manually; automatically when a scrub or reset fails, after `runners.max_consecutive_failures` (default 3) failed sessions in a row on one environment, or when the environment is needed by another project (§9.4) |
+| **Scrub** (`env.scrub`) | The session container, removed with `docker rm -f`, which takes the agent home, credential files, MCP config, prompt, context files, `/tmp`, the MITM CA and logs, the tmux server and every process with it; then a check by label that no container of the session is left. `/workspace/outputs` on the volume. Anything the strategy itself wrote to a writable cache or home mount. On `kubernetes`, deleting the pod is the scrub | Repository checkouts, package caches, pulled images | **After every session on a reusable environment, always**, before it returns to `idle`. Not optional: it is what makes reuse safe. A failed scrub leads to a rebuild where the type is `rebuildable`, and to a reset on `manual` (built in 11a) |
+| **Reset** (`env.reset`) | Scrub, plus the `aixle-ws-<key>` volume and every `aixle-cache-<key>-*` volume, including repository checkouts | Pulled images. On `manual`, everything on the machine that Aixle did not create | Not started by a user: there is no Reset action on a healthy machine and no "Start from a clean workspace" for one run (removed, Alex 2026-11-13); **automatically after a failed session** on that environment, whatever the policy; on `manual` with `reuse_policy: reset`, after every session. **Return to service** on a `failed` `manual` machine runs one (§5.2) |
+| **Rebuild** (adapter `reset level: :rebuild`, `coder` only) | Everything: the workspace is deleted and re-created from the template | Nothing | Manually; automatically when a scrub or reset fails, after `runners.max_consecutive_failures` (default 3) failed sessions in a row on one environment |
 
 The repository bootstrap that `SessionContextService` already does (clone, or fetch and
 repair) is what makes a kept checkout safe to reuse: an existing clone is fetched and reset
@@ -2624,6 +2791,22 @@ guarantee. The mechanism:
   rotation (`failed`, §5.2) with the reason. The runner page asks the operator to look at
   the machine and press **Return to service**, which runs a reset first.
 
+**As built (§15 task 11a), on `manual`.** `ContainerRuntime::RunnerRuntime#cleanup_session`
+sends `container.stop`, then `env.scrub` under `reuse` (its payload names the image the
+session's `container.start` pulled) or `env.reset` under `reset`. The machine is freed
+(`Runners::Machines.release!`) when that op succeeds. **A session that failed gets a reset**,
+whatever the policy: the admitted phase activity passes `failed:` when the session is already
+`failed` or its phase state carries an error, and a stop the person asked for is not one.
+**A failed scrub is followed by a reset**; a failed reset, an unanswered one included, makes
+the machine `failed` with the reason ("build-01 failed to reset after session 12: …"). Each
+session that ends adds to the machine's `consecutive_failures` when it failed and sets it to 0
+when it did not; the `runners.max_consecutive_failures`th failure in a row makes the machine
+`failed` ("build-01 failed 3 sessions in a row"), after its reset succeeded. The limit is the
+platform setting `Settings.runners.max_consecutive_failures` (default 3), not a runner column.
+Return to service is in §5.2. On the runner, the removal of `env.scrub`'s helper container
+runs under a bounded timeout (`Environment.RemoveTimeout`, 30 seconds by default) with a fresh
+context, as `container.start`'s removal after a failure does (8a, Fix CR round 6).
+
 **As built (§15 task 6b), on `manual`.** The host runner implements both ops
 (`PROTOCOL.md` §6.4); who decides between them, and when, is the allocator's job (task 11).
 
@@ -2656,24 +2839,23 @@ guarantee. The mechanism:
 `Runners::Allocator.acquire(session)`, under a `FOR UPDATE SKIP LOCKED` lock on candidate
 rows:
 
-1. An `idle` environment of this runner bound to the session's project with
-   `last_workflow_id = session.workflow_id` (warm-cache affinity).
-2. Otherwise any `idle` environment bound to this project.
-3. Otherwise any `idle` unbound environment.
+1. to 3. **Removed (Alex, 2026-11-13).** Warm-cache affinity through `last_workflow_id`, then
+   the project's own bound environment, then an unbound one: affinity and project binding are
+   not needed for now (§9.4). The first step is any `idle` environment of this runner.
 4. Otherwise, **only if the runner is `provisionable`** and
    `count(non-gone environments) < max_environments`, insert a new `runner_environments`
-   row in `requested`, bound to the session's project, in the same transaction. After
+   row in `requested` in the same transaction. After
    commit, call `adapter.provision` for it (§5.1).
 5. Otherwise raise `CapacityError`, and the session waits in the existing admission
    capacity wait.
 
 **On `manual`, step 4 does not exist.** The allocator cannot create a machine, so when
-every registered machine bound to (or available to) the project is busy, offline or
+every registered machine is busy, offline or
 `failed`, the session **queues** in step 5 until one comes back to `idle`. Capacity is
 exactly the machines the operator connected (§10).
 
 **Two overlapping runs of the same workflow:** the second one gets **another environment**
-(step 2–4), never the same one. If the pool is full it **queues**. It is never refused, and
+(step 4), never the same one. If the pool is full it **queues**. It is never refused, and
 it never falls back to `hosted`. That answers the open question with "fall back to a fresh
 environment while there is room, then queue". On `manual` "room" means another idle
 machine. Refusing would turn a capacity condition into a user-visible error. Sharing one
@@ -2691,7 +2873,7 @@ infrastructure, with credentials the customer meant to keep inside their perimet
 | --- | --- | --- | --- |
 | Runner deleted, disabled or revoked | Launch (`Runners::Resolver`) | Fails before admission, `runner_unavailable` | "Runner "X" is disabled. Re-enable it or pick another runner on the workflow." |
 | Runner not visible to the project | Launch | Fails, `runner_forbidden` | "Runner 12 is not available to project P." (by id: the runner is looked up through `TenantScope.owned`, so a foreign runner's name is never read) |
-| Runner `unreachable` (health or controller silent) | Launch | Fails, `runner_unreachable` | "Runner "X" is unreachable since 14:02: controller has not connected for 6 min." |
+| Runner `unreachable` (`kubernetes`: controller silent; `coder`: health) | Launch | Fails, `runner_unreachable` | "Runner "X" is unreachable since 14:02: controller has not connected for 6 min." For `manual` the launch does not read the runner's status: it refuses on the machines (the two `manual` rows below), and the `unreachable` status, set by the periodic check (§2.5), is only shown. |
 | Session mode not supported by the runner (an interactive standalone session, §4) | Selection | Refused | "Runner "X" can't run interactive sessions yet." |
 | At `max_concurrency` | n/a | Not enforced: admission is unchanged for runner sessions, row 9 is deferred (§10) | n/a |
 | At `max_environments`, or provider capacity (Coder quota, unschedulable pod) | `create_container` | `capacity_wait`, wait reason `runner_capacity`, reservation kept (session-admission §7) | "Waiting for capacity on runner "X"." |
@@ -2735,7 +2917,7 @@ credentials, config items not attached to the session (still only through
 
 | Token | Issued | Lifetime | Grants | Storage |
 | --- | --- | --- | --- | --- |
-| Registration (Kubernetes) | Runner creation, or "Rotate" in the UI. Shown once | Single use, expires in 24 h if unused (a GitOps `helm install` can take a review cycle) | Calling `register` once for this runner | Digest only |
+| Registration (Kubernetes) | Runner creation (there is no Rotate token, removed from the plan, Alex 2026-11-13). Shown once | Single use, expires in 24 h if unused (a GitOps `helm install` can take a review cycle) | Calling `register` once for this runner | Digest only |
 | Registration (`manual`) | "Add machine" on the runner page. Shown once, inside the copy-paste command | **Single use, expires in 1 h** if unused | Calling `register` once, which creates **one** environment of this runner | Digest only. One token per machine |
 | Controller access / refresh | `register` | Access 1 h. Refresh rotates on every use and becomes invalid after 30 days idle | Polling **controller ops of this runner** (provision, teardown, observe); posting results; minting nothing | Digest only. Refresh-token reuse detection revokes the whole family and marks the runner `degraded` ("credential reuse detected") |
 | Bootstrap | Per environment, at `provision` | Single use, 30 min (or `bootstrap_timeout`, whichever is longer) | Calling `check-in` for **this environment** | Digest only. Delivered by Coder SSH stdin or by a k8s Secret the controller deletes after check-in |
@@ -2823,12 +3005,14 @@ the customer, and lists them. "Disable" is the soft version: no new work, runnin
 finish, credentials stay valid.
 
 On `manual` there is nothing for us to tear down. A revoked machine's runner gets `401`
-on its next request, stops its session containers, removes the Aixle-labelled containers
-and volumes it created (§7.2), and exits; the systemd unit is left installed and disabled.
-The runner page tells the operator to finish with `aixle-runner service uninstall`.
+on its next request and stops. **The machine does not clean up after itself on Revoke** (Alex,
+2026-11-13): credentials are revoked at once, and the operator removes what is left, i.e. the
+Aixle-labelled containers and volumes (§7.2) and the service, with `aixle-runner service
+uninstall`. The user documentation says so.
 Revoke also works **per machine** (the machines table on the runner page), which revokes
-that environment's credential family only. `aixle-runner unregister` is the same thing
-initiated from the machine.
+that environment's credential family only. It takes the place of Force release: it also
+frees the admission slot held by a lost machine's session (§6.7). `aixle-runner unregister`
+is the same thing initiated from the machine.
 
 **What v1 has so far (§15 task 5a).** Revoke and Delete (a soft delete that revokes, §2.5)
 set the status and revoke every `runner_credentials` row of the runner in one transaction
@@ -2842,7 +3026,27 @@ runner, then environment, then credential: `rotate!` also locks the environment 
 `unregister!` locks to mark it `gone`, and `unregister!` takes the runner's lock first too,
 so it cannot deadlock with a Revoke over the credential rows both revoke. Failing and
 dequeuing sessions, and the teardown, come with the tasks that first run sessions on a
-runner. Per-machine Revoke is task 12.
+runner. Per-machine Revoke is task 12e, below.
+
+**What v1 has (§15 task 12e).**
+
+- **A runner's Revoke, and so its Delete, ends its sessions** (`Runners::Revocation.end_sessions!`,
+  run after the revoking transaction commits, from `Runner`'s `after_save`). A session that
+  holds one of its machines, or is `ready` or `finishing`, fails through `SessionService.fail_session`
+  with "Runner "X" was revoked, so the session running on it ended.". Any other session that
+  names the runner and has not ended, waiting for a machine or not yet admitted, fails with the
+  message `Runners::Resolver.check_status!` gives for a revoked runner. A machine that held
+  one of them stops holding it, so the session's cleanup finds it absent and releases the
+  admission at once. A session has no `failure_reason`: "ends as `runner_unavailable`" is that
+  message and the `failed` state, and the parent run learns of it as of any failed session.
+- **Per-machine Revoke** is `POST …/runners/:runner_id/machines/:id/revoke` on
+  `Runners::MachinesController` (company and project), under the policy that guards the runner's
+  Revoke, for a machine in any state but `gone`. `Runners::Registration.revoke!` and `unregister!`
+  share one path: the machine is `gone` through `RunnerEnvironmentStateMachine#unregister`, its
+  credential family is revoked, and the session it held, if it had not ended, fails at once with a
+  message that names the machine and the runner (`SessionService.fail_session`, so its admission
+  is released by the cleanup). Other sessions waiting on the runner go on waiting for its other
+  machines. The confirmation says the session ends and that the operator cleans the machine.
 
 Removing the `external_runners` override for a company (§12.1) is not a revocation.
 Credentials stay valid, the gateway refuses every request of that company's runners with
@@ -2863,28 +3067,29 @@ a convention:
    `runner.company_id == session.company_id && (runner.project_id.nil? || runner.project_id == session.project_id)`
    on the session itself, because workflows can be copied, templated or moved, and a stored
    `runner_id` proves nothing on its own.
-3. **Assignment:** `Allocator` only assigns an environment whose `project_id` is null or
-   equal to the session's project. When it binds an unbound environment it sets
-   `project_id`, which never changes afterwards. The gateway authorises every op, log and
-   proxy call against `environment.current_session_id`, and that session's project must
-   equal the environment's bound project. A database check constraint ties
+3. **Assignment:** the gateway authorises every op, log and proxy call against
+   `environment.current_session_id`. A database check constraint ties
    `terminal_sessions.runner_environment_id` to the same company.
 
-**The company-scope case:** a company runner is shared by projects, but **its environments
-are not**. A reusable workspace carries repository checkouts, caches and possibly leftover
-files. Project B's run must never land on a disk project A used, even after a scrub, so
-environments are partitioned by bound project. An environment bound to A is never handed
-to B. If B needs capacity and A's environments are idle at `max_environments`, the
-allocator rebuilds A's least-recently-used idle environment (wipe and unbind) and binds it
-to B. Capacity is shared at the runner level. Disks are not.
+**Removed from the plan (Alex, 2026-11-13): the bound project.** An environment was to be bound
+to the first project that used it, partitioned by project, handed from one project to another
+only by an explicit **Release to company** that wipes and unbinds it. That, and the `project_id`
+column of §2.2, are not needed for now.
 
-**On `manual` there is no rebuild, so there is no automatic rebinding.** A reset wipes
-what Aixle created, not the machine, and that is not enough to hand a disk from one
-project to another. A machine on a company `manual` runner is bound to the first project
-that uses it. Moving it is an explicit admin action, **Release to company**, which runs a
-reset, clears the binding, and asks for confirmation that says the rest of the machine is
-not wiped. If B needs capacity while every machine is bound to A, B queues. The runner form
-recommends project scope for `manual` runners for this reason.
+**The company-scope case, as it is built:** a company runner's machines are reused across
+projects, with no special handling. Without binding, a machine of a company runner takes
+sessions of every project that can use the runner. What a scrub keeps under
+`reuse_policy: reuse` (repository checkouts, package caches, pulled images) is there for the
+next session, which may be another project's. The project scope is the way to keep a machine
+to one project: a project runner's machines take that project's sessions only.
+
+**Docs requirement (task 11a, built).** The `manual` user guide (`docs/user-guide/runners.md`
+and its portal copy) and the runner form explain: what a scrub removes and what it keeps;
+that on a company runner with `reuse` the next session may belong to another project and sees
+what the scrub kept; that `reset` wipes the workspace and cache volumes after every session;
+that on a project runner what is kept stays within that project; and that writable host
+mounts are outside every policy (§7.2). The form's copy is `SCRUB_NOTES` in
+`shared/resources/runners/runnerCopy.ts`.
 
 ### 9.5 Network surface
 
@@ -2895,7 +3100,8 @@ platform holds no credential that reaches into it.
 - **Inbound to the customer:** nothing. This is a commitment.
 - **Outbound from the environment:** not restricted by this design, and there is no goal to
   narrow it to one host. The runner page documents what the runner and the agent need to
-  reach, so customers who filter egress can allow it. **This list is documentation, not a
+  reach, so customers who filter egress can allow it (`docs/user-guide/runners.md`, "What the machine reaches outbound"). It is in the user documentation only,
+  **not on the runner page** (Alex, 2026-11-13). **This list is documentation, not a
   constraint we commit to keeping short:**
   - the platform host on 443 (gateway, proxy, the release redirect);
   - `github.com` / `objects.githubusercontent.com` for runner binaries (§14.3);
@@ -2988,14 +3194,20 @@ owner:**
 ### 9.7 A `manual` machine: what the operator takes on
 
 The platform holds nothing into the machine, so the trust questions move to the operator,
-and the runner page and the user documentation say so plainly:
+and the user documentation says so plainly. This disclosure is in the docs only, not on the
+runner page (Alex, 2026-11-13). It is written in `docs/user-guide/runners.md`, "What you take on with a `manual` machine":
 
-- **Agent sessions are a persistent tenant on that machine.** Every session assigned to it
-  runs there, with its repository checkouts on the workspace volume between sessions.
+- **The machine keeps the sessions' work between sessions.** Each session runs in a new
+  container, removed when it ends with its credentials, agent home, MCP config, prompt and
+  `/tmp`. Under `reuse` the workspace volume with the repository checkouts, the cache volumes
+  and the pulled images stay on the disk, so the code of every repository a session worked on
+  stays there, readable by anyone with root or `docker` access, and the next session starts
+  from those checkouts and caches. `reset` wipes the workspace and cache volumes after every
+  session; a failed session gets a reset under either policy.
 - **The launching user's agent login lands there** (§9.1), as on every external type. The
   §3.2 permissions and the §11 disclosure on the run drawer and session form apply
   unchanged.
-- **Environments stay bound to one project** (§9.4), and there is no automatic rebinding.
+- **On a company runner a machine is reused across projects** (§9.4): what a scrub keeps is there for the next session, whichever project it belongs to. A project runner keeps it within the project.
 - **The `docker` group is root-equivalent.** `service install` puts the `aixle-runner`
   system user in it, because the host runner starts containers. Anyone who controls that
   user controls the machine.
@@ -3003,9 +3215,7 @@ and the runner page and the user documentation say so plainly:
   SHA-256 the platform pins. An operator who wants no software change they did not make turns
   self-update off with `configure --no-auto-update`, or `config.auto_update: false` for the
   whole runner.
-- **Recommendation:** a dedicated machine for the runner, not a shared developer box; or,
-  once it exists, the ephemeral mode (§6.3), with one fresh VM per session from the
-  customer's own automation.
+- **Recommendation:** a dedicated machine for the runner, not a shared developer box.
 
 ---
 
@@ -3036,16 +3246,27 @@ runners. The limit logic may be revisited later (task row 9 of §15 is deferred)
     ends only when one frees up or the operator connects another machine. Nothing the
     platform or a setting does raises it. The runner page and the waiting-session message
     say "2 of 2 machines busy" rather than suggesting that capacity is being created.
+  - **Built in task 12d.** `Runners::Machines.take!` raises `ContainerRuntime::CapacityError`
+    with the reason `runner_capacity` (`Runners::Machines::RUNNER_CAPACITY`) when every machine
+    that can take a session is busy: "Waiting for a free machine on runner \"X\" (1 of 1
+    busy)." Machines that are offline or failed are not counted. `runner_capacity` is a wait
+    reason like `cluster_capacity`: in `SessionAdmission::WAIT_REASONS` (so the reapers leave
+    the reservation alone) and in `SessionAdmission#launch_phase`, and `launchStatus.ts` turns
+    it into "Waiting for a free machine" on the session page, with the message under it.
+    Nothing that reports cluster capacity counts a runner wait: `isWaitingForCluster` is false
+    for it.
 - **Release** follows AD-4 and the confirmed-release rule. The slot is freed when cleanup
   completes (scrub ok and the environment back to `idle`, or teardown confirmed). An
-  environment the platform lost contact with keeps the slot until `observe` says `missing`
-  or an admin forces release from the runner page. That is the external equivalent of
-  "unknown creation retains capacity".
+  environment the platform lost contact with keeps the slot, once the grace has failed its
+  session (§6.7), until the machine is heard again and has been reset (**built in 11b**), or an
+  admin revokes the machine (§9.3); the slot of a session on a revoked or deleted runner is
+  released when the grace fails it. That is the external equivalent of "unknown creation
+  retains capacity".
 - **Reconciliation and the scanners.** The hosted scanners are not changed to skip runner
   sessions. Since row 8a, `ScanDeadContainersActivity` asks the session's own runtime
   (`ContainerRuntime.for_session`), so a runner session is checked through its runner.
-  Comparing `runner_environments` with `adapter.observe` and with heartbeats belongs to
-  the allocator (row 11).
+  Since row 11b the scan asks `adapter.observe` first and sends no `status` op to a machine that
+  is not heard; that case belongs to the grace (§6.7).
 
 ---
 
@@ -3053,15 +3274,15 @@ runners. The limit logic may be revisited later (task row 9 of §15 is deferred)
 
 | Where | What |
 | --- | --- |
-| **Company → Settings → Runners** (new tab in `pages/Company/Settings/SettingsTabs.tsx`) | List of company runners: name, type, status pill with reason, environments busy/total, last seen. "New runner" for admins. |
+| **Company → Settings → Runners** (new tab in `pages/Company/Settings/SettingsTabs.tsx`) | List of company runners: name, type, status pill with reason, machines busy/total, last seen. "New runner" for admins. |
 | **Project → Runners** (new page next to Integrations, in the Resources group of the project sidebar) | Two sections: "From your company" (read-only, link to the company page for admins) and "This project". "New runner" for admins and the owner. |
 | **New runner form** | Step 1: pick a type (cards; the type list comes from the adapter registry filtered by the flags, so a new type shows up without UI work, and the Kubernetes card only with `external_runners_kubernetes`). Step 2: the type's form generated from `config_schema`. Manual: the `container` options from §6.8, offered first as "give the agent your toolchain", with the acknowledgement for writable host mounts (§7.2), reuse policy with the per-type wording of §7.1, auto-update. Coder: integration select (visible ones), template, parameters, the `container` options, reuse policy, max environments. Kubernetes: namespace, and the `container` resources and image override. The fields per type are exactly the keys of §2.7. Step 3: limits. Then **Connect**: Manual shows the GitHub-style sequence of §6.3 (download, **SHA-256 verification**, `aixle-runner configure --url … --token …`, `aixle-runner service install`) with a one-time token, and waits for the first machine with a live status; Coder runs the config checks + `check_health` inline; Kubernetes shows the one-time registration token and `helm install` command, and waits for the controller. |
-| **Runner page** | Status and health facts, capabilities, the container options that widen access (§6.8), the documented egress list (§9.5), runner version against `recommended_version` (§14.2), environments table (state, bound project, current session link, last used, version; actions Reset / Rebuild where `rebuildable` / Force release), Disable / Revoke / Rotate token / Delete. For `manual` the table is **Machines**: name, online / idle / offline, os/arch, Docker version, first-seen IP, runner version and auto-update; actions Reset, Return to service, Release to company (§9.4), Revoke; and "Add machine", which mints a new registration token. The §9.7 disclosure sits above the table. |
+| **Runner page** | Status and health facts, capabilities, the container options that widen access (§6.8), environments table (state, current session link, last used, version; action Rebuild where `rebuildable`), Disable / Revoke / Delete. For `manual` the table is **Machines**: name, online / idle / offline, os/arch, first-seen IP, created by (`created_by_id`), runner version and auto-update; actions Return to service, per-machine Revoke; and "Add machine", which mints a new registration token. The runner page does not show the runner version against `recommended_version` (§14.2), the egress list (§9.5) or the §9.7 disclosure: those two are in the user documentation only. It has no Rotate token, no Reset, no Force release, and no machine facts (Docker version, free disk, images present; check-in still collects them, §2.2). |
 | **Workflow builder → Base Resources** (`BaseResourcesTab.tsx`) | "Runner" select: `Hosted (default)` + visible runners with status. Inline warning when the referenced runner is not usable (§3.4). No warning for an interactive step on a runner without `interactive_terminal`: it is not built, for the reason in §4. |
 | **Run drawer** (`RunWorkflowDrawer.tsx`) | "Runs on" select defaulting to the workflow's runner. For an external runner a one-line note: "Your agent login is used on this runner, which is operated by *Company/Project*." |
 | **New session form** (`SessionNewForm.tsx`) | Same select and note. Interactive mode greys out every external runner until the tunnel (§4, §15 task 16). |
-| **Session page, run page, step list, board task run history** | A "Runs on" badge: `Hosted`, or `Prod VPC · coder`, linking to the runner and environment. "Open in Coder" when `human_accessible`. A connection-lost banner (§6.7). This is where users see where a run actually executed. |
-| **Admin (Administrate)** | Runners and environments dashboards for support. |
+| **Session page, run page, step list, board task run history** | A "Runs on" badge: `Hosted`, or `Prod VPC · coder`, linking to the runner and environment. "Open in Coder" when `human_accessible`. There is no connection-lost banner (§6.7). This is where users see where a run actually executed. |
+| **Admin (Administrate)** | No runners or environments dashboards (removed from the plan, Alex 2026-11-13). |
 
 **What v1 has so far (§15 task 3).** The two lists, the new-runner form and the runner page,
 all behind `useFeatureFlag('externalRunners')`, in `app/frontend/shared/resources/runners/`
@@ -3084,7 +3305,7 @@ and the pages `Company/Settings/RunnersPage`, `Company/Settings/RunnerPage`,
   policy carries the §7.1 wording and is sent only when chosen, so the server's per-type
   default applies. The server's errors land at their field: a `config` message at the field
   its leading key names, anything else above the form. The "Add machine" button is on a live `manual` runner's page since task 12a;
-  the Machines table is task 12. A created runner opens its page.
+  the Machines section is since task 12c (below), its Return to service action since task 11a, and its other actions are task 12's. A created runner opens its page.
 - **Session page, wait reasons.** A runner session waits for the same reasons as any other
   session (§10). The only runner-specific one is `runner_capacity` (the runner's own
   capacity, rows 11 and 12); there is no `runner_limit`.
@@ -3092,9 +3313,27 @@ and the pages `Company/Settings/RunnersPage`, `Company/Settings/RunnerPage`,
   policy, capabilities, the keys the config sets, and the §6.8 options that widen access
   called out above them. Edit (the same form without the type step), Disable, Enable,
   Revoke and Delete (the soft delete) only with `canManage`; a company runner seen from a
-  project is read-only there and links a company admin to company settings. Machines,
-  environments, tokens, the runner version and the egress list are not there yet (tasks 5,
-  12 and 13).
+  project is read-only there and links a company admin to company settings. Environments
+  and tokens are not there yet (tasks 5 and 12). The runner version against `recommended_version`,
+  the egress list and the §9.7 disclosure are never on the page: the last two are in the user
+  documentation only.
+- **Machines section (task 12c).** On the page of a `manual` runner, company and project alike
+  (`machines` prop, `RunnerMachineResource`; `RunnerMachines.tsx`), read-only: for each
+  machine its name (`display_name`) and key, its state (online, idle or offline, or failed or
+  gone with the reason, §2.5), its runner version and os/arch (from `register`, and from
+  `check-in`), when it registered and its last seen (`last_heartbeat_at`). Machines are listed
+  in registration order, `gone` ones included. The page asks for `runner` and `machines` again
+  every 15 s while the tab is visible, so states and last seen move without a reload. The
+  Overview's "Last seen" is the runner's `last_seen_at`. The first-seen IP and `created_by_id`
+  and per-machine Revoke were task 12's remaining part, built in task 12e (below); Return to service is task 11a. The
+  facts (Docker version, free disk, images present) are not shown in the list, and there is
+  no Reset action (removed, Alex 2026-11-13).
+- **Task 12e.** The list adds the first-seen IP (`first_seen_ip`, from `request.remote_ip` at
+  `register`) and "Added by" (`created_by`, the user who minted the registration token), a dash
+  for a machine registered before they were recorded (no backfill, §12.2), and a Revoke button on
+  every machine that is not `gone`, with a confirmation. The runners list has a "Machines
+  busy/total" column for a `manual` runner (`RunnerResource#machines`, from `Runner#machine_counts` over the loaded machines):
+  busy is holding a session, total is every machine that is not `gone`.
 
 **What v1 has so far (§15 task 4).** Behind the same flag, the selects and the badges, built from
 `shared/resources/runners/runnerChoice.tsx`. The selects are fed by `RunnerSummaryResource` (name,
@@ -3226,6 +3465,12 @@ Each phase leaves `develop` releasable and the hosted path untouched. "Test comp
 own staging test company; "named companies" are companies given an override from `/admin`,
 one at a time, each with a reason. The flags never go `default: true` before removal.
 
+**No compatibility with earlier versions of the runner feature until it has users (decided,
+Alex, 2026-11-13).** Nobody outside our test company has the `external_runners` flag, and
+nobody will until phase 4. Until then, a change to runner data or behaviour keeps no shims
+for earlier states: a migration may rewrite or drop runner rows, and the only such data is on
+staging. The first phase that gives the flag to a named company (phase 4) ends this rule.
+
 | Phase | Content | `external_runners` | `external_runners_kubernetes` | Who sees the client-side surfaces |
 | --- | --- | --- | --- | --- |
 | 1 | Model and CRUD, no execution. A run with an external runner fails with "runner execution not enabled". This validates scopes, permissions and failure messages before any code runs remotely | Declared. `default: false`. Override **on for the test company only** | Not declared | Members of the test company: the Runners pages (Manual type card only), the builder, drawer and session-form selects, the badge |
@@ -3323,9 +3568,8 @@ runners (`RunnerRuntime` over the protocol). Until that ends, every change to a
 `container_status`, `container_logs`) or to a `ContainerWorkflowV2` phase has to be
 reasoned about, and tested, twice: once for each model, including the ways each one fails.
 
-- **Recorded as:** a `tech-debt` board task created with the phase 3 tasks, linked from
-  this section, and a note in `app/services/container_runtime/base_runtime.rb` that names
-  both implementations.
+- **Recorded as:** this section, and a note in `app/services/container_runtime/base_runtime.rb`
+  that names both implementations. It is not a task of its own in §15 (Alex, 2026-11-13).
 - **Mitigation while it lasts:** the conformance fixtures (§14.1) cover the `RunnerRuntime`
   side of every primitive, and the "hosted unchanged" regression test covers the hosted
   side. A change to a primitive must touch both suites in the same PR.
@@ -3335,8 +3579,8 @@ reasoned about, and tested, twice: once for each model, including the ways each 
   caller left in the session path.**
 - **Trigger to schedule step A:** the protocol is declared stable (the same trigger as the
   runner extract, §14.1), and one full release has passed with no protocol-breaking
-  change. Step B follows once step A has run in production for one release. The debt task
-  carries this trigger, so it is reviewed when the protocol is declared stable and not left
+  change. Step B follows once step A has run in production for one release. This section
+  carries the trigger, so it is reviewed when the protocol is declared stable and not left
   open-ended.
 
 ### 12.4 Validating the first `manual` runner on staging (phase 3)
@@ -3363,7 +3607,7 @@ machine used is recorded in the validation task's result.
    container is left (`docker ps -a --filter label=aixle.com/environment=<key>`).
 5. Start two runs at once with one machine: the second **queues** with `runner_capacity`
    ("1 of 1 machines busy") and runs when the first finishes. Nothing is provisioned.
-6. Set `reuse_policy: fresh`: after a session the workspace volume is gone and recreated
+6. Set `reuse_policy: reset`: after a session the workspace volume is gone and recreated
    empty for the next one; the pulled image stays.
 7. Repeat step 3 with `cursor_cli` and with `grok`: usage is recorded from the MITM log
    exactly as on hosted.
@@ -3376,17 +3620,13 @@ machine used is recorded in the validation task's result.
     and the session completes.
 11. Reboot the machine while idle: the service comes back and the machine is idle again
     with no operator action.
-12. Remove the `external_runners` override for the test company mid-session from `/admin`:
-    the session fails at the next poll, the Runners pages disappear, and a new launch of a
-    workflow that names the runner fails with the §8 message, without falling back to
-    `hosted`. Put the override back: the machine reconnects without re-registering.
-13. `aixle-runner unregister`: the machine disappears from the list and its credential
-    gets `401`. Register again and Revoke from the UI: the runner on the machine stops and
-    cleans up its containers and volumes.
-14. Point a run from a second project at the project runner by id through the API: 403.
-15. Selecting `hosted` or nothing on the same project behaves exactly as before. The hosted
+12. `aixle-runner unregister`: the machine disappears from the list and its credential
+    gets `401`. Register again and Revoke from the UI: the runner on the machine stops. Its
+    containers and volumes are left, and the operator removes them (§9.3).
+13. Point a run from a second project at the project runner by id through the API: 403.
+14. Selecting `hosted` or nothing on the same project behaves exactly as before. The hosted
     pods are created as before, verified on the cluster.
-16. The long-poll wake-up through the real Redis adapter (CI runs the `test` cable adapter
+15. The long-poll wake-up through the real Redis adapter (CI runs the `test` cable adapter
     only, §6.1): with the machine idle in a `GET /runner/v1/ops` with `wait=25`, enqueue an
     op for its environment through `Runners::Operations.enqueue!` from a Rails console on
     staging. The poll answers with the op well before its 25 s end (within about a second).
@@ -3423,7 +3663,7 @@ result, so a later re-run knows what it is comparing against.
    - cost is recorded.
 4. Run it twice in parallel: the second run gets the second workspace, and a third run
    queues with `runner_capacity`.
-5. Run it again: it lands on the warm workspace (affinity), the agent image is not
+5. Run it again: it lands on a warm workspace (the machine's), the agent image is not
    re-pulled, the clone on the `/workspace` volume is fetched rather than re-cloned, and
    the scrub left no session container and no credential files on the volume (check over
    Coder SSH with `docker ps -a` and a file search).
@@ -3625,8 +3865,12 @@ Alex 2026-11-09): `1.0.0` comes with the extract or the first customer (§14.1).
   `settings.yml`, the one loading mechanism, next to the other `runners:` settings. Besides the
   four keys above the block holds `download_url`, the template of the asset URL the release
   endpoint redirects to (`%{version}`, `%{platform}`), so a mirror is one edit. It pins
-  `protocol_supported: [1]`, no minimum, and `recommended_version: "0.1.0"` with the
-  `linux-amd64` and `linux-arm64` digests of `runner-v0.1.0`'s `checksums.txt` (task #220). The
+  `protocol_supported: [1]`, no minimum, and `recommended_version: "0.4.0"` with the
+  `linux-amd64` and `linux-arm64` digests of `runner-v0.1.0`'s to `runner-v0.4.0`'s
+  `checksums.txt` (task #220; `0.2.0` pinned by task #232,
+  `0.3.0`, the heartbeat release, by task #244, `0.4.0`, the native-platform
+  release (#226, #242), by task #247; the older ones kept so
+  machines on them still download and verify). The
   gateway's `X-Aixle-Runner-Protocol` check reads `protocol_supported`, and
   `X-Aixle-Runner-Version` is strict SemVer 2.0 from task 10 on, so versions compare by SemVer
   precedence (`Runners::Version`).
@@ -3771,31 +4015,36 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | --- | --- | --- |
 | 1a | 1 | **Flag and the client-flag resource.** Declare `external_runners` in `config/feature_flags.yml` exactly as in §12.1 (`introduced` set to the PR's date). Replace the hand-written `FeatureFlagName` with an Alba `FeaturesResource` and `useFeatureFlag(name: keyof Features)`, which touches every existing `useFeatureFlag` consumer, and retire `test/config/feature_flag_name_test.rb` (§11). Override on for the test company from `/admin`. Platform cleanup triggered by the first client flag, not runner-specific: a prerequisite for task 3, not for 1b, and reviewed on its own. |
 | 1b | 1 | **The `runners` table and the `Runner` model**, only what task 2 reads and writes. The `runners` migration (§2.1, without `encrypted_secrets`): the unique name index, the four check constraints and the two composite tenant keys (§2, §2.4). `Runner` with enumerize `runner_type` and `reuse_policy` (defaulted by type, §2.7), validations mirroring the database, the §2.6 integration rule, `visible_for_project` (§3.1), and the status state machine with soft delete (§2.5). No flag check here: nothing reaches the model until task 2's controllers, which check it. Every other table and column of §2 lands with the first task that reads or writes it. |
-| 2 | 1 | **Done.** Policies and controllers: `Web::Company::RunnersPolicy` and `Web::Company::Projects::RunnersPolicy` with the §3.2 rules (the project policy refused writes on a company runner, from the record; task #209 moved that to the controllers' lookup, §3.2), company runners CRUD at `/company/settings/runners` and project runners at `/company/projects/:project_id/runners` (`index`, `show`, `create`, `update`, `destroy` as the soft delete that revokes, `disable`, `enable`, `revoke`), each a `404` without the flag, declared with `requires_feature :external_runners` (`FeatureGated`, docs/architecture/feature-flags.md). `RunnerResource` for the pages. `Runners::ConfigSchema` encoding §2.7 for every type (refusing unknown, inapplicable and later keys and `ephemeral`; defaults never written), the `Runners::Adapter` registry with `ManualAdapter` only (`coder` and `kubernetes` are refused as not available yet), capabilities `provisionable` and `rebuildable` stored on save, and `ManualAdapter#validate_config` (task #209 moved its rules to `Runners::ConfigSchema`, §5.1). The other §4 flags wait for their first reader, and `check_health` moved to task 12. `IntegrationsController#destroy` shows the error when `Integration`'s `has_many :runners, dependent: :restrict_with_error` refuses the removal, instead of ignoring `destroy`'s result and saying "Integration removed" (until task 17 decides what disconnecting does to runners). Needs 1a (the flag) and 1b. |
+| 2 | 1 | **Done.** Policies and controllers: `Web::Company::RunnersPolicy` and `Web::Company::Projects::RunnersPolicy` with the §3.2 rules (the project policy refused writes on a company runner, from the record; task #209 moved that to the controllers' lookup, §3.2), company runners CRUD at `/company/settings/runners` and project runners at `/company/projects/:project_id/runners` (`index`, `show`, `create`, `update`, `destroy` as the soft delete that revokes, `disable`, `enable`, `revoke`), each a `404` without the flag, declared with `requires_feature :external_runners` (`FeatureGated`, docs/architecture/feature-flags.md). `RunnerResource` for the pages. `Runners::ConfigSchema` encoding §2.7 for every type (refusing unknown, inapplicable and later keys; defaults never written), the `Runners::Adapter` registry with `ManualAdapter` only (`coder` and `kubernetes` are refused as not available yet), capabilities `provisionable` and `rebuildable` stored on save, and `ManualAdapter#validate_config` (task #209 moved its rules to `Runners::ConfigSchema`, §5.1). The other §4 flags wait for their first reader, and `check_health` moved to task 12. `IntegrationsController#destroy` shows the error when `Integration`'s `has_many :runners, dependent: :restrict_with_error` refuses the removal, instead of ignoring `destroy`'s result and saying "Integration removed" (until task 17 decides what disconnecting does to runners). Needs 1a (the flag) and 1b. |
 | 3 | 1 | **Done.** Frontend behind `useFeatureFlag('externalRunners')` (needs 1a): the Company Settings → Runners tab and the Project → Runners page (sidebar entry next to Integrations, "From your company" and "This project"), the new-runner form generated from the type's `configSchema` by an in-house renderer (Manual card; the writable-mount acknowledgement and the Docker-socket rule as form widgets; only the keys the user set are sent, verbatim; the server's errors shown at their fields), and the runner page without machines (capabilities, config with the options that widen access, limits, Edit, Disable, Enable, Revoke, Delete), as §11 "What v1 has so far" describes. |
 | 4 | 1 | **Done.** Selection: the nullable `workflows.runner_id`, `workflow_runs.runner_id` and `terminal_sessions.runner_id` references (§2.4), with how `runner_id` is snapshotted and restored in a workflow version, including a runner that is gone (§3.4); `workflows.runner_id` in the builder (Base Resources) and the version snapshot, run-drawer and new-session selects, `Runners::Resolver` with launch-time checks (status, visibility, flag) and the §8 failure messages, `runner_id` frozen on `workflow_runs`, "Runs on" badges. A reference is checked by the project's tenant rule (`TenantScope.owned(Runner, …)`). The runner pages do not list where a runner is used. A project move blocks on the project's own runners, switches its workflows that name a runner to Hosted (archived ones included, listed in the preflight), clears `runner_id` on its runs and sessions and on its workflows' version snapshots; a revert to a version whose runner is gone or no longer reachable restores Hosted (§3.4). Without the flag, a workflow can still be switched back to Hosted. The badges serialize only a runner in the record's tenant. The "hosted unchanged with the flag enabled" regression test of §12.3. |
-| 5a | 2 | **Done.** The gateway process type (`config/puma_runner_gateway.rb`, `runner_gateway` in `Procfile.dev`; its deployment is an `aixle-infra` task) and `/runner/v1/*` as `RunnerGateway::V1` (§6.1). The `runner_environments` and `runner_credentials` tables, with only the columns this task reads and writes (§2.2, §2.3). Token issuance and rotation in `Runners::Credentials` (§9.2): registration tokens minted by the service, with no endpoint or UI, single-use and valid for 1 h; access tokens valid for 1 h; refresh tokens that rotate on every use, expire after 30 days unused, and revoke the family on reuse, a spent one past its own expiry included. `register` creates one `registered` `manual` environment, and `ephemeral` is refused. `DELETE registration` marks it `gone` and revokes its credentials, without `409 busy`, which waits for the first task that assigns a session to an environment. Every request checks the protocol header, the token (a refresh token that is revoked, of a `gone` environment, or expired without being spent is refused before anything else), the runner status (cached 5 s) and the flag; the gateway's Puma caps bodies at 64 KB (2 MiB since 5b). Only the gateway process draws the `/runner/v1` routes (`AIXLE_PROCESS_MODE`, set by its Puma config), and every other process draws everything else. Revoking a runner revokes its credentials in the same transaction, serialized against every issuer, registration-token minting included, by a lock on the runner's row (§9.3), and credentials of a `gone` environment are refused (§9.2). Rack::Attack throttles per token, per IP on all of `/runner/v1/*`, and per IP on `register`. `terminal_sessions.runner_environment_id` moved to its first reader (task 8 or 11). |
+| 5a | 2 | **Done.** The gateway process type (`config/puma_runner_gateway.rb`, `runner_gateway` in `Procfile.dev`; its deployment is an `aixle-infra` task) and `/runner/v1/*` as `RunnerGateway::V1` (§6.1). The `runner_environments` and `runner_credentials` tables, with only the columns this task reads and writes (§2.2, §2.3). Token issuance and rotation in `Runners::Credentials` (§9.2): registration tokens minted by the service, with no endpoint or UI, single-use and valid for 1 h; access tokens valid for 1 h; refresh tokens that rotate on every use, expire after 30 days unused, and revoke the family on reuse, a spent one past its own expiry included. `register` creates one `registered` `manual` environment. `DELETE registration` marks it `gone` and revokes its credentials, without `409 busy`, which waits for the first task that assigns a session to an environment. Every request checks the protocol header, the token (a refresh token that is revoked, of a `gone` environment, or expired without being spent is refused before anything else), the runner status (cached 5 s) and the flag; the gateway's Puma caps bodies at 64 KB (2 MiB since 5b). Only the gateway process draws the `/runner/v1` routes (`AIXLE_PROCESS_MODE`, set by its Puma config), and every other process draws everything else. Revoking a runner revokes its credentials in the same transaction, serialized against every issuer, registration-token minting included, by a lock on the runner's row (§9.3), and credentials of a `gone` environment are refused (§9.2). Rack::Attack throttles per token, per IP on all of `/runner/v1/*`, and per IP on `register`. `terminal_sessions.runner_environment_id` moved to its first reader (task 8 or 11). |
 | 5b | 2 | **Done.** The `runner_operations` queue (§2.3), with only the columns this task reads and writes, and `Encryptable` with `runners_key` (`RUNNERS_SECRET_KEY`, not required at boot) for its `encrypted_payload`, nulled when the op completes, fails or expires, and its `encrypted_result`. `Runners::Operations.enqueue!` as a service only, taking the environment's next sequence. The `GET /runner/v1/ops` long-poll (§6.2, §6.7): the token's environment's ops past `after`, batched, marked `delivered`, waiting up to 25 s and checking access again after the wait, woken through Redis pub/sub (`ActionCable.server.pubsub` on `runner_env_<id>`, published after commit) and subscribed before it reads so no wake-up is missed, holding no Active Record connection while it waits (§6.1). `POST /runner/v1/ops/:id/result` (§6.4): `ok`, `error` and `expired` complete, fail and expire the op, the first result wins, and another environment's op is `404`. The gateway's Puma caps bodies at 2 MiB. |
 | 6a | 2 | **Done.** `aixle-runner` in Go: the self-contained module `runner/` with its own `go.mod` and the Go version pinned (§14.1), one static binary for `linux/amd64` and `linux/arm64` with its version set at build time (`0.0.0-dev` for a local build), written against `runner/protocol/` (task 7). Docker is reached through the official Docker Engine SDK for Go (`github.com/moby/moby/client`). `configure` with its local preflight (Linux amd64/arm64, Docker API ≥ 1.41, 20 GiB free; a failed check registers nothing) and the credentials file (§6.3); `unregister`; `service install`/`uninstall`/`start`/`stop` with the systemd unit and the `aixle-runner` system user in the `docker` group (§9.7), the unit running the root-owned copy `/usr/local/bin/aixle-runner` that `install` makes. `--mode host`: refresh before expiry and on an access `invalid_token`, every rotation stored atomically before use, every refusal handled as `PROTOCOL.md` §3 says, no token in a log line; the ops loop, one long-poll at a time, `after` moved only past an accepted result; ops past `deadline_at` answered `expired`; the at-most-once journal (§6.7), with a graceful stop during an op answered `interrupted`; an exclusive `flock` on the state directory, held by `--mode host` and taken by `configure` and `unregister`; results retried until accepted, a `404` dropped; an op the runner does not implement answered `unsupported_op`; the `image.ensure` op, specified in `PROTOCOL.md` §6.1 with its fixture (by digest; 8a removed the digest, then the op: `container.start` always pulls the reference it is given). The Go side of conformance (a fake gateway built from the fixtures) and the `Runner (Go)` CI job (`gofmt`, `go vet`, `go test -race`, both builds), part of `Checks`. |
 | 6b | 2 | **Done.** The agent container on `manual`, with the session ops run by the host runner through the Docker API (decision 1, Alex 2026-11-05: no runner inside the agent container; the host runner is the environment's only poller, §16). `container.start` creates and starts `aixle-<key>-<session_id>`, labelled `aixle.com/environment` and `aixle.com/session`, from the image pinned by digest (8a removed the digest: the image is the reference as given, which the runner always pulls) with its own entrypoint, with the payload's env, workspace and cache volumes (created with the environment's label), read-only-by-default binds, network, pid, resources and `no-new-privileges`, restart policy `no`, nothing of the runner inside (a bind that would expose the state directory is `forbidden_mount`), and at most one container per environment (`container_exists`); `container.stop` stops and removes it. The session ops `exec` (user, env, cwd, `timeout` through coreutils `timeout`, stdin), `write_file` (mode, owner), `read_file`, `batch` (until the first failure), `status` (as `DockerRuntime#container_status`) and `logs` (the tail of `/tmp/terminal_output.log`), found by label for every op, answering `no_session_container` without one; output and files capped at 1 MiB, a constant of `PROTOCOL.md` (decision 2), with larger output moved to task 8. A host-runner restart leaves the container running, and a cut-off op is answered `interrupted`. The journal drops a result once it is accepted. `env.scrub` and `env.reset` by label and name (§7.2, "As built"). `session.start`/`session.stop` stay reserved (`unsupported_op`). Each op's schema and fixtures are in `PROTOCOL.md` §6.2 to §6.4. The in-container session runner (`--mode session` as PID 1) and its Unix-socket relay moved to task #205, with the callback proxy, the live log, the tunnel and how `kubernetes` runs the session ops. Fix CR round 1 (Alex, 2026-11-06) added: a result over the gateway's body cap answered `result_too_large`; an `exec` without a `timeout` bounded by the op's `deadline_at`; ownership checks before acting on a name (`volume_not_owned` in `container.start`, `container_not_owned` in `container.stop`, and `scrub_failed`/`reset_failed` for a volume with the environment's name and without its label); and `write_file` refusing an absent or `null` `content`. |
-| 7 | 2 | **Done.** `runner/protocol/PROTOCOL.md`, protocol `1` as built: the transport and its three headers, the limits (the 2 MiB body cap, the three throttles, `no-store`), every refusal with its status, endpoints and check order and what a runner does on each, the token kinds and rules, the five endpoints of 5a and 5b, the op envelope and names (payload schemas left to 6a, 6b and 8), versioning, and what is not in protocol 1 yet. The conformance fixtures in `runner/protocol/fixtures/v1/` (register, token, unregister, headers, refusals and ops scenarios, the refused `ephemeral` case included, and the registration, access-token, spent-refresh and batch boundaries), in the JSON format of `runner/protocol/fixtures/README.md`: named setup steps, request/response exchanges, captured variables and type matchers. `RunnerProtocolConformanceTest` runs every fixture file against the gateway's routes, its setup steps calling the real services, in the normal Rails CI shards. The fixtures README lists the clauses verified outside the portable suite (`413`, `429`, the unserved-path `404`, `runner_revoked`) with the Rails tests that cover them. The protocol lives under `runner/protocol/`, with the runner (§14.1). §6 links to `PROTOCOL.md` for the wire details. The Go side of conformance and the Go CI lane came with 6a (§12.2). |
-| 8a | 2 | **Done.** `ContainerRuntime::RunnerRuntime` and the op path (Alex, 2026-11-07: row 8 is three tasks, 8a, 8b and 8c, each written against the code the one before merged). `ContainerRuntime.for_session(session)` gives a session with a runner `RunnerRuntime` and every other session `ContainerRuntime.build`, unchanged, and every call site that acts on one session goes through it: `BaseStrategy#runtime`, `AdmittedPhaseActivity`, `SessionContextService` (and the credential write it makes), `Sessions::LiveLogReader`, `Sessions::AuthPause`, `Sessions::SecretRegistry`, `Trackers::Workspace`, `Agents::CredentialDelivery`, the internal tools that read a session's files, and the scanners (`ScanDeadContainersActivity`, `ScanQuotaErrorsActivity`, `ScanNoOutputSessionsActivity`, `CleanupStaleActivity`); `ContainerSweepOrphanedResourcesActivity` sweeps the hosted runtime's own objects and stays as it was. `for_session` is the only place that picks a runtime (Alex, Fix CR round 2): the runtime reaches the code that uses it as an argument or a constructor dependency, never through `Thread.current`, a global or class-level state, and `SessionContextService` assembles a session's context through one object per assembly that holds the session, its runtime and the context log. **One runtime call of a strategy is one runner op** (requirement 2): `RunnerRuntime` enqueues it with `Runners::Operations.enqueue!`, waits for its result (`Runners::Operations.await`, heartbeating the activity) and answers what `DockerRuntime` answers; an op that ends `error` or `expired` answers as a hosted failure does (`ContainerUnreachableError` from `exec!` without the session's container, exit code 1 from `exec`, `false` from `write_file`, `nil` from `read_file`, `:missing` from `container_status`). No `batch` grouping (decision 5). An op's `deadline_at` is its own budget, and at most the end of the activity that sends it less 5 s (`RunnerRuntime::ACTIVITY_MARGIN`), and the wait stops at it and expires the op, so the strategy gets the expired outcome before Temporal times the activity out. The budgets: an `exec`'s `timeout` plus 30 s, `Settings.runners.op_timeout` (60 s, what `DockerRuntime#exec` waits by default) for the other session ops, `Settings.runners.lifecycle_op_timeout` (600 s) for `container.start`, `container.stop` and `env.reset`; the scanners cap theirs at `Settings.runners.scan_op_timeout` (15 s), so a machine that does not answer reads as unknown, never as dead or idle, and costs a scanner exactly that cap. The phases (§5.3, "What 8a built"). **Fix CR round 3 (Alex, 2026-11-07):** `RunnerRuntime#pull_image` does nothing, as `KubernetesRuntime#pull_image`, and the machine is taken in `create_container`; `container.start` always pulls the image reference, then creates and starts the container, and a failed pull is its `image_pull_failed`; the `image.ensure` op is removed from the platform, `PROTOCOL.md`, the fixtures and the Go runner, and with it `identity_before_pull?`, since the admission's identity is persisted before `create_container` for every runtime; the agent session's `create_container` budget is 600 s (§12.3). `RunnerRuntime` is not bound to a session, like `DockerRuntime`: `create_container` finds the session from the spec's `aixle.session_id` label, and every other call from the admission whose `runtime_id` its container id or cleanup identity is (a partial index on `session_admissions.runtime_id` for runner admissions); `op_timeout` stays the caller's budget. The wait for an op checks the activity's cancellation on every look, as `ToolStrategy#wait_with_heartbeat` does. A reused refresh token moves the machine to `failed` (§9.2), so it is given no session. **No digest** (Alex, Fix CR round 1): `container.start` and the helper container of `env.scrub` take the image reference as the user gave it, a tag or a digest, `container.image_override` included; the runner always pulls it, and no op returns a digest. The platform never contacts a registry, which it may not reach when a customer runs the runner in their own network. The dev `local` adapter therefore needs agent images from a registry: a pull always happens. The container's options come from the runner's `config.container` (§2.7), its resources from the hosted container's limits unless `container.resources` sets them. `Runners::Resolver` no longer refuses a `manual` runner with `runner_execution_not_enabled`: a runner without a registered machine, or whose every machine is `failed`, is refused `runner_unreachable` at launch, with a message that names it (and the failed machines, their reasons and how to bring one back). **Which machine takes a session** (decision 2): `Runners::Machines`, a free `registered` machine of the session's runner, one session per machine, taken under its row lock (`FOR UPDATE SKIP LOCKED`) and recorded in `runner_environments.current_session_id` and `terminal_sessions.runner_environment_id`; every machine busy raises `ContainerRuntime::CapacityError`, so the session waits in `capacity_wait`; the machine is taken in `create_container`, the first phase that needs it, and the admission's identity is persisted before that phase, as for every runtime, so a failure or a stop in it, the pull included, still runs the cleanup; after the session the machine gets `env.reset` and is free again, and a machine whose reset failed, or was not answered, moves to `failed` (§5.2), held by no session, with the reason in `state_reason`, so nothing that happens to the session, its deletion included, returns it to rotation (Return to service stays task 11). A session's ops reach its machine only while it holds it. `CleanupStaleActivity` sends a runner nothing, and moves a machine a stale session still holds to `failed`. **`session_id` in the op envelope** (requirement 1): `runner_operations.terminal_session_id`; a session op must name its session, an environment op names none, and every op is created only while its session holds the machine, checked by `enqueue!` under the machine's lock; `session_id` left the payloads of `container.start` and `container.stop`; the host runner refuses a session op without one (`session_required`) and one whose container is labelled with another session (`session_mismatch`), `container.start` and `container.stop` included, `container.stop` answers `no_session_container` without any session container, and `container.start` names and labels the container from the envelope (`PROTOCOL.md` §6, with the fixtures and the new `session_on_machine` setup step). **The queue's housekeeping**: an op still without a result is expired by the platform, with its payload nulled: at its `deadline_at` by the wait that sent it, and 10 s past it, `pending` or `delivered`, by `RunnerOperationsSweepWorkflow` every 5 minutes for the ops nobody waits for; the same sweep prunes finished ops older than 7 days. The sequence is a counter on the environment's row, `runner_environments.op_sequence` (Fix CR round 4: chosen over keeping each environment's newest op for `MAX(sequence) + 1`, which a session's deletion, taking its ops with it, broke), so the prune and that deletion remove any finished op. **The dev `local` adapter** (§12.2): the `runner-local` Compose service (profile `runners`), `aixle-runner` built from `runner/` with `docker/runner/local/Dockerfile` (the runner images live under `docker/runner/`), image `${RUNNER_IMAGE:-runner}`, and run in web's network namespace with this machine's Docker socket, and `bin/runner-local register <runner id>`, which mints a registration token and runs `configure`. **Fix CR round 4 (Alex, 2026-11-08):** `enqueue!` takes the session of every op and checks its hold under the machine's lock, which replaced the model's check that the session ran on the machine; `Machines.acquire!` no longer touches the caller's session and is idempotent for one session; `Machines.fail!(…, holder:)` is a compare-and-set, as `release!`; unregistering a machine ends its hold; `Machines.availability` answers `:available`, `:none_registered` or `:all_failed`, and one method words the refusal; the company keys of the session references; the cleanup sends nothing while an op of the session is unfinished, and `container.start` stops at its `deadline_at`; an answered `container.start` refusal is a `ContainerRuntime::CreateRefusedError` and pins no reservation; the runner pulls with the Docker credentials of the user it runs as; the Go session handlers take the envelope's `session_id` as a parameter (`SessionHandler`). **Fix CR round 5 (Alex, 2026-11-08):** Docker Hub's credentials are looked up under `https://index.docker.io/v1/`, as the Docker CLI's `getAuthConfigKey` maps them; a runner stopped during `ContainerCreate` removes what the daemon may have created and answers `container_start_failed`; a runtime call is external I/O and is never made inside a database transaction, on any runtime (`BaseRuntime`), which a test-time check enforces, and `Sessions::SecretRegistry#publish!` serializes a session's publications with a connection-level advisory lock instead of a transaction's; the cleanup waits for any unfinished op on the machine the session holds, an `env.reset` included; `create_container` returns the platform's container name, never the runner's. **Fix CR round 7 (Alex, 2026-11-08):** the host runner cuts an `exec`'s positive `timeout` to the seconds left until the op's `deadline_at`, as it bounds an `exec` without one, so an `exec` never holds the serial ops loop past its op's deadline. Tests: the contract test (`test/services/container_runtime/runner_runtime_contract_test.rb`) runs the same scenarios on `DockerRuntime`, against the Docker Engine API served by WebMock from an in-memory machine, and on `RunnerRuntime`, whose ops `ContainerRuntime::FakeHostRunner` answers from that machine with the results of `PROTOCOL.md` §6. |
+| 7 | 2 | **Done.** `runner/protocol/PROTOCOL.md`, protocol `1` as built: the transport and its three headers, the limits (the 2 MiB body cap, the three throttles, `no-store`), every refusal with its status, endpoints and check order and what a runner does on each, the token kinds and rules, the five endpoints of 5a and 5b, the op envelope and names (payload schemas left to 6a, 6b and 8), versioning, and what is not in protocol 1 yet. The conformance fixtures in `runner/protocol/fixtures/v1/` (register, token, unregister, headers, refusals and ops scenarios, and the registration, access-token, spent-refresh and batch boundaries), in the JSON format of `runner/protocol/fixtures/README.md`: named setup steps, request/response exchanges, captured variables and type matchers. `RunnerProtocolConformanceTest` runs every fixture file against the gateway's routes, its setup steps calling the real services, in the normal Rails CI shards. The fixtures README lists the clauses verified outside the portable suite (`413`, `429`, the unserved-path `404`, `runner_revoked`) with the Rails tests that cover them. The protocol lives under `runner/protocol/`, with the runner (§14.1). §6 links to `PROTOCOL.md` for the wire details. The Go side of conformance and the Go CI lane came with 6a (§12.2). |
+| 8a | 2 | **Done.** `ContainerRuntime::RunnerRuntime` and the op path (Alex, 2026-11-07: row 8 is three tasks, 8a, 8b and 8c, each written against the code the one before merged). `ContainerRuntime.for_session(session)` gives a session with a runner `RunnerRuntime` and every other session `ContainerRuntime.build`, unchanged, and every call site that acts on one session goes through it: `BaseStrategy#runtime`, `AdmittedPhaseActivity`, `SessionContextService` (and the credential write it makes), `Sessions::LiveLogReader`, `Sessions::AuthPause`, `Sessions::SecretRegistry`, `Trackers::Workspace`, `Agents::CredentialDelivery`, the internal tools that read a session's files, and the scanners (`ScanDeadContainersActivity`, `ScanQuotaErrorsActivity`, `ScanNoOutputSessionsActivity`, `CleanupStaleActivity`); `ContainerSweepOrphanedResourcesActivity` sweeps the hosted runtime's own objects and stays as it was. `for_session` is the only place that picks a runtime (Alex, Fix CR round 2): the runtime reaches the code that uses it as an argument or a constructor dependency, never through `Thread.current`, a global or class-level state, and `SessionContextService` assembles a session's context through one object per assembly that holds the session, its runtime and the context log. **One runtime call of a strategy is one runner op** (requirement 2): `RunnerRuntime` enqueues it with `Runners::Operations.enqueue!`, waits for its result (`Runners::Operations.await`, heartbeating the activity) and answers what `DockerRuntime` answers; an op that ends `error` or `expired` answers as a hosted failure does (`ContainerUnreachableError` from `exec!` without the session's container, exit code 1 from `exec`, `false` from `write_file`, `nil` from `read_file`, `:missing` from `container_status`). No `batch` grouping (decision 5). An op's `deadline_at` is its own budget, and at most the end of the activity that sends it less 5 s (`RunnerRuntime::ACTIVITY_MARGIN`), and the wait stops at it and expires the op, so the strategy gets the expired outcome before Temporal times the activity out. The budgets: an `exec`'s `timeout` plus 30 s, `Settings.runners.op_timeout` (60 s, what `DockerRuntime#exec` waits by default) for the other session ops, `Settings.runners.lifecycle_op_timeout` (600 s) for `container.start`, `container.stop` and `env.reset`; the scanners cap theirs at `Settings.runners.scan_op_timeout` (15 s), so a machine that does not answer reads as unknown, never as dead or idle, and costs a scanner exactly that cap. The phases (§5.3, "What 8a built"). **Fix CR round 3 (Alex, 2026-11-07):** `RunnerRuntime#pull_image` does nothing, as `KubernetesRuntime#pull_image`, and the machine is taken in `create_container`; `container.start` always pulls the image reference, then creates and starts the container, and a failed pull is its `image_pull_failed`; the `image.ensure` op is removed from the platform, `PROTOCOL.md`, the fixtures and the Go runner, and with it `identity_before_pull?`, since the admission's identity is persisted before `create_container` for every runtime; the agent session's `create_container` budget is 600 s (§12.3). `RunnerRuntime` is not bound to a session, like `DockerRuntime`: `create_container` finds the session from the spec's `aixle.session_id` label, and every other call from the admission whose `runtime_id` its container id or cleanup identity is (a partial index on `session_admissions.runtime_id` for runner admissions); `op_timeout` stays the caller's budget. The wait for an op checks the activity's cancellation on every look, as `ToolStrategy#wait_with_heartbeat` does. A reused refresh token moves the machine to `failed` (§9.2), so it is given no session. **No digest** (Alex, Fix CR round 1): `container.start` and the helper container of `env.scrub` take the image reference as the user gave it, a tag or a digest, `container.image_override` included; the runner always pulls it, and no op returns a digest. The platform never contacts a registry, which it may not reach when a customer runs the runner in their own network. The dev `local` adapter therefore needs agent images from a registry: a pull always happens. The container's options come from the runner's `config.container` (§2.7), its resources from the hosted container's limits unless `container.resources` sets them. `Runners::Resolver` no longer refuses a `manual` runner with `runner_execution_not_enabled`: a runner without a registered machine, or whose every machine is `failed`, is refused `runner_unreachable` at launch, with a message that names it (and the failed machines, their reasons and how to bring one back). **Which machine takes a session** (decision 2): `Runners::Machines`, a free `registered` machine of the session's runner, one session per machine, taken under its row lock (`FOR UPDATE SKIP LOCKED`) and recorded in `runner_environments.current_session_id` and `terminal_sessions.runner_environment_id`; every machine busy raises `ContainerRuntime::CapacityError`, so the session waits in `capacity_wait`; the machine is taken in `create_container`, the first phase that needs it, and the admission's identity is persisted before that phase, as for every runtime, so a failure or a stop in it, the pull included, still runs the cleanup; after the session the machine gets `env.reset` and is free again, and a machine whose reset failed, or was not answered, moves to `failed` (§5.2), held by no session, with the reason in `state_reason`, so nothing that happens to the session, its deletion included, returns it to rotation (Return to service stays task 11a). A session's ops reach its machine only while it holds it. `CleanupStaleActivity` sends a runner nothing, and moves a machine a stale session still holds to `failed`. **`session_id` in the op envelope** (requirement 1): `runner_operations.terminal_session_id`; a session op must name its session, an environment op names none, and every op is created only while its session holds the machine, checked by `enqueue!` under the machine's lock; `session_id` left the payloads of `container.start` and `container.stop`; the host runner refuses a session op without one (`session_required`) and one whose container is labelled with another session (`session_mismatch`), `container.start` and `container.stop` included, `container.stop` answers `no_session_container` without any session container, and `container.start` names and labels the container from the envelope (`PROTOCOL.md` §6, with the fixtures and the new `session_on_machine` setup step). **The queue's housekeeping**: an op still without a result is expired by the platform, with its payload nulled: at its `deadline_at` by the wait that sent it, and 10 s past it, `pending` or `delivered`, by `RunnerOperationsSweepWorkflow` every 5 minutes for the ops nobody waits for; the same sweep prunes finished ops older than 7 days. The sequence is a counter on the environment's row, `runner_environments.op_sequence` (Fix CR round 4: chosen over keeping each environment's newest op for `MAX(sequence) + 1`, which a session's deletion, taking its ops with it, broke), so the prune and that deletion remove any finished op. **The dev `local` adapter** (§12.2): the `runner-local` Compose service (profile `runners`), `aixle-runner` built from `runner/` with `docker/runner/local/Dockerfile` (the runner images live under `docker/runner/`), image `${RUNNER_IMAGE:-runner}`, and run in web's network namespace with this machine's Docker socket, and `bin/runner-local register <runner id>`, which mints a registration token and runs `configure`. **Fix CR round 4 (Alex, 2026-11-08):** `enqueue!` takes the session of every op and checks its hold under the machine's lock, which replaced the model's check that the session ran on the machine; `Machines.acquire!` no longer touches the caller's session and is idempotent for one session; `Machines.fail!(…, holder:)` is a compare-and-set, as `release!`; unregistering a machine ends its hold; `Machines.availability` answers `:available`, `:none_registered` or `:all_failed`, and one method words the refusal; the company keys of the session references; the cleanup sends nothing while an op of the session is unfinished, and `container.start` stops at its `deadline_at`; an answered `container.start` refusal is a `ContainerRuntime::CreateRefusedError` and pins no reservation; the runner pulls with the Docker credentials of the user it runs as; the Go session handlers take the envelope's `session_id` as a parameter (`SessionHandler`). **Fix CR round 5 (Alex, 2026-11-08):** Docker Hub's credentials are looked up under `https://index.docker.io/v1/`, as the Docker CLI's `getAuthConfigKey` maps them; a runner stopped during `ContainerCreate` removes what the daemon may have created and answers `container_start_failed`; a runtime call is external I/O and is never made inside a database transaction, on any runtime (`BaseRuntime`), which a test-time check enforces, and `Sessions::SecretRegistry#publish!` serializes a session's publications with a connection-level advisory lock instead of a transaction's; the cleanup waits for any unfinished op on the machine the session holds, an `env.reset` included; `create_container` returns the platform's container name, never the runner's. **Fix CR round 7 (Alex, 2026-11-08):** the host runner cuts an `exec`'s positive `timeout` to the seconds left until the op's `deadline_at`, as it bounds an `exec` without one, so an `exec` never holds the serial ops loop past its op's deadline. Tests: the contract test (`test/services/container_runtime/runner_runtime_contract_test.rb`) runs the same scenarios on `DockerRuntime`, against the Docker Engine API served by WebMock from an in-memory machine, and on `RunnerRuntime`, whose ops `ContainerRuntime::FakeHostRunner` answers from that machine with the results of `PROTOCOL.md` §6. |
 | 8b | 2 | **Done.** The callback proxy (§6.6, §6.9.3; `PROTOCOL.md` §5.8). An agent on a `manual` runner reaches MCP, `finish_session` included, the agent credential sync and refresh, git credentials (GitHub, GitLab, Bitbucket, Azure DevOps), cloud credentials and stored files through a local proxy. **The Go side:** `aixle-runner --mode proxy`, the sidecar (`internal/proxy.RunSidecar`), a reverse proxy on `127.0.0.1:7690` to the host runner's relay socket; the relay (`proxy.Relay`), served by `proxy.Host` on a Unix socket per session under the state directory (mounted read-only into the sidecar only), or with `network: host` on the session's port of the machine's `127.0.0.1`, which serves `/runner/v1/proxy/*` only and adds the environment credential; `container.start` creates the sidecar first, from the agent image with the host runner's binary bind-mounted read-only as its entrypoint, and the agent joins its network namespace; `container.stop`, `env.scrub` and `env.reset` remove it with the agent's container and close the relay; a restarted host runner serves the running sidecars again (`Environment.Resume`). **Decision 10:** a sidecar that exits stops the agent's container, so the session fails through the dead-container path, and its exit code and log tail are logged. **Decision 4:** a daemon that refuses the sidecar's bind mount ("bind source path does not exist") gives `docker_files_not_visible`, naming the cause. **The platform:** the gateway route `ANY /runner/v1/proxy/:route/*` (`RunnerGateway::V1::ProxiesController`): the environment credential, the allow-list (`Runners::Proxy::ROUTES`, **decision 7**: no OTLP route, deferred, so a runner session gets no OTLP endpoint), the key of the session that holds the environment (`Runners::Proxy.holder`), then an HTTP forward to the internal endpoint with `X-Aixle-Runner-Environment`, streamed back (**decision 8**), with no body schema (**decision 9**), and `X-Aixle-Runner-Refusal` on every refusal of the route. **Decision 6:** the callback-URL seam, `runtime.callback_url(name, session)` (`ContainerRuntime::CallbackUrls`), the `Settings` value on hosted and `http://127.0.0.1:<port>/<route>` on a runner, read by the env vars, the MCP config, the asset URLs of the context and the instructions, `read_tool_result` and the OTLP endpoint of the agent configs; `RunnerRuntime` rewrites no string. **An implementation decision for review:** with `network: host` the port is per session (`20000 + id mod 10000`), sent as `container.start`'s `proxy_port`, not per environment, because the container's environment is built before the session takes a machine (§6.9.3). `PROTOCOL.md` §5.8 and §6.2 describe the proxy, the port, the socket, the headers, the refusals (`route_not_allowed`, `session_not_on_environment`, `upstream_unavailable`; on the runner `not_proxied`, `relay_failed`, `body_too_large`) and the changed `container.start` (`proxy_port`, `docker_files_not_visible`, `proxy_port_in_use`, `proxy_start_failed`), with the fixtures in `fixtures/v1/proxy/` and the setup steps `session_holds_machine` and `upstream_answers`. The Go conformance test fails for a fixture that drives no exchange unless it is on its `gatewayOnly` list (none is). The dev `local` adapter keeps its binary and state in `RUNNER_LOCAL_DIR`, a directory of the machine mounted at the same path, so the daemon sees them. Tests: `test/integration/runner_gateway_proxy_test.rb`, `test/services/runners/proxy_test.rb`, `test/services/container_runtime/callback_urls_test.rb`, the §12.3 test extended, and on the Go side `internal/proxy` and `internal/docker/proxy_test.go`. Fix CR round 1 (Alex, 2026-11-10) added: a re-opened relay socket keeps its directory and replaces only `relay.sock`, so a running sidecar's bind mount still reaches it after a restart; the relay refuses a path with an empty, `.` or `..` segment after percent-decoding, or an encoded `/` or a `\`, as `not_proxied`; a relay or a `network: host` listener that can't be served again after a restart stops the session's agent container (no retry); the gateway drops the headers a `Connection` header names, both ways, releases its database connection before the forward, and logs a runner that disconnects mid-answer at info; the sidecar and the relay read a request body within 30 s (`408 body_timeout`), with no limit on the answer or on concurrent calls; the adapters take the callback addresses only from the session's runtime (`callbacks:` and `otel_endpoint:` required, no hosted fallback); `MCP::SessionKey.lookup` resolves an MCP key for both `MCPController` and `Runners::Proxy`, and each key's header is its `SessionKey` module's `HEADER`. The `network: host` port per session is accepted (Alex, 2026-11-10). Fix CR round 2 (Alex, 2026-11-10) added: `ContainerRuntime.callback_url(name, session)`, one call for a callback address; the proxy's ports in `Settings.runners.proxy`, overridable by environment variables, with the sidecar's port sent in `container.start`'s `proxy_port` too, so the host runner has no port setting; the gateway's 900 s read timeout kept and stated in `PROTOCOL.md` §5.8 (an answer silent that long is cut); a sidecar watcher that re-subscribes to Docker's wait with a backoff from 1 s to 30 s after a broken stream, and inspects the sidecar in between; `Route#allows?` refuses a decoded `\` as the relay does; the relay passes one trailing slash (`/mcp/`), as hosted does; `CallbackUrls.hosted_all` removed, and no `workflow_config = {}` default on the paths that need `:otel_endpoint`. Fix CR round 4 (Alex, 2026-11-10) added: a host runner whose `Environment.Resume` can't list the containers exits before polling, with a failure the service manager restarts; a sidecar that exits stops the agent before its log tail is read, under `SidecarLogTimeout`, and a stopped sidecar found by `Resume` is logged with its real exit code; `Runners::Proxy` decodes path segments strictly, so a malformed `%` escape or octets that aren't UTF-8 are `route_not_allowed`, not a 500. Fix CR round 5 (Alex, 2026-11-11) added: a Docker wait result that carries an error is treated as a failed wait, not a sidecar exit, so the sidecar is inspected and waited for again; the host runner narrows its state directory to `0700` at start, and needs an operator when it can't; the relay takes the logged route before the query and logs a transport failure without its URL; `Runners::Proxy.settings_problems` refuses a `network: host` port range that includes an image port; a raw octet outside ASCII in the path is `route_not_allowed`. Go's transports adding `Accept-Encoding: gzip` and a `User-Agent` is kept: the agent gets the same content, and nothing breaks today. |
 | 8c | 2 | **`check-in`, and output, files and the terminal log over 1 MiB through an upload to a signed URL (Alex, 2026-11-11).** The live-log chunks are not built (§6.5, §6.9.4): a runner session's terminal is read through `exec` and `capture-pane`, as hosted; `Sessions::LiveLogReader`, `get_session_log`, the monitor's snapshot (`Sessions::Snapshot::ExecSource`) and `AuthErrorDetector` stay as they are, and the live view comes with the tunnel (row 16). Not built: the `local` log driver, the follow of the container's log, `POST /runner/v1/sessions/:id/log` and `session_live_log_chunks`. `POST /runner/v1/heartbeat` moved to row 12, which records heartbeats and derives machine health from them: nothing reads one before. **Built:** (1) `POST /runner/v1/check-in` for `manual` (§6.2): the host runner calls it after every start; `Runners::CheckIn` writes the `X-Aixle-Runner-Version` (and protocol) it is sent to `runner_environments.runner_version`, which until then kept the version the machine registered with, so a machine that updated itself (row 10) shows its new version, and the os, arch and facts it reports; the answer carries the environment, the config (`upload_max_bytes`) and `update` under row 10's rule, and a runner below `min_version` is refused at it (§14.4). (2) Uploads to a signed URL (§6.4, `PROTOCOL.md` §6.5): the platform issues a slot per output with the `exec` and `read_file` ops (`Runners::ResultUploads`, into the `cache` storage, S3 presigned; the filesystem storage issues none, a known limitation that the cleanup's report names), with a budget that fits the largest upload added to the op's deadline, up to `Settings.runners.upload_limit` (32 MiB); the result names the upload; the platform reads it, removes it, and leaves what no result claims to the `cache/` lifecycle rule. With them, on S3, the cleanup collects whole, as on hosted, a terminal log (replacing the `logs` tail fallback of 8a, Fix CR round 7), the agent's session logs and the outputs over 1 MiB. (3) `PROTOCOL.md` §5.9 and §6.5 with their fixtures (`check_in/`, `ops/exec_upload*`, `ops/read_file_upload`), and the Go conformance test requires a driven exchange per fixture, unless the fixture is on its `gatewayOnly` list with a reason (from row 8; the list is empty). The bootstrap-token exchange of `check-in` comes with `coder` and `kubernetes`. |
 | 9 | 2 | **Deferred (Alex, 2026-11-11): runners don't change session admission for now; see §10.** Runner sessions are admitted like any other session. |
 | 10 | 2 | **Done.** Runner release lane: `runner-release.yml` for `runner-v*` (binaries, `checksums.txt`, GHCR image, from `docker/runner/Dockerfile`), applied by Alex from the task's patch since agents cannot push `.github/workflows/`. The pins file read through `Settings.runners.release` and checked by `Runners::Release` at boot (since task #220 the `runners.release` block of `config/settings.yml`). The `/runner/v1/releases` redirect and checksums endpoints, public and with `schemas/v1/releases.params.json`. The `min_version` refusal at `register` (`400 runner_version_unsupported`), strict SemVer 2.0 for `X-Aixle-Runner-Version` and `protocol_supported` for `X-Aixle-Runner-Protocol`. The "Runner compatibility" and "Releasing the runner" sections in `docs/operations/releasing.md` (§14.2). Self-update with the opt-out (`config.auto_update: false`, `configure --no-auto-update` as `runner_environments.auto_update`, §14.4), moved from task 6. **Decisions (Alex, 2026-11-09):** (1) the first runner version is `0.1.0`, and `1.0.0` comes with the extract or the first customer; (2) a runner learns of an update from the answer of `GET /runner/v1/ops` without ops, which carries `update: {version, sha256}` only while the machine holds no session and runs below `recommended_version`, unless it opted out, and 8c's `check-in` adds the same field; (3) the binary lives in `/var/lib/aixle-runner/bin`, owned by the `aixle-runner` user, `service install` installs it there and points `ExecStart` at it, and an update downloads there, verifies the SHA-256, switches atomically and exits for systemd to restart (`Restart=always`), with no root helper and no package manager; (4) `runner-release.yml` also runs by `workflow_dispatch` as a dry run that builds and checks the binaries and the image and pushes and releases nothing. As built: §14.2 "What v1 has", §14.4 "What v1 has", §6.3. Alex tags `runner-v0.1.0` after this merges, and a follow-up PR pins `0.1.0` and its digests (task #220: done, with the pins moved into `config/settings.yml`). **Fix CR round 1 (Alex, 2026-11-10):** no update reservation, and `update.DownloadTimeout` is 2 minutes, so a `container.start` queued during an update outlives it (§14.4); the release requests carry neither protocol header, and the Go conformance harness checks each fixture header's presence or absence; a `download_url` template that `format` cannot fill in fails boot; a runner version over 255 characters is `invalid_registration` before the `min_version` refusal; the published image sets `AIXLE_RUNNER_NO_SELF_UPDATE=1` and does not update itself (§14.4); the parsed pins are memoized. **Fix CR round 2 (Alex, 2026-11-10):** every answer of the release endpoints, the `400` and `404` refusals included, has `Cache-Control: no-store`; the `update` offer drops `url` and is `{version, sha256}`, since the runner builds its release requests from its own configured platform URL (protocol 1 is unreleased, so nothing is kept for compatibility); `configure` treats `AIXLE_RUNNER_NO_SELF_UPDATE` as `--no-auto-update`, so a machine configured from the published image registers `auto_update: false`; the host runner computes its effective self-update setting once, for the start line and the updater. |
-| 11 | 3 | `Runners::Allocator` and environment state machine, including the self-registering entry path (§5.2): affinity, project binding, no step 4 on non-`provisionable` types, scrub and reset escalation without rebuild, Return to service, Release to company (§9.4), reconciliation pass, and the capacity path of §10: a `ContainerRuntime::CapacityError` from the allocator (the runner at `max_environments`, or the provider out of capacity) becomes `capacity_wait` with the wait reason `runner_capacity`, reservation kept. When `env.scrub` is first sent, the removal of its helper container in `runner/internal/docker/scrub.go` gets a bounded timeout under a fresh context, as `container.start`'s removal on failure did in 8a's Fix CR round 6; in 8a its code is unchanged, because `env.scrub` is not sent yet (Alex, Fix CR round 7). |
+| 11a | 3 | **Built in #242:** `reuse_policy` as `reuse` / `reset` / `fresh` (§7.1, `manual` takes the first two, a migration moved its `fresh` to `reset`), the cleanup by policy and the reset escalation in `RunnerRuntime#cleanup_session` (§7.2), `runner_environments.consecutive_failures` with `Settings.runners.max_consecutive_failures`, Return to service with the `resetting` state (§5.2), the bounded removal of `env.scrub`'s helper container, the runner form's choices and the user guide. The rest of the row below is what the task was written as: `Runners::Allocator` and the capacity path of §10 stay with it. (#242 is its scrub, `reuse_policy`, reset escalation and Return to service.) `Runners::Allocator` and environment state machine, including the self-registering entry path (§5.2): no step 4 on non-`provisionable` types, `reuse_policy` per §7.1, scrub and reset escalation without rebuild, Return to service, and, when scrub lands, the user docs and runner-form copy of §9.4 about what scrub keeps on a company runner (affinity, project binding and Release to company are removed from the plan, Alex 2026-11-13), and the capacity path of §10: a `ContainerRuntime::CapacityError` from the allocator (the runner at `max_environments`, or the provider out of capacity) becomes `capacity_wait` with the wait reason `runner_capacity`, reservation kept. When `env.scrub` is first sent, the removal of its helper container in `runner/internal/docker/scrub.go` gets a bounded timeout under a fresh context, as `container.start`'s removal on failure did in 8a's Fix CR round 6; in 8a its code is unchanged, because `env.scrub` is not sent yet (Alex, Fix CR round 7). |
+| 11b | 3 | **Done** (#248, Alex, 2026-11-15). (1) `Runners::ManualAdapter#observe` (§5.1): `:running` while the machine is heard, `:unknown` after, never `:missing`. (2) The grace (§6.7), `Runners::ContactLoss`, applied by `ScanDeadContainersActivity`: a runner session whose machine was not heard for 15 minutes (a constant) fails with "Runner environment lost contact for 15 minutes.", a revoked or deleted runner's session included; the scan sends no `status` op to a machine whose `observe` is `:unknown`. (3) The slot (§10): the failed session keeps its machine (`TerminalSession#contact_lost?`, `RunnerRuntime#cleanup_ready?`) until the machine is heard, then the container is stopped, the machine reset and the slot released; a revoked or deleted runner's slot is released when the grace fails the session. **Removed from the plan:** the running-session summary in the heartbeat (§6.2, §6.7): the scan's `status` op catches an exit on a connected machine, so the protocol and the Go runner are unchanged. |
 | 12a | 3 | **Done.** "Add machine", brought forward from row 12 on its own (Alex, 2026-11-12, task #225) so that QA can register a staging machine and exercise the runner paths that need a machine's credentials (8c and after). The button on a live `manual` runner's page, company and project, offered under the policy that guards update and revoke (`registration_token?`); `POST .../runners/:id/registration_token` mints a single-use token (1 h) through `Runners::Credentials.mint_registration!` (`Runners::MachineRegistration.issue!`) and returns it once, with the recommended version and, per platform, the binary's URL on the platform's own host and its SHA-256 from the pins; the dialog shows the §6.3 sequence (download and verify, `configure --url --token --name`, `service install` and `service start`) with a choice of `linux-amd64` or `linux-arm64`, a machine name and `--no-auto-update`. A revoked runner offers no button and is refused with `runner_revoked`. The "Adding a machine" section of `docs/user-guide/runners.md`. As built: §6.3. Row 12 keeps the rest. |
 | 12b | 3 | **Done.** A Docker choice in "Add machine" (the published image as a host runner: its entrypoint keeps the binary and the state in `AIXLE_RUNNER_DIR`, a directory of the machine mounted at the same path; restart policy `unless-stopped` and the Docker socket; removal by `unregister`) and machines on arm64: the agent container, the sidecar and the scrub container are pulled and created for `linux/amd64`, so an arm64 daemon runs them under emulation until native images (#226). User guide: "Adding a machine". As built: §6.3, §6.9.3, §14.4. Decided by Alex, 2026-11-12. |
-| 12 | 3 | `manual` end to end: `POST /runner/v1/heartbeat` (moved from 8c, Alex 2026-11-11: it records heartbeats and derives machine health, its first readers; the host runner runs one thing at a time, so no poll is outstanding during an op, but nothing reads a heartbeat before this row), `ManualAdapter#check_health` derived from machine heartbeats (§2.5), heartbeat-based `observe`, the Machines table (online / idle / offline, facts, first-seen IP), per-machine Revoke, `reuse_policy` per §7.1, the writable-mount acknowledgement, the §9.7 disclosure, the `runner_capacity` wait reason on the session page and the "every machine busy" message ("Waiting for a free machine on runner \"X\" (2 of 2 busy).", §10), and user docs for `manual` (dedicated machine recommended). The operator docs must say that a bind source can't be under the machine's `/tmp` or `/var/tmp` when the runner runs as the service: the unit has `PrivateTmp=true`, so the runner doesn't see those directories and refuses such a bind with `forbidden_mount` (verification round 1 of 6b; accepted as a known limitation, Alex 2026-11-06). From 8b, for `network: host` (Alex, 2026-11-10): **port collisions**: a session's proxy port is `20000 + session id mod 10000`, so two sessions on one machine whose ids are congruent mod 10000, or any other service in 20000 to 29999, can take it, and the session then fails with `proxy_port_in_use`, which is not retryable on that machine; **local access**: the listener is on the machine's own `127.0.0.1`, so any local user or process can reach it, and the host runner adds the environment credential to what it sends. A session key is still required, but the exposure is wider than the sidecar's private network namespace. |
-| 13 | 3 | Runner page actions (Reset, Force release), connection-lost banner, the revoke flow, Administrate dashboards. |
+| 12c | 3 | **Done.** What 12's Machines table needed to be useful, brought forward on its own (Alex, 2026-11-12, task #231): (1) **liveness**: `runner_environments.last_heartbeat_at` (§2.2) is written by every authenticated request of a machine (polls, op results, `check-in`, token refresh and `register`) at most once every 15 s (`Runners::Liveness.record!`), and `runners.last_seen_at` is raised to it; (2) **the machine's state** for display, online / idle / offline (§2.5), with the op-deadline exception (a machine executing a delivered op is not offline before its deadline) and `failed` / `gone` shown as such; (3) **placement**: `Runners::Machines.take!` skips an offline machine, and a runner whose every registered machine is offline is refused at launch as `runner_unreachable` with a message that names the runner and says its machines are offline; (4) **the Machines section** on the runner page, company and project, read-only (§11). Row 12d took the runner's status from health, `POST /runner/v1/heartbeat` and the `runner_capacity` wait. Row 12 keeps the rest: the writable-mount acknowledgement, and the `manual` user docs with the §9.7 disclosure and the egress list. `reuse_policy` is task 11a; heartbeat-based `observe` is task 11b. |
+| 12d | 3 | **Done.** Cut on its own after 12c (Alex, 2026-11-13, task #241): (1) **`POST /runner/v1/heartbeat`** (§6.2, §6.7): empty body, `204`, recorded through `Runners::Liveness.record!`; the host runner sends one at least every 25 s while an op runs; `PROTOCOL.md` §5.10, the `heartbeat/` fixtures and a driven exchange in the Go conformance test; **the op-deadline exception of 12c is removed** (`RunnerEnvironment.executing_op`, `#executing_op?`, `.reachable`, `delivered_operations`), so a machine is reachable when heard within 90 s; (2) **the runner's status from its machines' health** (§2.5): `ManualAdapter#check_health`, and one periodic check every 60 s (`runner_health_check_workflow`, `Runners::HealthCheck`) that is the only thing setting the status, which is display only: the launch refusal stays on machine availability; (3) **waiting for a free machine** (§10): `take!`'s `CapacityError` carries `runner_capacity`, a wait reason like `cluster_capacity`; (4) docs. Moved to task 11: the running-session summary in the heartbeat and heartbeat-based `observe`. Removed from the plan: affinity and project binding (§7.3, §9.4). |
+| 12e | 3 | **Done.** Cut on its own after 12d (task #245): (1) **per-machine Revoke** (§9.3) for a machine in any state but `gone`, sharing `Runners::Registration`'s path with `unregister`, which ends the session the machine held at once and releases its admission; (2) **a runner's Revoke and Delete end its sessions**: running ones fail with the revoked message, waiting ones end with the launch's revoked-runner message; (3) **the Machines list** shows the first-seen IP and who added each machine (`first_seen_ip`, `created_by_id`), and the runners list "machines busy/total"; (4) docs. Row 12 keeps the writable-mount acknowledgement and the `manual` user docs with the §9.7 disclosure and the egress list. |
+| 12 | 3 | **Done** (the last part is 12f, task #249: the writable-mount acknowledgement was already built, `container.acknowledged_writable_mounts` checked by `Runners::ConfigSchema` and the form's checkbox per writable host mount, and the `manual` user docs are `docs/user-guide/runners.md` and its portal mirror: "What you take on with a `manual` machine" (§9.7), "What the machine reaches outbound" (§9.5) and "Known limits"). `manual` end to end (the Revoke, first-seen IP, created by and busy/total parts are 12e, done): the Machines table (online / idle / offline, first-seen IP, created by; "machines busy/total" in the runners list), per-machine Revoke (which also frees the slot held by a lost machine's session), the writable-mount acknowledgement, and user docs for `manual` (dedicated machine recommended), with the §9.7 disclosure and the egress list (§9.5): in the docs only, not on the runner page. `max_concurrency` stays on the runner, and is not enforced while row 9 is deferred. Not in the plan (Alex, 2026-11-13): the Reset action, Force release, the connection-lost banner, the Administrate dashboards, machine facts in the Machines list, Rotate token and the runner version against `recommended_version` on the runner page, "Start from a clean workspace" for one run, the machine's own cleanup on Revoke, and the ephemeral registration. The operator docs must say that a bind source can't be under the machine's `/tmp` or `/var/tmp` when the runner runs as the service: the unit has `PrivateTmp=true`, so the runner doesn't see those directories and refuses such a bind with `forbidden_mount` (verification round 1 of 6b; accepted as a known limitation, Alex 2026-11-06). From 8b, for `network: host` (Alex, 2026-11-10): **port collisions**: a session's proxy port is `20000 + session id mod 10000`, so two sessions on one machine whose ids are congruent mod 10000, or any other service in 20000 to 29999, can take it, and the session then fails with `proxy_port_in_use`, which is not retryable on that machine; **local access**: the listener is on the machine's own `127.0.0.1`, so any local user or process can reach it, and the host runner adds the environment credential to what it sends. A session key is still required, but the exposure is wider than the sidecar's private network namespace. |
 | 14 | 3 | Staging validation per §12.4 (QA task). Record the machine used in the result. |
-| 15 | 3 | Tech-debt task for the two execution models, with the exit condition and trigger from §12.3, and the note in `base_runtime.rb`. |
 | 16 | 4 | Interactive tunnel: a session-runner WebSocket relay for ttyd (both instances), the IDE and the watcher through the host runner, plus session page routing. **It also brings the live view of a runner session's terminal** (Alex, 2026-11-11: row 8c builds no live-log chunks, so until the tunnel a runner session's page shows no live log of its own, and the terminal is read through `exec` and `capture-pane` as hosted). Developed against the `local` adapter. Lifts `interactive_terminal: false` on every type. Once it is done, named companies can get the `external_runners` override (§12.2). **Decided (§6.9.5):** the relay is the host runner's and the controller's, not a session runner's: on `manual` and `coder` it reaches the ports through the proxy sidecar, on `kubernetes` the controller dials the pod's IP; per-session ports with `network: host`. **Requirement for this task:** the relay protocol's framing (stream ids, open, close and reset frames, half-close), per-stream flow control with bounded buffers, limits (frame size, concurrent streams), heartbeat and reconnect, cleanup on a browser disconnect, and revocation of every stream when the current session or the viewer's authorization changes (§6.9.5). |
 | 17 | 5 | `CoderAdapter` provision, prepare, inject_bootstrap, reset, rebuild, teardown, observe over `Coder::Api`/`WorkspaceService`; the `coder` keys of §2.7 (template, `config.container`) and their validation (§6.8); `install.sh` with SHA-256 verify and the `verify` hook; pooling, `max_environments`, warm-disk affinity; `reuse_policy: fresh` as a new workspace per session. **Decided (§6.9, Alex, 2026-11-06): mode 1, container mode.** v1 supports only Coder workspaces that are virtual machines; the host runner's start check refuses a workspace that is a container on a shared server or a pod, with a clear message, and a Docker daemon that does not see its files (§6.9.7). A workspace runs one session at a time, and a second concurrent session gets another workspace, up to the runner's limit. `reuse` (the default) keeps the workspace warm; `fresh` gives each session a new workspace and deletes it afterwards. The session-side pieces are the host runner's, as on `manual`. |
 | 18 | 5 | Staging validation per §12.5 (QA task), on the staging Coder integration configured on the test project and a template it offers at test time. Record the template used and the §12.5 checks (Docker daemon, disk, pruning) in the result. |
 | 19 | 6 | Kubernetes: declare `external_runners_kubernetes` (§12.1); `aixle-runner` controller mode, the Helm chart and its `runner-chart-v*` OCI lane in `AixleHQ/aixle-runner` (§14.1), `KubernetesAdapter` over controller ops, registration-token UX, documented agent image sizes. Preceded by the runner extract if it has not happened yet. **Decided (§6.9.2):** the controller runs the session ops through the Kubernetes API (`client-go` exec, `tar` over exec, the pod watch and the log API) behind the session-op handlers of #204, does the check-in for each pod with the bootstrap token from the `provision` op, follows the pod log, creates the proxy sidecar and its per-session proxy key (TLS on the relay, revoked when the session ends), keeps its state on a `PersistentVolumeClaim`, takes leader election with a `Lease` and a controller generation the gateway checks, requires Kubernetes 1.29 and an enforced NetworkPolicy (checked by the validation), and gets the RBAC of §9.6's decided footprint. An `interrupted` op may still run in the pod (§6.9.7). |
 | 20 | 7 | `host` execution mode (§6.8): `config.execution_mode: host` and `config.host.cli_source` declared in the §2.7 schema, the host-side CLI with `cli_source` (prototype `docker create` + `docker cp` first), the host-generated CA trusted in three stores and passed into the MITM container, the `NODE_OPTIONS` instrumentation, host-side ttyd/IDE/watcher for the tunnel, the redaction path, the per-session OS user and its scrub (§7.2), toolcache session kits, P2. Likely several tasks when it is cut. **Decided (§6.9, Alex, 2026-11-06): mode 2, on Coder only, with one session per workspace.** The agent CLI runs on the workspace's machine; the services that can run in Docker (`mitmdump`, the callback proxy and the others) run in containers with their ports published on the machine, so that the runner and the agent reach them. The reason: a full development machine with no container around the agent, for example to run `docker compose up`. The workspace is the unit of isolation, so the per-session OS user and the airtight scrub of §7.2, written for `manual`, are not needed. The `host` mode is not planned for `manual`. |
+| 21 | 5 | **Runner sessions' default agent images (#229, Alex, 2026-11-12).** `Settings.runners.agent_image_prefix` (default `ghcr.io/aixlehq/flow-`) and `agent_images.<runtime>`, from `RUNNER_AGENT_IMAGE_*`; `ContainerRuntime::RunnerRuntime#runner_image` chooses them (the override, then `agent_images.<runtime>`, then prefix, runtime image and tag), and `AgentBaseStrategy#resolve_image` is unchanged for hosted `agents.*`; the tag is `runners.agent_image_tag` (`RUNNER_AGENT_IMAGE_TAG`, default `latest`; GHCR has no `sha-*` tags); `container.image_override` still wins (§2.7, §6.8). Docs: configuration reference, runners user guide. |
+| 22 | 7 | **`{agent}` in `container.image_override` (Alex, 2026-11-12).** `Runners::ConfigSchema` accepts the placeholder `{agent}` and refuses any other, and a value that is not an image reference once replaced; `RunnerRuntime#runner_image` replaces it with `AgentRuntime.fetch(session.agent_type).image` at `container.start`; an override without a placeholder works as before. The runner form's help text says what `{agent}` is replaced with. Default images for runner sessions are not part of it. |
+| 23 | 5 | **Agent images for `linux/arm64` (#226, Alex, 2026-11-14).** The agent base image and every runtime image are built as one index for `linux/amd64` and `linux/arm64`; the registry's optional `platforms` field narrows a runtime whose CLI has no arm64 build (none today: every CLI installs for arm64). The runner pulls the daemon's own platform and falls back to `linux/amd64`, and creates the agent, sidecar and scrub containers for the platform it pulled (§6.9.3, `runner/internal/docker/image.go`). The `images.yml` change is part of this PR: QEMU, `platforms` per runtime from the registry, a cache scope per image, and 60-minute timeouts for the slower emulated build. The published images become multi-arch after the merge, at the next image build; until then arm64 machines run them under emulation as before. |
 
 ---
 
@@ -3819,9 +4068,6 @@ reviewable and lands behind the flags. The number in the second column is the ph
 - **Customer pre/post session hooks.** Not in v1, by decision (§7.2). Revisit when a
   customer shows a preparation step that neither the image or template nor the agent
   instructions can express.
-- **Ephemeral registration for `manual`.** Defined in the protocol and refused in v1
-  (§6.3). Settled by the first customer who wants to script their own scaling; adding it
-  needs no protocol bump.
 - **Coder control planes not reachable from the platform.** Not served in v1.
   Recommendation: the controller mode with a Coder backend (provisioning from inside, the
   same adapter contract). Settled by the first customer who asks for it.

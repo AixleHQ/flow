@@ -187,4 +187,80 @@ class Chat::ChannelConnectTest < ActiveJob::TestCase
     connection = ChatChannelConnection.sole
     assert_equal [ "19:abc@thread.tacv2", "9" ], [ connection.chat_conversation.external_id, connection.confirmation_message_id ]
   end
+
+  # The app was in the team before the organization was connected, so its
+  # install named the team to nobody; the channel itself came from its
+  # channelCreated event, and the message names neither.
+  test "a Teams channel whose team nobody has named yet is named by the Connector before its code is checked" do
+    teams, endpoint = connect_teams
+    ChatConversation.record_teams!(integration: teams, activity: teams_activity(mention: false, type: "conversationUpdate")
+      .except("text", "entities").merge("conversation" => { "id" => "19:team@thread.tacv2", "conversationType" => "channel" },
+                                        "channelData" => { "eventType" => "channelCreated", "tenant" => { "id" => TEAMS_CUSTOMER_TENANT },
+                                                           "team" => { "id" => "19:team@thread.tacv2" },
+                                                           "channel" => { "id" => "19:abc@thread.tacv2", "name" => "Onboarding" } }))
+    team = stub_request(:get, "#{TEAMS_SERVICE_URL}v3/teams/19%3Ateam%40thread.tacv2")
+           .to_return({ status: 403, body: { error: { code: "Forbidden" } }.to_json }, { status: 200, body: { aadGroupId: "1b22f251-0000-4000-8000-000000000001", name: "Sales" }.to_json })
+    thread = "#{TEAMS_SERVICE_URL}v3/conversations/19%3Aabc%40thread.tacv2%3Bmessageid%3D1700000000001/activities"
+    stub_request(:post, thread).with(body: /not valid here/).to_return(status: 201, body: { id: "7" }.to_json)
+    confirmed = stub_request(:post, thread).with(body: /now connected to \*\*Acme\*\*/).to_return(status: 201, body: { id: "9" }.to_json)
+    first, first_code = ChatConnectCode.issue!(project: @project, provider: "teams", user: @user, channel: "Sales / Onboarding")
+    _second, second_code = ChatConnectCode.issue!(project: @project, provider: "teams", user: @user, channel: "Sales / Onboarding")
+
+    [ first_code, second_code ].each do |code|
+      activity = teams_activity(text: "connect #{code}")
+      activity["channelData"] = { "tenant" => { "id" => TEAMS_CUSTOMER_TENANT }, "team" => { "id" => "19:team@thread.tacv2" },
+                                  "channel" => { "id" => "19:abc@thread.tacv2" } }
+      deliver_teams(teams, endpoint, activity)
+    end
+
+    assert_requested team, times: 2
+    assert_equal "Microsoft Teams did not say which team Onboarding is in. Try again in a minute.", first.reload.failure_reason
+    assert_requested confirmed
+    channel = ChatChannelConnection.sole.chat_conversation
+    assert_equal [ "Onboarding", "Sales", "1b22f251-0000-4000-8000-000000000001" ],
+                 channel.values_at(:name, :team_name, :team_aad_group_id)
+  end
+
+  # New Teams asks for the first channel's name when a team is created: that
+  # channel is the team's General, which the Connector lists with no name.
+  test "a code naming a renamed General channel connects it and names it" do
+    teams, endpoint = connect_teams
+    team = ChatConversation.create!(integration: teams, provider: "teams", kind: "channel", external_id: "19:team@thread.tacv2",
+                                    team_external_id: "19:team@thread.tacv2", team_name: "flow-staging",
+                                    tenant_id: TEAMS_CUSTOMER_TENANT, service_url: TEAMS_SERVICE_URL)
+    ChatConversation.record_team_channels!(team, [ { "id" => "19:team@thread.tacv2" } ])
+    thread = "#{TEAMS_SERVICE_URL}v3/conversations/19%3Ateam%40thread.tacv2%3Bmessageid%3D1700000000001/activities"
+    confirmed = stub_request(:post, thread).with(body: /now connected to \*\*Acme\*\*/).to_return(status: 201, body: { id: "9" }.to_json)
+    _record, code = ChatConnectCode.issue!(project: @project, provider: "teams", user: @user, channel: "flow-staging / flow-staging")
+
+    activity = teams_activity(text: "connect #{code}", conversation: { "id" => "19:team@thread.tacv2;messageid=1700000000001",
+                                                                       "conversationType" => "channel" })
+    activity["channelData"] = { "tenant" => { "id" => TEAMS_CUSTOMER_TENANT }, "team" => { "id" => "19:team@thread.tacv2" },
+                                "channel" => { "id" => "19:team@thread.tacv2" } }
+    deliver_teams(teams, endpoint, activity)
+
+    assert_requested confirmed
+    assert_equal [ "19:team@thread.tacv2", "flow-staging", "flow-staging" ],
+                 ChatChannelConnection.sole.chat_conversation.values_at(:external_id, :name, :team_name)
+  end
+
+  private
+
+  def connect_teams
+    with_teams_enabled
+    stub_teams_token!
+    teams = Integration.create!(provider: :teams, company: @company, connected_by: @user, name: "Contoso",
+                                status: :active, settings: { "tenant_id" => TEAMS_CUSTOMER_TENANT })
+    endpoint = create(:webhook_endpoint, slug: "teams-tenant-#{TEAMS_CUSTOMER_TENANT}", provider: :teams,
+                                         verification_strategy: :none, secret: nil, company: @company,
+                                         config: { "integration_id" => teams.id })
+    [ teams, endpoint ]
+  end
+
+  def deliver_teams(integration, endpoint, activity)
+    ChatConversation.record_teams!(integration: integration, activity: activity)
+    received = ReceivedWebhook.create!(webhook_endpoint: endpoint, idempotency_key: SecureRandom.hex, event_type: "teams",
+                                       raw_payload: activity)
+    Webhooks::ProcessEventJob.perform_now(received.id)
+  end
 end

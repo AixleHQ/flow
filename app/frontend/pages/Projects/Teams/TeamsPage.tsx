@@ -73,6 +73,7 @@ const STATUS_STYLE: Record<TeamMember['status']['state'], { color: string; label
     color: 'orange',
     label: (m) => (m.status.until ? `On hold until ${formatMonthDay(m.status.until)}` : 'On hold'),
   },
+  signed_out: { color: 'red', label: () => 'Login expired' },
   unavailable: { color: 'gray', label: () => "Can't take runs" },
 };
 
@@ -220,6 +221,7 @@ const TeamsPage = () => {
   const requestClose = useUnsavedChanges({
     opened: editing !== null,
     dirty: !sameForm(form, initial),
+    saving,
     onClose: handleClose,
   });
 

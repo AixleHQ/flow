@@ -41,8 +41,9 @@ and lifecycle tools. Every board tool that acts on a task takes either its
 | `board_get_board_info` | Return the current board with its columns. |
 | `board_list_tasks` | List a page of tasks (no descriptions), searched by title or `#N`, filtered by column / tag / type / assignee. Archived tasks only with `include_archived`. |
 | `board_get_task` | Full details for a task. |
-| `board_create_task` | Create a task, optionally in a specific column. |
-| `board_update_task` | Update title, description, priority, tags, or type. |
+| `board_create_task` | Create a task, optionally in a specific column and assigned to a person (`assignee_id`) or a team (`assignee_team_id`). |
+| `board_update_task` | Update title, description, priority, tags, type, or assignee — a person (`assignee_id`) or a team (`assignee_team_id`); `unassign` clears either. |
+| `board_list_members` | List the project's people and teams, with the ids a task can be assigned to. |
 | `board_move_task` | Move a task to another column. |
 | `board_add_comment` / `board_get_comments` | Add or read comments (Markdown). |
 | `board_attach_asset` / `board_get_task_assets` | Attach or list task files. |

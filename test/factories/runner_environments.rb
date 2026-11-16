@@ -9,5 +9,6 @@ FactoryBot.define do
     sequence(:display_name) { |n| "machine-#{n}" }
     origin { :registered }
     state { :registered }
+    last_heartbeat_at { Time.current }
   end
 end

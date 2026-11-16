@@ -6,7 +6,7 @@ module Api
       module Workflows
         class StepsController < Workflows::ApplicationController
           def index
-            steps = current_workflow.steps.not_deleted.includes(:sub_steps)
+            steps = current_workflow.steps.not_deleted.includes(:sub_steps, :resource_links)
             render json: steps.map { |s| StepResource.new(s).to_h }
           end
 

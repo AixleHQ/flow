@@ -116,7 +116,7 @@ const InstallPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const entered = JSON.stringify({ inputs, secrets, projectName });
   const [initiallyEntered] = useState(entered);
-  useUnsavedChanges({ dirty: entered !== initiallyEntered && !submitting });
+  useUnsavedChanges({ dirty: entered !== initiallyEntered, saving: submitting });
 
   const resolutions = toRecord(selection.resolutions);
   const intoExisting = selection.projectId !== null;

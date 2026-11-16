@@ -28,9 +28,9 @@ module InternalTools
     end
 
     def execute
-      return error(Concerns::GithubUserTokenContext::NO_USER) if session_user.nil?
+      return error(Concerns::UserTokenContext::NO_USER) if session_user.nil?
 
-      return error(Concerns::GithubUserTokenContext::NO_PROJECT) if project.nil?
+      return error(Concerns::UserTokenContext::NO_PROJECT) if project.nil?
 
       user = project.company.users.find_by(id: params[:user_id])
       return error("No member with id #{params[:user_id]} in this company.") if user.nil?

@@ -28,9 +28,12 @@ class WorkflowRun < ApplicationRecord
                               .where(step_runs: { workflow_run_id: run_ids })
                               .pluck(Arel.sql("step_runs.workflow_run_id"), :state)
     sessions.group_by(&:first).filter_map do |run_id, rows|
-      states = rows.map(&:last)
-      run_id if states.include?("queued") && (states & %w[running ready finishing]).empty?
+      run_id if parked_on_slot?(rows.map(&:last))
     end.to_set
+  end
+
+  def self.parked_on_slot?(session_states)
+    session_states.include?("queued") && (session_states & %w[running ready finishing]).empty?
   end
 
   include WorkflowRunStateMachine
@@ -108,6 +111,15 @@ class WorkflowRun < ApplicationRecord
   }
 
   scope :active, -> { where(state: %w[pending running paused]) }
+  # Started and not yet ended: running or paused.
+  scope :underway, -> { where(state: %w[running paused]) }
+  # Failed or cancelled: it ended without finishing.
+  scope :aborted, -> { where(state: %w[failed cancelled]) }
+  scope :stop_requested, -> { where.not(stop_requested_at: nil) }
+  scope :not_stop_requested, -> { where(stop_requested_at: nil) }
+  # A stop was requested and the run has not failed or completed since: its steps
+  # may still be running (SessionAdmissionReconciler repairs the cancellation).
+  scope :cancellation_in_flight, -> { stop_requested.where(state: %w[running paused cancelled]) }
   # What the run cost: the usage of every session its step runs ran in. A session
   # shared by several step runs is counted once, which a JOIN would not do.
   scope :with_total_cost_cents, -> {
@@ -175,6 +187,34 @@ class WorkflowRun < ApplicationRecord
     seconds unless seconds.negative?
   end
 
+  # .waiting_for_slot_ids for one run, read off its step runs' sessions — no query
+  # when the caller preloaded `step_runs: :terminal_session`.
+  def waiting_for_slot?
+    self.class.parked_on_slot?(step_runs.filter_map { |step_run| step_run.terminal_session&.state })
+  end
+
+  # The state every screen shows: the run page, the task drawer and the board card
+  # must agree on a run that is parked on a session slot.
+  def displayed_state(waiting = waiting_for_slot?)
+    waiting ? "queued" : state
+  end
+
+  # Somebody asked for the run to stop (cancel was requested), whether or not it
+  # has reached `cancelled` yet.
+  def stop_requested?
+    stop_requested_at.present?
+  end
+
+  # Stop requested, or cancelled already: the run is being or has been stopped.
+  def stopped?
+    stop_requested? || cancelled?
+  end
+
+  # Completed, failed or cancelled.
+  def ended?
+    completed? || failed? || cancelled?
+  end
+
   def can_run_non_interactive?
     workflow.steps.not_deleted.all?(&:allow_non_interactive)
   end
@@ -187,12 +227,12 @@ class WorkflowRun < ApplicationRecord
   end
 
   def current_step_run
-    step_runs.where(state: %w[pending running waiting_input]).order(:created_at).last
+    step_runs.unfinished.order(:created_at).last
   end
 
   # Latest failed step the user may retry via API (current_step_run excludes failed — that caused 404 on retry).
   def latest_failed_step_run
-    step_runs.where(state: :failed).order(updated_at: :desc).first
+    step_runs.with_state(:failed).order(updated_at: :desc).first
   end
 
   # May `viewer` STEER this run — cancel it, or approve / retry / skip one of its

@@ -48,8 +48,8 @@ module PersonalTools
     end
 
     ATTRS = %i[name description].freeze
-    # Base resources are not columns — they live in workflow.config, behind the
-    # model's base_* readers and merge_config! writer.
+    # Base resources are not columns: they are the workflow's resource links,
+    # written through merge_config! with the rest of its config.
     CONFIG_ATTRS = %i[base_tool_ids base_skill_ids base_mcp_server_ids base_repository_ids
                       base_config_item_ids base_asset_ids].freeze
     # Same store, but a flag rather than a list: JSON config does no

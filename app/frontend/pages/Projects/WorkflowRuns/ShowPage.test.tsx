@@ -107,6 +107,23 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
     );
   });
 
+  it('heads a run waiting for a session slot as Queued and treats it as still in flight', () => {
+    const run = makeRun({
+      state: 'queued',
+      stepRuns: [
+        buildStepRun({ id: 101, stepId: 1, stepName: 'Lint', stepPosition: 1, state: 'failed' }),
+        buildStepRun({ id: 102, stepId: 2, stepName: 'Route', stepPosition: 2, state: 'pending' }),
+      ],
+    });
+    renderAuthedPage(<ShowPage />, { props: seed({ run }) });
+
+    expect(screen.getByText('Queued')).toBeInTheDocument();
+    expect(screen.queryByText('Running')).not.toBeInTheDocument();
+    // Retrying an earlier failure is offered once the run settles, not while it waits for a slot.
+    expect(screen.queryByRole('button', { name: 'Retry session' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel run' })).toBeInTheDocument();
+  });
+
   it("names the team the run's owner was picked from", () => {
     renderAuthedPage(<ShowPage />, { props: seed({ run: makeRun({ teamName: 'Planner' }) }) });
 

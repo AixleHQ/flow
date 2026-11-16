@@ -103,6 +103,12 @@ export const SEARCH_INDEX: SearchResult[] = [
     desc: 'Admin, employee and viewer roles, company members, project collaborators, and what each role can see.',
   },
   {
+    slug: 'project-teams',
+    title: 'Project teams',
+    section: 'Using Flow',
+    desc: 'Teams of project members that cards are assigned to and triggers run as: strategies, who can take a run, quota holds and expired logins, handing a run to the next member, and who manages teams.',
+  },
+  {
     slug: 'signing-in',
     title: 'Signing in & SSO',
     section: 'Using Flow',
@@ -166,7 +172,7 @@ export const SEARCH_INDEX: SearchResult[] = [
     slug: 'runners',
     title: 'Runners',
     section: 'User guide',
-    desc: 'Runners send a session to a machine you control. Adding a machine to a manual runner: the single-use registration token and the install sequence.',
+    desc: 'Runners send a session to a machine you control. Adding a machine to a manual runner, what a runner’s status means (pending, connected, degraded, unreachable), and waiting for a free machine.',
   },
   {
     slug: 'tools',

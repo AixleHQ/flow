@@ -107,6 +107,34 @@ module Agents
       end
     end
 
+    test "config_files sends every signal to the collector, with every content switch, for full telemetry" do
+      stub_codex_models([])
+      toml = @adapter.config_files({}, hosted_otel(full_telemetry: true))["/home/codex/.codex/config.toml"]
+      endpoint = ContainerRuntime::CallbackUrls.hosted(:otel)
+
+      { "exporter" => "logs", "trace_exporter" => "traces", "metrics_exporter" => "metrics" }.each do |key, signal|
+        assert_includes toml, %(#{key} = { otlp-http = { endpoint = "#{endpoint}/v1/#{signal}", protocol = "binary" } })
+      end
+      %w[log_user_prompt log_agent_responses log_guardian_assessments].each { |key| assert_includes toml, "#{key} = true" }
+      assert_includes toml, "[otel.tool_result]\nmax_bytes = 65536"
+    end
+
+    test "config_files sends only the logs usage is counted from without full telemetry" do
+      stub_codex_models([])
+      toml = @adapter.config_files({}, hosted_otel)["/home/codex/.codex/config.toml"]
+      endpoint = ContainerRuntime::CallbackUrls.hosted(:otel)
+
+      assert_includes toml, %(exporter = { otlp-http = { endpoint = "#{endpoint}/v1/logs", protocol = "binary" } })
+      %w[trace_exporter metrics_exporter log_user_prompt [otel.tool_result]].each { |key| refute_includes toml, key }
+    end
+
+    test "a session without a collector leaves telemetry to the CLI's defaults" do
+      stub_codex_models([])
+      toml = @adapter.config_files({}, { otel_endpoint: nil })["/home/codex/.codex/config.toml"]
+
+      refute_includes toml, "[otel]"
+    end
+
     test "config_files uses default workspace when not provided" do
       credentials = {}
       files = @adapter.config_files(credentials, hosted_otel)

@@ -153,7 +153,7 @@ module Github
 
       integration.update!(settings: integration.settings.to_h.merge("github_projects" => chosen))
       Trackers::Provisioning.ensure_for!(integration)
-      integration.project_trackers.where.not(status: "detached").where.not(external_scope_id: chosen.pluck("id")).find_each(&:detach!)
+      integration.project_trackers.attached.where.not(external_scope_id: chosen.pluck("id")).find_each(&:detach!)
       Trackers::Provider.for(integration).ensure_event_delivery! if chosen.any?
       integration
     end

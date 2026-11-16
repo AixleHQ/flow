@@ -77,6 +77,12 @@ workflows:
       - name: runner_operations_sweep_activity
         task_queue: aixle_ruby
 
+  - name: runner_health_check_workflow
+    owner: aixle_ruby
+    activities:
+      - name: runner_health_check_activity
+        task_queue: aixle_ruby
+
   - name: membership_invitation_reminder_workflow
     owner: aixle_ruby
     activities:

@@ -49,4 +49,12 @@ class ActAsConsentTest < ActiveSupport::TestCase
 
     assert_not ActAsConsent.allows?(user: @user, project: other, provider: "github", scope: :own)
   end
+
+  test "accepts gitlab as a provider and keeps its switches apart from github's" do
+    create(:act_as_consent, :own, user: @user, project: @project, provider: "gitlab")
+
+    assert ActAsConsent.allows?(user: @user, project: @project, provider: "gitlab", scope: :own)
+    assert_not ActAsConsent.allows?(user: @user, project: @project, provider: "github", scope: :own)
+    assert_not build(:act_as_consent, user: @user, project: @project, provider: "bitbucket").valid?
+  end
 end

@@ -13,6 +13,7 @@ let bypass = false;
 let skipNextPopState = false;
 let current: { url: string; state: unknown } | null = null;
 let removeListeners: (() => void) | null = null;
+let holdingBrowserHistory = false;
 
 function dirtyGuards() {
   return [...guards].filter((guard) => guard.dirty);
@@ -77,9 +78,11 @@ function onInertiaBefore(event: CustomEvent<{ visit: PendingVisit }>) {
 }
 
 // Inertia swaps the page on popstate without a cancelable `before` event, and by then the browser
-// has already moved to the other entry. This capture listener runs ahead of Inertia's own (both sit
-// on window), holds the page, and pushes the left entry back on top. Whichever way the user went,
-// the entry they were going to is then one step back, so leaving after all is `history.back()`.
+// has already moved to the other entry. This listener has to run ahead of Inertia's own: both sit on
+// window, where listeners run in the order they were added whatever their capture flag, so it is
+// added before Inertia boots (see `holdBrowserHistory`). It holds the page, and pushes the left entry
+// back on top. Whichever way the user went, the entry they were going to is then one step back, so
+// leaving after all is `history.back()`.
 function onPopState(event: PopStateEvent) {
   if (skipNextPopState) {
     skipNextPopState = false;
@@ -98,18 +101,28 @@ function onPopState(event: PopStateEvent) {
   });
 }
 
+/**
+ * Puts the browser Back/Forward hold in place. Call it once at boot, before Inertia starts: a
+ * popstate listener added after Inertia's runs after it, and the page is swapped under the question.
+ * It does nothing while no form is dirty. `registerGuard` does not install it: the boot call is the
+ * only place that does.
+ */
+export function holdBrowserHistory() {
+  if (holdingBrowserHistory) return;
+  holdingBrowserHistory = true;
+  window.addEventListener('popstate', onPopState);
+}
+
 function install() {
   bypass = false;
   skipNextPopState = false;
   rememberCurrentEntry();
   window.addEventListener('beforeunload', onBeforeUnload);
-  window.addEventListener('popstate', onPopState, true);
   const removeBefore = router.on('before', onInertiaBefore);
   const removeNavigate = router.on('navigate', rememberCurrentEntry);
 
   return () => {
     window.removeEventListener('beforeunload', onBeforeUnload);
-    window.removeEventListener('popstate', onPopState, true);
     removeBefore();
     removeNavigate();
   };

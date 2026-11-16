@@ -8,8 +8,8 @@ class SessionAdmissionReconciler
 
   def self.run(limit: 100)
     # Durable run stop markers repair a crash during cancellation fan-out.
-    WorkflowRun.where.not(stop_requested_at: nil).where(state: %w[running paused cancelled])
-      .joins(:step_runs).where(step_runs: { state: %w[pending running waiting_input] }).distinct.limit(limit).each do |run|
+    WorkflowRun.cancellation_in_flight
+      .joins(:step_runs).merge(StepRun.unfinished).distinct.limit(limit).each do |run|
       WorkflowService.repair_cancellation(run)
     end
     SessionLaunchRelay.drain(limit: limit)
@@ -59,7 +59,7 @@ class SessionAdmissionReconciler
   def self.cleanup_error(admission)
     session = admission.terminal_session
     return nil if session.finished?
-    return "Container workflow ended" if session.started_at || admission.runtime_id.present?
+    return TerminalSession::WORKFLOW_ENDED_ERROR if session.started_at || admission.runtime_id.present?
 
     TerminalSession::LAUNCH_ABANDONED_ERROR
   end
@@ -129,7 +129,7 @@ class SessionAdmissionReconciler
     now = Time.current
     queued = SessionAdmission.unreleased.where(admitted_at: nil, stop_requested_at: nil)
     lagging = SessionAdmission.occupied.joins(:terminal_session)
-                              .where(terminal_sessions: { state: TerminalSession::TERMINAL_STATES })
+                              .merge(TerminalSession.ended)
 
     {
       queued: queued.count,

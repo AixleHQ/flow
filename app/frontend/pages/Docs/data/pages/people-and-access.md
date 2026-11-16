@@ -1,7 +1,9 @@
 # Team & Access
 
 Membership has two levels, and they answer different questions: *who belongs to
-the company* and *who works on this project*.
+the company* and *who works on this project*. Inside a project,
+[teams](/docs/project-teams) group its members so that runs are shared out
+between their agent subscriptions.
 
 ## Roles
 
@@ -70,3 +72,10 @@ route in a company where several people share a first name.
 > info Adding someone to a project does not give them a credential. They still
 > connect their own agent in [Profile](/docs/getting-started) before they can
 > run anything.
+
+## Project teams
+
+A project's members can be grouped into **teams**: a card can be assigned to a
+team and a trigger can run as one, and each run goes to whichever member the
+team's strategy picks, on that member's own agent subscription. Teams have
+their own page: [Project teams](/docs/project-teams).

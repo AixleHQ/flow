@@ -327,8 +327,9 @@ Connecting a workspace gives a company nothing by itself: no channel, no message
 
 ### 7.4 Uninstall and revocation
 
-- **Slack.** `app_uninstalled` and `tokens_revoked` mark the workspace `inactive`. Every connected company
-  sees "Slack app removed from &lt;workspace&gt;: reinstall to resume".
+- **Slack.** `app_uninstalled`, or a `tokens_revoked` that names the bot token, marks the workspace `inactive`.
+  A `tokens_revoked` for users' tokens alone (a member deactivated, a Sign in with Slack token revoked) changes
+  nothing: the bot keeps working. Every connected company sees "Slack app removed from &lt;workspace&gt;: reinstall to resume".
 - **Reinstall.** A reinstall by any one of the companies reactivates the workspace for all of them. This is
   inherent to one app install per workspace.
 - **Teams.** Removing the app from a team marks that team's conversation rows `installed: false`, as today.

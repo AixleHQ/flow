@@ -67,7 +67,7 @@ module Api
 
           assert_response :success
           @workflow.reload
-          assert_equal tool_ids, @workflow.config["base_tool_ids"]
+          assert_equal tool_ids, @workflow.base_tool_ids
           assert @workflow.config["inherit_all_project_resources"]
         end
 
@@ -83,7 +83,7 @@ module Api
 
           assert_response :success
           @workflow.reload
-          assert_equal tool_ids, @workflow.config["base_tool_ids"]
+          assert_equal tool_ids, @workflow.base_tool_ids
           assert @workflow.config["inherit_all_project_resources"]
         end
 

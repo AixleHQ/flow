@@ -70,7 +70,7 @@ module Activities
       rescue ContainerService::PhaseError => e
         if e.original_error.is_a?(ContainerRuntime::CapacityError)
           operation&.update!(state: "retryable", error: e.message)
-          admission.update!(wait_reason: e.original_error.reason, last_error: e.message)
+          admission.update!(wait_reason: e.original_error.reason, last_error: e.original_error.message)
           return { "capacity_wait" => true }
         end
         record_failed_operation(operation, e)
@@ -136,7 +136,9 @@ module Activities
         # that request has its answer or its deadline.
         if !absent && runtime.cleanup_ready?(admission.runtime_id)
           state = collect_outputs(admission, session, state)
-          runtime.cleanup_session(admission.runtime_id)
+          # A session on a runner's machine that failed gets a reset, whatever
+          # its policy (DESIGN.md §7.2), and counts toward the machine's streak.
+          runtime.cleanup_session(admission.runtime_id, failed: session_failed?(session, state))
           absent = runtime.session_absent?(admission.runtime_id)
         end
 
@@ -228,6 +230,17 @@ module Activities
       def clear_absence_clock(admission)
         admission.session_runtime_operations.pinning.where.not(absent_since: nil)
                  .update_all(absent_since: nil, updated_at: Time.current)
+      end
+
+      # Whether the session is ending as a failure: the state `finalize_session`
+      # is about to record for it is `failed`, decided by the same outcome
+      # (#outcome_error, #outcome_state), so cleanup and the session's final
+      # state never disagree. A stop the person asked for, a session that
+      # finished, and one that ends with only the queue's own generic error
+      # after a requested finish are not failures.
+      def session_failed?(session, state)
+        session.reload
+        outcome_state(session, outcome_error(session, state[:error])) == "failed"
       end
 
       # Output collection walks the container filesystem and must not repeat on

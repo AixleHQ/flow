@@ -19,6 +19,12 @@ class StepRun < ApplicationRecord
 
   scope :ordered, -> { joins(:step).order("steps.position ASC") }
 
+  # A step that has not ended: waiting to start, running, or waiting for input.
+  UNFINISHED_STATES = %w[pending running waiting_input].freeze
+  scope :unfinished, -> { where(state: UNFINISHED_STATES) }
+  # Completed or skipped: nothing left for the agent to do on it.
+  scope :done, -> { where(state: %w[completed skipped]) }
+
   HISTORY_ERROR_LIMIT = 2_000
 
   # A retry is a new step run of the same step. It carries the tally — which

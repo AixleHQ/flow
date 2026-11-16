@@ -8,7 +8,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
     # `visible_steps` filters in Ruby so the preload survives (see Workflow#visible_steps).
     # Run counts come from attach_run_stats: includes(:runs) would load every historical run.
     workflows = Workflow.attach_run_stats(
-      Workflow.visible_for_project(current_project).includes(steps: :sub_steps)
+      Workflow.visible_for_project(current_project).includes(:base_resource_links, steps: %i[sub_steps resource_links])
     )
     archived = Workflow.for_project(current_project).where.not(deleted_at: nil).order(deleted_at: :desc)
 
@@ -45,7 +45,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
 
   def builder
     workflow = Workflow.for_project(current_project)
-                      .includes(steps: :sub_steps)
+                      .includes(:base_resource_links, steps: %i[sub_steps resource_links])
                       .find(params[:id])
 
     render inertia: "Projects/Workflows/BuilderPage", props: {

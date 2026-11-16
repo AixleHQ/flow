@@ -6,12 +6,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { visitHeld } from 'test/inertiaVisit';
 import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
-import { confirmLeave } from './guards';
+import { confirmLeave, holdBrowserHistory } from './guards';
 import { useUnsavedChanges } from './useUnsavedChanges';
 
 function NoteDialog({ onClose }: { onClose: () => void }) {
   const [note, setNote] = useState('');
-  const requestClose = useUnsavedChanges({ dirty: note !== '', onClose });
+  const requestClose = useUnsavedChanges({ dirty: note !== '', saving: false, onClose });
 
   return (
     <Modal opened onClose={requestClose} title="Add note" closeButtonProps={{ 'aria-label': 'Close' }}>
@@ -21,11 +21,20 @@ function NoteDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-function NameForm({ label = 'Name', onSave }: { label?: string; onSave?: (name: string) => Promise<boolean> }) {
+function NameForm({
+  label = 'Name',
+  saving = false,
+  onSave,
+}: {
+  label?: string;
+  saving?: boolean;
+  onSave?: (name: string) => Promise<boolean>;
+}) {
   const [saved, setSaved] = useState('Acme');
   const [name, setName] = useState('Acme');
   useUnsavedChanges({
     dirty: name !== saved,
+    saving,
     onSave: onSave
       ? async () => {
           const ok = await onSave(name);
@@ -149,6 +158,18 @@ describe('useUnsavedChanges — leaving the page', () => {
     expect(router.visit).toHaveBeenCalledWith(elsewhereUrl(), expect.objectContaining({ method: 'get' }));
   });
 
+  it('lets a visit through while the form is saving, and holds it again once the save ends', async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderPage(<NameForm saving />);
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), ' Inc');
+
+    expect(visitHeld(elsewhere)).toBe(false);
+
+    rerender(<NameForm saving={false} />);
+
+    expect(visitHeld(elsewhere)).toBe(true);
+  });
+
   it('stays on the page on Keep editing', async () => {
     const user = userEvent.setup();
     renderPage(<NameForm />);
@@ -251,6 +272,9 @@ describe('useUnsavedChanges — leaving the page', () => {
     const inertiaPopstate = vi.fn();
     window.history.replaceState({ page: 'previous' }, '', '/previous');
     window.history.pushState({ page: 'form' }, '', '/form');
+    // The entrypoint does this before Inertia boots. Listeners on window run in the order they were
+    // added, so one added after Inertia's would see the page already swapped under the question.
+    holdBrowserHistory();
     window.addEventListener('popstate', inertiaPopstate);
     try {
       renderPage(<NameForm />);
@@ -272,6 +296,37 @@ describe('useUnsavedChanges — leaving the page', () => {
       await waitFor(() => expect(inertiaPopstate).toHaveBeenCalledTimes(1));
       expect(inertiaPopstate.mock.calls[0][0].state).toEqual({ page: 'previous' });
       expect(window.location.pathname).toBe('/previous');
+    } finally {
+      window.removeEventListener('popstate', inertiaPopstate);
+    }
+  });
+
+  it('holds browser forward the same way, and goes forward on Discard', async () => {
+    const user = userEvent.setup();
+    const inertiaPopstate = vi.fn();
+    window.history.replaceState({ page: 'form' }, '', '/form');
+    window.history.pushState({ page: 'next' }, '', '/next');
+    holdBrowserHistory();
+    window.addEventListener('popstate', inertiaPopstate);
+    try {
+      window.history.back();
+      await waitFor(() => expect(window.location.pathname).toBe('/form'));
+      inertiaPopstate.mockClear();
+
+      renderPage(<NameForm />);
+      await user.type(screen.getByRole('textbox', { name: 'Name' }), ' Inc');
+
+      window.history.forward();
+      const question = await discardQuestion();
+      expect(inertiaPopstate).not.toHaveBeenCalled();
+      expect(window.location.pathname).toBe('/form');
+      expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Acme Inc');
+
+      await user.click(within(question).getByRole('button', { name: 'Discard' }));
+
+      await waitFor(() => expect(inertiaPopstate).toHaveBeenCalledTimes(1));
+      expect(inertiaPopstate.mock.calls[0][0].state).toEqual({ page: 'next' });
+      expect(window.location.pathname).toBe('/next');
     } finally {
       window.removeEventListener('popstate', inertiaPopstate);
     }

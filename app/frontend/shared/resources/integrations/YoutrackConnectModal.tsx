@@ -31,7 +31,7 @@ export const YoutrackConnectModal = ({ opened, onClose, basePath, youtrack }: Co
     setInstanceUrl('');
     setError(null);
   }, [onClose]);
-  const requestClose = useUnsavedChanges({ opened, dirty: instanceUrl !== '', onClose: close });
+  const requestClose = useUnsavedChanges({ opened, dirty: instanceUrl !== '', saving: redirecting, onClose: close });
 
   const proceed = async () => {
     setError(null);

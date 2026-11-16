@@ -35,6 +35,8 @@ class ProjectTracker < ApplicationRecord
   before_validation :normalize_handle
 
   scope :for_project, ->(project) { where(project_id: project.id) }
+  # Everything but a tracker someone detached: active, or in error.
+  scope :attached, -> { where.not(status: "detached") }
   scope :usable, -> { where(status: "active").joins(:integration).merge(Integration.active) }
 
   def self.handle_for(name, taken: [])

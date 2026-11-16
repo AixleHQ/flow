@@ -29,7 +29,7 @@ export const CreateProjectModal = ({ opened, onClose }: CreateProjectModalProps)
     onClose();
   };
   const dirty = data.name !== BLANK_PROJECT.name || data.description !== BLANK_PROJECT.description;
-  const requestClose = useUnsavedChanges({ opened, dirty, onClose: handleClose });
+  const requestClose = useUnsavedChanges({ opened, dirty, saving: processing, onClose: handleClose });
   const messages = errorMessages(errors);
 
   const handleSubmit = (e: React.FormEvent) => {

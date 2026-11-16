@@ -24,7 +24,7 @@ class Webhooks::SlackController < ActionController::API
 
     inner_type = payload.dig("event", "type").to_s
     if LIFECYCLE_EVENTS.include?(inner_type)
-      deactivate_install(endpoint)
+      deactivate_install(endpoint) if app_removed?(payload["event"])
       return head :ok
     end
     if RENAME_EVENTS.include?(inner_type)
@@ -113,6 +113,17 @@ class Webhooks::SlackController < ActionController::API
 
     ChatConversation.in_workspace_of(endpoint.config.to_h["integration_id"]).where(provider: "slack", external_id: channel["id"])
                     .update_all(name: channel["name"], updated_at: Time.current)
+  end
+
+  # Slack also sends `tokens_revoked` when only users' tokens go (a member is
+  # deactivated, a Sign in with Slack token is revoked); the bot keeps working
+  # then. Only a revoked bot token means the app is gone.
+  # https://docs.slack.dev/reference/events/tokens_revoked/
+  def app_removed?(event)
+    return true if event["type"] == "app_uninstalled"
+
+    tokens = event["tokens"]
+    tokens.is_a?(Hash) && Array(tokens["bot"]).any?
   end
 
   # The app left the workspace, so it left it for every company that connected it.

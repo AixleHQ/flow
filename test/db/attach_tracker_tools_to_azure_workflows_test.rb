@@ -18,13 +18,19 @@ class AttachTrackerToolsToAzureWorkflowsTest < ActiveSupport::TestCase
     Tool.where(source: "code", name: AttachTrackerToolsToAzureWorkflows::TRACKER_TOOLS).pluck(:id)
   end
 
+  # The migration predates the resource links and works on the jsonb list itself.
+  def base_tool_ids(workflow)
+    Array(workflow.reload.config["base_tool_ids"])
+  end
+
   test "a workflow of a project with an Azure connection gets the tracker tools, keeping what it had" do
     kept = Tool.shadow_for(Tools::Registry.fetch("board_list_tasks"))
-    workflow = create(:workflow, scope: @project, config: { "base_tool_ids" => [ kept.id ] })
+    workflow = create(:workflow, scope: @project)
+    workflow.update_columns(config: { "base_tool_ids" => [ kept.id ] })
 
     migrate
 
-    base = workflow.reload.base_tool_ids.map(&:to_i)
+    base = base_tool_ids(workflow).map(&:to_i)
     assert_includes base, kept.id
     assert_equal tracker_tool_ids.sort, (base - [ kept.id ]).sort
     assert_equal 11, tracker_tool_ids.size
@@ -38,7 +44,7 @@ class AttachTrackerToolsToAzureWorkflowsTest < ActiveSupport::TestCase
     migrate
     migrate
 
-    assert_equal workflow.reload.base_tool_ids.uniq, workflow.base_tool_ids
-    assert_empty elsewhere.reload.base_tool_ids
+    assert_equal base_tool_ids(workflow).uniq, base_tool_ids(workflow)
+    assert_empty base_tool_ids(elsewhere)
   end
 end

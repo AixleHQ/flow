@@ -8,7 +8,7 @@ require "test_helper"
 class RunnerGatewayOperationsTest < ActionDispatch::IntegrationTest
   include ProcessModeHelper::RunnerGateway
 
-  REGISTRATION = { os: "linux", arch: "amd64", facts: {}, ephemeral: false }.freeze
+  REGISTRATION = { os: "linux", arch: "amd64", facts: {} }.freeze
   SECRET = "ghp_payload-secret-0123456789"
 
   # Calls the block when the event named by `pattern` starts, on the thread
@@ -33,6 +33,67 @@ class RunnerGatewayOperationsTest < ActionDispatch::IntegrationTest
     FeatureFlag.find_or_create_by!(key: "external_runners").overrides.create!(company: @company, enabled: true, reason: "test")
     @pair = registered_pair
     @environment = RunnerEnvironment.sole
+  end
+
+  # == liveness (task 12c) ==
+
+  test "registration, a poll and an op result each record the machine's heartbeat, at most every 15 seconds" do
+    assert_not_nil @environment.reload.last_heartbeat_at, "register records it"
+    assert_equal @environment.last_heartbeat_at, @runner.reload.last_seen_at
+
+    travel 16.seconds
+    poll(@pair, wait: 0)
+    assert_response :ok
+    assert_in_delta Time.current, @environment.reload.last_heartbeat_at, 1
+    assert_in_delta Time.current, @runner.reload.last_seen_at, 1
+
+    recorded = @environment.last_heartbeat_at
+    travel 5.seconds
+    poll(@pair, wait: 0)
+    assert_equal recorded, @environment.reload.last_heartbeat_at, "a second request within 15 s writes nothing"
+
+    travel 15.seconds
+    operation = enqueue
+    post_result(@pair, operation, status: "ok", exit_code: 0)
+    assert_response :ok
+    assert_operator @environment.reload.last_heartbeat_at, :>, recorded
+  end
+
+  test "a heartbeat records the machine's heartbeat, answers 204 with no body and has no ops" do
+    travel 16.seconds
+
+    post "/runner/v1/heartbeat", headers: headers_for(@pair["access_token"])
+
+    assert_response :no_content
+    assert_empty response.body
+    assert_in_delta Time.current, @environment.reload.last_heartbeat_at, 1
+    assert_in_delta Time.current, @runner.reload.last_seen_at, 1
+  end
+
+  test "a heartbeat is recorded at most every 15 seconds, and one with a refresh token records nothing" do
+    travel 16.seconds
+    post "/runner/v1/heartbeat", headers: headers_for(@pair["access_token"])
+    recorded = @environment.reload.last_heartbeat_at
+
+    travel 5.seconds
+    post "/runner/v1/heartbeat", headers: headers_for(@pair["access_token"])
+    assert_response :no_content
+    assert_equal recorded, @environment.reload.last_heartbeat_at
+
+    travel 20.seconds
+    post "/runner/v1/heartbeat", headers: headers_for(@pair["refresh_token"])
+    assert_response :unauthorized
+    assert_equal recorded, @environment.reload.last_heartbeat_at
+  end
+
+  test "a refused request records nothing" do
+    travel 1.minute
+    recorded = @environment.reload.last_heartbeat_at
+
+    get "/runner/v1/ops", params: { after: 0, wait: 0 }, headers: headers_for("not-a-token")
+
+    assert_response :unauthorized
+    assert_equal recorded, @environment.reload.last_heartbeat_at
   end
 
   # == GET /runner/v1/ops ==

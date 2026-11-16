@@ -194,7 +194,7 @@ class SessionsRunsFeed
 
   def runs_with_queued_step
     WorkflowRun.joins(step_runs: :terminal_session)
-               .where(terminal_sessions: { state: "queued" })
+               .merge(TerminalSession.queued)
                .select(:id)
   end
 

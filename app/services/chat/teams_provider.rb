@@ -163,8 +163,22 @@ module Chat
     def person_name(_integration, actor) = actor.to_h["name"].presence
 
     # Every addressed activity is recorded before it is processed, so the row exists.
+    # A channel is checked against the team its code names, which no channel of
+    # the team may know yet: the app was in the team before the organization was
+    # connected, so its install was never heard.
     def conversation_for(event, integration)
-      Teams::Notifier.conversation_for(integration.id, event.data.to_h.dig("conversation", "id"))
+      conversation = Teams::Notifier.conversation_for(integration.id, event.data.to_h.dig("conversation", "id"))
+      name_team(conversation) if conversation&.channel? && conversation.team_name.blank?
+      conversation
+    end
+
+    def name_team(conversation)
+      return if conversation.team_external_id.blank?
+
+      team = Teams::ConnectorClient.team(conversation.teams_reference, conversation.team_external_id)
+      conversation.learn_team!(name: team["name"], aad_group_id: team["aadGroupId"])
+    rescue Teams::Error => e
+      Rails.logger.warn("[Chat::TeamsProvider] could not name the team of conversation ##{conversation.id}: #{e.message}")
     end
 
     # Microsoft's rule: the mention is an entity, and its own `text` is what to

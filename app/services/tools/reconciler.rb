@@ -3,7 +3,7 @@
 module Tools
   # Projects the code registry into `tools` shadow rows (Solid Queue's
   # recurring-task mirror pattern) so every existing FK — tool_results.tool_id,
-  # session_tools.tool_id, steps.tool_ids jsonb — keeps working unchanged while
+  # session_tools.tool_id, step_resource_links.tool_id — keeps working unchanged while
   # the code stays the single source of truth for definitions.
   #
   # Rows with source: "code" are owned by this reconciler; humans never write

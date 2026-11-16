@@ -33,6 +33,18 @@ schedules:
     enabled: true
     overlap: skip
 
+  # Each live runner's health status from its machines (Runners::HealthCheck,
+  # DESIGN.md §2.5): connected, degraded or unreachable, with the reason. Every
+  # minute, so the status may lag a machine's state by up to a minute. It
+  # reads the machines' last heartbeat and calls nothing outbound. Nothing
+  # else sets the status, and a launch's refusal does not read it.
+  # SKIP overlap: a slow pass must not be joined by the next one applying the
+  # same statuses.
+  - workflow: runner_health_check_workflow
+    cron: "* * * * *"
+    overlap: skip
+    enabled: true
+
   # Sessions::Monitor: reads each live workflow step's terminal once, with one exec, and
   # hands the snapshot to the checks (Sessions::Checks: quota stop, blocking prompt,
   # refused login, turn end, silence). The cron is the pass's interval, N = 1 minute for

@@ -140,6 +140,12 @@ through the same Pundit policies as the UI, across every company you are
 an active member of. There is no "current project": tools take an
 explicit `project_id`. Regenerating the token revokes the old one.
 
+Teams are covered too: `list_project_teams`, `create_project_team`,
+`update_project_team` and `delete_project_team` manage a project's teams;
+`create_board_task` and `update_board_task` take `assignee_team_id`, and
+`create_workflow_trigger` and `update_workflow_trigger` take `run_as_team_id`,
+so a trigger built over MCP can run as a team from the start.
+
 ### Choosing which tools it serves
 
 The **Tools** card on the same tab lists every tool the server can offer,

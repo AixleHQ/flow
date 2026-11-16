@@ -101,6 +101,8 @@ module Chat
     end
 
     def connect(record, conversation, event, provider, integration)
+      # The code names a renamed General channel as people in Teams see it.
+      conversation.update!(name: record.channel_name) if conversation.unnamed_general?
       actor = event.data.to_h["actor"].to_h
       connection = ChatChannelConnection.find_or_initialize_by(chat_conversation: conversation, company_id: record.company_id)
       already = connection.persisted?

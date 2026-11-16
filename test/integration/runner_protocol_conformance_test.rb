@@ -171,7 +171,7 @@ class RunnerProtocolConformanceTest < ActionDispatch::IntegrationTest
   def register_machine(as, name, where)
     credential = Runners::Credentials.usable(Runners::Credentials.mint_registration!(@runner), kind: :registration)
     result = Runners::Registration.register!(credential, name: name, os: "linux", arch: "amd64", facts: {},
-                                                         ephemeral: false, auto_update: true,
+                                                         auto_update: true,
                                                          runner_version: RUNNER_VERSION, protocol_version: PROTOCOL_VERSION)
     define("#{as}.access_token", result.pair.access_token, where)
     define("#{as}.refresh_token", result.pair.refresh_token, where)
