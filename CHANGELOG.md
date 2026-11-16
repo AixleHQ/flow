@@ -59,6 +59,13 @@ governance, community health — carry none.
   version: 0.2.0 keeps working, but shows offline during an operation longer
   than 90 seconds because it sends no heartbeat.
 
+### Fixed
+- Runners: on a `manual` machine under the `reuse` policy, a session fetches a
+  repository checkout the scrub kept and puts it on the repository's source
+  branch at the remote's current tip, instead of failing to clone into the
+  existing directory and working on a stale checkout. A path that holds
+  another repository or a broken clone is cloned again.
+
 ## [1.15.0] - 2026-11-14
 
 ### Added

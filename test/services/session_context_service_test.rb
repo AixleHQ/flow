@@ -1051,8 +1051,10 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
     commands = runtime.execs.map { |cmd| Array(cmd).join(" ") }
     clone = commands.find { |c| c.include?("clone") }
-    assert_includes clone, "git --config-env=http.extraheader=AIXLE_GIT_AUTH_HEADER clone --filter=blob:none --branch=main " \
-                           "https://github.com/acme/my-app.git /workspace/repo/my-app"
+    assert_includes clone, "$AUTHED_GIT clone --filter=blob:none --branch=\"$BRANCH\" \"$URL\" \"$TARGET\""
+    assert_includes clone, "AUTHED_GIT=\"git --config-env=http.extraheader=AIXLE_GIT_AUTH_HEADER\""
+    assert_includes clone, "URL=https://github.com/acme/my-app.git"
+    assert_includes clone, "TARGET=/workspace/repo/my-app"
     assert_includes clone, "credential.https://github.com/acme/my-app.git.helper /workspace/.aixle/git-credential-aixle"
     assert_includes clone, "chown -R 1001:1001 /workspace/repo/my-app"
     assert_includes clone, "git config --system --add safe.directory /workspace/repo/my-app"
@@ -1086,7 +1088,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
     service.send(:inject_repositories)
 
-    assert_equal 2, runtime.execs.count { |cmd| Array(cmd).join(" ").include?("clone --filter=blob:none --branch=main https://github.com/acme/bad.git") }
+    assert_equal 2, runtime.execs.count { |cmd| Array(cmd).join(" ").include?("$AUTHED_GIT clone --filter=blob:none") && Array(cmd).join(" ").include?("URL=https://github.com/acme/bad.git") }
     failed = session.reload.metadata["failed_repos"]
     assert_equal [ repo_bad.id ], failed.map { |f| f["id"] }
     assert_match(/Authentication failed/, failed.first["error"])
@@ -1118,7 +1120,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     context_service(session, "ctr1", runtime: runtime).send(:inject_repositories)
 
     commands = runtime.execs.map { |cmd| Array(cmd).join(" ") }
-    assert commands.any? { |c| c.include?("clone --filter=blob:none --branch=main https://gitlab.example.com/team/service.git") }
+    assert commands.any? { |c| c.include?("clone --filter=blob:none") && c.include?("URL=https://gitlab.example.com/team/service.git") }
     assert commands.none? { |c| c.include?("gitlab.com") || c.include?("glpat-secret") }
   end
 
