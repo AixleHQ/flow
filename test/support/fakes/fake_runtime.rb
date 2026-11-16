@@ -453,6 +453,7 @@ module ContainerRuntime
       return terminal_clients if cmd_str.include?("tmux list-clients")
       return KIRO_MODEL_CATALOGUE if cmd_str.include?("--list-models")
       return COPILOT_MODEL_CATALOGUE if cmd_str.include?(Agents::CopilotCliAdapter::MODELS_SCRIPT)
+      return ANTIGRAVITY_USAGE_ENVELOPE if cmd_str.include?("/usage") && cmd_str.include?("--output-format json")
 
       if cmd_str.include?("find") && cmd_str.include?("/workspace/outputs")
         return @fs.keys.select { |k| k.start_with?("/workspace/outputs/") }.join("\n")
@@ -752,6 +753,14 @@ module ContainerRuntime
                  "state #{Agents::KiroCliAdapter::PROFILE_STATE_KEY} " \
                  '{"arn":"arn:aws:codewhisperer:us-east-1:1:profile/A"}'
       },
+      # Antigravity's OAuth token file, written by `agy` on login (see
+      # Agents::AntigravityCliAdapter's header comment). The quota probe the
+      # cleanup runs reads `/usage` through the command router, not this file.
+      "antigravity_cli" => {
+        path: "/home/antigravity/.gemini/antigravity-cli/antigravity-oauth-token",
+        content: { "token" => { "access_token" => "tok-123", "refresh_token" => "refresh-123" },
+                   "auth_method" => "consumer" }.to_json
+      },
       # What `copilot login` leaves in config.json with no keychain (1.0.108): the comment
       # lines the CLI writes at the top, the trusted folder seeded before login, and the
       # token stored under both of the keys it uses for one github.com account.
@@ -800,6 +809,46 @@ module ContainerRuntime
           "context_window_tokens" => 256_000, "rate_multiplier" => 0.05, "rate_unit" => "Credit" }
       ],
       "default_model" => "auto"
+    }.to_json
+
+    # A real `agy -p /usage --output-format json` success envelope, captured on
+    # agy 1.5.9. Note `num_turns: 0` and the zeroed `usage` — the probe spends no
+    # model turn. Each group carries one weekly bucket, so the group name is the
+    # label the adapter surfaces.
+    ANTIGRAVITY_USAGE_ENVELOPE = {
+      "conversation_id" => "",
+      "status" => "SUCCESS",
+      "response" => "Gemini Models\tWeekly Limit Remaining\t100%\t2026-11-23T00:49:24Z\n" \
+                    "Claude and GPT models\tWeekly Limit Remaining\t100%\t2026-11-23T00:49:24Z\n",
+      "duration_seconds" => 0,
+      "num_turns" => 0,
+      "usage" => { "input_tokens" => 0, "output_tokens" => 0, "thinking_tokens" => 0,
+                   "cache_read_tokens" => 0, "total_tokens" => 0 },
+      "command" => {
+        "name" => "usage",
+        "data" => {
+          "description" => "Within each group, models share a weekly limit. Quota is consumed " \
+                          "proportionally to the cost of the tokens.",
+          "groups" => [
+            {
+              "name" => "Gemini Models",
+              "description" => "Models within this group: Gemini 3.8 Flash",
+              "buckets" => [
+                { "id" => "gemini-weekly", "name" => "Weekly Limit Remaining", "window" => "weekly",
+                  "remaining_fraction" => 1, "reset_time" => "2026-11-23T00:49:24Z" }
+              ]
+            },
+            {
+              "name" => "Claude and GPT models",
+              "description" => "Models within this group: Claude Sonnet 4.6, Claude Opus 4.6, GPT-OSS 120B",
+              "buckets" => [
+                { "id" => "3p-weekly", "name" => "Weekly Limit Remaining", "window" => "weekly",
+                  "remaining_fraction" => 1, "reset_time" => "2026-11-23T00:49:24Z" }
+              ]
+            }
+          ]
+        }
+      }
     }.to_json
 
     MITM_LOGS = {

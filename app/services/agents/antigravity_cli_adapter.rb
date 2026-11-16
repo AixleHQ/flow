@@ -40,6 +40,14 @@ module Agents
                             "onboardingComplete" => true }.freeze
     WORKSPACE = "/workspace"
 
+    # The metadata key under which the last `/usage` probe's snapshot is stored,
+    # and the print-mode command that reads it. `/usage` is the CLI's own quota
+    # view; in print mode it answers with `num_turns: 0` and a zeroed `usage`
+    # (verified against agy 1.5.9), so the probe spends no model turn. Never add
+    # `--disable-slash-commands`: agy then sends `/usage` as a billed prompt.
+    SUBSCRIPTION_USAGE_KEY = "subscription_usage"
+    USAGE_PROBE_COMMAND = [ "agy", "-p", "/usage", "--output-format", "json", "--print-timeout", "20s" ].freeze
+
     # API-equivalent prices in USD per million tokens. Antigravity's result event
     # reports cache reads as a subset of input tokens, so cached input is removed
     # from the regular input bucket before pricing. Keep this table beside the
@@ -332,6 +340,59 @@ module Agents
       )
     end
 
+    # Antigravity's remaining quota is read from the CLI itself (`agy`'s `/usage`
+    # print mode), which only runs inside the container — so the reading is a
+    # snapshot captured here at cleanup, not a live server-side fetch. Only the
+    # session phase is probed: at :auth the credential was just captured and no
+    # quota has been spent since the last session.
+    def collect_credential_metadata(runtime, container, credential, phase)
+      return {} if phase != :session || credential.blank?
+
+      stdout, _stderr, status = runtime.exec(container, USAGE_PROBE_COMMAND, stdout: true, stderr: true)
+      return {} unless status.to_i.zero?
+
+      windows = usage_windows_from_probe(Array(stdout).join)
+      return {} if windows.empty?
+
+      { SUBSCRIPTION_USAGE_KEY => { "fetched_at" => Time.current.utc.iso8601, "windows" => windows } }
+    rescue StandardError => e
+      Rails.logger.warn("[AntigravityCliAdapter] could not read the quota: #{e.class}: #{e.message}")
+      {}
+    end
+
+    # The quota snapshot is the only source for this runtime's remaining quota,
+    # and workflow steps are where Antigravity runs — so its cleanup must probe
+    # even though every other runtime skips metadata collection there.
+    def collect_credential_metadata_on_workflow_step?
+      true
+    end
+
+    # Reads the snapshot #collect_credential_metadata stored. Lives outside
+    # #fetch_subscription_usage because the server cannot fetch this quota live;
+    # SubscriptionUsageService prefers it when the adapter responds to it.
+    def fetch_subscription_usage_from_snapshot(credential)
+      snapshot = credential&.metadata&.dig(SUBSCRIPTION_USAGE_KEY)
+      return nil unless snapshot.is_a?(Hash)
+
+      windows = Array(snapshot["windows"]).map(&:symbolize_keys)
+      # A window that reset since the snapshot was taken is stale: the card has
+      # no "last updated" line, so a week-old 95% reading would still say "resets
+      # now" after the quota already reset. Drop reset windows; a snapshot with
+      # none left is no reading at all.
+      windows = windows.reject { |window| window_reset?(window[:resets_at]) }
+      return nil if windows.empty?
+
+      { status: "ok", windows: windows, fetched_at: snapshot["fetched_at"] }
+    end
+
+    def window_reset?(resets_at)
+      return false if resets_at.blank?
+
+      Time.zone.parse(resets_at.to_s) < Time.current
+    rescue ArgumentError
+      false
+    end
+
     def context_file_path = "#{home_dir}/.gemini/GEMINI.md"
     def skills_agent_name = "gemini-cli"
     def skills_install_path = "#{home_dir}/.gemini/skills"
@@ -357,6 +418,63 @@ module Agents
     private
 
     ANSI_ESCAPE = /\e(?:\[[0-?]*[ -\/]*[@-~]|\][^\a]*(?:\a|\e\\))/.freeze
+
+    # The `/usage` print-mode envelope is a single JSON line; the CLI may
+    # interleave other output around it. Each bucket becomes one window.
+    def usage_windows_from_probe(stdout)
+      envelope = parse_print_envelope(stdout)
+      return [] unless envelope.is_a?(Hash) && envelope["status"] == "SUCCESS"
+
+      command = envelope["command"]
+      data = command.is_a?(Hash) ? command["data"] : nil
+      groups = data.is_a?(Hash) ? Array(data["groups"]) : []
+      groups.flat_map { |group| usage_windows_from_group(group) }.compact
+    end
+
+    def usage_windows_from_group(group)
+      return [] unless group.is_a?(Hash)
+
+      group_name = group["name"].to_s.presence
+      buckets = Array(group["buckets"]).select { |bucket| bucket.is_a?(Hash) && bucket["disabled"] != true }
+      return [] if buckets.empty?
+
+      buckets.filter_map do |bucket|
+        fraction = bucket["remaining_fraction"]
+        key = bucket["id"].to_s.presence
+        next if fraction.nil? || key.blank?
+
+        bucket_name = bucket["name"].to_s.presence
+        # The bucket id is a dynamic vendor slug (e.g. "gemini-weekly"), so the
+        # card can't label it statically. Carry a human label: the group name,
+        # qualified by the bucket name only when a group has several buckets.
+        label = buckets.one? || bucket_name.blank? ? group_name : [ group_name, bucket_name ].compact.join(" · ")
+
+        {
+          key: key,
+          label: label.presence,
+          utilization: ((1.0 - fraction.to_f) * 100).clamp(0.0, 100.0),
+          resets_at: bucket["reset_time"].presence,
+          window_duration_mins: window_minutes_for(bucket["window"])
+        }.compact
+      end
+    end
+
+    def window_minutes_for(window)
+      { "weekly" => 10_080, "5h" => 300 }[window.to_s]
+    end
+
+    def parse_print_envelope(stdout)
+      stdout.to_s.each_line do |line|
+        trimmed = line.strip
+        next unless trimmed.start_with?("{")
+
+        parsed = JSON.parse(trimmed)
+        return parsed if parsed.is_a?(Hash)
+      rescue JSON::ParserError
+        next
+      end
+      nil
+    end
 
     def terminal_output(terminal_session)
       terminal_session.session_logs.find_by(name: "terminal_output.log")&.file&.read
