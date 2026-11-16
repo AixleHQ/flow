@@ -721,6 +721,38 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert RunnerOperation.find_by(op: "env.reset").expired?
   end
 
+  # DESIGN.md §6.7: after an outage longer than the grace the machine is reset
+  # when it is heard again. A machine heard just long enough to be sent the reset
+  # that then goes unanswered (its answer never reached the runner) is not failed.
+  test "an unanswered env.reset of a session that lost contact keeps the machine, which is reset when it is heard again" do
+    @runner.update!(reuse_policy: :reset)
+    handle = start_session
+    @session.mark_contact_lost!(Time.current)
+    @environment.update_columns(last_heartbeat_at: Time.current)
+    @host_runner.answer_with("env.reset", :none)
+
+    in_activity(ContainerRuntime::RunnerRuntime::ACTIVITY_MARGIN + 1.0, CleanupProbe, handle)
+
+    @environment.reload
+    assert_equal "registered", @environment.state
+    assert_equal @session.id, @environment.current_session_id, "the session keeps the machine"
+    assert RunnerOperation.find_by(op: "env.reset").expired?
+    assert_not @runtime.session_absent?(handle)
+
+    @environment.update_columns(last_heartbeat_at: 10.minutes.ago)
+    assert_not @runtime.cleanup_ready?(handle), "nothing is sent while the machine is away"
+
+    @environment.update_columns(last_heartbeat_at: Time.current)
+    @host_runner.answer_with("env.reset", nil)
+    assert @runtime.cleanup_ready?(handle)
+    @runtime.cleanup_session(handle, failed: true)
+
+    @environment.reload
+    assert_nil @environment.current_session_id
+    assert_equal "registered", @environment.state
+    assert_equal "idle", @environment.display_state
+  end
+
   # As ToolStrategy#wait_with_heartbeat: a stopped session stops waiting at once.
   # CancelProbe does not take Temporal's asynchronous raise, so it is the
   # wait's own check that stops it.

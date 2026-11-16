@@ -24,6 +24,11 @@ governance, community health — carry none.
   GitLab token, which Flow replaces only in its last ten minutes.
 
 ### Changed
+- Runners: a machine recovers from a network outage within about a minute. The
+  runner closes a connection that stopped answering instead of reusing it, which
+  needs the next runner release (0.4.1), and a machine whose reset goes
+  unanswered while it reconnects after a lost-contact session is reset when it
+  is heard again, not marked Failed.
 - Runners: the runner pulls the agent images for its machine's own platform
   and falls back to `linux/amd64` when an image has no build for it, so a
   machine on arm64 runs an image built for arm64 natively. `images.yml` builds

@@ -2,10 +2,13 @@ package protocol
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -228,5 +231,137 @@ func TestCheckInRefusalIsClassified(t *testing.T) {
 	r, ok := AsRefusal(err)
 	if !ok || r.Endpoint != EndpointCheckIn || r.Code != "runner_version_unsupported" || Classify(err) != ActionUpdate {
 		t.Fatalf("%v", err)
+	}
+}
+
+// silentProxy forwards TCP to a server until cut: from then on the connections
+// it holds go quiet, as the ones of a machine whose packets are dropped do. It
+// reads what they send, answers nothing and closes nothing, so the client is left
+// with a socket that looks open. A connection made after heal goes through again.
+type silentProxy struct {
+	listener net.Listener
+	target   string
+
+	mu    sync.Mutex
+	conns []*silentConn
+}
+
+type silentConn struct {
+	mu   sync.Mutex
+	dead bool
+}
+
+func (c *silentConn) isDead() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.dead
+}
+
+func newSilentProxy(t *testing.T, target string) *silentProxy {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &silentProxy{listener: l, target: target}
+	go p.serve()
+	return p
+}
+
+func (p *silentProxy) addr() string { return p.listener.Addr().String() }
+
+func (p *silentProxy) close() { _ = p.listener.Close() }
+
+// cut silences every connection open now.
+func (p *silentProxy) cut() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, c := range p.conns {
+		c.mu.Lock()
+		c.dead = true
+		c.mu.Unlock()
+	}
+}
+
+func (p *silentProxy) serve() {
+	for {
+		client, err := p.listener.Accept()
+		if err != nil {
+			return
+		}
+		upstream, err := net.Dial("tcp", p.target)
+		if err != nil {
+			_ = client.Close()
+			continue
+		}
+		state := &silentConn{}
+		p.mu.Lock()
+		p.conns = append(p.conns, state)
+		p.mu.Unlock()
+		go pipe(upstream, client, state)
+		go pipe(client, upstream, state)
+	}
+}
+
+func pipe(dst, src net.Conn, state *silentConn) {
+	defer dst.Close()
+	defer src.Close()
+	buf := make([]byte, 32<<10)
+	for {
+		n, err := src.Read(buf)
+		if n > 0 && !state.isDead() {
+			if _, werr := dst.Write(buf[:n]); werr != nil {
+				return
+			}
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
+// A connection that stops answering without being closed is not reused: the poll
+// that finds it dead fails, and the next one dials again and reaches the server
+// (DESIGN.md §6.7).
+func TestARequestAfterAConnectionDiedSilentlyDialsAgain(t *testing.T) {
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ops":[]}`))
+	}))
+	server.EnableHTTP2 = true
+	server.StartTLS()
+	defer server.Close()
+	proxy := newSilentProxy(t, strings.TrimPrefix(server.URL, "https://"))
+	defer proxy.close()
+
+	transport := newTransport(200*time.Millisecond, 200*time.Millisecond)
+	transport.TLSClientConfig = &tls.Config{RootCAs: server.Client().Transport.(*http.Transport).TLSClientConfig.RootCAs}
+	c, err := NewClient("https://"+proxy.addr(), "0.0.0-dev", &http.Client{Transport: transport, Timeout: 5 * time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	if _, err := c.PollOps(ctx, "aracc_x", 0, 0); err != nil {
+		t.Fatalf("the first poll: %v", err)
+	}
+	proxy.cut()
+	started := time.Now()
+	_, err = c.PollOps(ctx, "aracc_x", 0, 0)
+	var netErr *NetworkError
+	if !errors.As(err, &netErr) {
+		t.Fatalf("a poll on the dead connection: %v", err)
+	}
+	if took := time.Since(started); took > 3*time.Second {
+		t.Errorf("the dead connection was found after %s, not by its health check", took)
+	}
+
+	// The network is back: the connection that died is not the one used.
+	started = time.Now()
+	if _, err := c.PollOps(ctx, "aracc_x", 0, 0); err != nil {
+		t.Fatalf("the poll after the network came back: %v", err)
+	}
+	if took := time.Since(started); took > 3*time.Second {
+		t.Errorf("the poll after the network came back took %s", took)
 	}
 }
