@@ -22,6 +22,7 @@ import {
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import {
+  IconAdjustments,
   IconBuildingCommunity,
   IconCheck,
   IconChevronDown,
@@ -34,6 +35,7 @@ import {
   IconLayoutKanban,
   IconLink,
   IconPencil,
+  IconPlugConnected,
   IconPlus,
   IconRefresh,
   IconSearch,
@@ -66,6 +68,13 @@ import { GithubConnectModal, type GithubProps } from './GithubConnectModal';
 import { GithubProjectsModal } from './GithubProjectsModal';
 import { GitlabGroupModal } from './GitlabGroupModal';
 import { GitlabTrackersModal } from './GitlabTrackersModal';
+import {
+  confirmInsightsDisconnect,
+  type InsightsProps,
+  insightsProjectSummary,
+  rotateInsightsSecret,
+} from './insightsActions';
+import { InsightsConnectModal, InsightsProjectModal } from './InsightsModals';
 import { JiraConnectModal, JiraProjectsModal, type JiraProps, JiraWebhookModal } from './JiraConnectModal';
 import { LinearConnectModal, type LinearProps, LinearTeamsModal } from './LinearConnectModal';
 import { TeamsApprovalModal } from './TeamsApprovalModal';
@@ -74,6 +83,7 @@ import { YoutrackConnectModal, type YoutrackProps } from './YoutrackConnectModal
 export type { AzureDevopsProps } from './AzureDevopsConnectModal';
 export type { BitbucketProps } from './BitbucketConnectModal';
 export type { GithubProps } from './GithubConnectModal';
+export type { InsightsProps } from './insightsActions';
 export type { JiraProps } from './JiraConnectModal';
 export type { LinearProps } from './LinearConnectModal';
 export type { YoutrackProps } from './YoutrackConnectModal';
@@ -114,6 +124,8 @@ interface IntegrationsContentProps {
   slack?: SlackProps;
   // Absent on the company page.
   teams?: TeamsProps;
+  // Absent on the company page. `enabled: false` is a deployment Insights has not registered.
+  insights?: InsightsProps;
 }
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -127,6 +139,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   jira: 'Jira',
   linear: 'Linear',
   youtrack: 'YouTrack',
+  insights: 'Aixle Insights',
 };
 
 const CHAT_PROVIDERS = ['slack', 'teams'];
@@ -180,6 +193,7 @@ export const IntegrationsContent = ({
   youtrack,
   slack,
   teams,
+  insights,
 }: IntegrationsContentProps) => {
   const { canExecute, canManageCompany } = useProjectPermissions();
   const isProjectContext = basePath.includes('projects');
@@ -249,6 +263,11 @@ export const IntegrationsContent = ({
 
   const [youtrackOpen, setYoutrackOpen] = useState(false);
   const youtrackAvailable = isProjectContext && !!youtrack?.enabled;
+
+  // One Insights connection per company: offered until there is one, managed from its row after.
+  const [insightsConnectOpen, setInsightsConnectOpen] = useState(false);
+  const [insightsProjectOpen, setInsightsProjectOpen] = useState(false);
+  const insightsAvailable = isProjectContext && !!insights?.enabled && !!insights.canConnect && !insights.connection;
 
   // The Atlassian and Linear apps' callbacks land here with the connection still to finish.
   useEffect(() => {
@@ -655,6 +674,14 @@ export const IntegrationsContent = ({
                     Microsoft Teams
                   </Menu.Item>
                 )}
+                {insightsAvailable && (
+                  <Menu.Item
+                    leftSection={<IntegrationLogo provider="insights" />}
+                    onClick={() => setInsightsConnectOpen(true)}
+                  >
+                    Aixle Insights
+                  </Menu.Item>
+                )}
               </Menu.Dropdown>
             </Menu>
           )
@@ -786,6 +813,15 @@ export const IntegrationsContent = ({
                         Microsoft Teams
                       </Button>
                     )}
+                    {insightsAvailable && (
+                      <Button
+                        variant="outline"
+                        leftSection={<IntegrationLogo provider="insights" />}
+                        onClick={() => setInsightsConnectOpen(true)}
+                      >
+                        Aixle Insights
+                      </Button>
+                    )}
                   </Group>
                 )
               }
@@ -867,6 +903,11 @@ export const IntegrationsContent = ({
                                     integration.teamsApprovedBy ?? 'an administrator'
                                   } · files ${integration.teamsFileAccess ? 'on' : 'off'}`
                                 : 'Waiting for a Microsoft 365 administrator to approve'}
+                            </Text>
+                          )}
+                          {integration.provider === 'insights' && insights && (
+                            <Text fz={11} c="dimmed" truncate maw={260}>
+                              {insightsProjectSummary(insights)}
                             </Text>
                           )}
                           {/* Which Azure project this connection is pinned to, and
@@ -1066,6 +1107,58 @@ export const IntegrationsContent = ({
                               Channels
                             </Button>
                           )}
+                        {integration.provider === 'insights' && insights && projectId != null && (
+                          <>
+                            <Button
+                              aria-label="Aixle Insights for this project"
+                              size="compact-xs"
+                              variant="light"
+                              leftSection={<IconAdjustments size={12} />}
+                              onClick={() => setInsightsProjectOpen(true)}
+                            >
+                              This project
+                            </Button>
+                            {insights.canConnect && integration.status === 'error' && (
+                              <Tooltip label="Enter a new pairing code">
+                                <ActionIcon
+                                  aria-label="Enter a new Insights pairing code"
+                                  variant="subtle"
+                                  size="sm"
+                                  onClick={() => setInsightsConnectOpen(true)}
+                                >
+                                  <IconPlugConnected size={16} />
+                                </ActionIcon>
+                              </Tooltip>
+                            )}
+                            {insights.canConnect && integration.status !== 'error' && (
+                              <Tooltip label="Rotate secret">
+                                <ActionIcon
+                                  aria-label="Rotate the Insights secret"
+                                  variant="subtle"
+                                  size="sm"
+                                  onClick={() => rotateInsightsSecret(projectId)}
+                                >
+                                  <IconKey size={16} />
+                                </ActionIcon>
+                              </Tooltip>
+                            )}
+                            {insights.canConnect && (
+                              <Tooltip label="Disconnect">
+                                <ActionIcon
+                                  aria-label="Disconnect Aixle Insights"
+                                  variant="subtle"
+                                  size="sm"
+                                  color="red"
+                                  onClick={() =>
+                                    confirmInsightsDisconnect(projectId, insights.connection?.organizationName)
+                                  }
+                                >
+                                  <IconTrash size={16} />
+                                </ActionIcon>
+                              </Tooltip>
+                            )}
+                          </>
+                        )}
                         {integration.provider === 'github' && canExecute && !readOnly && (
                           <Tooltip label="Test connection">
                             <ActionIcon
@@ -1376,7 +1469,7 @@ export const IntegrationsContent = ({
                             </ActionIcon>
                           </Tooltip>
                         )}
-                        {canExecute && (!readOnly || canManageCompany) && (
+                        {integration.provider !== 'insights' && canExecute && (!readOnly || canManageCompany) && (
                           <Tooltip label="Remove">
                             <ActionIcon
                               aria-label="Remove"
@@ -1502,6 +1595,22 @@ export const IntegrationsContent = ({
           onClose={() => setChannelsOpen(false)}
           canEdit={canExecute}
         />
+      )}
+
+      {insights?.enabled && projectId !== undefined && (
+        <>
+          <InsightsConnectModal
+            opened={insightsConnectOpen}
+            onClose={() => setInsightsConnectOpen(false)}
+            projectId={projectId}
+          />
+          <InsightsProjectModal
+            opened={insightsProjectOpen}
+            onClose={() => setInsightsProjectOpen(false)}
+            projectId={projectId}
+            insights={insights}
+          />
+        </>
       )}
 
       {azureDevops && (

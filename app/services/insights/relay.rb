@@ -5,9 +5,11 @@ module Insights
   #
   # .capture runs in the usage ingest, once a batch has proven its sessions: what belongs
   # to a session of an exported project is enriched, masked and written to the outbox.
-  # .drain, on a Temporal cron, sends each connection's due rows — merged per signal up to
-  # MAX_RECORDS — and deletes what Insights accepted. A row is claimed with a lease, so no
-  # lock is held while Insights is called and a sender that dies is picked up later.
+  # .drain, on a Temporal cron, sends each connection's due rows — rows of one resource
+  # merged into one request, up to MAX_RECORDS — and deletes what Insights accepted. Unless
+  # INSIGHTS_RESEND is on, it deletes what Insights refused too. A row is claimed with a
+  # lease, so no lock is held while Insights is called and a sender that dies is picked up
+  # later.
   class Relay
     LEASE = 10.minutes
     FIRST_RETRY = 1.minute
@@ -15,8 +17,13 @@ module Insights
     GIVE_UP_AFTER = 7.days
     KEEP_FAILED = 7.days
     MAX_RECORDS = 1_000
+    # Insights takes at most 5 MB gzipped and 50 MB inflated per request. Claude Code's raw
+    # API bodies repeat the conversation and compress far better than 10:1.
     MAX_BYTES = 4.megabytes
+    MAX_JSON_BYTES = 40.megabytes
     ROWS_PER_DRAIN = 500
+    # Insights takes 60 requests a minute per connection, and a drain starts every minute.
+    MAX_REQUESTS = 50
     ERROR_LIMIT = 255
 
     # Raised for records Insights refused, so the report names what went wrong.
@@ -53,11 +60,18 @@ module Insights
 
     def drain
       rows = claim
-      InsightsOtlpBatch::SIGNALS.each do |signal|
-        groups = group(rows.select { |row| row.signal == signal })
-        deliver(signal, groups) until groups.empty? || @halted
-        release(groups.flatten) if @halted
+      queues = InsightsOtlpBatch::SIGNALS.map { |signal| [ signal, group(rows.select { |row| row.signal == signal }) ] }
+      MAX_REQUESTS.times do
+        break if @halted
+
+        index = queues.index { |_signal, groups| groups.any? }
+        break unless index
+
+        signal, groups = queues.delete_at(index)
+        deliver(signal, groups)
+        queues << [ signal, groups ]
       end
+      queues.each { |_signal, groups| release(groups.flatten) }
       @outcome.merge("claimed" => rows.size)
     end
 
@@ -70,21 +84,31 @@ module Insights
       InsightsOtlpBatch.where(id: ids, claimed_until: lease).order(:id).to_a
     end
 
+    # Insights takes one resource per request, so rows are grouped by theirs. Only the
+    # resource and the size are kept: a drain's rows inflated at once could be gigabytes.
     def group(rows)
-      rows.slice_before(new_group_tracker).to_a
+      shapes = rows.to_h { |row| [ row.id, shape_of(row) ] }
+      rows.group_by { |row| shapes[row.id][:resource] }.values
+          .flat_map { |same| same.slice_before(new_group_tracker(shapes)).to_a }
     end
 
-    # Starts a new request when adding the row would pass either limit; a row over a limit
+    def shape_of(row)
+      json = Zlib.gunzip(row.payload)
+      { resource: JSON.parse(json).fetch(OtlpEnvelope::KEYS.fetch(row.signal)).first["resource"], json_bytes: json.bytesize }
+    end
+
+    # Starts a new request when adding the row would pass any limit; a row over a limit
     # on its own is still sent alone, and Insights answers 413 if it is too big.
-    def new_group_tracker
-      records = 0
-      bytes = 0
+    def new_group_tracker(shapes)
+      records = bytes = json_bytes = 0
       lambda do |row|
-        fresh = records.positive? && (records + row.record_count > MAX_RECORDS || bytes + row.payload.bytesize > MAX_BYTES)
-        records = 0 if fresh
-        bytes = 0 if fresh
+        inflated = shapes[row.id][:json_bytes]
+        fresh = records.positive? && (records + row.record_count > MAX_RECORDS || bytes + row.payload.bytesize > MAX_BYTES ||
+                                      json_bytes + inflated > MAX_JSON_BYTES)
+        records = bytes = json_bytes = 0 if fresh
         records += row.record_count
         bytes += row.payload.bytesize
+        json_bytes += inflated
         fresh
       end
     end
@@ -95,10 +119,12 @@ module Insights
 
       if result.accepted?
         done(rows)
-      elsif result.partially_rejected?
-        failed(rows, "Insights refused #{result.rejected} of #{rows.sum(&:record_count)} #{signal} records: #{result.message}")
       elsif [ 401, 403 ].include?(result.status)
         refused_connection(rows)
+      elsif !Config.resend?
+        let_go(signal, rows, result)
+      elsif result.partially_rejected?
+        failed(rows, "Insights refused #{result.rejected} of #{rows.sum(&:record_count)} #{signal} records: #{result.message}")
       elsif result.status == 413 && rows.size > 1
         groups.unshift(*rows.each_slice((rows.size / 2.0).ceil).to_a)
       elsif [ 400, 413, 422 ].include?(result.status)
@@ -114,7 +140,9 @@ module Insights
 
     def merge(rows)
       key = OtlpEnvelope::KEYS.fetch(rows.first.signal)
-      { key => rows.flat_map { |row| row.request.fetch(key, []) } }
+      scopes = OtlpEnvelope::SIGNALS.fetch(key)[:scopes]
+      resources = rows.flat_map { |row| row.request.fetch(key, []) }
+      { key => [ resources.first.merge(scopes => resources.flat_map { |resource| Array(resource[scopes]) }) ] }
     end
 
     def secret
@@ -124,6 +152,22 @@ module Insights
     def done(rows)
       InsightsOtlpBatch.where(id: rows.map(&:id)).delete_all
       @outcome["delivered"] += rows.size
+    end
+
+    # Without INSIGHTS_RESEND, Insights' answer is final: the rows go, and the answer is logged.
+    def let_go(signal, rows, result)
+      InsightsOtlpBatch.where(id: rows.map(&:id)).delete_all
+      records = rows.sum(&:record_count)
+      if result.partially_rejected?
+        @outcome["delivered"] += rows.size
+        @outcome["records_refused"] += result.rejected
+        lost = "#{result.rejected} of #{records}"
+      else
+        @outcome["let_go"] += rows.size
+        lost = records.to_s
+      end
+      Rails.logger.info("[InsightsRelay] integration ##{@integration.id}: Insights answered #{result.status}, " \
+                        "#{lost} #{signal} records not taken #{result.message.to_s.truncate(ERROR_LIMIT)}".strip)
     end
 
     def failed(rows, message)

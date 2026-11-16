@@ -44,7 +44,7 @@ module Insights
     def claim(code:, company_id:, company_name:, deployment_id:, deployment_secret:)
       request = Net::HTTP::Post.new(path("/connections/claim"))
       request.basic_auth(deployment_id, deployment_secret)
-      json!(request, { code: code.to_s.delete("-").strip, company: { id: company_id, name: company_name } })
+      json!(request, { code: code.to_s.delete("-").strip, company: { id: company_id.to_s, name: company_name } })
       body = perform!(request)
       { connection_id: body.fetch("connection_id"), secret: body.fetch("secret"),
         organization_id: body.dig("organization", "id"), organization_name: body.dig("organization", "name") }
@@ -75,7 +75,7 @@ module Insights
     # One OTLP/HTTP JSON export request of the signal — the agents' own records, enriched
     # by Flow — gzipped.
     def export(secret, signal, payload)
-      request = authorized(Net::HTTP::Post.new(path("/otlp/v1/#{signal}")), secret)
+      request = authorized(Net::HTTP::Post.new(path("/aixle_flow/#{signal}")), secret)
       request["Content-Type"] = "application/json"
       request["Content-Encoding"] = "gzip"
       request.body = Zlib.gzip(payload.to_json)

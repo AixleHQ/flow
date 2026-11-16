@@ -4,7 +4,7 @@ require "test_helper"
 
 # Insights::Relay and Insights::OtlpEnvelope (docs/design/insights-otlp-relay.md §4–§5):
 # what an exported session's agent sends reaches the outbox enriched and masked, and the
-# outbox reaches Insights at least once.
+# outbox reaches Insights — once, or until Insights takes it when INSIGHTS_RESEND is on.
 class Insights::RelayTest < ActiveSupport::TestCase
   setup do
     @company = create(:company)
@@ -24,8 +24,10 @@ class Insights::RelayTest < ActiveSupport::TestCase
     attrs = attributes(resource.dig("resource", "attributes"))
     assert_equal @user.email, attrs["user.email"]
     assert_equal "ip-7", attrs["insights.project.id"]
-    assert_equal @session.id.to_s, attrs["aixle_flow.session.id"]
-    assert_equal "claude-code", attrs["service.name"]
+    assert_equal "aixle-flow", attrs["service.name"]
+    assert_equal "claude-code", attrs["aixle_flow.agent.service.name"]
+    session_id = resource.dig("resource", "attributes").find { |kv| kv["key"] == "aixle_flow.session.id" }
+    assert_equal({ "stringValue" => @session.id.to_s }, session_id["value"])
     assert_not attrs.key?("terminal_session_token")
     assert_not attrs.key?(UsageStatistics::SessionKey::ATTRIBUTE)
 
@@ -34,6 +36,15 @@ class Insights::RelayTest < ActiveSupport::TestCase
     assert_equal "user_prompt", record_attrs["event.name"]
     assert_equal "deploy it", record_attrs["prompt"]
     assert_match(/\A\h{32}\z/, record_attrs["aixle_flow.record.id"])
+  end
+
+  test "each resource of an agent's request is a batch of its own" do
+    payload = logs_payload(@session)
+    payload["resourceLogs"] << logs_payload(@session, extra_resource: { "service.version" => "2" })["resourceLogs"].first
+
+    Insights::Relay.capture(payload, [ @session ])
+
+    assert_equal [ 1, 1 ], InsightsOtlpBatch.order(:id).map { |batch| batch.request["resourceLogs"].size }
   end
 
   test "the same record gets the same id, so a re-send can be told apart from a new one" do
@@ -82,18 +93,70 @@ class Insights::RelayTest < ActiveSupport::TestCase
     assert_nil Insights::Relay.capture({ "resourceLogs" => "garbage" }, [ @session ])
   end
 
-  test "due rows are merged per signal into one request and deleted once accepted" do
+  test "due rows of one resource are merged into one request with that resource, and deleted once accepted" do
     3.times { Insights::Relay.capture(logs_payload(@session), [ @session ]) }
 
     outcome = Insights::Relay.drain(client: @insights)
 
     assert_equal({ "delivered" => 3, "claimed" => 3 }, outcome[@integration.id])
     assert_equal [ [ :export, { secret: @integration.credentials_data["secret"], signal: "logs" } ] ], @insights.calls
-    assert_equal 3, @insights.exported.sole["resourceLogs"].size
+    resource = @insights.exported.sole["resourceLogs"].sole
+    assert_equal 3, resource["scopeLogs"].size
     assert_equal 0, InsightsOtlpBatch.count
   end
 
-  test "a rate limit holds the rows until Retry-After and stops the drain" do
+  test "rows of different resources go in separate requests" do
+    Insights::Relay.capture(logs_payload(@session), [ @session ])
+    Insights::Relay.capture(logs_payload(@session, extra_resource: { "service.version" => "2" }), [ @session ])
+
+    Insights::Relay.drain(client: @insights)
+
+    assert_equal [ 1, 1 ], @insights.exported.map { |request| request["resourceLogs"].size }
+  end
+
+  test "a drain sends at most MAX_REQUESTS requests, taking turns between signals, and leaves the rest for the next" do
+    (Insights::Relay::MAX_REQUESTS + 1).times do |index|
+      batch_for(signal: "logs", resource: { "attributes" => [ { "key" => "n", "value" => { "stringValue" => index.to_s } } ] })
+    end
+    batch_for(signal: "metrics", resource: { "attributes" => [] })
+
+    outcome = Insights::Relay.drain(client: @insights)
+
+    assert_equal Insights::Relay::MAX_REQUESTS, @insights.calls.size
+    assert_equal "metrics", @insights.calls.second.last[:signal]
+    assert_equal({ "delivered" => Insights::Relay::MAX_REQUESTS, "claimed" => Insights::Relay::MAX_REQUESTS + 2 },
+                 outcome[@integration.id])
+    assert_equal [ [ "pending", nil ] ] * 2, InsightsOtlpBatch.pluck(:state, :claimed_until)
+  end
+
+  test "without INSIGHTS_RESEND whatever Insights answers is final: what it refused is let go, not sent again" do
+    Insights::Relay.capture(logs_payload(@session), [ @session ])
+    Insights::Relay.capture(metrics_payload(@session), [ @session ])
+    Insights::Relay.capture(spans_payload(@session), [ @session ])
+    @insights.export_results = [ Insights::Client::ExportResult.new(status: 200, rejected: 1, message: "record 0: event.name"),
+                                 Insights::Client::ExportResult.new(status: 404),
+                                 Insights::Client::ExportResult.new(status: 429, retry_after: 60) ]
+
+    outcome = Insights::Relay.drain(client: @insights)
+
+    assert_equal %w[logs metrics traces], @insights.calls.map { |_method, args| args[:signal] }
+    assert_equal({ "delivered" => 1, "records_refused" => 1, "let_go" => 2, "claimed" => 3 }, outcome[@integration.id])
+    assert_equal 0, InsightsOtlpBatch.count
+  end
+
+  test "without INSIGHTS_RESEND an Insights that does not answer is still tried again" do
+    Insights::Relay.capture(logs_payload(@session), [ @session ])
+    @insights.fail_next(:export, Insights::Client::Error.new("Insights is unreachable: SocketError"))
+
+    Insights::Relay.drain(client: @insights)
+
+    batch = InsightsOtlpBatch.sole
+    assert_equal [ "pending", 1 ], [ batch.state, batch.attempts ]
+    assert_operator batch.next_attempt_at, :>, Time.current
+  end
+
+  test "with INSIGHTS_RESEND a rate limit holds the rows until Retry-After and stops the drain" do
+    insights_deployment!(resend: true)
     Insights::Relay.capture(logs_payload(@session), [ @session ])
     Insights::Relay.capture(metrics_payload(@session), [ @session ])
     @insights.export_results = [ Insights::Client::ExportResult.new(status: 429, retry_after: 120) ]
@@ -106,7 +169,8 @@ class Insights::RelayTest < ActiveSupport::TestCase
     assert_equal 2, InsightsOtlpBatch.where(state: "pending", claimed_until: nil).count
   end
 
-  test "an unreachable Insights backs the rows off, and a week of failures gives up" do
+  test "with INSIGHTS_RESEND a failing Insights backs the rows off, and a week of failures gives up" do
+    insights_deployment!(resend: true)
     Insights::Relay.capture(logs_payload(@session), [ @session ])
     old = InsightsOtlpBatch.sole
     Insights::Relay.capture(logs_payload(@session, prompt: "later"), [ @session ])
@@ -131,7 +195,8 @@ class Insights::RelayTest < ActiveSupport::TestCase
     assert_equal [ "pending", nil ], InsightsOtlpBatch.sole.slice(:state, :claimed_until).values
   end
 
-  test "records Insights refuses are not retried, and say why" do
+  test "with INSIGHTS_RESEND records Insights refuses are kept as failed, not retried, and say why" do
+    insights_deployment!(resend: true)
     Insights::Relay.capture(logs_payload(@session), [ @session ])
     @insights.export_results = [ Insights::Client::ExportResult.new(status: 200, rejected: 1, message: "unknown event") ]
 
@@ -142,13 +207,14 @@ class Insights::RelayTest < ActiveSupport::TestCase
     assert_match(/refused 1 of 1 logs records: unknown event/, batch.last_error)
   end
 
-  test "a request too large for Insights is split in half" do
+  test "with INSIGHTS_RESEND a request too large for Insights is split in half" do
+    insights_deployment!(resend: true)
     2.times { Insights::Relay.capture(logs_payload(@session), [ @session ]) }
     @insights.export_results = [ Insights::Client::ExportResult.new(status: 413) ]
 
     Insights::Relay.drain(client: @insights)
 
-    assert_equal [ 2, 1, 1 ], @insights.exported.map { |request| request["resourceLogs"].size }
+    assert_equal [ 2, 1, 1 ], @insights.exported.map { |request| request["resourceLogs"].sole["scopeLogs"].size }
     assert_equal 0, InsightsOtlpBatch.count
   end
 
@@ -178,6 +244,18 @@ class Insights::RelayTest < ActiveSupport::TestCase
     { "resourceLogs" => [ { "resource" => { "attributes" => resource },
                             "scopeLogs" => [ { "scope" => { "name" => "com.anthropic.claude_code.events" },
                                                "logRecords" => [ record ] } ] } ] }
+  end
+
+  def spans_payload(session)
+    { "resourceSpans" => [ { "resource" => { "attributes" => session_attributes(session) },
+                             "scopeSpans" => [ { "spans" => [ { "name" => "chat gpt-5" } ] } ] } ] }
+  end
+
+  def batch_for(signal:, resource:)
+    key = Insights::OtlpEnvelope::KEYS.fetch(signal)
+    scopes = Insights::OtlpEnvelope::SIGNALS.fetch(key)[:scopes]
+    create(:insights_otlp_batch, integration: @integration, project: @project, terminal_session: @session, signal: signal,
+                                 payload: InsightsOtlpBatch.wrap(key => [ { "resource" => resource, scopes => [ {} ] } ]))
   end
 
   def metrics_payload(session)

@@ -13,7 +13,7 @@ module Insights
     test "claim redeems the code with the deployment credential and returns the connection" do
       stub = stub_request(:post, "#{BASE}/partner/v1/connections/claim")
              .with(basic_auth: %w[dep-1 dep-secret],
-                   body: { code: "ABCD2345", company: { id: 7, name: "Acme Co" } }.to_json)
+                   body: { code: "ABCD2345", company: { id: "7", name: "Acme Co" } }.to_json)
              .to_return(status: 201, body: { connection_id: "conn-1", secret: "aixle_flow_s1",
                                              organization: { id: "org-1", name: "Acme" } }.to_json)
 
@@ -57,7 +57,7 @@ module Insights
     end
 
     test "an export is sent gzipped to its signal's path, and the OTLP partial success is read" do
-      stub = stub_request(:post, "#{BASE}/partner/v1/otlp/v1/logs")
+      stub = stub_request(:post, "#{BASE}/partner/v1/aixle_flow/logs")
              .with(headers: { "Content-Encoding" => "gzip", "Authorization" => "Bearer aixle_flow_s1" }) do |request|
                JSON.parse(Zlib.gunzip(request.body)) == { "resourceLogs" => [] }
              end
@@ -72,14 +72,14 @@ module Insights
     end
 
     test "spans rejected are read from their own partial-success field" do
-      stub_request(:post, "#{BASE}/partner/v1/otlp/v1/traces")
+      stub_request(:post, "#{BASE}/partner/v1/aixle_flow/traces")
         .to_return(status: 200, body: { partialSuccess: { rejectedSpans: "1" } }.to_json)
 
       assert_equal 1, @client.export("s", "traces", { "resourceSpans" => [] }).rejected
     end
 
     test "a rate-limited export carries Retry-After" do
-      stub_request(:post, "#{BASE}/partner/v1/otlp/v1/metrics").to_return(status: 429, headers: { "Retry-After" => "30" })
+      stub_request(:post, "#{BASE}/partner/v1/aixle_flow/metrics").to_return(status: 429, headers: { "Retry-After" => "30" })
 
       result = @client.export("s", "metrics", {})
 

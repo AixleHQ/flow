@@ -9,7 +9,8 @@ module Insights
   # - The session's token and key are removed wherever they sit. The key proves a batch to
   #   Flow's ingest; outside Flow it is a credential for that session's usage.
   # - Each resource names its person, project and session from Flow's records, never from
-  #   what the container set: the agent controls its own environment.
+  #   what the container set: the agent controls its own environment. Its `service.name`
+  #   is Flow's, as Insights requires.
   # - Known secrets of the session are masked, and each log record carries
   #   `aixle_flow.record.id`, a hash of its content, so a re-send — ours or the agent SDK's —
   #   arrives with the same id.
@@ -22,14 +23,19 @@ module Insights
     KEYS = SIGNALS.to_h { |key, shape| [ shape[:signal], key ] }.freeze
     SESSION_ATTRIBUTES = [ "terminal_session_token", UsageStatistics::SessionKey::ATTRIBUTE ].freeze
     RECORD_ID = "aixle_flow.record.id"
-    FLOW_OWNED = %w[user.email insights.project.id vcs.repository.url.full].freeze
+    FLOW_OWNED = %w[service.name user.email insights.project.id vcs.repository.url.full].freeze
+    # Insights refuses a resource named anything else; the agent's own name moves to
+    # AGENT_SERVICE_NAME.
+    SERVICE_NAME = "aixle-flow"
+    AGENT_SERVICE_NAME = "aixle_flow.agent.service.name"
     FLOW_PREFIX = "aixle_flow."
     DATA_POINT_KINDS = %w[gauge sum histogram exponentialHistogram summary].freeze
 
     Part = Struct.new(:session, :signal, :request, :record_count, keyword_init: true)
 
-    # The request split by the session each resource proves it belongs to (by its token and
-    # key, as UsageStatisticsService checks them). A resource that proves none is dropped.
+    # One part per resource that proves its session (by its token and key, as
+    # UsageStatisticsService checks them): Insights takes one resource per request. A
+    # resource that proves none is dropped.
     def self.parts(payload, sessions_by_token)
       new(payload, sessions_by_token).parts
     end
@@ -41,13 +47,14 @@ module Insights
 
     def parts
       SIGNALS.flat_map do |key, shape|
-        Array(@payload[key]).group_by { |resource| owner(resource, shape) }.filter_map do |token, resources|
+        Array(@payload[key]).filter_map do |resource|
+          token = owner(resource, shape)
           session = token && @sessions[token]
           next unless session
 
-          resources = resources.map { |resource| seal(resource, session, shape) }
-          Part.new(session: session, signal: shape[:signal], request: { key => resources },
-                   record_count: count(resources, shape))
+          sealed = seal(resource, session, shape)
+          Part.new(session: session, signal: shape[:signal], request: { key => [ sealed ] },
+                   record_count: items(sealed, shape).size)
         end
       end
     end
@@ -79,10 +86,6 @@ module Insights
 
     def items(resource, shape)
       Array(resource[shape[:scopes]]).flat_map { |scope| Array(scope[shape[:items]]) }
-    end
-
-    def count(resources, shape)
-      resources.sum { |resource| items(resource, shape).size }
     end
 
     def seal(resource, session, shape)
@@ -118,18 +121,24 @@ module Insights
     end
 
     def flow_attributes(attrs, session)
-      kept = Array(attrs).reject do |kv|
+      attrs = Array(attrs)
+      kept = attrs.reject do |kv|
         key = kv.is_a?(Hash) ? kv["key"].to_s : ""
         key.start_with?(FLOW_PREFIX) || FLOW_OWNED.include?(key)
       end
-      kept + Metadata.new(session).attributes
+      agent_service = string_value(attrs, "service.name")
+      named = [ string_attribute("service.name", SERVICE_NAME) ]
+      named << string_attribute(AGENT_SERVICE_NAME, agent_service) if agent_service.present?
+      kept + named + Metadata.new(session).attributes
     end
+
+    def string_attribute(key, value) = { "key" => key, "value" => { "stringValue" => value } }
 
     def stamp_record_ids(resource, session, shape)
       Array(resource[shape[:scopes]]).each do |scope|
         Array(scope[shape[:items]]).each do |record|
           digest = Digest::SHA256.hexdigest("#{session.id}\0#{record.to_json}")[0, 32]
-          record["attributes"] = Array(record["attributes"]) + [ { "key" => RECORD_ID, "value" => { "stringValue" => digest } } ]
+          record["attributes"] = Array(record["attributes"]) + [ string_attribute(RECORD_ID, digest) ]
         end
       end
     end

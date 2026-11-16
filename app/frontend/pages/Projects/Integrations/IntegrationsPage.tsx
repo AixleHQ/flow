@@ -4,9 +4,9 @@ import type { Integration, Project } from '@/types/generated';
 
 import type { AzureDevopsProps } from 'shared/resources/integrations/AzureDevopsConnectModal';
 import type { GithubProps } from 'shared/resources/integrations/GithubConnectModal';
-import { InsightsCard, type InsightsProps } from 'shared/resources/integrations/InsightsCard';
 import {
   type BitbucketProps,
+  type InsightsProps,
   IntegrationsContent,
   type SlackProps,
   type TeamsProps,
@@ -67,8 +67,8 @@ const IntegrationsPage = () => {
         youtrack={youtrack}
         slack={slack}
         teams={teams}
+        insights={insights}
       />
-      {insights && <InsightsCard insights={insights} projectId={project.id} />}
     </>
   );
 };

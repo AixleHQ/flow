@@ -9,5 +9,8 @@ module Insights
       settings = Settings.insights
       settings.present? && [ settings.url, settings.deployment_id, settings.deployment_secret ].all?(&:present?)
     end
+
+    # Off, Insights' answer to a batch is final: what it refused or failed to take is let go.
+    def resend? = Settings.insights&.resend == true
   end
 end

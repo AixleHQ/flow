@@ -380,7 +380,8 @@ origin without credentials, because the app calls them from a sandboxed widget.
 
 Forwards what the agents of switched-on projects report over OpenTelemetry — usage,
 prompts, replies and tool calls — to an Aixle Insights organization
-(`docs/design/insights-otlp-relay.md`). Insights registers
+(`docs/design/insights-otlp-relay.md`). Those projects' agents send their full telemetry
+(`docs/design/agent-telemetry.md`). Insights registers
 the deployment and hands over its id and secret out of band; the integration is hidden
 until all three variables are set. The secret is accepted by Insights only to redeem an
 owner's pairing code; each connection then gets its own secret, stored encrypted.
@@ -390,6 +391,7 @@ owner's pairing code; each connection then gets its own secret, stored encrypted
 | `INSIGHTS_URL`               | no       | unset   | The Insights API host (not its OTLP collector). |
 | `INSIGHTS_DEPLOYMENT_ID`     | no       | unset   | This deployment's id, issued by Insights. |
 | `INSIGHTS_DEPLOYMENT_SECRET` | no       | unset   | This deployment's secret, issued by Insights. Rotated by Insights on request; two are valid for a day during the switch. |
+| `INSIGHTS_RESEND`            | no       | `false` | `true`: a batch Insights failed to take is sent again and one it refused is kept for a week. Otherwise Insights' answer is final and only an Insights that does not answer is tried again. |
 
 ## Auth & OAuth providers
 

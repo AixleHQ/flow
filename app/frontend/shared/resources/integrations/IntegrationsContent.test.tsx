@@ -8,7 +8,7 @@ import { buildIntegration } from 'test/factories/integration';
 import { answerFetch, jsonResponse } from 'test/fetchStub';
 import { act, renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
-import { IntegrationsContent } from './IntegrationsContent';
+import { type InsightsProps, IntegrationsContent } from './IntegrationsContent';
 
 const settingsProps = { settings: { githubAppSlug: 'aixle-app' } };
 
@@ -398,6 +398,83 @@ describe('IntegrationsContent', () => {
     expect(window.location.search).toBe('');
     window.history.pushState({}, '', '/');
     vi.mocked(globalThis.fetch).mockReset();
+  });
+
+  describe('Aixle Insights', () => {
+    const insights: InsightsProps = {
+      enabled: true,
+      connection: { status: 'active', organizationName: 'Acme', connectedAt: '2026-11-11T10:00:00Z' },
+      project: { export: true, insightsProjectId: null },
+      canConnect: true,
+      canManage: true,
+      delivery: { pending: 3, oldestPendingAt: null, failed: 0, lastError: null },
+    };
+    const insightsRow = makeIntegration({ id: 5, name: 'Aixle Insights — Acme', provider: 'insights' });
+    const renderInsights = (props: { integrations: Integration[]; insights: InsightsProps }) =>
+      renderPage(
+        <IntegrationsContent
+          title="Integrations"
+          basePath="/company/projects/3/integrations"
+          projectId={3}
+          integrations={props.integrations}
+          insights={props.insights}
+        />,
+        { props: settingsProps },
+      );
+
+    it('is offered under Connect until the company is connected', async () => {
+      const user = userEvent.setup();
+      renderInsights({ integrations: [], insights: { ...insights, connection: null } });
+
+      await user.click(screen.getAllByRole('button', { name: /Connect/ })[0]);
+      await user.click(await screen.findByRole('menuitem', { name: 'Aixle Insights' }));
+
+      expect(await screen.findByRole('dialog', { name: 'Connect Aixle Insights' })).toBeInTheDocument();
+    });
+
+    it("is a company-wide row, with this project's dialog and its own rotate and disconnect", async () => {
+      const user = userEvent.setup();
+      renderInsights({ integrations: [insightsRow], insights });
+
+      const row = screen.getByRole('row', { name: /Aixle Insights — Acme/ });
+      expect(within(row).getByText('This project: sent · 3 waiting')).toBeInTheDocument();
+      expect(within(row).queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+
+      await user.click(within(row).getByRole('button', { name: 'Rotate the Insights secret' }));
+      expect(router.post).toHaveBeenCalledWith('/company/projects/3/insights/rotate', {}, { preserveScroll: true });
+
+      await user.click(within(row).getByRole('button', { name: 'Aixle Insights for this project' }));
+      expect(await screen.findByRole('dialog', { name: 'Aixle Insights for this project' })).toBeInTheDocument();
+    });
+
+    it('asks before disconnecting, and the disconnect revokes it at Insights', async () => {
+      const user = userEvent.setup();
+      renderInsights({ integrations: [insightsRow], insights });
+
+      await user.click(screen.getByRole('button', { name: 'Disconnect Aixle Insights' }));
+      const confirm = await screen.findByRole('dialog', { name: 'Disconnect Aixle Insights' });
+      await user.click(within(confirm).getByRole('button', { name: 'Disconnect' }));
+
+      expect(router.delete).toHaveBeenCalledWith('/company/projects/3/insights/disconnect', { preserveScroll: true });
+    });
+
+    it('asks for a new code once Insights refused the connection', () => {
+      renderInsights({
+        integrations: [{ ...insightsRow, status: 'error' }],
+        insights: { ...insights, connection: { ...insights.connection!, status: 'error' } },
+      });
+
+      expect(screen.getByRole('button', { name: 'Enter a new Insights pairing code' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Rotate the Insights secret' })).not.toBeInTheDocument();
+    });
+
+    it('leaves the connection to a company admin', () => {
+      renderInsights({ integrations: [insightsRow], insights: { ...insights, canConnect: false } });
+
+      expect(screen.getByRole('button', { name: 'Aixle Insights for this project' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Rotate the Insights secret' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Disconnect Aixle Insights' })).not.toBeInTheDocument();
+    });
   });
 
   it('shows the empty state when there are no integrations', () => {

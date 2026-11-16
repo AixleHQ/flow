@@ -9,8 +9,7 @@ class Web::Company::Projects::InsightsControllerTest < ActionDispatch::Integrati
 
   setup do
     setup_project_authz_personas
-    Settings.stubs(:insights).returns(OpenStruct.new(url: "https://insights.example.com", deployment_id: "dep-1",
-                                                     deployment_secret: "dep-secret"))
+    insights_deployment!
     @insights = FakeInsightsClient.new
     Insights::Client.stubs(:build).returns(@insights)
   end
@@ -64,7 +63,7 @@ class Web::Company::Projects::InsightsControllerTest < ActionDispatch::Integrati
     assert_equal [ { "id" => "ip-1", "name" => "Platform" } ], response.parsed_body["projects"]
   end
 
-  test "the integrations page shows the connection and the switches, never the secret" do
+  test "the integrations page lists the connection with the other integrations and shows the switches, never the secret" do
     integration = connect_to_insights!(@project)
     sign_in_as(@admin)
 
@@ -74,8 +73,20 @@ class Web::Company::Projects::InsightsControllerTest < ActionDispatch::Integrati
       insights = props[:insights]
       insights["enabled"] && insights.dig("connection", "organizationName") == "Acme" &&
         insights["project"] == { "export" => true, "insightsProjectId" => nil } &&
-        insights["canConnect"] && props[:integrations].none? { |i| i["provider"] == "insights" }
+        insights["canConnect"] &&
+        props[:integrations].one? { |i| i["provider"] == "insights" && i["scopeIndicator"] == "company" }
     end
     assert_not_includes response.body, integration.credentials_data["secret"]
+  end
+
+  test "the list's generic remove leaves the connection to its own disconnect, which revokes it at Insights" do
+    integration = connect_to_insights!(@project)
+    sign_in_as(@admin)
+
+    delete company_project_integration_path(@project, integration)
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert Integration.exists?(integration.id)
+    assert_empty(@insights.calls.select { |method, _| method == :disconnect })
   end
 end

@@ -8,7 +8,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   }.freeze
 
   def index
-    integrations = Integration.visible_for_project(current_project).where.not(provider: "insights")
+    integrations = Integration.visible_for_project(current_project)
                               .includes(:connected_by).order(created_at: :desc).to_a
     preload_provider_associations(integrations)
 
@@ -79,6 +79,11 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   # own, so a company admin removes it from any of them.
   def destroy
     integration = Integration.visible_for_project(current_project).find(params[:id])
+    # Insights forgets a connection only after revoking it there (InsightsController#disconnect).
+    if integration.insights?
+      return redirect_to company_project_integrations_path(current_project),
+                         alert: "Disconnect Aixle Insights with its own Disconnect action"
+    end
     if integration.project_id.nil? && !current_project_membership&.admin?
       return redirect_to company_project_integrations_path(current_project),
                          alert: "Only a company admin can remove a company-wide integration"
@@ -375,8 +380,9 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
 
   private
 
-  # Aixle Insights has a card of its own (Web::Company::Projects::InsightsController): the
-  # company's connection, never its secret, and this project's switch and mapping.
+  # The company's Aixle Insights connection is a row of the list; this is what its actions
+  # (Web::Company::Projects::InsightsController) need: the connection, never its secret, and
+  # this project's switch and mapping.
   def insights_props
     return { enabled: false } unless Insights::Config.enabled?
 

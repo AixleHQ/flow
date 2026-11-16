@@ -3,6 +3,7 @@
 module Insights
   # What Flow knows about a session, as OTLP resource attributes
   # (docs/design/insights-otlp-relay.md §4). Unknown values are left out, never sent empty.
+  # Every value is a string: Insights refuses a request whose `aixle_flow.session.id` is not.
   class Metadata
     def initialize(session)
       @session = session
@@ -10,7 +11,7 @@ module Insights
     end
 
     def attributes
-      to_h.filter_map { |key, value| { "key" => key, "value" => otlp_value(value) } unless value.nil? }
+      to_h.filter_map { |key, value| { "key" => key, "value" => { "stringValue" => value.to_s } } unless value.nil? }
     end
 
     def to_h
@@ -44,14 +45,6 @@ module Insights
     def single_url(scope)
       urls = scope&.limit(2)&.pluck(:clone_url)
       urls.first if urls&.size == 1
-    end
-
-    # OTLP JSON writes an int64 as a string.
-    def otlp_value(value)
-      case value
-      when Integer then { "intValue" => value.to_s }
-      else { "stringValue" => value.to_s }
-      end
     end
   end
 end

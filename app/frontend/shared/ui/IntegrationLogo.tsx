@@ -1,6 +1,7 @@
 import { useComputedColorScheme } from '@mantine/core';
 import type { ReactNode } from 'react';
 
+import insightsLogo from './integration-logos/aixle-insights.svg';
 import atlassianLogo from './integration-logos/atlassian.svg';
 import azureDevopsLogo from './integration-logos/azure-devops.svg';
 import bitbucketLogo from './integration-logos/bitbucket.svg';
@@ -30,6 +31,7 @@ const LOGOS: Record<string, { light: string; dark?: string }> = {
   youtrack: { light: youtrackLogo },
   slack: { light: slackLogo },
   teams: { light: teamsLogo },
+  insights: { light: insightsLogo },
 };
 
 interface IntegrationLogoProps {

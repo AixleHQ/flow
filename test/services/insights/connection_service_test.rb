@@ -5,8 +5,7 @@ require "test_helper"
 module Insights
   class ConnectionServiceTest < ActiveSupport::TestCase
     setup do
-      Settings.stubs(:insights).returns(OpenStruct.new(url: "https://insights.example.com", deployment_id: "dep-1",
-                                                       deployment_secret: "dep-secret"))
+      insights_deployment!
       @company = create(:company)
       @admin = create(:user, :admin, company: @company)
       @client = FakeInsightsClient.new

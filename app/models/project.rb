@@ -190,7 +190,7 @@ class Project < ApplicationRecord
   end
 
   def exports_to_insights?
-    insights_settings["export"] == true && insights_connection.present?
+    insights_settings["export"] == true && Insights::Config.enabled? && insights_connection.present?
   end
 
   private

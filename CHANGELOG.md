@@ -34,13 +34,17 @@ governance, community health — carry none.
   GitLab token, which Flow replaces only in its last ten minutes.
 - **Integrations**: connect the company to an Aixle Insights organization with
   the one-time pairing code an Insights owner creates, then switch on the
-  projects whose agents Insights should see. Everything those agents report over
+  projects whose agents Insights should see. From their next session those
+  agents send their full telemetry, and everything they report over
   OpenTelemetry — usage, prompts, replies, tool calls — is forwarded within a
   minute, tagged with the person, project and session; only the session's own
-  secrets are masked. The card shows what is still waiting and the last problem.
+  secrets are masked. The connection is a row of the Integrations list; its
+  **This project** dialog holds the switch and shows what is still waiting and
+  the last problem.
   Operators: set `INSIGHTS_URL`, `INSIGHTS_DEPLOYMENT_ID` and
   `INSIGHTS_DEPLOYMENT_SECRET` (issued by Insights); the integration stays hidden
-  until all three are set.
+  until all three are set. Insights' answer to a batch is final unless
+  `INSIGHTS_RESEND=true`, which sends again what it failed to take.
 
 ### Changed
 - Runners: the runner pulls the agent images for its machine's own platform
