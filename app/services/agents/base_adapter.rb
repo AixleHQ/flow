@@ -935,6 +935,16 @@ module Agents
       {}
     end
 
+    # Whether a workflow step's cleanup should also run #collect_credential_metadata.
+    # False by default: most runtimes only need it after a standalone session or at
+    # auth, and running it on every workflow step adds a CLI call (Kiro's
+    # `--list-models`, Copilot's models script) to each teardown. Antigravity
+    # overrides this — its remaining quota is read from the CLI in the container,
+    # and workflow steps are where it runs.
+    def collect_credential_metadata_on_workflow_step?
+      false
+    end
+
     protected
 
     # Unparseable input is {} — including nil, which JSON.parse raises TypeError on

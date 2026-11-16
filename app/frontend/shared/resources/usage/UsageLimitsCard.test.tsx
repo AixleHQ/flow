@@ -120,6 +120,49 @@ describe('UsageLimitsCard', () => {
     expect(screen.getByText('5% used · 95% remaining')).toBeInTheDocument();
   });
 
+  it('labels Cursor plan windows and Grok weekly instead of a bare duration', () => {
+    renderPage(
+      <UsageLimitsCard
+        entries={[
+          buildEntry({
+            agentType: 'cursor_cli',
+            windows: [
+              { key: 'cursor_plan', utilization: 42, resetsAt: '2026-08-30T06:40:00Z', windowDurationMins: 43200 },
+              { key: 'cursor_models', utilization: 30, resetsAt: '2026-08-30T06:40:00Z', windowDurationMins: 43200 },
+              {
+                key: 'cursor_other_models',
+                utilization: 12,
+                resetsAt: '2026-08-30T06:40:00Z',
+                windowDurationMins: 43200,
+              },
+            ],
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Plan')).toBeInTheDocument();
+    expect(screen.getByText('Cursor Models')).toBeInTheDocument();
+    expect(screen.getByText('Other Models')).toBeInTheDocument();
+    expect(screen.queryByText(/Usage window/i)).not.toBeInTheDocument();
+  });
+
+  it('prefers a vendor-supplied label over the static key label', () => {
+    renderPage(
+      <UsageLimitsCard
+        entries={[
+          buildEntry({
+            agentType: 'antigravity_cli',
+            windows: [{ key: 'gemini-weekly', label: 'Gemini · Weekly', utilization: 40, resetsAt: null }],
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Gemini · Weekly')).toBeInTheDocument();
+    expect(screen.queryByText(/Usage window/i)).not.toBeInTheDocument();
+  });
+
   it('uses provider-specific authentication and error messages', () => {
     const { rerender } = renderPage(
       <UsageLimitsCard entries={[buildEntry({ agentType: 'codex', status: 'unauthorized', windows: [] })]} />,
