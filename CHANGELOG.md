@@ -14,6 +14,16 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
+- **Profile**: a connected Cursor account now shows its remaining quota in the
+  Usage limits card — the plan allowance, the Cursor Models / Other Models
+  split, and any on-demand spend, each with when the billing period resets.
+- **Profile**: a signed-in Grok account now shows its remaining quota in the
+  Usage limits card — the weekly credit window and the monthly spend limit, each
+  with when it resets.
+- **Profile**: a connected Antigravity account now shows its remaining quota in
+  the Usage limits card, read from the CLI's own `/usage` view at the end of each
+  session (its quota is not reachable by the server, so the card shows the last
+  session's reading).
 - **Integrations**: agents can act as you on GitLab, as they can on GitHub.
   Connect your GitLab account under **Profile → Connected accounts**, allow it
   per project, and give a step the `gitlab_user_token` or `gitlab_user_token_for`
@@ -64,7 +74,8 @@ governance, community health — carry none.
   repository checkout the scrub kept and puts it on the repository's source
   branch at the remote's current tip, instead of failing to clone into the
   existing directory and working on a stale checkout. A path that holds
-  another repository or a broken clone is cloned again.
+  another repository or a broken clone is cloned again. A kept checkout keeps
+  only its objects and refs: its config and hooks are rebuilt, never reused.
 
 ## [1.15.0] - 2026-11-14
 

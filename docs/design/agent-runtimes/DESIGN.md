@@ -2783,14 +2783,21 @@ the checkout path holds:
 
 - **Nothing.** A blobless clone of the source branch, as before.
 - **A working clone whose `origin` is this repository** (the URL compared without any
-  `user@` part an older session left). The remote URL is rewritten to the clean one, any
-  `http.extraheader` is removed, and the clone is fetched with this session's own
-  credential (`fetch --prune`). The source branch is then checked out at the remote's
-  current tip (`checkout --force -B` and `reset --hard`), so a branch the agent left
-  behind, local commits on the source branch, edits to tracked files and a stale
-  `index.lock` do not survive. Untracked files are removed; ignored files (build output,
-  dependency caches) are kept. The helper configuration is written again. No credential is
-  stored in `.git/config`.
+  `user@` part an older session left). **Only its objects and refs are reused: a kept
+  checkout's config and hooks are never reused.** Before any git command holds this
+  session's credential, `.git/config` is deleted and written again from scratch with the
+  clean `origin` URL, its fetch refspec and the partial-clone settings the original clone
+  sets, so no `url.*.insteadOf`, `include.path`, `credential.*`, `filter.*`, `core.*` or
+  `http.*` entry of an earlier session survives. `.git/hooks`, `.git/config.worktree` and
+  `.git/objects/info/alternates` are removed, and every git command of the update runs
+  with `core.hooksPath=/dev/null` and `core.fsmonitor=false`. The clone is fetched with
+  this session's own credential (`fetch --prune`). The source branch is then checked out
+  at the remote's current tip (`checkout --force -B` and `reset --hard`, also with the
+  credential, so a blobless clone can fetch the blobs of files changed since), so a branch
+  the agent left behind, local commits on the source branch, edits to tracked files and a
+  stale `index.lock` do not survive. Untracked files are removed; ignored files (build
+  output, dependency caches) are kept. The helper configuration is written again. No
+  credential is stored in `.git/config`.
 - **Anything else:** another remote, a broken or partial clone, a directory that is not a
   clone, a file; and a kept clone that cannot be fetched or checked out (for example the
   source branch no longer exists on the remote). The path is removed and the repository is
