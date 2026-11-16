@@ -38,7 +38,6 @@ module Cursor
 
     DASHBOARD_ORIGIN = "https://cursor.com"
     USAGE_SUMMARY_URL = "#{DASHBOARD_ORIGIN}/api/usage-summary"
-    CURRENT_PERIOD_USAGE_URL = "#{DASHBOARD_ORIGIN}/api/dashboard/get-current-period-usage"
 
     HTTP_TIMEOUTS = { open: 5, read: 10 }.freeze
 
@@ -51,23 +50,15 @@ module Cursor
       # @raise [UnauthorizedError] when the token is rejected
       # @raise [ApiError] on any other transport, status or parse failure
       def usage_summary(access_token:)
-        json_request(:get, USAGE_SUMMARY_URL, access_token: access_token, op: "usage_summary")
-      end
-
-      # The current billing period's usage. A sub-monthly plan (e.g. a weekly
-      # Premium seat) reports its allowance here rather than in the summary.
-      def current_period_usage(access_token:)
-        json_request(:post, CURRENT_PERIOD_USAGE_URL, access_token: access_token, op: "current_period_usage", body: "{}")
+        json_request(USAGE_SUMMARY_URL, access_token: access_token, op: "usage_summary")
       end
 
       private
 
-      def json_request(method, url, access_token:, op:, body: nil)
+      def json_request(url, access_token:, op:)
         uri = URI(url)
-        request = method == :post ? Net::HTTP::Post.new(uri) : Net::HTTP::Get.new(uri)
+        request = Net::HTTP::Get.new(uri)
         headers(access_token).each { |key, value| request[key] = value }
-        request["Content-Type"] = "application/json" if method == :post
-        request.body = body if body
 
         response = Net::HTTP.start(
           uri.hostname, uri.port,

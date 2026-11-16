@@ -410,7 +410,7 @@ module Agents
       assert_nil @adapter.fetch_subscription_usage({ "refreshToken" => "refresh" })
     end
 
-    test "fetch_subscription_usage maps the plan, model pools and on-demand windows" do
+    test "fetch_subscription_usage maps the plan, model pools and on-demand as extra usage" do
       Cursor::Api.expects(:usage_summary).with(access_token: "tok").returns({
         "billingCycleStart" => "2024-07-31T06:40:00.000Z",
         "billingCycleEnd" => "2024-08-30T06:40:00.000Z",
@@ -425,16 +425,18 @@ module Agents
       usage = @adapter.fetch_subscription_usage({ "accessToken" => "tok" })
 
       assert_equal "ok", usage[:status]
-      assert_equal %w[cursor_plan cursor_models cursor_other_models cursor_on_demand],
-                   usage[:windows].pluck(:key)
+      assert_equal %w[cursor_plan cursor_models cursor_other_models], usage[:windows].pluck(:key)
 
       plan = usage[:windows].find { |w| w[:key] == "cursor_plan" }
       assert_in_delta 42.0, plan[:utilization]
       assert_equal "2024-08-30T06:40:00Z", plan[:resets_at]
       assert_equal 43_200, plan[:window_duration_mins]
 
-      on_demand = usage[:windows].find { |w| w[:key] == "cursor_on_demand" }
-      assert_in_delta 50.0, on_demand[:utilization]
+      extra = usage[:extra_usage]
+      assert extra[:enabled]
+      assert_in_delta 50.0, extra[:utilization]
+      assert_in_delta 10.0, extra[:monthly_limit]
+      assert_in_delta 5.0, extra[:used_credits]
     end
 
     test "fetch_subscription_usage prefers the overall pool when the plan pool is disabled" do
@@ -466,6 +468,23 @@ module Agents
       usage = @adapter.fetch_subscription_usage({ "accessToken" => "tok" })
 
       assert_equal %w[cursor_plan], usage[:windows].pluck(:key)
+      assert_nil usage[:extra_usage]
+    end
+
+    test "fetch_subscription_usage shows only the total for a team-seat account with no split percentages" do
+      Cursor::Api.expects(:usage_summary).with(access_token: "tok").returns({
+        "billingCycleStart" => "2024-07-31T06:40:00.000Z",
+        "billingCycleEnd" => "2024-08-30T06:40:00.000Z",
+        "individualUsage" => {
+          "overall" => { "enabled" => true, "used" => 40, "limit" => 100, "remaining" => 60 }
+        }
+      })
+
+      usage = @adapter.fetch_subscription_usage({ "accessToken" => "tok" })
+
+      assert_equal %w[cursor_plan], usage[:windows].pluck(:key)
+      assert_in_delta 40.0, usage[:windows].first[:utilization]
+      assert_nil usage[:extra_usage]
     end
 
     test "fetch_subscription_usage still maps epoch cycle bounds from older endpoints" do

@@ -340,10 +340,7 @@ module Agents
       return nil if token.blank?
 
       billing = Grok::Api.billing(access_token: token, user_id: grok_user_id(credentials))
-      windows = grok_windows(billing)
-      return { status: "unavailable" } if windows.empty?
-
-      { status: "ok", windows: windows }
+      { status: "ok", windows: grok_windows(billing), extra_usage: grok_extra_usage(billing) }
     rescue Grok::Api::UnauthorizedError
       { status: "unauthorized" }
     rescue Grok::Api::HTTPError => e
@@ -452,13 +449,13 @@ module Agents
       entry && entry["user_id"].presence
     end
 
-    # The billing response's weekly credit percentage and its monthly spend, each
-    # as a window. A signed-in account reports one or the other (or both).
+    # The billing response's weekly credit percentage, as a window. A signed-in
+    # account reports it; the monthly spend is separate (see #grok_extra_usage).
     def grok_windows(billing)
-      config = billing["config"].is_a?(Hash) ? billing["config"] : billing
+      config = grok_billing_config(billing)
       resets_at = grok_resets_at(config)
 
-      [ grok_weekly_window(config, resets_at), grok_monthly_window(config, resets_at) ].compact
+      [ grok_weekly_window(config, resets_at) ].compact
     end
 
     def grok_weekly_window(config, resets_at)
@@ -468,12 +465,26 @@ module Agents
       { key: "grok_weekly", utilization: percent.clamp(0.0, 100.0), resets_at: resets_at, window_duration_mins: 10_080 }
     end
 
-    def grok_monthly_window(config, resets_at)
+    # Monthly spend on top of the plan maps to extra_usage (as Codex's
+    # spend_control and Claude's extra_usage do): it is a cap, not a rolling
+    # window, and a nearly-spent monthly budget must not read as an exhausted
+    # weekly window to QuotaHold or the picker.
+    def grok_extra_usage(billing)
+      config = grok_billing_config(billing)
       limit = grok_money(config["monthlyLimit"])
       used = grok_money(config["used"])
       return nil if limit.nil? || used.nil? || !limit.positive?
 
-      { key: "grok_monthly", utilization: (used / limit * 100.0).clamp(0.0, 100.0), resets_at: resets_at, window_duration_mins: 43_200 }
+      {
+        enabled: true,
+        utilization: (used / limit * 100.0).clamp(0.0, 100.0),
+        monthly_limit: limit,
+        used_credits: used
+      }
+    end
+
+    def grok_billing_config(billing)
+      billing["config"].is_a?(Hash) ? billing["config"] : billing
     end
 
     def grok_resets_at(config)

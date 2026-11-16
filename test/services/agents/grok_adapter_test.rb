@@ -599,7 +599,7 @@ module Agents
       assert_nil @adapter.fetch_subscription_usage(@adapter.extract_credentials(api_key_auth_json))
     end
 
-    test "fetch_subscription_usage maps the weekly credit and monthly spend windows" do
+    test "fetch_subscription_usage maps the weekly credit window and monthly spend as extra usage" do
       Grok::Api.expects(:billing).with(access_token: "grok-session-token", user_id: nil).returns({
         "config" => {
           "creditUsagePercent" => 42.0,
@@ -612,16 +612,30 @@ module Agents
       usage = @adapter.fetch_subscription_usage(@adapter.extract_credentials(oauth_auth_json))
 
       assert_equal "ok", usage[:status]
-      assert_equal %w[grok_weekly grok_monthly], usage[:windows].pluck(:key)
+      assert_equal %w[grok_weekly], usage[:windows].pluck(:key)
 
-      weekly = usage[:windows].find { |w| w[:key] == "grok_weekly" }
+      weekly = usage[:windows].first
       assert_in_delta 42.0, weekly[:utilization]
       assert_equal "2026-08-21T12:00:00Z", weekly[:resets_at]
       assert_equal 10_080, weekly[:window_duration_mins]
 
-      monthly = usage[:windows].find { |w| w[:key] == "grok_monthly" }
-      assert_in_delta 40.0, monthly[:utilization]
-      assert_equal 43_200, monthly[:window_duration_mins]
+      extra = usage[:extra_usage]
+      assert extra[:enabled]
+      assert_in_delta 40.0, extra[:utilization]
+      assert_in_delta 100.0, extra[:monthly_limit]
+      assert_in_delta 40.0, extra[:used_credits]
+    end
+
+    test "fetch_subscription_usage reports ok with no windows when the billing view reports neither" do
+      Grok::Api.expects(:billing).with(access_token: "grok-session-token", user_id: nil).returns({
+        "config" => { "subscriptionTier" => "supergrok" }
+      })
+
+      usage = @adapter.fetch_subscription_usage(@adapter.extract_credentials(oauth_auth_json))
+
+      assert_equal "ok", usage[:status]
+      assert_empty usage[:windows]
+      assert_nil usage[:extra_usage]
     end
 
     test "fetch_subscription_usage passes the stored user id to the billing endpoint" do

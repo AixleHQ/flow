@@ -211,7 +211,7 @@ module Agents
       return nil if token.blank?
 
       summary = Cursor::Api.usage_summary(access_token: token)
-      { status: "ok", windows: usage_windows(summary) }
+      { status: "ok", windows: usage_windows(summary), extra_usage: cursor_extra_usage(summary) }
     rescue Cursor::Api::UnauthorizedError
       { status: "unauthorized" }
     rescue Cursor::Api::HTTPError => e
@@ -319,10 +319,12 @@ module Agents
 
     private
 
-    # The pools in a usage-summary body, each as a window. `plan` is the account's
-    # own allowance; a team-limited account reports the member's included
-    # allowance as `overall`, so a disabled `plan` falls back to it. On-demand is
-    # spend on top of the plan and only appears once enabled.
+    # The pools in a usage-summary body. `plan` is the account's own allowance; a
+    # team-limited account reports the member's included allowance as `overall`,
+    # so a disabled `plan` falls back to it. The Cursor Models / Other Models
+    # split windows appear only when the vendor reports their percentages — a
+    # team-seat `overall` pool has only used/limit, and painting that ratio onto
+    # the two split windows would show three identical rows.
     def usage_windows(summary)
       individual = summary["individualUsage"].is_a?(Hash) ? summary["individualUsage"] : {}
       end_ms = cursor_epoch_ms(summary["billingCycleEnd"])
@@ -330,13 +332,11 @@ module Agents
       duration = cursor_window_minutes(cursor_epoch_ms(summary["billingCycleStart"]), end_ms)
 
       plan = cursor_prefer_enabled_pool(individual["plan"], individual["overall"])
-      on_demand = individual["onDemand"]
 
       [
-        cursor_pool_window("cursor_plan", cursor_pool_utilization(plan, "totalPercentUsed"), resets_at, duration),
-        cursor_pool_window("cursor_models", cursor_pool_utilization(plan, "autoPercentUsed"), resets_at, duration),
-        cursor_pool_window("cursor_other_models", cursor_pool_utilization(plan, "apiPercentUsed"), resets_at, duration),
-        cursor_pool_window("cursor_on_demand", cursor_on_demand_utilization(on_demand), resets_at, duration)
+        cursor_pool_window("cursor_plan", cursor_total_utilization(plan), resets_at, duration),
+        cursor_pool_window("cursor_models", cursor_percent(plan, "autoPercentUsed"), resets_at, duration),
+        cursor_pool_window("cursor_other_models", cursor_percent(plan, "apiPercentUsed"), resets_at, duration)
       ].compact
     end
 
@@ -346,19 +346,42 @@ module Agents
       { key: key, utilization: utilization, resets_at: resets_at, window_duration_mins: duration }
     end
 
-    # The reported percentage of a pool, falling back to its raw used/limit ratio
-    # when the percentage field is absent.
-    def cursor_pool_utilization(pool, percent_key)
+    # The plan's overall utilization: its reported percentage, else its raw
+    # used/limit ratio (a team-seat account reports only used/limit/remaining).
+    def cursor_total_utilization(pool)
       return nil unless pool.is_a?(Hash)
 
-      (cursor_number(pool[percent_key]) || cursor_ratio(pool))&.clamp(0.0, 100.0)
+      (cursor_number(pool["totalPercentUsed"]) || cursor_ratio(pool))&.clamp(0.0, 100.0)
+    end
+
+    # A pool's own percentage field, with no used/limit fallback: the Cursor
+    # Models and Other Models split windows exist only when the vendor reports
+    # them.
+    def cursor_percent(pool, percent_key)
+      return nil unless pool.is_a?(Hash)
+
+      cursor_number(pool[percent_key])&.clamp(0.0, 100.0)
+    end
+
+    # On-demand is spend on top of the plan, so it maps to extra_usage (as Codex's
+    # spend_control and Claude's extra_usage do), not to a window: a nearly-spent
+    # on-demand cap must not read as an exhausted plan to QuotaHold or the picker.
+    def cursor_extra_usage(summary)
+      individual = summary["individualUsage"].is_a?(Hash) ? summary["individualUsage"] : {}
+      on_demand = individual["onDemand"]
+      return nil unless on_demand.is_a?(Hash) && on_demand["enabled"] == true
+
+      {
+        enabled: true,
+        utilization: cursor_on_demand_utilization(on_demand),
+        monthly_limit: cursor_number(on_demand["limit"]),
+        used_credits: cursor_number(on_demand["used"])
+      }
     end
 
     # On-demand bills against its own cap; its raw allowance avoids the rounding
     # its reported percentage can carry.
     def cursor_on_demand_utilization(on_demand)
-      return nil unless on_demand.is_a?(Hash) && on_demand["enabled"] == true
-
       (cursor_ratio(on_demand) || cursor_number(on_demand["totalPercentUsed"]))&.clamp(0.0, 100.0)
     end
 
