@@ -79,8 +79,7 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
   end
 
   def filtered_scope
-    scope = type_sessions_scope
-                                  .ransack(list_query.except(:s)).result
+    scope = type_sessions_scope.ransack(list_query.except(:s)).result
 
     scope = scope.where(agent_type: params[:agent_type]) if params[:agent_type].present?
     scope = scope.where(user_id: params[:user_id]) if params[:user_id].present?

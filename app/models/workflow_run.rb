@@ -33,7 +33,7 @@ class WorkflowRun < ApplicationRecord
   end
 
   def self.parked_on_slot?(session_states)
-    session_states.include?("queued") && (session_states & %w[running ready finishing]).empty?
+    session_states.include?("queued") && session_states.none? { |state| TerminalSession.live_state?(state) }
   end
 
   include WorkflowRunStateMachine
