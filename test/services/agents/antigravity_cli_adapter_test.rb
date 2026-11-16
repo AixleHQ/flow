@@ -392,34 +392,10 @@ module Agents
       ContainerRuntime::FakeRuntime.new(agent_type: "antigravity_cli", filesystem: {})
     end
 
-    def usage_envelope
-      {
-        "status" => "SUCCESS",
-        "command" => {
-          "name" => "usage",
-          "data" => {
-            "description" => "Antigravity pools",
-            "groups" => [
-              { "name" => "Gemini", "buckets" => [
-                { "id" => "gemini-weekly", "name" => "Weekly", "window" => "weekly",
-                  "remaining_fraction" => 0.6, "reset_time" => "2026-08-21T12:00:00Z" },
-                { "id" => "3p-5h", "name" => "5 hours", "window" => "5h",
-                  "remaining_fraction" => 0.5, "reset_time" => "2026-08-14T18:00:00Z" },
-                { "id" => "disabled-pool", "window" => "weekly", "remaining_fraction" => 0.0, "disabled" => true }
-              ] }
-            ]
-          }
-        }
-      }.to_json
-    end
-
     test "collect_credential_metadata stores the /usage probe as a snapshot" do
       credential = consumer_credential
       runtime = usage_probe_runtime
       container = runtime.resolve_container("abc123")
-      runtime.expects(:exec)
-             .with(container, AntigravityCliAdapter::USAGE_PROBE_COMMAND, stdout: true, stderr: true)
-             .returns([ [ usage_envelope ], [ "" ], 0 ])
 
       extras = @adapter.collect_credential_metadata(runtime, container, credential, :session)
 
@@ -431,13 +407,17 @@ module Agents
       assert_equal %w[gemini-weekly 3p-5h], windows.map { |w| w[:key] }
 
       weekly = windows.find { |w| w[:key] == "gemini-weekly" }
+      assert_equal "Gemini · Weekly", weekly[:label]
       assert_in_delta 40.0, weekly[:utilization]
       assert_equal "2026-08-21T12:00:00Z", weekly[:resets_at]
       assert_equal 10_080, weekly[:window_duration_mins]
 
       five_hour = windows.find { |w| w[:key] == "3p-5h" }
+      assert_equal "Gemini · 5 hours", five_hour[:label]
       assert_in_delta 50.0, five_hour[:utilization]
       assert_equal 300, five_hour[:window_duration_mins]
+
+      assert_equal [ AntigravityCliAdapter::USAGE_PROBE_COMMAND ], runtime.execs
     end
 
     test "collect_credential_metadata writes nothing on a non-session phase or a failed probe" do
@@ -447,9 +427,7 @@ module Agents
 
       assert_equal({}, @adapter.collect_credential_metadata(runtime, container, credential, :auth))
 
-      runtime.expects(:exec)
-             .with(container, AntigravityCliAdapter::USAGE_PROBE_COMMAND, stdout: true, stderr: true)
-             .returns([ [ "" ], [ "not signed in" ], 1 ])
+      runtime.fail_exec("/usage", exit_code: 1)
       assert_equal({}, @adapter.collect_credential_metadata(runtime, container, credential, :session))
     end
 
@@ -457,10 +435,10 @@ module Agents
       credential = consumer_credential
       credential.update!(metadata: {
         "subscription_usage" => {
-          "fetched_at" => "2026-08-21T12:00:00Z",
+          "fetched_at" => "2027-01-15T00:00:00Z",
           "windows" => [
-            { "key" => "gemini-weekly", "utilization" => 40.0,
-              "resets_at" => "2026-08-21T12:00:00Z", "window_duration_mins" => 10_080 }
+            { "key" => "gemini-weekly", "label" => "Gemini · Weekly", "utilization" => 40.0,
+              "resets_at" => "2027-01-15T00:00:00Z", "window_duration_mins" => 10_080 }
           ]
         }
       })
@@ -468,13 +446,33 @@ module Agents
       usage = @adapter.fetch_subscription_usage_from_snapshot(credential)
 
       assert_equal "ok", usage[:status]
-      assert_equal "2026-08-21T12:00:00Z", usage[:fetched_at]
+      assert_equal "2027-01-15T00:00:00Z", usage[:fetched_at]
       assert_equal [ "gemini-weekly" ], usage[:windows].map { |w| w[:key] }
+      assert_equal "Gemini · Weekly", usage[:windows].first[:label]
       assert_in_delta 40.0, usage[:windows].first[:utilization]
+    end
+
+    test "fetch_subscription_usage_from_snapshot drops windows whose reset has already passed" do
+      credential = consumer_credential
+      credential.update!(metadata: {
+        "subscription_usage" => {
+          "fetched_at" => "2026-08-21T12:00:00Z",
+          "windows" => [
+            { "key" => "gemini-weekly", "utilization" => 95.0,
+              "resets_at" => "2026-08-21T12:00:00Z", "window_duration_mins" => 10_080 }
+          ]
+        }
+      })
+
+      assert_nil @adapter.fetch_subscription_usage_from_snapshot(credential)
     end
 
     test "fetch_subscription_usage_from_snapshot returns nil without a snapshot" do
       assert_nil @adapter.fetch_subscription_usage_from_snapshot(consumer_credential)
+    end
+
+    test "collect_credential_metadata_on_workflow_step? is true so workflow steps probe the quota" do
+      assert @adapter.collect_credential_metadata_on_workflow_step?
     end
 
     private

@@ -21,7 +21,12 @@ module ContainerStrategies
       logs_count += terminal.count
       collect_usage(session, agent_service, log_contents)
       persist_refreshed_credentials(container, session, agent_service)
-      persist_credential_metadata(container, SessionCompany.agent_credentials_for(session).find_by(agent_type: input[:agent_type]), agent_service, :session)
+      # Only a runtime whose remaining quota is read from the CLI in the container
+      # (Antigravity) opts into metadata collection on a workflow step — see
+      # BaseAdapter#collect_credential_metadata_on_workflow_step?.
+      if agent_service.adapter.collect_credential_metadata_on_workflow_step?
+        persist_credential_metadata(container, SessionCompany.agent_credentials_for(session).find_by(agent_type: input[:agent_type]), agent_service, :session)
+      end
 
       outputs = collect_workflow_outputs(container_id)
       outputs_count = outputs.count

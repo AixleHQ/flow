@@ -117,6 +117,24 @@ module ContainerStrategies
       assert_equal({}, strategy.before_cleanup(container_id: nil))
     end
 
+    test "before_cleanup probes the Antigravity quota on a workflow step" do
+      stub_container_runtime(agent_type: "antigravity_cli")
+      create(:agent_credential, user: @user, agent_type: "antigravity_cli",
+             config_data: { "access_token" => "tok-123", "refresh_token" => "refresh-123", "auth_method" => "consumer" })
+
+      workflow = create(:workflow, scope: @project)
+      step = create(:step, workflow: workflow, instructions: "Do the thing")
+      workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user)
+      session = create(:terminal_session, session_type: "workflow_step", user: @user, project: @project, agent_type: "antigravity_cli")
+      create(:step_run, workflow_run: workflow_run, step: step, terminal_session: session)
+
+      build_strategy(session: session, agent_type: "antigravity_cli").before_cleanup(container_id: "abc123")
+
+      snapshot = AgentCredential.find_by(user: @user, agent_type: "antigravity_cli").reload.metadata["subscription_usage"]
+      assert snapshot, "expected the quota snapshot on the credential"
+      assert_equal %w[gemini-weekly 3p-5h], snapshot["windows"].map { |w| w["key"] }
+    end
+
     # == cleanup phase ==
 
     test "the run hears about a container that failed to start only once its session has failed" do

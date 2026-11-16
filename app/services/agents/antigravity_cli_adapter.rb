@@ -42,9 +42,10 @@ module Agents
 
     # The metadata key under which the last `/usage` probe's snapshot is stored,
     # and the print-mode command that reads it. `/usage` is the CLI's own quota
-    # view; in print mode it reports without spending a model turn (agy 1.1.11+,
-    # verified by Orca). Never add `--disable-slash-commands`: agy then sends
-    # `/usage` as a billed prompt.
+    # view; in print mode it reports without spending a model turn (agy 1.1.11+ —
+    # see stablyai/orca src/main/rate-limits/providers/antigravity/antigravity-usage-command.ts,
+    # whose version guard and timeout this mirrors). Never add
+    # `--disable-slash-commands`: agy then sends `/usage` as a billed prompt.
     SUBSCRIPTION_USAGE_KEY = "subscription_usage"
     USAGE_PROBE_COMMAND = [ "agy", "-p", "/usage", "--output-format", "json", "--print-timeout", "20s" ].freeze
 
@@ -340,6 +341,13 @@ module Agents
       {}
     end
 
+    # The quota snapshot is the only source for this runtime's remaining quota,
+    # and workflow steps are where Antigravity runs — so its cleanup must probe
+    # even though every other runtime skips metadata collection there.
+    def collect_credential_metadata_on_workflow_step?
+      true
+    end
+
     # Reads the snapshot #collect_credential_metadata stored. Lives outside
     # #fetch_subscription_usage because the server cannot fetch this quota live;
     # SubscriptionUsageService prefers it when the adapter responds to it.
@@ -347,10 +355,23 @@ module Agents
       snapshot = credential&.metadata&.dig(SUBSCRIPTION_USAGE_KEY)
       return nil unless snapshot.is_a?(Hash)
 
-      windows = snapshot["windows"]
-      return nil unless windows.is_a?(Array)
+      windows = Array(snapshot["windows"]).map(&:symbolize_keys)
+      # A window that reset since the snapshot was taken is stale: the card has
+      # no "last updated" line, so a week-old 95% reading would still say "resets
+      # now" after the quota already reset. Drop reset windows; a snapshot with
+      # none left is no reading at all.
+      windows = windows.reject { |window| window_reset?(window[:resets_at]) }
+      return nil if windows.empty?
 
-      { status: "ok", windows: windows.map(&:symbolize_keys), fetched_at: snapshot["fetched_at"] }
+      { status: "ok", windows: windows, fetched_at: snapshot["fetched_at"] }
+    end
+
+    def window_reset?(resets_at)
+      return false if resets_at.blank?
+
+      Time.zone.parse(resets_at.to_s) < Time.current
+    rescue ArgumentError
+      false
     end
 
     def context_file_path = "#{home_dir}/.gemini/GEMINI.md"
@@ -394,15 +415,24 @@ module Agents
     def usage_windows_from_group(group)
       return [] unless group.is_a?(Hash)
 
-      Array(group["buckets"]).filter_map do |bucket|
-        next unless bucket.is_a?(Hash) && bucket["disabled"] != true
+      group_name = group["name"].to_s.presence
+      buckets = Array(group["buckets"]).select { |bucket| bucket.is_a?(Hash) && bucket["disabled"] != true }
+      return [] if buckets.empty?
 
+      buckets.filter_map do |bucket|
         fraction = bucket["remaining_fraction"]
         key = bucket["id"].to_s.presence
         next if fraction.nil? || key.blank?
 
+        bucket_name = bucket["name"].to_s.presence
+        # The bucket id is a dynamic vendor slug (e.g. "gemini-weekly"), so the
+        # card can't label it statically. Carry a human label: the group name,
+        # qualified by the bucket name only when a group has several buckets.
+        label = buckets.one? || bucket_name.blank? ? group_name : [ group_name, bucket_name ].compact.join(" · ")
+
         {
           key: key,
+          label: label.presence,
           utilization: ((1.0 - fraction.to_f) * 100).clamp(0.0, 100.0),
           resets_at: bucket["reset_time"].presence,
           window_duration_mins: window_minutes_for(bucket["window"])

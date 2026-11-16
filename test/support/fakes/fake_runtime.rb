@@ -453,6 +453,7 @@ module ContainerRuntime
       return terminal_clients if cmd_str.include?("tmux list-clients")
       return KIRO_MODEL_CATALOGUE if cmd_str.include?("--list-models")
       return COPILOT_MODEL_CATALOGUE if cmd_str.include?(Agents::CopilotCliAdapter::MODELS_SCRIPT)
+      return ANTIGRAVITY_USAGE_ENVELOPE if cmd_str.include?("/usage") && cmd_str.include?("--output-format json")
 
       if cmd_str.include?("find") && cmd_str.include?("/workspace/outputs")
         return @fs.keys.select { |k| k.start_with?("/workspace/outputs/") }.join("\n")
@@ -752,6 +753,14 @@ module ContainerRuntime
                  "state #{Agents::KiroCliAdapter::PROFILE_STATE_KEY} " \
                  '{"arn":"arn:aws:codewhisperer:us-east-1:1:profile/A"}'
       },
+      # Antigravity's OAuth token file, written by `agy` on login (see
+      # Agents::AntigravityCliAdapter's header comment). The quota probe the
+      # cleanup runs reads `/usage` through the command router, not this file.
+      "antigravity_cli" => {
+        path: "/home/antigravity/.gemini/antigravity-cli/antigravity-oauth-token",
+        content: { "token" => { "access_token" => "tok-123", "refresh_token" => "refresh-123" },
+                   "auth_method" => "consumer" }.to_json
+      },
       # What `copilot login` leaves in config.json with no keychain (1.0.108): the comment
       # lines the CLI writes at the top, the trusted folder seeded before login, and the
       # token stored under both of the keys it uses for one github.com account.
@@ -800,6 +809,28 @@ module ContainerRuntime
           "context_window_tokens" => 256_000, "rate_multiplier" => 0.05, "rate_unit" => "Credit" }
       ],
       "default_model" => "auto"
+    }.to_json
+
+    # `agy -p /usage --output-format json`'s print-mode envelope. Two enabled
+    # buckets (a weekly and a 5-hour pool) plus a disabled one, so the adapter's
+    # group/name label logic and its disabled-bucket filter are both exercised.
+    ANTIGRAVITY_USAGE_ENVELOPE = {
+      "status" => "SUCCESS",
+      "command" => {
+        "name" => "usage",
+        "data" => {
+          "description" => "Antigravity pools",
+          "groups" => [
+            { "name" => "Gemini", "buckets" => [
+              { "id" => "gemini-weekly", "name" => "Weekly", "window" => "weekly",
+                "remaining_fraction" => 0.6, "reset_time" => "2026-08-21T12:00:00Z" },
+              { "id" => "3p-5h", "name" => "5 hours", "window" => "5h",
+                "remaining_fraction" => 0.5, "reset_time" => "2026-08-14T18:00:00Z" },
+              { "id" => "disabled-pool", "window" => "weekly", "remaining_fraction" => 0.0, "disabled" => true }
+            ] }
+          ]
+        }
+      }
     }.to_json
 
     MITM_LOGS = {
