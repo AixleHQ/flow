@@ -2757,6 +2757,29 @@ repair) is what makes a kept checkout safe to reuse: an existing clone is fetche
 to the requested ref, not trusted as-is. `Coder::RepoBootstrap` exists for the same reason
 on the MCP-tool path.
 
+As built for GitHub, GitLab and Bitbucket repositories
+(`GitCredentials::SessionGitSetup#sync_script`, one shell script per repository), by what
+the checkout path holds:
+
+- **Nothing.** A blobless clone of the source branch, as before.
+- **A working clone whose `origin` is this repository** (the URL compared without any
+  `user@` part an older session left). The remote URL is rewritten to the clean one, any
+  `http.extraheader` is removed, and the clone is fetched with this session's own
+  credential (`fetch --prune`). The source branch is then checked out at the remote's
+  current tip (`checkout --force -B` and `reset --hard`), so a branch the agent left
+  behind, local commits on the source branch, edits to tracked files and a stale
+  `index.lock` do not survive. Untracked files are removed; ignored files (build output,
+  dependency caches) are kept. The helper configuration is written again. No credential is
+  stored in `.git/config`.
+- **Anything else:** another remote, a broken or partial clone, a directory that is not a
+  clone, a file; and a kept clone that cannot be fetched or checked out (for example the
+  source branch no longer exists on the remote). The path is removed and the repository is
+  cloned again. If that clone fails too, the repository is listed under the session's
+  failed repositories, as for any failed clone.
+
+The path must be absolute and not `/`; the script refuses anything else before it removes
+anything. Azure DevOps checkouts (`AzureDevops::SessionGitSetup`) still run a plain clone.
+
 #### `manual`: an airtight scrub without a rebuild
 
 On a machine we do not own, `rebuild` does not exist, so scrub and reset carry the whole

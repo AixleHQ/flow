@@ -65,9 +65,8 @@ module GitCredentials
         AIXLE_GIT_AUTH_HEADER="$(cat #{Shellwords.escape(header_path)})"
         export AIXLE_GIT_AUTH_HEADER
         rm -f #{Shellwords.escape(header_path)}
-        git --config-env=http.extraheader=AIXLE_GIT_AUTH_HEADER clone --filter=blob:none --branch=#{Shellwords.escape(repository.source_branch)} #{Shellwords.escape(url)} #{Shellwords.escape(target_path)}
+        #{sync_script(repository, target_path, url)}
         unset AIXLE_GIT_AUTH_HEADER
-        #{configure_helper_script(url, repository, target_path)}
         chown -R #{uid}:#{uid} #{Shellwords.escape(target_path)}
         #{SafeDirectory.script(target_path, scope: :system)}
       SH
@@ -78,6 +77,61 @@ module GitCredentials
       rescue StandardError
         nil
       end
+    end
+
+    # Puts a checkout of `repository` at `target_path`, at the tip of its source
+    # branch, authenticating with the header in AIXLE_GIT_AUTH_HEADER (set by the
+    # caller). A scrub on a reusable machine keeps checkouts (DESIGN.md §7.2), so
+    # the path may already hold one:
+    #
+    # - nothing there: a clone;
+    # - a working clone whose `origin` is this repository (an older token in the
+    #   URL is ignored): its remote is rewritten clean, it is fetched with this
+    #   session's credential, and the source branch is checked out at the remote's
+    #   current tip. Local changes to tracked files, untracked files, other
+    #   branches' state and a stale index lock are discarded; ignored files stay;
+    # - anything else (another remote, a broken or partial clone, a plain
+    #   directory or file) and a kept clone that cannot be fetched or checked out:
+    #   removed and cloned again.
+    #
+    # Either way the checkout ends with the helper configured and no
+    # `http.extraheader` or credential in `.git/config`. Expects `set -e`.
+    def sync_script(repository, target_path, url)
+      raise ArgumentError, "checkout path must be absolute and below the root" unless target_path.to_s.start_with?("/") && target_path.to_s.squeeze("/") != "/"
+
+      path = Shellwords.escape(target_path)
+      git = 'git -c safe.directory="$TARGET" -C "$TARGET"'
+      <<~SH.strip
+        TARGET=#{path}
+        URL=#{Shellwords.escape(url)}
+        BRANCH=#{Shellwords.escape(repository.source_branch)}
+        AUTHED_GIT="git --config-env=http.extraheader=AIXLE_GIT_AUTH_HEADER"
+        fresh_clone() {
+          rm -rf "$TARGET"
+          $AUTHED_GIT clone --filter=blob:none --branch="$BRANCH" "$URL" "$TARGET"
+        }
+        kept_clone() {
+          [ -d "$TARGET/.git" ] || return 1
+          origin="$(#{git} config --get remote.origin.url)" || return 1
+          [ "$(printf '%s' "$origin" | sed 's#^\\([a-z]*://\\)[^/@]*@#\\1#')" = "$URL" ]
+        }
+        update_clone() {
+          rm -f "$TARGET/.git/index.lock" &&
+          #{git} remote set-url origin "$URL" &&
+          #{git} config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*' &&
+          #{git} config --unset-all http.extraheader || [ $? -eq 5 ] &&
+          $AUTHED_GIT -c safe.directory="$TARGET" -C "$TARGET" fetch --prune origin &&
+          #{git} checkout --force -B "$BRANCH" "refs/remotes/origin/$BRANCH" &&
+          #{git} reset --hard "refs/remotes/origin/$BRANCH" &&
+          #{git} clean -fdq
+        }
+        if kept_clone && update_clone; then
+          echo "fetched the kept checkout at $TARGET"
+        else
+          fresh_clone
+        fi
+        #{configure_helper_script(url, repository, target_path, git: "git -c safe.directory=#{path} -C #{path}")}
+      SH
     end
 
     # The same configuration applied to a checkout that already exists and is
