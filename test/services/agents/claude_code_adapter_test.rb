@@ -442,6 +442,17 @@ module Agents
       assert_equal({ "cc-plugin-privacy@builtin" => false }, settings["enabledPlugins"])
     end
 
+    test "an automatic session caches its prompt for five minutes, an interactive one keeps the default" do
+      settings_for = lambda do |workflow_config|
+        files = @adapter.config_files({ "primaryApiKey" => "sk" }, workflow_config)
+        JSON.parse(files["/home/claude/.claude/settings.json"])
+      end
+
+      assert_equal "5m", settings_for.call({ mode: "non_interactive" })["promptCacheTtl"]
+      refute settings_for.call({ mode: "interactive" }).key?("promptCacheTtl")
+      refute settings_for.call({}).key?("promptCacheTtl")
+    end
+
     test "settings let Claude Code follow the terminal's light or dark theme" do
       files = @adapter.config_files({ "primaryApiKey" => "sk" }, { mode: "interactive" })
       settings = JSON.parse(files["/home/claude/.claude/settings.json"])

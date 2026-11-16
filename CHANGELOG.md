@@ -34,6 +34,10 @@ governance, community health — carry none.
   GitLab token, which Flow replaces only in its last ten minutes.
 
 ### Changed
+- **Sessions & Runs**: an automatic Claude Code session writes its prompt cache
+  for 5 minutes instead of an hour, which costs less of the connected
+  subscription: its requests come seconds apart, so the cache stays warm.
+  Interactive sessions keep the one-hour cache.
 - Runners: the runner pulls the agent images for its machine's own platform
   and falls back to `linux/amd64` when an image has no build for it, so a
   machine on arm64 runs an image built for arm64 natively. `images.yml` builds
