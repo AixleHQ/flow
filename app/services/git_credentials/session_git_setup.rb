@@ -86,9 +86,12 @@ module GitCredentials
     #
     # - nothing there: a clone;
     # - a working clone whose `origin` is this repository (an older token in the
-    #   URL is ignored): its remote is rewritten clean, it is fetched with this
-    #   session's credential, and the source branch is checked out at the remote's
-    #   current tip. Local changes to tracked files, untracked files, other
+    #   URL is ignored): its objects and refs are kept, its config is rebuilt from
+    #   scratch (origin, fetch refspec, partial-clone settings) and its hooks are
+    #   cleared, then it is fetched with this session's credential and the source
+    #   branch is checked out at the remote's current tip. Every git command of the
+    #   update runs with hooks and fsmonitor off, and checkout and reset fetch
+    #   missing blobs with the same credential. Local changes to tracked files, untracked files, other
     #   branches' state and a stale index lock are discarded; ignored files stay;
     # - anything else (another remote, a broken or partial clone, a plain
     #   directory or file) and a kept clone that cannot be fetched or checked out:
@@ -100,7 +103,10 @@ module GitCredentials
       raise ArgumentError, "checkout path must be absolute and below the root" unless target_path.to_s.start_with?("/") && target_path.to_s.squeeze("/") != "/"
 
       path = Shellwords.escape(target_path)
-      git = 'git -c safe.directory="$TARGET" -C "$TARGET"'
+      # No hook and no fsmonitor of a kept checkout runs, whatever its config says.
+      guard = "-c core.hooksPath=/dev/null -c core.fsmonitor=false"
+      git = %(git #{guard} -c safe.directory="$TARGET" -C "$TARGET")
+      authed = %(git #{guard} --config-env=http.extraheader=AIXLE_GIT_AUTH_HEADER -c safe.directory="$TARGET" -C "$TARGET")
       <<~SH.strip
         TARGET=#{path}
         URL=#{Shellwords.escape(url)}
@@ -112,18 +118,30 @@ module GitCredentials
         }
         kept_clone() {
           [ -d "$TARGET/.git" ] || return 1
-          origin="$(#{git} config --get remote.origin.url)" || return 1
+          origin="$(git config --file "$TARGET/.git/config" --no-includes --get remote.origin.url)" || return 1
           [ "$(printf '%s' "$origin" | sed 's#^\\([a-z]*://\\)[^/@]*@#\\1#')" = "$URL" ]
         }
+        # Only the objects and refs of a kept checkout are reused. Its config, hooks
+        # and alternates came from an earlier session's agent and are replaced with
+        # what the clone itself writes, before any git command holds the header.
+        reset_config() {
+          rm -f "$TARGET/.git/index.lock" "$TARGET/.git/config" "$TARGET/.git/config.worktree" "$TARGET/.git/objects/info/alternates" &&
+          rm -rf "$TARGET/.git/hooks" &&
+          mkdir "$TARGET/.git/hooks" &&
+          git config --file "$TARGET/.git/config" core.repositoryformatversion 1 &&
+          git config --file "$TARGET/.git/config" core.bare false &&
+          git config --file "$TARGET/.git/config" extensions.partialclone origin &&
+          git config --file "$TARGET/.git/config" remote.origin.url "$URL" &&
+          git config --file "$TARGET/.git/config" remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*' &&
+          git config --file "$TARGET/.git/config" remote.origin.promisor true &&
+          git config --file "$TARGET/.git/config" remote.origin.partialclonefilter blob:none
+        }
         update_clone() {
-          rm -f "$TARGET/.git/index.lock" &&
-          #{git} remote set-url origin "$URL" &&
-          #{git} config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*' &&
-          #{git} config --unset-all http.extraheader || [ $? -eq 5 ] &&
-          $AUTHED_GIT -c safe.directory="$TARGET" -C "$TARGET" fetch --prune origin &&
-          #{git} checkout --force -B "$BRANCH" "refs/remotes/origin/$BRANCH" &&
-          #{git} reset --hard "refs/remotes/origin/$BRANCH" &&
-          #{git} clean -fdq
+          reset_config &&
+          #{authed} fetch --prune origin &&
+          #{authed} checkout --force -B "$BRANCH" "refs/remotes/origin/$BRANCH" &&
+          #{authed} reset --hard "refs/remotes/origin/$BRANCH" &&
+          #{authed} clean -fdq
         }
         if kept_clone && update_clone; then
           echo "fetched the kept checkout at $TARGET"

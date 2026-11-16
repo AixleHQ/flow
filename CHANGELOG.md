@@ -69,7 +69,8 @@ governance, community health — carry none.
   repository checkout the scrub kept and puts it on the repository's source
   branch at the remote's current tip, instead of failing to clone into the
   existing directory and working on a stale checkout. A path that holds
-  another repository or a broken clone is cloned again.
+  another repository or a broken clone is cloned again. A kept checkout keeps
+  only its objects and refs: its config and hooks are rebuilt, never reused.
 
 ## [1.15.0] - 2026-11-14
 

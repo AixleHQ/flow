@@ -132,12 +132,12 @@ module GitCredentials
       with_remote do |dir, remote|
         target = File.join(dir, "app")
         assert run_sync(remote, target)
-        git(target, "config", "--local", "marker.kept", "yes")
+        git(target, "tag", "kept")
         push_commit(dir, remote, "second")
 
         assert run_sync(remote, target)
 
-        assert_equal "yes", git(target, "config", "marker.kept"), "the checkout was kept, not replaced"
+        assert_equal sha(target, "HEAD~1"), sha(target, "kept"), "the checkout was kept, not replaced"
         assert_equal sha(remote, "main"), sha(target, "HEAD")
       end
     end
@@ -172,6 +172,59 @@ module GitCredentials
 
         config = File.read(File.join(target, ".git", "config"))
         assert_no_match(/OLD|NEW|old-token|extraheader/, config)
+      end
+    end
+
+    test "a kept checkout's config and hooks are never reused: none of an earlier session's takes effect" do
+      with_remote do |dir, remote|
+        target = File.join(dir, "app")
+        assert run_sync(remote, target)
+        git(target, "tag", "kept")
+        elsewhere = File.join(dir, "elsewhere.git")
+        ran = File.join(dir, "ran")
+        File.write(File.join(dir, "extra.config"), "[marker]\n\tincluded = yes\n")
+        File.write(File.join(target, ".git", "hooks", "post-checkout"), "#!/bin/sh\necho hook >> #{ran}\n")
+        FileUtils.chmod(0o755, File.join(target, ".git", "hooks", "post-checkout"))
+        File.write(File.join(dir, "fsmonitor"), "#!/bin/sh\necho fsmonitor >> #{ran}\n")
+        FileUtils.chmod(0o755, File.join(dir, "fsmonitor"))
+        git(target, "config", "url.file://#{elsewhere}.insteadOf", "file://#{remote}")
+        git(target, "config", "core.fsmonitor", File.join(dir, "fsmonitor"))
+        git(target, "config", "core.hooksPath", File.join(target, ".git", "hooks"))
+        git(target, "config", "include.path", File.join(dir, "extra.config"))
+        git(target, "config", "credential.helper", "!echo helper >> #{ran}; true")
+        git(target, "config", "http.extraheader", "Authorization: Basic OLD")
+        push_commit(dir, remote, "second")
+
+        assert run_sync(remote, target)
+
+        assert_equal sha(target, "HEAD~1"), sha(target, "kept"), "updated in place, not by a fresh clone"
+        assert_equal sha(remote, "main"), sha(target, "HEAD")
+        assert_not File.exist?(ran), "no hook, fsmonitor or credential helper of the kept clone ran"
+        assert_not File.exist?(elsewhere)
+        config = File.read(File.join(target, ".git", "config"))
+        assert_no_match(/insteadOf|fsmonitor|hooksPath|include|helper = !|OLD|elsewhere/, config)
+        assert_empty Dir.children(File.join(target, ".git", "hooks"))
+      end
+    end
+
+    test "a kept blobless checkout fetches the blobs of files changed since, without falling back to a fresh clone" do
+      with_remote do |dir, remote|
+        git(remote, "config", "uploadpack.allowFilter", "true")
+        git(remote, "config", "uploadpack.allowAnySHA1InWant", "true")
+        target = File.join(dir, "app")
+        assert run_sync(remote, target)
+        git(target, "tag", "kept")
+        work = File.join(dir, "pusher")
+        system("git", "clone", "-q", remote, work, exception: true)
+        File.write(File.join(work, "README"), "changed between the sessions")
+        system("git", "-C", work, "-c", "user.name=a", "-c", "user.email=a@b", "commit", "-qam", "change", exception: true)
+        system("git", "-C", work, "push", "-q", "origin", "main", exception: true)
+
+        assert run_sync(remote, target)
+
+        assert_equal "origin", git(target, "config", "extensions.partialclone")
+        assert_equal sha(target, "HEAD~1"), sha(target, "kept"), "no fresh clone"
+        assert_equal "changed between the sessions", File.read(File.join(target, "README"))
       end
     end
 
@@ -240,6 +293,9 @@ module GitCredentials
 
       assert_includes clone_script, "update_clone"
       assert_includes clone_script, "fetch --prune origin"
+      assert_match(/--config-env=http\.extraheader=AIXLE_GIT_AUTH_HEADER[^\n]* checkout --force/, clone_script)
+      assert_match(/--config-env=http\.extraheader=AIXLE_GIT_AUTH_HEADER[^\n]* reset --hard/, clone_script)
+      assert_includes clone_script, "core.hooksPath=/dev/null"
     end
 
     private
