@@ -42,10 +42,8 @@ module Agents
 
     # The metadata key under which the last `/usage` probe's snapshot is stored,
     # and the print-mode command that reads it. `/usage` is the CLI's own quota
-    # view; in print mode it reports without spending a model turn (agy 1.1.11+ —
-    # see stablyai/orca src/main/rate-limits/providers/antigravity/antigravity-usage-command.ts,
-    # whose version guard and timeout this mirrors). Never add
-    # `--disable-slash-commands`: agy then sends `/usage` as a billed prompt.
+    # view. Never add `--disable-slash-commands`: agy then sends `/usage` as a
+    # billed prompt.
     SUBSCRIPTION_USAGE_KEY = "subscription_usage"
     USAGE_PROBE_COMMAND = [ "agy", "-p", "/usage", "--output-format", "json", "--print-timeout", "20s" ].freeze
 
