@@ -105,7 +105,6 @@ module GitCredentials
       path = Shellwords.escape(target_path)
       # No hook and no fsmonitor of a kept checkout runs, whatever its config says.
       guard = "-c core.hooksPath=/dev/null -c core.fsmonitor=false"
-      git = %(git #{guard} -c safe.directory="$TARGET" -C "$TARGET")
       authed = %(git #{guard} --config-env=http.extraheader=AIXLE_GIT_AUTH_HEADER -c safe.directory="$TARGET" -C "$TARGET")
       <<~SH.strip
         TARGET=#{path}
