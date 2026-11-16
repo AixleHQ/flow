@@ -64,7 +64,7 @@ module GitCredentials
       script = clone_script
       assert_includes script, "git config --system --add safe.directory /workspace/repo/my-app"
       assert_includes script, "grep -qxF -- /workspace/repo/my-app"
-      assert_operator script.index("chown -R"), :<, script.index("safe.directory")
+      assert_operator script.rindex("chown -R"), :<, script.index("git config --system")
     end
 
     test "reconfiguring an existing checkout adds the entry too" do
