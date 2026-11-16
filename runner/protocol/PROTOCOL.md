@@ -566,13 +566,12 @@ as for every endpoint (§3). When it cannot reach the gateway at all, it answers
    | `azure-git-credentials` | `POST` | none | git credentials for Azure DevOps | `X-Session-Id` and `X-Azure-Git-Key` |
    | `cloud-credentials` | `POST` | none | cloud credentials | `X-Session-Id` and `X-Cloud-Key` |
    | `assets` | `GET`, `HEAD` | `store/…`, with no empty, `.` or `..` segment, and none with a `/` or `\` once decoded | stored files | none |
-
-   There is no OTLP route in protocol 1 yet: a runner session gets no telemetry endpoint.
+   | `otel` | `POST` | `v1/…`, with the same segment rules | the OTLP collector (`otlp-ingest`): usage and telemetry exports | none; the batch carries the session's key in its resource attributes |
 2. **The session.** The request must carry the route's key of the session that holds this
    machine now; anything else is `403 session_not_on_environment`. So a session key copied out of
    a machine is useless anywhere but through that machine's credential, and only while its
    session runs there. Stored files carry no key, on the internal address either, so `assets`
-   needs only a session on the machine.
+   and `otel` need only a session on the machine.
 3. **No body schema.** The body is the agent's, forwarded unchanged, so the gateway does not check
    it, and `schemas/v1/` has no schema for this route.
 
@@ -1215,8 +1214,6 @@ Fixtures: `ops/exec_upload.json`, `ops/exec_upload_failed.json`, `ops/read_file_
 
 Each of these is designed in DESIGN.md §6 and comes with its own section and fixtures:
 
-- An OTLP route of the callback proxy (§5.8): a runner session gets no telemetry endpoint until it
-  comes.
 - The running-session summary in the heartbeat's body (DESIGN.md §6.7, §15 task 11): the heartbeat
   has no body in protocol 1, and a later release can add the field, which is not a breaking change.
 - `POST /runner/v1/sessions/:id/log` and live-log chunks: not built (Alex, 2026-11-11). A runner

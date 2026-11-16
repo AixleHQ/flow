@@ -70,7 +70,14 @@ module Runners
       # (config/initializers/shrine.rb). A deployment that serves stored files
       # from the filesystem (self-hosted, say) must give this route a key
       # check first, or a runner session could read another company's files.
-      Route.new(name: "assets", callback: :container_assets, verbs: %w[GET HEAD], prefix: "store/", key: nil)
+      Route.new(name: "assets", callback: :container_assets, verbs: %w[GET HEAD], prefix: "store/", key: nil),
+      # The OTLP collector (`otlp-ingest`, not Rails): the agent's usage and
+      # telemetry exports, `v1/metrics`, `v1/logs` and `v1/traces` below the
+      # route. They carry no session key header: the batch names its session
+      # in its resource attributes and `UsageStatisticsService` verifies the
+      # key there, as it does for a hosted session. The route needs only a
+      # session on the environment.
+      Route.new(name: "otel", callback: :otel, verbs: %w[POST], prefix: "v1/", key: nil)
     ].index_by(&:name).freeze
 
     # The module that checks each credential endpoint's key, and names the
@@ -102,11 +109,7 @@ module Runners
     end
 
     # The address a runner session calls a callback on: its proxy's route.
-    # Nil for `:otel`: there is no OTLP route yet, so a runner session gets
-    # no telemetry endpoint.
     def local_url(callback, session)
-      return nil if callback.to_sym == :otel
-
       route = ROUTES.values.find { |candidate| candidate.callback == callback.to_sym }
       raise ArgumentError, "unknown callback #{callback.inspect}" if route.nil?
 

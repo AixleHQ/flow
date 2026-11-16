@@ -13,7 +13,7 @@ class Runners::ProxyTest < ActiveSupport::TestCase
     @environment.update!(current_session: @session)
   end
 
-  test "a runner session calls every callback on its sidecar's constant port, and gets no OTLP endpoint" do
+  test "a runner session calls every callback, the OTLP endpoint included, on its sidecar's constant port" do
     expected = {
       mcp: "http://127.0.0.1:7690/mcp",
       agent_credential_sync: "http://127.0.0.1:7690/agent-credentials",
@@ -22,7 +22,7 @@ class Runners::ProxyTest < ActiveSupport::TestCase
       azure_git_credentials: "http://127.0.0.1:7690/azure-git-credentials",
       cloud_credentials: "http://127.0.0.1:7690/cloud-credentials",
       container_assets: "http://127.0.0.1:7690/assets",
-      otel: nil
+      otel: "http://127.0.0.1:7690/otel"
     }
 
     assert_equal expected, ContainerRuntime::RunnerRuntime.new.callback_urls(@session)
@@ -49,8 +49,8 @@ class Runners::ProxyTest < ActiveSupport::TestCase
                  Runners::Proxy.local_url(:git_credentials, session)
   end
 
-  test "every callback but OTLP has a route, and every route a callback" do
-    callbacks = ContainerRuntime::CallbackUrls::NAMES - [ :otel ]
+  test "every callback has a route, and every route a callback" do
+    callbacks = ContainerRuntime::CallbackUrls::NAMES
 
     assert_equal callbacks.sort, Runners::Proxy::ROUTES.values.map(&:callback).sort
     assert_raises(ArgumentError) { Runners::Proxy.local_url(:nope, @session) }
@@ -75,6 +75,25 @@ class Runners::ProxyTest < ActiveSupport::TestCase
     assert_not assets.allows?("GET", "store/a%5Cb")
     assert_not assets.allows?("GET", "store//x")
     assert_nil Runners::Proxy.route("otlp")
+  end
+
+  test "the OTLP route passes a POST of a signal below v1/ and nothing else" do
+    otel = Runners::Proxy.route("otel")
+
+    %w[v1/metrics v1/logs v1/traces].each { |path| assert otel.allows?("POST", path), path }
+    assert_not otel.allows?("GET", "v1/metrics")
+    assert_not otel.allows?("POST", "")
+    assert_not otel.allows?("POST", "v2/metrics")
+    assert_not otel.allows?("POST", "v1/../x")
+    assert_not otel.allows?("POST", "v1/%2e%2e/x")
+  end
+
+  test "the OTLP route needs only a session on the machine, and forwards to the collector" do
+    otel = Runners::Proxy.route("otel")
+
+    assert_nil Runners::Proxy.key_header(otel)
+    assert_equal @session, Runners::Proxy.holder(otel, @environment)
+    assert_equal "#{Settings.otel.endpoint}/v1/metrics", Runners::Proxy.upstream_url(otel, "v1/metrics", nil).to_s
   end
 
   test "a path segment that does not decode strictly is refused, without raising" do

@@ -1708,10 +1708,12 @@ are unchanged. With `network: host` the host runner listens itself.
   with `ActionController::Live`, chunk by chunk. No body schema (decision 9). Every refusal of
   the route carries `X-Aixle-Runner-Refusal`, so the runner tells it from the endpoint's own
   answer.
-- **No OTLP route yet** (decision 7): `RunnerRuntime#callback_url(:otel)` is nil, so a runner
-  session gets no OTLP variable. Claude Code and Gemini CLI then have telemetry off, Codex no
-  `[otel]` block, and Kiro CLI `KIRO_DISABLE_TELEMETRY`, since its export would otherwise fall
-  back to the vendor's collector. The route comes with a later task.
+- **The OTLP route** (decision 7, done in #257): `RunnerRuntime#callback_url(:otel)` is the proxy's
+  `otel` route, `POST` below `v1/` (`v1/metrics`, `v1/logs`, `v1/traces`), forwarded to
+  `otlp-ingest`. It takes no key header: a batch names its session in its resource attributes,
+  and `UsageStatisticsService` checks the session key there, as for a hosted session. The
+  gateway needs only a session on the environment. So the OTLP sources of usage (Claude Code,
+  Gemini CLI, Codex, Kiro CLI, Copilot CLI, Grok) record on a runner as on hosted.
 
 ### 6.7 Heartbeat, reconnect and resume
 
