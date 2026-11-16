@@ -438,20 +438,41 @@ module Agents
       assert snapshot["fetched_at"].present?
 
       windows = snapshot["windows"]
-      assert_equal %w[gemini-weekly 3p-5h], windows.map { |w| w[:key] }
+      assert_equal %w[gemini-weekly 3p-weekly], windows.map { |w| w[:key] }
 
-      weekly = windows.find { |w| w[:key] == "gemini-weekly" }
-      assert_equal "Gemini · Weekly", weekly[:label]
-      assert_in_delta 40.0, weekly[:utilization]
-      assert_equal "2026-08-21T12:00:00Z", weekly[:resets_at]
-      assert_equal 10_080, weekly[:window_duration_mins]
+      gemini = windows.find { |w| w[:key] == "gemini-weekly" }
+      assert_equal "Gemini Models", gemini[:label]
+      assert_in_delta 0.0, gemini[:utilization]
+      assert_equal "2026-11-23T00:49:24Z", gemini[:resets_at]
+      assert_equal 10_080, gemini[:window_duration_mins]
 
-      five_hour = windows.find { |w| w[:key] == "3p-5h" }
-      assert_equal "Gemini · 5 hours", five_hour[:label]
-      assert_in_delta 50.0, five_hour[:utilization]
-      assert_equal 300, five_hour[:window_duration_mins]
+      claude = windows.find { |w| w[:key] == "3p-weekly" }
+      assert_equal "Claude and GPT models", claude[:label]
+      assert_in_delta 0.0, claude[:utilization]
+      assert_equal "2026-11-23T00:49:24Z", claude[:resets_at]
+      assert_equal 10_080, claude[:window_duration_mins]
 
       assert_equal [ AntigravityCliAdapter::USAGE_PROBE_COMMAND ], runtime.execs
+    end
+
+    test "usage_windows_from_probe qualifies buckets and skips disabled ones when a group has several" do
+      stdout = {
+        "status" => "SUCCESS",
+        "command" => { "name" => "usage", "data" => {
+          "groups" => [ { "name" => "Gemini Models", "buckets" => [
+            { "id" => "gemini-weekly", "name" => "Weekly", "window" => "weekly",
+              "remaining_fraction" => 0.5, "reset_time" => "2026-11-23T00:49:24Z" },
+            { "id" => "3p-5h", "name" => "5 hours", "window" => "5h",
+              "remaining_fraction" => 0.5, "reset_time" => "2026-11-23T00:49:24Z" },
+            { "id" => "disabled-pool", "window" => "weekly", "remaining_fraction" => 0, "disabled" => true }
+          ] } ]
+        } }
+      }.to_json
+
+      windows = @adapter.send(:usage_windows_from_probe, stdout)
+
+      assert_equal %w[gemini-weekly 3p-5h], windows.map { |w| w[:key] }
+      assert_equal [ "Gemini Models · Weekly", "Gemini Models · 5 hours" ], windows.map { |w| w[:label] }
     end
 
     test "collect_credential_metadata writes nothing on a non-session phase or a failed probe" do

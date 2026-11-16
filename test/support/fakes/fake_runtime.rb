@@ -811,23 +811,41 @@ module ContainerRuntime
       "default_model" => "auto"
     }.to_json
 
-    # `agy -p /usage --output-format json`'s print-mode envelope. Two enabled
-    # buckets (a weekly and a 5-hour pool) plus a disabled one, so the adapter's
-    # group/name label logic and its disabled-bucket filter are both exercised.
+    # A real `agy -p /usage --output-format json` success envelope, captured on
+    # agy 1.5.9. Note `num_turns: 0` and the zeroed `usage` — the probe spends no
+    # model turn. Each group carries one weekly bucket, so the group name is the
+    # label the adapter surfaces.
     ANTIGRAVITY_USAGE_ENVELOPE = {
+      "conversation_id" => "",
       "status" => "SUCCESS",
+      "response" => "Gemini Models\tWeekly Limit Remaining\t100%\t2026-11-23T00:49:24Z\n" \
+                    "Claude and GPT models\tWeekly Limit Remaining\t100%\t2026-11-23T00:49:24Z\n",
+      "duration_seconds" => 0,
+      "num_turns" => 0,
+      "usage" => { "input_tokens" => 0, "output_tokens" => 0, "thinking_tokens" => 0,
+                   "cache_read_tokens" => 0, "total_tokens" => 0 },
       "command" => {
         "name" => "usage",
         "data" => {
-          "description" => "Antigravity pools",
+          "description" => "Within each group, models share a weekly limit. Quota is consumed " \
+                          "proportionally to the cost of the tokens.",
           "groups" => [
-            { "name" => "Gemini", "buckets" => [
-              { "id" => "gemini-weekly", "name" => "Weekly", "window" => "weekly",
-                "remaining_fraction" => 0.6, "reset_time" => "2026-08-21T12:00:00Z" },
-              { "id" => "3p-5h", "name" => "5 hours", "window" => "5h",
-                "remaining_fraction" => 0.5, "reset_time" => "2026-08-14T18:00:00Z" },
-              { "id" => "disabled-pool", "window" => "weekly", "remaining_fraction" => 0.0, "disabled" => true }
-            ] }
+            {
+              "name" => "Gemini Models",
+              "description" => "Models within this group: Gemini 3.8 Flash",
+              "buckets" => [
+                { "id" => "gemini-weekly", "name" => "Weekly Limit Remaining", "window" => "weekly",
+                  "remaining_fraction" => 1, "reset_time" => "2026-11-23T00:49:24Z" }
+              ]
+            },
+            {
+              "name" => "Claude and GPT models",
+              "description" => "Models within this group: Claude Sonnet 4.6, Claude Opus 4.6, GPT-OSS 120B",
+              "buckets" => [
+                { "id" => "3p-weekly", "name" => "Weekly Limit Remaining", "window" => "weekly",
+                  "remaining_fraction" => 1, "reset_time" => "2026-11-23T00:49:24Z" }
+              ]
+            }
           ]
         }
       }

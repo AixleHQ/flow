@@ -42,8 +42,9 @@ module Agents
 
     # The metadata key under which the last `/usage` probe's snapshot is stored,
     # and the print-mode command that reads it. `/usage` is the CLI's own quota
-    # view. Never add `--disable-slash-commands`: agy then sends `/usage` as a
-    # billed prompt.
+    # view; in print mode it answers with `num_turns: 0` and a zeroed `usage`
+    # (verified against agy 1.5.9), so the probe spends no model turn. Never add
+    # `--disable-slash-commands`: agy then sends `/usage` as a billed prompt.
     SUBSCRIPTION_USAGE_KEY = "subscription_usage"
     USAGE_PROBE_COMMAND = [ "agy", "-p", "/usage", "--output-format", "json", "--print-timeout", "20s" ].freeze
 

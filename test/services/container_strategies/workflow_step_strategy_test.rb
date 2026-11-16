@@ -132,7 +132,7 @@ module ContainerStrategies
 
       snapshot = AgentCredential.find_by(user: @user, agent_type: "antigravity_cli").reload.metadata["subscription_usage"]
       assert snapshot, "expected the quota snapshot on the credential"
-      assert_equal %w[gemini-weekly 3p-5h], snapshot["windows"].map { |w| w["key"] }
+      assert_equal %w[gemini-weekly 3p-weekly], snapshot["windows"].map { |w| w["key"] }
     end
 
     # == cleanup phase ==
