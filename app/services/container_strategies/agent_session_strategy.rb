@@ -381,7 +381,7 @@ module ContainerStrategies
 
     # → ContainerStrategies::Collection
     def collect_outputs(container, session)
-      output_dir = "/workspace/outputs"
+      output_dir = Asset::OUTPUT_DIR
 
       # Recurse: agents organize outputs into subdirs (e.g. outputs/presentation/index.html).
       # A -maxdepth 1 scan would silently miss all of them. The relative path (not the bare

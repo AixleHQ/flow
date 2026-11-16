@@ -64,6 +64,11 @@ governance, community health — carry none.
   version: 0.2.0 keeps working, but shows offline during an operation longer
   than 90 seconds because it sends no heartbeat.
 
+### Fixed
+- **Assets**: a step can promote a file it wrote to `/workspace/outputs` to a
+  project asset while it is still running. Before, `promote_asset` found only
+  outputs of earlier steps and failed with "No workflow output asset named …".
+
 ## [1.15.0] - 2026-11-14
 
 ### Added

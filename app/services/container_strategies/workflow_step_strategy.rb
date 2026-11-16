@@ -73,7 +73,7 @@ module ContainerStrategies
 
       workflow_run = step_run.workflow_run
       container = resolve_container(container_id)
-      output_dir = "/workspace/outputs"
+      output_dir = Asset::OUTPUT_DIR
 
       result = runtime.exec(
         container,

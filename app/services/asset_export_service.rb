@@ -1,8 +1,24 @@
 # frozen_string_literal: true
 
 class AssetExportService
-  def initialize(workflow_run_asset, project:, user:)
-    @wra = workflow_run_asset
+  # A file the running session has written to its outputs. It becomes a
+  # WorkflowRunAsset only when the session ends, so a step that promotes its
+  # own output exports the bytes it reads from the container.
+  LiveOutput = Data.define(:name, :content) do
+    def file = self
+
+    def download
+      Tempfile.new([ "asset_export_", File.extname(name) ]).tap do |tempfile|
+        tempfile.binmode
+        tempfile.write(content)
+        tempfile.rewind
+      end
+    end
+  end
+
+  # source: a WorkflowRunAsset or a LiveOutput.
+  def initialize(source, project:, user:)
+    @source = source
     @project = project
     @user = user
   end
@@ -11,7 +27,7 @@ class AssetExportService
     asset = find_or_create_asset(folder, public)
     version = create_version(asset)
 
-    Rails.logger.info("[AssetExportService] Exported #{@wra.name} → Asset##{asset.id} v#{version&.version}")
+    Rails.logger.info("[AssetExportService] Exported #{@source.name} → Asset##{asset.id} v#{version&.version}")
     { asset: asset, version: version }
   end
 
@@ -22,7 +38,7 @@ class AssetExportService
     existing = Asset.find_by(
       scope_type: "Project",
       scope_id: @project.id,
-      name: @wra.name,
+      name: @source.name,
       folder: folder
     )
 
@@ -33,7 +49,7 @@ class AssetExportService
       Asset.create!(
         scope_type: "Project",
         scope_id: @project.id,
-        name: @wra.name,
+        name: @source.name,
         folder: folder,
         status: "active",
         created_by: @user,
@@ -43,7 +59,7 @@ class AssetExportService
   end
 
   def create_version(asset)
-    tempfile = download_wra_file
+    tempfile = download_source_file
     return nil unless tempfile
 
     begin
@@ -59,9 +75,9 @@ class AssetExportService
     end
   end
 
-  def download_wra_file
-    return nil unless @wra.file
+  def download_source_file
+    return nil unless @source.file
 
-    @wra.file.download
+    @source.file.download
   end
 end
