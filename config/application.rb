@@ -19,6 +19,8 @@ require "rails/test_unit/railtie"
 # you've limited to :test, :development, or :production.
 Bundler.require(*Rails.groups)
 
+require_relative "../lib/middleware/null_byte_guard"
+
 module Aixle
   class Application < Rails::Application
     # Initialize configuration defaults for originally generated Rails version.
@@ -28,6 +30,7 @@ module Aixle
     config.secret_key_base = Settings.rails.secret_key_base
     config.public_file_server.enabled = true
 
+    config.middleware.insert_before 0, Middleware::NullByteGuard
     config.middleware.use Rack::Attack
 
     # The runner gateway routes /runner/v1/* and /up only (config/routes.rb), so
