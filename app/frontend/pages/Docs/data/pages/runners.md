@@ -10,10 +10,11 @@ admin or the project's owner manages the project's own.
 Runners are behind the `external_runners` feature flag: without it the pages
 do not exist for your company.
 
-This page covers adding machines to a `manual` runner, what the runner's status
-means, what a session shows while it waits for a free machine, the reuse policy
-and Return to service, what you take on with a `manual` machine, what it reaches
-outbound and its known limits.
+This page covers adding machines to a `manual` runner and reading the
+machines list on its page, what the runner's status means, what a session shows
+while it waits for a free machine, the reuse policy and Return to service, what
+you take on with a `manual` machine, what it reaches outbound and its known
+limits.
 
 ---
 
@@ -60,6 +61,100 @@ By default an idle machine updates itself to the version the platform
 recommends. To turn that off, tick **Turn off self-update**, which adds
 `--no-auto-update` to `configure`.
 
+### Running the runner in Docker
+
+Choose **Docker** instead of a platform when the machine has no systemd, when
+you want no service user, or on macOS. The machine needs Docker and has to
+reach the platform; it needs no `curl` or `sha256sum`. The sequence:
+
+1. **Picks the runner's directory.** `/var/lib/aixle-runner` on Linux; on macOS
+   `~/aixle-runner`, which Docker shares with its VM. The runner keeps its
+   binary and credentials there, and the directory is mounted at the same path
+   in the container: Docker starts the session's containers from files on the
+   machine, not in the runner's container.
+2. **Registers the machine.** A throwaway container of
+   `ghcr.io/aixlehq/aixle-runner:<version>`, the version the platform
+   recommends, runs `configure --url … --token … --name …` with the Docker
+   socket and the `aixle-runner-docker-root` volume, because `configure` checks
+   Docker and the disk before it registers. It uses up the token.
+3. **Runs it.** A container with `--restart unless-stopped` and the Docker
+   socket, so it starts again with Docker.
+
+The container runs as root (`--user 0:0`): reaching the Docker socket already
+gives root on the machine. A runner in Docker does not update itself: to update
+it, remove the container and run the image of the new version with the same
+directory.
+
+The runner reads registry credentials from `~/.docker/config.json` of the user
+it runs as, which in the container is the container's root, not yours. For agent
+images in a private registry, add
+`-v "$HOME/.docker/config.json:/root/.docker/config.json:ro"` to the step 3
+command. A file with a credential helper (`credsStore`) does not work in the
+container: use a file with the credentials in it.
+
+To remove the machine, stop and remove the container, run the same image with
+`unregister` (it removes the machine on the platform), then delete the
+directory and the `aixle-runner-docker-root` volume. The dialog lists the
+commands after the sequence, commented out.
+
+macOS works through Docker: OrbStack is checked, Docker Desktop as far as
+checked. Rootless Docker and Podman (another socket path) and Windows are not
+covered.
+
+## The machines list
+
+The page of a `manual` runner, in company settings and in the project alike,
+has a **Machines** section: a read-only list with one row per machine. A
+machine appears as soon as it has run `configure`. Each row shows:
+
+- the machine's **name** (the `--name` it was configured with, the hostname by
+  default) and its **key**;
+- its **state**:
+  - **Online**: the machine is connected and running a session;
+  - **Idle**: the machine is connected and has no session;
+  - **Offline**: the platform has not heard from the machine for 90 seconds, or
+    never has. Stop `aixle-runner` on a machine, or lose its network, and it
+    turns offline within about two minutes;
+  - **Resetting**: a reset started by Return to service is running, and the
+    machine takes no session;
+  - **Failed**: the machine is out of rotation after a failed reset or three
+    failed sessions in a row, with the reason shown and a **Return to service**
+    button (see below);
+  - **Gone**: the machine was unregistered or revoked;
+- the runner **version** and the **OS / arch** it reported at `configure`
+  (updated every time the runner starts);
+- the **first-seen IP**, the address the machine registered from, and **added
+  by**, the user who created the registration token with **Add machine**. A
+  machine registered before these were recorded shows a dash for both;
+- when it was **registered**;
+- its **last seen**: the last time the platform heard from it. The runner's own
+  "Last seen" in the overview is the latest of its machines'.
+
+The list refreshes itself every 15 seconds while the page is open. The runners
+list shows, for a manual runner, **machines busy/total**: the machines holding a
+session out of those registered and not gone.
+
+An **offline machine is given no new session**. While another machine of the
+runner is free, a session goes there. If every machine of the runner is
+offline, the session is refused at launch with a message naming the runner and
+saying its machines are offline: start `aixle-runner` on one of them (a machine
+returns to **Idle** on its next poll, within seconds), or pick another runner.
+A machine that is busy running a long step is not treated as offline while that
+step is within its time limit, even when it is silent.
+
+### Machines on arm64
+
+The agent images (`ghcr.io/aixlehq/flow-<image>`) are built for `linux/amd64`
+and `linux/arm64`, so on an arm64 machine (Apple Silicon, or an ARM Linux
+server, with the binary or with Docker) the runner pulls the arm64 image and the
+agent runs natively. This needs `aixle-runner` 0.4.0 or later: 0.3.0 and
+earlier always pull `linux/amd64`, so every agent runs under emulation. An image published before arm64 builds existed, or a runtime
+whose CLI has no arm64 build, has `linux/amd64` only: the runner then pulls that
+and the agent starts under amd64 emulation, which is slower. OrbStack and Docker
+Desktop have emulation built in; on ARM Linux install it with binfmt (the
+`tonistiigi/binfmt` image installs it). Without it, a session that needs it fails
+to start with the Docker daemon's own message.
+
 ### If something goes wrong
 
 - A token that was already used, or that is more than an hour old, is refused
@@ -70,8 +165,6 @@ recommends. To turn that off, tick **Turn off self-update**, which adds
 - On a self-hosted installation the machine must reach the runner gateway
   (`/runner/v1`) on the platform's host. If the gateway is served on a private
   address, the machine has to be inside that network or on its VPN.
-
----
 
 ## What the runner's status means
 
@@ -108,54 +201,6 @@ the runner and how many of its machines are busy:
 `Waiting for a free machine on runner "Build farm" (1 of 1 busy).` Machines that
 are offline or failed are not counted. A session that waits for a hosted
 cluster still says **Waiting for cluster capacity**.
-
-
-## A machine that stops answering
-
-A session keeps running on a machine that loses its network or whose
-`aixle-runner` stops, because the agent belongs to the runner on the machine.
-The machine shows **Offline** after 90 seconds, and the platform asks it
-nothing while it is offline.
-
-- **The machine is back within 15 minutes.** If the agent is still running, the
-  session goes on and can finish. If the agent exited meanwhile, the session
-  fails within a few minutes of the machine's return, as a session whose
-  container died does.
-- **The machine is away for 15 minutes.** The session fails with *Runner
-  environment lost contact for 15 minutes.* A session that has already finished
-  keeps its outcome.
-- **The slot stays with the machine.** The failed session still holds the
-  machine, so no other session takes it and the session's slot is not
-  released. When the machine is heard again, the platform stops the session's
-  leftover container, resets the machine, and releases the slot. The machine
-  shows **Idle**, and a session waiting for it starts. To give the slot up
-  without waiting, revoke the machine.
-- **A revoked or deleted runner** never hears its machines again, so its session
-  fails after the 15 minutes and its slot is released then.
-
----
-
-## Which agent image a machine pulls
-
-A session on a runner runs the platform's agent image for the session's agent
-runtime, and the machine pulls it. By default that is the public image,
-`ghcr.io/aixlehq/flow-<image>` (for example `ghcr.io/aixlehq/flow-claude-code`),
-so the machine needs no registry login. The tag is `latest`, unless the
-deployment sets `RUNNER_AGENT_IMAGE_TAG`. Hosted sessions are not affected: they
-keep their own images.
-
-To run another image on a runner's machines, set **`container.image_override`**
-in the runner's settings. It wins over the default and must be built `FROM` the
-platform's agent image. If that image is in a private registry, run
-`docker login` for that registry on each machine as the user that runs
-`aixle-runner`: the platform sends no registry credentials to a machine.
-
-A self-hosted deployment changes the default for all its runners with
-`RUNNER_AGENT_IMAGE_PREFIX`, `RUNNER_AGENT_IMAGE_TAG` (default `latest`) and the
-per-runtime `RUNNER_AGENT_IMAGE_<RUNTIME>` variables (see the configuration
-reference).
-`latest` moves with every stable release, so pin `RUNNER_AGENT_IMAGE_TAG` to the
-release the deployment runs in production.
 
 ## Reuse policy, scrub and Return to service
 
@@ -204,6 +249,31 @@ on the machine) it shows a checkbox, *I understand the agent can write to
 `container.acknowledged_writable_mounts`. A runner with a writable host mount
 that is not ticked is refused at the field.
 
+### Revoking a machine
+
+**Revoke** in a machine's row removes a machine for good: a lost or compromised
+machine, or one you no longer want on the runner. It works on a machine in any
+state but Gone. It is available to whoever can revoke the runner: a company admin
+on a company runner, and a project admin or owner on a project runner.
+
+- The machine shows **Gone** and stays in the list. Its credentials are revoked,
+  so `aixle-runner` on it is refused (`401`) on its next request and stops. The
+  other machines of the runner keep working.
+- If the machine held a session, the session ends at once with a message that
+  names the machine, and its slot is released. A session waiting for a machine on
+  the runner goes on waiting for its other machines.
+- **Aixle does not clean the machine.** Remove the Aixle containers and volumes
+  it left, and its service (`aixle-runner service uninstall`), yourself.
+  `aixle-runner unregister` on the machine does the same as Revoke.
+
+### What Revoke and Delete do to a runner's sessions
+
+Revoking a runner, and deleting it, which revokes it, ends its sessions: a
+session running on it fails with a message that says the runner was revoked, and
+one waiting for one of its machines ends with the message a launch gives for a
+revoked runner. Nothing stays in Finishing or waiting because its runner was
+revoked.
+
 ### Return to service
 
 A **Failed** machine takes no session and shows why, for example *build-01
@@ -218,6 +288,29 @@ project runner.
 
 While every machine of a runner is Failed, a launch on it is refused with a
 message that points to Return to service.
+
+## A machine that stops answering
+
+A session keeps running on a machine that loses its network or whose
+`aixle-runner` stops, because the agent belongs to the runner on the machine.
+The machine shows **Offline** after 90 seconds, and the platform asks it
+nothing while it is offline.
+
+- **The machine is back within 15 minutes.** If the agent is still running, the
+  session goes on and can finish. If the agent exited meanwhile, the session
+  fails within a few minutes of the machine's return, as a session whose
+  container died does.
+- **The machine is away for 15 minutes.** The session fails with *Runner
+  environment lost contact for 15 minutes.* A session that has already finished
+  keeps its outcome.
+- **The slot stays with the machine.** The failed session still holds the
+  machine, so no other session takes it and the session's slot is not
+  released. When the machine is heard again, the platform stops the session's
+  leftover container, resets the machine, and releases the slot. The machine
+  shows **Idle**, and a session waiting for it starts. To give the slot up
+  without waiting, revoke the machine.
+- **A revoked or deleted runner** never hears its machines again, so its session
+  fails after the 15 minutes and its slot is released then.
 
 ## What you take on with a `manual` machine
 
@@ -276,3 +369,44 @@ documentation of what the runner and the agent use, and it can grow.
   does not retry it on that machine. The listener is on the machine's own
   `127.0.0.1`, so any local user or process can reach it. A session key is still
   required.
+
+## Using your own agent image
+
+A runner starts every session in the default image of the session's agent (see
+below). To use
+your own image (built `FROM` the Aixle base image), set **Image override** in
+the runner's settings.
+
+The override is one image for every session on the runner. A runner that serves
+several agents puts `{agent}` in it, which is replaced when the session starts
+with the image name of the session's agent (`claude-code`, `cursor-cli`,
+`codex`, …). For example `ghcr.io/aixlehq/flow-{agent}:develop` starts a Claude
+Code session in `ghcr.io/aixlehq/flow-claude-code:develop`. `{agent}` is the
+only placeholder. The runner isn't saved if the override has another one, or
+isn't an image reference once `{agent}` is replaced. As in Docker, the first
+part of the path is a registry only when it has a `.` or a port, or is
+`localhost`; any other part must be lowercase, so `UPPER/flow-{agent}` is refused.
+
+---
+
+## Which agent image a machine pulls
+
+A session on a runner runs the platform's agent image for the session's agent
+runtime, and the machine pulls it. By default that is the public image,
+`ghcr.io/aixlehq/flow-<image>` (for example `ghcr.io/aixlehq/flow-claude-code`),
+so the machine needs no registry login. The tag is `latest`, unless the
+deployment sets `RUNNER_AGENT_IMAGE_TAG`. Hosted sessions are not affected: they
+keep their own images.
+
+To run another image on a runner's machines, set **`container.image_override`**
+in the runner's settings. It wins over the default and must be built `FROM` the
+platform's agent image. If that image is in a private registry, run
+`docker login` for that registry on each machine as the user that runs
+`aixle-runner`: the platform sends no registry credentials to a machine.
+
+A self-hosted deployment changes the default for all its runners with
+`RUNNER_AGENT_IMAGE_PREFIX`, `RUNNER_AGENT_IMAGE_TAG` (default `latest`) and the
+per-runtime `RUNNER_AGENT_IMAGE_<RUNTIME>` variables (see the configuration
+reference).
+`latest` moves with every stable release, so pin `RUNNER_AGENT_IMAGE_TAG` to the
+release the deployment runs in production.
