@@ -1091,7 +1091,7 @@ module Agents
     # OTLP telemetry, to the session's collector: the metrics Flow's usage comes from, and
     # for a session with full telemetry (TerminalSession#full_telemetry?) every other signal
     # and content switch the CLI has (docs/design/agent-telemetry.md). None for a session
-    # without a collector (a runner session: there is no OTLP route through its proxy yet).
+    # without a collector (none today).
     def telemetry_env(session, endpoint)
       return {} if endpoint.nil?
 

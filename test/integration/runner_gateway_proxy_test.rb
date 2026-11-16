@@ -123,6 +123,30 @@ class RunnerGatewayProxyTest < ActionDispatch::IntegrationTest
     assert_requested upstream, times: 1
   end
 
+  test "an OTLP export of the session on the machine reaches the collector, and nothing else of it passes" do
+    upstream = stub_request(:post, "#{Settings.otel.endpoint}/v1/metrics")
+               .to_return(status: 200, body: "{}", headers: { "Content-Type" => "application/json" })
+
+    post "/runner/v1/proxy/otel/v1/metrics", params: '{"resourceMetrics":[]}',
+                                             headers: proxy_headers("Content-Type" => "application/json")
+
+    assert_response :ok
+    assert_requested(:post, "#{Settings.otel.endpoint}/v1/metrics") do |request|
+      request.body == '{"resourceMetrics":[]}' && request.headers["Authorization"].nil? &&
+        request.headers["X-Aixle-Runner-Environment"] == @environment.id.to_s
+    end
+
+    get "/runner/v1/proxy/otel/v1/metrics", headers: proxy_headers
+    assert_refused :not_found, "route_not_allowed"
+    post "/runner/v1/proxy/otel/health", headers: proxy_headers
+    assert_refused :not_found, "route_not_allowed"
+
+    @environment.update!(current_session: nil)
+    post "/runner/v1/proxy/otel/v1/metrics", params: "{}", headers: proxy_headers
+    assert_refused :forbidden, "session_not_on_environment"
+    assert_requested upstream, times: 1
+  end
+
   test "a personal MCP token does not pass as a session key" do
     post "/runner/v1/proxy/mcp", params: "{}", headers: proxy_headers("X-Session-Key" => "#{User::MCP_TOKEN_PREFIX}personal")
 
