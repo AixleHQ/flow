@@ -54,9 +54,12 @@ func NewClient(platformURL, version string, httpClient *http.Client) (*Client, e
 		httpClient = &http.Client{
 			// The long-poll is held for up to 25 s; the margin covers the gateway's own
 			// work before and after the wait.
-			Timeout: MaxWait + 35*time.Second,
+			Timeout:   MaxWait + 35*time.Second,
+			Transport: newTransport(healthCheckAfter, healthCheckTimeout),
 		}
-		proxyClient = &http.Client{}
+		// Its own transport, so a dead connection of one client is never shared with
+		// the other.
+		proxyClient = &http.Client{Transport: newTransport(healthCheckAfter, healthCheckTimeout)}
 	} else {
 		// A copy, so the caller's client keeps its own redirect policy.
 		clone := *httpClient
@@ -69,6 +72,33 @@ func NewClient(platformURL, version string, httpClient *http.Client) (*Client, e
 		return http.ErrUseLastResponse
 	}
 	return &Client{baseURL: u, version: version, http: httpClient, proxy: proxyClient}, nil
+}
+
+// How the runner finds out that a connection died without being closed, which
+// is what a dropped network does to it (DESIGN.md §6.7): an HTTP/2 connection
+// that has been silent for healthCheckAfter is sent a ping, and is closed when
+// the ping is not answered within healthCheckTimeout. Without it, a request that
+// timed out leaves its connection in the pool and the next request is written to
+// the same dead socket, until TCP gives up, which takes about 15 minutes.
+const (
+	healthCheckAfter   = 15 * time.Second
+	healthCheckTimeout = 10 * time.Second
+	dialTimeout        = 10 * time.Second
+	keepAlive          = 15 * time.Second
+)
+
+// newTransport is the default transport of a client: net/http's own defaults, a
+// bounded dial, TCP keep-alives, and a health check of its HTTP/2 connections.
+// A write blocked on a dead connection gives up after the same time.
+func newTransport(checkAfter, checkTimeout time.Duration) *http.Transport {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.DialContext = (&net.Dialer{Timeout: dialTimeout, KeepAlive: keepAlive}).DialContext
+	t.HTTP2 = &http.HTTP2Config{
+		SendPingTimeout:  checkAfter,
+		PingTimeout:      checkTimeout,
+		WriteByteTimeout: checkAfter,
+	}
+	return t
 }
 
 // ParsePlatformURL checks the --url a runner is configured with.
@@ -167,6 +197,7 @@ func (c *Client) Release(ctx context.Context, version, platform string) (Release
 	noRedirect.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	resp, err := noRedirect.Do(req)
 	if err != nil {
+		c.dropIdleConnections()
 		return ReleaseLocation{}, &NetworkError{Endpoint: EndpointReleases, Err: err}
 	}
 	defer resp.Body.Close()
@@ -233,6 +264,7 @@ func (c *Client) Proxy(ctx context.Context, accessToken, method, path string, he
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	resp, err := c.proxy.Do(req)
 	if err != nil {
+		c.proxy.CloseIdleConnections()
 		// net/http names the URL in its error, never a header, so no key is in
 		// it. The URL carries the agent's query, so the relay logs only the
 		// error it wraps.
@@ -256,12 +288,14 @@ func (c *Client) do(ctx context.Context, endpoint Endpoint, method, path, token 
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
+		c.dropIdleConnections()
 		// net/http names the URL in its error, never a header, so no token is in it.
 		return &NetworkError{Endpoint: endpoint, Err: err}
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 	if err != nil {
+		c.dropIdleConnections()
 		return &NetworkError{Endpoint: endpoint, Err: err}
 	}
 
@@ -276,6 +310,11 @@ func (c *Client) do(ctx context.Context, endpoint Endpoint, method, path, token 
 	}
 	return nil
 }
+
+// dropIdleConnections closes the connections no request is using, after a
+// request got no answer: the connection it was on may be dead, and the retry must
+// dial a new one instead of reusing it.
+func (c *Client) dropIdleConnections() { c.http.CloseIdleConnections() }
 
 // newRequest builds a request with the protocol's headers (§1), and the token as
 // the bearer when there is one. The release endpoints take neither protocol

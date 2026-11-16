@@ -40,9 +40,10 @@ module ContainerRuntime
   # - cleanup_session sends `container.stop`, then `env.scrub` under the
   #   runner's `reuse` policy or `env.reset` under `reset` (a reset after a
   #   failed session too), and frees the machine once that succeeded. A failed
-  #   scrub is followed by a reset; a failed reset moves the machine to `failed`,
-  #   and so do `runners.max_consecutive_failures` failed sessions in a row
-  #   (§7.2).
+  #   scrub is followed by a reset; a failed reset moves the machine to `failed`
+  #   (a reset nobody answered does not, for a session that lost contact: the
+  #   machine is reset when it is heard again), and so do
+  #   `runners.max_consecutive_failures` failed sessions in a row (§7.2).
   #   It waits for nothing queued: while an earlier op is unfinished on the
   #   machine the session holds (a `container.start` whose wait a stop cut
   #   short, or an `env.reset` of an earlier cleanup attempt), cleanup_ready?
@@ -169,6 +170,17 @@ module ContainerRuntime
 
       reset = call(session, "env.reset", {}, lifecycle: true)
       return Runners::Machines.release!(environment, session, failed: failed) if reset.ok?
+
+      # A machine that was away came back just long enough to be heard, and went
+      # quiet again before it took the reset (a request whose answer never
+      # reached it: DESIGN.md §6.7). The reset it never answered says nothing of
+      # the machine's state, so the session keeps the machine and the cleanup
+      # waits until it is heard again, as it did before the reset was sent.
+      if reset.expired? && session.contact_lost?
+        Rails.logger.warn("[RunnerRuntime] session #{session.id}: #{reset.message}; machine #{environment.key} " \
+                          "was away, so its reset is sent again when it is heard")
+        return
+      end
 
       Rails.logger.warn("[RunnerRuntime] session #{session.id}: #{reset.message}; machine #{environment.key} is failed")
       reason = reset.expired? ? "the runner did not answer" : Runners::Machines.failure_text(reset.result)
