@@ -41,8 +41,9 @@ module ContainerRuntime
   #   runner's `reuse` policy or `env.reset` under `reset` (a reset after a
   #   failed session too), and frees the machine once that succeeded. A failed
   #   scrub is followed by a reset; a failed reset moves the machine to `failed`
-  #   (a reset nobody answered does not, for a session that lost contact: the
-  #   machine is reset when it is heard again), and so do
+  #   (a reset nobody answered does not, for a session that lost contact while
+  #   the machine is not heard when the reset expires: the machine is reset when
+  #   it is heard again), and so do
   #   `runners.max_consecutive_failures` failed sessions in a row (§7.2).
   #   It waits for nothing queued: while an earlier op is unfinished on the
   #   machine the session holds (a `container.start` whose wait a stop cut
@@ -151,7 +152,11 @@ module ContainerRuntime
     # once either succeeded. A failed reset, a machine that does not answer
     # included, moves the machine to `failed` with the reason, and so does the
     # session that is the `runners.max_consecutive_failures`th failed one in a
-    # row on it (Runners::Machines.release!). A failed `container.stop` is
+    # row on it (Runners::Machines.release!). The exception is a session that
+    # lost contact whose reset expired while the machine was not heard: the
+    # session keeps the machine and the cleanup sends a new reset when the
+    # machine is heard again. A machine heard throughout the reset's deadline
+    # that still did not answer is failed. A failed `container.stop` is
     # logged, and the cleanup goes on.
     def cleanup_session(id, failed: false)
       session = session_for(id)
@@ -171,14 +176,17 @@ module ContainerRuntime
       reset = call(session, "env.reset", {}, lifecycle: true)
       return Runners::Machines.release!(environment, session, failed: failed) if reset.ok?
 
-      # A machine that was away came back just long enough to be heard, and went
-      # quiet again before it took the reset (a request whose answer never
-      # reached it: DESIGN.md §6.7). The reset it never answered says nothing of
-      # the machine's state, so the session keeps the machine and the cleanup
-      # waits until it is heard again, as it did before the reset was sent.
-      if reset.expired? && session.contact_lost?
+      # A machine that is not heard when its reset expires is still away (or
+      # went quiet again before it took the reset: DESIGN.md §6.7). The reset it
+      # never answered says nothing of the machine's state, so the session keeps
+      # the machine and the cleanup waits until it is heard again, as it did
+      # before the reset was sent. A machine that is heard and still left the
+      # reset unanswered is not away, so it is failed below; otherwise a runner
+      # that heartbeats but never runs ops would hold its slot and be reset
+      # without end.
+      if reset.expired? && session.contact_lost? && !machine(session).heard?
         Rails.logger.warn("[RunnerRuntime] session #{session.id}: #{reset.message}; machine #{environment.key} " \
-                          "was away, so its reset is sent again when it is heard")
+                          "is not heard, so its reset is sent again when it is heard")
         return
       end
 

@@ -722,14 +722,17 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
   end
 
   # DESIGN.md §6.7: after an outage longer than the grace the machine is reset
-  # when it is heard again. A machine heard just long enough to be sent the reset
-  # that then goes unanswered (its answer never reached the runner) is not failed.
-  test "an unanswered env.reset of a session that lost contact keeps the machine, which is reset when it is heard again" do
+  # when it is heard again. A machine heard just long enough to be sent the reset,
+  # and not heard when that reset expires, is not failed.
+  test "an unanswered env.reset of a session that lost contact keeps the machine while it is not heard, and it is reset when heard again" do
     @runner.update!(reuse_policy: :reset)
     handle = start_session
     @session.mark_contact_lost!(Time.current)
     @environment.update_columns(last_heartbeat_at: Time.current)
-    @host_runner.answer_with("env.reset", :none)
+    @host_runner.answer_with("env.reset") do
+      @environment.update_columns(last_heartbeat_at: 10.minutes.ago)
+      :none
+    end
 
     in_activity(ContainerRuntime::RunnerRuntime::ACTIVITY_MARGIN + 1.0, CleanupProbe, handle)
 
@@ -751,6 +754,24 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert_nil @environment.current_session_id
     assert_equal "registered", @environment.state
     assert_equal "idle", @environment.display_state
+  end
+
+  # A runner that heartbeats but never runs ops would otherwise be reset every
+  # op timeout without end, holding its slot unseen.
+  test "an unanswered env.reset of a session that lost contact fails the machine when it was heard throughout" do
+    @runner.update!(reuse_policy: :reset)
+    handle = start_session
+    @session.mark_contact_lost!(Time.current)
+    @environment.update_columns(last_heartbeat_at: Time.current)
+    @host_runner.answer_with("env.reset", :none)
+
+    in_activity(ContainerRuntime::RunnerRuntime::ACTIVITY_MARGIN + 1.0, CleanupProbe, handle)
+
+    @environment.reload
+    assert_equal "failed", @environment.state
+    assert_nil @environment.current_session_id
+    assert_equal "#{@environment.display_name} failed to reset after session #{@session.id}: the runner did not answer",
+                 @environment.state_reason
   end
 
   # As ToolStrategy#wait_with_heartbeat: a stopped session stops waiting at once.

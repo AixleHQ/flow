@@ -320,6 +320,36 @@ func pipe(dst, src net.Conn, state *silentConn) {
 	}
 }
 
+// The clients NewClient builds for production (no http.Client given) check their
+// HTTP/2 connections, and the platform client and the proxy client never share a
+// transport, so a dead connection of one is not the other's.
+func TestNewClientBuildsTheHealthCheckedTransports(t *testing.T) {
+	c, err := NewClient("https://platform.example", "0.0.0-dev", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	platform, ok := c.http.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("platform client transport is %T, want *http.Transport", c.http.Transport)
+	}
+	proxy, ok := c.proxy.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("proxy client transport is %T, want *http.Transport", c.proxy.Transport)
+	}
+	if platform == proxy {
+		t.Fatal("the platform client and the proxy client share one transport")
+	}
+	for name, tr := range map[string]*http.Transport{"platform": platform, "proxy": proxy} {
+		if tr.HTTP2 == nil {
+			t.Fatalf("%s transport has no HTTP/2 config", name)
+		}
+		if tr.HTTP2.SendPingTimeout != healthCheckAfter || tr.HTTP2.PingTimeout != healthCheckTimeout {
+			t.Errorf("%s transport pings after %v and waits %v, want %v and %v", name,
+				tr.HTTP2.SendPingTimeout, tr.HTTP2.PingTimeout, healthCheckAfter, healthCheckTimeout)
+		}
+	}
+}
+
 // A connection that stops answering without being closed is not reused: the poll
 // that finds it dead fails, and the next one dials again and reaches the server
 // (DESIGN.md §6.7).
