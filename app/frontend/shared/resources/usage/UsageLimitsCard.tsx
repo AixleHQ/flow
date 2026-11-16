@@ -13,6 +13,8 @@ import { AGENT_RUNTIMES, isAgentType } from 'shared/ui/agentRuntimes';
  */
 interface UsageWindow {
   key: string;
+  /** A vendor-supplied display name; preferred over the static key label. */
+  label?: string | null;
   utilization: number;
   resetsAt: string | null;
   windowDurationMins?: number | null;
@@ -45,6 +47,10 @@ const WINDOW_LABELS: Record<string, string> = {
   seven_day_opus: 'Current week (Opus)',
   seven_day_sonnet: 'Current week (Sonnet)',
   kiro_credits: 'Credits this billing period',
+  cursor_plan: 'Plan',
+  cursor_models: 'Cursor Models',
+  cursor_other_models: 'Other Models',
+  grok_weekly: 'Current week',
 };
 
 /** Credits arrive fractional; whole numbers should not grow a ".00" tail. */
@@ -103,7 +109,8 @@ export function formatResetsIn(iso: string | null, now: number = Date.now()): st
 
 function WindowRow({ quota }: { quota: UsageWindow }) {
   const duration = durationLabel(quota.windowDurationMins);
-  const label = WINDOW_LABELS[quota.key] ?? (duration ? `Usage window (${duration})` : quota.key.replace(/_/g, ' '));
+  const label =
+    quota.label ?? WINDOW_LABELS[quota.key] ?? (duration ? `Usage window (${duration})` : quota.key.replace(/_/g, ' '));
   const percent = Math.min(100, Math.max(0, Math.round(quota.utilization)));
   const remaining = 100 - percent;
   const resets = formatResetsIn(quota.resetsAt);
