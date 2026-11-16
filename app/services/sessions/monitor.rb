@@ -38,7 +38,7 @@ module Sessions
     # The sessions any check can apply to; each check narrows them in its applies_to?.
     def self.candidates
       TerminalSession
-        .where(state: Checks::Base::ACTIVE_STATES).workflow_steps
+        .container_up.workflow_steps
         .where.not(container_id: [ nil, "" ])
     end
 

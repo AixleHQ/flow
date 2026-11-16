@@ -23,8 +23,6 @@ module Sessions
     # stream; without this a reader gets a screenful of escape codes.
     ANSI_SEQUENCE = /\e\[[0-9;?]*[ -\/]*[@-~]|\e\][^\a\e]*(?:\a|\e\\)|\e[@-Z\\-_]/
 
-    LIVE_STATES = %w[running ready finishing].freeze
-
     def initialize(session)
       @session = session
     end
@@ -50,7 +48,7 @@ module Sessions
     attr_reader :session
 
     def live?
-      session.state.in?(LIVE_STATES) && session.container_id.present?
+      session.live? && session.container_id.present?
     end
 
     def live(lines)

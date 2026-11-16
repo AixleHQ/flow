@@ -23,12 +23,6 @@ class SessionsRunsFeed
   # run, and auth/tool setup sessions are plumbing the user never asked for.
   TOP_LEVEL_SESSION_TYPES = %w[agent_session].freeze
 
-  # The session types a FLAT, session-level list shows: standalone sessions plus
-  # workflow steps as rows of their own rather than folded under a run. The
-  # company-wide feed reads this way, and so does one member's slice of it on
-  # /user/:id. Auth/tool-setup sessions are plumbing the user never asked for.
-  LISTABLE_SESSION_TYPES = %w[agent_session workflow_step].freeze
-
   # One status vocabulary over two state machines. A session is "finished" where
   # a run is "completed"; asking a user to know that is asking them to know our
   # schema.
@@ -160,15 +154,11 @@ class SessionsRunsFeed
   # allowed to reveal (see TerminalSession#visible_to?). Without this, a
   # private session whose hidden prompt matches someone else's search term
   # would still surface in their results, leaking that the prompt matched.
-  IN_FLIGHT_STATES = %w[not_started queued running ready finishing].freeze
-
   def viewer_visible_scope
     TerminalSession.left_joins(:user).where(user_id: viewer.id).or(
-      TerminalSession.left_joins(:user).where(
-        "(terminal_sessions.state IN (:in_flight) AND users.share_active_sessions = TRUE) " \
-        "OR (terminal_sessions.state NOT IN (:in_flight) AND users.share_completed_sessions = TRUE)",
-        in_flight: IN_FLIGHT_STATES
-      )
+      TerminalSession.left_joins(:user).not_ended.where(users: { share_active_sessions: true })
+    ).or(
+      TerminalSession.left_joins(:user).ended.where(users: { share_completed_sessions: true })
     )
   end
 

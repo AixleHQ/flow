@@ -121,9 +121,6 @@ class Web::Company::UsersController < Web::Company::ApplicationController
   # owner. A dual-membership user's work in another company never appears,
   # because company_sessions_scope is already bounded by the current company.
   def member_sessions_scope
-    @member_sessions_scope ||= company_sessions_scope.where(
-      user_id: member_membership.user_id,
-      session_type: SessionsRunsFeed::LISTABLE_SESSION_TYPES
-    )
+    @member_sessions_scope ||= company_sessions_scope.work_sessions.where(user_id: member_membership.user_id)
   end
 end

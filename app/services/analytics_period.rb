@@ -8,10 +8,6 @@ module AnalyticsPeriod
   CUSTOM = "custom"
   BUCKETS = { "7d" => "day", "30d" => "day", "90d" => "week", "1y" => "month" }.freeze
 
-  # The sessions that do work, and so count toward usage and session totals: a
-  # login (auth_setup) or a tool setup is neither.
-  USAGE_SESSION_TYPES = %w[agent_session workflow_step].freeze
-
   # A resolved period: the preset it came from ("custom" for a picked range)
   # and the span of time it covers, both ends inclusive.
   Window = Data.define(:key, :range) do

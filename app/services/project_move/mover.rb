@@ -74,7 +74,7 @@ module ProjectMove
       preflight.waiting_sessions.find_each do |session|
         SessionService.cancel(session: session)
         session.reload
-        session.cancel! if session.state.in?(Preflight::WAITING_SESSION_STATES) && session.may_cancel?
+        session.cancel! if session.waiting? && session.may_cancel?
       end
     end
 
