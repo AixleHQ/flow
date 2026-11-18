@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { buildTenant, buildUsageDay } from 'test/factories/adminDashboard';
+import { buildDashboardPaths, buildTenant, buildUsageDay } from 'test/factories/adminDashboard';
 import { answerFetch, jsonResponse } from 'test/fetchStub';
 import { render, screen, userEvent, within } from 'test/renderPage';
 
@@ -9,6 +9,7 @@ import Dashboard from './Dashboard';
 import type { DashboardData } from './types';
 
 const now = new Date('2026-10-19T12:00:00Z');
+const paths = buildDashboardPaths();
 
 const data: DashboardData = {
   tenants: [
@@ -50,7 +51,7 @@ describe('Dashboard', () => {
   });
 
   it('opens on the current month, one row per company, with when each was created and its status, type and billing method', () => {
-    render(<Dashboard data={data} now={now} />);
+    render(<Dashboard paths={paths} data={data} now={now} />);
 
     expect(screen.getByRole('combobox', { name: 'Period' })).toHaveDisplayValue('October 2026 (current)');
     expect(screen.getByText('Oct 14 – Oct 15, 2026 · to date · 2 companies')).toBeInTheDocument();
@@ -70,7 +71,7 @@ describe('Dashboard', () => {
       ...data,
       tenants: [data.tenants[0], buildTenant({ id: 2, name: 'Globex', accountStatus: 'locked_nonpayment' })],
     };
-    render(<Dashboard data={locked} now={now} />);
+    render(<Dashboard paths={paths} data={locked} now={now} />);
     const companiesInOrder = () => screen.getAllByRole('rowheader').map((cell) => cell.textContent);
 
     await userEvent.click(sortBy('Account status'));
@@ -81,7 +82,7 @@ describe('Dashboard', () => {
   });
 
   it('shows the platform as it stands in tiles', () => {
-    render(<Dashboard data={data} now={now} />);
+    render(<Dashboard paths={paths} data={data} now={now} />);
 
     expect(tile('Companies').getByText('2')).toBeInTheDocument();
     expect(tile('Companies').getByText('1 paying · 1 managed')).toBeInTheDocument();
@@ -101,14 +102,14 @@ describe('Dashboard', () => {
       days: [...data.days, buildUsageDay({ companyId: 3, day: '2026-10-15' })],
       snapshot: { ...data.snapshot, companies: 5 },
     };
-    render(<Dashboard data={accounts} now={now} />);
+    render(<Dashboard paths={paths} data={accounts} now={now} />);
 
     expect(tile('Companies').getByText('5')).toBeInTheDocument();
     expect(tile('Companies').getByText('2 paying · 1 trial · 1 canceled · 1 managed')).toBeInTheDocument();
   });
 
   it('shows what the period used in tiles, and how much of it nobody pays for', () => {
-    render(<Dashboard data={data} now={now} />);
+    render(<Dashboard paths={paths} data={data} now={now} />);
 
     expect(tile('Busy hours').getByText('96')).toBeInTheDocument();
     expect(tile('Busy hours').getByText('50% not on a paid plan')).toBeInTheDocument();
@@ -121,7 +122,7 @@ describe('Dashboard', () => {
       ...data,
       days: [...data.days, buildUsageDay({ companyId: 1, day: '2026-10-16', billingClass: 'unlimited' as const })],
     };
-    render(<Dashboard data={unbilled} now={now} />);
+    render(<Dashboard paths={paths} data={unbilled} now={now} />);
 
     expect(tile('Companies').getByText(/1 not billed/)).toBeInTheDocument();
   });
@@ -134,7 +135,7 @@ describe('Dashboard', () => {
           String(input).includes('from=2026-10-01') ? [{ companyId: 1, p95: 600 }] : [{ companyId: 1, p95: 400 }],
         ),
       );
-    render(<Dashboard data={data} now={now} />);
+    render(<Dashboard paths={paths} data={data} now={now} />);
 
     expect(await within(rowOf('Acme')).findByText('10 min')).toBeInTheDocument();
     expect(await within(rowOf('Acme')).findByText('▲ +50%')).toBeInTheDocument();
@@ -144,15 +145,26 @@ describe('Dashboard', () => {
     );
   });
 
+  it('reads the p95 wait from the copy of the page it is shown in', async () => {
+    const fetchSpy = answerFetch({ 'GET /dashboard/waits.json': [{ companyId: 1, p95: 600 }] });
+    render(<Dashboard paths={{ base: '/dashboard' }} data={data} now={now} />);
+
+    expect(await within(rowOf('Acme')).findByText('10 min')).toBeInTheDocument();
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/dashboard/waits.json?from=2026-10-01&to=2026-10-31',
+      expect.objectContaining({ headers: { Accept: 'application/json' } }),
+    );
+  });
+
   it('says so when the p95 wait cannot be loaded', async () => {
     answerFetch({ 'GET /admin/dashboard/waits.json': jsonResponse({ error: 'boom' }, 500) });
-    render(<Dashboard data={data} now={now} />);
+    render(<Dashboard paths={paths} data={data} now={now} />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('p95 wait could not be loaded');
   });
 
   it('shows a company without a limit as unlimited and fully used', () => {
-    render(<Dashboard data={data} now={now} />);
+    render(<Dashboard paths={paths} data={data} now={now} />);
 
     const globex = within(rowOf('Globex'));
     expect(globex.getAllByText('∞')).toHaveLength(2);
@@ -163,14 +175,14 @@ describe('Dashboard', () => {
   });
 
   it('compares with the same days of the month before', () => {
-    render(<Dashboard data={data} now={now} />);
+    render(<Dashboard paths={paths} data={data} now={now} />);
 
     expect(screen.getByText('Change vs Sep 1 – Sep 15, 2026')).toBeInTheDocument();
     expect(within(rowOf('Acme')).getByText('▲ +100%')).toBeInTheDocument();
   });
 
   it('steps back to the previous month', async () => {
-    render(<Dashboard data={data} now={now} />);
+    render(<Dashboard paths={paths} data={data} now={now} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Previous period' }));
 
@@ -181,7 +193,7 @@ describe('Dashboard', () => {
   });
 
   it('switches to a single day', async () => {
-    render(<Dashboard data={data} now={now} />);
+    render(<Dashboard paths={paths} data={data} now={now} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Day' }));
 
@@ -191,7 +203,7 @@ describe('Dashboard', () => {
   });
 
   it('sums a custom range', async () => {
-    render(<Dashboard data={data} now={now} />);
+    render(<Dashboard paths={paths} data={data} now={now} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Custom' }));
 
@@ -201,7 +213,7 @@ describe('Dashboard', () => {
   });
 
   it('filters companies by name, and the tiles with them', async () => {
-    render(<Dashboard data={data} now={now} />);
+    render(<Dashboard paths={paths} data={data} now={now} />);
 
     await userEvent.type(screen.getByRole('searchbox', { name: 'Search companies' }), 'glo');
 
@@ -211,7 +223,7 @@ describe('Dashboard', () => {
   });
 
   it('sorts by when the account was created, newest first', async () => {
-    render(<Dashboard data={data} now={now} />);
+    render(<Dashboard paths={paths} data={data} now={now} />);
     const companiesInOrder = () => screen.getAllByRole('rowheader').map((cell) => cell.textContent);
 
     await userEvent.click(sortBy('Account created'));
@@ -222,7 +234,7 @@ describe('Dashboard', () => {
   });
 
   it('keeps every filter folded until it is opened, one at a time, and folds it on Escape', async () => {
-    render(<Dashboard data={data} now={now} />);
+    render(<Dashboard paths={paths} data={data} now={now} />);
 
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
 
@@ -240,7 +252,7 @@ describe('Dashboard', () => {
   });
 
   it('names how many values a filter has once it has more than one', async () => {
-    render(<Dashboard data={data} now={now} />);
+    render(<Dashboard paths={paths} data={data} now={now} />);
 
     await userEvent.click(filter('Account status'));
     await userEvent.click(screen.getByRole('checkbox', { name: 'Trial – Active' }));
@@ -250,7 +262,7 @@ describe('Dashboard', () => {
   });
 
   it('filters by account fields, narrowing the tiles and the total to the companies shown', async () => {
-    render(<Dashboard data={data} now={now} />);
+    render(<Dashboard paths={paths} data={data} now={now} />);
 
     await userEvent.click(filter('Account type'));
     await userEvent.click(screen.getByRole('checkbox', { name: 'Managed by Aixle' }));
@@ -274,7 +286,7 @@ describe('Dashboard', () => {
         buildUsageDay({ companyId: 2, day: '2026-09-10', sessionsSucceeded: 19, billingClass: 'managed' as const }),
       ],
     };
-    render(<Dashboard data={both} now={now} />);
+    render(<Dashboard paths={paths} data={both} now={now} />);
 
     await userEvent.click(filter('Account type'));
     await userEvent.click(screen.getByRole('checkbox', { name: 'Managed by Aixle' }));
@@ -284,7 +296,7 @@ describe('Dashboard', () => {
   });
 
   it('filters by the day the account was created', async () => {
-    render(<Dashboard data={data} now={now} />);
+    render(<Dashboard paths={paths} data={data} now={now} />);
 
     await userEvent.click(filter('Account created'));
     await userEvent.type(screen.getByLabelText('Created from'), '2026-10-01');
@@ -295,7 +307,7 @@ describe('Dashboard', () => {
   });
 
   it('clears the filters, keeping the search', async () => {
-    render(<Dashboard data={data} now={now} />);
+    render(<Dashboard paths={paths} data={data} now={now} />);
 
     await userEvent.type(screen.getByRole('searchbox', { name: 'Search companies' }), 'a');
     await userEvent.click(filter('Account status'));
@@ -311,7 +323,7 @@ describe('Dashboard', () => {
   });
 
   it('sorts by a column, and reverses on a second click', async () => {
-    render(<Dashboard data={data} now={now} />);
+    render(<Dashboard paths={paths} data={data} now={now} />);
     const companiesInOrder = () => screen.getAllByRole('rowheader').map((cell) => cell.textContent);
 
     await userEvent.click(screen.getByRole('button', { name: 'Successful sessions' }));
@@ -323,13 +335,13 @@ describe('Dashboard', () => {
   });
 
   it('totals the period across companies', () => {
-    render(<Dashboard data={data} now={now} />);
+    render(<Dashboard paths={paths} data={data} now={now} />);
 
     expect(within(rowOf('Total, all companies')).getByText('58')).toBeInTheDocument();
   });
 
   it('shows the platform tiles and says so when no usage has been measured yet', () => {
-    render(<Dashboard data={{ ...data, tenants: [], days: [], measuredThrough: null }} now={now} />);
+    render(<Dashboard paths={paths} data={{ ...data, tenants: [], days: [], measuredThrough: null }} now={now} />);
 
     expect(screen.getByText(/No usage has been measured yet/)).toBeInTheDocument();
     expect(tile('People').getByText('14')).toBeInTheDocument();

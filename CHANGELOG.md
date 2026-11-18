@@ -57,6 +57,10 @@ governance, community health — carry none.
   `INSIGHTS_DEPLOYMENT_SECRET` (issued by Insights); the integration stays hidden
   until all three are set. Insights' answer to a batch is final unless
   `INSIGHTS_RESEND=true`, which sends again what it failed to take.
+- **Admin**: the admin dashboard can be opened to people who are not superadmins.
+  Tick **Dashboard viewer** on a user in the admin, and the same dashboard opens
+  to them at `/dashboard`, linked from their user menu, without the rest of the
+  admin. Nobody has it until a superadmin ticks it.
 
 ### Changed
 - **Sign-in & onboarding**: a viewer's onboarding is the profile step alone —
@@ -64,6 +68,8 @@ governance, community health — carry none.
   step that followed it is gone.
 - The remaining sign-in pages, invitations, integration pages, the legal pages, the public site
   and emails show the Aixle Flow lockup, Flow in the brand orange, as sign-in already did.
+- **Admin**: the admin's sidebar and `/dashboard` show the Aixle Flow lockup, Flow in the brand
+  orange, as sign-in and the public pages already do.
 - **Sessions & Runs**: the live terminal no longer lets the agent's output read
   your clipboard.
 - **Sessions & Runs**: an automatic Claude Code session writes its prompt cache
