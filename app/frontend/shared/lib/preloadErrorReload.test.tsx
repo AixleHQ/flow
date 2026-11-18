@@ -1,23 +1,42 @@
 import '@testing-library/jest-dom/vitest';
+import { router } from '@inertiajs/react';
 import { notifications } from '@mantine/notifications';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { act, renderPage, screen, userEvent, waitFor } from 'test/renderPage';
+import { act, renderPage, screen, userEvent } from 'test/renderPage';
 
 import { registerPreloadErrorReload } from './preloadErrorReload';
+import { registerGuard } from './unsaved-changes/guards';
 
 const RELOAD_AT_KEY = 'vitePreloadReloadedAt';
 
 // Dispatch synchronously updates the global Mantine notifications store, which
 // re-renders the mounted <Notifications>; wrap it in act() to keep React happy.
-const dispatchPreloadError = () =>
+const dispatchPreloadError = () => {
+  const event = new Event('vite:preloadError', { cancelable: true });
   act(() => {
-    window.dispatchEvent(new Event('vite:preloadError', { cancelable: true }));
+    window.dispatchEvent(event);
   });
+  return event;
+};
+
+type VisitListener = (event: { detail: { visit: Record<string, unknown> } }) => void;
+
+const startVisit = (method: string, path: string) => {
+  const call = vi
+    .mocked(router.on)
+    .mock.calls.filter(([type]) => type === 'start')
+    .at(-1);
+  const listener = call?.[1] as unknown as VisitListener;
+  listener({
+    detail: { visit: { method, url: new URL(path, window.location.origin), prefetch: false, async: false } },
+  });
+};
 
 describe('registerPreloadErrorReload', () => {
   let unregister: () => void;
   let reloadSpy: ReturnType<typeof vi.fn>;
+  let assignSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     // Notifications live in a global Mantine store; a persistent (autoClose:false)
@@ -25,11 +44,12 @@ describe('registerPreloadErrorReload', () => {
     notifications.clean();
     window.sessionStorage.clear();
     reloadSpy = vi.fn();
+    assignSpy = vi.fn();
     // jsdom's location.reload is non-configurable via spyOn on some versions;
     // redefine it directly so we can assert it was called.
     Object.defineProperty(window, 'location', {
       configurable: true,
-      value: { ...window.location, reload: reloadSpy },
+      value: { ...window.location, reload: reloadSpy, assign: assignSpy },
     });
   });
 
@@ -38,41 +58,52 @@ describe('registerPreloadErrorReload', () => {
     vi.restoreAllMocks();
   });
 
-  it('shows a "New version available" reload prompt on vite:preloadError', async () => {
+  it('reloads into the new version and records a guard timestamp', () => {
     unregister = registerPreloadErrorReload();
 
-    // Mount the Mantine notifications container so shown notices render to the DOM.
-    renderPage(<div />);
-    dispatchPreloadError();
+    const event = dispatchPreloadError();
 
-    expect(await screen.findByText('New version available')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument();
-  });
-
-  it('reloads the page and records a guard timestamp when Reload is pressed', async () => {
-    unregister = registerPreloadErrorReload();
-
-    renderPage(<div />);
-    dispatchPreloadError();
-
-    const button = await screen.findByRole('button', { name: 'Reload' });
-    await userEvent.click(button);
-
+    expect(event.defaultPrevented).toBe(true);
     expect(reloadSpy).toHaveBeenCalledTimes(1);
     expect(Number(window.sessionStorage.getItem(RELOAD_AT_KEY))).toBeGreaterThan(0);
   });
 
-  it('calls preventDefault so Vite does not rethrow the error as an unhandled rejection', () => {
+  it('goes on to the page being visited when the chunk belonged to that visit', () => {
     unregister = registerPreloadErrorReload();
 
-    const event = new Event('vite:preloadError', { cancelable: true });
-    window.dispatchEvent(event);
+    startVisit('get', '/company/projects/7/board');
+    dispatchPreloadError();
 
-    expect(event.defaultPrevented).toBe(true);
+    expect(assignSpy).toHaveBeenCalledWith(`${window.location.origin}/company/projects/7/board`);
+    expect(reloadSpy).not.toHaveBeenCalled();
   });
 
-  it('does not offer another reload if a chunk still fails right after a reload (loop guard)', async () => {
-    // Simulate that we reloaded a moment ago and the chunk STILL fails.
+  it('reloads in place when the chunk belonged to a form submission', () => {
+    unregister = registerPreloadErrorReload();
+
+    startVisit('post', '/login/identify');
+    dispatchPreloadError();
+
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+    expect(assignSpy).not.toHaveBeenCalled();
+  });
+
+  it('asks first when a form holds unsaved changes', async () => {
+    unregister = registerPreloadErrorReload();
+    const removeGuard = registerGuard({ dirty: true });
+
+    renderPage(<div />);
+    dispatchPreloadError();
+
+    expect(await screen.findByText('New version available')).toBeInTheDocument();
+    expect(reloadSpy).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Reload' }));
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+    removeGuard();
+  });
+
+  it('stops reloading if a chunk still fails right after a reload (loop guard)', async () => {
     window.sessionStorage.setItem(RELOAD_AT_KEY, String(Date.now()));
     unregister = registerPreloadErrorReload();
 
@@ -80,10 +111,11 @@ describe('registerPreloadErrorReload', () => {
     dispatchPreloadError();
 
     expect(await screen.findByText('Failed to load page')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Reload' })).not.toBeInTheDocument();
+    expect(reloadSpy).not.toHaveBeenCalled();
+    expect(assignSpy).not.toHaveBeenCalled();
   });
 
-  it('offers a reload again for a new deploy once the stale guard flag has aged out', async () => {
+  it('reloads again for a new deploy once the stale guard flag has aged out', () => {
     // A guard flag older than the window belongs to an earlier, resolved reload.
     window.sessionStorage.setItem(RELOAD_AT_KEY, String(Date.now() - 60_000));
     unregister = registerPreloadErrorReload();
@@ -91,23 +123,18 @@ describe('registerPreloadErrorReload', () => {
     // Registration clears the aged-out flag so the next deploy is handled fresh.
     expect(window.sessionStorage.getItem(RELOAD_AT_KEY)).toBeNull();
 
-    renderPage(<div />);
     dispatchPreloadError();
 
-    expect(await screen.findByText('New version available')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument();
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('is idempotent: a second registration does not stack a second prompt', async () => {
+  it('is idempotent: a second registration does not handle the error twice', () => {
     unregister = registerPreloadErrorReload();
     const secondCleanup = registerPreloadErrorReload();
 
-    const showSpy = vi.spyOn(notifications, 'show');
-    renderPage(<div />);
     dispatchPreloadError();
 
-    await waitFor(() => expect(showSpy).toHaveBeenCalledTimes(1));
-
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
     secondCleanup();
   });
 });

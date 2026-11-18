@@ -142,6 +142,10 @@ export function registerGuard(guard: Guard) {
   };
 }
 
+export function hasUnsavedChanges() {
+  return dirtyGuards().length > 0;
+}
+
 /** Asks before a form's own close (Cancel, X, Escape, the overlay) when that form is dirty. */
 export function requestClose(guard: Guard, close: () => void) {
   if (!guard.dirty) {

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { act, renderHook } from 'test/renderPage';
 
-import { useCableRowUpdates } from './useCableRowUpdates';
+import { type RowChanges, useCableRowUpdates } from './useCableRowUpdates';
 
 type CableHandlers = { connected: () => void; received: (data: Record<string, unknown>) => void };
 
@@ -20,6 +20,16 @@ vi.mock('../actionCableConsumer', () => ({
     },
   }),
 }));
+
+type RejectionListener = (reason: unknown) => void;
+const nodeProcess = (
+  globalThis as unknown as {
+    process: {
+      on(event: 'unhandledRejection', listener: RejectionListener): void;
+      off(event: 'unhandledRejection', listener: RejectionListener): void;
+    };
+  }
+).process;
 
 describe('useCableRowUpdates', () => {
   beforeEach(() => {
@@ -81,6 +91,33 @@ describe('useCableRowUpdates', () => {
     expect(onChanges).toHaveBeenCalledTimes(2);
     expect(onChanges).toHaveBeenNthCalledWith(1, { sessionIds: shown.slice(0, 100), runIds: [7] });
     expect(onChanges).toHaveBeenNthCalledWith(2, { sessionIds: shown.slice(100), runIds: [] });
+  });
+
+  it('drops a delivery whose fetch fails and keeps delivering the next ones', async () => {
+    const unhandled = vi.fn();
+    nodeProcess.on('unhandledRejection', unhandled);
+    // A plain async function: a vi.fn() result is observed by the mock itself, so it never goes unhandled.
+    const delivered: RowChanges[] = [];
+    const onChanges = async (changes: RowChanges) => {
+      delivered.push(changes);
+      if (delivered.length === 1) throw new TypeError('Failed to fetch');
+    };
+    renderHook(() => useCableRowUpdates('signed-stream', onChanges));
+    act(() => vi.advanceTimersByTime(100));
+
+    act(() => lastHandlers!.received({ type: 'session_update', id: 1 }));
+    act(() => vi.advanceTimersByTime(250));
+    act(() => lastHandlers!.received({ type: 'session_update', id: 2 }));
+    act(() => vi.advanceTimersByTime(250));
+    vi.useRealTimers();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    nodeProcess.off('unhandledRejection', unhandled);
+
+    expect(unhandled).not.toHaveBeenCalled();
+    expect(delivered).toEqual([
+      { sessionIds: [1], runIds: [] },
+      { sessionIds: [2], runIds: [] },
+    ]);
   });
 
   it('unsubscribes and drops a pending batch on unmount', () => {

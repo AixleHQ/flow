@@ -6,6 +6,7 @@ import { type ClipboardEvent, type DragEvent, useCallback, useEffect, useRef, us
 import { stripContainerTicket } from 'shared/lib/containerTicket';
 import { findHardWrappedLink } from 'shared/lib/hardWrappedLink';
 import { pastedImages, uploadImage } from 'shared/lib/imagePaste';
+import { terminalClipboardProvider } from 'shared/lib/terminalClipboard';
 import { isMacPlatform, terminalKeyAction } from 'shared/lib/terminalKeys';
 import { TtydConnection, type TtydStatus } from 'shared/lib/ttydConnection';
 import {
@@ -161,7 +162,9 @@ export function LiveTerminal({ url, readOnly = false, label = 'Terminal', hotkey
         scrollback: 10_000,
         theme: terminalTheme(schemeRef.current),
       });
-      track(term);
+      // Output already queued is parsed on a later tick; disposing under it makes the
+      // parser and the renderer touch a buffer that is gone, so the queue drains first.
+      cleanups.push(() => term.write('', () => term.dispose()));
       termRef.current = term;
       cleanups.push(() => {
         termRef.current = null;
@@ -172,7 +175,7 @@ export function LiveTerminal({ url, readOnly = false, label = 'Terminal', hotkey
       term.loadAddon(new xterm.Unicode11Addon());
       term.unicode.activeVersion = '11';
       // OSC 52: the CLIs' own "copy" (Claude Code's `c` on the login URL) through tmux passthrough.
-      term.loadAddon(new xterm.ClipboardAddon());
+      term.loadAddon(new xterm.ClipboardAddon(undefined, terminalClipboardProvider({ readOnly })));
       term.open(el);
 
       try {

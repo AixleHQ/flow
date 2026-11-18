@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
+import { act, renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import { AwsConnectionModal } from './AwsConnectionModal';
 
@@ -161,6 +161,48 @@ describe('AwsConnectionModal', () => {
     await fillAndContinue();
 
     expect(await screen.findByRole('alert')).toHaveTextContent('start_url is required');
+  });
+
+  it('says the server could not be reached when starting fails on the network', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
+    renderPage(<AwsConnectionModal opened onClose={vi.fn()} />);
+
+    await fillAndContinue();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not reach the server/i);
+    expect(screen.getByRole('button', { name: /Continue/i })).toBeEnabled();
+  });
+
+  it('keeps waiting for approval through a dropped connection', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const replies = scriptFetch({ create: CREATED, poll: [APPROVED] });
+    const answer = replies.getMockImplementation()!;
+    let polls = 0;
+    replies.mockImplementation(async (input, init) => {
+      if (String(input).includes('/poll') && polls++ === 0) throw new TypeError('Failed to fetch');
+      return answer(input, init);
+    });
+    renderPage(<AwsConnectionModal opened onClose={vi.fn()} />);
+
+    await fillAndContinue();
+    await screen.findByRole('link', { name: /Approve in AWS/i });
+    await act(async () => vi.advanceTimersByTime(5_000));
+
+    expect(await screen.findByText(/Signed in/i)).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('keeps the selection and explains when saving fails on the network', async () => {
+    const replies = scriptFetch({ create: CREATED, poll: [APPROVED] });
+    renderPage(<AwsConnectionModal opened onClose={vi.fn()} />);
+    await fillAndContinue();
+    await screen.findByText(/Signed in/i);
+
+    replies.mockRejectedValue(new TypeError('Failed to fetch'));
+    await userEvent.click(screen.getByRole('button', { name: /^Connect$/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not reach the server/i);
+    expect(screen.getByRole('button', { name: /^Connect$/i })).toBeEnabled();
   });
 
   it('explains an identity center that grants no accounts', async () => {
