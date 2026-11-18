@@ -275,8 +275,12 @@ workflow step calls `board_create_gate` with:
 
 When you add a GitLab repository, Flow gives the GitLab project a hook at
 `<PROTOCOL>://<DOMAIN>/webhooks/gitlab`, or under `GITLAB_WEBHOOK_BASE_URL`
-when the operator sets it. The hook carries **Pipeline events** only and has
-its own secret token. Each repository owns its hook: when several Flow
+when the operator sets it. The hook carries **Pipeline events**, for CI gates,
+and **Merge request events** and **Comments**, for
+[pull request triggers](/docs/triggers-and-gates#pull-request-events), and has
+its own secret token. A hook added before pull request triggers existed carries
+pipeline events only; switching on a pull request trigger registers it again
+with all three. Each repository owns its hook: when several Flow
 projects, in one company or in several, attach the same GitLab project, each
 one gets a hook of its own. Removing the repository from Flow, or the GitLab
 connection it came through, deletes that repository's hook and no other.

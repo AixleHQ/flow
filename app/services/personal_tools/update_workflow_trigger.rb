@@ -34,8 +34,11 @@ module PersonalTools
       param :subject_title_template, type: :string, description: "Title template for the card created by subject_policy=create_task."
       param :project_tracker_id, type: :integer,
                                  description: "kind=tracker: the project tracker to listen to; null for any tracker."
+      param :repository_id, type: :integer,
+                            description: "kind=pull_request: the repository to listen to; null for any repository."
       param :aixle_changes, type: :string, enum: WorkflowTriggerSupport::AIXLE_CHANGES,
-                            description: "kind=tracker: ignore, other_workflows or always — what to do with changes Aixle made."
+                            description: "kind=tracker or pull_request: ignore, other_workflows or always — what to do " \
+                                         "with changes, reviews and comments Aixle made."
       param :copy_attachments, type: :boolean,
                                description: "kind=tracker: copy the issue's files onto the run's task when a run starts."
       param :chat_provider, type: :string, enum: WorkflowTriggerSupport::CHAT_PROVIDERS,

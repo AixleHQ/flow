@@ -124,6 +124,12 @@ module Bitbucket
       [ values.reject { |comment| comment["deleted"] }.map { |comment| comment_hash(comment) }, next_cursor ]
     end
 
+    # A Forge comment event names the comment only.
+    def comment(workspace, repository, id, comment_id)
+      comment = @client.get("repositories", workspace, repository, "pullrequests", id, "comments", comment_id)
+      comment_hash(comment).merge(author_uuid: Identifiers.uuid(comment.dig("user", "uuid")), deleted: comment["deleted"] == true)
+    end
+
     def create_comment(workspace, repository, id, body:, path: nil, line: nil, parent_id: nil)
       payload = { content: { raw: body } }
       payload[:inline] = { path: path, to: line&.to_i }.compact if path.present?

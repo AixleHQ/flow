@@ -14,6 +14,15 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
+- **Triggers & gates**: a pull request trigger starts a workflow when someone
+  submits a review on, or comments on, a pull request of a repository attached
+  through GitHub, GitLab, Bitbucket or Azure DevOps — for example, an agent that
+  picks up a request for changes on the pull request's branch. It filters on the
+  verdict, a mention of the app or the text, can land on the task whose run opened
+  the pull request, and ignores reviews and comments Aixle wrote. On Azure DevOps a
+  vote is the review. Operators: subscribe the GitHub app to the
+  **Pull request review** and **Pull request review comment** events, and deploy
+  the Bitbucket Forge app again for its two new pull-request events.
 - **Profile**: a connected Cursor account now shows its remaining quota in the
   Usage limits card — the plan allowance, the Cursor Models / Other Models
   split, and any on-demand spend, each with when the billing period resets.

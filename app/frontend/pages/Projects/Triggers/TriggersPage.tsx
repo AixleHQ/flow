@@ -4,7 +4,12 @@ import type { Project } from '@/types/generated';
 
 import type { TrackerOption } from 'shared/resources/triggers/trackerTrigger';
 import { TriggersContent } from 'shared/resources/triggers/TriggersContent';
-import type { ChatProviderOption, TriggerColumnOption, TriggerWorkflowOption } from 'shared/resources/triggers/types';
+import type {
+  ChatProviderOption,
+  TriggerColumnOption,
+  TriggerRepository,
+  TriggerWorkflowOption,
+} from 'shared/resources/triggers/types';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -13,12 +18,13 @@ interface Props {
   workflows: TriggerWorkflowOption[];
   boardColumns: TriggerColumnOption[];
   trackers: TrackerOption[];
+  triggerRepositories?: TriggerRepository[];
   chatProviders?: ChatProviderOption[];
   [key: string]: unknown;
 }
 
 const TriggersPage = () => {
-  const { project, workflows, boardColumns, trackers, chatProviders } = usePage<Props>().props;
+  const { project, workflows, boardColumns, trackers, triggerRepositories, chatProviders } = usePage<Props>().props;
 
   return (
     <>
@@ -28,6 +34,7 @@ const TriggersPage = () => {
         workflows={workflows}
         columns={boardColumns}
         trackers={trackers}
+        repositories={triggerRepositories ?? []}
         chatProviders={chatProviders ?? []}
       />
     </>

@@ -18,6 +18,9 @@ class TriggerBinding < ApplicationRecord
   # tracker.* events only: the tracker this binding listens to; none means any
   # tracker in the project (what a migration between trackers wants).
   belongs_to :project_tracker, optional: true
+  # pull_request.* events only: the repository this binding listens to; none
+  # means any repository of the project on a code host.
+  belongs_to :repository, optional: true
   # chat.message only: the one channel the trigger listens to. It must be
   # connected to the trigger's company (docs/design/shared-chat-workspaces.md §9).
   belongs_to :chat_conversation, optional: true
@@ -38,6 +41,7 @@ class TriggerBinding < ApplicationRecord
 
   TRACKER_EVENT_PREFIX = "tracker."
   TRACKER_SOURCE = "tracker"
+  PULL_REQUEST_EVENT_PREFIX = "pull_request."
 
   WEBHOOK_EVENT_PREFIX = "webhook."
   # Events Aixle raises about its own runs (ProjectTeams::QuotaEvent).
@@ -71,6 +75,9 @@ class TriggerBinding < ApplicationRecord
   validate :run_as_can_own_runs, if: -> { persisted? && will_save_change_to_created_by_id? }
   validate :run_as_team_in_project, if: -> { run_as_team_id.present? && will_save_change_to_run_as_team_id? }
   validate :tracker_event_type_known, if: :tracker_event?
+  validate :pull_request_event_type_known, if: :pull_request_event?
+  validate :repository_in_project, if: -> { repository_id.present? && will_save_change_to_repository_id? }
+  validates :repository_id, absence: { message: "is only for pull-request triggers" }, unless: :pull_request_event?
   validate :tracker_binding_not_duplicated, if: -> {
     tracker_event? && (new_record? || will_save_change_to_filter_predicate? || will_save_change_to_project_tracker_id?)
   }
@@ -84,6 +91,7 @@ class TriggerBinding < ApplicationRecord
     # A generic webhook names its own event type, so without this a sender could
     # present itself as a tracker or chat event.
     next none if event.event_type.to_s.start_with?(TRACKER_EVENT_PREFIX) && event.source != TRACKER_SOURCE
+    next none if event.event_type.to_s.start_with?(PULL_REQUEST_EVENT_PREFIX) && event.source != PullRequests::EventPipeline::SOURCE
     next none if event.event_type.to_s.start_with?(RUN_EVENT_PREFIX) && event.source != RUN_EVENT_SOURCE
     next none if Chat.event?(event) && Chat.provider_for(event).nil?
 
@@ -112,6 +120,7 @@ class TriggerBinding < ApplicationRecord
   after_commit :reconcile_schedule, on: %i[create update], if: :schedule_needs_reconcile?
   after_commit :remove_schedule, on: :destroy, if: :reconcile_schedule?
   after_commit :ensure_tracker_event_delivery, on: %i[create update], if: -> { tracker_event? && enabled? }
+  after_commit :ensure_pull_request_event_delivery, on: %i[create update], if: -> { pull_request_event? && enabled? }
   # A webhook trigger's endpoint is found by its event type, not by a key, so
   # nothing else turns it off: removing the trigger would leave its URL live.
   after_destroy_commit :disable_webhook_endpoint, if: :webhook?
@@ -209,7 +218,7 @@ class TriggerBinding < ApplicationRecord
   # "Deploy" and "deploy" for the same command. A chat trigger's channel is
   # matched by .listening_in, before this.
   def matches?(data)
-    return false unless tracker_scope_matches?(data) && aixle_change_allowed?(data)
+    return false unless tracker_scope_matches?(data) && repository_scope_matches?(data) && aixle_change_allowed?(data)
 
     conditions = chat? ? filter_predicate.to_h.except("channel") : filter_predicate
     TriggerFilter.match?(conditions, data, ignore_case: chat? ? %w[text] : [])
@@ -221,6 +230,10 @@ class TriggerBinding < ApplicationRecord
 
   def tracker_event?
     event_type.to_s.start_with?(TRACKER_EVENT_PREFIX)
+  end
+
+  def pull_request_event?
+    event_type.to_s.start_with?(PULL_REQUEST_EVENT_PREFIX)
   end
 
   private
@@ -297,9 +310,15 @@ class TriggerBinding < ApplicationRecord
     data.to_h.dig("tracker", "id").to_i == project_tracker_id
   end
 
+  def repository_scope_matches?(data)
+    return true unless pull_request_event? && repository_id
+
+    data.to_h.dig("repository", "id").to_i == repository_id
+  end
+
   def aixle_change_allowed?(data)
     origin = data.to_h["origin"]
-    return true unless tracker_event? && origin.is_a?(Hash) && origin["aixle"]
+    return true unless (tracker_event? || pull_request_event?) && origin.is_a?(Hash) && origin["aixle"]
 
     case aixle_changes.to_s
     when "always" then true
@@ -329,6 +348,19 @@ class TriggerBinding < ApplicationRecord
     errors.add(:workflow, "already has a trigger for this tracker event with the same conditions")
   end
 
+  # Only a repository of this project on a code host delivers pull-request events.
+  def repository_in_project
+    provider = repository&.integration&.provider.to_s
+    return if repository && repository.scope_type == "Project" && repository.scope_id == project_id &&
+              Repository::CODE_HOST_PROVIDERS.include?(provider)
+
+    errors.add(:repository, "must be a repository of this project connected through GitHub, GitLab, Bitbucket or Azure DevOps")
+  end
+
+  def ensure_pull_request_event_delivery
+    PullRequests::EnsureEventDeliveryJob.perform_later(id)
+  end
+
   def ensure_tracker_event_delivery
     trackers = project_tracker ? [ project_tracker ] : ProjectTracker.usable.for_project(project)
     trackers.each { |tracker| Trackers::EnsureEventDeliveryJob.perform_later(tracker.id) }
@@ -352,6 +384,12 @@ class TriggerBinding < ApplicationRecord
     return if Trackers::EventPipeline::EVENT_TYPES.include?(event_type)
 
     errors.add(:event_type, "must be one of #{Trackers::EventPipeline::EVENT_TYPES.join(', ')}")
+  end
+
+  def pull_request_event_type_known
+    return if PullRequests::EventPipeline::EVENT_TYPES.include?(event_type)
+
+    errors.add(:event_type, "must be one of #{PullRequests::EventPipeline::EVENT_TYPES.join(', ')}")
   end
 
   def schedule_requires_cron

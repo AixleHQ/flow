@@ -306,10 +306,12 @@ module Tools
 
           ## 9. Automation
           - `create_workflow_trigger` with a `kind`: `column` (a card entering a
-            board column — the column must already exist), `slack`, `schedule`
+            board column — the column must already exist), `chat`, `schedule`
             (cron AND an explicit timezone, or Temporal schedules in UTC and
             drifts under daylight saving), `webhook` (returns the endpoint URL
-            and a secret shown only in that response), or `event`.
+            and a secret shown only in that response), `tracker`, `pull_request`
+            (a review or comment on a pull request of a connected repository),
+            or `event`.
           - The off-board kinds fire with nobody watching, so every step needs
             `allow_non_interactive` first — otherwise the trigger is rejected
             and the error names the steps.
@@ -373,9 +375,11 @@ module Tools
           7. `reorder_workflow_steps` — fix execution order by passing step ids.
           8. Connect a trigger, or the workflow only ever starts by hand:
              `create_workflow_trigger` with a `kind` —
-             `column` (a card entering a board column), `slack` (an inbound message),
+             `column` (a card entering a board column), `chat` (a message to the bot),
              `schedule` (cron), `webhook` (an inbound HTTP call, which also returns the
-             endpoint URL and secret), or `event` (a custom platform event).
+             endpoint URL and secret), `tracker` (a task tracker event),
+             `pull_request` (a review or comment on a pull request), or `event` (a
+             custom platform event).
              `list_workflow_triggers` / `update_workflow_trigger` /
              `delete_workflow_trigger` manage them.
           9. `trigger_workflow` — start a run by hand (interactive or non_interactive).
@@ -391,8 +395,9 @@ module Tools
             The same applies to every id list (`tool_ids`, `skill_ids`,
             `mcp_server_ids`, `depends_on_step_ids`, and the workflow's `base_*`
             lists): an update REPLACES the list, so read the current value first.
-          - The off-board trigger kinds (slack, schedule, webhook, event) fire with
-            nobody watching, so every step must have `allow_non_interactive` set.
+          - The off-board trigger kinds (chat, schedule, webhook, event, tracker,
+            pull_request) fire with nobody watching, so every step must have
+            `allow_non_interactive` set.
             A trigger whose workflow still has a human-gated step is rejected on
             save, and the error names the steps.
           - A `schedule` trigger needs a cron expression AND an explicit timezone —
@@ -450,7 +455,7 @@ module Tools
           - `depends_on_step_ids` builds the DAG: a step runs after every step it
             depends on. A step can't be deleted while others depend on it.
           - `allow_non_interactive` lets the step run unattended. Every step needs it
-            before a slack / schedule / webhook / tracker trigger can be attached to
+            before a chat / schedule / webhook / tracker / pull_request trigger can be attached to
             the workflow.
           - Each of those id lists is REPLACED wholesale by an update — read the
             current value with `get_workflow_step` before changing one.

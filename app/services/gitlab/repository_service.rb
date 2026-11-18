@@ -7,6 +7,9 @@ module Gitlab
     # account or repository, but never an unbounded walk inside a web request.
     MAX_PROJECTS = 1000
     MAX_BRANCHES = 1000
+    # Pipelines resolve CI gates; merge-request and note events start
+    # pull-request triggers (docs/design/pull-request-triggers.md §7.2).
+    HOOK_EVENTS = { pipeline_events: true, merge_requests_events: true, note_events: true }.freeze
 
     def initialize(integration)
       @integration = integration
@@ -51,10 +54,20 @@ module Gitlab
         repository.full_name,
         Gitlab::AppConfig.webhook_url,
         token: webhook_secret,
-        pipeline_events: true
+        **HOOK_EVENTS
       )
       repository.update!(webhook_secret: webhook_secret, gitlab_hook_id: hook.id)
       webhook_secret
+    end
+
+    # A hook registered before pull-request triggers existed carries pipeline
+    # events only. GitLab never returns a hook's token, so one lacking the
+    # events is registered again rather than edited.
+    def ensure_hook_events(repository)
+      hook = repository.gitlab_hook_id && find_hook(token_service.client, repository)
+      return repository.webhook_secret if hook && HOOK_EVENTS.keys.all? { |event| hook.to_h[event.to_s] == true }
+
+      configure(repository)
     end
 
     def remove(repository)
@@ -68,6 +81,12 @@ module Gitlab
     end
 
     private
+
+    def find_hook(client, repository)
+      client.project_hook(repository.full_name, repository.gitlab_hook_id)
+    rescue ::Gitlab::Error::NotFound
+      nil
+    end
 
     def delete_hook(client, full_name, hook_id)
       client.delete_project_hook(full_name, hook_id)

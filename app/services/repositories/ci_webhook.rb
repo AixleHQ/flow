@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 module Repositories
-  # The CI webhook a repository's gates resolve on. A GitLab project needs its own
-  # hook, carrying this repository's secret — the endpoint authenticates each
-  # delivery by it. GitHub delivers through the app installation and Azure DevOps
+  # The CI webhook a repository's gates resolve on, which also delivers its
+  # pull-request events. A GitLab project needs its own hook, carrying this
+  # repository's secret — the endpoint authenticates each delivery by it. GitHub delivers through the app installation and Azure DevOps
   # through its service hooks, so there is nothing to register for them.
   #
   # Best effort: a token without Maintainer rights cannot add a hook, and a
@@ -23,6 +23,17 @@ module Repositories
       Gitlab::RepositoryService.new(repository.integration).configure(repository)
     rescue StandardError => e
       Rails.logger.warn("[CiWebhook] Could not register the GitLab hook for #{repository.full_name}: #{e.class}: #{e.message}")
+      nil
+    end
+
+    # A pull-request trigger needs the hook's merge-request and note events,
+    # which a hook registered before those triggers existed lacks.
+    def ensure_pull_request_events(repository)
+      return unless gitlab?(repository) && Gitlab::AppConfig.webhooks_enabled?
+
+      Gitlab::RepositoryService.new(repository.integration).ensure_hook_events(repository)
+    rescue StandardError => e
+      Rails.logger.warn("[CiWebhook] Could not update the GitLab hook for #{repository.full_name}: #{e.class}: #{e.message}")
       nil
     end
 

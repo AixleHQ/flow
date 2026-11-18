@@ -232,11 +232,15 @@ stops holding the card, but never counts as a pass. See
 
 ## Starting a workflow from GitHub
 
-The connection's webhooks close CI gates, and start tracker triggers for the
-projects picked as trackers ([below](#github-projects-as-a-tracker)). To start a
-workflow on anything else — a pull request opened, a push to `main` — point a
-GitHub webhook at an **Incoming webhook** trigger. This works with either kind
-of connection, or with none.
+The connection's webhooks close CI gates, start tracker triggers for the
+projects picked as trackers ([below](#github-projects-as-a-tracker)), and start
+**pull request** triggers when someone reviews or comments on a pull request of
+an attached repository ([Pull request events](/docs/triggers-and-gates#pull-request-events)).
+Those need an **app** connection: a token connection gets no webhooks.
+
+To start a workflow on anything else — a pull request opened, a push to `main` —
+point a GitHub webhook at an **Incoming webhook** trigger. This works with either
+kind of connection, or with none.
 
 1. On the workflow's **Triggers** tab, select **Add a trigger**, choose
    **Incoming webhook**, and set **Verification** to **HMAC SHA-256**. Leave
@@ -436,8 +440,10 @@ the operator registers one GitHub App for the whole deployment:
    read & write if agents will change files under `.github/workflows`.
    **Organization permissions:** Projects read & write. Issues and Projects are
    what GitHub Projects trackers need.
-4. **Events:** Check suite and Workflow run — the two CI gates resolve on — and
-   Issues, Issue comment and Projects v2 item, for tracker triggers. GitHub
+4. **Events:** Check suite and Workflow run — the two CI gates resolve on —
+   Issues, Issue comment and Projects v2 item, for tracker triggers, and Pull
+   request review and Pull request review comment, for pull request triggers
+   (comments in a pull request's conversation arrive as Issue comment). GitHub
    also sends every app its `installation` events, with no subscription; Flow
    follows an uninstall, a suspension, an unsuspension and an approval of new
    permissions from them. Flow ignores every other event.

@@ -6,6 +6,7 @@
 # survives a reconnect or a second connection to the same tracker.
 class ExternalResource < ApplicationRecord
   TRACKER_ISSUE = "tracker_issue"
+  PULL_REQUEST = "pull_request"
 
   belongs_to :board_task
 
@@ -13,8 +14,8 @@ class ExternalResource < ApplicationRecord
   validates :external_id, uniqueness: { scope: %i[board_task_id kind provider instance] }
 
   scope :tracker_issues, -> { where(kind: TRACKER_ISSUE) }
-  scope :identifying, ->(provider:, instance:, external_id:) {
-    tracker_issues.where(provider: provider.to_s, instance: instance.to_s, external_id: external_id.to_s)
+  scope :identifying, ->(provider:, instance:, external_id:, kind: TRACKER_ISSUE) {
+    where(kind: kind, provider: provider.to_s, instance: instance.to_s, external_id: external_id.to_s)
   }
 
   def key = data["key"]
