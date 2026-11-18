@@ -1,0 +1,44 @@
+<%#
+# Dashboard layout
+
+The admin's dashboard outside the admin (docs/design/tenant-usage-report.md
+§7.2). Administrate's page shell and the admin's skin, so the page looks as it
+does in the admin, without the admin's sidebar: a bar above it holds what a
+viewer needs besides the page.
+%>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="ROBOTS" content="NOODP">
+  <meta name="viewport" content="initial-scale=1">
+  <title>Dashboard - Aixle Flow</title>
+  <%= render "administrate/application/stylesheet" %>
+  <%= csrf_meta_tags %>
+  <%= csp_meta_tag %>
+  <%= render "administrate/application/javascript" %>
+</head>
+<body>
+  <div class="app-container app-container--top-bar">
+    <header class="top-bar">
+      <div class="navigation__brand">
+        <%= image_tag "/logo.svg", alt: "Aixle" %>
+        <span>Flow</span>
+      </div>
+
+      <%= link_to("Back to app", company_projects_url, class: "button button--alt", data: { turbo: false }) if current_membership %>
+
+      <%# Labelled and shown by app/frontend/entrypoints/admin.ts. %>
+      <button type="button" class="navigation__scheme" data-color-scheme-toggle hidden></button>
+
+      <%# The sign-in page it lands on is an Inertia page, which Turbo cannot render in place. %>
+      <%= button_to "Sign out", logout_path, method: :delete, form_class: "navigation__sign-out", form: { data: { turbo: false } } %>
+    </header>
+
+    <main class="main-content">
+      <%= yield %>
+    </main>
+  </div>
+</body>
+</html>

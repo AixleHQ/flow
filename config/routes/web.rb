@@ -410,6 +410,15 @@ scope module: :web, defaults: { format: :html } do
   get "docs/*slug", to: "docs#show", as: :docs_page, constraints: { slug: /[^\/]+/ }
   get "changelog", to: "changelog#show", as: :changelog
 
+  # The admin's dashboard for a dashboard viewer, who is not a superadmin
+  # (docs/design/tenant-usage-report.md §7.2).
+  resource :dashboard, only: %i[show] do
+    get :waits, to: "dashboard_companies#waits"
+    resources :companies, only: %i[show], controller: "dashboard_companies" do
+      get :hours, on: :member
+    end
+  end
+
   # What Flow does, what a queue costs and the ROI model the sales team
   # quotes. Public: the signup form links to it, and its reader has no
   # account yet.

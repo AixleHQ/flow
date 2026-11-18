@@ -63,6 +63,10 @@ FactoryBot.define do
       super_admin { true }
     end
 
+    trait :dashboard_viewer do
+      dashboard_viewer { true }
+    end
+
     trait :employee do
       membership_role { "employee" }
     end

@@ -66,6 +66,15 @@ module Admin
       assert_redirected_to admin_user_path(@user)
     end
 
+    test "opens the platform dashboard to a user, which nobody has until then" do
+      assert_equal false, @user.dashboard_viewer # rubocop:disable Minitest/RefuteFalse
+
+      patch :update, params: { id: @user.id, user: { dashboard_viewer: "1" } }
+
+      assert_redirected_to admin_user_path(@user)
+      assert @user.reload.dashboard_viewer
+    end
+
     test "should soft delete user" do
       # Soft delete: the row is kept (count unchanged) but marked deleted.
       assert_no_difference("User.count") do

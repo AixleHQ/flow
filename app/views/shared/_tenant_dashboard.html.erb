@@ -1,0 +1,22 @@
+<%#
+# Tenant dashboard
+
+The admin's dashboard, rendered by both its copies: the admin's own and the one
+at /dashboard (docs/design/tenant-usage-report.md §7.2). The page itself is a
+React island (app/frontend/entrypoints/admin_dashboard.tsx) reading its data
+from the data attributes below: the report, where its JSON lives, and — only in
+the admin — where a company's record is.
+%>
+
+<% content_for :javascript do %>
+  <%= vite_react_refresh_tag %>
+  <%= vite_javascript_tag "admin_dashboard.tsx" %>
+<% end %>
+
+<header class="main-content__header">
+  <h1 class="main-content__page-title">Dashboard</h1>
+</header>
+
+<section class="main-content__body">
+  <%= tag.div(id: "admin-dashboard", data: { report: report.to_json, base: base, company_records: company_records }) %>
+</section>

@@ -135,6 +135,15 @@ A company with no worker limit in the period gets no utilization: nothing capped
 
 **The table's p95.** For the same reason the table's wait column is the p95 rather than the maximum, and it is not in the page's data either. For the selected period, and for the period it is compared with, the page fetches `GET /admin/dashboard/waits.json?from=&to=` (`Usage::TenantWaits`): every company's p95 over the sessions admitted in those days, the same sessions the breakdown counts. Each range is fetched once while the page is open.
 
+### 7.2 Outside the admin
+
+Added 2026-11-18. People outside engineering — marketing, finance — asked for the dashboard, and the superadmin area is not somewhere to let them in. The same page is served at `/dashboard` to whoever a superadmin marks a **dashboard viewer** (`users.dashboard_viewer`, off by default, a checkbox on the user in the admin, with a filter to list them). The admin keeps its own copy.
+
+- **The same page.** `Web::DashboardsController` and `Admin::DashboardsController` both take their `show` from `TenantDashboard` and render `shared/_tenant_dashboard.html.erb`, so a change to the page or its report reaches both copies. Outside the admin it sits in `layouts/dashboard.html.erb`: Administrate's page shell and the admin's skin, with no sidebar, since there is nowhere else in the admin to go. A bar above the page holds the color-scheme switch, sign-out and a way back to the app.
+- **Where its JSON lives.** The island reads `data-base` (`/admin/dashboard` or `/dashboard`) and fetches the p95 waits, a company's breakdown and a day's hours under it. Both copies are served by `TenantDashboardCompanies`, included by `Admin::DashboardCompaniesController` and `Web::DashboardCompaniesController`. Only the admin's copy sets `data-company-records`, so a company opened outside the admin links to no admin record.
+- **Who gets in.** `DashboardViewerOnly`: a stranger is sent to sign in, and a signed-in person without the flag gets a 404. It is no company's data, so the company gates of the app — the workspace, its sign-in policy, its terms, its onboarding — are skipped. A superadmin is sent on to `/admin`, as from every other page of the app; an impersonated viewer is let in, so an operator can see what they see.
+- **Finding it.** The user menu of the app links to it for a viewer (`currentUser.dashboardViewer`). A person signs in to the app as everyone does, which needs an active membership somewhere; a viewer with none is refused at sign-in like anyone else with none, so marketing and finance should be members of our own workspace.
+
 ## 8. Free means managed
 
 Where we host, a company is paying, on a trial, blocked, or carried by Aixle (`managed_by_aixle`). Before this change it could also run free in two other ways, both through the admin:

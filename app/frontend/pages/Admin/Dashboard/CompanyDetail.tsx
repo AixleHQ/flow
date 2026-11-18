@@ -3,7 +3,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import type { DayRange, TenantSummary } from './aggregate';
 import classes from './Dashboard.module.css';
 import { BILLING_LABELS, formatCount, formatPercent, formatWait, formatWorkers } from './format';
-import type { CompanyBreakdown, WaitHour, WaitStats } from './types';
+import type { CompanyBreakdown, DashboardPaths, WaitHour, WaitStats } from './types';
 import { useDayHours } from './useDayHours';
 import WaitTable, { type WaitRow } from './WaitTable';
 
@@ -21,6 +21,7 @@ const FOCUSABLE = 'a[href], button:not([disabled]), summary, [tabindex]:not([tab
 type State = { status: 'loading' } | { status: 'failed' } | { status: 'ready'; breakdown: CompanyBreakdown };
 
 interface Props {
+  paths: DashboardPaths;
   tenant: TenantSummary;
   range: DayRange;
   /** The period as the dashboard names it, e.g. "Oct 1 – Oct 30, 2026". */
@@ -110,15 +111,16 @@ const hourRows = (hours: WaitHour[]): WaitRow[] =>
   hours.map((row) => ({ ...row, key: String(row.hour), label: `${clock(row.hour)}–${clock(row.hour + 1)}` }));
 
 interface BreakdownProps {
+  base: string;
   tenant: TenantSummary;
   range: DayRange;
   breakdown: CompanyBreakdown;
 }
 
-function Breakdown({ tenant, range, breakdown }: BreakdownProps) {
+function Breakdown({ base, tenant, range, breakdown }: BreakdownProps) {
   const { waits, runs, projects, days, timeZone } = breakdown;
   const [openDay, setOpenDay] = useState<string | null>(null);
-  const dayHours = useDayHours({ companyId: tenant.tenantId, range, timeZone }, openDay);
+  const dayHours = useDayHours({ base, companyId: tenant.tenantId, range, timeZone }, openDay);
 
   return (
     <>
@@ -284,7 +286,7 @@ function Breakdown({ tenant, range, breakdown }: BreakdownProps) {
 }
 
 /** One company over the dashboard's selected days, read from its admissions when opened. */
-export default function CompanyDetail({ tenant, range, span, timeZone, onClose }: Props) {
+export default function CompanyDetail({ paths, tenant, range, span, timeZone, onClose }: Props) {
   const [state, setState] = useState<State>({ status: 'loading' });
   const dialog = useRef<HTMLDivElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -294,7 +296,7 @@ export default function CompanyDetail({ tenant, range, span, timeZone, onClose }
   useEffect(() => {
     const controller = new AbortController();
     const query = new URLSearchParams({ from: range.start, to: range.end, time_zone: timeZone });
-    fetch(`/admin/dashboard/companies/${tenant.tenantId}.json?${query}`, {
+    fetch(`${paths.base}/companies/${tenant.tenantId}.json?${query}`, {
       headers: { Accept: 'application/json' },
       signal: controller.signal,
     })
@@ -307,7 +309,7 @@ export default function CompanyDetail({ tenant, range, span, timeZone, onClose }
         if (!controller.signal.aborted) setState({ status: 'failed' });
       });
     return () => controller.abort();
-  }, [tenant.tenantId, range.start, range.end, timeZone]);
+  }, [paths.base, tenant.tenantId, range.start, range.end, timeZone]);
 
   // Without Mantine on this page the dialog keeps focus itself: it takes it on
   // open, holds Tab inside, closes on Escape, and hands focus back on close.
@@ -357,7 +359,13 @@ export default function CompanyDetail({ tenant, range, span, timeZone, onClose }
             </h2>
             <p className={classes.dialogMeta}>
               <span className={`${classes.badge} ${classes[billing.tone]}`}>{billing.label}</span>
-              {span} · UTC · <a href={`/admin/companies/${tenant.tenantId}`}>Company record</a>
+              {span} · UTC
+              {paths.companyRecords && (
+                <>
+                  {' · '}
+                  <a href={`${paths.companyRecords}/${tenant.tenantId}`}>Company record</a>
+                </>
+              )}
             </p>
           </div>
           <button ref={closeButton} type="button" className={classes.close} aria-label="Close" onClick={onClose}>
@@ -372,7 +380,9 @@ export default function CompanyDetail({ tenant, range, span, timeZone, onClose }
               The breakdown could not be loaded. Close this and open the company again.
             </p>
           )}
-          {state.status === 'ready' && <Breakdown tenant={tenant} range={range} breakdown={state.breakdown} />}
+          {state.status === 'ready' && (
+            <Breakdown base={paths.base} tenant={tenant} range={range} breakdown={state.breakdown} />
+          )}
         </div>
       </div>
     </div>

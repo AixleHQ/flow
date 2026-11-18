@@ -57,6 +57,10 @@ governance, community health — carry none.
   `INSIGHTS_DEPLOYMENT_SECRET` (issued by Insights); the integration stays hidden
   until all three are set. Insights' answer to a batch is final unless
   `INSIGHTS_RESEND=true`, which sends again what it failed to take.
+- **Admin**: the admin dashboard can be opened to people who are not superadmins.
+  Tick **Dashboard viewer** on a user in the admin, and the same dashboard opens
+  to them at `/dashboard`, linked from their user menu, without the rest of the
+  admin. Nobody has it until a superadmin ticks it.
 
 ### Changed
 - **Sign-in & onboarding**: a viewer's onboarding is the profile step alone —

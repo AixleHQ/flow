@@ -1327,6 +1327,26 @@ export function changelogPath(options?: object): string {
   return "/" + "changelog" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /dashboard/waits(.:format) */
+export function waitsDashboardPath(options?: object): string {
+  return "/" + "dashboard" + "/" + "waits" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /dashboard/companies/:id/hours(.:format) */
+export function hoursDashboardCompanyPath(id: ScalarType, options?: object): string {
+  return "/" + "dashboard" + "/" + "companies" + "/" + id + "/" + "hours" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /dashboard/companies/:id(.:format) */
+export function dashboardCompanyPath(id: ScalarType, options?: object): string {
+  return "/" + "dashboard" + "/" + "companies" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /dashboard(.:format) */
+export function dashboardPath(options?: object): string {
+  return "/" + "dashboard" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /how-it-works(.:format) */
 export function howItWorksPath(options?: object): string {
   return "/" + "how-it-works" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1482,6 +1502,11 @@ export function securityProfilePath(options?: object): string {
   return "/" + "profile" + "/" + "security" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /profile(.:format) */
+export function profilePath(options?: object): string {
+  return "/" + "profile" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /profile/connections/:connection_provider/act_as_consents/:project_id(.:format) */
 export function profileConnectionActAsConsentPath(connection_provider: ScalarType, project_id: ScalarType, options?: object): string {
   return "/" + "profile" + "/" + "connections" + "/" + connection_provider + "/" + "act_as_consents" + "/" + project_id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["connection_provider","project_id","format"]);
@@ -1495,11 +1520,6 @@ export function profileConnectionsPath(options?: object): string {
 /** /profile/connections/:provider(.:format) */
 export function profileConnectionPath(provider: ScalarType, options?: object): string {
   return "/" + "profile" + "/" + "connections" + "/" + provider + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["provider","format"]);
-}
-
-/** /profile(.:format) */
-export function profilePath(options?: object): string {
-  return "/" + "profile" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /profile/sign_in_methods(.:format) */
@@ -2110,6 +2130,31 @@ export function companyProjectIntegrationsPath(project_id: ScalarType, options?:
 /** /company/projects/:project_id/integrations/:id(.:format) */
 export function companyProjectIntegrationPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /company/projects/:project_id/insights/connect(.:format) */
+export function connectCompanyProjectInsightsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "insights" + "/" + "connect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /company/projects/:project_id/insights/rotate(.:format) */
+export function rotateCompanyProjectInsightsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "insights" + "/" + "rotate" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /company/projects/:project_id/insights/disconnect(.:format) */
+export function disconnectCompanyProjectInsightsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "insights" + "/" + "disconnect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /company/projects/:project_id/insights/projects(.:format) */
+export function projectsCompanyProjectInsightsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "insights" + "/" + "projects" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /company/projects/:project_id/insights(.:format) */
+export function companyProjectInsightsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "insights" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
 /** /company/projects/:project_id/agents(.:format) */
