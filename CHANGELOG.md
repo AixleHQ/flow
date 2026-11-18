@@ -68,6 +68,8 @@ governance, community health — carry none.
   step that followed it is gone.
 - The remaining sign-in pages, invitations, integration pages, the legal pages, the public site
   and emails show the Aixle Flow lockup, Flow in the brand orange, as sign-in already did.
+- **Admin**: the admin's sidebar and `/dashboard` show the Aixle Flow lockup, Flow in the brand
+  orange, as sign-in and the public pages already do.
 - **Sessions & Runs**: the live terminal no longer lets the agent's output read
   your clipboard.
 - **Sessions & Runs**: an automatic Claude Code session writes its prompt cache

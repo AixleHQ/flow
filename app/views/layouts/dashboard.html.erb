@@ -23,8 +23,7 @@ viewer needs besides the page.
   <div class="app-container app-container--top-bar">
     <header class="top-bar">
       <div class="navigation__brand">
-        <%= image_tag "/logo.svg", alt: "Aixle" %>
-        <span>Flow</span>
+        <%= render "shared/brand_lockup" %>
       </div>
 
       <%= link_to("Back to app", company_projects_url, class: "button button--alt", data: { turbo: false }) if current_membership %>
