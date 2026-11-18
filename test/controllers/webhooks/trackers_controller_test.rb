@@ -75,6 +75,25 @@ class Webhooks::TrackersControllerTest < ActionDispatch::IntegrationTest
     assert_equal [ subscription.id ], TrackerDelivery.pluck(:tracker_subscription_id)
   end
 
+  test "an app webhook that matches several subscriptions marks them all heard in one write" do
+    subscriptions = %w[4001 4002 4003].map do |id|
+      create(:tracker_subscription, integration: create(:integration, :jira_oauth, :active), strategy: "api",
+                                    provider_subscription_id: id)
+    end
+    raw = issue_created.merge(matchedWebhookIds: [ 4001, 4002, 4003 ]).to_json
+    token = JSON::JWT.new(exp: 5.minutes.from_now.to_i).sign("jira-app-secret", :HS256).to_s
+    updates = 0
+    counter = ->(*, payload) { updates += 1 if payload[:sql].start_with?('UPDATE "tracker_subscriptions"') }
+
+    ActiveSupport::Notifications.subscribed(counter, "sql.active_record") do
+      post "/webhooks/trackers/app/jira", params: raw, headers: { "CONTENT_TYPE" => "application/json", "Authorization" => "Bearer #{token}" }
+    end
+
+    assert_response :ok
+    assert_equal 1, updates
+    assert subscriptions.all? { |subscription| subscription.reload.last_event_at.present? }
+  end
+
   def linear_issue_update(timestamp: (Time.current.to_f * 1000).to_i)
     { type: "Issue", action: "update", organizationId: FakeLinear::Api::ORGANIZATION, webhookTimestamp: timestamp,
       createdAt: "2026-10-01T10:00:00.000Z", actor: { id: "u-ada", name: "Ada" },

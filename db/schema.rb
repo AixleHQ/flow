@@ -612,6 +612,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_17_100000) do
     t.string "billing_provider", default: "none", null: false
     t.datetime "billing_provider_since"
     t.integer "trial_hours"
+    t.uuid "public_id", default: -> { "gen_random_uuid()" }, null: false
     t.index ["billing_provider"], name: "index_companies_on_billing_provider"
     t.uuid "public_id", default: -> { "gen_random_uuid()" }, null: false
     t.index ["billing_state"], name: "index_companies_on_billing_state"

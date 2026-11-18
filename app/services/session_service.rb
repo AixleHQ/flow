@@ -6,6 +6,12 @@ class SessionService
   # stored value may have changed since, so we re-check before dialing.
   class UnsafeMcpUrlError < StandardError; end
 
+  # What a launch preflight refuses with: something the session's user has to
+  # renew or fix, and is told about on the session.
+  PREFLIGHT_REFUSALS = [
+    Oauth::PreflightError, CloudAuth::PreflightError, AgentCredential::PreflightError, UnsafeMcpUrlError
+  ].freeze
+
   class << self
     # `company:` is required for PROJECT-LESS sessions (auth_setup): those create
     # an agent credential, and the credential is billed to a company, so it can

@@ -133,6 +133,12 @@ module ContainerRuntime
       true
     end
 
+    # Whether `error`, raised by a call to this runtime, is a passing failure
+    # of its API that the same call can expect to get past on a later try.
+    def transient_error?(_error)
+      false
+    end
+
     # The address the session's container calls the platform back on, by
     # name (ContainerRuntime::CallbackUrls). A hosted runtime answers the
     # Settings value unchanged; RunnerRuntime answers the session's local

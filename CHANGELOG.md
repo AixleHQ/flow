@@ -13,6 +13,13 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+- **Integrations**: Azure DevOps can be connected through your own Microsoft Entra app.
+  Register an app in your directory, add a federated credential that trusts Flow, and
+  an Azure DevOps administrator runs a generated script once. No secret, certificate or
+  personal access token is stored, Aixle never receives an administrator credential,
+  and deleting the credential or the app stops Flow from signing in (a token already issued lasts up to about an hour). Operators enable it by
+  setting `AZURE_DEVOPS_FEDERATION_SIGNING_KEY`.
+
 ### Added
 - **Triggers & gates**: a pull request trigger starts a workflow when someone
   submits a review on, or comments on, a pull request of a repository attached
@@ -61,6 +68,8 @@ governance, community health — carry none.
   needs the next runner release (0.4.1), and a machine whose reset goes
   unanswered while it reconnects after a lost-contact session is reset when it
   is heard again, not marked Failed.
+- **Sessions & Runs**: the live terminal no longer lets the agent's output read
+  your clipboard.
 - **Sessions & Runs**: an automatic Claude Code session writes its prompt cache
   for 5 minutes instead of an hour, which costs less of the connected
   subscription: its requests come seconds apart, so the cache stays warm.
@@ -102,9 +111,28 @@ governance, community health — carry none.
   existing directory and working on a stale checkout. A path that holds
   another repository or a broken clone is cloned again. A kept checkout keeps
   only its objects and refs: its config and hooks are rebuilt, never reused.
+- A tab left open across a release now reloads into the new version when it
+  opens a page, instead of failing to load it. A live page that can no longer
+  update says a new version is out, and a link clicked while offline says the
+  server can't be reached instead of doing nothing.
+- **Sessions & Runs**: a copy the agent asks for in the live terminal no longer
+  fails when the tab is not focused, and never reaches the clipboard of someone
+  only watching the session. The sessions list keeps updating after a dropped
+  connection.
+- **Profile**: connecting AWS Bedrock through IAM Identity Center says when the
+  server can't be reached, and keeps waiting for your approval through a
+  dropped connection.
 - **Assets**: a step can promote a file it wrote to `/workspace/outputs` to a
   project asset while it is still running. Before, `promote_asset` found only
   outputs of earlier steps and failed with "No workflow output asset named …".
+- **Sessions & Runs**: a session whose cleanup cannot reach the Kubernetes API
+  for a moment is cleaned up on the next try 15 seconds later, and gives its
+  slot back then. Before, the cleanup failed and the slot waited for the
+  reconciler.
+- The error tracker no longer gets an "Admission queue is not moving" warning
+  for a slot released seconds before the check and still being handed on, or an
+  error for an agent login that expired while a step waited for its slot; the
+  step already tells its owner to sign in again.
 
 ## [1.15.0] - 2026-11-14
 
