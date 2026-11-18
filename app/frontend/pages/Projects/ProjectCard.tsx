@@ -4,6 +4,7 @@ import { IconArrowRight, IconClock, IconSettings, IconStar, IconStarFilled } fro
 
 import type { Project } from '@/types/generated';
 
+import { type TourTarget, tourTarget } from 'shared/tour/targets';
 import { Identicon, StatusBadge } from 'shared/ui';
 
 import classes from './ProjectCard.module.css';
@@ -12,6 +13,7 @@ interface ProjectCardProps {
   project: Project;
   onClick?: () => void;
   onToggleFavorite?: () => void;
+  tour?: TourTarget;
 }
 
 const formatRelativeTime = (dateString?: string | null): string => {
@@ -87,13 +89,13 @@ const FavoriteButton = ({ project, onToggle }: { project: Project; onToggle: () 
   );
 };
 
-export const ProjectCard = ({ project, onClick, onToggleFavorite }: ProjectCardProps) => {
+export const ProjectCard = ({ project, onClick, onToggleFavorite, tour }: ProjectCardProps) => {
   const isArchived = project.state === 'archived';
 
   return (
     <Box className={`${classes.card} ${isArchived ? classes.archived : ''}`}>
       {onToggleFavorite && <FavoriteButton project={project} onToggle={onToggleFavorite} />}
-      <UnstyledButton onClick={onClick} className={classes.clickArea}>
+      <UnstyledButton onClick={onClick} className={classes.clickArea} {...(tour && tourTarget(tour))}>
         <Group gap={12} align="center" wrap="nowrap" className={classes.headerRow}>
           <Box className={classes.avatar}>
             <Identicon seed={project.name} size={24} />

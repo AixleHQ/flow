@@ -20,6 +20,7 @@ import {
   IconMessage,
   IconPlug,
   IconPlugConnected,
+  IconRoute,
   IconRobot,
   IconServer,
   IconSettings,
@@ -77,6 +78,8 @@ import {
   profilePath,
   templatesPath,
 } from 'shared/routes';
+import { type TourTarget, tourTarget } from 'shared/tour/targets';
+import { requestTourStart } from 'shared/tour/tourStore';
 
 import classes from './AppSidebar.module.css';
 import { ColorSchemeToggle } from './ColorSchemeToggle';
@@ -118,11 +121,13 @@ interface NavItem {
   icon: React.ReactNode;
   path: string;
   adminOnly?: boolean;
+  tour?: TourTarget;
 }
 
 interface NavGroup {
   label?: string;
   items: NavItem[];
+  tour?: TourTarget;
 }
 
 // ─── Project-level nav ────────────────────────────────────────────────────────
@@ -135,6 +140,7 @@ const buildProjectNavGroups = (projectId: string, { externalRunners }: { externa
   },
   {
     label: 'Work',
+    tour: 'project-nav-work',
     items: [
       { label: 'Tasks', icon: <IconCheckbox size={18} />, path: companyProjectBoardPath(projectId) },
       { label: 'Workflows', icon: <IconGitMerge size={18} />, path: companyProjectWorkflowsPath(projectId) },
@@ -200,7 +206,7 @@ const companyNavGroups: NavGroup[] = [
   {
     label: 'Library',
     items: [
-      { label: 'Templates', icon: <IconTemplate size={18} />, path: templatesPath() },
+      { label: 'Templates', icon: <IconTemplate size={18} />, path: templatesPath(), tour: 'sidebar-templates' },
       { label: 'Workflow Catalog', icon: <IconGitMerge size={18} />, path: companyWorkflowCatalogIndexPath() },
     ],
   },
@@ -357,7 +363,7 @@ function SidebarNav({ groups, collapsed, isAdmin, collapsedGroups, toggleGroup, 
         const groupCollapsed = !collapsed && group.label !== undefined && collapsedGroups.has(group.label);
 
         return (
-          <Fragment key={groupIdx}>
+          <div key={groupIdx} {...(group.tour && tourTarget(group.tour))}>
             {group.label && (
               <button
                 type="button"
@@ -384,6 +390,7 @@ function SidebarNav({ groups, collapsed, isAdmin, collapsedGroups, toggleGroup, 
                       <Link
                         href={item.path}
                         onClick={onNavigate}
+                        {...(item.tour && tourTarget(item.tour))}
                         aria-label={item.label}
                         aria-current={isActive ? 'page' : undefined}
                         className={[
@@ -403,6 +410,7 @@ function SidebarNav({ groups, collapsed, isAdmin, collapsedGroups, toggleGroup, 
                     key={item.path}
                     href={item.path}
                     onClick={onNavigate}
+                    {...(item.tour && tourTarget(item.tour))}
                     aria-current={isActive ? 'page' : undefined}
                     className={[
                       isOverview ? classes.navOverview : classes.navItem,
@@ -414,7 +422,7 @@ function SidebarNav({ groups, collapsed, isAdmin, collapsedGroups, toggleGroup, 
                   </Link>
                 );
               })}
-          </Fragment>
+          </div>
         );
       })}
     </>
@@ -658,6 +666,7 @@ interface SidebarUserFooterProps {
 
 function SidebarUserFooter({ userName, collapsed, feedbackEnabled }: SidebarUserFooterProps) {
   const [feedbackOpened, { open: openFeedback, close: closeFeedback }] = useDisclosure(false);
+  const tourEnabled = useFeatureFlag('productTour');
 
   return (
     <div className={`${classes.navFoot} ${collapsed ? classes.navFootCollapsed : ''}`}>
@@ -683,6 +692,11 @@ function SidebarUserFooter({ userName, collapsed, feedbackEnabled }: SidebarUser
           {feedbackEnabled && (
             <Menu.Item leftSection={<IconMessage size={16} />} onClick={openFeedback}>
               Send feedback
+            </Menu.Item>
+          )}
+          {tourEnabled && (
+            <Menu.Item leftSection={<IconRoute size={16} />} onClick={requestTourStart}>
+              Start product tour
             </Menu.Item>
           )}
           <Menu.Divider />

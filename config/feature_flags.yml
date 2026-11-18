@@ -38,3 +38,13 @@ external_runners:
   client: true
   introduced: 2026-10-26
   remove_by: 2027-06-30    # a review checkpoint, not a planned removal date (docs/design/agent-runtimes/DESIGN.md §12.1)
+
+product_tour:
+  description: Product tour for new users — the first-visit offer on Projects and "Start product tour" in the user menu.
+  owner: "@AixleHQ/web"
+  kind: release
+  scope: company
+  default: false
+  client: true
+  introduced: 2026-11-18
+  remove_by: 2027-03-31

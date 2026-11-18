@@ -14,6 +14,9 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
+- **Sign-in & onboarding**: a product tour that walks a new user from a template to their first
+  workflow run, offered once on Projects and started any time from *Start product tour* in the
+  user menu. Off until an operator turns on the `product_tour` feature flag.
 - **Profile**: a connected Cursor account now shows its remaining quota in the
   Usage limits card — the plan allowance, the Cursor Models / Other Models
   split, and any on-demand spend, each with when the billing period resets.

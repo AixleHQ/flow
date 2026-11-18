@@ -4,6 +4,8 @@ import { useDebouncedValue } from '@mantine/hooks';
 import { IconSearch, IconTemplate } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
+import { HELLO_FLOW_TEMPLATE } from 'shared/tour/steps';
+import { tourTarget } from 'shared/tour/targets';
 import { EmptyState } from 'shared/ui';
 import { PageHeader } from 'shared/ui/PageHeader';
 
@@ -58,6 +60,12 @@ const IndexPage = () => {
         (!query || t.name.toLowerCase().includes(query) || t.summary?.toLowerCase().includes(query)),
     );
   }, [templates, kind, publisher, debouncedSearch]);
+  // Until the catalog ships Hello Flow (scenario section 2), the tour points at a template that needs nothing connected.
+  const tourCard = (
+    filtered.find((t) => t.identifier === HELLO_FLOW_TEMPLATE) ??
+    filtered.find((t) => requirementLine(t) === 'Nothing to connect') ??
+    filtered[0]
+  )?.identifier;
 
   return (
     <TemplatesShell>
@@ -115,7 +123,13 @@ const IndexPage = () => {
       ) : (
         <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
           {filtered.map((template) => (
-            <Card key={template.identifier} withBorder padding="lg" radius="md">
+            <Card
+              key={template.identifier}
+              withBorder
+              padding="lg"
+              radius="md"
+              {...(template.identifier === tourCard && tourTarget('template-card'))}
+            >
               <Stack gap="xs" h="100%">
                 <Group gap="xs">
                   <KindBadge kind={template.kind} />

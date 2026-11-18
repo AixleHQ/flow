@@ -171,9 +171,10 @@ const IndexPage = () => {
           />
         ) : (
           <Box className={classes.grid}>
-            {sortedAndFiltered.map((project) => (
+            {sortedAndFiltered.map((project, index) => (
               <ProjectCard
                 key={project.id}
+                tour={index === 0 ? 'project-card' : undefined}
                 project={project}
                 onClick={() => handleProjectClick(project.id)}
                 onToggleFavorite={() => handleToggleFavorite(project)}

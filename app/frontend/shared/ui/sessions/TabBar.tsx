@@ -1,3 +1,5 @@
+import { type TourTarget, tourTarget } from 'shared/tour/targets';
+
 import classes from './TabBar.module.css';
 
 interface TabDef<T extends string> {
@@ -6,6 +8,7 @@ interface TabDef<T extends string> {
   /** Rendered small and mono after the label, e.g. the asset count. */
   count?: number;
   disabled?: boolean;
+  tour?: TourTarget;
 }
 
 interface TabBarProps<T extends string> {
@@ -36,6 +39,7 @@ export function TabBar<T extends string>({ tabs, value, onChange, inline = false
           role="tab"
           aria-selected={tab.value === value}
           disabled={tab.disabled}
+          {...(tab.tour && tourTarget(tab.tour))}
           className={tab.value === value ? `${classes.tab} ${classes.active}` : classes.tab}
           onClick={() => onChange(tab.value)}
         >

@@ -23,6 +23,7 @@ import { useState } from 'react';
 import { AuthLayout } from 'layouts/AuthLayout';
 
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
+import { tourTarget } from 'shared/tour/targets';
 import { PageHeader } from 'shared/ui/PageHeader';
 
 import { KindBadge } from './components/KindBadge';
@@ -336,7 +337,12 @@ const InstallPage = () => {
                 </Text>
               )}
               <Group justify="flex-end">
-                <Button onClick={install} loading={submitting} disabled={!plan.resolved || missingRequired}>
+                <Button
+                  onClick={install}
+                  loading={submitting}
+                  disabled={!plan.resolved || missingRequired}
+                  {...tourTarget('install-submit')}
+                >
                   {installLabel()}
                 </Button>
               </Group>

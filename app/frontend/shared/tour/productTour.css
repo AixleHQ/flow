@@ -1,0 +1,82 @@
+/* driver.js popover in the app's own colours, so the tour follows the light and dark themes. */
+
+/* The dimmed overlay barely shows against the dark theme: ring the highlighted element as well. */
+.driver-active .driver-active-element {
+  outline: 2px solid var(--app-primary);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+.driver-popover.aixle-tour-popover {
+  background: var(--app-bg-elevated);
+  color: var(--app-text-primary);
+  border: 1px solid var(--app-border-default);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.28);
+  font-family: var(--app-font-body);
+  max-width: 340px;
+  padding: 16px 18px;
+}
+
+.aixle-tour-popover .driver-popover-title {
+  font-family: var(--app-font-heading);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--app-text-primary);
+}
+
+.aixle-tour-popover .driver-popover-description {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--app-text-secondary);
+}
+
+.aixle-tour-popover .driver-popover-description b {
+  color: var(--app-text-primary);
+}
+
+.aixle-tour-popover .driver-popover-progress-text {
+  font-family: var(--app-font-mono-label);
+  font-size: 11px;
+  color: var(--app-text-tertiary);
+}
+
+.aixle-tour-popover .driver-popover-close-btn {
+  color: var(--app-text-tertiary);
+}
+
+.aixle-tour-popover .driver-popover-close-btn:hover {
+  color: var(--app-text-primary);
+}
+
+.aixle-tour-popover .driver-popover-footer button {
+  background: var(--app-primary);
+  color: var(--app-on-primary);
+  border: none;
+  border-radius: 6px;
+  font-family: var(--app-font-body);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 14px;
+  text-shadow: none;
+}
+
+.aixle-tour-popover .driver-popover-footer button:hover {
+  background: var(--app-primary-strong);
+}
+
+.aixle-tour-popover .driver-popover-arrow-side-left.driver-popover-arrow {
+  border-left-color: var(--app-bg-elevated);
+}
+
+.aixle-tour-popover .driver-popover-arrow-side-right.driver-popover-arrow {
+  border-right-color: var(--app-bg-elevated);
+}
+
+.aixle-tour-popover .driver-popover-arrow-side-top.driver-popover-arrow {
+  border-top-color: var(--app-bg-elevated);
+}
+
+.aixle-tour-popover .driver-popover-arrow-side-bottom.driver-popover-arrow {
+  border-bottom-color: var(--app-bg-elevated);
+}

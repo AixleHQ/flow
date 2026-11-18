@@ -19,6 +19,7 @@ import remarkGfm from 'remark-gfm';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
+import { tourTarget } from 'shared/tour/targets';
 import { MarkdownLink } from 'shared/ui/MarkdownLink';
 import { PageHeader } from 'shared/ui/PageHeader';
 
@@ -142,7 +143,7 @@ const ShowPage = () => {
         subtitle={`Installed from the template catalog (version ${install.version}). What is left before it runs on its own.`}
         mb={20}
       />
-      <Stack gap="lg" maw={860}>
+      <Stack gap="lg" maw={860} {...tourTarget('setup-checklist')}>
         {items.length > 0 && (
           <Group gap="sm">
             <Progress value={(finished / items.length) * 100} w={240} aria-label="Setup progress" />

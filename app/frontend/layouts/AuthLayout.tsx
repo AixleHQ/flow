@@ -4,6 +4,7 @@ import { notifications } from '@mantine/notifications';
 import type { ReactNode } from 'react';
 import { useEffect, useRef } from 'react';
 
+import { ProductTour } from 'shared/tour/ProductTour';
 import {
   AppSidebar,
   BrandLockup,
@@ -76,6 +77,7 @@ export function AuthLayout({ children, projectId: propProjectId, noPadding }: Au
           silently never start. */}
       <TrialBanner />
       <MarketplaceBanner />
+      {showChrome && <ProductTour />}
       <Box className={classes.shell}>
         {showChrome && (
           <AppSidebar
