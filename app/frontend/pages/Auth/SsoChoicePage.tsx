@@ -2,7 +2,7 @@ import { Head } from '@inertiajs/react';
 import { Button, Paper, Stack, Text, Title } from '@mantine/core';
 
 import { oidcStartPath } from 'shared/routes';
-import { Logo, PageShell } from 'shared/ui';
+import { BrandLockup, PageShell } from 'shared/ui';
 
 interface Connection {
   id: number;
@@ -25,7 +25,7 @@ export default function SsoChoicePage({ companyName, connections }: PageProps) {
       <Head title="Choose a sign-in method" />
       <Paper p="xl" radius="md" w="100%" maw={420}>
         <Stack gap="md">
-          <Logo width={96} />
+          <BrandLockup />
           <Title order={3}>Sign in to {companyName}</Title>
           <Text size="sm" c="dimmed">
             This workspace has more than one identity provider. Pick the one you use.

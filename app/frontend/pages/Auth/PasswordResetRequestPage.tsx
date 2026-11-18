@@ -3,7 +3,7 @@ import { Anchor, Button, Paper, Stack, Text, TextInput, Title } from '@mantine/c
 import { useState } from 'react';
 
 import { loginPath, passwordResetsPath } from 'shared/routes';
-import { Logo, PageShell } from 'shared/ui';
+import { BrandLockup, PageShell } from 'shared/ui';
 
 interface PageProps {
   email?: string | null;
@@ -27,7 +27,7 @@ export default function PasswordResetRequestPage({ email: prefill, sent }: PageP
       <Head title="Reset your password" />
       <Paper p="xl" radius="md" w="100%" maw={420}>
         <Stack gap="md">
-          <Logo width={96} />
+          <BrandLockup />
           {sent ? (
             <>
               <Title order={3}>Check your email</Title>

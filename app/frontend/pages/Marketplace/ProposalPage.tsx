@@ -2,7 +2,7 @@ import { Head, useForm } from '@inertiajs/react';
 import { Button, Paper, Stack, Text, Title } from '@mantine/core';
 
 import { confirmMarketplaceProposalPath } from 'shared/routes';
-import { Logo, PageShell } from 'shared/ui';
+import { BrandLockup, PageShell } from 'shared/ui';
 
 interface PageProps {
   token: string;
@@ -22,7 +22,7 @@ export default function MarketplaceProposalPage({ token, email }: PageProps) {
       <Head title="Confirm your request" />
       <Paper p="xl" radius="md" w="100%" maw={420}>
         <Stack gap="md">
-          <Logo width={96} />
+          <BrandLockup />
           <Title order={3}>Confirm your request</Title>
           <Text size="sm" c="dimmed">
             Confirming proves that <b>{email}</b> is yours and asks the administrators of the workspace at{' '}

@@ -14,6 +14,9 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
+- A page that does not exist shows the app's own 404 page, in the scheme you picked, with the
+  way back to the app, the docs and the home page, instead of a blank or stock error page. A
+  page a feature flag hides shows it too.
 - **Triggers & gates**: a pull request trigger starts a workflow when someone
   submits a review on, or comments on, a pull request of a repository attached
   through GitHub, GitLab, Bitbucket or Azure DevOps — for example, an agent that
@@ -59,6 +62,8 @@ governance, community health — carry none.
 - **Sign-in & onboarding**: a viewer's onboarding is the profile step alone —
   **Get started** there takes them into the app. The read-only workflow preview
   step that followed it is gone.
+- The remaining sign-in pages, invitations, integration pages, the legal pages, the public site
+  and emails show the Aixle Flow lockup, Flow in the brand orange, as sign-in already did.
 - **Sessions & Runs**: the live terminal no longer lets the agent's output read
   your clipboard.
 - **Sessions & Runs**: an automatic Claude Code session writes its prompt cache
