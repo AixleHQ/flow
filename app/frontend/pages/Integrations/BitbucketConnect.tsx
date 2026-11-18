@@ -4,7 +4,7 @@ import { IconAlertCircle } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 
 import { requestJson } from 'shared/resources/integrations/requestJson';
-import { Logo, PageShell } from 'shared/ui';
+import { BrandLockup, PageShell } from 'shared/ui';
 
 interface ConnectableProject {
   id: number;
@@ -132,7 +132,7 @@ export default function BitbucketConnect() {
       <Head title="Connect Bitbucket" />
       <Paper p="xl" radius="md" w="100%" maw={460} withBorder>
         <Stack gap="md">
-          <Logo />
+          <BrandLockup />
           <Title order={3}>Connect Bitbucket</Title>
 
           {!signedIn ? (

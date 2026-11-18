@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 import { getCredential, isSupported } from 'shared/lib/webauthn';
 import { passkeyLoginOptionsPath, passkeyLoginPath, stepUpPath } from 'shared/routes';
-import { Logo, PageShell } from 'shared/ui';
+import { BrandLockup, PageShell } from 'shared/ui';
 
 interface AllowedMethod {
   kind: string;
@@ -95,7 +95,7 @@ export default function StepUpPage({ companyName, methods, error }: PageProps) {
       <Head title="Confirm it's you" />
       <Paper p="xl" radius="md" w="100%" maw={420}>
         <Stack gap="md">
-          <Logo />
+          <BrandLockup />
           <Title order={3}>Confirm it&apos;s you</Title>
           <Text size="sm" c="dimmed">
             {companyName} accepts {methods.map((method) => method.name).join(', ') || 'no sign-in method'} for entry.

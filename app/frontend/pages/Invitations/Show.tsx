@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { z } from 'zod';
 
 import { GoogleLoginButton } from 'shared/components/GoogleLoginButton';
-import { Logo, PageShell } from 'shared/ui';
+import { BrandLockup, PageShell } from 'shared/ui';
 
 type Variant = 'expired' | 'accept' | 'wrong_account' | 'login' | 'signup';
 
@@ -123,7 +123,7 @@ function InvitationShow(props: Props) {
       <Head title="Invitation" />
       <Paper p="xl" radius="md" w="100%" maw={440} withBorder>
         <Center mb={24}>
-          <Logo width={96} />
+          <BrandLockup />
         </Center>
 
         {variant === 'expired' && (

@@ -1,0 +1,114 @@
+<%#
+# Not found
+
+The app's 404 page (NotFoundPage, ErrorsController): a session log that ran into
+nothing, and the ways out of it as commands. Standalone, with no app layout,
+since it is shown wherever a page is missing; the colors are the theme's tokens
+(app/frontend/shared/theme/mantineTheme.ts), in the scheme the person picked.
+Its links are plain paths, not route helpers: the page renders for routes that
+do not resolve, and test/integration/not_found_page_test.rb checks each one does.
+%>
+<% path = request.env["action_dispatch.original_path"] || request.path %>
+<!doctype html>
+<html lang="en" data-mantine-color-scheme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="initial-scale=1, width=device-width">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Page not found · Aixle Flow</title>
+  <link rel="icon" href="/favicon.ico">
+  <%# The scheme the app keeps, before first paint, as app/views/administrate/application/_stylesheet.html.erb does. %>
+  <%= javascript_tag nonce: true do %>
+    (function () {
+      try {
+        var scheme = localStorage.getItem('mantine-color-scheme-value') || 'dark';
+        if (scheme === 'auto') {
+          scheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.setAttribute('data-mantine-color-scheme', scheme);
+      } catch (e) {}
+    })();
+  <% end %>
+  <%= render "shared/web_fonts", families: %w[Inter:wght@400..700 JetBrains+Mono:wght@400;500 Spline+Sans+Mono:wght@400;500] %>
+  <style>
+    :root {
+      --font-body: Inter, "Inter Fallback", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-code: "JetBrains Mono", ui-monospace, monospace;
+      --font-label: "Spline Sans Mono", ui-monospace, monospace;
+      --brand-orange: #e0582e;
+      --bg-paper: #ffffff; --bg-elevated: #f6f8fa; --bg-hover: rgba(208, 215, 222, 0.32);
+      --border-default: #d1d9e0;
+      --text-primary: #1f2328; --text-secondary: #59636e; --text-tertiary: #68717b;
+      --primary: #b95331; --accent: #cf6b4a;
+      --danger-fg: #b31c27; --danger-bg: rgba(207, 34, 46, 0.1); --danger-border: rgba(207, 34, 46, 0.3);
+      --canvas: var(--bg-elevated);
+      color-scheme: light;
+    }
+    :root[data-mantine-color-scheme='dark'] {
+      --bg-paper: #191817; --bg-elevated: #1c1a18; --bg-hover: rgba(209, 207, 205, 0.05);
+      --border-default: #292726;
+      --text-primary: #d1cfcd; --text-secondary: #9f9d9c; --text-tertiary: #8b8987;
+      --primary: #cf6b4a; --accent: #cf6b4a;
+      --danger-fg: #ff6b6b; --danger-bg: rgba(255, 100, 100, 0.15); --danger-border: rgba(255, 100, 100, 0.35);
+      --canvas: #0a0908;
+      color-scheme: dark;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    * { margin: 0; }
+    body {
+      min-height: 100vh; background: var(--canvas); color: var(--text-primary);
+      font-family: var(--font-body); font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased;
+    }
+    a:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    main { min-height: 100vh; width: min(600px, 100%); margin: 0 auto; padding: 24px; display: grid; place-content: center; gap: 24px; }
+    .brand { display: inline-block; color: var(--text-primary); }
+    .brand-lockup { display: block; height: 24px; width: calc(24px * 354 / 62.5); }
+    .brand-lockup__flow { fill: var(--brand-orange); }
+    h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.01em; margin: 24px 0 6px; }
+    .muted { color: var(--text-secondary); }
+    .label { font-family: var(--font-label); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary); }
+    .term { width: 100%; background: var(--bg-paper); border: 1px solid var(--border-default); border-radius: 12px; overflow: hidden; }
+    .term-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px;
+      border-bottom: 1px solid var(--border-default); background: var(--bg-elevated);
+    }
+    .badge {
+      padding: 1px 8px; border-radius: 999px; background: var(--danger-bg); border: 1px solid var(--danger-border);
+      color: var(--danger-fg); font: 500 11px/1.6 var(--font-code);
+    }
+    .lines { padding: 18px 16px 20px; font: 13px/1.85 var(--font-code); color: var(--text-secondary); white-space: pre-wrap; word-break: break-all; }
+    .prompt { color: var(--accent); }
+    .err { color: var(--danger-fg); }
+    .dim { color: var(--text-tertiary); }
+    .cmds { padding: 0 8px 12px; border-top: 1px solid var(--border-default); }
+    .cmds .label { display: block; padding: 14px 8px 6px; }
+    .cmd {
+      display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 16px; padding: 8px; border-radius: 6px;
+      font: 13px/1.5 var(--font-code); color: var(--text-secondary); text-decoration: none;
+    }
+    .cmd:hover { background: var(--bg-hover); color: var(--text-primary); }
+    .cmd .go { font-family: var(--font-body); font-size: 13px; font-weight: 500; color: var(--primary); }
+    .cmd:first-of-type .go::after { content: " ↵"; color: var(--text-tertiary); }
+  </style>
+</head>
+<body>
+  <main>
+    <div>
+      <a class="brand" href="/"><%= render "shared/brand_lockup" %></a>
+      <h1>Page not found</h1>
+      <p class="muted">There is nothing at this address. The link may be mistyped, or what it pointed to has moved or been removed.</p>
+    </div>
+    <section class="term">
+      <div class="term-head"><span class="label">session log</span><span class="badge">exit 404</span></div>
+      <div class="lines" aria-hidden="true"><span class="prompt">$</span> open <%= path %>
+<span class="err">✕ 404 Not found</span> <span class="dim">· nothing is running at this address</span></div>
+      <nav class="cmds" aria-label="Where to go">
+        <span class="label">Where to next</span>
+        <a class="cmd" href="/company/projects"><span><span class="prompt">$</span> cd ~</span><span class="go">Back to app</span></a>
+        <a class="cmd" href="/docs"><span><span class="prompt">$</span> open /docs</span><span class="go">Documentation</span></a>
+        <a class="cmd" href="/"><span><span class="prompt">$</span> open /</span><span class="go">Home page</span></a>
+      </nav>
+    </section>
+  </main>
+</body>
+</html>
