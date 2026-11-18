@@ -95,8 +95,13 @@ class User < ApplicationRecord
     token
   end
 
+  # Ends every way in to the personal MCP: the static token and every app
+  # connected through OAuth.
   def disable_mcp_token!
-    update!(mcp_token_digest: nil, mcp_token_last_used_at: nil, mcp_token_proof_provider_ids: nil)
+    transaction do
+      update!(mcp_token_digest: nil, mcp_token_last_used_at: nil, mcp_token_proof_provider_ids: nil)
+      MCPAuthGrant.revoke_all_for!(self)
+    end
   end
 
   # NULL is a token issued before proofs were recorded. It counts as a password
@@ -104,13 +109,6 @@ class User < ApplicationRecord
   # stopped accepting passwords needs a token issued under its own method.
   def mcp_token_proven_provider_ids
     mcp_token_proof_provider_ids || [ IdentityProvider.password.id ]
-  end
-
-  def mcp_token_company_ids
-    Auth::PolicyResolver.satisfied_company_ids(
-      company_ids: company_memberships.active.select(:company_id),
-      provider_ids: mcp_token_proven_provider_ids
-    )
   end
 
   def mcp_enabled?
@@ -130,6 +128,7 @@ class User < ApplicationRecord
   # Associations
   has_many :company_memberships, dependent: :destroy
   has_many :user_sessions, dependent: :delete_all
+  has_many :mcp_auth_grants, class_name: "MCPAuthGrant", dependent: :delete_all
   # Per-user OAuth connections: the account's, gone with it (and never refreshed after).
   has_many :oauth_credentials, as: :owner, dependent: :destroy
   has_many :companies, through: :company_memberships
@@ -227,8 +226,9 @@ class User < ApplicationRecord
     revoke_live_access!
   end
 
-  # What outlives a sign-in: its browser sessions, the personal MCP token and open
-  # cable connections. Called when the account stops being authenticatable.
+  # What outlives a sign-in: its browser sessions, the personal MCP token, the apps
+  # connected to it, and open cable connections. Called when the account stops
+  # being authenticatable.
   def revoke_live_access!
     UserSession.revoke_all_for!(self)
     ActionCable.server.remote_connections.where(current_user: self).disconnect

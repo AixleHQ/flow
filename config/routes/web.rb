@@ -493,7 +493,11 @@ scope module: :web, defaults: { format: :html } do
     resources :connections, only: %i[index destroy], param: :provider do
       resources :act_as_consents, only: :update, param: :project_id
     end
+    # Apps connected to the personal MCP through OAuth (MCPAuthGrant).
+    resources :mcp_apps, only: :destroy
   end
+  get "mcp-oauth/authorize", to: "mcp_authorizations#new", as: :mcp_oauth_authorize
+  post "mcp-oauth/authorize", to: "mcp_authorizations#create"
   resources :sign_in_methods, only: %i[create destroy], path: "profile/sign_in_methods"
   patch "profile/password", to: "passwords#update", as: :profile_password
   # The confirmation link a stranger is emailed: opening it is the proof of

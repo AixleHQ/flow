@@ -20,7 +20,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { AuthLayout } from 'layouts/AuthLayout';
 
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
-import { disableMCPTokenProfilePath, regenerateMCPTokenProfilePath, updateMCPToolsProfilePath } from 'shared/routes';
+import {
+  disableMCPTokenProfilePath,
+  profileMCPAppPath,
+  regenerateMCPTokenProfilePath,
+  updateMCPToolsProfilePath,
+} from 'shared/routes';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { ProfileTabs } from './ProfileTabs';
@@ -38,6 +43,14 @@ interface McpToolGroup {
   tools: McpTool[];
 }
 
+// An app connected through OAuth (MCPAuthGrant), as opposed to the token.
+interface McpApp {
+  id: number;
+  name: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
 interface McpProps {
   enabled: boolean;
   lastUsedAt: string | null;
@@ -48,6 +61,7 @@ interface McpProps {
   // null means "every tool, including ones added later" — see
   // Tools::PersonalMCP.update_selection!.
   enabledTools: string[] | null;
+  apps: McpApp[];
 }
 
 interface Props {
@@ -111,6 +125,36 @@ function ConnectionSection({ mcp }: { mcp: McpProps }) {
       <Text fz={14} c="dimmed" mb="md">
         Connect your AI agent (Claude Code, Codex, Cursor, ...) to Aixle Flow: list your projects, manage board tasks
         and build workflows — with exactly your access level.
+      </Text>
+
+      <Box mb="md">
+        <Group justify="space-between" align="center" wrap="nowrap" gap="sm">
+          <Text fz={14} fw={600} c="var(--app-text-primary)">
+            Server URL
+          </Text>
+          <CopyAction value={mcp.serverUrl} label="Copy URL" />
+        </Group>
+        <Code block my={8} data-testid="mcp-server-url">
+          {mcp.serverUrl}
+        </Code>
+        {/* Apps that sign in (OAuth) need nothing else: they open this Aixle in
+            the browser and ask for consent. The token below is for the rest. */}
+        <Text fz={13} c="dimmed">
+          Apps that sign in — Claude, Claude Desktop and Cowork, ChatGPT, VS Code, Claude Code — need only this URL: add
+          it as a custom connector or MCP server, and allow access when Aixle asks. For Claude Code:
+        </Text>
+        <Code block mt={8} data-testid="mcp-claude-oauth-command">
+          {`claude mcp add ${mcp.serverName} --transport http ${mcp.serverUrl}`}
+        </Code>
+      </Box>
+
+      <Divider my="md" />
+
+      <Title order={5} mb={4}>
+        Token
+      </Title>
+      <Text fz={13} c="dimmed" mb="sm">
+        For clients that cannot sign in, or to configure one without a browser.
       </Text>
 
       <Group gap={8} mb="md">
@@ -198,18 +242,70 @@ function ConnectionSection({ mcp }: { mcp: McpProps }) {
           variant={mcp.enabled ? 'default' : 'filled'}
           onClick={() => router.post(regenerateMCPTokenProfilePath(), {}, { preserveScroll: true })}
         >
-          {mcp.enabled ? 'Regenerate token' : 'Enable MCP'}
+          {mcp.enabled ? 'Regenerate token' : 'Create token'}
         </Button>
-        {mcp.enabled && (
+      </Group>
+    </Card>
+  );
+}
+
+function AppsSection({ mcp }: { mcp: McpProps }) {
+  const anyAccess = mcp.enabled || mcp.apps.length > 0;
+
+  return (
+    <Card p={24} mt={16}>
+      <Title order={4} mb={4}>
+        Connected apps
+      </Title>
+      <Text fz={14} c="dimmed" mb="md">
+        Apps you allowed to sign in to this server. Each one acts as you until you disconnect it.
+      </Text>
+
+      {mcp.apps.length === 0 ? (
+        <Text fz={13} c="dimmed">
+          No apps connected yet.
+        </Text>
+      ) : (
+        <Stack gap="xs">
+          {mcp.apps.map((app) => (
+            <Card key={app.id} withBorder p="sm">
+              <Group justify="space-between" wrap="nowrap" gap="sm">
+                <Box>
+                  <Text fz={14} fw={600}>
+                    {app.name}
+                  </Text>
+                  <Text fz={12} c="dimmed">
+                    Connected {new Date(app.createdAt).toLocaleString()}
+                    {app.lastUsedAt ? ` · last used ${new Date(app.lastUsedAt).toLocaleString()}` : ' · not used yet'}
+                  </Text>
+                </Box>
+                <Button
+                  variant="subtle"
+                  color="red"
+                  size="compact-sm"
+                  aria-label={`Disconnect ${app.name}`}
+                  onClick={() => router.delete(profileMCPAppPath(app.id), { preserveScroll: true })}
+                >
+                  Disconnect
+                </Button>
+              </Group>
+            </Card>
+          ))}
+        </Stack>
+      )}
+
+      {/* One switch for every way in: the token and every connected app. */}
+      {anyAccess && (
+        <Group mt="md">
           <Button
             variant="subtle"
             color="red"
             onClick={() => router.delete(disableMCPTokenProfilePath(), { preserveScroll: true })}
           >
-            Disable
+            Disable all MCP access
           </Button>
-        )}
-      </Group>
+        </Group>
+      )}
     </Card>
   );
 }
@@ -270,8 +366,8 @@ function ToolsSection({ mcp }: { mcp: McpProps }) {
           </Title>
           <Text fz={14} c="dimmed">
             Which tools this server offers your agent. Switching the ones you never use off keeps them out of the
-            agent&apos;s context — it is not a permission boundary: the token always runs as you, with your access
-            level.
+            agent&apos;s context — it is not a permission boundary: the token and every connected app always run as you,
+            with your access level.
           </Text>
         </Box>
         <Badge variant="light" size="lg" style={{ flexShrink: 0 }}>
@@ -391,15 +487,16 @@ function ProfileMcpPage({ mcp: props }: Props) {
         <Title order={1} fz={28} fw={600} c="var(--app-text-primary)" mb={4}>
           My Profile
         </Title>
-        {/* Unlike the account tab, none of this is per company: the token is the
-            user, and it reaches every company they belong to. */}
+        {/* Unlike the account tab, none of this is per company: the token and every
+            connected app are the user, and reach every company they belong to. */}
         <Text size="sm" c="dimmed" mb={24}>
-          Your personal MCP token works across every company you belong to.
+          Your personal MCP server works across every company you belong to.
         </Text>
 
         <ProfileTabs active="mcp" />
 
         <ConnectionSection mcp={mcp} />
+        <AppsSection mcp={mcp} />
         <ToolsSection mcp={mcp} />
       </Box>
     </AuthLayout>

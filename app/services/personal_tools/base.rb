@@ -21,11 +21,14 @@ module PersonalTools
     # as not found, including a second project param like `target_project_id`.
     # `session:` is the Aixle Builder session serving the call, if any — so a
     # version written by the builder agent names the session, not just the user.
-    def initialize(params:, user:, pinned_project: nil, session: nil)
+    # `credential:` is what the personal-MCP request authenticated with
+    # (Tools::PersonalMCP::Credential); it decides the companies the call reaches.
+    def initialize(params:, user:, pinned_project: nil, session: nil, credential: nil)
       @params = params.with_indifferent_access
       @user = user
       @pinned_project = pinned_project
       @session = session
+      @credential = credential
     end
 
     def execute
@@ -70,7 +73,7 @@ module PersonalTools
         if pinned_project
           user.company_memberships.active.where(company_id: pinned_project.company_id).pluck(:company_id)
         else
-          user.mcp_token_company_ids.presence || refuse_token_reaching_no_company!
+          credential.company_ids.presence || refuse_token_reaching_no_company!
         end
     end
 
@@ -80,8 +83,8 @@ module PersonalTools
       return [] unless user.company_memberships.active.exists?
 
       raise UnauthorizedError,
-            "This MCP token was issued without a sign-in method any of your companies accepts — " \
-            "sign in to Aixle, then regenerate the token from your profile"
+            "This MCP #{credential.noun} was issued without a sign-in method any of your companies accepts — " \
+            "sign in to Aixle, then #{credential.reissue_hint}"
     end
 
     # The single company to act in when a tool has no project to derive one
@@ -118,8 +121,12 @@ module PersonalTools
       return unless user.company_memberships.active.exists?(company_id: company_id)
 
       raise UnauthorizedError,
-            "Company #{company_id} requires a sign-in method this MCP token was not issued with — " \
-            "sign in to that company, then regenerate the token from your profile"
+            "Company #{company_id} requires a sign-in method this MCP #{credential.noun} was not issued with — " \
+            "sign in to that company, then #{credential.reissue_hint}"
+    end
+
+    def credential
+      @credential ||= Tools::PersonalMCP::Credential.token(user)
     end
 
     def readable_sessions
