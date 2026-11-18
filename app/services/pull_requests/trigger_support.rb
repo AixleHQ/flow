@@ -11,6 +11,8 @@ module PullRequests
   module TriggerSupport
     DEFAULT_TITLE = "PR {{pull_request.number}}: {{pull_request.title}}"
     SKIP_IN_PROGRESS = "pull_request_run_in_progress"
+    # A skipped event a follow-up run took in, with the others skipped beside it.
+    COALESCED = "pull_request_followed_up"
 
     module_function
 
@@ -34,18 +36,59 @@ module PullRequests
                                               .merge(context).compact }
     end
 
-    # Another run of the same trigger for the same pull request while one is
-    # still going would work the same branch at the same time; the run in
-    # progress reads the pull request's reviews and comments itself. Locks the
-    # binding, so two events arriving together agree on which one starts.
+    # Another run of the workflow for the same pull request while one is still
+    # going would work the same branch at the same time — whichever of the
+    # workflow's triggers it came through: one review reaches a review trigger
+    # and, with its line comments, a comment trigger. What is skipped here is
+    # taken up when the run ends (FollowUpRun). Locks the workflow and pull
+    # request, so two events arriving together agree on which one starts.
     def run_in_progress?(binding, event)
       return false unless binding&.pull_request_event? && event?(event)
 
-      binding.lock!
+      lock_runs!(binding.workflow_id, event.subject)
+      active_runs(binding.workflow_id, event.subject).exists?
+    end
+
+    # The events skipped while `run` worked on the pull request, as one more run
+    # for the latest of them: the run may have read the pull request before they
+    # arrived. Returns the dispatch to fire, or nil.
+    def follow_up_dispatch(run, subject)
+      ActiveRecord::Base.transaction do
+        lock_runs!(run.workflow_id, subject)
+        next if active_runs(run.workflow_id, subject).exists?
+
+        skipped = skipped_while(run, subject).order(:updated_at, :id).to_a
+        latest = skipped.pop
+        next unless latest
+
+        skipped.each { |dispatch| dispatch.update!(detail: { "reason" => COALESCED, "into" => latest.id }) }
+        latest.update!(status: "matched", detail: { "follows_run" => run.id, "events" => skipped.size + 1 })
+        latest
+      end
+    end
+
+    def active_runs(workflow_id, subject)
       TriggerDispatch.joins(:trigger_event, :workflow_run)
-                     .where(trigger_binding_id: binding.id, status: "started", trigger_events: { subject: event.subject })
+                     .where(status: "started", trigger_events: { subject: subject, source: EventPipeline::SOURCE },
+                            workflow_runs: { workflow_id: workflow_id })
                      .merge(WorkflowRun.active)
-                     .exists?
+    end
+
+    # Skipped once the run's first session started (else since it was created).
+    # What arrived before, the agent reads with the rest of the pull request: a
+    # review and its line comments land within a second, and a follow-up run for
+    # them would only repeat the work. A dispatch skipped again after a follow-up
+    # lost a race is re-stamped, so the run that beat it takes it up.
+    def skipped_while(run, subject)
+      TriggerDispatch.joins(:trigger_event, :trigger_binding)
+                     .where(status: "skipped", trigger_events: { subject: subject, source: EventPipeline::SOURCE },
+                            trigger_bindings: { workflow_id: run.workflow_id })
+                     .where("trigger_dispatches.detail ->> 'reason' = ?", SKIP_IN_PROGRESS)
+                     .where(trigger_dispatches: { updated_at: (run.execution_started_at || run.created_at).. })
+    end
+
+    def lock_runs!(workflow_id, subject)
+      advisory_lock!("pull-request-runs:#{workflow_id}:#{subject}")
     end
 
     # The active task in the binding's project this pull request is about: one
@@ -115,8 +158,11 @@ module PullRequests
 
     def lock!(binding, event)
       identity = event.data["external_resource"].to_h
-      key = [ binding.project_id, ExternalResource::PULL_REQUEST, identity["provider"], identity["instance"],
-              identity["external_id"] ].join(":")
+      advisory_lock!([ binding.project_id, ExternalResource::PULL_REQUEST, identity["provider"], identity["instance"],
+                       identity["external_id"] ].join(":"))
+    end
+
+    def advisory_lock!(key)
       ActiveRecord::Base.connection.execute(
         ActiveRecord::Base.sanitize_sql_array([ "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", key ])
       )

@@ -248,7 +248,8 @@ class TriggerEngine
           dispatch.update!(
             workflow_run_id: result.try(:id),
             status: started ? "started" : "skipped",
-            detail: started ? {} : { "reason" => skip_reason(result) }
+            # A follow-up run keeps what it follows up (PullRequests::FollowUpRun).
+            detail: started ? dispatch.detail.to_h.except("reason") : { "reason" => skip_reason(result) }
           )
           decided = started ? "dispatched" : "skipped"
           WorkflowService.dispatch_or_leave_to_relay(result) if started

@@ -42,6 +42,33 @@ class PullRequests::TriggerSupportTest < ActiveSupport::TestCase
                  [ dispatch.trigger_binding_id, dispatch.status, dispatch.detail["reason"] ]
   end
 
+  # One review reaches a review trigger and, through its line comments, a
+  # comment trigger of the same workflow at the same time.
+  test "a run of the workflow from another of its triggers holds this one back too" do
+    pr_binding
+    comment_trigger = pr_binding(event_type: "pull_request.comment.created")
+    first = publish("r-1")
+    running = create(:workflow_run, :running, workflow: @workflow, project: @project)
+    first.trigger_dispatches.sole.update!(status: "started", workflow_run: running)
+    WorkflowService.expects(:enqueue).never
+
+    comment = PullRequests::Event.build(kind: :comment_created, number: 12, title: "Add retries", actor: { id: "7", name: "ada" },
+                                        body: "Rename this", comment_id: "c-1")
+    event = PullRequests::EventPipeline.process(comment, [ @repository ]).sole
+
+    assert_equal [ comment_trigger.id, "skipped" ], event.trigger_dispatches.sole.values_at(:trigger_binding_id, :status)
+  end
+
+  test "another workflow's run on the pull request holds nothing back" do
+    pr_binding
+    first = publish("r-1")
+    other = create(:workflow_run, :running, workflow: create(:workflow, scope: @project), project: @project)
+    first.trigger_dispatches.sole.update!(status: "started", workflow_run: other)
+    WorkflowService.expects(:enqueue).returns(build(:workflow_run))
+
+    publish("r-2")
+  end
+
   test "once that run has ended, the next review starts the workflow again" do
     pr_binding
     first = publish("r-1")
