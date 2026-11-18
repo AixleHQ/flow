@@ -56,6 +56,9 @@ governance, community health — carry none.
   `INSIGHTS_RESEND=true`, which sends again what it failed to take.
 
 ### Changed
+- **Sign-in & onboarding**: a viewer's onboarding is the profile step alone —
+  **Get started** there takes them into the app. The read-only workflow preview
+  step that followed it is gone.
 - **Sessions & Runs**: the live terminal no longer lets the agent's output read
   your clipboard.
 - **Sessions & Runs**: an automatic Claude Code session writes its prompt cache

@@ -77,15 +77,9 @@ const AVAILABLE_AGENTS = AGENT_TYPES.map((type) => ({
   description: AGENT_RUNTIMES[type].description,
 }));
 
-interface ViewerWorkflowPreview {
-  workflowName: string;
-  workflowDescription: string;
-  steps: Array<{ name: string }>;
-}
-
-// Server state → visual step index. Two steps only: step1 (0, Profile) and
-// step2 (1, Connect Agents / See the platform) — `complete` finishes directly
-// from step2, so `completed` still renders the same step until the redirect lands.
+// Server state → visual step index: step1 (0, Profile) and step2 (1, Connect Agents).
+// `complete` finishes directly from step2, so `completed` still renders the same
+// step until the redirect lands.
 const STEP_MAP: Record<string, number> = {
   step1: 0,
   step2: 1,
@@ -550,12 +544,10 @@ const OnboardingPage = () => {
     currentUser,
     authSessions = [],
     cableStream,
-    viewerWorkflowPreview = null,
   } = usePage<
     SharedProps & {
       authSessions: TerminalSession[];
       cableStream?: string;
-      viewerWorkflowPreview?: ViewerWorkflowPreview | null;
     }
   >().props;
 
@@ -564,9 +556,9 @@ const OnboardingPage = () => {
   const company = currentUser?.currentCompany ?? null;
   const isViewer = currentUser?.currentRole === 'viewer';
   const onboardingState = currentUser?.onboardingState ?? 'step1';
-  // Two steps: Profile (0) → Connect Agents / See the platform (1). "Get started"
-  // on step 2 fires `complete` directly — there is no separate summary step.
-  const activeStep = STEP_MAP[onboardingState] ?? 0;
+  // A viewer's only step is the profile, even when the server has them on step2
+  // (a role changed mid-onboarding): `complete` accepts a viewer from either step.
+  const activeStep = isViewer ? 0 : (STEP_MAP[onboardingState] ?? 0);
 
   const [position, setPosition] = useState(currentUser?.position ?? '');
   const [language, setLanguage] = useState(currentUser?.preferredAgentLanguage ?? '');
@@ -633,9 +625,9 @@ const OnboardingPage = () => {
       position,
       preferredAgentLanguage: language,
       selectedAgents: selectedAgents,
-      onboardingStateEvent: 'go_next',
+      onboardingStateEvent: isViewer ? 'complete' : 'go_next',
     });
-  }, [position, language, selectedAgents, canAdvanceStep1, submitStep]);
+  }, [position, language, selectedAgents, canAdvanceStep1, isViewer, submitStep]);
 
   const handleBack = useCallback(() => {
     setValidationWarning(null);
@@ -671,17 +663,19 @@ const OnboardingPage = () => {
         </Stack>
       </Center>
 
-      <Stepper
-        active={activeStep}
-        mb="xl"
-        size="xs"
-        iconSize={26}
-        allowNextStepsSelect={false}
-        classNames={{ stepLabel: classes.stepLabel, stepIcon: classes.stepIcon }}
-      >
-        <Stepper.Step label="Profile" />
-        <Stepper.Step label={isViewer ? 'Platform' : 'Agents'} />
-      </Stepper>
+      {!isViewer && (
+        <Stepper
+          active={activeStep}
+          mb="xl"
+          size="xs"
+          iconSize={26}
+          allowNextStepsSelect={false}
+          classNames={{ stepLabel: classes.stepLabel, stepIcon: classes.stepIcon }}
+        >
+          <Stepper.Step label="Profile" />
+          <Stepper.Step label="Agents" />
+        </Stepper>
+      )}
 
       {/* Step 1: Profile */}
       {activeStep === 0 && (
@@ -746,7 +740,7 @@ const OnboardingPage = () => {
               loading={loading}
               disabled={!canAdvanceStep1}
             >
-              Continue
+              {isViewer ? 'Get started' : 'Continue'}
             </Button>
           </Group>
         </Box>
@@ -763,70 +757,6 @@ const OnboardingPage = () => {
             onNext={handleFinish}
             onSkip={handleSkipAgentSetup}
           />
-        </Box>
-      )}
-
-      {/* Step 2: See the platform (viewers only) */}
-      {activeStep === 1 && isViewer && (
-        <Box key="step-viewer" className={classes.stepContent}>
-          <Card withBorder p={28}>
-            {viewerWorkflowPreview ? (
-              <>
-                <Text fw={600} size="lg" mb={4}>
-                  Here&apos;s what a workflow looks like in action
-                </Text>
-                <Badge size="sm" variant="outline" mb="md">
-                  Read-only preview
-                </Badge>
-                <Text size="sm" c="dimmed" mb="md">
-                  {viewerWorkflowPreview.workflowName}
-                </Text>
-                <Text size="sm" mb="xs">
-                  {viewerWorkflowPreview.workflowDescription}
-                </Text>
-                {viewerWorkflowPreview.steps?.length > 0 && (
-                  <Stack gap="xs" mb="md">
-                    {viewerWorkflowPreview.steps?.map((step, i) => (
-                      <Card key={i} withBorder p="sm">
-                        <Text size="sm" fw={500}>
-                          {i + 1}. {step.name}
-                        </Text>
-                      </Card>
-                    ))}
-                  </Stack>
-                )}
-                <Text size="xs" c="dimmed" mb="xl">
-                  You can explore the full board once you&apos;re in.
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text fw={600} size="lg" mb={4}>
-                  See the platform in action
-                </Text>
-                <Text size="sm" c="dimmed" mb="md">
-                  Once you&apos;re in, you&apos;ll see your team&apos;s workflows here.
-                </Text>
-                <Text size="sm" mb="xl">
-                  Each workflow automates a step of your process — from code review to bug triage to deployment.
-                </Text>
-              </>
-            )}
-          </Card>
-          <Group justify="space-between" mt="lg">
-            <Button
-              variant="outline"
-              size="sm"
-              leftSection={<IconChevronLeft size={16} />}
-              onClick={handleBack}
-              loading={loading}
-            >
-              Back
-            </Button>
-            <Button size="sm" rightSection={<IconChevronRight size={16} />} onClick={handleFinish} loading={loading}>
-              Get started
-            </Button>
-          </Group>
         </Box>
       )}
     </PageShell>

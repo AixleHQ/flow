@@ -42,9 +42,8 @@ module CompanyMembershipStateMachine
     # the agent credential must differ (billing is per company). Joining a second
     # company therefore runs the whole flow again.
     #
-    # Two steps only: step1 (profile) → step2 (connect agents / viewer preview),
-    # then complete finishes directly from step2 — no separate "ready to finish"
-    # or summary state.
+    # step1 (profile) → step2 (connect agents) → completed. A viewer never runs
+    # an agent, so they complete straight from step1.
     aasm :onboarding_state, column: :onboarding_state do
       state :step1, initial: true
       state :step2
@@ -60,6 +59,7 @@ module CompanyMembershipStateMachine
 
       event :complete, guard: :can_complete_onboarding?, after: :set_onboarding_completed_at do
         transitions from: :step2, to: :completed
+        transitions from: :step1, to: :completed, guard: :viewer?
       end
 
       # A member may look around before connecting a CLI agent at all.

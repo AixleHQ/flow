@@ -34,37 +34,19 @@ class Web::OnboardingControllerTest < ActionDispatch::IntegrationTest
     assert_equal "step2", @user.company_memberships.sole.reload.onboarding_state
   end
 
-  test "viewer completes onboarding without agents" do
-    viewer = create(:user, :viewer, company: @company, onboarding_state: "step2",
-                                    position: "dev", preferred_agent_language: "en",
+  test "a viewer finishes onboarding from the profile step without an agent" do
+    viewer = create(:user, :viewer, company: @company, onboarding_state: "step1",
                                     email: "client2@ext.com",
                                     password: AuthHelper::TEST_PASSWORD, password_confirmation: AuthHelper::TEST_PASSWORD)
     sign_in_as(viewer)
 
-    patch onboarding_path, params: { onboarding: { onboarding_state_event: "complete" } }
-    assert_equal "completed", viewer.company_memberships.sole.reload.onboarding_state
-  end
+    patch onboarding_path, params: {
+      onboarding: { position: "dev", preferred_agent_language: "en", onboarding_state_event: "complete" }
+    }
 
-  test "a viewer previews the company's first active workflow and its first four steps" do
-    project = create(:project, company: @company, owner: @user)
-    create(:workflow, scope: project, name: "Retired").archive!
-    workflow = create(:workflow, scope: project, name: "Ship a feature", description: "")
-    steps = Array.new(6) { |i| create(:step, workflow: workflow, name: "Step #{i}", position: i) }
-    steps.first.update!(deleted_at: Time.current)
-    viewer = create(:user, :viewer, company: @company, onboarding_state: "step1",
-                                    email: "client3@ext.com",
-                                    password: AuthHelper::TEST_PASSWORD, password_confirmation: AuthHelper::TEST_PASSWORD)
-    sign_in_as(viewer)
-
-    get onboarding_path
-
-    assert_inertia_page "Onboarding/OnboardingPage"
-    assert_inertia_props do |props|
-      preview = props[:viewerWorkflowPreview]
-      preview[:workflowName] == "Ship a feature" &&
-        preview[:workflowDescription] == "An automated workflow" &&
-        preview[:steps].pluck(:name) == [ "Step 1", "Step 2", "Step 3", "Step 4" ]
-    end
+    membership = viewer.company_memberships.sole.reload
+    assert_equal "completed", membership.onboarding_state
+    assert_equal "dev", membership.position
   end
 
   test "non-viewer cannot complete at step2 without agent credentials (silent no-op)" do
