@@ -85,6 +85,14 @@ governance, community health — carry none.
 - **Assets**: a step can promote a file it wrote to `/workspace/outputs` to a
   project asset while it is still running. Before, `promote_asset` found only
   outputs of earlier steps and failed with "No workflow output asset named …".
+- **Sessions & Runs**: a session whose cleanup cannot reach the Kubernetes API
+  for a moment is cleaned up on the next try 15 seconds later, and gives its
+  slot back then. Before, the cleanup failed and the slot waited for the
+  reconciler.
+- The error tracker no longer gets an "Admission queue is not moving" warning
+  for a slot released seconds before the check and still being handed on, or an
+  error for an agent login that expired while a step waited for its slot; the
+  step already tells its owner to sign in again.
 
 ## [1.15.0] - 2026-11-14
 

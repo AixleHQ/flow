@@ -91,6 +91,16 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
     assert_equal TemporalExceptions::BENIGN, error.category
   end
 
+  test "a login refused by the re-check before the phase is raised as an expected error" do
+    credential = create(:agent_credential, :errored, user: @session.user)
+    SessionService.stubs(:revalidate_admission!).raises(AgentCredential::PreflightError.new(credential))
+
+    error = assert_raises(Temporalio::Error::ApplicationError) { exec_phase }
+
+    assert error.non_retryable
+    assert_equal TemporalExceptions::BENIGN, error.category
+  end
+
   test "a phase that breaks after a stop was requested is filed with the stop" do
     admission = @admission
     stub_exec do
@@ -193,6 +203,22 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
     assert result[:cleanup_pending], "an unconfirmed delete must report back, not fail the execution"
     assert_nil @admission.reload.released_at
     assert_equal 1, SessionAdmission.occupied.count
+  end
+
+  test "a cleanup that cannot reach the cluster comes back pending, a refused one still fails" do
+    runtime = ContainerRuntime::KubernetesRuntime.new
+    ContainerRuntime.stubs(:build).returns(runtime)
+    @admission.update!(runtime_kind: runtime.class.name)
+    runtime.stubs(:session_absent?).raises(Kubeclient::HttpError.new(nil, "Timed out connecting to server", nil))
+
+    result = cleanup
+
+    assert result[:cleanup_pending], "an API timeout says nothing about the workload; the workflow retries"
+    assert_nil @admission.reload.released_at
+
+    runtime.stubs(:session_absent?).raises(Kubeclient::HttpError.new(403, "forbidden", nil))
+    error = assert_raises(Temporalio::Error::ApplicationError) { cleanup }
+    assert_match(/forbidden/, error.message)
   end
 
   test "a session that finished settles its own state while the runtime is still going away" do

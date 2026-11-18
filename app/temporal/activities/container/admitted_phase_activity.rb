@@ -82,6 +82,10 @@ module Activities
         # Sentry as errors and burying the ones that matter. A stale permit is not
         # that — something else restarted this launch — so it keeps its report.
         raise TemporalExceptions.non_retryable(e, benign: deliberate_stop?(e))
+      rescue *SessionService::PREFLIGHT_REFUSALS => e
+        # The re-check above refuses before any operation exists; the user is
+        # told on the session what to renew, so it is not a fault either.
+        raise TemporalExceptions.non_retryable(e, benign: true)
       rescue StandardError => e
         record_failed_operation(operation, e)
         # Wrapping hides a cancellation from the Sentry interceptor's own check.
@@ -95,7 +99,7 @@ module Activities
       # under it — the stop, not a fault. Cleanup never gets here: it sets the stop
       # marker itself, so the marker would excuse every cleanup failure.
       def expected_phase_failure?(admission, cause)
-        Temporalio::Error.canceled?(cause) || cause.is_a?(AgentCredential::PreflightError) ||
+        Temporalio::Error.canceled?(cause) || SessionService::PREFLIGHT_REFUSALS.any? { |klass| cause.is_a?(klass) } ||
           admission.reload.stop_requested_at.present?
       end
 
@@ -181,6 +185,14 @@ module Activities
         # for it; this runs in a worker, so the fan-out costs the user nothing.
         SessionLaunchRelay.drain(limit: 25)
         state
+      rescue StandardError => e
+        raise unless runtime&.transient_error?(e)
+
+        # Reaching the runtime's API failed, which proves nothing about the
+        # workload: the pass comes back pending and the workflow retries it on
+        # its cleanup timer, as it does a delete still in progress.
+        Rails.logger.warn("[SessionAdmission] admission #{admission.id}: cleanup deferred: #{e.class}: #{e.message}")
+        state.merge(cleanup_pending: true)
       end
 
       # Whether the absence proved above has held long enough to stop paying for
