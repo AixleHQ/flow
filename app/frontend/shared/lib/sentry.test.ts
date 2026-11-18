@@ -134,7 +134,7 @@ describe('initSentry', () => {
       window.sessionStorage.clear();
     });
 
-    it('reports a page as missing only when no chunk failed before it', async () => {
+    it('never reports a page as missing', async () => {
       const sent: string[] = [];
       vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
         sent.push(String(init?.body));
@@ -155,7 +155,7 @@ describe('initSentry', () => {
       await Sentry.flush(2000);
 
       const envelopes = sent.join('\n');
-      expect(envelopes).toContain('Page not found: Projects/Settings/Gone');
+      expect(envelopes).not.toContain('Page not found: Projects/Settings/Gone');
       expect(envelopes).not.toContain('Page not found: Company/Settings/SettingsPage');
       expect(envelopes).toContain('A page chunk still failed to load after a reload');
       expect(envelopes).toContain('SettingsPage-abc.js');

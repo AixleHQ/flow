@@ -2,8 +2,6 @@ import * as Sentry from '@sentry/react';
 
 import type { SharedSettings } from 'shared/ui/types';
 
-import { chunkLoadFailed } from './preloadErrorReload';
-
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // Path segments and query parameters that carry credentials: invitation and
@@ -162,9 +160,9 @@ export const initSentry = (settings: SharedSettings): void => {
       queues: false,
       graphQL: { document: false, variables: false },
     },
-    // A chunk that failed to load makes the page resolver report the page as missing;
-    // the chunk failure itself is handled (and reported when it persists) on its own.
-    beforeSend: (event) => (chunkLoadFailed() && isPageNotFound(event) ? null : scrubEvent(event)),
+    // Bots request arbitrary pages, so the resolver's "Page not found" floods Sentry. A chunk that
+    // failed to load also surfaces this way; that failure is reported on its own when it persists.
+    beforeSend: (event) => (isPageNotFound(event) ? null : scrubEvent(event)),
     beforeSendSpan: scrubSpan,
   });
 };
