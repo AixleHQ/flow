@@ -45,6 +45,16 @@ class ContextBuilders::PullRequestContextTest < ActiveSupport::TestCase
     assert_match "not attached to this session", content
   end
 
+  test "a comment that came without the branch sends the agent to read it from the pull request" do
+    @session.repositories << @repository
+
+    content = started_by("event_type" => "pull_request.comment.created", "source_branch" => nil, "target_branch" => nil,
+                         "comment" => { "text" => "Rename this" })
+
+    assert_match "the pull request's branch is not in the event, so read it with the pull request", content
+    assert_no_match "Its branch is", content
+  end
+
   test "an Azure DevOps run is pointed at Azure's own thread tools" do
     azure = create(:repository, :azure_devops, scope: @project,
                                                integration: create(:integration, :azure_devops, :active, company: @project.company, project: @project))
