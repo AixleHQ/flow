@@ -57,6 +57,24 @@ class ContextBuilders::PullRequestContextTest < ActiveSupport::TestCase
     assert_no_match "pull_request_list_comments", content
   end
 
+  test "a vote with no text quotes nothing, so it carries no warning about quoted text" do
+    content = started_by("review" => { "verdict" => "approved" })
+
+    assert_match "ada approved", content
+    assert_no_match "This text is from the pull request", content
+  end
+
+  test "a follow-up run is told the comments it covers arrived while an earlier run worked" do
+    event = TriggerEvent.create!(event_type: "pull_request.comment.created", source: "pull_request", subject: "github:acme/api#12",
+                                 project_id: @project.id, occurred_at: Time.current)
+    TriggerDispatch.create!(trigger_event: event, workflow_run: @workflow_run, source: "trigger_binding:1", dedup_key: SecureRandom.hex,
+                            status: "started", detail: { "follows_run" => 41, "events" => 3 })
+
+    content = started_by("event_type" => "pull_request.comment.created", "comment" => { "text" => "Rename this" })
+
+    assert_match "These 3 reviews and comments arrived while an earlier run was working on the pull request", content
+  end
+
   test "a run nothing on a pull request started gets no such section" do
     assert_not ContextBuilders::PullRequestContext.new(@session).applicable?
   end

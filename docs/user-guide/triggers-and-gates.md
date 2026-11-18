@@ -224,10 +224,12 @@ work back to that task.
   ignored unless **Changes made by Aixle** says otherwise, as for tracker
   triggers. A chain of them stops after five runs, or after ten such events on
   one pull request in an hour.
-- **One run per pull request at a time.** While a run this trigger started for a
-  pull request is still going, its further events for that pull request start
-  nothing: the run in progress reads the pull request's reviews and comments
-  itself. A reviewer who leaves fifteen comments in one review starts one run.
+- **One run per pull request at a time.** While a run of the workflow is working
+  on a pull request — whichever of its triggers started it — further reviews and
+  comments on that pull request wait. When the run finishes, one more run starts
+  for what arrived after its agent had started, and that agent is told how many
+  there were. A reviewer who leaves fifteen comments in one review starts one
+  run. A cancelled run starts no follow-up.
 
 **Example: fix what a reviewer asks for.**
 

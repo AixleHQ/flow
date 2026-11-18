@@ -33,7 +33,7 @@ caused them".
 4. **Aixle's own reviews and comments are recognized** through the ledger and the
    connection's own account, and ignored by default through the existing
    `aixle_changes` setting.
-5. **One run per pull request per trigger at a time.**
+5. **One run per pull request per workflow at a time,** and one follow-up run for what arrived meanwhile.
 6. **An Azure DevOps vote is a review,** read from the vote's system thread (§7.4).
 
 ## 3. Event vocabulary and data
@@ -114,12 +114,25 @@ tracker one:
 ### 6.2 One run per pull request
 
 Before starting a run, `TriggerEngine#fire_workflow` skips the dispatch
-(`pull_request_run_in_progress`) when the same trigger has a started dispatch for
-the same subject whose run is still active. The binding row is locked first, so two
-events arriving together agree. The run in progress reads the pull request's
-reviews and comments itself; a second run would work the same branch at the same
-time. It also bounds a loop the origin check cannot see: an agent replying through
-`gh` as a person.
+(`pull_request_run_in_progress`) when the workflow — through any of its triggers —
+has a started dispatch for the same subject whose run is still active. An advisory
+lock on the workflow and pull request is taken first, so two events arriving
+together agree. Per workflow, not per trigger: one review reaches a review trigger
+and, through its line comments, a comment trigger of the same workflow at the same
+moment, and two runs would work the same branch at once. It also bounds a loop the
+origin check cannot see: an agent replying through `gh` as a person.
+
+Nothing skipped is lost. When the run completes or fails,
+`PullRequests::FollowUpRun` (on the run-transition seam, `Triggers::ORIGIN_REPORTERS`)
+takes the dispatches skipped since the run's first session started, resumes the
+latest one as a new run, and marks the others `pull_request_followed_up`. What was
+skipped before the session started, the agent reads with the rest of the pull
+request — a review and its line comments land within a second — so it starts
+nothing more. The follow-up run's
+dispatch keeps `follows_run` and `events`, and its context says how many reviews and
+comments arrived meanwhile, since only the latest is quoted. A cancelled run has no
+follow-up: someone stopped the work. A follow-up that loses a race to a new run is
+skipped again and taken up when that run ends.
 
 ### 6.3 Run context
 
