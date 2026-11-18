@@ -29,6 +29,8 @@ module Aixle
     config.require_master_key = false
     config.secret_key_base = Settings.rails.secret_key_base
     config.public_file_server.enabled = true
+    # A page that does not exist gets the app's own 404 page (ErrorsController).
+    config.exceptions_app = ->(env) { ErrorsController.call(env) }
 
     config.middleware.insert_before 0, Middleware::NullByteGuard
     config.middleware.use Rack::Attack

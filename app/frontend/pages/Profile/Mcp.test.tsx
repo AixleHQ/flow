@@ -26,6 +26,7 @@ const buildMcp = (overrides = {}) => ({
   token: null,
   toolGroups,
   enabledTools: null,
+  apps: [],
   ...overrides,
 });
 
@@ -40,13 +41,13 @@ afterEach(() => {
 });
 
 describe('Profile MCP tab', () => {
-  it('enables MCP by posting to the regenerate-token route when MCP is disabled', async () => {
+  it('creates a token by posting to the regenerate-token route when there is none', async () => {
     renderPageWith();
 
-    expect(screen.queryByRole('button', { name: 'Disable' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Disable all MCP access' })).not.toBeInTheDocument();
     expect(screen.queryByText(/MCP access is enabled/)).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Enable MCP' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Create token' }));
 
     expect(router.post).toHaveBeenCalledWith(
       '/profile/regenerate_mcp_token',
@@ -67,7 +68,7 @@ describe('Profile MCP tab', () => {
       expect.objectContaining({ preserveScroll: true }),
     );
 
-    await userEvent.click(screen.getByRole('button', { name: 'Disable' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Disable all MCP access' }));
     expect(router.delete).toHaveBeenCalledWith(
       '/profile/disable_mcp_token',
       expect.objectContaining({ preserveScroll: true }),
@@ -86,8 +87,8 @@ describe('Profile MCP tab', () => {
     expect(screen.getByText('Your token — copy it now, it will not be shown again:')).toBeInTheDocument();
     expect(screen.getByText('amcp_tok_abc123')).toBeInTheDocument();
 
-    const command = screen.getByText(/claude mcp add flow --transport http/);
-    expect(command).toHaveTextContent('https://flow.example.com/mcp');
+    const command = screen.getByTestId('mcp-claude-command');
+    expect(command).toHaveTextContent('claude mcp add flow --transport http https://flow.example.com/mcp');
     expect(command).toHaveTextContent('Authorization: Bearer amcp_tok_abc123');
   });
 
@@ -108,7 +109,7 @@ describe('Profile MCP tab', () => {
     expect(screen.getByTestId('mcp-token')).toHaveTextContent('amcp_tok_abc123');
   });
 
-  // Enable MCP is a router.post, which Inertia answers without remounting the page.
+  // Create token is a router.post, which Inertia answers without remounting the page.
   it('shows a token that arrives while the page is already open', () => {
     const { rerender } = renderPageWith();
 
@@ -142,12 +143,53 @@ describe('Profile MCP tab', () => {
     });
   });
 
-  it('hides the connection snippets until a token has been generated', () => {
+  it('hides the token snippets until a token has been generated', () => {
     renderPageWith(buildMcp({ enabled: true }));
 
     expect(screen.queryByRole('link', { name: 'Add to Cursor' })).not.toBeInTheDocument();
-    expect(screen.queryByText(/claude mcp add/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mcp-claude-command')).not.toBeInTheDocument();
     expect(screen.queryByText(/codex mcp add/)).not.toBeInTheDocument();
+  });
+
+  it('gives apps that sign in the server URL alone, with no token', () => {
+    renderPageWith();
+
+    expect(screen.getByTestId('mcp-server-url')).toHaveTextContent('https://flow.example.com/mcp');
+    expect(screen.getByTestId('mcp-claude-oauth-command')).toHaveTextContent(
+      'claude mcp add flow --transport http https://flow.example.com/mcp',
+    );
+    expect(screen.getByTestId('mcp-claude-oauth-command')).not.toHaveTextContent('Authorization');
+  });
+
+  it('lists connected apps and disconnects one', async () => {
+    renderPageWith(
+      buildMcp({
+        apps: [{ id: 7, name: 'Claude (claude.ai)', createdAt: '2026-11-18T10:00:00Z', lastUsedAt: null }],
+      }),
+    );
+
+    expect(screen.getByText('Claude (claude.ai)')).toBeInTheDocument();
+    expect(screen.getByText(/not used yet/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Disconnect Claude (claude.ai)' }));
+    expect(router.delete).toHaveBeenCalledWith(
+      '/profile/mcp_apps/7',
+      expect.objectContaining({ preserveScroll: true }),
+    );
+  });
+
+  it('offers to disable all access when only apps are connected', async () => {
+    renderPageWith(
+      buildMcp({
+        apps: [{ id: 7, name: 'Claude Code (claude.ai)', createdAt: '2026-11-18T10:00:00Z', lastUsedAt: null }],
+      }),
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Disable all MCP access' }));
+    expect(router.delete).toHaveBeenCalledWith(
+      '/profile/disable_mcp_token',
+      expect.objectContaining({ preserveScroll: true }),
+    );
   });
 
   it('treats a null selection as every tool enabled', () => {

@@ -21,6 +21,17 @@ governance, community health — carry none.
   setting `AZURE_DEVOPS_FEDERATION_SIGNING_KEY`.
 
 ### Added
+- A page that does not exist shows the app's own 404 page, in the scheme you picked, with the
+  way back to the app, the docs and the home page, instead of a blank or stock error page. A
+  page a feature flag hides shows it too.
+- **Profile**: apps that sign in — Claude (claude.ai, Claude Desktop and Cowork),
+  Claude Code, ChatGPT, VS Code — can connect to your personal MCP server with
+  just its URL: they send you to Aixle to allow access, with no token to copy.
+  A Claude Team or Enterprise owner can add it once as a custom connector for
+  the whole organization, and each member connects with their own account.
+  **Profile → MCP** lists the connected apps and disconnects them one by one;
+  **Disable all MCP access** ends the token and every app at once. The token
+  keeps working for clients that cannot sign in.
 - **Triggers & gates**: a pull request trigger starts a workflow when someone
   submits a review on, or comments on, a pull request of a repository attached
   through GitHub, GitLab, Bitbucket or Azure DevOps — for example, an agent that
@@ -61,6 +72,10 @@ governance, community health — carry none.
   `INSIGHTS_DEPLOYMENT_SECRET` (issued by Insights); the integration stays hidden
   until all three are set. Insights' answer to a batch is final unless
   `INSIGHTS_RESEND=true`, which sends again what it failed to take.
+- **Admin**: the admin dashboard can be opened to people who are not superadmins.
+  Tick **Dashboard viewer** on a user in the admin, and the same dashboard opens
+  to them at `/dashboard`, linked from their user menu, without the rest of the
+  admin. Nobody has it until a superadmin ticks it.
 
 ### Changed
 - Runners: a machine recovers from a network outage within about a minute. The
@@ -68,6 +83,13 @@ governance, community health — carry none.
   needs the next runner release (0.4.1), and a machine whose reset goes
   unanswered while it reconnects after a lost-contact session is reset when it
   is heard again, not marked Failed.
+- **Sign-in & onboarding**: a viewer's onboarding is the profile step alone —
+  **Get started** there takes them into the app. The read-only workflow preview
+  step that followed it is gone.
+- The remaining sign-in pages, invitations, integration pages, the legal pages, the public site
+  and emails show the Aixle Flow lockup, Flow in the brand orange, as sign-in already did.
+- **Admin**: the admin's sidebar and `/dashboard` show the Aixle Flow lockup, Flow in the brand
+  orange, as sign-in and the public pages already do.
 - **Sessions & Runs**: the live terminal no longer lets the agent's output read
   your clipboard.
 - **Sessions & Runs**: an automatic Claude Code session writes its prompt cache

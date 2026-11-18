@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { z } from 'zod';
 
 import { loginPath, newPasswordResetPath, passwordResetPath } from 'shared/routes';
-import { Logo, PageShell } from 'shared/ui';
+import { BrandLockup, PageShell } from 'shared/ui';
 
 interface PageProps {
   token: string;
@@ -64,7 +64,7 @@ export default function PasswordResetPage({ token, valid, minLength }: PageProps
       <Head title="Choose a new password" />
       <Paper p="xl" radius="md" w="100%" maw={420}>
         <Stack gap="md">
-          <Logo width={96} />
+          <BrandLockup />
           {valid ? (
             <>
               <Title order={3}>Choose a new password</Title>

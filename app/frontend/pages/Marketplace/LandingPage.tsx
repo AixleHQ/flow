@@ -2,7 +2,7 @@ import { Head } from '@inertiajs/react';
 import { Anchor, Button, Paper, Stack, Text, Title } from '@mantine/core';
 
 import { loginPath } from 'shared/routes';
-import { Logo, PageShell } from 'shared/ui';
+import { BrandLockup, PageShell } from 'shared/ui';
 
 // The fulfilment URL AWS Marketplace is given. A buyer never reads this: they
 // arrive by POST, which the same path answers with the token exchange. This is
@@ -16,7 +16,7 @@ export default function MarketplaceLandingPage() {
       <Head title="AWS Marketplace" />
       <Paper p="xl" radius="md" w="100%" maw={420}>
         <Stack gap="md">
-          <Logo width={96} />
+          <BrandLockup />
           <Title order={3}>Finish setting up from AWS Marketplace</Title>
           <Text size="sm" c="dimmed">
             AWS Marketplace brings you here after you subscribe to Aixle Flow. You&apos;ve opened this page directly, so

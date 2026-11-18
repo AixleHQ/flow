@@ -99,8 +99,17 @@ module ContextBuilders
 
       path = RepositoryWorkspacePath.for_session(session, [ attached ])[attached.id]
       note = +"The repository is checked out at `#{path}`"
-      note << (pull_request["source_branch"].present? ? "; fetch and switch to `#{pull_request['source_branch']}` before changing code, and push your commits to that branch." : ".")
+      note << branch_note
       note << tools_note(attached)
+    end
+
+    # A GitHub conversation comment arrives without the pull request's branch.
+    def branch_note
+      branch = pull_request["source_branch"]
+      return "; fetch and switch to `#{branch}` before changing code, and push your commits to that branch." if branch.present?
+
+      "; the pull request's branch is not in the event, so read it with the pull request, switch to it " \
+        "before changing code, and push your commits to it."
     end
 
     # Azure DevOps is not behind the pull_request_* port; its own tools address

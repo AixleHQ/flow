@@ -75,7 +75,10 @@ class Web::ProfileController < Web::ApplicationController
         tool_groups: Tools::PersonalMCP.catalog_groups,
         # nil means "every tool, including ones added later" — the client
         # renders that as everything checked, and sends nil back for it.
-        enabled_tools: current_user.mcp_enabled_tools
+        enabled_tools: current_user.mcp_enabled_tools,
+        apps: current_user.mcp_auth_grants.active.order(created_at: :desc).map { |grant|
+          { id: grant.id, name: grant.client_name, created_at: grant.created_at, last_used_at: grant.last_used_at }
+        }
       }
     }, encrypt_history: true
   end

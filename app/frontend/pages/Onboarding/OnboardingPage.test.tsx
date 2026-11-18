@@ -78,7 +78,7 @@ const buildTerminalSession = (overrides: Partial<TerminalSession> = {}): Termina
 });
 
 // Build a currentUser pinned to a specific onboarding step. The page derives the active step
-// from currentUser.onboardingState (step1 → Profile, step2 → Connect Agents / See the platform)
+// from currentUser.onboardingState (step1 → Profile, step2 → Connect Agents)
 // and seeds its local position/language/selectedAgents state from the same user object. There is
 // no separate summary/"Complete" state — step2's "Get started" fires `complete` directly.
 const userAt = (overrides: Partial<CurrentUser> = {}): CurrentUser =>
@@ -627,96 +627,41 @@ describe('Onboarding/OnboardingPage', () => {
     const viewerAt = (overrides: Partial<CurrentUser> = {}): CurrentUser =>
       userAt({ currentRole: 'viewer', ...overrides });
 
-    it('hides the Connect Agents step and shows See the platform step for a viewer', () => {
+    it('shows a viewer only the profile step, with no stepper and no agent step', () => {
       renderAuthedPage(<OnboardingPage />, {
         props: { currentUser: viewerAt(), authSessions: [] },
       });
 
-      expect(screen.getByText('Profile')).toBeInTheDocument();
-      expect(screen.getByText('Platform')).toBeInTheDocument();
+      expect(screen.getByText('Tell us about yourself')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Get started/ })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Continue/ })).not.toBeInTheDocument();
+      expect(screen.queryByText('Profile')).not.toBeInTheDocument();
       expect(screen.queryByText('Agents')).not.toBeInTheDocument();
     });
 
-    it('advances a viewer from the profile step with go_next (no agent selection)', async () => {
+    it('finishes a viewer from the profile step with the complete event', async () => {
       renderAuthedPage(<OnboardingPage />, {
         props: { currentUser: viewerAt({ position: 'dev', preferredAgentLanguage: 'en' }), authSessions: [] },
-      });
-
-      await userEvent.click(screen.getByRole('button', { name: /Continue/ }));
-
-      expect(router.patch).toHaveBeenCalledWith(
-        '/onboarding',
-        expect.objectContaining({ onboarding: expect.objectContaining({ onboardingStateEvent: 'go_next' }) }),
-        expect.anything(),
-      );
-    });
-
-    it('viewer at step2 renders "See the platform" heading', () => {
-      renderAuthedPage(<OnboardingPage />, {
-        props: { currentUser: viewerAt({ onboardingState: 'step2' }), authSessions: [] },
-      });
-
-      expect(screen.getByText('See the platform in action')).toBeInTheDocument();
-    });
-
-    it('viewer platform step Get started sends the complete event directly', async () => {
-      renderAuthedPage(<OnboardingPage />, {
-        props: {
-          currentUser: viewerAt({ onboardingState: 'step2', position: 'dev', preferredAgentLanguage: 'en' }),
-          authSessions: [],
-        },
       });
 
       await userEvent.click(screen.getByRole('button', { name: /Get started/ }));
 
       expect(router.patch).toHaveBeenCalledWith(
         '/onboarding',
-        expect.objectContaining({ onboarding: expect.objectContaining({ onboardingStateEvent: 'complete' }) }),
+        expect.objectContaining({
+          onboarding: expect.objectContaining({ position: 'dev', onboardingStateEvent: 'complete' }),
+        }),
         expect.anything(),
       );
     });
 
-    it('viewer platform step also shows a Back button', () => {
+    it('keeps a viewer the server has on step2 on the profile step', () => {
       renderAuthedPage(<OnboardingPage />, {
         props: { currentUser: viewerAt({ onboardingState: 'step2' }), authSessions: [] },
       });
 
-      expect(screen.getByRole('button', { name: /Back/ })).toBeInTheDocument();
-    });
-
-    it('viewer does NOT see the agent connect step', () => {
-      renderAuthedPage(<OnboardingPage />, {
-        props: { currentUser: viewerAt({ onboardingState: 'step2' }), authSessions: [] },
-      });
-
+      expect(screen.getByText('Tell us about yourself')).toBeInTheDocument();
       expect(screen.queryByText('Connect your agents')).not.toBeInTheDocument();
-    });
-
-    it('renders viewer workflow preview when viewerWorkflowPreview prop is provided', () => {
-      const preview = {
-        workflowName: 'CI Pipeline',
-        workflowDescription: 'Automated CI workflow',
-        steps: [{ name: 'Lint' }],
-      };
-      renderAuthedPage(<OnboardingPage />, {
-        props: {
-          currentUser: viewerAt({ onboardingState: 'step2' }),
-          authSessions: [],
-          viewerWorkflowPreview: preview,
-        },
-      });
-
-      expect(screen.getByText("Here's what a workflow looks like in action")).toBeInTheDocument();
-      expect(screen.getByText('CI Pipeline')).toBeInTheDocument();
-      expect(screen.getByText(/Lint/)).toBeInTheDocument();
-    });
-
-    it('renders static fallback when viewerWorkflowPreview is null', () => {
-      renderAuthedPage(<OnboardingPage />, {
-        props: { currentUser: viewerAt({ onboardingState: 'step2' }), authSessions: [], viewerWorkflowPreview: null },
-      });
-
-      expect(screen.getByText('See the platform in action')).toBeInTheDocument();
     });
   });
 });

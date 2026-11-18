@@ -3,7 +3,7 @@ import { Anchor, Button, Center, Paper, Stack, Text, Title } from '@mantine/core
 import type { ReactNode } from 'react';
 
 import { postNavigate } from 'shared/lib/postNavigate';
-import { Logo, PageShell } from 'shared/ui';
+import { BrandLockup, PageShell } from 'shared/ui';
 import { IntegrationLogo } from 'shared/ui/IntegrationLogo';
 
 import { Flash } from './Flash';
@@ -41,7 +41,7 @@ function ChatLink({ state, provider, messenger, signInLabel, account, workspace,
       <Head title={`Link your ${messenger} account`} />
       <Paper p="xl" radius="md" w="100%" maw={520} withBorder>
         <Center mb={24}>
-          <Logo width={96} />
+          <BrandLockup />
         </Center>
         <Stack gap="md">
           <Flash />

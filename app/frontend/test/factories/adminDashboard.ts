@@ -1,4 +1,11 @@
-import type { CompanyBreakdown, Tenant, UsageDay } from 'pages/Admin/Dashboard/types';
+import type { CompanyBreakdown, DashboardPaths, Tenant, UsageDay } from 'pages/Admin/Dashboard/types';
+
+// The admin's own copy of the page.
+export const buildDashboardPaths = (overrides: Partial<DashboardPaths> = {}): DashboardPaths => ({
+  base: '/admin/dashboard',
+  companyRecords: '/admin/companies',
+  ...overrides,
+});
 
 // A company paying through Stripe, as Usage::TenantReport lists it.
 export const buildTenant = (overrides: Partial<Tenant> = {}): Tenant => ({

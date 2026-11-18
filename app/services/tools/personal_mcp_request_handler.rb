@@ -4,14 +4,15 @@ require "mcp"
 
 module Tools
   # The personal (session-less) MCP server: authenticated by a user's
-  # amcp_ token, serves every registry tool with `audience :user` — the
+  # amcp_ token or an OAuth access token an app holds for them, serves every registry tool with `audience :user` — the
   # user-level surface over Aixle (companies, projects, boards, workflows,
   # ...). No shadow rows, no session: handlers run straight from the registry
   # with (params, user), and every data access inside them goes through the
   # same policies as the UI.
   class PersonalMCPRequestHandler
-    def initialize(user)
+    def initialize(user, credential: PersonalMCP::Credential.token(user))
       @user = user
+      @credential = credential
     end
 
     # Returns a Rack response triple.
@@ -34,7 +35,7 @@ module Tools
     # `dns_rebinding_protection: false`: the SDK's own default only accepts a
     # loopback `Host`, which 403s every request to a deployed host. The
     # protection it provides is aimed at localhost servers a browser can reach
-    # with implicit trust — this endpoint authenticates from an amcp_ token in
+    # with implicit trust — this endpoint authenticates from a bearer token in
     # a header, never a cookie, so a rebound browser request arrives without a
     # credential and is answered with 401.
     #
@@ -54,7 +55,7 @@ module Tools
 
     private
 
-    attr_reader :user
+    attr_reader :user, :credential
 
     def server
       # The user's own selection, not the whole registry: a client that is only
@@ -83,6 +84,7 @@ module Tools
 
     def define_tool(defn)
       current_user = user
+      current_credential = credential
 
       MCP::Tool.define(
         name: defn.name,
@@ -91,7 +93,8 @@ module Tools
         annotations: mcp_annotations(defn),
         meta: defn.tags.any? ? { "ai.aixle/tags" => defn.tags.map(&:to_s) } : nil
       ) do |server_context:, **arguments|
-        handler = defn.handler_class.new(params: arguments.deep_stringify_keys, user: current_user)
+        handler = defn.handler_class.new(params: arguments.deep_stringify_keys, user: current_user,
+                                         credential: current_credential)
         result = handler.execute
         MCP::Tool::Response.new(
           CallExecutor.response_content(result),

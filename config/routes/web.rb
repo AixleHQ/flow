@@ -416,6 +416,15 @@ scope module: :web, defaults: { format: :html } do
   get "docs/*slug", to: "docs#show", as: :docs_page, constraints: { slug: /[^\/]+/ }
   get "changelog", to: "changelog#show", as: :changelog
 
+  # The admin's dashboard for a dashboard viewer, who is not a superadmin
+  # (docs/design/tenant-usage-report.md §7.2).
+  resource :dashboard, only: %i[show] do
+    get :waits, to: "dashboard_companies#waits"
+    resources :companies, only: %i[show], controller: "dashboard_companies" do
+      get :hours, on: :member
+    end
+  end
+
   # What Flow does, what a queue costs and the ROI model the sales team
   # quotes. Public: the signup form links to it, and its reader has no
   # account yet.
@@ -490,7 +499,11 @@ scope module: :web, defaults: { format: :html } do
     resources :connections, only: %i[index destroy], param: :provider do
       resources :act_as_consents, only: :update, param: :project_id
     end
+    # Apps connected to the personal MCP through OAuth (MCPAuthGrant).
+    resources :mcp_apps, only: :destroy
   end
+  get "mcp-oauth/authorize", to: "mcp_authorizations#new", as: :mcp_oauth_authorize
+  post "mcp-oauth/authorize", to: "mcp_authorizations#create"
   resources :sign_in_methods, only: %i[create destroy], path: "profile/sign_in_methods"
   patch "profile/password", to: "passwords#update", as: :profile_password
   # The confirmation link a stranger is emailed: opening it is the proof of

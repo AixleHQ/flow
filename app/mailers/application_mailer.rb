@@ -7,7 +7,7 @@ class ApplicationMailer < ActionMailer::Base
   helper MailerHelper
   self.delivery_job = MailDeliveryJob
 
-  # The shared mailer layout renders the Aixle wordmark. Email clients strip
+  # The shared mailer layout renders the Aixle Flow lockup. Email clients strip
   # JavaScript (so an onerror fallback never fires) and Gmail refuses to render
   # data: URIs, so the logo ships as a CID inline attachment referenced from the
   # layout via attachments["flow-logo.png"].url. The layout tolerates a missing
