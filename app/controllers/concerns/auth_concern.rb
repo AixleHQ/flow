@@ -7,7 +7,8 @@ module AuthConcern
   # Carried across the session reset at sign-in: what the flow signing the person
   # in has just set up for them (the company of an invitation it accepted).
   CARRIED_ACROSS_SIGN_IN = %w[current_company_id pending_invitation_token pending_template_install
-                              pending_bitbucket_connect pending_marketplace_proposal].freeze
+                              pending_bitbucket_connect pending_marketplace_proposal
+                              pending_mcp_authorization].freeze
 
   # Login continuation for a template install started as a guest (design §7.1).
   # Only the template and the version the guest saw are kept; the route back is
@@ -40,11 +41,27 @@ module AuthConcern
     session[:current_company_id] = company.id
   end
 
+  # Login continuation for an MCP client's authorization request (Aixle's own
+  # OAuth server): only parameters MCPAuth::AuthorizationRequest already
+  # accepted are kept, and the way back is always the authorize screen, which
+  # checks them again.
+  PENDING_MCP_AUTHORIZATION_KEY = :pending_mcp_authorization
+
+  def remember_pending_mcp_authorization(params)
+    session[PENDING_MCP_AUTHORIZATION_KEY] = params.slice(*MCPAuth::AuthorizationRequest::PARAMS)
+  end
+
+  def take_pending_mcp_authorization_path
+    pending = session.delete(PENDING_MCP_AUTHORIZATION_KEY)
+    pending.is_a?(Hash) ? mcp_oauth_authorize_path(pending.slice(*MCPAuth::AuthorizationRequest::PARAMS)) : nil
+  end
+
   # Where a sign-in continues when a guest started something that needed one.
   def take_pending_sign_in_path
     template = take_pending_template_install_path
     bitbucket = bitbucket_connect_path if session.delete(PENDING_BITBUCKET_CONNECT_KEY)
-    template || bitbucket || take_pending_marketplace_proposal_path
+    mcp = take_pending_mcp_authorization_path
+    mcp || template || bitbucket || take_pending_marketplace_proposal_path
   end
 
   # Only for a member of the workspace the request is on: the browser that

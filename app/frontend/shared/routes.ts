@@ -72,6 +72,21 @@ export function mcpPath(options?: object): string {
   return "/" + "mcp" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /mcp-oauth/token(.:format) */
+export function mcpOauthTokenPath(options?: object): string {
+  return "/" + "mcp-oauth" + "/" + "token" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /mcp-oauth/register(.:format) */
+export function mcpOauthRegisterPath(options?: object): string {
+  return "/" + "mcp-oauth" + "/" + "register" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /mcp-oauth/revoke(.:format) */
+export function mcpOauthRevokePath(options?: object): string {
+  return "/" + "mcp-oauth" + "/" + "revoke" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /cloud/aws/credentials(.:format) */
 export function cloudAwsCredentialsPath(options?: object): string {
   return "/" + "cloud" + "/" + "aws" + "/" + "credentials" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1520,6 +1535,16 @@ export function profileConnectionsPath(options?: object): string {
 /** /profile/connections/:provider(.:format) */
 export function profileConnectionPath(provider: ScalarType, options?: object): string {
   return "/" + "profile" + "/" + "connections" + "/" + provider + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["provider","format"]);
+}
+
+/** /profile/mcp_apps/:id(.:format) */
+export function profileMCPAppPath(id: ScalarType, options?: object): string {
+  return "/" + "profile" + "/" + "mcp_apps" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /mcp-oauth/authorize(.:format) */
+export function mcpOauthAuthorizePath(options?: object): string {
+  return "/" + "mcp-oauth" + "/" + "authorize" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /profile/sign_in_methods(.:format) */

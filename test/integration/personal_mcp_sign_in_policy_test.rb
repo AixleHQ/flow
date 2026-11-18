@@ -74,4 +74,26 @@ class PersonalMCPSignInPolicyTest < ActionDispatch::IntegrationTest
     assert_nil error_text(call_tool(token, "list_board_tasks", project_id: @open_project.id))
     assert_match(/regenerate/, error_text(call_tool(token, "list_board_tasks", project_id: @sso_project.id)))
   end
+
+  def connect_app(proof_provider_ids)
+    client = MCPAuth::Client.new(client_id: "aocl_test", kind: "dcr", name: "Test app", host: nil,
+                                 redirect_uris: [ "http://localhost/cb" ])
+    verifier = SecureRandom.urlsafe_base64(48)
+    _grant, code = MCPAuthGrant.authorize!(
+      user: @user, client: client, redirect_uri: "http://localhost/cb", resource: nil, scope: "mcp",
+      code_challenge: Base64.urlsafe_encode64(Digest::SHA256.digest(verifier), padding: false),
+      proof_provider_ids: proof_provider_ids
+    )
+    MCPAuth::TokenExchange.call("grant_type" => "authorization_code", "code" => code,
+                                "code_verifier" => verifier)[:access_token]
+  end
+
+  test "an app connected from an SSO session reaches the SSO company, whatever the static token was issued under" do
+    @user.regenerate_mcp_token!(proof_provider_ids: [ IdentityProvider.password.id ])
+    token = connect_app([ @sso.id ])
+
+    assert_nil error_text(call_tool(token, "list_board_tasks", project_id: @sso_project.id))
+    assert_match(/connect Test app to Aixle again/,
+                 error_text(call_tool(token, "list_board_tasks", project_id: @open_project.id)))
+  end
 end

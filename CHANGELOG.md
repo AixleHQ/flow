@@ -17,6 +17,14 @@ governance, community health — carry none.
 - A page that does not exist shows the app's own 404 page, in the scheme you picked, with the
   way back to the app, the docs and the home page, instead of a blank or stock error page. A
   page a feature flag hides shows it too.
+- **Profile**: apps that sign in — Claude (claude.ai, Claude Desktop and Cowork),
+  Claude Code, ChatGPT, VS Code — can connect to your personal MCP server with
+  just its URL: they send you to Aixle to allow access, with no token to copy.
+  A Claude Team or Enterprise owner can add it once as a custom connector for
+  the whole organization, and each member connects with their own account.
+  **Profile → MCP** lists the connected apps and disconnects them one by one;
+  **Disable all MCP access** ends the token and every app at once. The token
+  keeps working for clients that cannot sign in.
 - **Triggers & gates**: a pull request trigger starts a workflow when someone
   submits a review on, or comments on, a pull request of a repository attached
   through GitHub, GitLab, Bitbucket or Azure DevOps — for example, an agent that

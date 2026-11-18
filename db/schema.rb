@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_18_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_18_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1046,6 +1046,49 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_18_100000) do
     t.index ["applied_at", "occurred_at"], name: "idx_on_applied_at_occurred_at_9b9f6d64f1"
     t.index ["event_id"], name: "index_marketplace_subscription_events_on_event_id", unique: true
     t.index ["marketplace_license_id"], name: "idx_on_marketplace_license_id_bbeb7c9440"
+  end
+
+  create_table "mcp_auth_clients", force: :cascade do |t|
+    t.string "client_id", null: false
+    t.string "client_name"
+    t.string "redirect_uris", default: [], null: false, array: true
+    t.datetime "last_used_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["client_id"], name: "index_mcp_auth_clients_on_client_id", unique: true
+  end
+
+  create_table "mcp_auth_grants", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "client_id", null: false
+    t.string "client_kind", null: false
+    t.string "client_name", null: false
+    t.string "redirect_uri", null: false
+    t.string "resource"
+    t.string "scope"
+    t.bigint "proof_provider_ids", default: [], null: false, array: true
+    t.string "code_digest"
+    t.string "code_challenge"
+    t.datetime "code_expires_at"
+    t.datetime "code_used_at"
+    t.datetime "expires_at"
+    t.datetime "last_used_at"
+    t.datetime "revoked_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code_digest"], name: "index_mcp_auth_grants_on_code_digest", unique: true
+    t.index ["user_id", "revoked_at"], name: "index_mcp_auth_grants_on_user_id_and_revoked_at"
+  end
+
+  create_table "mcp_auth_tokens", force: :cascade do |t|
+    t.bigint "grant_id", null: false
+    t.string "kind", null: false
+    t.string "token_digest", null: false
+    t.datetime "expires_at", null: false
+    t.datetime "rotated_at"
+    t.datetime "created_at", null: false
+    t.index ["grant_id"], name: "index_mcp_auth_tokens_on_grant_id"
+    t.index ["token_digest"], name: "index_mcp_auth_tokens_on_token_digest", unique: true
   end
 
   create_table "mcp_servers", force: :cascade do |t|
@@ -2530,6 +2573,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_18_100000) do
   add_foreign_key "marketplace_licenses", "companies"
   add_foreign_key "marketplace_licenses", "companies", column: "proposed_company_id", on_delete: :nullify
   add_foreign_key "marketplace_subscription_events", "marketplace_licenses"
+  add_foreign_key "mcp_auth_grants", "users", on_delete: :cascade
+  add_foreign_key "mcp_auth_tokens", "mcp_auth_grants", column: "grant_id", on_delete: :cascade
   add_foreign_key "mcp_servers", "companies", on_delete: :cascade, validate: false
   add_foreign_key "mcp_servers", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_mcp_servers_project_company", on_delete: :cascade, validate: false
   add_foreign_key "mcp_servers", "projects", on_delete: :cascade, validate: false
