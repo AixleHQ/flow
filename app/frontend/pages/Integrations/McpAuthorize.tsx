@@ -4,7 +4,7 @@ import { IconAlertTriangle } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 
 import { postNavigate } from 'shared/lib/postNavigate';
-import { Logo, PageShell } from 'shared/ui';
+import { BrandLockup, PageShell } from 'shared/ui';
 
 type State = 'ready' | 'no_company' | 'invalid' | 'impersonating';
 
@@ -54,7 +54,7 @@ function McpAuthorize({
       <Head title="Connect an app to Aixle" />
       <Paper p="xl" radius="md" w="100%" maw={520} withBorder>
         <Center mb={24}>
-          <Logo width={96} />
+          <BrandLockup />
         </Center>
         <Stack gap="md">
           {state === 'invalid' && <Message title="This app cannot connect">{message}</Message>}
