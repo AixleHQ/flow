@@ -106,6 +106,23 @@ module ProjectTeams
                    result.message
     end
 
+    test "the queries a pick costs do not grow with the team" do
+      queries = lambda do
+        count = 0
+        counter = ->(*, payload) { count += 1 unless payload[:name] == "SCHEMA" || payload[:cached] }
+        ActiveSupport::Notifications.subscribed(counter, "sql.active_record") { Picker.preview(@team.reload) }
+        count
+      end
+      AgentCredential.where(user: [ @anna, @pavel, @olga ]).find_each do |credential|
+        CompanyMembership.find_by!(user: credential.user, company: @company).update!(default_agent_credential: credential)
+      end
+      small = queries.call
+
+      %w[Ivan Maria Petr].each { |name| member(name) }
+
+      assert_equal small, queries.call
+    end
+
     test "round robin hands runs out in turn and remembers whose turn it is" do
       @team.update!(strategy: "round_robin")
 

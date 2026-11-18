@@ -129,6 +129,15 @@ class Project < ApplicationRecord
       project_collaborators.exists?(user: user)
   end
 
+  # The ids among `user_ids` that #accessible_by? would let in, in two queries
+  # for any number of users.
+  def accessible_user_ids(user_ids)
+    collaborator_ids = project_collaborators.where(user_id: user_ids).pluck(:user_id).to_set
+    CompanyMembership.active.where(company_id: company_id, user_id: user_ids)
+                     .select { |membership| owner_id == membership.user_id || membership.admin? || collaborator_ids.include?(membership.user_id) }
+                     .map(&:user_id).to_set
+  end
+
   # Check if user is admin of project (owner only)
   def admin?(user)
     owner_id == user.id

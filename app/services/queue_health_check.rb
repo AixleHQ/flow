@@ -35,6 +35,11 @@ class QueueHealthCheck
   # ago and was never released. A warning to look at, not an outage.
   ADMISSION_WAIT_THRESHOLD = 30.minutes
 
+  # This check and the reconciler's drain both run on the minute, so a slot
+  # released just before the check is still on its way to the next waiter.
+  # Two drain passes is long enough for that hand-over to land.
+  DRAIN_GRACE = 2.minutes
+
   class << self
     def call(now: Time.current)
       stats = snapshot(now: now)
@@ -125,7 +130,7 @@ class QueueHealthCheck
       return [] if pools.empty?
 
       ids = pools.map(&:id)
-      live = live_occupants(since)
+      live = live_occupants(since, now)
       held = live.where(session_admission_pool_id: ids).group(:session_admission_pool_id).count
       occupied = SessionAdmission.occupied.where(session_admission_pool_id: ids)
                                  .group(:session_admission_pool_id).count
@@ -145,10 +150,12 @@ class QueueHealthCheck
     # which can take minutes (Pod deletion, a pinned operation's confirmation
     # window), so it only stops counting as live once it has been over for the
     # whole threshold.
-    def live_occupants(since)
-      SessionAdmission.occupied.joins(:terminal_session)
-                      .where("terminal_sessions.state NOT IN (?) OR terminal_sessions.finished_at > ?",
-                             TerminalSession::TERMINAL_STATES, since)
+    def live_occupants(since, now)
+      SessionAdmission.where.not(admitted_at: nil).joins(:terminal_session)
+                      .where("(session_admissions.released_at IS NULL AND " \
+                             "(terminal_sessions.state NOT IN (:ended) OR terminal_sessions.finished_at > :since)) " \
+                             "OR session_admissions.released_at > :handing_over",
+                             ended: TerminalSession::TERMINAL_STATES, since: since, handing_over: now - DRAIN_GRACE)
     end
 
     # One structured line every tick so the log pipeline has a series to draw, and
