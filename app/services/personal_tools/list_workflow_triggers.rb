@@ -7,7 +7,7 @@ module PersonalTools
     tool do
       display_name "List Workflow Triggers"
       description "List everything that can launch a workflow: board-column bindings plus " \
-                  "Slack / schedule / webhook / custom-event triggers. Pass the returned id " \
+                  "chat / schedule / webhook / tracker / pull-request / custom-event triggers. Pass the returned id " \
                   "together with its kind to update_workflow_trigger or delete_workflow_trigger — " \
                   "the two kinds are separate records and their ids can collide. " \
                   "created_by is who added the trigger; the off-board kinds fire unattended as " \

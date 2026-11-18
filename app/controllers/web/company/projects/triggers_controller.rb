@@ -17,7 +17,8 @@ class Web::Company::Projects::TriggersController < Web::Company::Projects::Appli
         { id: t.id, handle: t.handle, name: t.name, provider: t.provider, status: t.status,
           mentions_recognized: t.recognizes_mentions? }
       },
-      chat_providers: Chat.trigger_options(current_project)
+      chat_providers: Chat.trigger_options(current_project),
+      trigger_repositories: PullRequests.trigger_repositories(current_project)
     }
   end
 end

@@ -125,6 +125,7 @@ a pending gate or an active run.
 | `webhook` | an inbound HTTP call; the response carries the URL and a secret shown once |
 | `event` | a custom platform event |
 | `tracker` | a task tracker event: `tracker.issue.created`, `tracker.issue.status_changed`, `tracker.issue.assigned`, `tracker.comment.created`; `project_tracker_id` picks a tracker, none means any |
+| `pull_request` | a review or comment on a pull request: `pull_request.review.submitted`, `pull_request.comment.created`; `repository_id` picks a repository, none means any repository of the project on GitHub, GitLab, Bitbucket or Azure DevOps |
 
 Fields: `name`, `event_type`, `filter_predicate` (JSON the event must contain;
 supports `{"op", "value"}` operators and dot-paths), `subject_policy` (`none`,
@@ -138,10 +139,15 @@ mention). Tracker triggers also take `aixle_changes`
 (`ignore`, `other_workflows`, `always`): what a change Aixle itself made does.
 Filter tracker events on `change.to.name` (the column), `change.to.category`,
 `issue.type`, `issue.labels` (`includes`), `comment.mentions_me`, `text`.
+Pull request triggers take `aixle_changes` too, and filter on `review.verdict`
+(`approved`, `changes_requested`, `commented`), `comment.mentions_me`,
+`comment.file`, `pull_request.target_branch`, `actor.name` and `text`. While one
+of a trigger's runs for a pull request is still going, its further events for
+that pull request start nothing.
 
 Rules enforced on save:
-- Chat, schedule, webhook, event and tracker triggers need `allow_non_interactive`
-  on every step.
+- Chat, schedule, webhook, event, tracker and pull request triggers need
+  `allow_non_interactive` on every step.
 - `schedule` needs a cron expression; give a timezone too, or it runs in UTC and
   drifts an hour across daylight saving.
 - `create_task` and `find_or_create_task` need `subject_column_id`.

@@ -20,6 +20,8 @@ modules:
         - avi:bitbucket:updated:build-status
         - avi:bitbucket:updated:repository
         - avi:bitbucket:deleted:repository
+        - avi:bitbucket:created:pullrequest-comment
+        - avi:bitbucket:updated:pullrequest-reviewer-status
   scheduledTrigger:
     - key: token-heartbeat
       endpoint: heartbeat

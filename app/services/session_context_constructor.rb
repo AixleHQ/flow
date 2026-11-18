@@ -9,6 +9,7 @@ class SessionContextConstructor
     ContextBuilders::Workspace,
     ContextBuilders::WorkflowContext,
     ContextBuilders::TrackerContext,
+    ContextBuilders::PullRequestContext,
     ContextBuilders::WebhookContext,
     ContextBuilders::BoardContext,
     ContextBuilders::Tools,

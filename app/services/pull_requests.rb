@@ -15,6 +15,17 @@ module PullRequests
   # pull-request tools", whichever provider it is.
   CAPABILITY = "pull_requests"
 
+  # The repositories a pull-request trigger of `project` can listen to, for the
+  # trigger form's picker: those on a code host, which delivers their events.
+  def self.trigger_repositories(project)
+    Repository.where(scope: project).joins(:integration)
+              .where(integrations: { provider: Repository::CODE_HOST_PROVIDERS })
+              .includes(:integration).order(:full_name).map do |repository|
+      { id: repository.id, full_name: repository.full_name, provider: repository.integration.provider.to_s,
+        mentions_recognized: Identity.tracker_provider(repository.integration)&.identity.present? || false }
+    end
+  end
+
   def self.provider_class(provider)
     PROVIDERS[provider.to_s]&.constantize
   end

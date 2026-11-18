@@ -208,8 +208,8 @@ account.
 
 | Endpoint                                   | Purpose                                                        |
 | ------------------------------------------ | -------------------------------------------------------------- |
-| `POST /webhooks/github`                    | `check_suite` and `workflow_run` events from the GitHub App.   |
-| `POST /webhooks/gitlab`                    | GitLab pipeline hooks.                                         |
+| `POST /webhooks/github`                    | GitHub App events: CI (`check_suite`, `workflow_run`), tracker issues, pull request reviews and comments. |
+| `POST /webhooks/gitlab`                    | GitLab project hooks: pipelines, merge requests and notes.     |
 | `POST /webhooks/azure_devops/:endpoint_id` | Azure DevOps Service Hook deliveries.                          |
 | `POST /webhooks/slack/events`              | Slack Events API, routed to the workspace's installation.      |
 | `POST /webhooks/in/:slug`                  | Generic inbound webhooks that fire workflow triggers.          |

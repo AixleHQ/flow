@@ -4,7 +4,7 @@ module WorkflowTriggers
   # Creates a workflow trigger of any kind. One home for what the triggers API,
   # the personal MCP and the template installer all do:
   #   column                                      → ColumnWorkflowBinding
-  #   chat / schedule / webhook / event / tracker → TriggerBinding (+ WebhookEndpoint for webhook)
+  #   chat / schedule / webhook / event / tracker / pull_request → TriggerBinding (+ WebhookEndpoint for webhook)
   #
   # `slack` is the chat kind's name from before Teams: a chat trigger for Slack.
   #
@@ -12,7 +12,7 @@ module WorkflowTriggers
   # differently. ActiveRecord::RecordInvalid and Temporalio::Error (a schedule
   # reconciles onto Temporal after commit) propagate to the caller.
   class Creator
-    KINDS = %w[column chat schedule webhook event tracker].freeze
+    KINDS = %w[column chat schedule webhook event tracker pull_request].freeze
 
     BoardMissingError = Class.new(StandardError)
     UnsupportedKindError = Class.new(StandardError)
@@ -21,7 +21,8 @@ module WorkflowTriggers
 
     BINDING_KEYS = %i[name trigger_mode enabled cooldown_seconds status_reporting subject_policy
                       subject_column_id subject_title_template filter_predicate schedule_config
-                      project_tracker_id aixle_changes copy_attachments chat_channel_id run_as_team_id].freeze
+                      project_tracker_id repository_id aixle_changes copy_attachments chat_channel_id
+                      run_as_team_id].freeze
 
     def self.call(...) = new(...).call
 
@@ -40,7 +41,7 @@ module WorkflowTriggers
       case @kind
       when "column" then create_column_trigger
       when "webhook" then create_webhook_trigger
-      when "chat", "schedule", "event", "tracker" then Result.new(kind: @kind, trigger: create_binding!(event_type))
+      when "chat", "schedule", "event", "tracker", "pull_request" then Result.new(kind: @kind, trigger: create_binding!(event_type))
       else raise UnsupportedKindError, "Unsupported trigger kind: #{@kind}"
       end
     end
@@ -85,17 +86,18 @@ module WorkflowTriggers
       when "chat" then Chat::EVENT_TYPE
       when "schedule" then "schedule.fired"
       # No default: falling through to webhook.received would build a webhook
-      # trigger. The binding validates the tracker event type.
-      when "tracker" then @attributes[:event_type].to_s
+      # trigger. The binding validates the tracker and pull-request event types.
+      when "tracker", "pull_request" then @attributes[:event_type].to_s
       else @attributes[:event_type].to_s.presence || "webhook.received"
       end
     end
 
-    # A tracker trigger given a column for its tasks defaults to reusing the
-    # task already linked to the issue (docs/design/task-tracker-integrations.md §6.4).
+    # A tracker or pull-request trigger given a column for its tasks defaults to
+    # reusing the task already linked to the issue or pull request
+    # (docs/design/task-tracker-integrations.md §6.4).
     def binding_attributes
       attributes = @attributes.slice(*BINDING_KEYS)
-      if @kind == "tracker" && attributes[:subject_policy].blank? && attributes[:subject_column_id].present?
+      if %w[tracker pull_request].include?(@kind) && attributes[:subject_policy].blank? && attributes[:subject_column_id].present?
         attributes[:subject_policy] = "find_or_create_task"
       end
       @kind == "chat" ? chat_attributes(attributes) : attributes

@@ -230,6 +230,9 @@ class TriggerEngine
         elsif cooling_down?(trigger_binding, dispatch)
           dispatch.update!(status: "skipped", detail: { "reason" => "cooldown" })
           decided = "skipped"
+        elsif PullRequests::TriggerSupport.run_in_progress?(trigger_binding, event)
+          dispatch.update!(status: "skipped", detail: { "reason" => PullRequests::TriggerSupport::SKIP_IN_PROGRESS })
+          decided = "skipped"
         else
           subject = block_given? ? yield : task     # resolve (and maybe create) inside the lock
           result = WorkflowService.enqueue(
@@ -237,7 +240,8 @@ class TriggerEngine
             task: subject, mode: :non_interactive, runner_id: runner_id, team: team,
             input_asset_ids: input_asset_ids_for(event, project),
             shared_context: Chat.run_context(event).merge(
-              Trackers::TriggerSupport.run_context(event), Webhooks::TriggerSupport.run_context(event)
+              Trackers::TriggerSupport.run_context(event), PullRequests::TriggerSupport.run_context(event),
+              Webhooks::TriggerSupport.run_context(event)
             )
           )
           started = result.try(:persisted?)
@@ -361,17 +365,24 @@ class TriggerEngine
     end
 
     # Resolve the board task a binding's run should be about, per subject_policy.
+    # A tracker issue or a pull request carries its own link to a task.
     def resolve_subject(binding:, event:, fallback_task:)
-      tracker = Trackers::TriggerSupport.event?(event)
+      support = external_subject_support(event)
       case binding.subject_policy.to_s
       when "existing_task"
-        (tracker && Trackers::TriggerSupport.linked_task(binding, event)) || event.board_task || fallback_task
+        support&.linked_task(binding, event) || event.board_task || fallback_task
       when "create_task" then create_subject_task(binding, event)
       when "find_or_create_task"
-        return create_subject_task(binding, event) unless tracker
+        return create_subject_task(binding, event) unless support
 
-        Trackers::TriggerSupport.find_or_create_task(binding, event) { create_subject_task(binding, event) }
+        support.find_or_create_task(binding, event) { create_subject_task(binding, event) }
       else nil # none → task-less, project-level run
+      end
+    end
+
+    def external_subject_support(event)
+      if Trackers::TriggerSupport.event?(event) then Trackers::TriggerSupport
+      elsif PullRequests::TriggerSupport.event?(event) then PullRequests::TriggerSupport
       end
     end
 
@@ -379,15 +390,15 @@ class TriggerEngine
       column = binding.subject_column
       return nil if column.nil?
 
-      tracker = Trackers::TriggerSupport.event?(event)
-      template = binding.subject_title_template.presence || (Trackers::TriggerSupport::DEFAULT_TITLE if tracker)
+      support = external_subject_support(event)
+      template = binding.subject_title_template.presence || support&.const_get(:DEFAULT_TITLE)
       # Create directly (not via TaskService) so we don't re-enter check_auto_trigger.
       task = column.board.board_tasks.create!(
         board_column: column,
         title: render_title(template, event, binding.event_type),
-        description: tracker ? Trackers::TriggerSupport.task_body(event) : render_subject_body(event, binding.event_type)
+        description: support ? support.task_body(event) : render_subject_body(event, binding.event_type)
       )
-      Trackers::TriggerSupport.link!(task, binding, event) if tracker
+      support&.link!(task, binding, event)
       task
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error("[TriggerEngine] create_task failed for binding ##{binding.id}: #{e.message}")

@@ -63,6 +63,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
           mentions_recognized: t.recognizes_mentions? }
       },
       chat_providers: Chat.trigger_options(current_project),
+      trigger_repositories: PullRequests.trigger_repositories(current_project),
       configured_agents: current_project_membership&.configured_agents || [],
       default_agent_runtime: current_project_membership&.default_agent_runtime,
       agents: InertiaRails.defer(group: "resources") {

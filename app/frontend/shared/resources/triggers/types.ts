@@ -28,6 +28,8 @@ export interface Trigger {
   // Tracker triggers: the tracker listened to (null = any), and what a change
   // Aixle itself made does.
   project_tracker_id?: number | null;
+  // Pull-request triggers: the repository listened to (null = any repository of the project).
+  repository_id?: number | null;
   aixle_changes?: string;
   // Copy the issue's files onto the run's task when a run starts.
   copy_attachments?: boolean;
@@ -86,6 +88,15 @@ export interface ChatConversationOption {
   teamName: string | null;
   workspace: string | null;
   provider: string;
+}
+
+// A repository on a code host that a pull-request trigger can listen to.
+export interface TriggerRepository {
+  id: number;
+  fullName: string;
+  provider: 'github' | 'gitlab' | 'bitbucket' | 'azure_devops';
+  // Whether Aixle knows the account it is mentioned by through this repository's connection.
+  mentionsRecognized: boolean;
 }
 
 export interface ChatProviderOption {

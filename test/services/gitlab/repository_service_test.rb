@@ -144,8 +144,36 @@ module Gitlab
       assert_equal 7, repository.gitlab_hook_id
       assert_requested :post, HOOKS do |req|
         body = URI.decode_www_form(req.body).to_h
-        body["url"] == WEBHOOK_URL && body["pipeline_events"] == "true" && body["token"] == repository.webhook_secret
+        body["url"] == WEBHOOK_URL && body["pipeline_events"] == "true" && body["token"] == repository.webhook_secret &&
+          body["merge_requests_events"] == "true" && body["note_events"] == "true"
       end
+    end
+
+    test "a hook registered with pipeline events only is registered again with the pull-request events" do
+      repository = create(:repository, full_name: "group/app", integration: @integration, scope: @project,
+                                       webhook_secret: "old-secret", gitlab_hook_id: 42)
+      stub_request(:get, hook_url(42)).to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                                                 body: gl_hook(id: 42, url: WEBHOOK_URL, pipeline_events: true).to_json)
+      delete_old = stub_request(:delete, hook_url(42)).to_return(status: 204)
+      stub_request(:post, HOOKS).to_return(status: 201, headers: { "Content-Type" => "application/json" },
+                                           body: gl_hook(id: 43, url: WEBHOOK_URL, pipeline_events: true).to_json)
+
+      Gitlab::RepositoryService.new(@integration).ensure_hook_events(repository)
+
+      assert_requested delete_old
+      assert_equal 43, repository.reload.gitlab_hook_id
+    end
+
+    test "a hook that already carries every event is left alone" do
+      repository = create(:repository, full_name: "group/app", integration: @integration, scope: @project,
+                                       webhook_secret: "kept-secret", gitlab_hook_id: 42)
+      stub_request(:get, hook_url(42)).to_return(
+        status: 200, headers: { "Content-Type" => "application/json" },
+        body: gl_hook(id: 42, url: WEBHOOK_URL, pipeline_events: true).merge(merge_requests_events: true, note_events: true).to_json
+      )
+
+      assert_equal "kept-secret", Gitlab::RepositoryService.new(@integration).ensure_hook_events(repository)
+      assert_not_requested :post, HOOKS
     end
 
     # Another Flow project, or another company, may have attached the same GitLab

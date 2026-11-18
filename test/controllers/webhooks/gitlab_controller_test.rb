@@ -148,6 +148,32 @@ class Webhooks::GitlabControllerTest < ActionController::TestCase
     assert_response :ok
   end
 
+  # == pull request events ==
+
+  test "a comment on a merge request is queued when a pull-request trigger waits on the repository" do
+    create(:trigger_binding, project: @project, workflow: create(:workflow, scope: @project), created_by: @user,
+                             event_type: "pull_request.comment.created", repository: @repository)
+    payload = { "project" => { "path_with_namespace" => "group/app" }, "object_kind" => "note",
+                "user" => { "id" => 31, "username" => "ada" },
+                "merge_request" => { "iid" => 4, "title" => "Add retries", "source_branch" => "retries" },
+                "object_attributes" => { "id" => 77, "note" => "Rename this", "noteable_type" => "MergeRequest",
+                                         "system" => false, "action" => "create" } }
+
+    assert_enqueued_with(job: PullRequests::ProcessEventJob) do
+      post_json(payload, token: @webhook_secret, event: "Note Hook")
+    end
+    assert_response :ok
+  end
+
+  test "a merge request event is dropped while no pull-request trigger waits on the repository" do
+    payload = { "project" => { "path_with_namespace" => "group/app" }, "object_kind" => "merge_request",
+                "user" => { "id" => 31, "username" => "ada" },
+                "object_attributes" => { "iid" => 4, "action" => "approval" } }
+
+    assert_no_enqueued_jobs { post_json(payload, token: @webhook_secret, event: "Merge Request Hook") }
+    assert_response :ok
+  end
+
   private
 
   def pipeline_payload(status:, pipeline_id: 1234)
