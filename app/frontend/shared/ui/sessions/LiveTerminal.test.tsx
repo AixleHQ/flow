@@ -75,6 +75,15 @@ describe('LiveTerminal', () => {
     expect(FakeWebSocket.instances).toHaveLength(2);
   });
 
+  it("answers a clipboard query from the session with nothing, not the viewer's clipboard", async () => {
+    renderPage(<LiveTerminal url={URL_WITH_PASS} />);
+    const socket = await connected();
+
+    await fromTmux(socket, '\x1b]52;c;?\x07');
+
+    await waitFor(() => expect(typed(socket)).toContain('\x1b]52;c;\x07'));
+  });
+
   // jsdom reports no platform, which is what a Windows or Linux browser gets.
   // xterm maps Ctrl+letter from keyCode, which user-event leaves at 0.
   describe('clipboard keys off the Mac', () => {

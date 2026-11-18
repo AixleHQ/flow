@@ -47,6 +47,8 @@ governance, community health — carry none.
   `INSIGHTS_RESEND=true`, which sends again what it failed to take.
 
 ### Changed
+- **Sessions & Runs**: the live terminal no longer lets the agent's output read
+  your clipboard.
 - **Sessions & Runs**: an automatic Claude Code session writes its prompt cache
   for 5 minutes instead of an hour, which costs less of the connected
   subscription: its requests come seconds apart, so the cache stays warm.
@@ -82,6 +84,17 @@ governance, community health — carry none.
   than 90 seconds because it sends no heartbeat.
 
 ### Fixed
+- A tab left open across a release now reloads into the new version when it
+  opens a page, instead of failing to load it. A live page that can no longer
+  update says a new version is out, and a link clicked while offline says the
+  server can't be reached instead of doing nothing.
+- **Sessions & Runs**: a copy the agent asks for in the live terminal no longer
+  fails when the tab is not focused, and never reaches the clipboard of someone
+  only watching the session. The sessions list keeps updating after a dropped
+  connection.
+- **Profile**: connecting AWS Bedrock through IAM Identity Center says when the
+  server can't be reached, and keeps waiting for your approval through a
+  dropped connection.
 - **Assets**: a step can promote a file it wrote to `/workspace/outputs` to a
   project asset while it is still running. Before, `promote_asset` found only
   outputs of earlier steps and failed with "No workflow output asset named …".
