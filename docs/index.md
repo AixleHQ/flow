@@ -116,6 +116,7 @@ The active workflow: a research report in `research/` feeds a frozen-intent spec
 
 - **[product/user-guide-outline.md](./product/user-guide-outline.md)** — Outline of the end-user product guide: the board → workflow → agent → results loop, section-by-section skeleton following the product sidebar, two end-to-end stories, terminology notes
 - **[product/self-serve-signup.md](./product/self-serve-signup.md)** — How a stranger becomes a workspace and what it costs: the email-proved signup, what the form refuses, DNS domain verification and what it unlocks (auto-join) versus what works without it (invitations), workers and the list price, the free allowance and the fact that the workspace sets the rate it burns at, what happens when it runs out, where a card is asked for, and how cancelling and a failed payment work
+- **[design/product-tour.md](./design/product-tour.md)** — Product tour (Flow Dev #51): why driver.js (MIT, ~5 KB; Shepherd.js and Intro.js are AGPL), steps as data over named `data-tour` targets, crossing pages and full loads, the offer and the manual start, what a redesign breaks and how the tour is kept in step with the design, local demo, what is not done yet
 - **[product/changelog-product-areas.md](./product/changelog-product-areas.md)** — Frozen user-facing product map used as the changelog taxonomy: named product areas, changelog rules, area → guide-chapter map, snapshot baseline
 
 ## Operator documentation

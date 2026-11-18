@@ -77,6 +77,7 @@ import {
   apiV1ProjectColumnPath,
   reorderApiV1ProjectColumnsPath,
 } from 'shared/routes';
+import { tourTarget } from 'shared/tour/targets';
 import { PageHeader } from 'shared/ui/PageHeader';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -923,7 +924,7 @@ const BoardPage = () => {
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <Box className={styles.boardArea}>
+          <Box className={styles.boardArea} {...tourTarget('board')}>
             <SortableContext items={localColumns.map((c) => `col-${c.id}`)} strategy={horizontalListSortingStrategy}>
               {/*
                 A collapsed column still renders its tickets as compact draggable chips, so tickets

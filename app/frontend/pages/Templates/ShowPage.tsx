@@ -19,6 +19,7 @@ import type { ReactNode } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+import { tourTarget } from 'shared/tour/targets';
 import { MarkdownLink } from 'shared/ui/MarkdownLink';
 import { PageHeader } from 'shared/ui/PageHeader';
 
@@ -72,7 +73,7 @@ function WhatGetsCreated({ template }: { template: TemplateDetail }) {
     ...contents.mcpServers.map((m) => `MCP · ${m.name}${m.builtIn ? ' (built in)' : ''}`),
   ];
   return (
-    <Card withBorder padding="md" radius="md">
+    <Card withBorder padding="md" radius="md" {...tourTarget('template-contents')}>
       {template.boardColumns.length > 0 && (
         <Section title="Board" count={template.boardColumns.length}>
           <Chips items={template.boardColumns} />
@@ -227,7 +228,7 @@ const ShowPage = () => {
                 </Alert>
               )}
               {installPath && (
-                <Button component="a" href={installPath} fullWidth>
+                <Button component="a" href={installPath} fullWidth {...tourTarget('template-install')}>
                   {signedIn ? 'Install' : 'Sign in to install'}
                 </Button>
               )}

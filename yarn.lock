@@ -3879,6 +3879,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"driver.js@npm:1.10.2":
+  version: 1.10.2
+  resolution: "driver.js@npm:1.10.2"
+  checksum: 10c0/e1e14b567d4d62b9b614c8f93c3ebfc4fe357b306f4a72472285f5927b86013681140d72c383fc1a81d82a957bd17ce6b7b22edb74266abe67094f8a37719916
+  languageName: node
+  linkType: hard
+
 "dunder-proto@npm:^1.0.0, dunder-proto@npm:^1.0.1":
   version: 1.0.1
   resolution: "dunder-proto@npm:1.0.1"
@@ -8047,6 +8054,7 @@ __metadata:
     cronstrue: "npm:^3.41.0"
     date-fns: "npm:^4.4.0"
     dayjs: "npm:^1.11.22"
+    driver.js: "npm:1.10.2"
     eslint: "npm:^9.39.2"
     eslint-config-prettier: "npm:^10.1.8"
     eslint-import-resolver-typescript: "npm:4.4.5"

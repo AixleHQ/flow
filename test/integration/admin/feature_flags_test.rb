@@ -64,7 +64,8 @@ class Admin::FeatureFlagsTest < ActionDispatch::IntegrationTest
     get admin_feature_flags_path
     assert_not_includes response.body, "past remove-by"
 
-    travel_to FeatureFlags.registry.fetch(:external_runners).remove_by + 1.day do
+    first_due = FeatureFlags.registry.definitions.select(&:release?).min_by(&:remove_by)
+    travel_to first_due.remove_by + 1.day do
       sign_in_as(@admin)
       get admin_feature_flags_path
     end

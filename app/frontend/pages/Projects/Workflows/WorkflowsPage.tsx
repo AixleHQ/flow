@@ -29,6 +29,7 @@ import { HistoryButton } from 'shared/components/versions/HistoryButton';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { builderCompanyProjectWorkflowPath } from 'shared/routes';
+import { tourTarget } from 'shared/tour/targets';
 import { PageHeader } from 'shared/ui/PageHeader';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -336,7 +337,7 @@ const WorkflowsPage = () => {
         </Box>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, alignContent: 'start' }}>
-          {filtered.map((wf) => {
+          {filtered.map((wf, wfIdx) => {
             const isInherited = wf.scopeIndicator === 'company';
             const isPublished = !!wf.publishedAt;
             const lastRunDot = wf.lastRunStatus
@@ -360,7 +361,7 @@ const WorkflowsPage = () => {
               : null;
 
             return (
-              <div key={wf.id} className="wf-card">
+              <div key={wf.id} className="wf-card" {...(wfIdx === 0 && tourTarget('workflow-card'))}>
                 <div className="wf-card-body">
                   {/* Name row + status badge */}
                   <div
@@ -413,7 +414,12 @@ const WorkflowsPage = () => {
                   <div className="wf-foot-left">
                     {canExecute && (
                       <Tooltip label="Run workflow">
-                        <button type="button" className="wf-btn wf-btn-run" onClick={() => setRunWorkflow(wf)}>
+                        <button
+                          type="button"
+                          className="wf-btn wf-btn-run"
+                          onClick={() => setRunWorkflow(wf)}
+                          {...(wfIdx === 0 && tourTarget('workflow-run'))}
+                        >
                           <IconPlayerPlay size={12} /> Run
                         </button>
                       </Tooltip>

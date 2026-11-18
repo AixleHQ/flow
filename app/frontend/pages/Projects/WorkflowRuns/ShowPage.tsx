@@ -31,6 +31,7 @@ import {
   finishApiV1TerminalSessionPath,
   shareApiV1ProjectWorkflowRunWorkflowRunAssetPath,
 } from 'shared/routes';
+import { tourTarget } from 'shared/tour/targets';
 import {
   agentLabel,
   ConsoleFrame,
@@ -313,7 +314,7 @@ const WorkflowRunShowPage = () => {
     if (liveSteps.length === 0) return null;
 
     return (
-      <div className={classes.consoleStack}>
+      <div className={classes.consoleStack} {...tourTarget('run-console')}>
         {liveSteps.map((step) => (
           <StepConsole
             key={step.id}
@@ -452,7 +453,7 @@ const WorkflowRunShowPage = () => {
               onChange={setTab}
               tabs={[
                 { value: 'sessions', label: 'Sessions', count: run.stepsTotal },
-                { value: 'assets', label: 'Assets', count: assets.length },
+                { value: 'assets', label: 'Assets', count: assets.length, tour: 'run-assets-tab' },
               ]}
             />
           }
@@ -600,11 +601,15 @@ const WorkflowRunShowPage = () => {
 
               {isActive && liveSteps.length > 0 ? (
                 <div className={classes.split}>
-                  <div className={classes.list}>{sessionCards}</div>
+                  <div className={classes.list} {...tourTarget('run-sessions')}>
+                    {sessionCards}
+                  </div>
                   {renderConsoles()}
                 </div>
               ) : (
-                <div className={classes.list}>{sessionCards}</div>
+                <div className={classes.list} {...tourTarget('run-sessions')}>
+                  {sessionCards}
+                </div>
               )}
             </>
           )}

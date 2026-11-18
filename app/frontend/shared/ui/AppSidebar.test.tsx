@@ -293,6 +293,29 @@ describe('AppSidebar', () => {
     expect(screen.queryByRole('menuitem', { name: 'Platform dashboard' })).not.toBeInTheDocument();
   });
 
+  it('offers to start the product tour while the tour is switched on', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(<AppSidebar context="company" projects={[]} />, {
+      props: { currentUser: { ...buildUser(), name: 'Cassia Vega' }, features: { productTour: true } },
+    });
+
+    await user.click(screen.getByRole('button', { name: /Cassia Vega/ }));
+
+    expect(await screen.findByRole('menuitem', { name: 'Start product tour' })).toBeInTheDocument();
+  });
+
+  it('has no product tour item while the tour is switched off', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(<AppSidebar context="company" projects={[]} />, {
+      props: { currentUser: { ...buildUser(), name: 'Cassia Vega' } },
+    });
+
+    await user.click(screen.getByRole('button', { name: /Cassia Vega/ }));
+
+    expect(await screen.findByRole('menuitem', { name: 'Sign Out' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Start product tour' })).not.toBeInTheDocument();
+  });
+
   it('toggles the collapsed state via the collapse button', async () => {
     const user = userEvent.setup();
     renderAuthedPage(<AppSidebar context="company" projects={projects} />);
