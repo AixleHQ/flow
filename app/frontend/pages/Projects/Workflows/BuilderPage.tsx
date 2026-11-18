@@ -27,7 +27,7 @@ import { renameOutputReferences } from 'shared/lib/references';
 import type { ToolGroup } from 'shared/lib/toolPicker';
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import type { TrackerOption } from 'shared/resources/triggers/trackerTrigger';
-import type { ChatProviderOption } from 'shared/resources/triggers/types';
+import type { ChatProviderOption, TriggerRepository } from 'shared/resources/triggers/types';
 import { UnsavedChangesNotice } from 'shared/ui/UnsavedChangesNotice';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -75,6 +75,8 @@ interface Props {
   defaultAgentRuntime?: string | null;
   boardColumns?: { id: number; name: string; boundWorkflowName?: string | null }[];
   trackers?: TrackerOption[];
+  // Not `repositories`: that deferred prop is the step pickers' list.
+  triggerRepositories?: TriggerRepository[];
   chatProviders?: ChatProviderOption[];
   /** Data-flow issues of the saved workflow; absent from a server that predates the check. */
   issues?: WorkflowIssue[];
@@ -109,6 +111,7 @@ const BuilderPage = () => {
     defaultAgentRuntime,
     boardColumns,
     trackers,
+    triggerRepositories,
     chatProviders,
     issues: initialIssues,
   } = usePage<{ props: Props }>().props as unknown as Props;
@@ -705,6 +708,7 @@ const BuilderPage = () => {
               workflowId={workflow.id}
               columns={boardColumns ?? []}
               trackers={trackers ?? []}
+              repositories={triggerRepositories ?? []}
               chatProviders={chatProviders ?? []}
               readOnly={readOnly}
             />

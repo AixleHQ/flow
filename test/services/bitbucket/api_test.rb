@@ -169,6 +169,16 @@ module Bitbucket
                        line: 12, resolved: false, created_on: "2026-10-16T09:12:00.000000+00:00" } ], items
     end
 
+    test "one comment, as a Forge comment event names it, with its author's uuid" do
+      stub_request(:get, repo_url("pullrequests", 7, "comments", 501))
+        .to_return(json(COMMENT.merge("user" => { "display_name" => "Ada Lovelace", "uuid" => "{7A1B2C3D-0000-4000-8000-0000000000AD}" })))
+
+      assert_equal({ id: 501, parent_id: 500, author: "Ada Lovelace", body: "Please add a test", path: "app/billing.rb",
+                     line: 12, resolved: false, created_on: "2026-10-16T09:12:00.000000+00:00",
+                     author_uuid: "{7a1b2c3d-0000-4000-8000-0000000000ad}", deleted: false },
+                   @api.comment(WS, REPO, 7, 501))
+    end
+
     test "an inline reply carries its path, line and parent" do
       stub = stub_request(:post, repo_url("pullrequests", 7, "comments"))
              .with(body: { content: { raw: "Done" }, inline: { path: "app/billing.rb", to: 12 }, parent: { id: 500 } })
@@ -217,6 +227,9 @@ module Bitbucket
       assert_equal @api.pull_request(WS, REPO, 7).keys.sort, fake.pull_request("acme", "api", 7).keys.sort
       assert_equal @api.comments(WS, REPO, 7).first.first.keys.sort, fake.comments("acme", "api", 7).first.first.keys.sort
       assert_equal @api.current_user.keys.sort, fake.current_user.keys.sort
+      stub_request(:get, repo_url("pullrequests", 7, "comments", 501)).to_return(json(COMMENT))
+      written = fake.comments("acme", "api", 7).first.first
+      assert_equal @api.comment(WS, REPO, 7, 501).keys.sort, fake.comment("acme", "api", 7, written[:id]).keys.sort
     end
   end
 end

@@ -329,6 +329,35 @@ module AzureDevops
       end
     end
 
+    # The shape mined is undocumented (docs/design/pull-request-triggers.md §7.4):
+    # Azure DevOps Server names the voter through the thread's `identities`, and
+    # Services sometimes only by display name.
+    test "votes are read from the pull request's vote threads, with their voter" do
+      repository = create(:repository, :azure_devops, integration: @integration, scope: @integration.project)
+      vote_thread = lambda do |id, vote, properties = {}, identities = {}|
+        { id: id, publishedDate: "2026-11-18T10:00:0#{id}Z", identities: identities,
+          properties: { CodeReviewThreadType: { "$type": "System.String", "$value": "VoteUpdate" },
+                        CodeReviewVoteResult: { "$type": "System.String", "$value": vote } }.merge(properties),
+          comments: [ { id: 1, commentType: "system", content: "voted" } ] }
+      end
+      stub_request(:get, %r{/pullrequests/7/threads}).to_return(
+        status: 200, headers: { "Content-Type" => "application/json" },
+        body: { value: [
+          { id: 1, publishedDate: "2026-11-18T09:00:00Z", properties: {}, comments: [ { id: 1, content: "why?" } ] },
+          vote_thread.call(2, "10", { CodeReviewVotedByIdentity: { "$value": "1" } },
+                           { "1" => { id: "voter-1", displayName: "Ada" } }),
+          vote_thread.call(3, "-5", { CodeReviewVotedByDisplayName: { "$value": "Grace" } }),
+          vote_thread.call(4, "10").merge(isDeleted: true)
+        ] }.to_json
+      )
+
+      votes = PullRequestService.new(@integration).vote_updates(repository, 7)
+
+      assert_equal [ { thread_id: 2, vote: 10, voter: { id: "voter-1", name: "Ada" }, published_at: "2026-11-18T10:00:02Z" },
+                     { thread_id: 3, vote: -5, voter: { name: "Grace" }, published_at: "2026-11-18T10:00:03Z" } ],
+                   votes
+    end
+
     # The guard the description promised and did not have. Azure does NOT refuse
     # a completion whose `lastMergeSourceCommit` no longer matches — a
     # completion carrying an all-zeros commit id merged the branch anyway. So it

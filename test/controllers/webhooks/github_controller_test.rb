@@ -376,7 +376,60 @@ class Webhooks::GithubControllerTest < ActionController::TestCase
     assert_equal 0, TrackerDelivery.count
   end
 
+  # == pull request events ==
+
+  test "a submitted review is queued for the repository a pull-request trigger waits on" do
+    repository = pull_request_repository
+    payload = review_payload(repository).to_json
+
+    assert_enqueued_with(job: PullRequests::ProcessEventJob) { deliver_tracker_event("pull_request_review", payload, "d-3") }
+
+    args = enqueued_jobs.find { |job| job["job_class"] == "PullRequests::ProcessEventJob" }["arguments"].sole
+    assert_equal [ repository.id ], args["repository_ids"]
+    assert_equal "changes_requested", args.dig("event", "verdict")
+  end
+
+  test "a review of a repository no pull-request trigger waits on is dropped at the door" do
+    repository = pull_request_repository(trigger: false)
+
+    assert_no_enqueued_jobs(only: PullRequests::ProcessEventJob) do
+      deliver_tracker_event("pull_request_review", review_payload(repository).to_json, "d-4")
+    end
+    assert_response :ok
+  end
+
+  test "a comment on a pull request reaches pull-request triggers without any tracker" do
+    repository = pull_request_repository(event_type: "pull_request.comment.created")
+    payload = { action: "created", installation: { id: repository.integration.github_installation_id },
+                repository: { full_name: "Acme/API" },
+                issue: { number: 12, title: "Add retries", pull_request: { html_url: "https://github.com/acme/api/pull/12" } },
+                comment: { id: 3, body: "please rename", user: { id: 7, login: "ada" } } }.to_json
+
+    assert_enqueued_with(job: PullRequests::ProcessEventJob) { deliver_tracker_event("issue_comment", payload, "d-5") }
+  end
+
   private
+
+  def pull_request_repository(trigger: true, event_type: "pull_request.review.submitted")
+    company = create(:company)
+    user = create(:user, company: company)
+    project = create(:project, company: company, owner: user)
+    integration = github_connection(project, user, "5150")
+    repository = create(:repository, scope: project, integration: integration, full_name: "acme/api")
+    if trigger
+      create(:trigger_binding, project: project, workflow: create(:workflow, scope: project), created_by: user,
+                               event_type: event_type)
+    end
+    repository
+  end
+
+  def review_payload(repository)
+    { action: "submitted", installation: { id: repository.integration.github_installation_id },
+      repository: { full_name: "acme/api" },
+      pull_request: { number: 12, title: "Add retries", html_url: "https://github.com/acme/api/pull/12",
+                      head: { ref: "retries" }, base: { ref: "main" } },
+      review: { id: 501, state: "changes_requested", body: "Handle the timeout", user: { id: 7, login: "ada" } } }
+  end
 
   def tracked_github_connection(trigger: true)
     Settings.stubs(:github).returns(OpenStruct.new(webhook_secret: WEBHOOK_SECRET, app_slug: "aixle-flow"))

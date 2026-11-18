@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_16_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_17_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -2080,11 +2080,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_16_100000) do
     t.boolean "copy_attachments", default: false, null: false
     t.bigint "chat_conversation_id"
     t.bigint "run_as_team_id"
+    t.bigint "repository_id"
     t.index ["chat_conversation_id"], name: "index_trigger_bindings_on_chat_conversation_id"
     t.index ["created_by_id"], name: "index_trigger_bindings_on_created_by_id"
     t.index ["project_id", "event_type", "enabled"], name: "idx_on_project_id_event_type_enabled_44a9c97a71"
     t.index ["project_id"], name: "index_trigger_bindings_on_project_id"
     t.index ["project_tracker_id"], name: "index_trigger_bindings_on_project_tracker_id"
+    t.index ["repository_id"], name: "index_trigger_bindings_on_repository_id"
     t.index ["run_as_team_id"], name: "index_trigger_bindings_on_run_as_team_id"
     t.index ["subject_column_id"], name: "index_trigger_bindings_on_subject_column_id"
     t.index ["workflow_id"], name: "index_trigger_bindings_on_workflow_id"
@@ -2662,6 +2664,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_16_100000) do
   add_foreign_key "trigger_bindings", "project_teams", column: "run_as_team_id", on_delete: :nullify
   add_foreign_key "trigger_bindings", "project_trackers", on_delete: :restrict
   add_foreign_key "trigger_bindings", "projects", on_delete: :cascade
+  add_foreign_key "trigger_bindings", "repositories", on_delete: :cascade
   add_foreign_key "trigger_bindings", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "trigger_bindings", "workflows", on_delete: :cascade
   add_foreign_key "trigger_dispatches", "trigger_bindings", on_delete: :nullify

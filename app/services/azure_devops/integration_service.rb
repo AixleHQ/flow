@@ -244,6 +244,7 @@ module AzureDevops
 
       event_types = AzureDevopsSubscription::GATE_EVENT_TYPES
       event_types += AzureDevopsSubscription::TRACKER_EVENT_TYPES if tracker_events_awaited?(integration)
+      event_types += AzureDevopsSubscription::PULL_REQUEST_EVENT_TYPES if pull_request_events_awaited?(integration)
       service = SubscriptionService.new(integration)
       service.refresh_status! if check
       service.ensure_all!(event_types: event_types)
@@ -278,13 +279,21 @@ module AzureDevops
                     .where(project_tracker_id: [ nil, *integration.project_trackers.ids ]).exists?
     end
 
+    def pull_request_events_awaited?(integration)
+      repositories = Repository.where(integration_id: integration.id)
+      TriggerBinding.active.where(event_type: PullRequests::EventPipeline::EVENT_TYPES, project_id: repositories.select(:scope_id))
+                    .where(repository_id: [ nil, *repositories.ids ]).exists?
+    end
+
     def verified_message(integration, hooks)
       return "Connection verified. Azure cannot reach this deployment, so it has no Service Hooks" if hooks.nil?
       return "Connection verified, but its Service Hooks could not be checked" if hooks[:undelivered].nil?
 
       if hooks[:undelivered].empty?
-        events = hooks[:event_types].intersect?(AzureDevopsSubscription::TRACKER_EVENT_TYPES) ? "CI and Boards" : "CI"
-        return "Connection verified. Service Hooks are in place for #{events} events"
+        kinds = [ "CI" ]
+        kinds << "Boards" if hooks[:event_types].intersect?(AzureDevopsSubscription::TRACKER_EVENT_TYPES)
+        kinds << "pull request" if hooks[:event_types].intersect?(AzureDevopsSubscription::PULL_REQUEST_EVENT_TYPES)
+        return "Connection verified. Service Hooks are in place for #{kinds.to_sentence} events"
       end
 
       names = integration.azure_project_names

@@ -40,7 +40,13 @@ class AzureDevopsSubscription < ApplicationRecord
     workitem.updated
     workitem.commented
   ].freeze
-  EVENT_TYPES = (GATE_EVENT_TYPES + TRACKER_EVENT_TYPES).freeze
+  # Subscribed only once a pull-request trigger is waiting for them, for the
+  # same reason. Votes arrive on the gates' `git.pullrequest.updated`
+  # (docs/design/pull-request-triggers.md §7.4).
+  PULL_REQUEST_EVENT_TYPES = %w[
+    ms.vss-code.git-pullrequest-comment-event
+  ].freeze
+  EVENT_TYPES = (GATE_EVENT_TYPES + TRACKER_EVENT_TYPES + PULL_REQUEST_EVENT_TYPES).freeze
 
   belongs_to :integration
   has_many :azure_devops_deliveries, dependent: :delete_all

@@ -282,9 +282,12 @@ URL. Ordinary `git fetch` and `git push` work with no extra step.
 ## Service Hooks
 
 Flow subscribes to build and pull-request events so a CI gate on a board card
-closes the moment a build finishes rather than on the next reconciliation sweep,
-and, once a Boards trigger waits for them, to the `workitem.*` events that start
-it.
+closes the moment a build finishes rather than on the next reconciliation sweep;
+once a Boards trigger waits for them, to the `workitem.*` events that start it;
+and once a [pull request trigger](/docs/triggers-and-gates#pull-request-events)
+waits for them, to pull request comments. Votes come with the pull-request
+events Flow already receives; Azure does not say in them whose vote changed, so
+Flow reads it from the vote's entry in the pull request's history.
 
 They are provisioned automatically, using the permission granted in step 3, and
 owned by the application — not by the administrator who connected, so their

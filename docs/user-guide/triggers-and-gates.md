@@ -35,9 +35,10 @@ shared path (`WorkflowService.start`). A `trigger_dispatches` ledger records
 | **Chat message** (Slack or Microsoft Teams) | someone addresses the app in the trigger's channel and the message matches | the workflow's Triggers, or the project's Triggers page |
 | **Inbound webhook** | an external system POSTs to the endpoint | the workflow's Triggers, or the project's Triggers page |
 | **Task tracker event** | an issue is created, moves to a status (a column on the tracker's board), is assigned, or gets a comment | the workflow's Triggers, the project's Triggers page, or *Connect a board column* on the Trackers page |
+| **Pull request event** | a review is submitted, or a comment is added, on a pull request of a connected repository | the workflow's Triggers, or the project's Triggers page ([below](#pull-request-events)) |
 
 Column binding and manual are **board-native** — the task already exists.
-Schedule, Slack, webhook and tracker events originate **off the board** and must therefore
+Schedule, chat, webhook, tracker and pull request events originate **off the board** and must therefore
 answer "what task, if any, is this run about?" — that is [`subject_policy`](#subjectpolicy).
 
 > **tip** A column starts at most one workflow (see [Board](/docs/board)). Every trigger belongs to a workflow, so a workflow declares how it launches — like `on:` in CI.
@@ -53,7 +54,8 @@ every workflow in the project in one place. Each card shows:
 - who it runs as, and whether it is switched off.
 
 Filter by **source** — board column, chat (narrowed to the messenger, such as
-Slack), task tracker, schedule, webhook, custom event — and by **workflow**.
+Slack), task tracker, pull request, schedule, webhook, custom event — and by
+**workflow**.
 
 People who can write to the project add, edit, switch off and delete triggers
 there with the same form as the workflow's Triggers tab; a new trigger asks
@@ -145,7 +147,7 @@ policy** — the single field that decides the run's board context:
 | `existing_task` | attaches to the task from context | an existing card | column binding, manual |
 | `none` | runs with no card | nothing (`board_task_id` is null) | a scheduled background job |
 | `create_task` | creates a card first, then runs on it | a fresh card | a schedule/Slack/webhook that should appear on the board |
-| `find_or_create_task` | reuses the card linked to the tracker issue, or creates and links one | the issue's card | every tracker event about one issue landing on one card |
+| `find_or_create_task` | reuses the card linked to the tracker issue or pull request, or creates and links one | the issue's or pull request's card | every tracker event about one issue landing on one card |
 
 A scheduled trigger therefore **starts a workflow, not a task** by default
 (`subject_policy: none`) — a project-level run you'll find under Workflow Runs,
@@ -170,6 +172,87 @@ the event data with an operator — `eq`, `ne`, `contains`, `not_contains`,
 `includes` or `regex` — and the conditions are AND-ed.
 
 > **info** A chat trigger listens in exactly one channel, chosen from the channels connected to your company, and its filter cannot name a channel or any other place. A channel is connected by posting a one-time code in it. How, and what a text condition is compared with, is on the [Slack](/docs/slack) and [Microsoft Teams](/docs/teams) pages.
+
+## Pull request events
+
+A **pull request** trigger starts a workflow when someone reviews or comments on
+a pull request (a merge request on GitLab) in a repository attached to the
+project. It is the way to have an agent act on review feedback: a reviewer asks
+for changes, and the workflow picks the work up on the pull request's branch.
+
+| Event | Fires when |
+| ----- | ---------- |
+| **A review is submitted** (`pull_request.review.submitted`) | a reviewer approves, requests changes or submits a review with comments |
+| **A comment is added** (`pull_request.comment.created`) | someone comments on the pull request, in its conversation or on a line of the diff |
+
+Pick a **Repository**, or leave it on *Any repository in this project*. The
+repository has to come through a GitHub, GitLab, Bitbucket or Azure DevOps
+connection; a public repository attached without one sends no events.
+
+Narrow it under **Only when**:
+
+- **Verdict** — `review.verdict` is `approved`, `changes_requested` or
+  `commented`. A trigger that fixes review feedback wants *Changes requested*.
+- **Only when Aixle is mentioned** — `comment.mentions_me`: the comment mentions
+  the app. Flow recognizes the GitHub app's `@<app-slug>`, a GitLab service
+  account and, once it has written something, an Azure DevOps connection's own
+  identity. Elsewhere the switch never matches.
+- **Text contains** — the review's or comment's text. Other fields work as
+  conditions too: `comment.file`, `pull_request.target_branch`, `actor.name`.
+
+Every step's agent is told which pull request started the run, who reviewed or
+commented and what they wrote, and the pull request's branch. When a step has the
+repository attached, the agent is told to switch to that branch and push its
+commits to it, and to read the pull request's reviews and comments with the
+`pull_request_*` tools (on Azure DevOps, `azure_devops_get_pull_request`,
+`azure_devops_list_pull_request_threads` and
+`azure_devops_reply_pull_request_thread`). Give the step those tools. Text from
+the pull request is passed to the agent as data, not as instructions.
+
+**The board task.** *The pull request's task* (`find_or_create_task`) puts every
+event about one pull request on one card, created the first time. *The pull
+request's task, if it has one* (`existing_task`) uses the card linked to the pull
+request by an earlier run of a trigger, or else the card whose run opened the
+pull request: a review of a pull request an agent opened for a task brings the
+work back to that task.
+
+**Guards.**
+
+- **Reviews and comments Aixle wrote** — through the `pull_request_*` tools, or
+  as the GitHub app's bot, a GitLab service account, the Bitbucket app or an
+  Azure DevOps connection's own identity — are
+  ignored unless **Changes made by Aixle** says otherwise, as for tracker
+  triggers. A chain of them stops after five runs, or after ten such events on
+  one pull request in an hour.
+- **One run per pull request at a time.** While a run this trigger started for a
+  pull request is still going, its further events for that pull request start
+  nothing: the run in progress reads the pull request's reviews and comments
+  itself. A reviewer who leaves fifteen comments in one review starts one run.
+
+**Example: fix what a reviewer asks for.**
+
+1. On the workflow's **Triggers** tab, select **Add a trigger** → **Pull
+   request**, and pick the repository.
+2. **When**: *A review is submitted*; **Verdict**: *Changes requested*.
+3. **Subject**: *The pull request's task, if it has one* puts the work back on
+   the card whose run opened the pull request; *The pull request's task —
+   create it the first time* gives every pull request a card of its own.
+4. Attach the repository to the workflow's step, with the `pull_request_*`
+   tools, and instruct it along the lines of: *Address every unresolved review
+   comment on the pull request, push the fixes to its branch, and reply to each
+   comment with what changed.*
+
+A reviewer who requests changes then starts one run on the pull request's
+branch. Its replies are Aixle's own, so they start nothing.
+
+**What each host sends.**
+
+| Host | Reviews | Comments | Set up |
+| ---- | ------- | -------- | ------ |
+| GitHub | approve, request changes, comment | conversation and diff comments | the GitHub app's events ([GitHub](/docs/github)) |
+| GitLab | an approval; a review submitted with *Request changes* or *Comment* (GitLab 19.3 and later) | merge request and diff notes | the repository's hook gains the events when the trigger is switched on |
+| Bitbucket | approve, request changes | pull request comments | the Aixle Flow app; token connections send no events |
+| Azure DevOps | a vote: *Approve* and *Approve with suggestions* approve, *Wait for author* and *Reject* request changes | pull request comments | Service Hooks created when the trigger is switched on |
 
 ## Gates
 

@@ -15,14 +15,24 @@ class Webhooks::GithubController < ActionController::API
       handle_installation
     when "github_app_authorization"
       handle_app_authorization
-    when *Trackers::Github::Notifications::TRACKED.keys
-      Trackers::Github::Webhooks.receive(event, request.request_parameters, delivery_id: request.headers["X-GitHub-Delivery"])
+    when *Trackers::Github::Notifications::TRACKED.keys, *PullRequests::Github::Events::TRACKED.keys
+      receive_event(event)
     end
 
     head :ok
   end
 
   private
+
+  # A comment on a pull request is both: a tracker comment when the pull request
+  # is on a tracked board, and a pull-request comment.
+  def receive_event(event)
+    payload = request.request_parameters
+    if Trackers::Github::Notifications::TRACKED.key?(event)
+      Trackers::Github::Webhooks.receive(event, payload, delivery_id: request.headers["X-GitHub-Delivery"])
+    end
+    PullRequests::Github::Webhooks.receive(event, payload) if PullRequests::Github::Events::TRACKED.key?(event)
+  end
 
   def handle_check_suite
     payload = request.request_parameters

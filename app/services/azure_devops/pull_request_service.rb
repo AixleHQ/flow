@@ -113,6 +113,20 @@ module AzureDevops
       { threads: threads.first(clamp(limit)), has_more: threads.size > clamp(limit) }
     end
 
+    # The votes cast on a pull request, one per change, oldest first. The update
+    # event that announces a vote carries every reviewer's current vote and not
+    # whose changed; Azure also writes each vote as a system thread, and that
+    # names the voter. The thread properties are undocumented: the voter is a key
+    # into the thread's `identities`, or on Azure DevOps Services sometimes only
+    # a display name.
+    def vote_updates(repository, pull_request_id)
+      client, resolved = client_for(:"repositories.read", project_id: repository.external_project_id)
+      payload = client.get(*repo_path(repository), "pullrequests", pull_request_id.to_s, "threads",
+                           family: :git, project: resolved.project_id)
+
+      Array(payload["value"]).filter_map { |thread| vote_update(thread) }
+    end
+
     # A general thread has no file context; an inline one carries a path plus
     # line coordinates validated against an iteration. Passing line numbers for
     # the wrong iteration silently anchors the comment to unrelated code.
@@ -386,6 +400,24 @@ module AzureDevops
         published_at: thread["publishedDate"],
         comments: Array(thread["comments"]).reject { |c| c["isDeleted"] }.map { |c| summarize_comment(c) }
       }.compact
+    end
+
+    def vote_update(thread)
+      return if thread["isDeleted"] || thread_property(thread, "CodeReviewThreadType") != "VoteUpdate"
+
+      vote = thread_property(thread, "CodeReviewVoteResult")
+      key = thread_property(thread, "CodeReviewVotedByIdentity").to_s
+      identity = thread["identities"].to_h[key].to_h
+      voter = { id: identity["id"].presence || (key if key.match?(/\A\h{8}-/)),
+                name: identity["displayName"].presence || thread_property(thread, "CodeReviewVotedByDisplayName") }.compact
+      return if vote.nil? || voter.empty?
+
+      { thread_id: thread["id"], vote: vote.to_i, voter: voter, published_at: thread["publishedDate"] }
+    end
+
+    def thread_property(thread, name)
+      value = thread["properties"].to_h[name]
+      value.is_a?(Hash) ? value["$value"] : value
     end
 
     def summarize_reviewer(reviewer)

@@ -5,7 +5,7 @@ module WorkflowTriggers
   # MCP and the project's Triggers page all describe the same trigger the same
   # way. Two record kinds behind one shape:
   #   column                                      → ColumnWorkflowBinding
-  #   chat / schedule / webhook / event / tracker → TriggerBinding
+  #   chat / schedule / webhook / event / tracker / pull_request → TriggerBinding
   class Serializer
     def self.kind(event_type)
       case event_type
@@ -13,6 +13,7 @@ module WorkflowTriggers
       when TriggerBinding::SCHEDULE_EVENT_TYPE then "schedule"
       when /\Awebhook\./ then "webhook"
       when /\Atracker\./ then "tracker"
+      when /\Apull_request\./ then "pull_request"
       else "event"
       end
     end
@@ -59,7 +60,7 @@ module WorkflowTriggers
       {
         id: binding.id,
         kind: self.class.kind(binding.event_type),
-        # What starts the run, for grouping: board, chat, schedule, webhook, tracker or event.
+        # What starts the run, for grouping: board, chat, schedule, webhook, tracker, pull_request or event.
         source: self.class.kind(binding.event_type),
         chat_provider: binding.chat_provider,
         # The one channel a chat trigger listens to; nil means it needs one.
@@ -75,6 +76,7 @@ module WorkflowTriggers
         cooldown_seconds: binding.cooldown_seconds,
         status_reporting: binding.status_reporting.to_s,
         project_tracker_id: binding.project_tracker_id,
+        repository_id: binding.repository_id,
         aixle_changes: binding.aixle_changes,
         copy_attachments: binding.copy_attachments,
         verification_strategy: endpoint&.verification_strategy&.to_s,

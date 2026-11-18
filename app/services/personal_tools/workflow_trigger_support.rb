@@ -5,7 +5,7 @@ module PersonalTools
   # Api::V1::Projects::Workflows::TriggersController — one surface over two
   # record kinds:
   #   column                                      → ColumnWorkflowBinding (card enters a board column)
-  #   chat / schedule / webhook / event / tracker → TriggerBinding
+  #   chat / schedule / webhook / event / tracker / pull_request → TriggerBinding
   # Both describe a trigger through WorkflowTriggers::Serializer.
   module WorkflowTriggerSupport
     KINDS = WorkflowTriggers::Creator::KINDS
@@ -19,7 +19,7 @@ module PersonalTools
     # Mutable fields, mirroring the controller's permit lists.
     BINDING_FIELDS = %i[name trigger_mode enabled cooldown_seconds status_reporting
                         subject_policy subject_column_id subject_title_template
-                        project_tracker_id aixle_changes copy_attachments chat_channel_id].freeze
+                        project_tracker_id repository_id aixle_changes copy_attachments chat_channel_id].freeze
     COLUMN_FIELDS = %i[trigger_mode cooldown_seconds].freeze
     SCHEDULE_KEYS = %w[cron timezone].freeze
 

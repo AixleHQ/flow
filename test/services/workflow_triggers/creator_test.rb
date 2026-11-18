@@ -150,4 +150,17 @@ class WorkflowTriggers::CreatorTest < ActiveSupport::TestCase
 
     assert_raises(ActiveRecord::RecordInvalid) { create_trigger("tracker", event_type: "tracker.issue.deleted") }
   end
+
+  test "a pull-request trigger listens to the repository it names, and is serialized as its own kind" do
+    repository = create(:repository, scope: @project, full_name: "acme/api",
+                                     integration: create(:integration, :github, :active, company: @project.company, project: @project))
+
+    binding = create_trigger("pull_request", event_type: "pull_request.review.submitted", repository_id: repository.id,
+                                             filter_predicate: { "review.verdict" => "changes_requested" }).trigger
+
+    serialized = WorkflowTriggers::Serializer.new.binding(binding)
+    assert_equal [ "pull_request", "pull_request", repository.id, "pull_request.review.submitted" ],
+                 serialized.values_at(:kind, :source, :repository_id, :event_type)
+    assert_raises(ActiveRecord::RecordInvalid) { create_trigger("pull_request") }
+  end
 end
