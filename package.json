@@ -27,7 +27,7 @@
     "eslint-plugin-react-refresh": "^0.5.7",
     "eslint-plugin-testing-library": "^7.16.2",
     "globals": "^17.14.0",
-    "jsdom": "^30",
+    "jsdom": "^31",
     "license-checker-rseidelsohn": "^5.0.1",
     "prettier": "^3.9.10",
     "prettier-plugin-packagejson": "^3.1.0",
