@@ -226,7 +226,7 @@ gem "faraday-retry", "~> 2.3"
 # Metered billing for the hosted product. The official client rather than our own
 # HTTP: webhook signature verification is the one part of this that must not be
 # hand-rolled, and idempotency keys on retried writes come with it.
-gem "stripe", "~> 20.1"
+gem "stripe", "~> 21.0"
 
 gem "lograge", "~> 0.15.1"
 
