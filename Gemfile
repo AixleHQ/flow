@@ -193,31 +193,31 @@ gem "shrine", "~> 3.10"
 # session logs and step outputs. Nothing else requires it: the app does not load
 # Active Storage, which would.
 gem "marcel", "~> 1.0"
-gem "aws-sdk-s3", "~> 1.239"
+gem "aws-sdk-s3", "~> 1.242"
 
 # Bedrock runtime, for the cloud-connection health check: the only way to tell a user
 # their permission set cannot actually invoke a model is to try. Claude Code hides
 # Bedrock errors, so without this the failure surfaces as an agent that never answers.
 # (STS, SSO and SSO-OIDC clients already ship inside aws-sdk-core.)
-gem "aws-sdk-bedrockruntime", "~> 1.92"
+gem "aws-sdk-bedrockruntime", "~> 1.95"
 
 # Bedrock control plane, for listing the inference profiles an account can actually invoke.
 # That list is the only truthful model catalogue for a Bedrock connection — it includes the
 # account's own application inference profiles, which is what enterprise deployments pin.
-gem "aws-sdk-bedrock", "~> 1.102"
+gem "aws-sdk-bedrock", "~> 1.105"
 
 # AWS Marketplace metering. Only an installation bought through Marketplace ever
 # calls it, and only from the pod whose service account carries the role.
-gem "aws-sdk-marketplacemetering", "~> 1.114"
+gem "aws-sdk-marketplacemetering", "~> 1.117"
 
 # Asked at registration what state the agreement is already in, because the
 # event that would say so races the buyer's arrival on the fulfilment page.
-gem "aws-sdk-marketplaceagreement", "~> 1.54"
+gem "aws-sdk-marketplaceagreement", "~> 1.57"
 
 # The queue a rule in the seller account delivers SaaS subscription events into.
 # Unlike the metering call above, that queue is in THIS account, so it is read
 # with the pod's own identity rather than the seller role.
-gem "aws-sdk-sqs", "~> 1.126"
+gem "aws-sdk-sqs", "~> 1.129"
 gem "image_processing", "~> 2.2"
 gem "ruby-vips", "~> 2.3" # image_processing 2.0 no longer declares it; shrine.rb requires image_processing/vips
 
@@ -228,7 +228,7 @@ gem "faraday-retry", "~> 2.3"
 # hand-rolled, and idempotency keys on retried writes come with it.
 gem "stripe", "~> 20.1"
 
-gem "lograge", "~> 0.15.1"
+gem "lograge", "~> 0.16.0"
 
 # Reads ONE credential format, not an application database. Kiro CLI keeps its login in
 # a SQLite file rather than a JSON document, so Agents::KiroCliAdapter has to open that
