@@ -30,12 +30,9 @@ class Web::OnboardingController < Web::ApplicationController
                                                  :input_assets, :repositories, :runner)
                                        .where(company_id: current_membership.company_id)
 
-    viewer_preview = build_viewer_workflow_preview(current_membership.company) if current_membership.viewer?
-
     render inertia: "Onboarding/OnboardingPage", props: {
       auth_sessions: -> { active_auth_sessions.map { |s| TerminalSessionResource.new(s, params: { viewer: current_user }).to_h } },
-      cable_stream: -> { inertia_cable_stream(current_user) },
-      viewer_workflow_preview: -> { viewer_preview }
+      cable_stream: -> { inertia_cable_stream(current_user) }
     }
   end
 
@@ -78,16 +75,5 @@ class Web::OnboardingController < Web::ApplicationController
     event = params.dig(:onboarding, :onboarding_state_event)
     permitted[:onboarding_state_event] = event if event.present? && ALLOWED_ONBOARDING_EVENTS.include?(event)
     permitted
-  end
-
-  def build_viewer_workflow_preview(company)
-    workflow = Workflow.belonging_to_company(company).order(:id).first
-    return nil if workflow.nil?
-
-    {
-      workflow_name: workflow.name,
-      workflow_description: workflow.description.presence || "An automated workflow",
-      steps: workflow.steps.not_deleted.limit(4).map { |s| { name: s.name } }
-    }
   end
 end

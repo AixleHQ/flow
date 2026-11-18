@@ -6,9 +6,8 @@ require "test_helper"
 # role, the chosen agents and the agent credential all differ per company (the
 # credential must, so vendor spend is billed to the company that incurred it).
 #
-# Two steps only: step1 (profile) → step2 (connect agents / viewer preview) →
-# completed. `complete` finishes directly from step2 — no intermediate
-# "ready to finish" state.
+# step1 (profile) → step2 (connect agents) → completed. A viewer has no agent
+# step and completes straight from step1.
 class MembershipOnboardingStateMachineTest < ActiveSupport::TestCase
   setup do
     @company = create(:company)
@@ -37,6 +36,19 @@ class MembershipOnboardingStateMachineTest < ActiveSupport::TestCase
     assert m.aasm(:onboarding_state).fire!(:complete)
     assert_equal "completed", m.onboarding_state
     assert m.onboarding_completed_at.present?
+  end
+
+  test "viewer completes onboarding straight from the profile step" do
+    m = membership(:viewer, state: "step1")
+    assert m.aasm(:onboarding_state).fire!(:complete)
+    assert_equal "completed", m.onboarding_state
+    assert m.onboarding_completed_at.present?
+  end
+
+  test "non-viewer cannot complete from the profile step, even with credentials" do
+    m = membership(:employee, state: "step1")
+    create(:agent_credential, user: m.user, company: @company, agent_type: "claude_code")
+    assert_not m.reload.aasm(:onboarding_state).may_fire_event?(:complete)
   end
 
   test "non-viewer is blocked from completing at step2 without credentials" do
