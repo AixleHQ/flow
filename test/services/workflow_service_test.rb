@@ -45,6 +45,29 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     assert_equal 2, run.step_runs.count
   end
 
+  test "a run's step runs are created pending, in step order, at a cost that does not grow with the steps" do
+    TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: true)
+    @step2.update!(position: 0)
+    queries = lambda do
+      count = 0
+      counter = ->(*, payload) { count += 1 if payload[:sql].match?(/step_runs/) && !payload[:cached] }
+      run = ActiveSupport::Notifications.subscribed(counter, "sql.active_record") do
+        WorkflowService.start(workflow: @workflow, project: @project, user: @user, source: :web)
+      end
+      [ run, count ]
+    end
+
+    run, two_steps = queries.call
+
+    assert_equal [ @step2, @step1 ], run.step_runs.order(:id).map(&:step)
+    assert_equal %w[pending pending], run.step_runs.map(&:state)
+    assert_equal 2, run.step_runs_count
+    assert_equal 2, run.reload.step_runs_count
+
+    (3..5).each { |position| create(:step, workflow: @workflow, position: position) }
+    assert_equal two_steps, queries.call.last
+  end
+
   test "start persists agent_runtime when provided" do
     TemporalWorkflowRegistry.expects(:start_workflow_execution).once.returns(ok: true)
 

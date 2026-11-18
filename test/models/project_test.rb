@@ -43,6 +43,23 @@ class ProjectTest < ActiveSupport::TestCase
     assert_not @project.accessible_by?(foreign_admin)
   end
 
+  test "accessible_user_ids admits whom accessible_by? admits, in constant queries" do
+    collaborator = create(:user, :employee, :onboarding_completed, company: @company)
+    @project.add_collaborator(collaborator)
+    revoked = create(:user, :employee, :onboarding_completed, company: @company)
+    @project.add_collaborator(revoked)
+    revoked.company_memberships.find_by(company: @company).revoke!
+    admin = create(:user, :admin, :onboarding_completed, company: @company)
+    stranger = create(:user, :employee, :onboarding_completed, company: @company)
+    foreign_admin = create(:user, :admin, :onboarding_completed, company: create(:company))
+    users = [ @project_owner, collaborator, revoked, admin, stranger, foreign_admin ]
+
+    accessible = assert_queries_count(2) { @project.accessible_user_ids(users.map(&:id)) }
+
+    assert_equal [ @project_owner, collaborator, admin ].map(&:id).to_set, accessible
+    assert_equal users.select { |user| @project.accessible_by?(user) }.map(&:id).to_set, accessible
+  end
+
   test "assignable_users is the members accessible_by? admits, owner first, in constant queries" do
     collaborators = create_list(:user, 3, :employee, :onboarding_completed, company: @company)
     collaborators.each { |user| @project.add_collaborator(user) }

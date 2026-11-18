@@ -21,6 +21,7 @@ module Admin
     # Also preloads what virtual index columns read, so they do not query per row.
     INDEX_COLLECTION_INCLUDES_EXTRAS = {
       "Company" => [ :session_concurrency_limit_row ],
+      "Project" => [ :owner, :company ],
       "Step" => [ :workflow ],
       "TaskComment" => [ :board_task ],
       "BoardColumn" => [ :board ],
@@ -33,7 +34,6 @@ module Admin
       "SubStep" => [ :step ],
       "TaskAsset" => [ :board_task ],
       "WorkflowRunAsset" => [ :workflow_run ],
-      "WorkflowRun" => [ :workflow, :project, :user ],
       "ColumnWorkflowBinding" => [ :workflow ]
     }.freeze
 

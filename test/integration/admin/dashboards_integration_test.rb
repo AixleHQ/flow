@@ -88,6 +88,8 @@ module Admin
     end
 
     test "projects#index" do
+      other_company = create(:company)
+      create(:project, company: other_company, owner: create(:user, :onboarding_completed, company: other_company))
       get admin_projects_path
       assert_response :success
     end
@@ -233,6 +235,10 @@ module Admin
     end
 
     test "board_tasks#show" do
+      other_workflow = create(:workflow, scope: @project)
+      [ @workflow, other_workflow ].each do |workflow|
+        create(:workflow_run, workflow: workflow, project: @project, user: @user, board_task: @task)
+      end
       get admin_board_task_path(@task)
       assert_response :success
     end

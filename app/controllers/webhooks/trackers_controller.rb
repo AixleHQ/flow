@@ -20,7 +20,9 @@ class Webhooks::TrackersController < ActionController::API
     provider = Trackers::Provider.for(subscription.integration)
     return head :unauthorized unless provider.authentic_delivery?(request, raw, subscription)
 
-    accept(subscription, provider, JSON.parse(raw), raw)
+    payload = JSON.parse(raw)
+    heard_from([ subscription ])
+    accept(subscription, provider, payload, raw)
     head :ok
   rescue JSON::ParserError
     head :bad_request
@@ -33,9 +35,7 @@ class Webhooks::TrackersController < ActionController::API
     return head :unauthorized unless Trackers::Jira::Webhooks.app_signed?(request)
 
     payload = JSON.parse(raw)
-    Trackers::Jira::Webhooks.app_subscriptions(payload).each do |subscription|
-      accept(subscription, Trackers::Provider.for(subscription.integration), payload, raw)
-    end
+    accept_each(Trackers::Jira::Webhooks.app_subscriptions(payload), payload, raw)
     head :ok
   rescue JSON::ParserError
     head :bad_request
@@ -48,9 +48,7 @@ class Webhooks::TrackersController < ActionController::API
     return head :unauthorized unless Trackers::Linear::Webhooks.app_signed?(request, raw)
 
     payload = JSON.parse(raw)
-    Trackers::Linear::Webhooks.app_subscriptions(payload).each do |subscription|
-      accept(subscription, Trackers::Provider.for(subscription.integration), payload, raw)
-    end
+    accept_each(Trackers::Linear::Webhooks.app_subscriptions(payload), payload, raw)
     head :ok
   rescue JSON::ParserError
     head :bad_request
@@ -58,10 +56,23 @@ class Webhooks::TrackersController < ActionController::API
 
   private
 
+  def accept_each(subscriptions, payload, raw)
+    heard_from(subscriptions)
+    subscriptions.each do |subscription|
+      accept(subscription, Trackers::Provider.for(subscription.integration), payload, raw)
+    end
+  end
+
+  def heard_from(subscriptions)
+    return if subscriptions.empty?
+
+    now = Time.current
+    TrackerSubscription.where(id: subscriptions.map(&:id)).update_all(last_event_at: now, status: "active", updated_at: now)
+  end
+
   def accept(subscription, provider, payload, raw)
     dedup_key = provider.delivery_id(request, payload).presence || Digest::SHA256.hexdigest(raw)
     notifications = provider.parse_delivery(payload, subscription, delivery_id: dedup_key)
-    subscription.update_columns(last_event_at: Time.current, status: "active", updated_at: Time.current)
     return if notifications.empty?
 
     delivery = TrackerDelivery.record(subscription: subscription, dedup_key: dedup_key, notifications: notifications)
