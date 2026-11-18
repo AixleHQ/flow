@@ -19,6 +19,6 @@ module DashboardViewerOnly
   def require_dashboard_viewer
     return redirect_to(login_path) unless signed_in?
 
-    head :not_found unless current_user.dashboard_viewer?
+    render_not_found unless current_user.dashboard_viewer?
   end
 end

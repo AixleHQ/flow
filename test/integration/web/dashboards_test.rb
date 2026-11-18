@@ -91,6 +91,7 @@ class Web::DashboardsTest < ActionDispatch::IntegrationTest
     get dashboard_path
 
     assert_response :not_found
+    assert_select "h1", "Page not found"
 
     get waits_dashboard_path(from: "2026-10-01", to: "2026-10-31", format: :json)
 
