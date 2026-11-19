@@ -80,12 +80,39 @@ class Web::SessionsControllerTest < ActionDispatch::IntegrationTest
     assert inertia.props[:errors].present?, "the refusal has to say something"
   end
 
-  test "a refused password for an address no workspace claims goes back to the start" do
+  test "a refused password for an address no workspace claims stays on the password step" do
     post login_path, params: {
       user: { email: "nobody@unclaimed-#{SecureRandom.hex(3)}.test", password: "wrong_password" }
     }
 
+    assert_response :success
+    assert_equal "credentials", inertia.props[:step]
+    assert_nil inertia.props[:companyName]
+    assert inertia.props[:errors].present?, "the refusal has to say something"
+  end
+
+  test "a refused password for something that is not an address goes back to the start" do
+    post login_path, params: { user: { email: "not-an-address", password: "wrong_password" } }
+
     assert_redirected_to login_path
+  end
+
+  # The invitation signs a member in by itself, so the first time they meet the
+  # address step is after signing out. Their domain belongs to no workspace, and
+  # that step used to send them to create one instead of asking for a password.
+  test "a member invited from a domain no workspace claims signs back in with their password" do
+    member = create(:user, :onboarding_completed, company: @company, membership_role: "viewer",
+                           email: "guest@unclaimed-#{SecureRandom.hex(3)}.test", password: AuthHelper::TEST_PASSWORD)
+
+    post login_identify_path, params: { email: member.email }
+
+    assert_equal "credentials", inertia.props[:step]
+    assert_includes inertia.props[:methods], "password"
+
+    post login_path, params: { user: { email: member.email, password: AuthHelper::TEST_PASSWORD } }
+
+    assert_redirected_to company_projects_path
+    assert_equal member, UserSession.live.sole.user
   end
 
   test "destroy signs out and redirects to login" do

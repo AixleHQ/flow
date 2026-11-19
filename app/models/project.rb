@@ -186,6 +186,12 @@ class Project < ApplicationRecord
     member_users.where(id: CompanyMembership.active.where(company_id: company_id).select(:user_id))
   end
 
+  # The members, less anyone put on the project with an invitation still pending:
+  # they are not in the project until they accept.
+  def joined_member_users
+    member_users.where.not(id: CompanyMembership.invited.where(company_id: company_id).select(:user_id))
+  end
+
   INSIGHTS_DEFAULTS = { "export" => false, "project_id" => nil }.freeze
 
   # The export switch and the Insights project it maps to (docs/design/insights-otlp-relay.md §3).

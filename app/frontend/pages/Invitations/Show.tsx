@@ -19,6 +19,7 @@ interface Props {
   invitedEmail?: string;
   currentEmail?: string;
   inviteeName?: string;
+  projects?: string[];
 }
 
 interface PageErrors {
@@ -48,11 +49,24 @@ type SignupFormData = z.infer<typeof signupSchema>;
 const firstError = (value: string | string[] | undefined): string | undefined =>
   Array.isArray(value) ? value[0] : value;
 
-const InvitationSummary = ({ inviterName, company, role }: Pick<Props, 'inviterName' | 'company' | 'role'>) => (
-  <Text ta="center" size="sm" c="dimmed" mb="lg">
-    {inviterName ?? 'An administrator'} invited you to join <strong>{company?.name}</strong> as{' '}
-    <strong>{ROLE_LABELS[role ?? ''] ?? role}</strong>.
-  </Text>
+const InvitationSummary = ({
+  inviterName,
+  company,
+  role,
+  projects = [],
+}: Pick<Props, 'inviterName' | 'company' | 'role' | 'projects'>) => (
+  <Stack gap="xs" mb="lg">
+    <Text ta="center" size="sm" c="dimmed">
+      {inviterName ?? 'An administrator'} invited you to join <strong>{company?.name}</strong> as{' '}
+      <strong>{ROLE_LABELS[role ?? ''] ?? role}</strong>.
+    </Text>
+    {projects.length > 0 && (
+      <Text ta="center" size="sm" c="dimmed">
+        You&apos;ll have access to {projects.length === 1 ? 'the project' : 'the projects'}{' '}
+        <strong>{projects.join(', ')}</strong>.
+      </Text>
+    )}
+  </Stack>
 );
 
 const SignupForm = ({ token, inviteeName }: { token: string; inviteeName?: string }) => {
@@ -116,7 +130,7 @@ const SignupForm = ({ token, inviteeName }: { token: string; inviteeName?: strin
 };
 
 function InvitationShow(props: Props) {
-  const { variant, token, company, role, inviterName, invitedEmail, currentEmail, inviteeName } = props;
+  const { variant, token, company, role, inviterName, invitedEmail, currentEmail, inviteeName, projects } = props;
 
   return (
     <PageShell variant="centered">
@@ -145,7 +159,7 @@ function InvitationShow(props: Props) {
             <Title order={3} ta="center">
               Join {company?.name}
             </Title>
-            <InvitationSummary inviterName={inviterName} company={company} role={role} />
+            <InvitationSummary inviterName={inviterName} company={company} role={role} projects={projects} />
             <Group grow>
               <Button variant="default" onClick={() => router.post(`/invitations/${token}/decline`)}>
                 Decline
@@ -182,7 +196,7 @@ function InvitationShow(props: Props) {
             <Title order={3} ta="center">
               Join {company?.name}
             </Title>
-            <InvitationSummary inviterName={inviterName} company={company} role={role} />
+            <InvitationSummary inviterName={inviterName} company={company} role={role} projects={projects} />
             <Text ta="center" size="sm" c="dimmed">
               Sign in as <strong>{invitedEmail}</strong> to accept the invitation — it will be applied automatically
               after login.
@@ -201,7 +215,7 @@ function InvitationShow(props: Props) {
             <Title order={3} ta="center">
               Join {company?.name}
             </Title>
-            <InvitationSummary inviterName={inviterName} company={company} role={role} />
+            <InvitationSummary inviterName={inviterName} company={company} role={role} projects={projects} />
             <Text ta="center" size="sm" c="dimmed">
               Sign in with Google as <strong>{invitedEmail}</strong>, or create a password to get started.
             </Text>

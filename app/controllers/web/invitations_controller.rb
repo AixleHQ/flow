@@ -148,6 +148,7 @@ class Web::InvitationsController < Web::ApplicationController
       props[:company] = { name: membership.company.name }
       props[:role] = membership.role.to_s
       props[:inviterName] = membership.invited_by&.name
+      props[:projects] = membership.collaborated_projects.order(:name).pluck(:name)
     end
 
     props[:invitedEmail] = extra[:invited_email] if extra.key?(:invited_email)

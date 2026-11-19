@@ -39,7 +39,7 @@ describe('InviteMemberDrawer', () => {
     await waitFor(() =>
       expect(router.post).toHaveBeenCalledWith(
         '/companies/1/members',
-        { user: { email: 'jane@company.com', name: 'Jane Roe', role: 'employee' } },
+        { user: { email: 'jane@company.com', name: 'Jane Roe', role: 'employee', projectIds: [] } },
         expect.objectContaining({ preserveScroll: true }),
       ),
     );

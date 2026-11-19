@@ -7,6 +7,9 @@ module Auth
   # known and an unknown address at the same domain is an oracle for which
   # addresses are registered — so this asks only which company claims the
   # domain, and what that company accepts.
+  #
+  # A domain no company claims gets the installation's own methods, not nil: a
+  # member invited from another domain signs in from exactly such an address.
   class SignInOptions
     # Methods that can BEGIN a session. Authentication codes confirm a session
     # that already exists — there is nobody to look up from six digits — so they
@@ -16,25 +19,29 @@ module Auth
     attr_reader :company, :connections, :kinds
 
     def self.for(email)
-      company = Company.find_by_email_domain(email.to_s)
-      return nil if company.nil?
-
-      new(company)
+      new(Company.find_by_email_domain(email.to_s))
     end
 
     def initialize(company)
       @company = company
-      allowed = Auth::PolicyResolver.allowed_providers(company).to_a
+      if company.nil?
+        @connections = []
+        @kinds = Auth::PolicyResolver.deployment_allowlist_kinds & STARTABLE_KINDS
+        return
+      end
 
+      allowed = Auth::PolicyResolver.allowed_providers(company).to_a
       @connections = allowed.select { |provider| provider.company? && provider.oidc? }.sort_by(&:id)
       @kinds = allowed.select(&:deployment?).map { |provider| provider.kind.to_s } & STARTABLE_KINDS
     end
+
+    def unclaimed? = company.nil?
 
     # A workspace with nothing left that can start a session. The stranding
     # guard on the policy screen is what should keep this empty, and saying so
     # plainly beats an empty step that looks broken.
     def dead_end?
-      connections.empty? && kinds.empty?
+      !unclaimed? && connections.empty? && kinds.empty?
     end
   end
 end

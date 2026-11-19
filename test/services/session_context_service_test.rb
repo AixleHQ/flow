@@ -960,7 +960,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
     context_service(session, "ctr1", runtime: runtime_mock).assemble
 
-    step_logs = logged_messages.select { |m| m.include?("[SessionContext] Step") }
+    step_logs = logged_messages.select { |m| m.start_with?("[SessionContext] session=#{session.id} Step ") }
     assert step_logs.any? { |m| m.include?("'config_files'") }
     assert step_logs.any? { |m| m.include?("'mcp_config'") }
     assert step_logs.any? { |m| m.include?("'skills'") }
@@ -1282,8 +1282,28 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
     context_service(session, "ctr1", runtime: runtime_mock).assemble
 
-    assert logged_messages.any? { |m| m.include?("[SessionContext] Step 'bmad_method'") },
+    assert logged_messages.any? { |m| m.include?("[SessionContext] session=#{session.id} Step 'bmad_method' completed in") },
       "Expected bmad_method step timing to be logged"
+  end
+
+  test "assemble_session_context logs the step that failed, with its session and elapsed time" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "cursor_cli",
+                     mode: "interactive", session_config: { "bmad_enabled" => true })
+
+    runtime_mock = mock("runtime")
+    runtime_mock.stubs(:write_file).returns(true)
+    runtime_mock.stubs(:exec).returns([ [], [], 0 ])
+
+    injector_mock = mock("bmad_injector")
+    injector_mock.stubs(:inject!).raises(RuntimeError, "install hung")
+    BmadMethodInjector.stubs(:new).returns(injector_mock)
+
+    Rails.logger.expects(:warn).with do |line|
+      line.match?(/\A\[SessionContext\] session=#{session.id} Step 'bmad_method' failed after [\d.]+ms: RuntimeError: install hung\z/)
+    end
+
+    error = assert_raises(RuntimeError) { context_service(session, "ctr1", runtime: runtime_mock).assemble }
+    assert_equal "install hung", error.message
   end
 
   test "assemble_session_context runs bmad_method after repositories and before context_file" do
@@ -1297,7 +1317,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     Rails.logger.unstub(:info)
     step_order = []
     Rails.logger.stubs(:info).with do |msg|
-      if msg.include?("[SessionContext] Step '")
+      if msg.start_with?("[SessionContext] session=#{session.id} Step '")
         step_name = msg.match(/Step '([\w]+)'/)[1]
         step_order << step_name
       end

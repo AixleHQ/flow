@@ -37,6 +37,9 @@ class CompanyMembership < ApplicationRecord
   scope :not_revoked, -> { where.not(state: "revoked") }
   # Invited, suspended or revoked: everything but a member in good standing.
   scope :not_active, -> { where.not(state: "active") }
+  # Who can be put on a project: a member, or someone whose invitation is still
+  # open. Project access itself still wants an active membership.
+  scope :active_or_invited, -> { where(state: %w[active invited]) }
 
   # Per-company role lives ONLY here (platform-level super_admin is users.super_admin)
   enumerize :role, in: %i[employee admin viewer], default: :employee, predicates: true, scope: true
@@ -320,6 +323,12 @@ class CompanyMembership < ApplicationRecord
       models = models.map { |m| m.merge(reasoning_effort_levels: runtime&.reasoning_effort_levels(m[:model_id]) || []) }
       { agent_type: agent_type, models: models, default_model: default_models[agent_type] }
     end
+  end
+
+  # The company's projects this person collaborates on. For a pending invitation,
+  # the projects they reach once they accept.
+  def collaborated_projects
+    company.projects.where(id: ProjectCollaborator.where(user_id: user_id).select(:project_id))
   end
 
   # Revokes the membership after handing each owned project to the member

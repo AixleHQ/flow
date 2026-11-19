@@ -1765,8 +1765,13 @@ are unchanged. With `network: host` the host runner listens itself.
   written to again (#256; found by #252 step 9, where the runner kept using it for 18 minutes).
   A machine can still be heard for an instant by a request whose answer never reaches it, and
   the cleanup then sends the reset. A reset that nobody answers, for a session that lost
-  contact, does not fail the machine: the session keeps it, the op expires, and the cleanup
-  sends a new reset when the machine is heard again (`RunnerRuntime#cleanup_session`).
+  contact, does not fail the machine when the machine is not heard at the moment the reset
+  expires: the session keeps it, the op expires, and the cleanup sends a new reset when the
+  machine is heard again (`RunnerRuntime#cleanup_session`). A machine that is heard at that
+  moment and still left the reset unanswered is failed, as for any session ("the runner did
+  not answer"): a runner that heartbeats but never runs ops (a wedged op loop) would
+  otherwise be reset every `lifecycle_op_timeout` without end, with the machine and its slot
+  held and nothing shown to the operator.
 - `finish_session`/`fail_session` go through the proxy (§6.6). If the proxy is down at that
   moment, the MCP call fails, the agent retries as it does on any network error, and the
   runner keeps the agent alive until the call lands or the 15-minute grace expires.
