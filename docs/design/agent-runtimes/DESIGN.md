@@ -1745,6 +1745,20 @@ are unchanged. With `network: host` the host runner listens itself.
   revoking the machine (§9.3, which also frees the slot held by a lost machine's session; there is
   no Force release), and the runner being revoked or deleted: its machines never come back, so
   the grace lets the machine go when it fails the session and the slot is released then.
+- **After an outage the runner reconnects within about a minute, and the reset waits for it.**
+  A runner's HTTP client pings an HTTP/2 connection that has been silent for 15 s, closes it
+  when the ping is not answered within 10 s, and closes its idle connections after a request
+  got no answer (PROTOCOL.md §1), so a connection that died when the network dropped is never
+  written to again (#256; found by #252 step 9, where the runner kept using it for 18 minutes).
+  A machine can still be heard for an instant by a request whose answer never reaches it, and
+  the cleanup then sends the reset. A reset that nobody answers, for a session that lost
+  contact, does not fail the machine when the machine is not heard at the moment the reset
+  expires: the session keeps it, the op expires, and the cleanup sends a new reset when the
+  machine is heard again (`RunnerRuntime#cleanup_session`). A machine that is heard at that
+  moment and still left the reset unanswered is failed, as for any session ("the runner did
+  not answer"): a runner that heartbeats but never runs ops (a wedged op loop) would
+  otherwise be reset every `lifecycle_op_timeout` without end, with the machine and its slot
+  held and nothing shown to the operator.
 - `finish_session`/`fail_session` go through the proxy (§6.6). If the proxy is down at that
   moment, the MCP call fails, the agent retries as it does on any network error, and the
   runner keeps the agent alive until the call lands or the 15-minute grace expires.
