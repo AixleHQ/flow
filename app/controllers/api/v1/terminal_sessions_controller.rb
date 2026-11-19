@@ -40,6 +40,11 @@ module Api
         # unpersisted session raises on its Global ID, so the client would get a 500
         # where it should get the errors it can act on.
         unless session.persisted?
+          # A runner of another project or company: refused as forbidden (DESIGN.md §12.4 step 13).
+          if session.errors.of_kind?(:base, :not_available)
+            return render json: { error: session.errors.full_messages.to_sentence }, status: :forbidden
+          end
+
           return render json: { errors: session.errors.full_messages }, status: :unprocessable_entity
         end
 
