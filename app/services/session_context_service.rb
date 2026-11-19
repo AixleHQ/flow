@@ -427,9 +427,16 @@ class SessionContextService
   def measure_step(name)
     start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     result = yield
-    elapsed = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - start) * 1000).round(1)
-    Rails.logger.info("[SessionContext] Step '#{name}' completed in #{elapsed}ms")
+    Rails.logger.info("[SessionContext] session=#{session.id} Step '#{name}' completed in #{elapsed_ms_since(start)}ms")
     result
+  rescue StandardError => e
+    Rails.logger.warn("[SessionContext] session=#{session.id} Step '#{name}' failed after #{elapsed_ms_since(start)}ms: " \
+                      "#{e.class}: #{e.message}")
+    raise
+  end
+
+  def elapsed_ms_since(start)
+    ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - start) * 1000).round(1)
   end
 
   # == Shared Helpers ==
