@@ -750,13 +750,13 @@ class TerminalSessionTest < ActiveSupport::TestCase
   end
 
   test "waiting_for_runner_machine? is false for a session without an admission" do
-    assert_not create(:terminal_session, :agent_session).waiting_for_runner_machine?
+    assert_not create(:terminal_session, :agent_session, user: @user, project: @project).waiting_for_runner_machine?
   end
 
   private
 
   def admission_waiting_for(reason)
-    session = create(:terminal_session, :agent_session)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
     pool = SessionAdmissionPool.create!(key: "project:#{session.project_id}:#{reason}", limit: 10, policy_revision: 1)
     SessionAdmission.create!(terminal_session: session, session_admission_pool: pool, wait_reason: reason)
   end
