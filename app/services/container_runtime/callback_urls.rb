@@ -18,7 +18,8 @@ module ContainerRuntime
   # - `:container_assets`: the host stored files are downloaded from, for
   #   ContainerAssetUrl;
   # - `:otel`: the OTLP endpoint, which is not Rails but `otlp-ingest`. Nil
-  #   means the session gets no telemetry endpoint.
+  #   means the session gets no telemetry endpoint (no runtime answers nil
+  #   today).
   module CallbackUrls
     HOSTED = {
       mcp: -> { Settings.mcp.server_url },
