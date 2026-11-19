@@ -16,6 +16,8 @@ require "test_helper"
 # against the protocol in runner/internal/docker, and the wire by the
 # conformance fixtures.
 class ContainerRuntime::RunnerRuntimeContractTest < ActiveSupport::TestCase
+  MITM_LOG = "/var/log/mitm/http.log"
+
   setup do
     @environment = create(:runner_environment, key: "aixle-r1-0a1b2c3d")
     @session = create(:runner_session, environment: @environment)
@@ -99,7 +101,85 @@ class ContainerRuntime::RunnerRuntimeContractTest < ActiveSupport::TestCase
     assert_equal :unreachable, gone["RunnerRuntime"]
   end
 
+  # The usage of `cursor_cli`, `grok` and the Codex fallback is read from the
+  # session's MITM log. The strategy gets that log through the runtime
+  # (Sessions::LogCollector: an exec for the listing and the tail), so a runner
+  # session records usage when the same adapters price what RunnerRuntime returns.
+  test "the MITM log of a runner session is read through the runtime and grok prices it" do
+    start_container
+    @session.update!(agent_type: "grok")
+    log = "#{grok_mitm_line}\n"
+    @machine.container.files[MITM_LOG] = log
+    stub_request(:get, Agents::GrokAdapter::MODELS_URL).to_return(status: 401, body: "")
+
+    runtime = ContainerRuntime::RunnerRuntime.new
+    assert_equal log, runtime.read_file(@machine.container.name, MITM_LOG)
+    artifacts = collect_logs(runtime, Agents::GrokAdapter.new)
+    Agents::GrokAdapter.new.collect_usage(@session, artifacts)
+
+    stat = @session.reload.usage_statistic
+    assert_equal 1_000, stat.input_tokens
+    assert_equal 200, stat.output_tokens
+    assert_equal "mitm", stat.source
+  end
+
+  test "the MITM log of a runner session is read through the runtime and cursor_cli prices it" do
+    start_container
+    @session.update!(agent_type: "cursor_cli")
+    create(:agent_credential, :cursor_cli, user: @session.user, config_data: { "accessToken" => "session-token" })
+    response_iso = "2026-05-21T19:32:31.000Z"
+    log = [
+      { ts: "2026-05-21T19:32:30.461Z", direction: "request", path: "/agent.v1.AgentService/Run",
+        headers: { "x-request-id" => "req-1" }, _source: "http2-logger" },
+      { ts: response_iso, direction: "response", path: "/agent.v1.AgentService/Run",
+        headers: { "x-request-id" => "req-1" }, _source: "http2-logger" }
+    ].map(&:to_json).join("\n")
+    @machine.container.files[MITM_LOG] = log
+    response_ms = Time.iso8601(response_iso).to_i * 1000
+    stub_request(:post, "https://api2.cursor.sh/aiserver.v1.DashboardService/GetFilteredUsageEvents")
+      .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                 body: { "usageEventsDisplay" => [ {
+                   "timestamp" => (response_ms + 100).to_s, "model" => "claude-4-sonnet",
+                   "tokenUsage" => { "inputTokens" => 1000, "outputTokens" => 200, "totalCents" => 3.5 }
+                 } ] }.to_json)
+
+    runtime = ContainerRuntime::RunnerRuntime.new
+    artifacts = collect_logs(runtime, Agents::CursorCliAdapter.new)
+    assert_equal log, artifacts["logs/http.log"]
+    Agents::CursorCliAdapter.new.collect_usage(@session, artifacts)
+
+    stat = @session.reload.usage_statistic
+    assert_equal 1_000, stat.input_tokens
+    assert_equal 200, stat.output_tokens
+    assert_equal "cursor_api", stat.source
+  end
+
   private
+
+  def grok_mitm_line
+    body = { model: "grok-4.5", usage: { prompt_tokens: 1_000, completion_tokens: 200, total_tokens: 1_200,
+                                         prompt_tokens_details: { cached_tokens: 400 },
+                                         completion_tokens_details: { reasoning_tokens: 50 } } }.to_json
+    { _source: "http2-logger", direction: "response", host: "api.x.ai", path: "/v1/chat/completions",
+      status_code: 200, ts: "2026-08-14T12:00:00.000000Z", body: body }.to_json
+  end
+
+  # What the strategy does at cleanup: collect the adapter's declared logs
+  # through the runtime. The machine answers the listing and the tail from the
+  # container's files.
+  def collect_logs(runtime, adapter)
+    @machine.on_exec do |cmd|
+      script = cmd.last
+      path = @machine.container.files.keys.find { |file| script.include?(file) }
+      if script.start_with?("for f in")
+        [ "#{path}#{Sessions::LogCollector::FIELD_SEPARATOR}#{@machine.container.files[path].bytesize}\n", "", 0 ]
+      else
+        [ @machine.container.files[path].to_s, "", 0 ]
+      end
+    end
+    Sessions::LogCollector.new(session: @session, container: @machine.container.name, adapter: adapter,
+                               runtime: runtime, redactor: ->(content) { content }).call.contents
+  end
 
   def start_container
     @machine.start(@session.id)

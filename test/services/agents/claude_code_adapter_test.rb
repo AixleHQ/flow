@@ -584,10 +584,23 @@ module Agents
       assert_equal "1", env["CLAUDE_CODE_ENABLE_TELEMETRY"]
       assert_equal "http://collector:4318", env["OTEL_EXPORTER_OTLP_ENDPOINT"]
 
-      # A runner session: its callback proxy has no OTLP route yet.
+      # A session whose runtime answers no OTLP endpoint.
       env = @adapter.default_env_vars(@session, callbacks: callbacks.merge(otel: nil))
       assert_empty env.keys.grep(/\AOTEL_|TELEMETRY/)
       assert_equal "90000", env["MCP_TIMEOUT"]
+    end
+
+    test "a runner session exports its usage to the OTLP route of its callback proxy" do
+      runner = create(:runner, :manual)
+      environment = create(:runner_environment, runner: runner)
+      session = create(:runner_session, environment: environment)
+      callbacks = ContainerRuntime::RunnerRuntime.new.callback_urls(session)
+
+      env = @adapter.default_env_vars(session, callbacks: callbacks)
+
+      assert_equal "1", env["CLAUDE_CODE_ENABLE_TELEMETRY"]
+      assert_equal "http://127.0.0.1:#{Runners::Proxy.port(session)}/otel", env["OTEL_EXPORTER_OTLP_ENDPOINT"]
+      assert_includes env["OTEL_RESOURCE_ATTRIBUTES"], session.route_token
     end
 
     test "default_env_vars turns on every signal and every content switch for a session with full telemetry" do

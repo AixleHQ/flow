@@ -566,13 +566,12 @@ as for every endpoint (§3). When it cannot reach the gateway at all, it answers
    | `azure-git-credentials` | `POST` | none | git credentials for Azure DevOps | `X-Session-Id` and `X-Azure-Git-Key` |
    | `cloud-credentials` | `POST` | none | cloud credentials | `X-Session-Id` and `X-Cloud-Key` |
    | `assets` | `GET`, `HEAD` | `store/…`, with no empty, `.` or `..` segment, and none with a `/` or `\` once decoded | stored files | none |
-
-   There is no OTLP route in protocol 1 yet: a runner session gets no telemetry endpoint.
+   | `otel` | `POST` | `v1/…`, with the same segment rules | the OTLP collector (`otlp-ingest`): usage and telemetry exports | none; `UsageStatisticsService` finds the session by the token in the batch's resource attributes and drops the batch unless its `terminal_session_key` matches (`UsageStatistics::SessionKey`) |
 2. **The session.** The request must carry the route's key of the session that holds this
    machine now; anything else is `403 session_not_on_environment`. So a session key copied out of
    a machine is useless anywhere but through that machine's credential, and only while its
    session runs there. Stored files carry no key, on the internal address either, so `assets`
-   needs only a session on the machine.
+   and `otel` need only a session on the machine.
 3. **No body schema.** The body is the agent's, forwarded unchanged, so the gateway does not check
    it, and `schemas/v1/` has no schema for this route.
 
@@ -604,6 +603,10 @@ check-in refreshes what the platform records about it.
 | `os` | string | Optional, at most 255 characters, e.g. `linux`. Absent leaves the recorded value as it is; any other value, `null` included, is refused with `invalid_check_in`. |
 | `arch` | string | Optional, at most 255 characters, e.g. `amd64`. As `os`. |
 | `facts` | object | Optional. What the machine reports about itself, e.g. `{"docker": "27.2.0"}`. It replaces the recorded facts. `null` is refused with `invalid_check_in`. |
+
+A `facts.preflight_error` (a string) says the machine can no longer run sessions, for example that
+the Docker daemon is not reachable. The platform moves the machine to `failed` with that text in its
+reason; a later check-in without it does not return the machine, only Return to service does.
 
 Other fields are ignored. The `X-Aixle-Runner-Version` and `X-Aixle-Runner-Protocol` of the request
 are recorded as the machine's runner and protocol versions, **over** the ones it registered with.
@@ -1215,8 +1218,6 @@ Fixtures: `ops/exec_upload.json`, `ops/exec_upload_failed.json`, `ops/read_file_
 
 Each of these is designed in DESIGN.md §6 and comes with its own section and fixtures:
 
-- An OTLP route of the callback proxy (§5.8): a runner session gets no telemetry endpoint until it
-  comes.
 - The running-session summary in the heartbeat's body (DESIGN.md §6.7, §15 task 11): the heartbeat
   has no body in protocol 1, and a later release can add the field, which is not a breaking change.
 - `POST /runner/v1/sessions/:id/log` and live-log chunks: not built (Alex, 2026-11-11). A runner
