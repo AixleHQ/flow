@@ -13,6 +13,8 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-11-19
+
 ### Added
 - A page that does not exist shows the app's own 404 page, in the scheme you picked, with the
   way back to the app, the docs and the home page, instead of a blank or stock error page. A
@@ -77,6 +79,22 @@ governance, community health — carry none.
   they accept, with no second step. **Add Collaborator** on a project offers
   people whose invitation is still pending too, marked **Pending**, and the
   invitation email and page list the projects waiting for them.
+- Runners: a company admin, or a project admin or owner for a project runner,
+  can revoke a single machine from the Machines list. Its credentials stop
+  working, the machine shows **Gone**, and the session it held ends at once and
+  frees its slot. Revoking or deleting a runner now also ends its sessions: a
+  running one fails with the revoked message and one waiting for a machine ends,
+  instead of staying in **Finishing** or waiting. The Machines list shows the
+  first-seen IP and who added each machine, and the runners list shows machines
+  busy/total for a manual runner.
+- Runners: a manual runner has a reuse policy. **Reuse** scrubs the machine
+  after every session and keeps repository checkouts, package caches and pulled
+  images; **Reset** also removes the workspace and cache volumes, so the next
+  session clones again. A failed session or scrub is followed by a reset. A
+  machine whose reset fails, or that fails 3 sessions in a row, shows **Failed**
+  with the reason and gets no sessions until **Return to service** in the
+  Machines list resets it. A migration moves existing manual runners from
+  `fresh` to **Reset**.
 
 ### Changed
 - **Sign-in & onboarding**: a viewer's onboarding is the profile step alone —
@@ -95,32 +113,30 @@ governance, community health — carry none.
 - Runners: the runner pulls the agent images for its machine's own platform
   and falls back to `linux/amd64` when an image has no build for it, so a
   machine on arm64 runs an image built for arm64 natively. `images.yml` builds
-  the agent images for `linux/amd64` and `linux/arm64`, so the published images
-  are multi-arch from the next image build.
-- Runners: the platform now recommends `aixle-runner` 0.4.0 and serves it next
-  to 0.1.0 to 0.3.0. It pins the `linux-amd64` and `linux-arm64` binaries of
-  [runner-v0.4.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.4.0)
+  the agent images for `linux/amd64` and `linux/arm64`, so the agent images
+  published from this release on are multi-arch.
+- Runners: the platform now recommends `aixle-runner` 0.4.0 and serves 0.3.0
+  and 0.4.0 next to 0.1.0 and 0.2.0. It pins the `linux-amd64` and
+  `linux-arm64` binaries of
+  [runner-v0.3.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.3.0)
+  and [runner-v0.4.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.4.0)
   by their SHA-256. "Add machine" now offers 0.4.0, the binary and the
   `ghcr.io/aixlehq/aixle-runner:0.4.0` image, and an idle machine on an older
-  version that has not opted out is offered the update. 0.4.0 pulls and runs
-  the agent, sidecar and scrub containers for the machine's own platform when
-  the agent image has it, and `linux/amd64` otherwise, and bounds the removal of
-  the scrub helper container. Until the multi-arch agent images are published
-  (the application release with the arm64 build), it uses `linux/amd64` on
-  every machine, as 0.3.0 does. Runner protocol 1 only, and no minimum runner
-  version: 0.3.0 keeps working, but always runs `linux/amd64` images, under
-  emulation on an arm64 machine.
-- Runners: the platform now recommends `aixle-runner` 0.3.0 and
-  serves it next to 0.1.0 and 0.2.0. It pins the `linux-amd64` and `linux-arm64`
-  binaries of [runner-v0.3.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.3.0)
-  by their SHA-256. "Add machine" now offers 0.3.0, the binary and the
-  `ghcr.io/aixlehq/aixle-runner:0.3.0` image, and an idle machine on 0.2.0 that
-  has not opted out is offered the update. 0.3.0 sends a heartbeat while an
-  operation runs, so its machine stays online through a long one, such as a first
-  image pull, and stops on a terminal heartbeat refusal. It no longer sends
-  `ephemeral` when it registers. Runner protocol 1 only, and no minimum runner
-  version: 0.2.0 keeps working, but shows offline during an operation longer
-  than 90 seconds because it sends no heartbeat.
+  version that has not opted out is offered the update. From 0.3.0 the runner
+  sends a heartbeat while an operation runs, so its machine stays online through
+  a long one, such as a first image pull, and it no longer sends `ephemeral`
+  when it registers. 0.4.0 pulls and runs the agent, sidecar and scrub
+  containers for the machine's own platform when the agent image has it, and
+  `linux/amd64` otherwise, and bounds the removal of the scrub helper container.
+  Runner protocol 1 only, and no minimum runner version: 0.3.0 keeps working
+  but always runs `linux/amd64` images, under emulation on an arm64 machine, and
+  0.2.0 shows offline during an operation longer than 90 seconds because it
+  sends no heartbeat.
+- Runners: a session whose machine has not been heard from for 15 minutes
+  fails with "Runner environment lost contact for 15 minutes.", on a revoked or
+  deleted runner too. The machine keeps its slot until it answers again, and is
+  then reset and freed; on a revoked or deleted runner the slot is freed at
+  once.
 
 ### Fixed
 - **Sign-in & onboarding**: someone invited into a workspace from an email domain
@@ -162,14 +178,6 @@ governance, community health — carry none.
   seconds is offline and gets no sessions; when every machine is offline, a
   launch is refused naming the runner. The runner's status now follows its
   machines' health, checked every minute.
-- Runners: a company admin, or a project admin or owner for a project runner,
-  can revoke a single machine from the Machines list. Its credentials stop
-  working, the machine shows **Gone**, and the session it held ends at once and
-  frees its slot. Revoking or deleting a runner now also ends its sessions: a
-  running one fails with the revoked message and one waiting for a machine ends,
-  instead of staying in **Finishing** or waiting. The Machines list shows the
-  first-seen IP and who added each machine, and the runners list shows machines
-  busy/total for a manual runner.
 - Runners: a session waiting for a busy runner shows "Waiting for a free
   machine" instead of "Waiting for cluster capacity". The platform accepts a
   runner heartbeat (`POST /runner/v1/heartbeat`), which keeps a machine online
@@ -1584,7 +1592,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.15.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.16.0...develop
+[1.16.0]: https://github.com/AixleHQ/flow/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/AixleHQ/flow/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/AixleHQ/flow/compare/v1.13.1...v1.14.0
 [1.13.1]: https://github.com/AixleHQ/flow/compare/v1.13.0...v1.13.1
