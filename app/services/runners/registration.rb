@@ -74,8 +74,8 @@ module Runners
     # machine absent and releases its admission (PROTOCOL.md §8). `ended_by` is
     # how the message says the machine left: `aixle-runner unregister` from the
     # machine, or a Revoke on the runner page (DESIGN.md §9.3).
-    def unregister!(environment, ended_by: "unregistered")
-      held_session_id = release_machine!(environment)
+    def unregister!(environment, ended_by: RunnerEnvironmentStateMachine::UNREGISTERED)
+      held_session_id = release_machine!(environment, ended_by)
       end_session(environment, held_session_id, ended_by) if held_session_id
     end
 
@@ -84,17 +84,17 @@ module Runners
     def revoke!(environment)
       return false if RunnerEnvironment.gone.exists?(environment.id)
 
-      unregister!(environment, ended_by: "revoked")
+      unregister!(environment, ended_by: RunnerEnvironmentStateMachine::REVOKED)
       true
     end
 
     # The id of the session the machine held, read under the locks.
-    def release_machine!(environment)
+    def release_machine!(environment, reason)
       RunnerEnvironment.transaction do
         Credentials.lock_live_runner!(environment.runner_id)
         environment.lock!
         held = environment.current_session_id
-        environment.unregister!
+        environment.unregister!(reason)
         now = Time.current
         environment.credentials.unrevoked.update_all(revoked_at: now, updated_at: now)
         held

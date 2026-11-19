@@ -17,14 +17,21 @@ module Runners
     module_function
 
     def error(runner_id, project:, interactive: false)
-      return NOT_ENABLED unless Feature.enabled?(:external_runners, company: project.company)
+      refusal(runner_id, project: project, interactive: interactive)&.last
+    end
+
+    # Like `error`, with why: `[:not_enabled | :not_available | :interactive, message]`,
+    # or nil. `:not_available` is the pick of a runner the project cannot use
+    # (another tenant's, or deleted); an API answers it 403 (§12.4 step 13).
+    def refusal(runner_id, project:, interactive: false)
+      return [ :not_enabled, NOT_ENABLED ] unless Feature.enabled?(:external_runners, company: project.company)
       return if runner_id.blank?
 
       runner = Runner.visible_for_project(project).find_by(id: runner_id)
-      return "Runner #{runner_id} is not available to project #{project.name}." if runner.nil?
+      return [ :not_available, "Runner #{runner_id} is not available to project #{project.name}." ] if runner.nil?
 
       # §8: no runner has `interactive_terminal` until the tunnel (§15 task 16).
-      "Runner \"#{runner.name}\" can't run interactive sessions yet." if interactive
+      [ :interactive, "Runner \"#{runner.name}\" can't run interactive sessions yet." ] if interactive
     end
 
     # A workflow's runner is checked only when it changes, so a workflow saved

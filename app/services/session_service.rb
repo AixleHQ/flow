@@ -273,13 +273,14 @@ class SessionService
       return false unless params.key?(:runner_id)
       return false if params[:runner_id].blank? && session.project.nil?
 
-      error = if session.project.nil?
-        "Runner can only be picked for a project's session."
+      kind, error = if session.project.nil?
+        [ :project_required, "Runner can only be picked for a project's session." ]
       else
-        Runners::Selection.error(params[:runner_id], project: session.project,
-                                                     interactive: session.mode != "non_interactive")
+        Runners::Selection.refusal(params[:runner_id], project: session.project,
+                                                       interactive: session.mode != "non_interactive")
       end
-      session.errors.add(:base, error) if error
+      # The kind rides on the error so the API can tell a runner the project may not use (403) from the rest (422).
+      session.errors.add(:base, kind, message: error) if error
       error.present?
     end
 

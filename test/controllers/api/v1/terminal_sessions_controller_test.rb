@@ -43,6 +43,31 @@ module Api
         assert_response :success
       end
 
+      test "create refuses a runner of another project with 403 (DESIGN.md 12.4 step 13)" do
+        create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
+        other_project = create(:project, company: @company, owner: @user)
+        runner = create(:runner, :project_runner, company: @company, project: other_project, created_by: @user)
+
+        with_feature(:external_runners, true, company: @company) do
+          post :create, params: { session_type: "agent_session", agent_type: "claude_code", project_id: @project.id,
+                                  mode: "non_interactive", initial_prompt: "go", runner_id: runner.id }
+        end
+
+        assert_response :forbidden
+        assert_equal "Runner #{runner.id} is not available to project #{@project.name}.", response.parsed_body["error"]
+        assert_equal 0, TerminalSession.count
+      end
+
+      test "create answers a runner refused for another reason with 422" do
+        runner = create(:runner, company: @company, created_by: @user)
+
+        post :create, params: { session_type: "agent_session", agent_type: "claude_code", project_id: @project.id,
+                                mode: "non_interactive", initial_prompt: "go", runner_id: runner.id }
+
+        assert_response :unprocessable_entity
+        assert_equal [ "External runners are not enabled for this company." ], response.parsed_body["errors"]
+      end
+
       test "create returns created session" do
         mock_temporal_start
         SessionService.stubs(:create_and_start).returns(
