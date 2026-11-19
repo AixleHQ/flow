@@ -27,8 +27,8 @@ class Runners::ReleaseTest < ActiveSupport::TestCase
     create(:runner_environment, runner: @runner, os: "linux", arch: arch, runner_version: "1.4.0", protocol_version: "1")
   end
 
-  # The digests of runner-v0.1.0's to runner-v0.4.0's checksums.txt
-  # (https://github.com/AixleHQ/flow/releases/tag/runner-v0.1.0, …/runner-v0.2.0, …/runner-v0.4.0).
+  # The digests of runner-v0.1.0's to runner-v0.4.1's checksums.txt
+  # (https://github.com/AixleHQ/flow/releases/tag/runner-v0.1.0, …/runner-v0.2.0, …/runner-v0.4.1).
   RELEASED = {
     "0.1.0" => { "linux-amd64" => "55af0ecb22c70f52ca4213f7f310c6321ba0e1d175545f663c1c948107caad44",
                  "linux-arm64" => "e27d43e8d29ec520f5868b4394d66c9e95ea7476ffc3ee3d0a85e6b259527441" },
@@ -37,18 +37,20 @@ class Runners::ReleaseTest < ActiveSupport::TestCase
     "0.3.0" => { "linux-amd64" => "9cc279d49f818d89acfe2cadf6f5e7e56a41b515561be5233a9580256557d9b4",
                  "linux-arm64" => "6b09a694c7d6e1e31c8b0066f3e718e1493ad17f81f971983e1ce890941c4e06" },
     "0.4.0" => { "linux-amd64" => "65895313361d6ef5bcd2553041fa67118e0a9325356af2e93ecc31c8790f20bf",
-                 "linux-arm64" => "efcacfabdba63bc737ff04a7d0a0fb06b32cc4009c3fec425d2202b22f678464" }
+                 "linux-arm64" => "efcacfabdba63bc737ff04a7d0a0fb06b32cc4009c3fec425d2202b22f678464" },
+    "0.4.1" => { "linux-amd64" => "d83bf098dcdaa878d757a3fe1998813c949e4d90368bf3c0384fe5c841cffc9f",
+                 "linux-arm64" => "f43667d95d91c9960cac9b57525f3b280ab7cacc1138b173746b74002ed68366" }
   }.freeze
 
   test "the committed pins are config/settings.yml's runners.release block, read through Settings" do
-    assert_equal({ "protocol_supported" => [ 1 ], "min_version" => nil, "recommended_version" => "0.4.0",
+    assert_equal({ "protocol_supported" => [ 1 ], "min_version" => nil, "recommended_version" => "0.4.1",
                    "download_url" => PINS["download_url"],
                    "binaries" => RELEASED.transform_values { |platforms| platforms.transform_values { |digest| { "sha256" => digest } } } },
                  Settings.runners.release.to_h.deep_stringify_keys)
     pins = Runners::Release.pins
     assert_equal [ 1 ], pins.protocol_supported
     assert_nil pins.min_version
-    assert_equal Runners::Version.parse("0.4.0"), pins.recommended_version
+    assert_equal Runners::Version.parse("0.4.1"), pins.recommended_version
     assert_equal RELEASED, pins.binaries
     assert_equal "https://github.com/AixleHQ/flow/releases/download/runner-v0.1.0/aixle-runner-linux-amd64",
                  Runners::Release.binary("0.1.0", "linux-amd64").url
