@@ -31,6 +31,12 @@ that builds them (§8).
   `2026-10-31T14:00:00Z`.
 - **No cookie session and no CSRF token.** The gateway sets no cookie.
 - A path the gateway does not serve answers `404`.
+- **A connection that stops answering is dropped, not reused.** A network that drops packets
+  leaves the runner's open connection without a close. The runner pings an HTTP/2 connection
+  that has been silent for 15 s and closes it when the ping is not answered within 10 s, and
+  closes its idle connections after a request got no answer, so the retry dials a new one. After
+  the network is back, the next poll, heartbeat or token request reaches the gateway within about
+  a minute.
 
 Every request carries these three headers, except a request to the release endpoints (§5.6,
 §5.7), which takes none of them:

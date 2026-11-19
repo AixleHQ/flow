@@ -19,6 +19,15 @@ governance, community health — carry none.
   on the runner page reads **Revoked**; one that ran `aixle-runner unregister` still reads
   **Unregistered**. Machines revoked before this change keep reading **Unregistered**.
 
+### Changed
+
+- Runners: a machine recovers from a network outage within about a minute. The
+  runner closes a connection that stopped answering instead of reusing it, which
+  needs the next runner release (0.4.1), and a machine whose reset goes
+  unanswered while it is away after a lost-contact session is reset when it is
+  heard again, not marked Failed. A machine that is heard and still does not
+  answer the reset is marked Failed.
+
 ## [1.16.0] - 2026-11-19
 
 ### Added
