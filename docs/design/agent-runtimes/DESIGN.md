@@ -1713,8 +1713,10 @@ are unchanged. With `network: host` the host runner listens itself.
   answer.
 - **The OTLP route** (decision 7, done in #257): `RunnerRuntime#callback_url(:otel)` is the proxy's
   `otel` route, `POST` below `v1/` (`v1/metrics`, `v1/logs`, `v1/traces`), forwarded to
-  `otlp-ingest`. It takes no key header: a batch names its session in its resource attributes,
-  and `UsageStatisticsService` checks the session key there, as for a hosted session. The
+  `otlp-ingest`. It checks no key header. `UsageStatisticsService` finds the session by the
+  session token the batch names in its resource attributes, and drops the batch unless its
+  `terminal_session_key` matches that token (`UsageStatistics::SessionKey`), as for a hosted
+  session. The
   gateway needs only a session on the environment. So the OTLP sources of usage (Claude Code,
   Gemini CLI, Codex, Kiro CLI, Copilot CLI, Grok) record on a runner as on hosted.
 
