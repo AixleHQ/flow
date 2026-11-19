@@ -138,11 +138,18 @@ module Sessions
 
       test "keeps the screen's record in the session's metadata" do
         @session.update!(agent_type: "kiro_cli")
-        pass(kiro_pane("turn_ended"), last_output_at: 3.seconds.ago)
+        # The log's mtime is read, and the record kept, in whole seconds. On a running clock
+        # the time read back trails a later `3.seconds.ago` by the dropped fraction of a
+        # second plus the pass's own duration, which together can exceed one second. The
+        # frozen clock has no fraction (`freeze_time` drops it), so the time reads back exact.
+        freeze_time do
+          last_output_at = 3.seconds.ago
+          pass(kiro_pane("turn_ended"), last_output_at: last_output_at)
 
-        metadata = @session.reload.metadata
-        assert_equal ScreenDigest.of(kiro_pane("turn_ended")), metadata[NoOutput::SCREEN_KEY]
-        assert_in_delta 3.seconds.ago, Time.zone.parse(metadata[NoOutput::SCREEN_CHANGED_AT_KEY]), 1.second
+          metadata = @session.reload.metadata
+          assert_equal ScreenDigest.of(kiro_pane("turn_ended")), metadata[NoOutput::SCREEN_KEY]
+          assert_equal last_output_at, Time.zone.parse(metadata[NoOutput::SCREEN_CHANGED_AT_KEY])
+        end
       end
 
       # Sessions read by the token-refresh sweep: a parked session's repaints no longer pass
