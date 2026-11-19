@@ -72,18 +72,18 @@ class RunnerEnvironment < ApplicationRecord
     current_session_id.present?
   end
 
-  # What the machine's last report says keeps it from running sessions (the
-  # host runner's preflight, DESIGN.md §6.8: no reachable Docker daemon, too
-  # little disk), or nil when the report has no failure.
-  def preflight_failure
-    facts["preflight_error"].presence if facts.is_a?(Hash)
-  end
-
   # The machine left for good by a Revoke on the runner page, not by
   # `aixle-runner unregister`. A machine revoked before the reason was recorded
   # has none and reads as unregistered.
   def revoked_by_operator?
     gone? && state_reason == REVOKED
+  end
+
+  # What the machine's last report says keeps it from running sessions (the
+  # host runner's preflight, DESIGN.md §6.8: no reachable Docker daemon, too
+  # little disk), or nil when the report has no failure.
+  def preflight_failure
+    facts["preflight_error"].presence if facts.is_a?(Hash)
   end
 
   def heard?(now = Time.current, within: ONLINE_WINDOW)
