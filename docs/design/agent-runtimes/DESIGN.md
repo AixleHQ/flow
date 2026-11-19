@@ -2914,7 +2914,12 @@ rows:
 
 **On `manual`, step 4 does not exist.** The allocator cannot create a machine, so when
 every registered machine is busy, offline or
-`failed`, the session **queues** in step 5 until one comes back to `idle`. Capacity is
+`failed`, the session **queues** in step 5 until one comes back to `idle`. Two bounds apply
+(Alex, 2026-11-19, #261): only a session that is **already waiting** (`runner_capacity`)
+keeps waiting while every machine is offline, and it fails with the §8 "has no machine
+online" message once no machine of the runner has been heard for 15 minutes
+(`Runners::ContactLoss::GRACE`, §6.7); a launch that finds every machine offline fails at
+once; a runner whose every machine is `failed` is refused as before. Capacity is
 exactly the machines the operator connected (§10).
 
 **Two overlapping runs of the same workflow:** the second one gets **another environment**
@@ -2944,7 +2949,7 @@ infrastructure, with credentials the customer meant to keep inside their perimet
 | Runner never checks in | `start_container` after `runners.bootstrap_timeout` (default 10 min, 15 for `coder`) | Fails, environment `failed`, teardown | "Environment started but aixle-runner did not check in within 10 min. Check egress to flow.aixle.com:443." plus the last bootstrap output the adapter captured |
 | Prerequisites missing | Registration (`manual`) or check-in | Refused or fails, environment `failed` | "Machine build-01 has no reachable Docker daemon (aixle-runner needs Docker API ≥ 1.41)." |
 | External runners not enabled for the company (no `external_runners` override, §12.1) | Selection, launch, every gateway request | Refused; launches fail with `runner_unavailable`; the gateway answers `403 runners_disabled` | "External runners are not enabled for this company." |
-| `manual`: no machine registered yet, or every machine offline | Launch | Fails, `runner_unreachable` | "Runner "X" has no machine online. Last seen: build-01 at 14:02." |
+| `manual`: no machine registered yet, or every machine offline | Launch | Fails, `runner_unreachable`. A session already waiting for a machine (`runner_capacity`) keeps waiting while the machines are offline and fails the same way once none has been heard for 15 minutes (§7.3, §10) | "Runner "X" has no machine online. Last seen: build-01 at 14:02." |
 | `manual`: every machine busy | `create_container` | `capacity_wait`, wait reason `runner_capacity` | "Waiting for a free machine on runner "X" (2 of 2 busy)." |
 | `manual`: registration token expired or already used | `register` | Refused, `401 registration_token_invalid` | Printed by `aixle-runner configure`: "This registration token has expired or was already used. Create a new one on the runner page." |
 | `manual`: reset fails on a machine | Release | Environment `failed`, out of rotation | Runner page: "build-01 failed to reset: <reason>. Fix the machine and press Return to service." |
@@ -3318,6 +3323,12 @@ runners. The limit logic may be revisited later (task row 9 of §15 is deferred)
     it into "Waiting for a free machine" on the session page, with the message under it.
     Nothing that reports cluster capacity counts a runner wait: `isWaitingForCluster` is false
     for it.
+  - **Offline machines (#261).** A session already in `runner_capacity` keeps its reservation and
+    its wait while every machine of the runner is offline: the message says it waits for a
+    machine that is offline and names it, and the session starts when one is back and free. It
+    fails with the §8 "has no machine online" message once no machine has been heard for
+    15 minutes (`Runners::ContactLoss::GRACE`). A runner whose every machine is `failed` is
+    refused as before. The reapers leave the reservation alone, as `runner_capacity` is a wait reason.
 - **Release** follows AD-4 and the confirmed-release rule. The slot is freed when cleanup
   completes (scrub ok and the environment back to `idle`, or teardown confirmed). An
   environment the platform lost contact with keeps the slot, once the grace has failed its
