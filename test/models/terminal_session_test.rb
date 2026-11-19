@@ -732,4 +732,34 @@ class TerminalSessionTest < ActiveSupport::TestCase
     assert_equal [ agent.id, step.id ].sort, scope.work_sessions.pluck(:id).sort
     assert_not_includes scope.work_sessions.pluck(:id), auth.id
   end
+
+  # --- waiting_for_runner_machine? ---
+
+  test "waiting_for_runner_machine? is true for a reservation waiting on runner_capacity" do
+    admission = admission_waiting_for("runner_capacity")
+
+    assert admission.waiting_for_runner_machine?
+    assert admission.terminal_session.waiting_for_runner_machine?
+  end
+
+  test "waiting_for_runner_machine? is false for another wait reason" do
+    (SessionAdmission::WAIT_REASONS - %w[runner_capacity]).each do |reason|
+      admission = admission_waiting_for(reason)
+
+      assert_not admission.waiting_for_runner_machine?, reason
+      assert_not admission.terminal_session.waiting_for_runner_machine?, reason
+    end
+  end
+
+  test "waiting_for_runner_machine? is false for a session without an admission" do
+    assert_not create(:terminal_session, :agent_session, user: @user, project: @project).waiting_for_runner_machine?
+  end
+
+  private
+
+  def admission_waiting_for(reason)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+    pool = SessionAdmissionPool.create!(key: "project:#{session.project_id}:#{reason}", limit: 10, policy_revision: 1)
+    SessionAdmission.create!(terminal_session: session, session_admission_pool: pool, wait_reason: reason)
+  end
 end

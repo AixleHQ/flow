@@ -30,6 +30,7 @@ governance, community health — carry none.
   answer the reset is marked Failed.
 
 ### Fixed
+
 - Runners: a machine whose Docker daemon is down now checks in and shows **Failed**
   with the reason, instead of showing Offline while its service restarts in a loop.
   The runner no longer exits when Docker is unreachable: it waits for Docker with
