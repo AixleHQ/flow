@@ -164,10 +164,15 @@ module ContainerRuntime
       Result.new(client: client, events: seen)
     end
 
+    # In frames of 64 KiB, so a 200 KiB input still spans several. Each frame is a write
+    # that gives up the GVL, and winning it back costs a whole thread timeslice (100 ms)
+    # while another thread in the test process is busy: in 16 KiB frames, against the fake's
+    # former 4 KiB reads, two busy threads stretched the exchange past the 10 s wait
+    # (task #260).
     def send_stdin(client, stdin)
       Thread.new do
         io = StringIO.new(stdin)
-        while (chunk = io.read(16_384))
+        while (chunk = io.read(64 * 1024))
           client.send([ 0 ].pack("C") + chunk)
         end
         client.send([ 255, 0 ].pack("C*"))
