@@ -1,5 +1,9 @@
 <%= @inviter&.name || "An administrator" %> has invited you to join <%= @company.branded_name %> on Aixle Flow as <%= @role.humanize %>.
 
+<% if @projects.any? -%>
+You'll have access to <%= @projects.size == 1 ? "this project" : "these projects" %>: <%= @projects.to_sentence %>.
+
+<% end -%>
 Accept the invitation: <%= @accept_url %>
 
 This link expires in 7 days. If you weren't expecting this invitation, you can safely ignore this email.

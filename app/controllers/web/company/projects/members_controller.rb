@@ -7,15 +7,15 @@ class Web::Company::Projects::MembersController < Web::Company::Projects::Applic
     render inertia: "Projects/Members/MembersPage", props: {
       project: project_props,
       members: members.map { |u| UserResource.new(u, params: { company: current_company }).to_h },
-      company_users: current_company.users.includes(:company_memberships).order(:name)
-                                    .map { |u| UserResource.new(u, params: { company: current_company }).to_h },
+      company_users: addable_users.includes(:company_memberships).order(:name)
+                                  .map { |u| UserResource.new(u, params: { company: current_company }).to_h },
       owner_id: current_project.owner_id,
       ownership: ownership_props
     }
   end
 
   def create
-    users = current_company.users.find(collaborator_user_ids)
+    users = addable_users.find(collaborator_user_ids)
     collaborators = users.map { |user| current_project.project_collaborators.new(user: user) }
 
     if ProjectCollaborator.transaction { collaborators.all?(&:save) || raise(ActiveRecord::Rollback) }
@@ -37,6 +37,12 @@ class Web::Company::Projects::MembersController < Web::Company::Projects::Applic
   end
 
   private
+
+  # Company members, and people whose invitation is still open: they can be put
+  # on the project now and reach it once they accept.
+  def addable_users
+    User.for_company(current_company).merge(CompanyMembership.active_or_invited)
+  end
 
   def collaborator_user_ids
     collaborator = params.require(:collaborator).permit(:user_id, user_ids: [])

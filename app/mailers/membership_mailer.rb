@@ -9,6 +9,7 @@ class MembershipMailer < ApplicationMailer
     @company = membership.company
     @inviter = membership.invited_by
     @role = membership.role.to_s
+    @projects = membership.collaborated_projects.order(:name).pluck(:name)
     @accept_url = invitation_url(membership.generate_token_for(:invitation))
 
     mail(

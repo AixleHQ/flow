@@ -72,6 +72,11 @@ governance, community health — carry none.
 - **Members**: **Add Collaborator** takes several people at once — pick them one
   after another, or **Select all** for everyone in the company not yet on the
   project — instead of adding each person separately.
+- **Company members**: invite someone straight into projects — pick them under
+  **Projects** in **Invite Member**, and they are on those projects the moment
+  they accept, with no second step. **Add Collaborator** on a project offers
+  people whose invitation is still pending too, marked **Pending**, and the
+  invitation email and page list the projects waiting for them.
 
 ### Changed
 - **Sign-in & onboarding**: a viewer's onboarding is the profile step alone —

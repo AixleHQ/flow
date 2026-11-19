@@ -39,7 +39,7 @@ import { PageHeader } from 'shared/ui/PageHeader';
 import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
-import { InviteMemberDrawer } from './InviteMemberDrawer';
+import { InviteMemberDrawer, type InviteProject } from './InviteMemberDrawer';
 import type { ProjectHandover } from './projectHandover';
 import { ProjectHandoverModal } from './ProjectHandoverModal';
 
@@ -50,6 +50,7 @@ interface MembersContentProps {
   subtitle?: string;
   showRoleActions?: boolean;
   projectHandover?: ProjectHandover | null;
+  inviteProjects?: InviteProject[];
 }
 
 // Revoked members are never rendered (the index excludes them).
@@ -141,6 +142,7 @@ export const MembersContent = ({
   subtitle,
   showRoleActions = true,
   projectHandover = null,
+  inviteProjects = [],
 }: MembersContentProps) => {
   const { currentUser, permissions } = usePage<SharedProps>().props;
   // Every control this page offers mutates membership, so the whole action surface hangs off one
@@ -499,7 +501,12 @@ export const MembersContent = ({
       )}
 
       {canManageMembers && (
-        <InviteMemberDrawer opened={inviteOpen} onClose={() => setInviteOpen(false)} basePath={basePath} />
+        <InviteMemberDrawer
+          opened={inviteOpen}
+          onClose={() => setInviteOpen(false)}
+          basePath={basePath}
+          projects={inviteProjects}
+        />
       )}
     </Box>
   );
