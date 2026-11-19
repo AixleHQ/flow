@@ -114,11 +114,17 @@ and are taken as stated. The chart must have, before phase 4 is validated on sta
   `config/settings.yml`), and `intwebsecure` on staging. Staging is reached over the VPN, and its public copy
   comes back into `intwebsecure` through basic auth; the gateway's `/runner/v1` route is on `intwebsecure`
   there too. The chart takes the entrypoint from that value and **never hard-codes `websecure`**. The host is one
-  host, the one the hosted routes use (`ContainerRuntime::KubernetesRuntime#route_domain_host`: the sandbox
-  host if set, otherwise the app's domain), not "the app host or the sandbox host":
-  - `Host(<route_domain_host>) && Path('/runner/v1/tunnel')` to the runner-relay, with **no** `terminal-auth`
+  host for the browser's `/t/` route, the one the hosted routes use
+  (`ContainerRuntime::KubernetesRuntime#route_domain_host`: the sandbox host if set, otherwise the app's
+  domain), not "the app host or the sandbox host". The runner's tunnel route uses **the gateway's hosts** instead:
+  - `Host(<the gateway's hosts>) && Path('/runner/v1/tunnel')` to the runner-relay, with **no** `terminal-auth`
     middleware (the runner authenticates with its ticket, §3.1), at an **explicit priority above 100**, the
-    priority of the gateway's `/runner/v1` route on staging, so the longer path wins;
+    priority of the gateway's `/runner/v1` route on staging, so the longer path wins. The hosts are the same
+    ones the gateway's `/runner/v1` route matches (on staging `staging.flow.aixle.com` and
+    `www.staging.flow.aixle.com`), because the runner reaches the platform at its configured URL, as for every
+    `/runner/v1/*` call (decision 4, the runner's entry point is the gateway's host). It must not use
+    `route_domain_host`: when a sandbox host is configured, `route_domain_host` becomes that host, and a tunnel
+    route on it would no longer match the runner's requests;
   - `Host(<route_domain_host>) && PathPrefix('/t/')` to the runner-relay, **with** `terminal-auth` (the same
     middleware the hosted routes use, `authResponseHeadersRegex` unchanged), at an **explicit low priority above
     the catch-all `web` route's 1, for example 2**. Hosted per-session routes are
@@ -402,7 +408,7 @@ blank terminal on a network blip, which the session page already recovers from b
    closes with it.
 5. **Limits** are §5.3. One viewer cannot starve another: streams are shared per machine, and the
    64-stream cap is per machine, not per viewer (a single session has few viewers; if one proves to
-   be a problem the cap becomes per viewer, which the registry already has the keys for).
+   be a problem the cap would become per viewer, keyed on `X-User-Id` per browser connection).
 
 ## 7. The browser side
 
@@ -601,9 +607,10 @@ short request to the web app,** so the token and the check order of §3 are the 
   limit of one token (about 5 a minute from a poll loop), far below it;
 - `Rack::Attack`'s per-IP count must see the runner's IP, so the web app must trust the relay's
   `X-Forwarded-For` (the same `ActionDispatch::RemoteIp` trusted-proxy list that the ingress needs);
-- the relay itself limits what it holds without asking Rails: one waiting poll per bearer digest, and a cap on
-  waiting polls per client IP (a flood of requests with *different* garbage tokens never reaches a wait, since
-  the first forward answers `401`, so this is only a concurrency guard).
+- the relay itself limits what it holds without asking Rails: one waiting poll per bearer digest. There is
+  **no cap on waiting polls per client IP** (Alex, 2026-11-19): behind one NAT address every machine holds one
+  waiting poll at all times, so a per-IP cap would refuse a customer with many machines as a matter of course.
+  A request with a bad token never reaches a wait, since the first short read to Rails answers `401`.
 
 #### 10.2.1 Option for row 24: commands over the runner's persistent WebSocket
 
@@ -745,7 +752,7 @@ design) and 16b to 16g. The takeover rows 24 to 26 follow in the same table.
 | **16c** | **The service skeleton and the runner's connection.** `runner-relay/` module, config, `/healthz` `/readyz` `/metrics`, the Dockerfile, a Go CI job (`runner-relay (Go)`, in the required `Checks`), the `images.yml` entry (a patch for Alex); the `Settings.runners.relay` keys; `Runners::TunnelTicket` and `POST /runner/v1/tunnel-ticket` with `PROTOCOL.md` §5.11 and fixtures; the ticket verifier and `jti` replay guard; `GET /runner/v1/tunnel` upgrade, `HELLO`, heartbeat, `replaced`, `GOAWAY`; the runner's `tunnel` manager (ticket, connect, reconnect with backoff); Compose and `Procfile.dev`. A machine connects while it holds a session; no browser path yet | 16b |
 | **16d** | **The platform's half.** `Runners::Tunnel.ports(session)` and `tunnel` in `container.start`'s payload (with the schema and the fixture change) and the `network: host` port variables; the `runner_relay` publishers (`machine_session`, `session_ended`, `machine_revoked`); the internal `holders` and `checks` endpoints and the relay's internal token. The relay does not consume them yet | 16c |
 | **16e** | **The browser path.** The relay's edge handler (routing by token and surface, the stream `Transport`, path rules, header cross-check), signal subscription, the reconcile pass, revocation; the runner's `Dialer`s (the sidecar's `dial.sock` and the `network: host` dial) and the port check at start (`ports_in_use`); the readiness measurement of §9. End to end on the `local` adapter in Compose. `external_runners` stays on the test company only | 16d |
-| **16f** | **`aixle-infra`.** The Deployment, Service, Secret and ConfigMap, the two ingress routes of §2.3 (on `TRAEFIK_ENTRYPOINT`, one host, explicit priorities), the NetworkPolicy ingress rules, the scrape and the alerts. A separate repository's task, which can start once 16c's image exists | 16c |
+| **16f** | **`aixle-infra`.** The Deployment, Service, Secret and ConfigMap, the two ingress routes of §2.3 (on `TRAEFIK_ENTRYPOINT`; `/t/` on `route_domain_host`, the tunnel on the gateway's hosts; explicit priorities), the NetworkPolicy ingress rules, the scrape and the alerts. A separate repository's task, which can start once 16c's image exists | 16c |
 | **16g** | **Parity and the first customers.** Lift `interactive_terminal` (`Runners::Selection`, the capability table, the form's disabled runners and the builder); the session page; the user guide text; the staging validation of the interactive path on a real machine (QA); then `external_runners` can go to the first named companies (`DESIGN.md` §12.2, phase 4). `PROTOCOL.md` is checked against what was built | 16e, 16f |
 | **24** | **The ops long-poll moves into the relay** (§10.2): `X-Aixle-Runner-Wake` on the empty `wait=0` answer, the relay's `/runner/v1/ops` handler with the subscription, the per-machine subscription kept between polls, the replace rule, the trusted `X-Forwarded-For`, the ingress route; the gateway keeps answering the path until the ingress moves. **Decides first whether commands go over the runner's persistent WebSocket instead (§10.2.1); variant (a), a wake frame and one short `wait=0` read, is preferred (Alex, 2026-11-19), and the decision is made when this row is cut** | 16g |
 | **25** | **The callback proxy moves into the relay** (§10.3): `POST /runner/v1/proxy-authorizations`, the relay's streaming forward, the ingress route; `ProxiesController` keeps its forward for the rollout and loses it in 26 | 24 |
@@ -802,6 +809,7 @@ Harm levels are those of `DESIGN.md` §6.9.7 (H1 security or data loss, H2 a ses
 | 22 | The NetworkPolicy adds Traefik's namespace; the platform's own pods in the namespace reach the relay too, which is accepted | Alex, 2026-11-19 (Q8; §2.3) |
 | 23 | No per-IP limit on tunnel connections: a bad ticket costs one signature check, and minting tickets is throttled by `Rack::Attack` | Alex, 2026-11-19 (Q9; §5.3) |
 | 24 | The `aixle-infra` facts (priorities, single host, `TRAEFIK_ENTRYPOINT`, same-namespace policy) are taken as stated in the review comments; §2.3 is fixed now | Alex, 2026-11-19 (round instructions) |
+| 25 | The tunnel route matches the gateway's hosts, not `route_domain_host`, with an explicit priority above 100; no cap on waiting polls per client IP | Alex, 2026-11-19 (design review, round 2; §2.3, §10.2) |
 | 25 | `PROTOCOL.md` stays unedited by this design (accepted); each building task writes its section | Alex, 2026-11-19 (round instructions); §1 |
 
 ## 16. Deferred, and what to check
