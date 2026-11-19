@@ -65,9 +65,13 @@ module Runners
     # waits for the operator's Return to service, it does not return by itself.
     def fail_for_preflight!(environment)
       failure = environment.preflight_failure
-      return unless failure && environment.may_mark_failed?
+      return unless failure
 
-      environment.mark_failed!("#{Machines.label(environment)} cannot run sessions: #{failure}")
+      # Machines.fail! changes its own locked copy of the row, which also drops
+      # the hold of a session the machine still has: read the row again, the
+      # answer returns its state and Release.update_for reads its hold.
+      Machines.fail!(environment, "#{Machines.label(environment)} cannot run sessions: #{failure}")
+      environment.reload
     end
     private_class_method :fail_for_preflight!
 
