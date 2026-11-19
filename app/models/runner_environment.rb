@@ -72,6 +72,13 @@ class RunnerEnvironment < ApplicationRecord
     current_session_id.present?
   end
 
+  # What the machine's last report says keeps it from running sessions (the
+  # host runner's preflight, DESIGN.md §6.8: no reachable Docker daemon, too
+  # little disk), or nil when the report has no failure.
+  def preflight_failure
+    facts["preflight_error"].presence if facts.is_a?(Hash)
+  end
+
   def heard?(now = Time.current, within: ONLINE_WINDOW)
     last_heartbeat_at.present? && last_heartbeat_at >= now - within
   end

@@ -22,8 +22,13 @@ governance, community health — carry none.
   heard again, not marked Failed. A machine that is heard and still does not
   answer the reset is marked Failed.
 
-
 ### Fixed
+
+- Runners: a machine whose Docker daemon is down now checks in and shows **Failed**
+  with the reason, instead of showing Offline while its service restarts in a loop.
+  The runner no longer exits when Docker is unreachable: it waits for Docker with
+  a growing delay, and reports the machine again once Docker answers. Press
+  **Return to service** on the machine to bring it back to idle.
 - Runners: a session waiting for a machine of its runner keeps waiting while the machine is
   offline, and starts when it is back, instead of failing after about 90 seconds. It fails with
   the "has no machine online" message once no machine has been heard for 15 minutes. A new

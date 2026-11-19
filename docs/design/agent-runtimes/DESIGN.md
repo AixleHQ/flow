@@ -1375,7 +1375,10 @@ them. The answer carries the environment, `config` (`upload_max_bytes`) and `upd
 rule of the empty `GET ops` answer (`Runners::Release.update_for`, §14.4), read after the report
 is recorded. A runner below `min_version` is refused with `400 runner_version_unsupported`, as
 at `register` (§14.4). The host runner reports the preflight's os, arch and facts, and a machine
-that no longer passes the preflight still checks in, with the failure in `facts.preflight_error`.
+that no longer passes the preflight still checks in, with the failure in `facts.preflight_error`,
+and the platform moves it to `failed` with the failure as its reason (`Runners::CheckIn`; a later clean
+check-in does not return it, only Return to service does, §5.2). The runner checks in before it serves
+its sessions' proxies again, so this holds with Docker down.
 A check-in that fails in a way the runner can wait out is tried five times at most with backoff;
 then the runner logs it and starts its ops loop without one (the next start tries again), so a
 failing check-in route does not stop a machine that can work. A refusal that ends its work
@@ -1697,10 +1700,14 @@ are unchanged. With `network: host` the host runner listens itself.
   with `ActionController::Live`, chunk by chunk. No body schema (decision 9). Every refusal of
   the route carries `X-Aixle-Runner-Refusal`, so the runner tells it from the endpoint's own
   answer.
-- **No OTLP route yet** (decision 7): `RunnerRuntime#callback_url(:otel)` is nil, so a runner
-  session gets no OTLP variable. Claude Code and Gemini CLI then have telemetry off, Codex no
-  `[otel]` block, and Kiro CLI `KIRO_DISABLE_TELEMETRY`, since its export would otherwise fall
-  back to the vendor's collector. The route comes with a later task.
+- **The OTLP route** (decision 7, done in #257): `RunnerRuntime#callback_url(:otel)` is the proxy's
+  `otel` route, `POST` below `v1/` (`v1/metrics`, `v1/logs`, `v1/traces`), forwarded to
+  `otlp-ingest`. It checks no key header. `UsageStatisticsService` finds the session by the
+  session token the batch names in its resource attributes, and drops the batch unless its
+  `terminal_session_key` matches that token (`UsageStatistics::SessionKey`), as for a hosted
+  session. The
+  gateway needs only a session on the environment. So the OTLP sources of usage (Claude Code,
+  Gemini CLI, Codex, Kiro CLI, Copilot CLI, Grok) record on a runner as on hosted.
 
 ### 6.7 Heartbeat, reconnect and resume
 
@@ -2415,8 +2422,11 @@ The details task 8 fills in:
   be served again after a restart, the host runner stops the session's agent container, so the
   session fails through the dead-container path as with a sidecar that exits; nothing retries
   (Fix CR round 1). When the host runner can't list the environment's containers at its start,
-  it doesn't poll: it exits with a plain failure, and the service manager restarts it
-  (`Restart=always`), which retries `Environment.Resume` until Docker answers (Fix CR round 4).
+  it doesn't poll. It checks in first, with the preflight's failure in `facts.preflight_error`, so
+  the platform moves the machine to `failed` (§8), then retries `Environment.Resume` in the
+  process with a backoff up to 30 s until Docker answers, and checks in again, so a restart loop
+  of the service manager never hides the machine (task #258; it was an exit with a plain failure
+  and `Restart=always` in Fix CR round 4).
   The state directory is `0700`, so only the runner's user reaches the
   socket on the machine. The host runner narrows a wider state directory to `0700` when it
   starts, and exits with `ExitStop`, naming the directory and its mode, when it can't

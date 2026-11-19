@@ -200,7 +200,7 @@ module ContainerRuntime
 
     # A runner session calls the platform back through its callback proxy on
     # 127.0.0.1 (Runners::Proxy, DESIGN.md §6.6), never on the internal
-    # address. There is no OTLP route yet, so `:otel` is nil.
+    # address; `:otel` is the proxy's OTLP route.
     def callback_url(name, session)
       Runners::Proxy.local_url(name, session)
     end

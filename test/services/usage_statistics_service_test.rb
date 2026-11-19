@@ -41,6 +41,39 @@ class UsageStatisticsServiceTest < ActiveSupport::TestCase
     assert_equal 165, stat.total_tokens
   end
 
+  # A runner session's agent exports through the machine's callback proxy
+  # (Runners::Proxy, route `otel`). The proxy forwards the batch to otlp-ingest,
+  # which posts it here, so the batch reaches the service as it does for a hosted
+  # session: the token and key the adapter put in OTEL_RESOURCE_ATTRIBUTES.
+  test "process records cost and tokens for a runner session's batch" do
+    runner_session = create(:runner_session, agent_type: "claude_code")
+    payload = otlp_payload(
+      keyed_metric(runner_session, tokens: { input: 900, output: 100 }, cost_usd: 0.09, model: "claude-haiku-5-5")
+    )
+
+    result = nil
+    assert_difference("UsageStatistic.count", 1) do
+      result = UsageStatisticsService.process(payload.to_json)
+    end
+
+    assert_equal :ok, result.status
+    stat = runner_session.reload.usage_statistic
+    assert_equal 900, stat.input_tokens
+    assert_equal 100, stat.output_tokens
+    assert_equal 1_000, stat.total_tokens
+    assert_equal 9, stat.cost_cents
+    assert_equal "otlp", stat.source
+  end
+
+  test "process drops a runner session's batch that carries no key" do
+    runner_session = create(:runner_session, agent_type: "claude_code")
+    payload = otlp_payload(otlp_resource_metric(token: runner_session.route_token, tokens: { input: 900 }, cost_usd: 0.09))
+
+    assert_no_difference("UsageStatistic.count") do
+      UsageStatisticsService.process(payload.to_json)
+    end
+  end
+
   test "process persists a usage_statistic for every referenced session" do
     other_session = create(:terminal_session, :running, user: @user, project: @project)
 
