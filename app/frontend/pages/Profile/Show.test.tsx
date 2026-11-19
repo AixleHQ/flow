@@ -40,6 +40,7 @@ const buildProfile = (overrides: Partial<CurrentUser> = {}): CurrentUser => ({
   shareActiveSessions: false,
   shareCompletedSessions: true,
   excludeFromTeams: false,
+  dashboardViewer: false,
   currentRole: 'admin',
   currentCompany: acmeCompany,
   memberships: [{ id: 5, role: 'admin', state: 'active', company: acmeCompany }],

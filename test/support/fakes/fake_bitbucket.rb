@@ -26,6 +26,7 @@ module FakeBitbucket
       @branches_by_repository = Hash.new { |h, k| h[k] = [] }
       @pull_request_store = Hash.new { |h, k| h[k] = {} }
       @comment_store = Hash.new { |h, k| h[k] = [] }
+      @comment_authors = {}
       @statuses = Hash.new { |h, k| h[k] = [] }
       @merge_mode = :merged
       @next_id = 100
@@ -169,6 +170,14 @@ module FakeBitbucket
       [ @comment_store[[ uuid_of(workspace, repository), id.to_i ]].first(limit), nil ]
     end
 
+    def comment(workspace, repository, id, comment_id)
+      record(:comment, workspace: workspace, repository: repository, id: id, comment_id: comment_id)
+      found = @comment_store[[ uuid_of(workspace, repository), id.to_i ]].find { |c| c[:id].to_s == comment_id.to_s }
+      raise Bitbucket::Error::NotFound unless found
+
+      found.merge(author_uuid: @comment_authors[found[:id]], deleted: false)
+    end
+
     def create_comment(workspace, repository, id, body:, path: nil, line: nil, parent_id: nil)
       record(:create_comment, workspace: workspace, repository: repository, id: id, body: body, path: path, line: line,
                               parent_id: parent_id)
@@ -176,6 +185,15 @@ module FakeBitbucket
       comment = { id: @next_id += 1, parent_id: parent_id&.to_i, author: "Aixle Flow", body: body, path: path,
                   line: line&.to_i, resolved: false, created_on: "2026-10-16T09:05:00.000000+00:00" }
       @comment_store[[ uuid_of(workspace, repository), id.to_i ]] << comment
+      comment
+    end
+
+    # A comment someone left on Bitbucket, for a Forge comment event to name.
+    def add_comment(repository_uuid, id, author:, author_uuid:, body:, path: nil, line: nil)
+      comment = { id: @next_id += 1, parent_id: nil, author: author, body: body, path: path, line: line,
+                  resolved: false, created_on: "2026-10-16T09:05:00.000000+00:00" }
+      @comment_authors[comment[:id]] = author_uuid
+      @comment_store[[ repository_uuid, id.to_i ]] << comment
       comment
     end
 

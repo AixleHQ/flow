@@ -25,6 +25,11 @@ class Webhooks::IngressControllerTest < ActionDispatch::IntegrationTest
     assert_response :not_found
   end
 
+  test "a slug with a NUL byte is a bad request, not a server error" do
+    post "/webhooks/in/%00", params: "{}", headers: { "CONTENT_TYPE" => "application/json" }
+    assert_response :bad_request
+  end
+
   test "responds to the Slack url_verification challenge" do
     raw = { type: "url_verification", challenge: "abc123" }.to_json
     post "/webhooks/in/slack-test", params: raw, headers: { "CONTENT_TYPE" => "application/json" }

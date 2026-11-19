@@ -4,6 +4,7 @@ import {
   IconBolt,
   IconClock,
   IconColumns,
+  IconGitPullRequest,
   IconMessage,
   IconPencil,
   IconPlus,
@@ -17,7 +18,7 @@ import { IntegrationLogo } from 'shared/ui/IntegrationLogo';
 
 import { creatorLabel, creatorTone, needsChannel, triggerMeta, triggerSource, triggerTitle } from './describeTrigger';
 import type { TrackerOption } from './trackerTrigger';
-import type { Trigger } from './types';
+import type { Trigger, TriggerRepository } from './types';
 
 const SOURCE_ICONS: Record<string, typeof IconBolt> = {
   board: IconColumns,
@@ -25,11 +26,18 @@ const SOURCE_ICONS: Record<string, typeof IconBolt> = {
   chat: IconMessage,
   webhook: IconWebhook,
   tracker: IconTicket,
+  pull_request: IconGitPullRequest,
 };
 
-const integrationProvider = (t: Trigger, source: string, trackers: TrackerOption[]) => {
+const integrationProvider = (
+  t: Trigger,
+  source: string,
+  trackers: TrackerOption[],
+  repositories: TriggerRepository[],
+) => {
   if (source === 'chat') return t.chat_provider;
   if (source === 'tracker') return trackers.find((tr) => tr.id === t.project_tracker_id)?.provider;
+  if (source === 'pull_request') return repositories.find((r) => r.id === t.repository_id)?.provider;
   return null;
 };
 
@@ -53,6 +61,7 @@ const iconButton = {
 interface TriggerCardsProps {
   triggers: Trigger[];
   trackers?: TrackerOption[];
+  repositories?: TriggerRepository[];
   readOnly: boolean;
   onEdit: (t: Trigger) => void;
   onDelete: (t: Trigger) => void;
@@ -65,6 +74,7 @@ interface TriggerCardsProps {
 export function TriggerCards({
   triggers,
   trackers = [],
+  repositories = [],
   readOnly,
   onEdit,
   onDelete,
@@ -77,7 +87,7 @@ export function TriggerCards({
       {triggers.map((t) => {
         const source = triggerSource(t);
         const SourceIcon = SOURCE_ICONS[source] ?? IconBolt;
-        const provider = integrationProvider(t, source, trackers);
+        const provider = integrationProvider(t, source, trackers, repositories);
         const isDisabled = t.enabled === false;
         const href = workflowHref?.(t);
         const title = triggerTitle(t);
@@ -138,7 +148,7 @@ export function TriggerCards({
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {triggerMeta(t, trackers)}
+                  {triggerMeta(t, trackers, repositories)}
                 </div>
               </div>
             </div>

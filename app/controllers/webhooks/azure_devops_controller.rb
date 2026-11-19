@@ -49,7 +49,8 @@ class Webhooks::AzureDevopsController < ActionController::API
     ResolveAzureDevopsEventJob.perform_later(
       subscription_id: @subscription.id,
       event_type: payload["eventType"].to_s,
-      resource: payload["resource"].is_a?(Hash) ? payload["resource"] : {}
+      resource: payload["resource"].is_a?(Hash) ? payload["resource"] : {},
+      occurred_at: payload["createdDate"].presence
     )
 
     head :ok

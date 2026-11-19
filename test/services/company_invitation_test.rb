@@ -56,6 +56,44 @@ class CompanyInvitationTest < ActiveSupport::TestCase
     assert_equal @inviter, membership.invited_by
   end
 
+  test "the projects picked with the invitation are joined at once, other companies' skipped" do
+    picked = create(:project, company: @company, owner: create(:user, :admin, company: @company))
+    unpicked = create(:project, company: @company, owner: picked.owner)
+    other_company = create(:company)
+    foreign = create(:project, company: other_company, owner: create(:user, :admin, company: other_company))
+
+    result = invite("jane@example.com", project_ids: [ picked.id, foreign.id ])
+
+    assert_equal :invited, result.status
+    user = User.find_by!(email: "jane@example.com")
+    assert_equal [ picked ], user.collaborated_projects.to_a
+    assert_not unpicked.project_collaborators.exists?(user: user)
+    assert_not foreign.project_collaborators.exists?(user: user)
+  end
+
+  test "sending a pending invitation again adds the newly picked projects" do
+    owner = create(:user, :admin, company: @company)
+    first, second = create_list(:project, 2, company: @company, owner: owner)
+    member = create(:user, company: @company, membership_state: "invited")
+    first.add_collaborator(member)
+
+    result = invite(member.email, project_ids: [ first.id, second.id ])
+
+    assert_equal :resent, result.status
+    assert_equal [ first, second ].to_set, member.collaborated_projects.to_set
+  end
+
+  test "a revoked member invited again joins the picked projects" do
+    project = create(:project, company: @company, owner: create(:user, :admin, company: @company))
+    member = create(:user, :employee, company: @company)
+    @company.company_memberships.find_by!(user: member).revoke!
+
+    result = invite(member.email, project_ids: [ project.id ])
+
+    assert_equal :invited, result.status
+    assert project.project_collaborators.exists?(user: member)
+  end
+
   test "members and platform administrators are left alone" do
     member = create(:user, :employee, company: @company)
     super_admin = create(:user, :super_admin)
@@ -90,8 +128,8 @@ class CompanyInvitationTest < ActiveSupport::TestCase
 
   private
 
-  def invite(email, role: nil)
-    CompanyInvitation.call(company: @company, inviter: @inviter, email: email, role: role)
+  def invite(email, role: nil, project_ids: [])
+    CompanyInvitation.call(company: @company, inviter: @inviter, email: email, role: role, project_ids: project_ids)
   end
 end
 

@@ -26,6 +26,35 @@ class ProjectTest < ActiveSupport::TestCase
     assert @project.accessible_by?(collaborator)
   end
 
+  test "an invitee can be put on the project ahead, and reaches it only once they accept" do
+    invitee = create(:user, :employee, company: @company, membership_state: "invited")
+
+    @project.add_collaborator(invitee)
+
+    assert_not @project.accessible_by?(invitee)
+    assert_not_includes Project.for_user(invitee), @project
+    assert_includes @project.member_users, invitee
+    assert_not_includes @project.joined_member_users, invitee
+    assert_not_includes @project.assignable_users, invitee
+
+    invitee.company_memberships.find_by!(company: @company).accept!
+
+    assert @project.accessible_by?(invitee)
+    assert_includes Project.for_user(invitee), @project
+    assert_includes @project.joined_member_users, invitee
+  end
+
+  test "a suspended or revoked member cannot be put on the project" do
+    suspended = create(:user, :employee, company: @company, membership_state: "suspended")
+    revoked = create(:user, :employee, company: @company, membership_state: "revoked")
+
+    [ suspended, revoked ].each do |user|
+      collaborator = @project.project_collaborators.new(user: user)
+      assert_not collaborator.valid?
+      assert_includes collaborator.errors[:user], "must belong to the same company as the project"
+    end
+  end
+
   test "accessible_by? is true for company admin who is not owner or collaborator" do
     admin = create(:user, :admin, :onboarding_completed, company: @company)
     assert_not_equal @project.owner_id, admin.id
@@ -41,6 +70,23 @@ class ProjectTest < ActiveSupport::TestCase
     other_company = create(:company)
     foreign_admin = create(:user, :admin, :onboarding_completed, company: other_company)
     assert_not @project.accessible_by?(foreign_admin)
+  end
+
+  test "accessible_user_ids admits whom accessible_by? admits, in constant queries" do
+    collaborator = create(:user, :employee, :onboarding_completed, company: @company)
+    @project.add_collaborator(collaborator)
+    revoked = create(:user, :employee, :onboarding_completed, company: @company)
+    @project.add_collaborator(revoked)
+    revoked.company_memberships.find_by(company: @company).revoke!
+    admin = create(:user, :admin, :onboarding_completed, company: @company)
+    stranger = create(:user, :employee, :onboarding_completed, company: @company)
+    foreign_admin = create(:user, :admin, :onboarding_completed, company: create(:company))
+    users = [ @project_owner, collaborator, revoked, admin, stranger, foreign_admin ]
+
+    accessible = assert_queries_count(2) { @project.accessible_user_ids(users.map(&:id)) }
+
+    assert_equal [ @project_owner, collaborator, admin ].map(&:id).to_set, accessible
+    assert_equal users.select { |user| @project.accessible_by?(user) }.map(&:id).to_set, accessible
   end
 
   test "assignable_users is the members accessible_by? admits, owner first, in constant queries" do

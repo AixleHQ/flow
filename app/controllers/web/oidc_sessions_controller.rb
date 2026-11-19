@@ -19,25 +19,18 @@ class Web::OidcSessionsController < Web::ApplicationController
 
   # POST /login/identify — step one of signing in. The person gives an address
   # and nothing else; what comes back is decided by the address's DOMAIN, which
-  # already resolves to exactly one company.
+  # resolves to at most one company.
   #
   # Never by whether an account exists: an unknown address at a known domain
   # must answer exactly as a known one does, or the screen becomes an oracle
-  # for which addresses are registered.
+  # for which addresses are registered. An unclaimed domain gets the password
+  # step too, not a signup or a refusal: a member invited from another domain
+  # is otherwise locked out the first time they sign out.
   def identify
     email = params[:email].to_s.strip
     return redirect_to(login_path(error: "invalid_email")) unless email.match?(URI::MailTo::EMAIL_REGEXP)
 
     options = Auth::SignInOptions.for(email)
-    if options.nil?
-      # Where anyone may sign a company up, an address at a domain nobody has
-      # claimed is not a refusal — it is the first field of a signup, and
-      # answering it with "contact your admin" turns the one door away.
-      return redirect_to(new_workspace_path(email: email)) if Deployment.self_serve_signup?
-
-      return redirect_to(login_path(error: "no_workspace"))
-    end
-
     case options.connections.size
       # Begun right here rather than redirected to #start: that route is POST
       # only (CVE-2015-9284) and a redirect is followed with GET, so handing it

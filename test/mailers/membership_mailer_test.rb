@@ -35,6 +35,19 @@ class MembershipMailerTest < ActionMailer::TestCase
     assert_includes link["style"], "color:#d1cfcd"
   end
 
+  test "invitation email names the projects the invitee joins, and says nothing of projects without any" do
+    assert_no_match(/access to/, MembershipMailer.invitation(@membership).text_part.decoded)
+
+    owner = create(:user, :admin, company: @company)
+    [ "Mobile App", "Data Pipeline" ].each do |name|
+      create(:project, company: @company, owner: owner, name: name).add_collaborator(@invitee)
+    end
+    email = MembershipMailer.invitation(@membership)
+
+    assert_includes email.text_part.decoded, "You'll have access to these projects: Data Pipeline and Mobile App."
+    assert_includes Nokogiri::HTML(email.html_part.decoded).text.squish, "these projects: Data Pipeline and Mobile App"
+  end
+
   test "invitation_reminder carries a still-valid token link and the expiry date" do
     @membership.update!(invited_at: 6.days.ago)
     email = MembershipMailer.invitation_reminder(@membership)

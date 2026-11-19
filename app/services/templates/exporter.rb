@@ -376,13 +376,16 @@ module Templates
                 "filter_predicate" => filter.presence, "cooldown_seconds" => binding.cooldown_seconds,
                 "status_reporting" => binding.status_reporting.to_s }
       entry["chat_provider"] = binding.chat_provider if kind == "chat"
-      entry["event_type"] = binding.event_type if %w[event tracker].include?(kind)
-      # A tracker is this project's, so the exported trigger listens to any
-      # tracker of the installing project; status names differ between trackers.
-      entry["aixle_changes"] = binding.aixle_changes.to_s if kind == "tracker"
+      entry["event_type"] = binding.event_type if %w[event tracker pull_request].include?(kind)
+      # A tracker or repository is this project's, so the exported trigger listens
+      # to any of the installing project's; status names differ between trackers.
+      entry["aixle_changes"] = binding.aixle_changes.to_s if %w[tracker pull_request].include?(kind)
       entry["copy_attachments"] = true if kind == "tracker" && binding.copy_attachments
       if kind == "tracker" && binding.project_tracker_id
         @notes << "Tracker trigger #{binding.name || binding.id}: exported for any tracker of the installing project."
+      end
+      if kind == "pull_request" && binding.repository_id
+        @notes << "Pull request trigger #{binding.name || binding.id}: exported for any repository of the installing project."
       end
       entry["cron"] = binding.schedule_config["cron"] if kind == "schedule"
       entry["timezone"] = binding.schedule_config["timezone"].presence if kind == "schedule"

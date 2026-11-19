@@ -23,6 +23,18 @@ class Web::Company::Projects::BoardsControllerTest < ActionDispatch::Integration
     assert_inertia_page "Projects/Board/BoardPage"
   end
 
+  test "the board's people leave out an invitee who has not accepted yet" do
+    create(:board, project: @project)
+    collaborator = create(:user, :employee, company: @company)
+    invitee = create(:user, :employee, company: @company, membership_state: "invited")
+    [ collaborator, invitee ].each { |user| @project.add_collaborator(user) }
+
+    get company_project_board_path(@project)
+
+    ids = inertia.props[:members].pluck(:id)
+    assert_equal [ @user.id, collaborator.id ].sort, ids.sort
+  end
+
   test "show renders board page with selected task" do
     board = create(:board, project: @project)
     col = create(:board_column, board: board)

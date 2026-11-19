@@ -191,7 +191,9 @@ default) is marked **stale**.
 - Bitbucket Cloud only.
 - The app reaches the whole workspace; per-repository narrowing needs
   repository access tokens.
-- No Bitbucket triggers: push and pull-request events do not start workflows.
+- Pull request triggers ([Pull request events](/docs/triggers-and-gates#pull-request-events))
+  need the app: an approval, a request for changes or a comment starts them,
+  and a token connection sends no events. Pushes do not start workflows.
 - Coder workspaces cannot clone Bitbucket repositories yet.
 - A repository renamed in Bitbucket while a session is running keeps its old
   address in that session's checkout, and its fetches and pushes stop

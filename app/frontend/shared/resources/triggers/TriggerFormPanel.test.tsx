@@ -9,7 +9,7 @@ import {
   buildChatProviderOption,
 } from 'test/factories/chatChannel';
 import { buildSharedProps, buildSharedUser } from 'test/factories/sharedProps';
-import { buildChatTrigger } from 'test/factories/trigger';
+import { buildChatTrigger, buildPullRequestTrigger, buildTriggerRepository } from 'test/factories/trigger';
 import { answerFetch, jsonResponse } from 'test/fetchStub';
 import { act, renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
@@ -1425,6 +1425,147 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
       ).toBeInTheDocument();
     });
   });
+  // -------------------------------------------------------------------------
+  // Pull request kind
+  // -------------------------------------------------------------------------
+  describe('pull request kind', () => {
+    const storefront = buildTriggerRepository();
+    const api = buildTriggerRepository({
+      id: 9,
+      fullName: 'acme/api',
+      provider: 'bitbucket',
+      mentionsRecognized: false,
+    });
+
+    async function pick(field: string, option: string) {
+      await userEvent.click(screen.getByRole('combobox', { name: field }));
+      await userEvent.click(await screen.findByRole('option', { name: option }));
+    }
+
+    it('is offered only once the project has a repository on a code host', async () => {
+      const { unmount } = renderPage(<TriggerFormPanel {...baseProps()} />);
+      await userEvent.click(screen.getByDisplayValue('Task enters column'));
+      expect(screen.queryByRole('option', { name: 'Pull request' })).not.toBeInTheDocument();
+      unmount();
+
+      renderPage(<TriggerFormPanel {...baseProps({ repositories: [storefront] })} />);
+      await userEvent.click(screen.getByDisplayValue('Task enters column'));
+      await userEvent.click(await screen.findByRole('option', { name: 'Pull request' }));
+
+      expect(screen.getByRole('combobox', { name: 'Repository' })).toHaveValue('Any repository in this project');
+    });
+
+    it('posts a review trigger on one repository, narrowed to a verdict', async () => {
+      const fetchSpy = installFetch();
+      renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'pull_request', repositories: [storefront] })} />);
+
+      expect(screen.getByRole('combobox', { name: 'When' })).toHaveValue('A review is submitted');
+      expect(screen.getByRole('textbox', { name: 'Task title template' })).toHaveAttribute(
+        'placeholder',
+        'PR {{pull_request.number}}: {{pull_request.title}}',
+      );
+      expect(
+        screen.getByText(/the task linked to the pull request, or the task whose run opened it/),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('switch', { name: /comment on the issue when a run fails/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('switch', { name: 'Copy issue files to the task' })).not.toBeInTheDocument();
+
+      await pick('Repository', 'acme/storefront (GitHub)');
+      await pick('Verdict', 'Changes requested');
+      await pick('Changes made by Aixle', 'Only from other workflows');
+      await userEvent.type(screen.getByRole('textbox', { name: 'Task title template' }), 'Address review');
+      await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+      await waitFor(() =>
+        expect(fetchSpy).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'POST' })),
+      );
+      expect(bodyOf(fetchSpy, 'POST').trigger).toEqual({
+        kind: 'pull_request',
+        event_type: 'pull_request.review.submitted',
+        repository_id: '8',
+        aixle_changes: 'other_workflows',
+        filter_predicate: { 'review.verdict': 'changes_requested' },
+        subject_policy: 'find_or_create_task',
+        subject_column_id: '1',
+        subject_title_template: 'Address review',
+      });
+    });
+
+    it('posts a comment trigger that waits for a mention of Aixle', async () => {
+      const fetchSpy = installFetch();
+      renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'pull_request', repositories: [storefront] })} />);
+
+      await pick('When', 'A comment is added');
+      expect(screen.queryByRole('combobox', { name: 'Verdict' })).not.toBeInTheDocument();
+      expect(screen.getByRole('switch', { name: 'Only when Aixle is mentioned' })).toBeChecked();
+      await userEvent.type(screen.getByRole('textbox', { name: 'Text contains' }), 'please fix');
+      await pick('Subject', 'None — project-level run');
+      await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+      await waitFor(() =>
+        expect(fetchSpy).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'POST' })),
+      );
+      expect(bodyOf(fetchSpy, 'POST').trigger).toEqual({
+        kind: 'pull_request',
+        event_type: 'pull_request.comment.created',
+        repository_id: null,
+        aixle_changes: 'ignore',
+        filter_predicate: { 'comment.mentions_me': true, text: { op: 'contains', value: 'please fix' } },
+        subject_policy: 'none',
+      });
+    });
+
+    it('says where a mention of Aixle cannot be recognised', async () => {
+      installFetch();
+      renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'pull_request', repositories: [storefront, api] })} />);
+
+      await pick('When', 'A comment is added');
+      expect(screen.getByText(/^Mentions are not recognised in acme\/api\./)).toBeInTheDocument();
+
+      await pick('Repository', 'acme/api (Bitbucket)');
+      expect(
+        screen.getByText(
+          /^This trigger cannot fire yet\. Aixle cannot recognise a mention of itself through this repository's connection\./,
+        ),
+      ).toBeInTheDocument();
+
+      await pick('Repository', 'acme/storefront (GitHub)');
+      expect(screen.queryByText(/cannot recognise a mention|Mentions are not recognised/)).not.toBeInTheDocument();
+    });
+
+    it('edits a pull-request trigger without resending its event type, keeping conditions the form has no field for', async () => {
+      const fetchSpy = installFetch();
+      const editing = buildPullRequestTrigger({
+        repository_id: 8,
+        aixle_changes: 'always',
+        filter_predicate: { 'review.verdict': 'approved', 'pull_request.target_branch': 'main' },
+      });
+      renderPage(<TriggerFormPanel {...baseProps({ editing, repositories: [storefront] })} />);
+
+      expect(screen.getByText('Pull request')).toBeInTheDocument();
+      expect(screen.getByText('Type is locked when editing')).toBeInTheDocument();
+      expect(screen.getByText('A review is submitted')).toBeInTheDocument();
+      expect(screen.queryByRole('combobox', { name: 'When' })).not.toBeInTheDocument();
+      expect(screen.getByRole('combobox', { name: 'Repository' })).toHaveValue('acme/storefront (GitHub)');
+      expect(screen.getByRole('combobox', { name: 'Verdict' })).toHaveValue('Approved');
+      expect(screen.getByText('pull_request.target_branch = "main"')).toBeInTheDocument();
+
+      await pick('Verdict', 'Any verdict');
+      await userEvent.click(screen.getByRole('button', { name: 'Update trigger' }));
+
+      await waitFor(() =>
+        expect(fetchSpy).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'PATCH' })),
+      );
+      expect(bodyOf(fetchSpy, 'PATCH').trigger).toEqual({
+        repository_id: '8',
+        aixle_changes: 'always',
+        filter_predicate: { 'pull_request.target_branch': 'main' },
+        subject_policy: 'none',
+        enabled: true,
+      });
+    });
+  });
+
   describe('on the project Triggers page', () => {
     const workflows = [
       { id: 3, name: 'Intake' },

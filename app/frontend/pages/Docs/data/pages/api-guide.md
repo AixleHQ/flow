@@ -40,7 +40,9 @@ caller themselves:
 | `POST /webhooks/in/:slug` | Any configured source | The endpoint's own verification strategy, checked on the raw body. |
 | `GET /api/v1/internal/ws_auth` | Traefik ForwardAuth, before it proxies a container's terminal, IDE, or file view | A signed-in viewer: the session cookie on the app's host, or a short-lived container ticket on a sandbox host. The viewer must be allowed to reach the session, only the session's owner gets the writable terminal and the IDE, and the session must be `ready`. |
 | `POST /api/v1/internal/usage_statistics` | The OTLP ingest relay, forwarding agent telemetry | Each batch names its session in the `terminal_session_token` resource attribute and proves it with `terminal_session_key`, a key the app derives from that session and recomputes on arrival. |
-| `/mcp`, `/action_mcp` | Agent sessions; people's own agents | A session's MCP key, or a personal MCP token (`amcp_…`), in `X-Session-Key` or `Authorization: Bearer`. |
+| `/mcp`, `/action_mcp` | Agent sessions; people's own agents | A session's MCP key, a personal MCP token (`amcp_…`), or an OAuth access token an app holds for a person (`aoat_…`), in `X-Session-Key` or `Authorization: Bearer`. Without one, the answer names the authorization server in `WWW-Authenticate`. |
+| `/.well-known/oauth-*`, `POST /mcp-oauth/token`, `/register`, `/revoke` | MCP clients signing a person in to the personal MCP | None: public discovery documents, and token requests proved by PKCE or a refresh token. |
+| `/mcp-oauth/authorize` | A person allowing an MCP client | The signed-in viewer's own session. |
 | `POST /cloud/aws/credentials`, `/agents/credentials`, `/agents/git/credentials`, `/azure/git/credentials` | Helpers inside an agent container | `X-Session-Id` plus a key the app derives for that session; a session that is no longer active is refused. |
 
 ## REST surface — by resource
@@ -189,6 +191,13 @@ GET    /api/v1/projects/:project_id/assets/:id/download
 session reaches it with its session key and gets the session's tools; a
 person reaches it with a personal MCP token and gets the tools of their own
 account.
+
+For the personal server Aixle is also the OAuth 2.1 authorization server
+(protected resource metadata at `/.well-known/oauth-protected-resource/mcp`,
+authorization server metadata at `/.well-known/oauth-authorization-server`),
+so a client that supports MCP sign-in connects with the URL alone. Clients
+identify themselves with a Client ID Metadata Document URL or register at
+`/mcp-oauth/register`; PKCE S256 is required.
 
 ## Webhooks
 

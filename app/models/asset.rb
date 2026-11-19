@@ -6,6 +6,7 @@ class Asset < ApplicationRecord
   # for nesting.
   FOLDER_MAX_LENGTH = 100
   CONTAINER_DIR = "/workspace/assets"
+  OUTPUT_DIR = "/workspace/outputs"
   NAME_MESSAGE = "must be a relative path with no backslashes or control characters, and no segment blank, \".\" or \"..\""
   UNSHARED = PubliclyShareable::UNSHARED.merge(public: false).freeze
 

@@ -25,6 +25,12 @@ import type { SharedProps } from 'shared/ui';
 
 import { CHAT_PROVIDER_LABELS } from './describeTrigger';
 import {
+  pullRequestTriggerPayload,
+  pullRequestValueFromTrigger,
+  type PullRequestTriggerValue,
+} from './pullRequestTrigger';
+import { PullRequestTriggerFields } from './PullRequestTriggerFields';
+import {
   isAttached,
   trackerTriggerPayload,
   trackerValueFromTrigger,
@@ -39,6 +45,7 @@ import type {
   RunAsTeam,
   Trigger,
   TriggerColumnOption,
+  TriggerRepository,
   TriggerWorkflowOption,
 } from './types';
 
@@ -50,6 +57,8 @@ interface TriggerFormPanelProps {
   workflows?: TriggerWorkflowOption[];
   columns: TriggerColumnOption[];
   trackers?: TrackerOption[];
+  // The project's repositories on a code host, which a pull-request trigger can listen to.
+  repositories?: TriggerRepository[];
   // Messengers the company has connected, with the channels connected to the company in each.
   chatProviders?: ChatProviderOption[];
   editing: Trigger | null;
@@ -59,12 +68,12 @@ interface TriggerFormPanelProps {
   onSaved: () => void;
 }
 
-type Kind = 'column' | 'chat' | 'webhook' | 'schedule' | 'tracker';
+type Kind = 'column' | 'chat' | 'webhook' | 'schedule' | 'tracker' | 'pull_request';
 
 // Off-board triggers fire unattended: the run belongs to whoever added the
 // trigger and uses their credentials. A column trigger's run belongs to the
 // person the card puts on it, so its creator is provenance, not identity.
-const OFF_BOARD_KINDS: Kind[] = ['chat', 'webhook', 'schedule', 'tracker'];
+const OFF_BOARD_KINDS: Kind[] = ['chat', 'webhook', 'schedule', 'tracker', 'pull_request'];
 
 function describeCron(expr: string): { ok: boolean; text: string } {
   const value = expr.trim();
@@ -156,6 +165,7 @@ export function TriggerFormPanel({
   workflows = [],
   columns,
   trackers = [],
+  repositories = [],
   chatProviders = [],
   editing,
   runAs = null,
@@ -223,6 +233,9 @@ export function TriggerFormPanel({
   const [trackerValue, setTrackerValue] = useState<TrackerTriggerValue>(() =>
     trackerValueFromTrigger(editing?.kind === 'tracker' ? editing : null, columns[0]?.id?.toString() ?? null),
   );
+  const [pullRequestValue, setPullRequestValue] = useState<PullRequestTriggerValue>(() =>
+    pullRequestValueFromTrigger(editing?.kind === 'pull_request' ? editing : null, columns[0]?.id?.toString() ?? null),
+  );
 
   const columnData = columns.map((c) => ({ value: c.id.toString(), label: c.name }));
   const columnBindingData = columns.map((c) => ({
@@ -265,6 +278,9 @@ export function TriggerFormPanel({
       trigger.cooldown_seconds = cooldown;
     } else if (kind === 'tracker') {
       Object.assign(trigger, trackerTriggerPayload(trackerValue, isEdit));
+      if (isEdit) trigger.enabled = enabled;
+    } else if (kind === 'pull_request') {
+      Object.assign(trigger, pullRequestTriggerPayload(pullRequestValue, isEdit));
       if (isEdit) trigger.enabled = enabled;
     } else {
       const filter: Record<string, unknown> = {};
@@ -365,6 +381,7 @@ export function TriggerFormPanel({
     subjectColumnId,
     subjectTitleTemplate,
     trackerValue,
+    pullRequestValue,
     canPickRunAs,
     runAsId,
     projectId,
@@ -400,6 +417,7 @@ export function TriggerFormPanel({
     subjectColumnId,
     subjectTitleTemplate,
     trackerValue,
+    pullRequestValue,
     runAsId,
   });
   const [initialValues] = useState(values);
@@ -436,6 +454,7 @@ export function TriggerFormPanel({
     { value: 'chat', label: 'Chat message' },
     { value: 'webhook', label: 'Incoming webhook' },
     ...(trackers.some(isAttached) || kind === 'tracker' ? [{ value: 'tracker', label: 'Task tracker event' }] : []),
+    ...(repositories.length > 0 || kind === 'pull_request' ? [{ value: 'pull_request', label: 'Pull request' }] : []),
   ];
 
   return (
@@ -891,6 +910,16 @@ export function TriggerFormPanel({
                   value={trackerValue}
                   isEdit={isEdit}
                   onChange={setTrackerValue}
+                />
+              )}
+
+              {kind === 'pull_request' && (
+                <PullRequestTriggerFields
+                  repositories={repositories}
+                  columns={columnData}
+                  value={pullRequestValue}
+                  isEdit={isEdit}
+                  onChange={setPullRequestValue}
                 />
               )}
 

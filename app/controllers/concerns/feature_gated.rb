@@ -2,7 +2,8 @@
 
 # Declares that a controller, or some of its actions, exists only while a
 # feature flag is on (docs/architecture/feature-flags.md). Anything else
-# answers 404, as if the route were not there.
+# answers 404, as if the route were not there: the not-found page to a browser,
+# an empty 404 to anything else.
 #
 #   class Web::Company::RunnersController < Web::Company::ApplicationController
 #     requires_feature :external_runners                   # every action
@@ -21,13 +22,14 @@
 # change who may reach an action.
 module FeatureGated
   extend ActiveSupport::Concern
+  include NotFoundPage
 
   class_methods do
     # `options` are the before_action filters (`only:`, `except:`, `if:`,
     # `unless:`). Keep `key` a literal symbol: it is what to search for when
     # the flag is removed.
     def requires_feature(key, **options)
-      prepend_before_action(**options) { head :not_found unless required_feature_enabled?(key) }
+      prepend_before_action(**options) { render_not_found unless required_feature_enabled?(key) }
     end
   end
 

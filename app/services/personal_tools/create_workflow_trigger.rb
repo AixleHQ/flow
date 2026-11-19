@@ -12,9 +12,11 @@ module PersonalTools
                   "an inbound webhook (webhook), an event in a task tracker connected to the project " \
                   "(tracker: event_type tracker.issue.created, tracker.issue.status_changed, " \
                   "tracker.issue.assigned or tracker.comment.created; project_tracker_id picks one tracker, " \
-                  "none means any), or a custom platform event (event). " \
-                  "IMPORTANT: the off-board kinds (chat, schedule, webhook, event, tracker) fire unattended, " \
-                  "so EVERY step of the workflow must have auto-run (allow_non_interactive) enabled — " \
+                  "none means any), a review or comment on a pull request of a connected repository " \
+                  "(pull_request: event_type pull_request.review.submitted or pull_request.comment.created; " \
+                  "repository_id picks one repository, none means any), or a custom platform event (event). " \
+                  "IMPORTANT: the off-board kinds (chat, schedule, webhook, event, tracker, pull_request) fire " \
+                  "unattended, so EVERY step of the workflow must have auto-run (allow_non_interactive) enabled — " \
                   "otherwise this call is rejected and the error names the steps still waiting on a " \
                   "human. Column triggers are exempt: their manual mode puts a person on the button. " \
                   "kind=webhook also provisions an inbound endpoint and returns webhook_url and " \
@@ -30,8 +32,9 @@ module PersonalTools
       param :event_type, type: :string,
                          description: "Event name for kind=event — an inbound webhook's own 'webhook.<token>' " \
                                       "(list_workflow_triggers shows it); chat messages are kind=chat. " \
-                                      "Nothing emits GitHub events; start a workflow from GitHub with kind=webhook. " \
-                                      "For kind=tracker, one of the tracker.* types. Ignored for the other kinds, " \
+                                      "For kind=tracker, one of the tracker.* types; for kind=pull_request, " \
+                                      "pull_request.review.submitted or pull_request.comment.created. Other " \
+                                      "GitHub events start a workflow through kind=webhook. Ignored for the other kinds, " \
                                       "which set their own event type."
       param :name, type: :string, description: "Human-readable label for this trigger."
       param :trigger_mode, type: :string, enum: WorkflowTriggerSupport::TRIGGER_MODES,
@@ -44,14 +47,20 @@ module PersonalTools
                                             "edited as the run starts and ends). Chat triggers default to lifecycle."
       param :subject_policy, type: :string, enum: WorkflowTriggerSupport::SUBJECT_POLICIES,
                              description: "Which board task the run is about: none, existing_task, create_task, or " \
-                                          "find_or_create_task (tracker triggers: reuse the task linked to the " \
-                                          "issue, else create one). The last two need subject_column_id."
+                                          "find_or_create_task (tracker and pull_request triggers: reuse the task " \
+                                          "linked to the issue or pull request, else create one). The last two need " \
+                                          "subject_column_id."
       param :subject_column_id, type: :integer, description: "Board column the new card lands in when subject_policy is create_task."
       param :subject_title_template, type: :string, description: "Title template for the card created by subject_policy=create_task."
       param :project_tracker_id, type: :integer,
                                  description: "kind=tracker: the project tracker to listen to. Omit for any tracker in the project."
+      param :repository_id, type: :integer,
+                            description: "kind=pull_request: the repository to listen to (from list_repositories). " \
+                                         "Omit for any repository of the project on GitHub, GitLab, Bitbucket or " \
+                                         "Azure DevOps."
       param :aixle_changes, type: :string, enum: WorkflowTriggerSupport::AIXLE_CHANGES,
-                            description: "kind=tracker: what to do with changes Aixle itself made. ignore (default), " \
+                            description: "kind=tracker or pull_request: what to do with changes, reviews and comments " \
+                                         "Aixle itself made. ignore (default), " \
                                          "other_workflows (chain workflows, never re-enter one), or always."
       param :copy_attachments, type: :boolean,
                                description: "kind=tracker: copy the issue's files onto the run's task when a run " \

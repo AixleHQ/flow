@@ -12,6 +12,9 @@ class UserDashboard < Administrate::BaseDashboard
     password: Field::Password.with_options(export: false),
     password_confirmation: Field::Password.with_options(export: false),
     super_admin: Field::Boolean,
+    # Opens the platform dashboard at /dashboard to someone who is not a
+    # superadmin (docs/design/tenant-usage-report.md §7.2).
+    dashboard_viewer: Field::Boolean,
     state: Field::Select.with_options(
       include_blank: false,
       collection: ->(field) { available_states_collection(field, :state) }
@@ -50,6 +53,7 @@ class UserDashboard < Administrate::BaseDashboard
     email
     name
     super_admin
+    dashboard_viewer
     state
     companies
     owned_projects
@@ -65,6 +69,7 @@ class UserDashboard < Administrate::BaseDashboard
     password
     password_confirmation
     super_admin
+    dashboard_viewer
     state_event
   ].freeze
 
@@ -75,6 +80,7 @@ class UserDashboard < Administrate::BaseDashboard
     # `admin`/`collaborator` were Enumerize role scopes on users.role, which is
     # gone — the per-company role lives on CompanyMembership.
     super_admin: ->(resources) { resources.where(super_admin: true) },
+    dashboard_viewer: ->(resources) { resources.where(dashboard_viewer: true) },
     deleted: ->(resources) { resources.deleted },
     not_deleted: ->(resources) { resources.not_deleted }
   }.freeze

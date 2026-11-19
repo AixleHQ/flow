@@ -15,6 +15,7 @@ switched off with **Enabled** without deleting it.
 | **Chat message** | Someone addresses the Flow app in Slack or Microsoft Teams and the message matches your text pattern | Optionally limited to one channel or to direct messages; a cooldown stops a busy channel from starting a run per message. The thread gets a status card that follows the run |
 | **Incoming webhook** | An external system posts to the trigger's request URL | The workflow becomes a start API for anything that can send an HTTP request |
 | **Task tracker event** | An issue in a connected tracker is created, moves to a status, is assigned, or gets a comment | Offered once the project has a tracker attached; **Connect a board column** on the Trackers page sets one up for you |
+| **Pull request** | Someone submits a review on, or comments on, a pull request of a connected repository | Offered once the project has a repository on GitHub, GitLab, Bitbucket or Azure DevOps; filter on the verdict to act on requested changes ([Pull request events](/docs/triggers-and-gates#pull-request-events)) |
 
 Triggers that create a card as they fire let you template its title and give
 the run a subject, so the board does not fill up with rows called *Run 41*.

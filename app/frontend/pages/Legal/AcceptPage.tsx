@@ -3,7 +3,7 @@ import { Alert, Anchor, Button, Checkbox, Paper, Stack, Text, Title } from '@man
 import { useState } from 'react';
 
 import { legalAcceptancePath, legalPrivacyPolicyPath, logoutPath } from 'shared/routes';
-import { Logo, PageShell } from 'shared/ui';
+import { BrandLockup, PageShell } from 'shared/ui';
 
 export interface PendingDocument {
   key: string;
@@ -78,7 +78,7 @@ export default function AcceptPage({ companyName, documents, errors = {} }: Page
       <Paper p="xl" radius="md" w="100%" maw={480}>
         <form onSubmit={submit}>
           <Stack gap="md">
-            <Logo />
+            <BrandLockup />
             <Title order={3}>Review our terms</Title>
             <Text size="sm" c="dimmed">
               {updated} to be accepted before you continue to {companyName}. Each opens in a new tab.

@@ -270,6 +270,29 @@ describe('AppSidebar', () => {
     expect(screen.queryByRole('menuitem', { name: 'Send feedback' })).not.toBeInTheDocument();
   });
 
+  it('links a dashboard viewer to the platform dashboard from the user footer menu', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(<AppSidebar context="company" projects={[]} />, {
+      props: { currentUser: { ...buildUser(), name: 'Cassia Vega', dashboardViewer: true } },
+    });
+
+    await user.click(screen.getByRole('button', { name: /Cassia Vega/ }));
+
+    expect(await screen.findByRole('menuitem', { name: 'Platform dashboard' })).toHaveAttribute('href', '/dashboard');
+  });
+
+  it('offers no platform dashboard to anyone else', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(<AppSidebar context="company" projects={[]} />, {
+      props: { currentUser: { ...buildUser(), name: 'Cassia Vega' } },
+    });
+
+    await user.click(screen.getByRole('button', { name: /Cassia Vega/ }));
+
+    expect(await screen.findByRole('menuitem', { name: 'Sign Out' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Platform dashboard' })).not.toBeInTheDocument();
+  });
+
   it('toggles the collapsed state via the collapse button', async () => {
     const user = userEvent.setup();
     renderAuthedPage(<AppSidebar context="company" projects={projects} />);

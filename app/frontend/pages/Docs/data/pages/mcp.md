@@ -37,10 +37,31 @@ internal server (see resource resolution on the Tools page).
 
 ## Personal MCP (connect your own agent)
 
-You can point your own agent (Claude Code, Codex, Cursor, …) at Aixle directly —
-no session, no container. Enable it on **Profile → MCP** to get a personal
-token. Clients register the server under the name `flow`, so its tools
-appear as `mcp__flow__list_projects` and so on:
+You can point your own agent (Claude, Claude Code, Codex, Cursor, …) at Aixle
+directly — no session, no container. Clients register the server under the
+name `flow`, so its tools appear as `mcp__flow__list_projects` and so on.
+
+### Sign in
+
+A client that supports MCP sign-in needs only the server URL from
+**Profile → MCP**. It sends you to Aixle to allow access — the consent screen
+names the app, the companies it will reach and where your browser goes next —
+and keeps its own tokens from then on.
+
+- **Claude, Claude Desktop, Cowork:** add the URL as a custom connector. On a
+  Team or Enterprise plan an owner adds it once for the organization, and each
+  member connects with their own Aixle account.
+- **Claude Code:** `claude mcp add flow --transport http https://<your-aixle-host>/mcp`,
+  then `/mcp` to sign in.
+
+An app reaches the companies whose sign-in policy the browser session you
+allowed it from satisfies. **Connected apps** on the same tab lists every app
+and disconnects each one on its own.
+
+### Personal token
+
+For clients that cannot sign in, **Create token** on **Profile → MCP** gives
+you a personal token:
 
 ```
 claude mcp add flow --transport http https://<your-aixle-host>/mcp \
@@ -75,7 +96,8 @@ Unchecking what you never use keeps its schemas out of the agent's
 context, and the `tool_catalog` prompt then describes exactly the
 remaining set. Leaving everything checked means "all tools", so ones added
 in a later release arrive switched on. This is not a permission boundary —
-the token always runs as you.
+the token and every connected app always run as you. **Disable all MCP
+access** ends the token and every connected app at once.
 
 The server also documents itself, so a client does not have to guess. Its
 `instructions` — in your agent's context from the moment it connects —

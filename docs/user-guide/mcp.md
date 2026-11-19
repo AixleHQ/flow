@@ -103,17 +103,45 @@ Custom HTTP/SSE servers are validated against SSRF: the URL must be
 endpoints, or private / loopback / link-local addresses (including
 hostnames that resolve to them).
 
-## Aixle as an MCP server (your personal token)
+## Aixle as an MCP server (your personal server)
 
 The same `/mcp` endpoint also serves a **personal** server: not a
 session's tools, but your own Aixle account, so an outside client
-(Claude Code, Codex, Claude Desktop, any MCP client) can drive the platform for
-you — list projects, build workflows, run them, work the board.
+(Claude, Claude Code, Codex, Cursor, any MCP client) can drive the platform for
+you — list projects, build workflows, run them, work the board. Clients
+register it under the name `flow`, so its tools appear as
+`mcp__flow__list_projects` and so on.
 
-Enable it under **Profile → MCP**, which hands you an `amcp_` token and,
-alongside it, the ways to install the server. Clients register it
-under the name `flow`, so its tools appear as `mcp__flow__list_projects`
-and so on.
+There are two ways to connect: sign in (OAuth), or a personal token.
+
+### Sign in (OAuth)
+
+A client that supports MCP sign-in needs only the server URL — it is on
+**Profile → MCP**. The client sends you to Aixle, you sign in if needed, and
+a consent screen shows which app is asking, the companies it will reach, and
+where your browser goes next. Allow, and the client holds its own tokens from
+then on.
+
+- **Claude, Claude Desktop, Cowork:** add the URL as a custom connector
+  (**Customize → Connectors → Add custom connector**). On a Team or Enterprise
+  plan an owner adds it once under **Organization settings → Connectors**, and
+  each member connects with their own Aixle account. Claude's servers must be
+  able to reach your Aixle host.
+- **Claude Code:** `claude mcp add flow --transport http $MCP_SERVER_URL`, then
+  `/mcp` to sign in.
+- ChatGPT, VS Code and other clients that sign in work the same way.
+
+An app reaches the companies whose sign-in policy the browser session you
+consented from satisfies — connect from a session signed in with your
+company's SSO to reach a company that requires it. Every connected app is
+listed under **Connected apps** on the same tab and can be disconnected on its
+own. How the authorization server works:
+[design/mcp-oauth-server.md](../design/mcp-oauth-server.md).
+
+### Personal token
+
+For clients that cannot sign in, **Create token** on **Profile → MCP** hands
+you an `amcp_` token and, alongside it, the ways to install the server:
 
 ```
 claude mcp add flow --transport http $MCP_SERVER_URL --header "Authorization: Bearer amcp_…"
@@ -138,7 +166,8 @@ token is on screen: it is stored as a digest and shown exactly once.
 The token carries **exactly your own access level** — every call runs
 through the same Pundit policies as the UI, across every company you are
 an active member of. There is no "current project": tools take an
-explicit `project_id`. Regenerating the token revokes the old one.
+explicit `project_id`. Regenerating the token revokes the old one;
+**Disable all MCP access** revokes the token and every connected app.
 
 Teams are covered too: `list_project_teams`, `create_project_team`,
 `update_project_team` and `delete_project_team` manage a project's teams;
@@ -152,8 +181,8 @@ The **Tools** card on the same tab lists every tool the server can offer,
 grouped the way the `tool_catalog` prompt groups them. Unchecking the ones
 you never use keeps their schemas out of your agent's context; the
 `tool_catalog` prompt then describes exactly the remaining set. It is not
-a permission boundary — the token always runs as you, with your access
-level — just a smaller surface.
+a permission boundary — the token and every connected app always run as
+you, with your access level — just a smaller surface.
 
 Leaving everything checked is stored as "all tools", so tools added in a
 later release arrive switched on. A client picks up a change on its next

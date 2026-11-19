@@ -1,5 +1,5 @@
 import { router } from '@inertiajs/react';
-import { Button, Select, Stack, TextInput } from '@mantine/core';
+import { Button, MultiSelect, Select, Stack, TextInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { IconSend } from '@tabler/icons-react';
 import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
@@ -13,14 +13,21 @@ const schema = z.object({
   email: z.string().email('Invalid email').min(1, 'Email is required'),
   name: z.string().min(1, 'Name is required'),
   role: z.string().min(1, 'Role is required'),
+  projectIds: z.array(z.string()),
 });
 
 type FormData = z.infer<typeof schema>;
+
+export interface InviteProject {
+  id: number;
+  name: string;
+}
 
 interface Props {
   opened: boolean;
   onClose: () => void;
   basePath: string;
+  projects?: InviteProject[];
 }
 
 const ROLE_OPTIONS = [
@@ -29,7 +36,7 @@ const ROLE_OPTIONS = [
   { value: 'viewer', label: 'Viewer' },
 ];
 
-export const InviteMemberDrawer: FC<Props> = ({ opened, onClose, basePath }) => {
+export const InviteMemberDrawer: FC<Props> = ({ opened, onClose, basePath, projects = [] }) => {
   const [loading, setLoading] = useState(false);
 
   const form = useForm<FormData>({
@@ -38,6 +45,7 @@ export const InviteMemberDrawer: FC<Props> = ({ opened, onClose, basePath }) => 
       email: '',
       name: '',
       role: 'employee',
+      projectIds: [],
     },
   });
 
@@ -57,9 +65,10 @@ export const InviteMemberDrawer: FC<Props> = ({ opened, onClose, basePath }) => 
   const handleSubmit = (values: FormData) => {
     setLoading(true);
 
+    const { projectIds, ...user } = values;
     router.post(
       basePath,
-      { user: values },
+      { user: { ...user, projectIds: user.role === 'admin' ? [] : projectIds.map(Number) } },
       {
         preserveScroll: true,
         onFinish: () => setLoading(false),
@@ -101,6 +110,27 @@ export const InviteMemberDrawer: FC<Props> = ({ opened, onClose, basePath }) => 
             data={ROLE_OPTIONS}
             {...form.getInputProps('role')}
           />
+          {projects.length > 0 &&
+            (form.values.role === 'admin' ? (
+              <MultiSelect
+                label="Projects"
+                description="Admins see every project in the company, so there's nothing to pick."
+                placeholder="All projects"
+                data={[]}
+                disabled
+              />
+            ) : (
+              <MultiSelect
+                label="Projects"
+                description="Optional. They join these projects as soon as they accept the invitation."
+                placeholder={form.values.projectIds.length === 0 ? 'Add projects…' : undefined}
+                data={projects.map((project) => ({ value: String(project.id), label: project.name }))}
+                searchable
+                clearable
+                nothingFoundMessage="No projects match"
+                {...form.getInputProps('projectIds')}
+              />
+            ))}
         </Stack>
       </form>
     </ResourceDrawer>

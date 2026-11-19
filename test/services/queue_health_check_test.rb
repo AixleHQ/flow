@@ -244,6 +244,21 @@ class QueueHealthCheckTest < ActiveSupport::TestCase
     assert_empty QueueHealthCheck.snapshot[:stalled_pools]
   end
 
+  # PALAD-AI-RAILS-3S on 1.15.0: the company's only slot came back seconds before
+  # the check, and the reconciler's drain granted it in the same minute.
+  test "a company slot released moments ago is not reported while the drain hands it on" do
+    with_company_limit(@company, 1)
+    released = occupant(state: "finished", finished_at: 40.minutes.ago, limit: 4,
+                        project: create(:project, owner: @user, company: @company))
+    admission_in_pool(limit: 4, waiting_since: 40.minutes.ago)
+
+    released.update_columns(released_at: 10.seconds.ago)
+    assert_empty QueueHealthCheck.snapshot[:stalled_pools]
+
+    released.update_columns(released_at: 3.minutes.ago)
+    assert_equal [ "project:#{@project.id}" ], QueueHealthCheck.snapshot[:stalled_pools].pluck(:key)
+  end
+
   test "a company slot held by a session that ended long ago is reported on the pool waiting for it" do
     with_company_limit(@company, 1)
     occupant(state: "failed", finished_at: 40.minutes.ago, limit: 4,

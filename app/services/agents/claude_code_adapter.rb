@@ -529,7 +529,8 @@ module Agents
         # Main config (includes primaryApiKey for API-key path users)
         config_path => generate_config(credentials, workflow_config).to_json,
         # Settings with permissions and optional model override
-        "#{home_dir}/.claude/settings.json" => generate_settings(mcp_names, model: model, bedrock: bedrock).to_json
+        "#{home_dir}/.claude/settings.json" =>
+          generate_settings(mcp_names, model: model, bedrock: bedrock, mode: workflow_config[:mode]).to_json
       }
       files.merge!(aws_config_file(bedrock)) if bedrock
 
@@ -1468,7 +1469,7 @@ module Agents
       available + [ model ]
     end
 
-    def generate_settings(mcp_server_names = [], model: nil, bedrock: nil)
+    def generate_settings(mcp_server_names = [], model: nil, bedrock: nil, mode: nil)
       settings = {
         "permissions" => {
           "defaultMode" => PERMISSION_DEFAULT_MODE,
@@ -1502,6 +1503,12 @@ module Agents
         }
       }
       settings["model"] = model if model.present?
+      # On a subscription Claude Code writes its prompt cache with a 1-hour TTL, billed at
+      # 2x input against 1.25x for 5 minutes. A cache read restarts the timer, and an
+      # automatic session's requests start seconds apart, so 5 minutes keeps it warm for
+      # less; only a tool call running past five minutes (waiting on CI) pays one rewrite.
+      # Interactive sessions keep the 1-hour default: a person pauses between turns.
+      settings["promptCacheTtl"] = "5m" if mode.to_s == "non_interactive"
 
       if bedrock
         settings["env"] = settings["env"].merge(bedrock_settings_env(bedrock))

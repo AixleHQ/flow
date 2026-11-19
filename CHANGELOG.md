@@ -13,7 +13,29 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-11-19
+
 ### Added
+- A page that does not exist shows the app's own 404 page, in the scheme you picked, with the
+  way back to the app, the docs and the home page, instead of a blank or stock error page. A
+  page a feature flag hides shows it too.
+- **Profile**: apps that sign in — Claude (claude.ai, Claude Desktop and Cowork),
+  Claude Code, ChatGPT, VS Code — can connect to your personal MCP server with
+  just its URL: they send you to Aixle to allow access, with no token to copy.
+  A Claude Team or Enterprise owner can add it once as a custom connector for
+  the whole organization, and each member connects with their own account.
+  **Profile → MCP** lists the connected apps and disconnects them one by one;
+  **Disable all MCP access** ends the token and every app at once. The token
+  keeps working for clients that cannot sign in.
+- **Triggers & gates**: a pull request trigger starts a workflow when someone
+  submits a review on, or comments on, a pull request of a repository attached
+  through GitHub, GitLab, Bitbucket or Azure DevOps — for example, an agent that
+  picks up a request for changes on the pull request's branch. It filters on the
+  verdict, a mention of the app or the text, can land on the task whose run opened
+  the pull request, and ignores reviews and comments Aixle wrote. On Azure DevOps a
+  vote is the review. Operators: subscribe the GitHub app to the
+  **Pull request review** and **Pull request review comment** events, and deploy
+  the Bitbucket Forge app again for its two new pull-request events.
 - **Profile**: a connected Cursor account now shows its remaining quota in the
   Usage limits card — the plan allowance, the Cursor Models / Other Models
   split, and any on-demand spend, each with when the billing period resets.
@@ -32,37 +54,117 @@ governance, community health — carry none.
   operator adds `<PROTOCOL>://<DOMAIN>/oauth/callback` as a redirect URI to the
   deployment's GitLab OAuth application. Your concurrent sessions share one
   GitLab token, which Flow replaces only in its last ten minutes.
+- **Integrations**: connect the company to an Aixle Insights organization with
+  the one-time pairing code an Insights owner creates, then switch on the
+  projects whose agents Insights should see. From their next session those
+  agents send their full telemetry, and everything they report over
+  OpenTelemetry — usage, prompts, replies, tool calls — is forwarded within a
+  minute, tagged with the person, project and session; only the session's own
+  secrets are masked. The connection is a row of the Integrations list; its
+  **This project** dialog holds the switch and shows what is still waiting and
+  the last problem.
+  Operators: set `INSIGHTS_URL`, `INSIGHTS_DEPLOYMENT_ID` and
+  `INSIGHTS_DEPLOYMENT_SECRET` (issued by Insights); the integration stays hidden
+  until all three are set. Insights' answer to a batch is final unless
+  `INSIGHTS_RESEND=true`, which sends again what it failed to take.
+- **Admin**: the admin dashboard can be opened to people who are not superadmins.
+  Tick **Dashboard viewer** on a user in the admin, and the same dashboard opens
+  to them at `/dashboard`, linked from their user menu, without the rest of the
+  admin. Nobody has it until a superadmin ticks it.
+- **Members**: **Add Collaborator** takes several people at once — pick them one
+  after another, or **Select all** for everyone in the company not yet on the
+  project — instead of adding each person separately.
+- **Company members**: invite someone straight into projects — pick them under
+  **Projects** in **Invite Member**, and they are on those projects the moment
+  they accept, with no second step. **Add Collaborator** on a project offers
+  people whose invitation is still pending too, marked **Pending**, and the
+  invitation email and page list the projects waiting for them.
+- Runners: a company admin, or a project admin or owner for a project runner,
+  can revoke a single machine from the Machines list. Its credentials stop
+  working, the machine shows **Gone**, and the session it held ends at once and
+  frees its slot. Revoking or deleting a runner now also ends its sessions: a
+  running one fails with the revoked message and one waiting for a machine ends,
+  instead of staying in **Finishing** or waiting. The Machines list shows the
+  first-seen IP and who added each machine, and the runners list shows machines
+  busy/total for a manual runner.
+- Runners: a manual runner has a reuse policy. **Reuse** scrubs the machine
+  after every session and keeps repository checkouts, package caches and pulled
+  images; **Reset** also removes the workspace and cache volumes, so the next
+  session clones again. A failed session or scrub is followed by a reset. A
+  machine whose reset fails, or that fails 3 sessions in a row, shows **Failed**
+  with the reason and gets no sessions until **Return to service** in the
+  Machines list resets it. A migration moves existing manual runners from
+  `fresh` to **Reset**.
 
 ### Changed
+- **Sign-in & onboarding**: a viewer's onboarding is the profile step alone —
+  **Get started** there takes them into the app. The read-only workflow preview
+  step that followed it is gone.
+- The remaining sign-in pages, invitations, integration pages, the legal pages, the public site
+  and emails show the Aixle Flow lockup, Flow in the brand orange, as sign-in already did.
+- **Admin**: the admin's sidebar and `/dashboard` show the Aixle Flow lockup, Flow in the brand
+  orange, as sign-in and the public pages already do.
+- **Sessions & Runs**: the live terminal no longer lets the agent's output read
+  your clipboard.
+- **Sessions & Runs**: an automatic Claude Code session writes its prompt cache
+  for 5 minutes instead of an hour, which costs less of the connected
+  subscription: its requests come seconds apart, so the cache stays warm.
+  Interactive sessions keep the one-hour cache.
 - Runners: the runner pulls the agent images for its machine's own platform
   and falls back to `linux/amd64` when an image has no build for it, so a
   machine on arm64 runs an image built for arm64 natively. `images.yml` builds
-  the agent images for `linux/amd64` and `linux/arm64`, so the published images
-  are multi-arch from the next image build.
-- Runners: the platform now recommends `aixle-runner` 0.4.0 and serves it next
-  to 0.1.0 to 0.3.0. It pins the `linux-amd64` and `linux-arm64` binaries of
-  [runner-v0.4.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.4.0)
+  the agent images for `linux/amd64` and `linux/arm64`, so the agent images
+  published from this release on are multi-arch.
+- Runners: the platform now recommends `aixle-runner` 0.4.0 and serves 0.3.0
+  and 0.4.0 next to 0.1.0 and 0.2.0. It pins the `linux-amd64` and
+  `linux-arm64` binaries of
+  [runner-v0.3.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.3.0)
+  and [runner-v0.4.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.4.0)
   by their SHA-256. "Add machine" now offers 0.4.0, the binary and the
   `ghcr.io/aixlehq/aixle-runner:0.4.0` image, and an idle machine on an older
-  version that has not opted out is offered the update. 0.4.0 pulls and runs
-  the agent, sidecar and scrub containers for the machine's own platform when
-  the agent image has it, and `linux/amd64` otherwise, and bounds the removal of
-  the scrub helper container. Until the multi-arch agent images are published
-  (the application release with the arm64 build), it uses `linux/amd64` on
-  every machine, as 0.3.0 does. Runner protocol 1 only, and no minimum runner
-  version: 0.3.0 keeps working, but always runs `linux/amd64` images, under
-  emulation on an arm64 machine.
-- Runners: the platform now recommends `aixle-runner` 0.3.0 and
-  serves it next to 0.1.0 and 0.2.0. It pins the `linux-amd64` and `linux-arm64`
-  binaries of [runner-v0.3.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.3.0)
-  by their SHA-256. "Add machine" now offers 0.3.0, the binary and the
-  `ghcr.io/aixlehq/aixle-runner:0.3.0` image, and an idle machine on 0.2.0 that
-  has not opted out is offered the update. 0.3.0 sends a heartbeat while an
-  operation runs, so its machine stays online through a long one, such as a first
-  image pull, and stops on a terminal heartbeat refusal. It no longer sends
-  `ephemeral` when it registers. Runner protocol 1 only, and no minimum runner
-  version: 0.2.0 keeps working, but shows offline during an operation longer
-  than 90 seconds because it sends no heartbeat.
+  version that has not opted out is offered the update. From 0.3.0 the runner
+  sends a heartbeat while an operation runs, so its machine stays online through
+  a long one, such as a first image pull, and it no longer sends `ephemeral`
+  when it registers. 0.4.0 pulls and runs the agent, sidecar and scrub
+  containers for the machine's own platform when the agent image has it, and
+  `linux/amd64` otherwise, and bounds the removal of the scrub helper container.
+  Runner protocol 1 only, and no minimum runner version: 0.3.0 keeps working
+  but always runs `linux/amd64` images, under emulation on an arm64 machine, and
+  0.2.0 shows offline during an operation longer than 90 seconds because it
+  sends no heartbeat.
+- Runners: a session whose machine has not been heard from for 15 minutes
+  fails with "Runner environment lost contact for 15 minutes.", on a revoked or
+  deleted runner too. The machine keeps its slot until it answers again, and is
+  then reset and freed; on a revoked or deleted runner the slot is freed at
+  once.
+
+### Fixed
+- **Sign-in & onboarding**: someone invited into a workspace from an email domain
+  that has no workspace of its own can sign in again after signing out. Entering
+  their address now asks for their password, or offers an emailed link, instead of
+  offering to create a new workspace.
+- A tab left open across a release now reloads into the new version when it
+  opens a page, instead of failing to load it. A live page that can no longer
+  update says a new version is out, and a link clicked while offline says the
+  server can't be reached instead of doing nothing.
+- **Sessions & Runs**: a copy the agent asks for in the live terminal no longer
+  fails when the tab is not focused, and never reaches the clipboard of someone
+  only watching the session. The sessions list keeps updating after a dropped
+  connection.
+- **Profile**: connecting AWS Bedrock through IAM Identity Center says when the
+  server can't be reached, and keeps waiting for your approval through a
+  dropped connection.
+- **Assets**: a step can promote a file it wrote to `/workspace/outputs` to a
+  project asset while it is still running. Before, `promote_asset` found only
+  outputs of earlier steps and failed with "No workflow output asset named …".
+- **Sessions & Runs**: a session whose cleanup cannot reach the Kubernetes API
+  for a moment is cleaned up on the next try 15 seconds later, and gives its
+  slot back then. Before, the cleanup failed and the slot waited for the
+  reconciler.
+- The error tracker no longer gets an "Admission queue is not moving" warning
+  for a slot released seconds before the check and still being handed on, or an
+  error for an agent login that expired while a step waited for its slot; the
+  step already tells its owner to sign in again.
 
 ## [1.15.0] - 2026-11-14
 
@@ -76,14 +178,6 @@ governance, community health — carry none.
   seconds is offline and gets no sessions; when every machine is offline, a
   launch is refused naming the runner. The runner's status now follows its
   machines' health, checked every minute.
-- Runners: a company admin, or a project admin or owner for a project runner,
-  can revoke a single machine from the Machines list. Its credentials stop
-  working, the machine shows **Gone**, and the session it held ends at once and
-  frees its slot. Revoking or deleting a runner now also ends its sessions: a
-  running one fails with the revoked message and one waiting for a machine ends,
-  instead of staying in **Finishing** or waiting. The Machines list shows the
-  first-seen IP and who added each machine, and the runners list shows machines
-  busy/total for a manual runner.
 - Runners: a session waiting for a busy runner shows "Waiting for a free
   machine" instead of "Waiting for cluster capacity". The platform accepts a
   runner heartbeat (`POST /runner/v1/heartbeat`), which keeps a machine online
@@ -1498,7 +1592,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.15.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.16.0...develop
+[1.16.0]: https://github.com/AixleHQ/flow/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/AixleHQ/flow/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/AixleHQ/flow/compare/v1.13.1...v1.14.0
 [1.13.1]: https://github.com/AixleHQ/flow/compare/v1.13.0...v1.13.1

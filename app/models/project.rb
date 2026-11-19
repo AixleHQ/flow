@@ -38,6 +38,7 @@ class Project < ApplicationRecord
   # A limit outliving its project kept reserving capacity nobody could use.
   has_one :session_concurrency_limit, as: :scope, dependent: :destroy
   has_many :template_installs, dependent: :destroy
+  has_many :insights_otlp_batches, dependent: :delete_all
 
   # Validations
   validates :name, presence: true, uniqueness: { scope: :company_id }
@@ -128,6 +129,15 @@ class Project < ApplicationRecord
       project_collaborators.exists?(user: user)
   end
 
+  # The ids among `user_ids` that #accessible_by? would let in, in two queries
+  # for any number of users.
+  def accessible_user_ids(user_ids)
+    collaborator_ids = project_collaborators.where(user_id: user_ids).pluck(:user_id).to_set
+    CompanyMembership.active.where(company_id: company_id, user_id: user_ids)
+                     .select { |membership| owner_id == membership.user_id || membership.admin? || collaborator_ids.include?(membership.user_id) }
+                     .map(&:user_id).to_set
+  end
+
   # Check if user is admin of project (owner only)
   def admin?(user)
     owner_id == user.id
@@ -174,6 +184,28 @@ class Project < ApplicationRecord
   # revoked keeps a project_collaborators row but can no longer be assigned.
   def assignable_users
     member_users.where(id: CompanyMembership.active.where(company_id: company_id).select(:user_id))
+  end
+
+  # The members, less anyone put on the project with an invitation still pending:
+  # they are not in the project until they accept.
+  def joined_member_users
+    member_users.where.not(id: CompanyMembership.invited.where(company_id: company_id).select(:user_id))
+  end
+
+  INSIGHTS_DEFAULTS = { "export" => false, "project_id" => nil }.freeze
+
+  # The export switch and the Insights project it maps to (docs/design/insights-otlp-relay.md §3).
+  def insights_settings
+    stored = settings.is_a?(Hash) && settings["insights"].is_a?(Hash) ? settings["insights"] : {}
+    INSIGHTS_DEFAULTS.merge(stored.slice(*INSIGHTS_DEFAULTS.keys))
+  end
+
+  def insights_connection
+    Integration.active.find_by(company_id: company_id, project_id: nil, provider: "insights")
+  end
+
+  def exports_to_insights?
+    insights_settings["export"] == true && Insights::Config.enabled? && insights_connection.present?
   end
 
   private

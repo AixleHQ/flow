@@ -5,6 +5,8 @@ import { Notifications } from '@mantine/notifications';
 import * as Sentry from '@sentry/react';
 
 import 'shared/lib/zodConfig';
+import { registerInertiaNetworkErrorNotice } from 'shared/lib/inertiaNetworkErrorNotice';
+import { registerInertiaVersionGuard } from 'shared/lib/inertiaVersionGuard';
 import { registerPreloadErrorReload } from 'shared/lib/preloadErrorReload';
 import { initSentry } from 'shared/lib/sentry';
 import { holdBrowserHistory } from 'shared/lib/unsaved-changes/guards';
@@ -26,12 +28,14 @@ import './global.css';
 // page into a `<script type="application/json">` element (mirroring its own
 // getInitialPageFromDOM) rather than the #app div's data-page attribute, so read
 // it from there. Fall back to the div for the legacy attribute mode.
+let bootVersion: string | null = null;
 try {
   const pageJson =
     document.querySelector('script[data-page="app"][type="application/json"]')?.textContent ??
     document.getElementById('app')?.dataset.page;
   if (pageJson) {
     const page = JSON.parse(pageJson);
+    bootVersion = typeof page.version === 'string' ? page.version : null;
     if (page.props?.settings) {
       initSentry(page.props.settings);
     }
@@ -40,9 +44,10 @@ try {
   // Sentry init will be skipped if page data is missing or malformed
 }
 
-// Recover from stale Vite chunk 404s after a deploy: prompt the user to reload
-// into the new version instead of landing on a broken page.
+// Recover from stale Vite chunk 404s after a deploy by reloading into the new version.
 registerPreloadErrorReload();
+registerInertiaVersionGuard(bootVersion);
+registerInertiaNetworkErrorNotice();
 
 // Must run before createInertiaApp: the unsaved-changes hold on browser Back/Forward has to sit
 // ahead of Inertia's own popstate listener, and listeners run in the order they were added.

@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildChatChannel } from 'test/factories/chatChannel';
-import { buildChatTrigger } from 'test/factories/trigger';
+import { buildChatTrigger, buildPullRequestTrigger, buildTriggerRepository } from 'test/factories/trigger';
 import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import { TriggersContent } from './TriggersContent';
@@ -99,6 +99,36 @@ describe('TriggersContent', () => {
     await userEvent.click(screen.getByRole('combobox', { name: 'Filter by workflow' }));
     await userEvent.click(await screen.findByRole('option', { name: 'Intake' }));
     expect(screen.getAllByRole('article').map((a) => a.getAttribute('aria-label'))).toEqual(['Task enters "Backlog"']);
+  });
+
+  it('files pull-request triggers under their own source, with the repository each listens to', async () => {
+    const review = buildPullRequestTrigger({
+      id: 7,
+      repository_id: 8,
+      workflow_id: 3,
+      workflow_name: 'Intake',
+      created_by: { id: 1, name: 'Ida Ferris' },
+    });
+    installFetch([...triggers, review]);
+    renderPage(
+      <TriggersContent
+        projectId={7}
+        workflows={workflows}
+        columns={[]}
+        trackers={[]}
+        repositories={[buildTriggerRepository()]}
+      />,
+    );
+
+    const card = await screen.findByRole('article', { name: 'Review submitted' });
+    expect(within(card).getByText('acme/storefront · ignores Aixle changes')).toBeInTheDocument();
+    expect(within(card).getByText('Runs as Ida Ferris')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Filter by source' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Pull request' }));
+
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+    expect(screen.getByText('1 of 4')).toBeInTheDocument();
   });
 
   it('switches a trigger off through its own workflow, and has no switch on a column trigger', async () => {

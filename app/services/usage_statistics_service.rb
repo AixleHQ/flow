@@ -24,6 +24,8 @@ class UsageStatisticsService
     sessions = authenticated_sessions(payload, sessions)
     return Result.new(status: :unauthorized, error: "Invalid session key") if sessions.empty?
 
+    Insights::Relay.capture(payload, sessions.values)
+
     persisted = false
     sessions.each_value do |terminal_session|
       adapter = adapter_for(terminal_session)
@@ -188,7 +190,7 @@ class UsageStatisticsService
   # folds each batch in with a single upsert, and PostgreSQL serialises concurrent
   # batches for one session on the unique index.
   def find_sessions(tokens)
-    sessions = TerminalSession.where(route_token: tokens).index_by(&:route_token)
+    sessions = TerminalSession.where(route_token: tokens).includes(:project).index_by(&:route_token)
     sessions.size == tokens.size ? sessions : nil
   end
 

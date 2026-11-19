@@ -4,7 +4,7 @@ import { IconDownload, IconFolders } from '@tabler/icons-react';
 import { useState } from 'react';
 
 import { postNavigate } from 'shared/lib/postNavigate';
-import { Logo, PageShell } from 'shared/ui';
+import { BrandLockup, PageShell } from 'shared/ui';
 import { IntegrationLogo } from 'shared/ui/IntegrationLogo';
 
 import { Flash } from './Flash';
@@ -147,7 +147,7 @@ function TeamsApproval(props: Props) {
       <Head title="Connect Microsoft Teams" />
       <Paper p="xl" radius="md" w="100%" maw={520} withBorder>
         <Center mb={24}>
-          <Logo width={96} />
+          <BrandLockup />
         </Center>
         <Stack gap="md">
           <Flash />

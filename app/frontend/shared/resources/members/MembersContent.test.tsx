@@ -120,6 +120,61 @@ describe('MembersContent', () => {
     expect(within(dialog).getByRole('button', { name: /send invite/i })).toBeInTheDocument();
   });
 
+  describe('inviting onto projects', () => {
+    const projects = [
+      { id: 11, name: 'Mobile App' },
+      { id: 12, name: 'Data Pipeline' },
+    ];
+
+    const openInviteFor = async (inviteProjects = projects) => {
+      renderAuthedPage(<MembersContent {...baseProps([makeUser()])} inviteProjects={inviteProjects} />);
+      await userEvent.click(screen.getByRole('button', { name: /invite member/i }));
+      const dialog = await screen.findByRole('dialog');
+      await userEvent.type(within(dialog).getByRole('textbox', { name: /^email/i }), 'jane@acme.test');
+      await userEvent.type(within(dialog).getByRole('textbox', { name: /^full name/i }), 'Jane Doe');
+      return dialog;
+    };
+
+    it('sends the picked projects with the invitation', async () => {
+      const dialog = await openInviteFor();
+
+      await userEvent.click(within(dialog).getByRole('combobox', { name: 'Projects' }));
+      await userEvent.click(await screen.findByRole('option', { name: 'Data Pipeline' }));
+      await userEvent.click(within(dialog).getByRole('button', { name: /send invite/i }));
+
+      expect(router.post).toHaveBeenCalledWith(
+        '/company/members',
+        { user: { email: 'jane@acme.test', name: 'Jane Doe', role: 'employee', projectIds: [12] } },
+        expect.objectContaining({ preserveScroll: true }),
+      );
+    });
+
+    it('has nothing to pick for an admin, who sees every project', async () => {
+      const dialog = await openInviteFor();
+
+      await userEvent.click(within(dialog).getByRole('combobox', { name: 'Projects' }));
+      await userEvent.click(await screen.findByRole('option', { name: 'Mobile App' }));
+      await userEvent.click(within(dialog).getByRole('combobox', { name: 'Role' }));
+      await userEvent.click(await screen.findByRole('option', { name: 'Admin' }));
+
+      expect(within(dialog).getByRole('combobox', { name: 'Projects' })).toBeDisabled();
+      expect(within(dialog).getByText(/admins see every project/i)).toBeInTheDocument();
+
+      await userEvent.click(within(dialog).getByRole('button', { name: /send invite/i }));
+      expect(router.post).toHaveBeenCalledWith(
+        '/company/members',
+        { user: { email: 'jane@acme.test', name: 'Jane Doe', role: 'admin', projectIds: [] } },
+        expect.objectContaining({ preserveScroll: true }),
+      );
+    });
+
+    it('offers no project picker when the company has no projects', async () => {
+      const dialog = await openInviteFor([]);
+
+      expect(within(dialog).queryByRole('combobox', { name: 'Projects' })).not.toBeInTheDocument();
+    });
+  });
+
   it('confirming Remove in the row menu fires router.delete', async () => {
     // Two active admins so neither is the "last admin" (which would disable Remove).
     renderAuthedPage(

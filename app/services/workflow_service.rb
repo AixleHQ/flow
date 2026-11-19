@@ -95,8 +95,10 @@ class WorkflowService
       run.failure_reason = TEAM_UNAVAILABLE if pick && !pick.picked?
       return run unless run.save
 
-      workflow.steps.not_deleted.order(:position).each do |step|
-        run.step_runs.find_or_create_by!(step: step)
+      step_ids = workflow.steps.not_deleted.order(:position).pluck(:id)
+      if step_ids.any?
+        StepRun.insert_all!(step_ids.map { |step_id| { workflow_run_id: run.id, step_id: step_id } })
+        run.increment!(:step_runs_count, step_ids.size)
       end
 
       if run.failure_reason == TEAM_UNAVAILABLE

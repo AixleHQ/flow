@@ -21,9 +21,9 @@ class ResolveAzureDevopsEventJobTest < ActiveSupport::TestCase
     stub_azure_token(tenant_id: @integration.azure_devops_installation.tenant_id)
   end
 
-  def perform(event_type:, resource:)
+  def perform(event_type:, resource:, occurred_at: nil)
     ResolveAzureDevopsEventJob.new.perform(
-      subscription_id: @subscription.id, event_type: event_type, resource: resource
+      subscription_id: @subscription.id, event_type: event_type, resource: resource, occurred_at: occurred_at
     )
   end
 
@@ -158,5 +158,64 @@ class ResolveAzureDevopsEventJobTest < ActiveSupport::TestCase
     assert_equal [ "tracker.issue.status_changed", "Approved", "in_progress", "Sample task" ],
                  [ event.event_type, event.data.dig("change", "to", "name"), event.data.dig("change", "to", "category"),
                    event.data.dig("issue", "title") ]
+  end
+
+  test "a comment on a pull request of a repository this connection owns reaches pull-request triggers" do
+    project = @integration.project
+    create(:trigger_binding, project: project, workflow: create(:workflow, scope: project), created_by: project.owner,
+                             event_type: "pull_request.comment.created")
+    WorkflowService.stubs(:enqueue).returns(build(:workflow_run))
+    resource = {
+      "comment" => { "id" => 1, "content" => "Rename this", "commentType" => "text",
+                     "author" => { "id" => "a1b2", "displayName" => "Ada" },
+                     "_links" => { "threads" => { "href" => "https://dev.azure.com/o/_apis/git/repositories/r/pullRequests/5/threads/9" } } },
+      "pullRequest" => { "pullRequestId" => 5, "title" => "Add retries", "repository" => { "id" => @repository.external_id } }
+    }
+
+    perform(event_type: "ms.vss-code.git-pullrequest-comment-event", resource: resource)
+    perform(event_type: "ms.vss-code.git-pullrequest-comment-event",
+            resource: resource.deep_merge("pullRequest" => { "repository" => { "id" => SecureRandom.uuid } }))
+
+    event = TriggerEvent.sole
+    assert_equal [ "pull_request.comment.created", "9/1", @repository.id ],
+                 [ event.event_type, event.data.dig("comment", "id"), event.data.dig("repository", "id") ]
+  end
+
+  test "an update while a review trigger waits publishes the votes its pull request's threads record" do
+    project = @integration.project
+    create(:trigger_binding, project: project, workflow: create(:workflow, scope: project), created_by: project.owner,
+                             event_type: "pull_request.review.submitted")
+    WorkflowService.stubs(:enqueue).returns(build(:workflow_run))
+    stub_request(:get, %r{/_apis/policy/evaluations}).to_return(
+      status: 200, headers: { "Content-Type" => "application/json" }, body: { value: [] }.to_json
+    )
+    stub_request(:get, %r{/pullrequests/5/threads}).to_return(
+      status: 200, headers: { "Content-Type" => "application/json" },
+      body: { value: [ { id: 31, publishedDate: "2026-11-18T10:00:00Z",
+                         identities: { "1" => { id: "a1b2", displayName: "Ada" } },
+                         properties: { CodeReviewThreadType: { "$value": "VoteUpdate" },
+                                       CodeReviewVoteResult: { "$value": "-10" },
+                                       CodeReviewVotedByIdentity: { "$value": "1" } } } ] }.to_json
+    )
+    resource = { "pullRequestId" => 5, "title" => "Add retries", "repository" => { "id" => @repository.external_id } }
+
+    # The vote's own update, then a push a minute later that finds it again.
+    perform(event_type: "git.pullrequest.updated", resource: resource, occurred_at: "2026-11-18T10:00:01Z")
+    perform(event_type: "git.pullrequest.updated", resource: resource, occurred_at: "2026-11-18T10:01:00Z")
+
+    event = TriggerEvent.sole
+    assert_equal [ "pull_request.review.submitted", "changes_requested", "Ada" ],
+                 [ event.event_type, event.data.dig("review", "verdict"), event.data.dig("actor", "name") ]
+  end
+
+  test "an update reads no threads while no review trigger waits" do
+    stub_request(:get, %r{/_apis/policy/evaluations}).to_return(
+      status: 200, headers: { "Content-Type" => "application/json" }, body: { value: [] }.to_json
+    )
+
+    perform(event_type: "git.pullrequest.updated",
+            resource: { "pullRequestId" => 5, "repository" => { "id" => @repository.external_id } })
+
+    assert_not_requested(:get, %r{/threads})
   end
 end

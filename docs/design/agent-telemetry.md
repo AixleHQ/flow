@@ -1,8 +1,8 @@
 # Agent telemetry: what each runtime sends
 
-Status: implemented, off for every session — OpenTelemetry switches for the runtimes that
-export it (§1), lifecycle hooks for the ones that do not (§3), both behind one switch
-(§4).
+Status: implemented — OpenTelemetry switches for the runtimes that export it (§1),
+lifecycle hooks for the ones that do not (§3), both behind one switch, on for the sessions
+of a project exported to Aixle Insights (§4).
 
 Every agent session reports to the platform's collector, `docker/otlp-ingest`, which
 accepts OTLP/HTTP logs, metrics and traces (protobuf or JSON) and forwards them as JSON
@@ -141,9 +141,11 @@ nothing — the `//` finding above.
 
 ## 4. The switch
 
-`TerminalSession#full_telemetry?` decides, once per session. It is `false` for every
-session: Flow keeps nothing but usage, so the rest stays off until something forwards it.
-The adapters read it in two places:
+`TerminalSession#full_telemetry?` decides, once per session. Flow keeps nothing but usage,
+so the rest is on only where something forwards it: a session whose project is exported to
+Aixle Insights (`Project#exports_to_insights?` — the project's export switch is on, the
+deployment has Insights configured and the company is connected;
+`docs/design/insights-otlp-relay.md`). The adapters read it in two places:
 
 - `default_env_vars(session, callbacks:)` asks the session — the environment switches,
   Grok's export and the hooks' variables;
