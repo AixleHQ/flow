@@ -45,8 +45,10 @@ class Web::Company::Projects::MembersControllerTest < ActionDispatch::Integratio
     assert_includes ids, colleague.id
     assert_not_includes ids, session_company_member.id
 
-    post company_project_members_path(other_project), params: { collaborator: { user_id: session_company_member.id } }
+    post company_project_members_path(other_project),
+         params: { collaborator: { user_ids: [ colleague.id, session_company_member.id ] } }
     assert_response :not_found
+    assert_not other_project.project_collaborators.exists?(user_id: colleague.id)
 
     get company_projects_path
     assert_equal other.id, session[:current_company_id]
@@ -55,19 +57,55 @@ class Web::Company::Projects::MembersControllerTest < ActionDispatch::Integratio
   test "a non-active member cannot be added as collaborator" do
     invited = create(:user, :employee, company: @company, membership_state: "invited")
 
-    post company_project_members_path(@project), params: { collaborator: { user_id: invited.id } }
+    post company_project_members_path(@project), params: { collaborator: { user_ids: [ invited.id ] } }
 
     assert_response :not_found
     assert_not @project.project_collaborators.exists?(user_id: invited.id)
   end
 
-  test "create adds collaborator and redirects" do
-    member = create(:user, company: @company)
+  test "create adds every picked user to the project at once" do
+    first = create(:user, :employee, company: @company)
+    second = create(:user, :employee, company: @company)
 
-    post company_project_members_path(@project), params: {
-      collaborator: { user_id: member.id }
-    }
-    assert_response :redirect
+    post company_project_members_path(@project), params: { collaborator: { user_ids: [ first.id, second.id ] } }
+
+    assert_redirected_to company_project_members_path(@project)
+    assert_equal [ first.id, second.id ].sort, @project.project_collaborators.pluck(:user_id).sort
+    assert_equal "2 members added to project", flash[:notice]
+  end
+
+  test "create names the one user it added" do
+    member = create(:user, :employee, company: @company, name: "Bo Member")
+
+    post company_project_members_path(@project), params: { collaborator: { user_ids: [ member.id ] } }
+
+    assert @project.project_collaborators.exists?(user_id: member.id)
+    assert_equal "Bo Member added to project", flash[:notice]
+  end
+
+  test "create adds nobody when one of the picked users cannot join" do
+    member = create(:user, :employee, company: @company)
+
+    assert_no_difference -> { ProjectCollaborator.count } do
+      post company_project_members_path(@project), params: { collaborator: { user_ids: [ member.id, @user.id ] } }
+    end
+
+    assert_redirected_to company_project_members_path(@project)
+  end
+
+  test "create still takes the single user_id an older page posts" do
+    member = create(:user, :employee, company: @company)
+
+    post company_project_members_path(@project), params: { collaborator: { user_id: member.id } }
+
+    assert_redirected_to company_project_members_path(@project)
+    assert @project.project_collaborators.exists?(user_id: member.id)
+  end
+
+  test "create without any picked user is a bad request" do
+    post company_project_members_path(@project), params: { collaborator: { user_ids: [] } }, as: :json
+
+    assert_response :bad_request
   end
 
   test "destroy removes collaborator and redirects" do

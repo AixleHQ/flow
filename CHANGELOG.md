@@ -69,6 +69,9 @@ governance, community health — carry none.
   Tick **Dashboard viewer** on a user in the admin, and the same dashboard opens
   to them at `/dashboard`, linked from their user menu, without the rest of the
   admin. Nobody has it until a superadmin ticks it.
+- **Members**: **Add Collaborator** takes several people at once — pick them one
+  after another, or **Select all** for everyone in the company not yet on the
+  project — instead of adding each person separately.
 
 ### Changed
 - **Sign-in & onboarding**: a viewer's onboarding is the profile step alone —

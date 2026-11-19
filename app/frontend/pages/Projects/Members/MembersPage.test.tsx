@@ -11,6 +11,7 @@ const project = { id: 7, name: 'Apollo Project' };
 const owner = { id: 1, email: 'ada@apollo.test', name: 'Ada Owner', role: 'admin', state: 'active' };
 const member = { id: 2, email: 'bo@apollo.test', name: 'Bo Member', role: 'member', state: 'active' };
 const outsider = { id: 3, email: 'cy@apollo.test', name: 'Cy Outsider', role: 'member', state: 'active' };
+const newcomer = { id: 6, email: 'di@apollo.test', name: 'Di Newcomer', role: 'member', state: 'active' };
 
 const baseProps = {
   project,
@@ -140,7 +141,43 @@ describe('Projects/Members/MembersPage', () => {
 
     expect(router.post).toHaveBeenCalledWith(
       '/company/projects/7/members',
-      { collaborator: { userId: 3 } },
+      { collaborator: { userIds: [3] } },
+      expect.objectContaining({ preserveScroll: true }),
+    );
+  });
+
+  it('adds several picked users in one request', async () => {
+    renderAuthedPage(<MembersPage />, { props: { ...baseProps, companyUsers: [...baseProps.companyUsers, newcomer] } });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add Collaborator' }));
+    const dialog = await screen.findByRole('dialog');
+    for (const name of ['Cy Outsider (cy@apollo.test)', 'Di Newcomer (di@apollo.test)']) {
+      await userEvent.click(within(dialog).getByRole('combobox', { name: /select users/i }));
+      await userEvent.click(await screen.findByRole('option', { name }));
+    }
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add 2 members' }));
+
+    expect(router.post).toHaveBeenCalledWith(
+      '/company/projects/7/members',
+      { collaborator: { userIds: [3, 6] } },
+      expect.objectContaining({ preserveScroll: true }),
+    );
+  });
+
+  it('picks every user not yet on the project with Select all', async () => {
+    renderAuthedPage(<MembersPage />, { props: { ...baseProps, companyUsers: [...baseProps.companyUsers, newcomer] } });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add Collaborator' }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Select all (2)' }));
+
+    expect(within(dialog).queryByRole('button', { name: /Select all/ })).not.toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add 2 members' }));
+
+    expect(router.post).toHaveBeenCalledWith(
+      '/company/projects/7/members',
+      { collaborator: { userIds: [3, 6] } },
       expect.objectContaining({ preserveScroll: true }),
     );
   });
