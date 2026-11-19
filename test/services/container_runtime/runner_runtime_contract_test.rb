@@ -110,7 +110,7 @@ class ContainerRuntime::RunnerRuntimeContractTest < ActiveSupport::TestCase
     @session.update!(agent_type: "grok")
     log = "#{grok_mitm_line}\n"
     @machine.container.files[MITM_LOG] = log
-    stub_request(:get, GrokAdapter::MODELS_URL).to_return(status: 401, body: "")
+    stub_request(:get, Agents::GrokAdapter::MODELS_URL).to_return(status: 401, body: "")
 
     runtime = ContainerRuntime::RunnerRuntime.new
     assert_equal log, runtime.read_file(@machine.container.name, MITM_LOG)
