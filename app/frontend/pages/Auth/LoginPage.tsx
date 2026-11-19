@@ -20,7 +20,7 @@ import { z } from 'zod';
 
 import { type ClaimedDomain, ClaimedDomainNotice } from 'shared/components/ClaimedDomainNotice';
 import { GoogleLoginButton } from 'shared/components/GoogleLoginButton';
-import { loginIdentifyPath, loginPath, newPasswordResetPath } from 'shared/routes';
+import { loginIdentifyPath, loginPath, newPasswordResetPath, newWorkspacePath } from 'shared/routes';
 import { BrandLockup, LegalLinks, PageShell } from 'shared/ui';
 
 import classes from './LoginPage.module.css';
@@ -33,12 +33,15 @@ interface PageProps {
   /** Redirect providers this installation offers. Absent means Google only. */
   oauthProviders?: string[];
   passwordlessMethods?: string[];
-  /** Present only on step two, once an address has resolved to a workspace. */
+  /** Present only on step two, once an address has been given. */
   step?: 'credentials';
-  companyName?: string;
+  /** Absent when no workspace claims the address's domain. */
+  companyName?: string | null;
   /** Exactly what this workspace accepts. Nothing else is drawn. */
   methods?: string[];
-  dead_end?: boolean;
+  deadEnd?: boolean;
+  /** Set on step two for a domain no workspace claims, where anyone may sign their company up. */
+  canCreateWorkspace?: boolean;
   /** Set only on the redirect from a sign-in that left the person outside their domain's workspace. */
   claimedDomain?: ClaimedDomain | null;
   flash?: { notice?: unknown; alert?: unknown };
@@ -124,7 +127,8 @@ const LoginPage = () => {
   const step = usePage<PageProps>().props.step;
   const companyName = usePage<PageProps>().props.companyName;
   const acceptedMethods = (usePage<PageProps>().props.methods as string[] | undefined) ?? [];
-  const deadEnd = usePage<PageProps>().props.dead_end === true;
+  const deadEnd = usePage<PageProps>().props.deadEnd === true;
+  const canCreateWorkspace = usePage<PageProps>().props.canCreateWorkspace === true;
   const passwordless = (usePage<PageProps>().props.passwordlessMethods as string[] | undefined) ?? [];
   const claimedDomain = usePage<PageProps>().props.claimedDomain;
   const errorShownRef = useRef(false);
@@ -238,6 +242,7 @@ const LoginPage = () => {
   // Step two. Only what this workspace actually accepts is drawn — a method it
   // does not take is never offered and then refused.
   if (step === 'credentials') {
+    const address = prefillEmail ?? data.email;
     return (
       <PageShell variant="centered">
         <Head title={`Sign in to ${companyName ?? 'Aixle Flow'}`} />
@@ -251,7 +256,7 @@ const LoginPage = () => {
               onClick={() => router.get(loginPath())}
               style={{ alignSelf: 'flex-start' }}
             >
-              {prefillEmail ?? data.email}
+              {address}
             </Button>
 
             {deadEnd ? (
@@ -311,6 +316,21 @@ const LoginPage = () => {
                   {acceptedMethods.includes('microsoft') && <MicrosoftLoginButton />}
                   <PasswordlessOptions email={data.email} methods={acceptedMethods} />
                 </Stack>
+
+                {canCreateWorkspace && (
+                  <>
+                    <Divider label="New here?" labelPosition="center" color="var(--app-border-default)" />
+                    <Button
+                      component="a"
+                      href={newWorkspacePath({ email: address })}
+                      variant="outline"
+                      fullWidth
+                      size="md"
+                    >
+                      Create a workspace for {address.split('@')[1]}
+                    </Button>
+                  </>
+                )}
               </>
             )}
           </Stack>,

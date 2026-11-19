@@ -316,37 +316,59 @@ class Web::OidcSignInTest < ActionDispatch::IntegrationTest
   # The mode is pinned rather than inherited: config/settings/test.yml reads
   # DEPLOYMENT_MODE from the environment, so a developer who set it for a local
   # stack would otherwise get a different answer here than CI does.
-  # Registration off is the other half of the same gate: with it closed, a hosted
-  # installation answers exactly as a self-hosted one does.
-  test "an unclaimed domain is a refusal again once registration is off" do
+  #
+  # An unclaimed domain is where a member invited from another domain signs in
+  # from. Sending it to a signup or a refusal locked them out the first time they
+  # signed out, so it gets the password step, naming no workspace.
+  test "an unclaimed domain gets the password step and no signup where a workspace is made in the admin" do
+    Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SELF_HOSTED))
+
+    post login_identify_path, params: { email: "someone@unknown-domain-#{SecureRandom.hex(3)}.test" }
+
+    assert_response :success
+    assert_equal "credentials", inertia.props[:step]
+    assert_includes inertia.props[:methods], "password"
+    assert_nil inertia.props[:companyName]
+    assert_equal false, inertia.props[:canCreateWorkspace] # rubocop:disable Minitest/RefuteFalse
+  end
+
+  test "an unclaimed domain offers no signup once registration is off" do
     Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS))
     Settings.stubs(:registration).returns(Hashie::Mash.new(enabled: false))
 
     post login_identify_path, params: { email: "someone@unknown-domain-#{SecureRandom.hex(3)}.test" }
 
-    assert_redirected_to login_path(error: "no_workspace")
+    assert_equal "credentials", inertia.props[:step]
+    assert_equal false, inertia.props[:canCreateWorkspace] # rubocop:disable Minitest/RefuteFalse
   end
 
-  test "an address no workspace claims is told so, rather than shown a password box" do
-    Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SELF_HOSTED))
+  # Where anyone may sign a company up, the same address may be the first field
+  # of a signup, so the step offers that beside the password.
+  test "where we host, an unclaimed domain offers a signup beside the password step" do
+    Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS))
+    Settings.stubs(:registration).returns(Hashie::Mash.new(enabled: true))
 
     post login_identify_path, params: { email: "someone@unknown-domain-#{SecureRandom.hex(3)}.test" }
 
-    assert_response :redirect
-    assert_match(/no_workspace/, response.location)
+    assert_equal "credentials", inertia.props[:step]
+    assert_includes inertia.props[:methods], "password"
+    assert inertia.props[:canCreateWorkspace], "anyone may sign their company up here"
   end
 
-  # Where anyone may sign a company up, that same address is not a refusal: it is
-  # the first field of a signup. Answering it with "contact your admin" turned
-  # the one door away from the product.
-  test "where we host, an unclaimed domain starts a signup instead" do
+  test "a member's address at an unclaimed domain answers exactly as an unknown one there" do
     Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS))
     Settings.stubs(:registration).returns(Hashie::Mash.new(enabled: true))
-    email = "someone@unknown-domain-#{SecureRandom.hex(3)}.test"
+    domain = "unknown-domain-#{SecureRandom.hex(3)}.test"
+    member = create(:user, :onboarding_completed, company: @company, membership_role: "viewer",
+                           email: "member@#{domain}")
 
-    post login_identify_path, params: { email: email }
+    post login_identify_path, params: { email: "definitely-nobody@#{domain}" }
+    stranger = [ response.status, inertia.props.slice(:step, :methods, :companyName, :canCreateWorkspace) ]
 
-    assert_redirected_to new_workspace_path(email: email)
+    post login_identify_path, params: { email: member.email }
+    known = [ response.status, inertia.props.slice(:step, :methods, :companyName, :canCreateWorkspace) ]
+
+    assert_equal known, stranger
   end
 
   test "a disabled connection is not offered, and the workspace's other methods are" do

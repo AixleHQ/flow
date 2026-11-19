@@ -95,8 +95,7 @@ class Web::SessionsController < Web::ApplicationController
 
   # clear_history drops the key the browser's encrypted history entries were
   # sealed with, so Back after signing out cannot show the pages of the session.
-  # An operator goes back to their own door: /login offers nothing to an address
-  # no workspace claims.
+  # An operator goes back to their own door.
   def destroy
     target = true_user&.super_admin? ? admin_login_path : login_path
     sign_out
@@ -234,10 +233,9 @@ class Web::SessionsController < Web::ApplicationController
   # they had already given.
   def refuse_credentials(errors)
     email = session_params[:email].to_s.strip
-    options = email.present? ? Auth::SignInOptions.for(email) : nil
-    return redirect_to(login_path, inertia: { errors: errors }) if options.nil?
+    return redirect_to(login_path, inertia: { errors: errors }) unless email.match?(URI::MailTo::EMAIL_REGEXP)
 
-    render_credentials_step(email, options, errors: errors)
+    render_credentials_step(email, Auth::SignInOptions.for(email), errors: errors)
   end
 
   def safe_email_param
