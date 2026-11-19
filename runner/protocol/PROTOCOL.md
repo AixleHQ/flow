@@ -566,7 +566,7 @@ as for every endpoint (§3). When it cannot reach the gateway at all, it answers
    | `azure-git-credentials` | `POST` | none | git credentials for Azure DevOps | `X-Session-Id` and `X-Azure-Git-Key` |
    | `cloud-credentials` | `POST` | none | cloud credentials | `X-Session-Id` and `X-Cloud-Key` |
    | `assets` | `GET`, `HEAD` | `store/…`, with no empty, `.` or `..` segment, and none with a `/` or `\` once decoded | stored files | none |
-   | `otel` | `POST` | `v1/…`, with the same segment rules | the OTLP collector (`otlp-ingest`): usage and telemetry exports | none; the batch carries the session's key in its resource attributes |
+   | `otel` | `POST` | `v1/…`, with the same segment rules | the OTLP collector (`otlp-ingest`): usage and telemetry exports | none; `UsageStatisticsService` finds the session by the token in the batch's resource attributes and drops the batch unless its `terminal_session_key` matches (`UsageStatistics::SessionKey`) |
 2. **The session.** The request must carry the route's key of the session that holds this
    machine now; anything else is `403 session_not_on_environment`. So a session key copied out of
    a machine is useless anywhere but through that machine's credential, and only while its

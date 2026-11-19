@@ -73,10 +73,12 @@ module Runners
       Route.new(name: "assets", callback: :container_assets, verbs: %w[GET HEAD], prefix: "store/", key: nil),
       # The OTLP collector (`otlp-ingest`, not Rails): the agent's usage and
       # telemetry exports, `v1/metrics`, `v1/logs` and `v1/traces` below the
-      # route. They carry no session key header, and this route checks no key:
-      # `UsageStatisticsService` finds the session by the session token the
-      # batch names in its resource attributes, as it does for a hosted
-      # session. The route needs only a session on the environment.
+      # route. They carry no session key header, and this route checks no key.
+      # What protects it is `UsageStatisticsService`: it finds the session by
+      # the session token the batch names in its resource attributes, and drops
+      # the batch unless its `terminal_session_key` matches that token
+      # (`UsageStatistics::SessionKey`), as for a hosted session. So the route
+      # needs only a session on the environment.
       Route.new(name: "otel", callback: :otel, verbs: %w[POST], prefix: "v1/", key: nil)
     ].index_by(&:name).freeze
 
