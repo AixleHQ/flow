@@ -65,9 +65,8 @@ module GitCredentials
         AIXLE_GIT_AUTH_HEADER="$(cat #{Shellwords.escape(header_path)})"
         export AIXLE_GIT_AUTH_HEADER
         rm -f #{Shellwords.escape(header_path)}
-        git --config-env=http.extraheader=AIXLE_GIT_AUTH_HEADER clone --filter=blob:none --branch=#{Shellwords.escape(repository.source_branch)} #{Shellwords.escape(url)} #{Shellwords.escape(target_path)}
+        #{sync_script(repository, target_path, url)}
         unset AIXLE_GIT_AUTH_HEADER
-        #{configure_helper_script(url, repository, target_path)}
         chown -R #{uid}:#{uid} #{Shellwords.escape(target_path)}
         #{SafeDirectory.script(target_path, scope: :system)}
       SH
@@ -78,6 +77,78 @@ module GitCredentials
       rescue StandardError
         nil
       end
+    end
+
+    # Puts a checkout of `repository` at `target_path`, at the tip of its source
+    # branch, authenticating with the header in AIXLE_GIT_AUTH_HEADER (set by the
+    # caller). A scrub on a reusable machine keeps checkouts (DESIGN.md §7.2), so
+    # the path may already hold one:
+    #
+    # - nothing there: a clone;
+    # - a working clone whose `origin` is this repository (an older token in the
+    #   URL is ignored): its objects and refs are kept, its config is rebuilt from
+    #   scratch (origin, fetch refspec, partial-clone settings) and its hooks are
+    #   cleared, then it is fetched with this session's credential and the source
+    #   branch is checked out at the remote's current tip. Every git command of the
+    #   update runs with hooks and fsmonitor off, and checkout and reset fetch
+    #   missing blobs with the same credential. Local changes to tracked files, untracked files, other
+    #   branches' state and a stale index lock are discarded; ignored files stay;
+    # - anything else (another remote, a broken or partial clone, a plain
+    #   directory or file) and a kept clone that cannot be fetched or checked out:
+    #   removed and cloned again.
+    #
+    # Either way the checkout ends with the helper configured and no
+    # `http.extraheader` or credential in `.git/config`. Expects `set -e`.
+    def sync_script(repository, target_path, url)
+      raise ArgumentError, "checkout path must be absolute and below the root" unless target_path.to_s.start_with?("/") && target_path.to_s.squeeze("/") != "/"
+
+      path = Shellwords.escape(target_path)
+      # No hook and no fsmonitor of a kept checkout runs, whatever its config says.
+      guard = "-c core.hooksPath=/dev/null -c core.fsmonitor=false"
+      authed = %(git #{guard} --config-env=http.extraheader=AIXLE_GIT_AUTH_HEADER -c safe.directory="$TARGET" -C "$TARGET")
+      <<~SH.strip
+        TARGET=#{path}
+        URL=#{Shellwords.escape(url)}
+        BRANCH=#{Shellwords.escape(repository.source_branch)}
+        AUTHED_GIT="git --config-env=http.extraheader=AIXLE_GIT_AUTH_HEADER"
+        fresh_clone() {
+          rm -rf "$TARGET"
+          $AUTHED_GIT clone --filter=blob:none --branch="$BRANCH" "$URL" "$TARGET"
+        }
+        kept_clone() {
+          [ -d "$TARGET/.git" ] || return 1
+          origin="$(git config --file "$TARGET/.git/config" --no-includes --get remote.origin.url)" || return 1
+          [ "$(printf '%s' "$origin" | sed 's#^\\([a-z]*://\\)[^/@]*@#\\1#')" = "$URL" ]
+        }
+        # Only the objects and refs of a kept checkout are reused. Its config, hooks
+        # and alternates came from an earlier session's agent and are replaced with
+        # what the clone itself writes, before any git command holds the header.
+        reset_config() {
+          rm -f "$TARGET/.git/index.lock" "$TARGET/.git/config" "$TARGET/.git/config.worktree" "$TARGET/.git/objects/info/alternates" &&
+          rm -rf "$TARGET/.git/hooks" &&
+          mkdir "$TARGET/.git/hooks" &&
+          git config --file "$TARGET/.git/config" core.repositoryformatversion 1 &&
+          git config --file "$TARGET/.git/config" core.bare false &&
+          git config --file "$TARGET/.git/config" extensions.partialclone origin &&
+          git config --file "$TARGET/.git/config" remote.origin.url "$URL" &&
+          git config --file "$TARGET/.git/config" remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*' &&
+          git config --file "$TARGET/.git/config" remote.origin.promisor true &&
+          git config --file "$TARGET/.git/config" remote.origin.partialclonefilter blob:none
+        }
+        update_clone() {
+          reset_config &&
+          #{authed} fetch --prune origin &&
+          #{authed} checkout --force -B "$BRANCH" "refs/remotes/origin/$BRANCH" &&
+          #{authed} reset --hard "refs/remotes/origin/$BRANCH" &&
+          #{authed} clean -fdq
+        }
+        if kept_clone && update_clone; then
+          echo "fetched the kept checkout at $TARGET"
+        else
+          fresh_clone
+        fi
+        #{configure_helper_script(url, repository, target_path, git: "git -c safe.directory=#{path} -C #{path}")}
+      SH
     end
 
     # The same configuration applied to a checkout that already exists and is

@@ -13,6 +13,15 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Changed
+
+- Runners: a machine recovers from a network outage within about a minute. The
+  runner closes a connection that stopped answering instead of reusing it, which
+  needs the next runner release (0.4.1), and a machine whose reset goes
+  unanswered while it is away after a lost-contact session is reset when it is
+  heard again, not marked Failed. A machine that is heard and still does not
+  answer the reset is marked Failed.
+
 ## [1.16.0] - 2026-11-19
 
 ### Added
@@ -165,6 +174,14 @@ governance, community health — carry none.
   for a slot released seconds before the check and still being handed on, or an
   error for an agent login that expired while a step waited for its slot; the
   step already tells its owner to sign in again.
+
+### Fixed
+- Runners: on a `manual` machine under the `reuse` policy, a session fetches a
+  repository checkout the scrub kept and puts it on the repository's source
+  branch at the remote's current tip, instead of failing to clone into the
+  existing directory and working on a stale checkout. A path that holds
+  another repository or a broken clone is cloned again. A kept checkout keeps
+  only its objects and refs: its config and hooks are rebuilt, never reused.
 
 ## [1.15.0] - 2026-11-14
 

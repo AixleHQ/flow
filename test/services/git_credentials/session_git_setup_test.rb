@@ -64,7 +64,7 @@ module GitCredentials
       script = clone_script
       assert_includes script, "git config --system --add safe.directory /workspace/repo/my-app"
       assert_includes script, "grep -qxF -- /workspace/repo/my-app"
-      assert_operator script.index("chown -R"), :<, script.index("safe.directory")
+      assert_operator script.rindex("chown -R"), :<, script.index("git config --system")
     end
 
     test "reconfiguring an existing checkout adds the entry too" do
@@ -115,7 +115,222 @@ module GitCredentials
       assert_equal 1, $?.exitstatus
     end
 
+    # The kept-checkout cases run the real script against real git repositories on
+    # disk: the remote is a local bare repository, so the fetch is a real fetch.
+    test "no checkout yet: the path is cloned" do
+      with_remote do |dir, remote|
+        target = File.join(dir, "repo", "app")
+
+        assert run_sync(remote, target)
+
+        assert_equal sha(remote, "main"), sha(target, "HEAD")
+        assert_equal "true", git(target, "config", "credential.useHttpPath")
+      end
+    end
+
+    test "a kept checkout is fetched, not cloned again, and sees a commit pushed in between" do
+      with_remote do |dir, remote|
+        target = File.join(dir, "app")
+        assert run_sync(remote, target)
+        git(target, "tag", "kept")
+        push_commit(dir, remote, "second")
+
+        assert run_sync(remote, target)
+
+        assert_equal sha(target, "HEAD~1"), sha(target, "kept"), "the checkout was kept, not replaced"
+        assert_equal sha(remote, "main"), sha(target, "HEAD")
+      end
+    end
+
+    test "a kept checkout with local changes, untracked files and another branch is put back on the source branch" do
+      with_remote do |dir, remote|
+        target = File.join(dir, "app")
+        assert run_sync(remote, target)
+        git(target, "checkout", "-q", "-b", "side")
+        File.write(File.join(target, "README"), "edited")
+        File.write(File.join(target, "junk"), "x")
+        git(target, "-c", "user.name=a", "-c", "user.email=a@b", "commit", "-qam", "local")
+        File.write(File.join(target, "README"), "dirty again")
+        push_commit(dir, remote, "second")
+
+        assert run_sync(remote, target)
+
+        assert_equal "main", git(target, "rev-parse", "--abbrev-ref", "HEAD")
+        assert_equal sha(remote, "main"), sha(target, "HEAD")
+        assert_equal "", git(target, "status", "--porcelain")
+      end
+    end
+
+    test "a kept checkout leaves no credential in its config, even one an earlier session left" do
+      with_remote do |dir, remote|
+        target = File.join(dir, "app")
+        assert run_sync(remote, target)
+        git(target, "remote", "set-url", "origin", "file://old-token@#{remote}")
+        git(target, "config", "http.extraheader", "Authorization: Basic OLD")
+
+        assert run_sync(remote, target, header: "Authorization: Basic NEW")
+
+        config = File.read(File.join(target, ".git", "config"))
+        assert_no_match(/OLD|NEW|old-token|extraheader/, config)
+      end
+    end
+
+    test "a kept checkout's config and hooks are never reused: none of an earlier session's takes effect" do
+      with_remote do |dir, remote|
+        target = File.join(dir, "app")
+        assert run_sync(remote, target)
+        git(target, "tag", "kept")
+        elsewhere = File.join(dir, "elsewhere.git")
+        ran = File.join(dir, "ran")
+        File.write(File.join(dir, "extra.config"), "[marker]\n\tincluded = yes\n")
+        File.write(File.join(target, ".git", "hooks", "post-checkout"), "#!/bin/sh\necho hook >> #{ran}\n")
+        FileUtils.chmod(0o755, File.join(target, ".git", "hooks", "post-checkout"))
+        File.write(File.join(dir, "fsmonitor"), "#!/bin/sh\necho fsmonitor >> #{ran}\n")
+        FileUtils.chmod(0o755, File.join(dir, "fsmonitor"))
+        git(target, "config", "url.file://#{elsewhere}.insteadOf", "file://#{remote}")
+        git(target, "config", "core.fsmonitor", File.join(dir, "fsmonitor"))
+        git(target, "config", "core.hooksPath", File.join(target, ".git", "hooks"))
+        git(target, "config", "include.path", File.join(dir, "extra.config"))
+        git(target, "config", "credential.helper", "!echo helper >> #{ran}; true")
+        git(target, "config", "http.extraheader", "Authorization: Basic OLD")
+        push_commit(dir, remote, "second")
+
+        assert run_sync(remote, target)
+
+        assert_equal sha(target, "HEAD~1"), sha(target, "kept"), "updated in place, not by a fresh clone"
+        assert_equal sha(remote, "main"), sha(target, "HEAD")
+        assert_not File.exist?(ran), "no hook, fsmonitor or credential helper of the kept clone ran"
+        assert_not File.exist?(elsewhere)
+        config = File.read(File.join(target, ".git", "config"))
+        assert_no_match(/insteadOf|fsmonitor|hooksPath|include|helper = !|OLD|elsewhere/, config)
+        assert_empty Dir.children(File.join(target, ".git", "hooks"))
+      end
+    end
+
+    test "a kept blobless checkout fetches the blobs of files changed since, without falling back to a fresh clone" do
+      with_remote do |dir, remote|
+        git(remote, "config", "uploadpack.allowFilter", "true")
+        git(remote, "config", "uploadpack.allowAnySHA1InWant", "true")
+        target = File.join(dir, "app")
+        assert run_sync(remote, target)
+        git(target, "tag", "kept")
+        work = File.join(dir, "pusher")
+        system("git", "clone", "-q", remote, work, exception: true)
+        File.write(File.join(work, "README"), "changed between the sessions")
+        system("git", "-C", work, "-c", "user.name=a", "-c", "user.email=a@b", "commit", "-qam", "change", exception: true)
+        system("git", "-C", work, "push", "-q", "origin", "main", exception: true)
+
+        assert run_sync(remote, target)
+
+        assert_equal "origin", git(target, "config", "extensions.partialclone")
+        assert_equal sha(target, "HEAD~1"), sha(target, "kept"), "no fresh clone"
+        assert_equal "changed between the sessions", File.read(File.join(target, "README"))
+      end
+    end
+
+    test "a stale index lock from a killed session does not stop the update" do
+      with_remote do |dir, remote|
+        target = File.join(dir, "app")
+        assert run_sync(remote, target)
+        File.write(File.join(target, ".git", "index.lock"), "")
+
+        assert run_sync(remote, target)
+        assert_equal sha(remote, "main"), sha(target, "HEAD")
+      end
+    end
+
+    test "a path holding another remote is replaced by a clone of this one" do
+      with_remote do |dir, remote|
+        other = File.join(dir, "other.git")
+        system("git", "clone", "-q", "--bare", remote, other, exception: true)
+        target = File.join(dir, "app")
+        system("git", "clone", "-q", other, target, exception: true)
+
+        assert run_sync(remote, target)
+
+        assert_equal "file://#{remote}", git(target, "config", "remote.origin.url")
+      end
+    end
+
+    test "a broken or partial clone, a plain directory and a file are replaced" do
+      with_remote do |dir, remote|
+        broken = File.join(dir, "broken")
+        FileUtils.mkdir_p(File.join(broken, ".git"))
+        plain = File.join(dir, "plain")
+        FileUtils.mkdir_p(plain)
+        File.write(File.join(plain, "stray"), "x")
+        file = File.join(dir, "file")
+        File.write(file, "x")
+        corrupt = File.join(dir, "corrupt")
+        assert run_sync(remote, corrupt)
+        FileUtils.rm_rf(Dir[File.join(corrupt, ".git", "objects", "??")])
+        File.write(File.join(corrupt, ".git", "HEAD"), "garbage")
+
+        [ broken, plain, file, corrupt ].each do |target|
+          assert run_sync(remote, target), target
+          assert_equal sha(remote, "main"), sha(target, "HEAD"), target
+          assert_not File.exist?(File.join(target, "stray"))
+        end
+      end
+    end
+
+    test "a source branch the remote no longer has fails and does not report success" do
+      with_remote do |dir, remote|
+        target = File.join(dir, "app")
+        assert run_sync(remote, target)
+
+        assert_not run_sync(remote, target, branch: "gone")
+      end
+    end
+
+    test "a relative or root checkout path is refused" do
+      assert_raises(ArgumentError) { @setup.sync_script(@repository, "app", "u") }
+      assert_raises(ArgumentError) { @setup.sync_script(@repository, "/", "u") }
+    end
+
+    test "the clone script updates a kept checkout through sync_script" do
+      @setup.clone(@repository, "/workspace/repo/my-app", 1001)
+
+      assert_includes clone_script, "update_clone"
+      assert_includes clone_script, "fetch --prune origin"
+      assert_match(/--config-env=http\.extraheader=AIXLE_GIT_AUTH_HEADER[^\n]* checkout --force/, clone_script)
+      assert_match(/--config-env=http\.extraheader=AIXLE_GIT_AUTH_HEADER[^\n]* reset --hard/, clone_script)
+      assert_includes clone_script, "core.hooksPath=/dev/null"
+    end
+
     private
+
+    def with_remote
+      Dir.mktmpdir do |dir|
+        work = File.join(dir, "work")
+        remote = File.join(dir, "remote.git")
+        system("git", "init", "-q", "-b", "main", work, exception: true)
+        File.write(File.join(work, "README"), "one")
+        system("git", "-C", work, "add", ".", exception: true)
+        system("git", "-C", work, "-c", "user.name=a", "-c", "user.email=a@b", "commit", "-qm", "one", exception: true)
+        system("git", "clone", "-q", "--bare", work, remote, exception: true)
+        yield dir, remote
+      end
+    end
+
+    def push_commit(dir, remote, message)
+      work = File.join(dir, "pusher")
+      system("git", "clone", "-q", remote, work, exception: true) unless File.directory?(work)
+      File.write(File.join(work, message), message)
+      system("git", "-C", work, "add", ".", exception: true)
+      system("git", "-C", work, "-c", "user.name=a", "-c", "user.email=a@b", "commit", "-qm", message, exception: true)
+      system("git", "-C", work, "push", "-q", "origin", "main", exception: true)
+    end
+
+    def run_sync(remote, target, header: "Authorization: Basic X", branch: "main")
+      @repository.source_branch = branch
+      script = "set -e\n#{@setup.sync_script(@repository, target, "file://#{remote}")}"
+      system({ "AIXLE_GIT_AUTH_HEADER" => header, "GIT_CONFIG_NOSYSTEM" => "1" }, "sh", "-c", script, out: File::NULL, err: File::NULL)
+    end
+
+    def git(path, *args) = IO.popen([ "git", "-C", path, *args ], err: File::NULL, &:read).strip
+
+    def sha(path, rev) = git(path, "rev-parse", rev)
 
     def clone_script
       @runtime.execs.map { |cmd| Array(cmd).join(" ") }.find { |c| c.include?("clone --filter=blob:none") }

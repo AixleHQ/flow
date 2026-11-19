@@ -1747,6 +1747,20 @@ are unchanged. With `network: host` the host runner listens itself.
   revoking the machine (§9.3, which also frees the slot held by a lost machine's session; there is
   no Force release), and the runner being revoked or deleted: its machines never come back, so
   the grace lets the machine go when it fails the session and the slot is released then.
+- **After an outage the runner reconnects within about a minute, and the reset waits for it.**
+  A runner's HTTP client pings an HTTP/2 connection that has been silent for 15 s, closes it
+  when the ping is not answered within 10 s, and closes its idle connections after a request
+  got no answer (PROTOCOL.md §1), so a connection that died when the network dropped is never
+  written to again (#256; found by #252 step 9, where the runner kept using it for 18 minutes).
+  A machine can still be heard for an instant by a request whose answer never reaches it, and
+  the cleanup then sends the reset. A reset that nobody answers, for a session that lost
+  contact, does not fail the machine when the machine is not heard at the moment the reset
+  expires: the session keeps it, the op expires, and the cleanup sends a new reset when the
+  machine is heard again (`RunnerRuntime#cleanup_session`). A machine that is heard at that
+  moment and still left the reset unanswered is failed, as for any session ("the runner did
+  not answer"): a runner that heartbeats but never runs ops (a wedged op loop) would
+  otherwise be reset every `lifecycle_op_timeout` without end, with the machine and its slot
+  held and nothing shown to the operator.
 - `finish_session`/`fail_session` go through the proxy (§6.6). If the proxy is down at that
   moment, the MCP call fails, the agent retries as it does on any network error, and the
   runner keeps the agent alive until the call lands or the 15-minute grace expires.
@@ -2758,6 +2772,36 @@ The repository bootstrap that `SessionContextService` already does (clone, or fe
 repair) is what makes a kept checkout safe to reuse: an existing clone is fetched and reset
 to the requested ref, not trusted as-is. `Coder::RepoBootstrap` exists for the same reason
 on the MCP-tool path.
+
+As built for GitHub, GitLab and Bitbucket repositories
+(`GitCredentials::SessionGitSetup#sync_script`, one shell script per repository), by what
+the checkout path holds:
+
+- **Nothing.** A blobless clone of the source branch, as before.
+- **A working clone whose `origin` is this repository** (the URL compared without any
+  `user@` part an older session left). **Only its objects and refs are reused: a kept
+  checkout's config and hooks are never reused.** Before any git command holds this
+  session's credential, `.git/config` is deleted and written again from scratch with the
+  clean `origin` URL, its fetch refspec and the partial-clone settings the original clone
+  sets, so no `url.*.insteadOf`, `include.path`, `credential.*`, `filter.*`, `core.*` or
+  `http.*` entry of an earlier session survives. `.git/hooks`, `.git/config.worktree` and
+  `.git/objects/info/alternates` are removed, and every git command of the update runs
+  with `core.hooksPath=/dev/null` and `core.fsmonitor=false`. The clone is fetched with
+  this session's own credential (`fetch --prune`). The source branch is then checked out
+  at the remote's current tip (`checkout --force -B` and `reset --hard`, also with the
+  credential, so a blobless clone can fetch the blobs of files changed since), so a branch
+  the agent left behind, local commits on the source branch, edits to tracked files and a
+  stale `index.lock` do not survive. Untracked files are removed; ignored files (build
+  output, dependency caches) are kept. The helper configuration is written again. No
+  credential is stored in `.git/config`.
+- **Anything else:** another remote, a broken or partial clone, a directory that is not a
+  clone, a file; and a kept clone that cannot be fetched or checked out (for example the
+  source branch no longer exists on the remote). The path is removed and the repository is
+  cloned again. If that clone fails too, the repository is listed under the session's
+  failed repositories, as for any failed clone.
+
+The path must be absolute and not `/`; the script refuses anything else before it removes
+anything. Azure DevOps checkouts (`AzureDevops::SessionGitSetup`) still run a plain clone.
 
 #### `manual`: an airtight scrub without a rebuild
 
