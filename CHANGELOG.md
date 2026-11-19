@@ -115,6 +115,10 @@ governance, community health — carry none.
   than 90 seconds because it sends no heartbeat.
 
 ### Fixed
+- **Sign-in & onboarding**: someone invited into a workspace from an email domain
+  that has no workspace of its own can sign in again after signing out. Entering
+  their address now asks for their password, or offers an emailed link, instead of
+  offering to create a new workspace.
 - A tab left open across a release now reloads into the new version when it
   opens a page, instead of failing to load it. A live page that can no longer
   update says a new version is out, and a link clicked while offline says the

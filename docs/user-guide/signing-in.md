@@ -31,6 +31,13 @@ claim is unique.
 If no workspace claims your domain, you are told so plainly instead of being
 given an account that belongs nowhere.
 
+Invited into a workspace from another domain? After your address, Flow asks for
+your password or offers an email sign-in link, and you land in the workspace that
+invited you. The screen looks the same for every address at your domain, so it
+never names the workspace or says whether an account exists. Where anyone may sign
+up, it also offers to create a workspace for your domain — skip that if you were
+invited.
+
 If a workspace does claim your domain but signing in did not add you to it, you
 are told how to get in, not handed a form for a second workspace that could only
 be refused. Two ways work: sign in with a method that adds people from your

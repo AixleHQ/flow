@@ -36,17 +36,6 @@ class Web::AdminSessionsControllerTest < ActionDispatch::IntegrationTest
     assert_equal admin_root_path, response.headers["X-Inertia-Location"]
   end
 
-  # /login offers methods by the address's domain; the operator's domain belongs
-  # to no workspace, so that screen never reaches a password step for them.
-  test "a super admin whose domain no workspace claims still gets in" do
-    post login_identify_path, params: { email: @operator.email }
-    assert_redirected_to login_path(error: "no_workspace")
-
-    post admin_login_path, params: { email: @operator.email, password: AuthHelper::TEST_PASSWORD }
-
-    assert_redirected_to admin_root_path
-  end
-
   test "a super admin signs out and is sent back to the admin sign-in" do
     sign_in_as(@operator)
 
