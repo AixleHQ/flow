@@ -26,6 +26,35 @@ class ProjectTest < ActiveSupport::TestCase
     assert @project.accessible_by?(collaborator)
   end
 
+  test "an invitee can be put on the project ahead, and reaches it only once they accept" do
+    invitee = create(:user, :employee, company: @company, membership_state: "invited")
+
+    @project.add_collaborator(invitee)
+
+    assert_not @project.accessible_by?(invitee)
+    assert_not_includes Project.for_user(invitee), @project
+    assert_includes @project.member_users, invitee
+    assert_not_includes @project.joined_member_users, invitee
+    assert_not_includes @project.assignable_users, invitee
+
+    invitee.company_memberships.find_by!(company: @company).accept!
+
+    assert @project.accessible_by?(invitee)
+    assert_includes Project.for_user(invitee), @project
+    assert_includes @project.joined_member_users, invitee
+  end
+
+  test "a suspended or revoked member cannot be put on the project" do
+    suspended = create(:user, :employee, company: @company, membership_state: "suspended")
+    revoked = create(:user, :employee, company: @company, membership_state: "revoked")
+
+    [ suspended, revoked ].each do |user|
+      collaborator = @project.project_collaborators.new(user: user)
+      assert_not collaborator.valid?
+      assert_includes collaborator.errors[:user], "must belong to the same company as the project"
+    end
+  end
+
   test "accessible_by? is true for company admin who is not owner or collaborator" do
     admin = create(:user, :admin, :onboarding_completed, company: @company)
     assert_not_equal @project.owner_id, admin.id

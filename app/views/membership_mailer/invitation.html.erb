@@ -28,6 +28,14 @@
         </td>
       </tr>
 
+<% if @projects.any? -%>
+      <tr>
+        <td style="font-family:<%= email_font %>; font-size:14px; line-height:22px; color:#9f9d9c; padding-bottom:28px;">
+          You'll have access to <%= @projects.size == 1 ? "this project" : "these projects" %>: <strong style="color:#d1cfcd; font-weight:600;"><%= @projects.to_sentence %></strong>.
+        </td>
+      </tr>
+<% end -%>
+
       <!-- CTA -->
       <tr>
         <td style="padding-bottom:28px;">

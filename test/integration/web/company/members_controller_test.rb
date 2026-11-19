@@ -23,6 +23,40 @@ class Web::Company::MembersControllerTest < ActionDispatch::IntegrationTest
     assert_response :redirect
   end
 
+  test "create invites the person onto the picked projects of this company only" do
+    picked = create(:project, company: @company, owner: @user)
+    other_company = create(:company)
+    foreign = create(:project, company: other_company, owner: create(:user, :admin, company: other_company))
+
+    post company_members_path, params: {
+      user: { email: "jane@example.com", name: "Jane", role: "employee", project_ids: [ picked.id, foreign.id ] }
+    }
+
+    assert_redirected_to company_members_path
+    invitee = User.find_by!(email: "jane@example.com")
+    assert @company.company_memberships.find_by!(user: invitee).invited?
+    assert_equal [ picked ], invitee.collaborated_projects.to_a
+  end
+
+  test "index offers an admin the company's projects to invite into, archived ones left out" do
+    live = create(:project, company: @company, owner: @user, name: "Mobile App")
+    create(:project, company: @company, owner: @user, name: "Old Site", state: :archived)
+
+    get company_members_path
+
+    assert_equal [ { "id" => live.id, "name" => "Mobile App" } ], inertia.props[:inviteProjects]
+  end
+
+  test "index offers no projects to invite into to someone who cannot invite" do
+    create(:project, company: @company, owner: @user)
+    employee = create(:user, :employee, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
+    sign_in_as(employee)
+
+    get company_members_path
+
+    assert_empty inertia.props[:inviteProjects]
+  end
+
   test "update redirects on success" do
     member = create(:user, company: @company)
 

@@ -24,4 +24,14 @@ class UserResource < ApplicationResource
 
     user.company_memberships.find { |m| m.company_id == company.id }&.role&.to_s
   end
+
+  # Membership state in the `params: { company: }` company: an `invited` person
+  # is on a project ahead of accepting, and the project page marks them pending.
+  typelize "'invited' | 'active' | 'suspended' | 'revoked' | null"
+  attribute :membership_state do |user|
+    company = params[:company]
+    next nil unless company
+
+    user.company_memberships.find { |m| m.company_id == company.id }&.state
+  end
 end

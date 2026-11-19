@@ -15,18 +15,30 @@ class Web::Company::Projects::MembersControllerTest < ActionDispatch::Integratio
     assert_inertia_page "Projects/Members/MembersPage"
   end
 
-  test "the collaborator picker only offers ACTIVE members (no invited/revoked leakage)" do
+  test "the collaborator picker offers members and pending invitees, never suspended or revoked ones" do
     active = create(:user, :employee, company: @company)
     invited = create(:user, :employee, company: @company, membership_state: "invited")
+    suspended = create(:user, :employee, company: @company, membership_state: "suspended")
     revoked = create(:user, :employee, company: @company)
     @company.company_memberships.find_by!(user: revoked).revoke!
 
     get company_project_members_path(@project)
 
-    ids = inertia.props[:companyUsers].map { |u| u[:id] }
-    assert_includes ids, active.id
-    assert_not_includes ids, invited.id
-    assert_not_includes ids, revoked.id
+    states = inertia.props[:companyUsers].to_h { |u| [ u[:id], u[:membershipState] ] }
+    assert_equal "active", states[active.id]
+    assert_equal "invited", states[invited.id]
+    assert_not_includes states.keys, suspended.id
+    assert_not_includes states.keys, revoked.id
+  end
+
+  test "a pending invitee put on the project is listed as a member marked invited" do
+    invited = create(:user, :employee, company: @company, membership_state: "invited")
+    @project.add_collaborator(invited)
+
+    get company_project_members_path(@project)
+
+    member = inertia.props[:members].find { |u| u[:id] == invited.id }
+    assert_equal "invited", member[:membershipState]
   end
 
   # A project from another of the user's companies lists its own company's members,
@@ -54,13 +66,19 @@ class Web::Company::Projects::MembersControllerTest < ActionDispatch::Integratio
     assert_equal other.id, session[:current_company_id]
   end
 
-  test "a non-active member cannot be added as collaborator" do
+  test "a pending invitee is added ahead, and a suspended member cannot be added" do
     invited = create(:user, :employee, company: @company, membership_state: "invited")
+    suspended = create(:user, :employee, company: @company, membership_state: "suspended")
 
     post company_project_members_path(@project), params: { collaborator: { user_ids: [ invited.id ] } }
 
+    assert_redirected_to company_project_members_path(@project)
+    assert @project.project_collaborators.exists?(user_id: invited.id)
+
+    post company_project_members_path(@project), params: { collaborator: { user_ids: [ suspended.id ] } }
+
     assert_response :not_found
-    assert_not @project.project_collaborators.exists?(user_id: invited.id)
+    assert_not @project.project_collaborators.exists?(user_id: suspended.id)
   end
 
   test "create adds every picked user to the project at once" do

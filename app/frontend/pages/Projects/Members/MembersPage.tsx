@@ -27,6 +27,7 @@ import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
+import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { NO_OWNERSHIP_TRANSFER, type Ownership } from '../ownership';
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -39,6 +40,8 @@ interface Props {
   ownerId: number;
   ownership?: Ownership;
 }
+
+const isPending = (user: User) => user.membershipState === 'invited';
 
 const MembersPage = () => {
   const {
@@ -64,6 +67,7 @@ const MembersPage = () => {
     value: String(u.id),
     label: `${u.name} (${u.email})`,
   }));
+  const pendingIds = new Set(availableUsers.filter(isPending).map((u) => String(u.id)));
 
   const filtered = useMemo(() => {
     if (!search.trim()) return members;
@@ -197,6 +201,7 @@ const MembersPage = () => {
                               >
                                 {member.name || member.email}
                               </Text>
+                              {isPending(member) && <StatusBadge state="pending" size="sm" />}
                               {isOwner && (
                                 <Badge
                                   size="sm"
@@ -215,7 +220,9 @@ const MembersPage = () => {
                               )}
                             </Group>
                             <Text size="xs" c="dimmed">
-                              {member.email}
+                              {isPending(member)
+                                ? `${member.email} · joins when they accept the invitation`
+                                : member.email}
                             </Text>
                           </Box>
                         </Group>
@@ -287,6 +294,17 @@ const MembersPage = () => {
               clearable
               hidePickedOptions
               nothingFoundMessage="No users available"
+              renderOption={({ option }) => (
+                <Group gap="xs" justify="space-between" wrap="nowrap" w="100%">
+                  <Text size="sm">{option.label}</Text>
+                  {pendingIds.has(option.value) && <StatusBadge state="pending" size="sm" />}
+                </Group>
+              )}
+              description={
+                pendingIds.size > 0
+                  ? 'People with a pending invitation can be added now and see the project once they accept.'
+                  : undefined
+              }
             />
             {selectData.length > 1 && !allPicked && (
               <Anchor

@@ -11,6 +11,9 @@
 # invitation signup. A pending invitation is sent again, and a revoked
 # membership is invited again in its own row, since a user holds one membership
 # per company. Anyone already in the company is left alone.
+#
+# Projects picked with the invitation are joined at once; the invitee reaches
+# them when they accept, since project access wants an active membership.
 class CompanyInvitation
   Result = Data.define(:status, :email, :errors) do
     def sent? = status.in?(%i[invited resent])
@@ -42,12 +45,13 @@ class CompanyInvitation
     end
   end
 
-  def initialize(company:, email:, inviter: nil, name: nil, role: nil)
+  def initialize(company:, email:, inviter: nil, name: nil, role: nil, project_ids: [])
     @company = company
     @inviter = inviter
     @email = email.to_s.strip.downcase
     @name = name.presence
     @role = role.presence || "employee"
+    @project_ids = Array(project_ids).compact_blank
   end
 
   def call
@@ -65,6 +69,8 @@ class CompanyInvitation
   rescue ActiveRecord::RecordNotUnique
     # The same address invited twice at once: the user or the membership index.
     result(:already_invited)
+  rescue ActiveRecord::RecordInvalid => e
+    result(:invalid, e.record.errors)
   end
 
   private
@@ -74,23 +80,34 @@ class CompanyInvitation
     membership = user.company_memberships.build(
       company: @company, role: @role, invited_by: @inviter, invited_at: Time.current
     )
-    return result(:invalid, user.errors.presence || membership.errors) unless user.save
+    saved = User.transaction { user.save && join_projects(user) }
+    return result(:invalid, user.errors.presence || membership.errors) unless saved
 
     deliver(membership, :invited)
   end
 
   # Touching invited_at rotates the token, so the link mailed before stops working.
   def resend(membership)
-    membership.update!(invited_at: Time.current)
+    membership.transaction do
+      membership.update!(invited_at: Time.current)
+      join_projects(membership.user)
+    end
     deliver(membership, :resent)
   end
 
   def reinvite(membership)
     membership.assign_attributes(role: @role, invited_by: @inviter, invited_at: Time.current, accepted_at: nil)
     membership.aasm(:state).fire(:reinvite)
-    return result(:invalid, membership.errors) unless membership.save
+    saved = membership.transaction { membership.save && join_projects(membership.user) }
+    return result(:invalid, membership.errors) unless saved
 
     deliver(membership, :invited)
+  end
+
+  # Only this company's projects: an id from another company is skipped.
+  def join_projects(user)
+    @company.projects.where(id: @project_ids).find_each { |project| project.add_collaborator(user) }
+    true
   end
 
   # deliver_later returns false when the adapter refuses the job, and Solid
