@@ -27,6 +27,15 @@ governance, community health — carry none.
   unanswered while it is away after a lost-contact session is reset when it is
   heard again, not marked Failed. A machine that is heard and still does not
   answer the reset is marked Failed.
+- Runners: the platform now recommends `aixle-runner` 0.4.1 and serves it next to the
+  earlier versions. It pins the `linux-amd64` and `linux-arm64` binaries of
+  [runner-v0.4.1](https://github.com/AixleHQ/flow/releases/tag/runner-v0.4.1) by their
+  SHA-256. "Add machine" now offers 0.4.1, the binary and the
+  `ghcr.io/aixlehq/aixle-runner:0.4.1` image, and an idle machine on an older version that
+  has not opted out is offered the update. 0.4.1 reconnects within about a minute after a
+  network outage, reports cost and token usage of runner sessions, and checks in a machine
+  whose Docker daemon is down, which then shows **Failed** with the reason. No minimum runner
+  version: older runners keep working.
 
 ### Fixed
 
