@@ -60,6 +60,7 @@ module Api
       end
 
       test "create answers a runner refused for another reason with 422" do
+        create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
         runner = create(:runner, company: @company, created_by: @user)
 
         post :create, params: { terminal_session: { session_type: "agent_session", agent_type: "claude_code",
