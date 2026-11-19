@@ -27,6 +27,7 @@ const machine = (overrides: Partial<RunnerMachine> = {}): RunnerMachine => ({
   createdAt: '2026-11-12T09:00:00Z',
   firstSeenIp: '203.0.113.7',
   createdByName: 'Dana Admin',
+  revokedByOperator: false,
   state: 'idle',
   ...overrides,
 });
@@ -181,7 +182,7 @@ describe('RunnerMachines', () => {
     renderAuthedPage(
       <RunnerMachines
         machines={[
-          machine({ id: 5, state: 'gone', stateReason: 'revoked' }),
+          machine({ id: 5, state: 'gone', stateReason: 'revoked', revokedByOperator: true }),
           machine({ id: 6, state: 'gone', stateReason: 'unregistered' }),
           machine({ id: 7, state: 'gone', stateReason: null }),
         ]}

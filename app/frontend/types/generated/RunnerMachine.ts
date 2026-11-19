@@ -14,6 +14,7 @@ type RunnerMachine = {
   createdAt: string;
   firstSeenIp: string | null;
   state: 'online' | 'idle' | 'offline' | 'resetting' | 'failed' | 'gone';
+  revokedByOperator: boolean;
   createdByName: string | null;
 }
 
