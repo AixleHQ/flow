@@ -262,7 +262,7 @@ module Runners
     # fails at once (§8), and so does a runner with no machine registered.
     def wait_while_offline!(runner, session, availability)
       return unless availability.status == :all_offline
-      return unless session.session_admission&.wait_reason == RUNNER_CAPACITY
+      return unless session.waiting_for_runner_machine?
 
       now = Time.current
       return if availability.offline.all? { |machine| ContactLoss.lapsed?(machine, now: now) }

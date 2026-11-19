@@ -143,6 +143,11 @@ class TerminalSession < ApplicationRecord
   before_destroy :retain_unreleased_admission, prepend: true
   has_one :session_admission, dependent: :destroy
 
+  # False for a session without an admission.
+  def waiting_for_runner_machine?
+    session_admission&.waiting_for_runner_machine? || false
+  end
+
   def retain_unreleased_admission
     if session_admission && !session_admission.released_at
       errors.add(:base, "Session runtime cleanup is still pending")
