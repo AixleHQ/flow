@@ -21,6 +21,9 @@ const STATE_HINT: Record<RunnerMachine['state'], string> = {
   gone: 'Unregistered',
 };
 
+const stateHint = (machine: RunnerMachine): string =>
+  machine.revokedByOperator ? 'Revoked' : STATE_HINT[machine.state];
+
 const platform = (machine: Pick<RunnerMachine, 'os' | 'arch'>): string =>
   [machine.os, machine.arch].filter(Boolean).join('/') || '—';
 
@@ -129,7 +132,7 @@ export function RunnerMachines({ machines, runner, paths, canManage }: RunnerMac
                     </>
                   ) : (
                     <Text fz="xs" c="dimmed">
-                      {STATE_HINT[machine.state]}
+                      {stateHint(machine)}
                     </Text>
                   )}
                 </Stack>

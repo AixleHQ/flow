@@ -14,6 +14,9 @@ class RunnerMachineResource < ApplicationResource
   typelize "'online' | 'idle' | 'offline' | 'resetting' | 'failed' | 'gone'"
   attribute :state, &:display_state
 
+  typelize "boolean"
+  attribute :revoked_by_operator, &:revoked_by_operator?
+
   typelize "string | null"
   attribute :created_by_name do |machine|
     machine.created_by&.name

@@ -13,6 +13,12 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Fixed
+- Runners: starting a session through the API on a runner the project cannot use (another
+  project's, or another company's) answers `403` instead of `422`. A machine revoked from its row
+  on the runner page reads **Revoked**; one that ran `aixle-runner unregister` still reads
+  **Unregistered**. Machines revoked before this change keep reading **Unregistered**.
+
 ### Changed
 
 - Runners: a machine recovers from a network outage within about a minute. The

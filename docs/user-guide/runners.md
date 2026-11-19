@@ -119,7 +119,7 @@ machine appears as soon as it has run `configure`. Each row shows:
   - **Failed**: the machine is out of rotation after a failed reset or three
     failed sessions in a row, with the reason shown and a **Return to service**
     button (see below);
-  - **Gone**: the machine was unregistered or revoked;
+  - **Gone**: the machine was unregistered or revoked, and the line under it says which;
 - the runner **version** and the **OS / arch** it reported at `configure`
   (updated every time the runner starts);
 - the **first-seen IP**, the address the machine registered from, and **added
@@ -219,7 +219,7 @@ machine, or one you no longer want on the runner. It works on a machine in any
 state but Gone. It is available to whoever can revoke the runner: a company admin
 on a company runner, and a project admin or owner on a project runner.
 
-- The machine shows **Gone** and stays in the list. Its credentials are revoked,
+- The machine shows **Gone**, marked **Revoked**, and stays in the list. Its credentials are revoked,
   so `aixle-runner` on it is refused (`401`) on its next request and stops. The
   other machines of the runner keep working.
 - If the machine held a session, the session ends at once with a message that

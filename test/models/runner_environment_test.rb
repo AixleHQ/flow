@@ -125,6 +125,20 @@ class RunnerEnvironmentTest < ActiveSupport::TestCase
     assert_equal [ holder.id ], RunnerEnvironment.where(id: [ idle.id, holder.id ]).holding_session.pluck(:id)
   end
 
+  test "revoked_by_operator? is true only for a gone machine that a Revoke on the runner page ended" do
+    revoked = create(:runner_environment, runner: @runner)
+    revoked.unregister!(RunnerEnvironmentStateMachine::REVOKED)
+    unregistered = create(:runner_environment, runner: @runner)
+    unregistered.unregister!
+    before_reasons = create(:runner_environment, runner: @runner, state: :gone, state_reason: nil)
+    failed = create(:runner_environment, runner: @runner, state: :failed, state_reason: RunnerEnvironmentStateMachine::REVOKED)
+
+    assert revoked.revoked_by_operator?
+    assert_not unregistered.revoked_by_operator?
+    assert_not before_reasons.revoked_by_operator?
+    assert_not failed.revoked_by_operator?, "a failed machine's free-text reason is not a departure"
+  end
+
   private
 
   def check_session_company_key

@@ -83,6 +83,25 @@ class Runners::RegistrationTest < ActiveSupport::TestCase
     assert other.environment.credentials.none?(&:revoked?)
   end
 
+  test "a machine that unregistered itself and one that was revoked say which in state_reason" do
+    left = register.environment
+    revoked = Runners::Registration.register!(
+      RunnerCredential.find_by_token(Runners::Credentials.mint_registration!(@runner), kind: :registration),
+      name: "build-02", os: "linux", arch: "arm64", facts: {}, auto_update: true,
+      runner_version: "1.4.0", protocol_version: "1"
+    ).environment
+
+    Runners::Registration.unregister!(left)
+    assert Runners::Registration.revoke!(revoked)
+
+    assert_equal "unregistered", left.reload.state_reason
+    assert_equal "revoked", revoked.reload.state_reason
+    assert_equal %w[gone gone], [ left.display_state, revoked.display_state ]
+
+    Runners::Registration.unregister!(revoked)
+    assert_equal "revoked", revoked.reload.state_reason, "a second unregister keeps how the machine left"
+  end
+
   private
 
   def register(credential: @credential, **changes)

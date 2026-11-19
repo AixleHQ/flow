@@ -27,6 +27,7 @@ const machine = (overrides: Partial<RunnerMachine> = {}): RunnerMachine => ({
   createdAt: '2026-11-12T09:00:00Z',
   firstSeenIp: '203.0.113.7',
   createdByName: 'Dana Admin',
+  revokedByOperator: false,
   state: 'idle',
   ...overrides,
 });
@@ -175,6 +176,27 @@ describe('RunnerMachines', () => {
     expect(within(rows[0]).getByText('203.0.113.7')).toBeInTheDocument();
     expect(within(rows[0]).getByText('Dana Admin')).toBeInTheDocument();
     expect(within(rows[1]).queryByText('203.0.113.7')).not.toBeInTheDocument();
+  });
+
+  it('reads a revoked machine as revoked and an unregistered one as unregistered', () => {
+    renderAuthedPage(
+      <RunnerMachines
+        machines={[
+          machine({ id: 5, state: 'gone', stateReason: 'revoked', revokedByOperator: true }),
+          machine({ id: 6, state: 'gone', stateReason: 'unregistered' }),
+          machine({ id: 7, state: 'gone', stateReason: null }),
+        ]}
+        runner={runner}
+        paths={paths}
+        canManage
+      />,
+    );
+
+    const rows = screen.getAllByRole('row').slice(1);
+    expect(within(rows[0]).getByText('Revoked')).toBeInTheDocument();
+    expect(within(rows[0]).queryByText('Unregistered')).not.toBeInTheDocument();
+    expect(within(rows[1]).getByText('Unregistered')).toBeInTheDocument();
+    expect(within(rows[2]).getByText('Unregistered')).toBeInTheDocument();
   });
 
   it('offers Revoke on every machine that is not gone, and posts after the confirmation', async () => {

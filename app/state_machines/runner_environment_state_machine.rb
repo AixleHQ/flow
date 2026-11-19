@@ -17,6 +17,10 @@
 module RunnerEnvironmentStateMachine
   extend ActiveSupport::Concern
 
+  # `state_reason` of a `gone` machine: it unregistered itself, or was revoked from the runner page.
+  UNREGISTERED = "unregistered"
+  REVOKED = "revoked"
+
   included do
     include AASM
 
@@ -47,14 +51,21 @@ module RunnerEnvironmentStateMachine
         transitions from: :resetting, to: :registered, after: :clear_failure_record
       end
 
-      # `aixle-runner unregister`: the machine leaves for good. Idempotent.
+      # `aixle-runner unregister`, or a Revoke on the runner page (`unregister(REVOKED)`):
+      # the machine leaves for good, and `state_reason` says which of the two. Idempotent:
+      # a machine already `gone` keeps the reason it left with.
       event :unregister do
-        transitions from: %i[registered resetting failed gone], to: :gone, after: -> { self.current_session_id = nil }
+        transitions from: %i[registered resetting failed gone], to: :gone, after: :record_departure
       end
     end
   end
 
   private
+
+  def record_departure(reason = UNREGISTERED)
+    self.current_session_id = nil
+    self.state_reason = reason if aasm.from_state != :gone
+  end
 
   def record_failure(reason = nil)
     self.current_session_id = nil
