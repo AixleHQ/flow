@@ -10,7 +10,7 @@ class RunnerMachineResourceTest < ActiveSupport::TestCase
     unregistered = create(:runner_environment, runner: runner)
     unregistered.unregister!
 
-    assert_equal true, RunnerMachineResource.new(revoked).to_h["revokedByOperator"]
-    assert_equal false, RunnerMachineResource.new(unregistered).to_h["revokedByOperator"]
+    assert RunnerMachineResource.new(revoked).to_h["revokedByOperator"]
+    refute RunnerMachineResource.new(unregistered).to_h["revokedByOperator"]
   end
 end
