@@ -49,11 +49,31 @@ module Runners
         unless environment.update(attributes)
           raise Credentials::Refused.new("invalid_check_in", environment.errors.full_messages.to_sentence)
         end
+
+        fail_for_preflight!(environment)
       end
 
       Result.new(environment: environment, config: config,
                  update: Release.update_for(environment, runner_version: runner_version))
     end
+
+    # A machine that reports a failed preflight (no reachable Docker daemon, too
+    # little disk) cannot run a session: it goes `failed`, out of rotation, with
+    # the failure for people in its reason (DESIGN.md §8, "Prerequisites
+    # missing"), and stays so until Return to service resets it (§5.2). A report
+    # without a failure changes nothing: a `failed` machine whose Docker is back
+    # waits for the operator's Return to service, it does not return by itself.
+    def fail_for_preflight!(environment)
+      failure = environment.preflight_failure
+      return unless failure
+
+      # Machines.fail! changes its own locked copy of the row, which also drops
+      # the hold of a session the machine still has: read the row again, the
+      # answer returns its state and Release.update_for reads its hold.
+      Machines.fail!(environment, "#{Machines.label(environment)} cannot run sessions: #{failure}")
+      environment.reload
+    end
+    private_class_method :fail_for_preflight!
 
     # What the platform tells a runner about its limits. It is for the runner's
     # log: each upload slot of an op carries the `max_bytes` that binds that

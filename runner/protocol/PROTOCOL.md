@@ -604,6 +604,10 @@ check-in refreshes what the platform records about it.
 | `arch` | string | Optional, at most 255 characters, e.g. `amd64`. As `os`. |
 | `facts` | object | Optional. What the machine reports about itself, e.g. `{"docker": "27.2.0"}`. It replaces the recorded facts. `null` is refused with `invalid_check_in`. |
 
+A `facts.preflight_error` (a string) says the machine can no longer run sessions, for example that
+the Docker daemon is not reachable. The platform moves the machine to `failed` with that text in its
+reason; a later check-in without it does not return the machine, only Return to service does.
+
 Other fields are ignored. The `X-Aixle-Runner-Version` and `X-Aixle-Runner-Protocol` of the request
 are recorded as the machine's runner and protocol versions, **over** the ones it registered with.
 So a machine that updated itself (§5.4) shows its new version once it restarted and checked in,
