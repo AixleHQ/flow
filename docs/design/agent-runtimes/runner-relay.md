@@ -429,8 +429,8 @@ In the relay:
    is `404`; a session not held by a machine, or a machine not connected, is `503` with `Retry-After: 2`
    (a runner session whose tunnel is briefly down is not gone).
 3. **Cross-check.** `X-Session-Id` must equal the session id found by the token. A mismatch is `403`.
-   The relay trusts the header only because Traefik wrote it after `ws_auth` and the NetworkPolicy of §2.3
-   admits nobody else, and checks it against the token as defence in depth.
+   The relay trusts the header only because Traefik wrote it after `ws_auth` and the NetworkPolicies of §2.3
+   admit only Traefik and the platform's own pods, and checks it against the token as defence in depth.
 4. Map the surface to the port from the registry's `ports` (the five of §3.3), open a stream, proxy.
 
 **Why a session maps to a machine only through the platform.** A runner is never believed about *which
