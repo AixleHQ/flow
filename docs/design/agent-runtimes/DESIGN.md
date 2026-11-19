@@ -1386,7 +1386,10 @@ them. The answer carries the environment, `config` (`upload_max_bytes`) and `upd
 rule of the empty `GET ops` answer (`Runners::Release.update_for`, §14.4), read after the report
 is recorded. A runner below `min_version` is refused with `400 runner_version_unsupported`, as
 at `register` (§14.4). The host runner reports the preflight's os, arch and facts, and a machine
-that no longer passes the preflight still checks in, with the failure in `facts.preflight_error`.
+that no longer passes the preflight still checks in, with the failure in `facts.preflight_error`,
+and the platform moves it to `failed` with the failure as its reason (`Runners::CheckIn`; a later clean
+check-in does not return it, only Return to service does, §5.2). The runner checks in before it serves
+its sessions' proxies again, so this holds with Docker down.
 A check-in that fails in a way the runner can wait out is tried five times at most with backoff;
 then the runner logs it and starts its ops loop without one (the next start tries again), so a
 failing check-in route does not stop a machine that can work. A refusal that ends its work
@@ -2428,8 +2431,11 @@ The details task 8 fills in:
   be served again after a restart, the host runner stops the session's agent container, so the
   session fails through the dead-container path as with a sidecar that exits; nothing retries
   (Fix CR round 1). When the host runner can't list the environment's containers at its start,
-  it doesn't poll: it exits with a plain failure, and the service manager restarts it
-  (`Restart=always`), which retries `Environment.Resume` until Docker answers (Fix CR round 4).
+  it doesn't poll. It checks in first, with the preflight's failure in `facts.preflight_error`, so
+  the platform moves the machine to `failed` (§8), then retries `Environment.Resume` in the
+  process with a backoff up to 30 s until Docker answers, and checks in again, so a restart loop
+  of the service manager never hides the machine (task #258; it was an exit with a plain failure
+  and `Restart=always` in Fix CR round 4).
   The state directory is `0700`, so only the runner's user reaches the
   socket on the machine. The host runner narrows a wider state directory to `0700` when it
   starts, and exits with `ExitStop`, naming the directory and its mode, when it can't

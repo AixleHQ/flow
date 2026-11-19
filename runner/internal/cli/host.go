@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aixlehq/aixle-runner/internal/backoff"
 	"github.com/aixlehq/aixle-runner/internal/credentials"
 	"github.com/aixlehq/aixle-runner/internal/docker"
 	"github.com/aixlehq/aixle-runner/internal/host"
@@ -37,6 +38,9 @@ type HostOptions struct {
 	// published image sets NoSelfUpdateEnv, since in a container the image tag is
 	// the version (DESIGN.md §14.4).
 	NoSelfUpdate bool
+	// Sleep waits between the tries of resuming the sessions while Docker is
+	// down. Replaced in tests; nil waits for real.
+	Sleep func(ctx context.Context, d time.Duration) error
 }
 
 // NoSelfUpdateEnv, set to a true value (`1`, `true`), turns self-update off for
@@ -127,17 +131,6 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 	// Docker API against the environment's session container (DESIGN.md §6.8).
 	env := &docker.Environment{API: api, Key: creds.Environment.Key, StateDir: opts.StateDir, Logger: opts.Logger,
 		Proxy: proxies, Background: ctx}
-	// A Resume that cannot list the environment's containers has served no
-	// running session's proxy again, and nothing would call it later. So the
-	// host runner does not poll: it exits with a plain failure, not
-	// service.ExitStop, and the service manager starts it again
-	// (Restart=always, RestartSec=5), which retries Resume until Docker answers.
-	if err := env.Resume(ctx); err != nil {
-		if ctx.Err() != nil {
-			return nil
-		}
-		return fmt.Errorf("serving the running sessions' callback proxies again failed; exiting so that the service manager restarts the runner and it tries again: %w", err)
-	}
 	handlers := map[string]host.Handler{}
 	for name, handler := range env.Handlers() {
 		handlers[name] = handler
@@ -155,6 +148,9 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 	// version this binary is, which a machine that updated itself has moved on
 	// from the one it registered with, and the machine's facts as they are now.
 	// Its answer may offer an update, taken under the rule of an empty poll.
+	// It comes before the sessions' proxies are served again, so that a machine
+	// whose Docker is down still reports it (DESIGN.md §8, "Prerequisites
+	// missing") instead of exiting unheard.
 	checker := &host.Checker{Gateway: client, Tokens: source, Logger: opts.Logger}
 	answer, _, err := checker.CheckIn(ctx, checkInReport(ctx, api, opts.Logger))
 	if err != nil {
@@ -167,6 +163,34 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 		return host.ErrUpdated
 	}
 
+	// A Resume that cannot list the environment's containers has served no
+	// running session's proxy again, and nothing would call it later, so the
+	// host runner does not poll until it has. It waits for Docker with a
+	// backoff instead of exiting: an exit makes the service manager restart it
+	// every few seconds (Restart=always, RestartSec=5), a loop that tells the
+	// operator nothing. Once Docker answers it reports the machine again, so
+	// that the platform has the facts of a machine that works, and Return to
+	// service (DESIGN.md §5.2) reaches a runner that polls.
+	waited, err := resumeWhenDockerAnswers(ctx, env, opts.Logger, opts.Sleep)
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
+		return err
+	}
+	if waited {
+		answer, _, err = checker.CheckIn(ctx, checkInReport(ctx, api, opts.Logger))
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return err
+		}
+		if answer.Update != nil && updater.Apply(ctx, *answer.Update) {
+			return host.ErrUpdated
+		}
+	}
+
 	loop := &host.Loop{
 		Gateway:  client,
 		Tokens:   source,
@@ -176,6 +200,38 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 		Logger:   opts.Logger,
 	}
 	return loop.Run(ctx)
+}
+
+// resumeBackoffMax bounds the wait between two tries of resuming the sessions'
+// proxies while the Docker daemon is down: a daemon the operator starts is found
+// again within this time.
+const resumeBackoffMax = 30 * time.Second
+
+// resumeWhenDockerAnswers serves the running sessions' callback proxies again
+// (docker.Environment.Resume), trying again with a backoff for as long as the
+// Docker daemon cannot be reached. The boolean says whether it had to wait.
+// It returns only when Resume succeeded, or with ctx's error.
+func resumeWhenDockerAnswers(ctx context.Context, env *docker.Environment, logger *slog.Logger, sleep func(context.Context, time.Duration) error) (bool, error) {
+	if sleep == nil {
+		sleep = backoff.Sleep
+	}
+	retry := backoff.New(time.Second, resumeBackoffMax)
+	waited := false
+	for {
+		err := env.Resume(ctx)
+		if err == nil {
+			return waited, nil
+		}
+		if ctx.Err() != nil {
+			return waited, ctx.Err()
+		}
+		waited = true
+		delay := retry.Next()
+		logger.Warn("serving the running sessions' callback proxies again failed; waiting for Docker and trying again", "error", err, "retry_in", delay.Round(time.Millisecond))
+		if err := sleep(ctx, delay); err != nil {
+			return waited, err
+		}
+	}
 }
 
 // preflightTimeout bounds the preflight of a check-in: the daemon is asked twice.

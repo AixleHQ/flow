@@ -395,28 +395,94 @@ func (unlistableDocker) ContainerList(context.Context, client.ContainerListOptio
 }
 
 // A host runner that cannot list the environment's containers has served no
-// running session's proxy again, and nothing would try later: it exits, with a
-// failure the service manager restarts, before it polls.
-func TestAHostRunnerThatCannotResumeItsSessionsExitsBeforePolling(t *testing.T) {
+// running session's proxy again, and nothing would try later: it checks in
+// first, so that the platform hears of the machine, then waits for Docker with a
+// backoff instead of exiting (a restart loop of the service manager tells the
+// operator nothing), and polls only once it has resumed.
+func TestAHostRunnerThatCannotResumeItsSessionsChecksInAndWaitsBeforePolling(t *testing.T) {
 	p, url := newPlatform(t, map[string][]answer{"GET /runner/v1/ops": {{200, map[string]any{"ops": []any{}}}}})
 	dir := t.TempDir()
 	storeCreds(t, dir, url)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	err := RunHost(ctx, HostOptions{StateDir: dir, Docker: unlistableDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
-	if err == nil || !strings.Contains(err.Error(), "Cannot connect to the Docker daemon") || !strings.Contains(err.Error(), "restarts") {
-		t.Fatalf("got %v", err)
+	var waits []time.Duration
+	sleep := func(ctx context.Context, d time.Duration) error {
+		waits = append(waits, d)
+		if len(waits) == 3 {
+			cancel()
+		}
+		return ctx.Err()
 	}
-	if NeedsOperator(err) {
-		t.Fatalf("a restart can fix it, but it is reported as needing an operator: %v", err)
+	err := RunHost(ctx, HostOptions{StateDir: dir, Docker: unlistableDocker{}, Sleep: sleep, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	if err != nil {
+		t.Fatalf("a runner waiting for Docker is stopped, not failed: %v", err)
+	}
+	if len(waits) != 3 {
+		t.Fatalf("waits %v", waits)
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	for _, r := range p.requests {
-		if r.method == http.MethodGet && r.path == "/runner/v1/ops" {
-			t.Fatalf("the host runner polled with its sessions not served again: %v", p.requests)
+	if len(p.requests) != 1 || p.requests[0].method != http.MethodPost || p.requests[0].path != "/runner/v1/check-in" {
+		t.Fatalf("the host runner checks in once and does not poll: %v", p.requests)
+	}
+}
+
+// With Docker down at the start, the check-in carries the failure, and Docker
+// coming back is reported with a second check-in before the runner polls.
+func TestAHostRunnerWithDockerDownChecksInWithTheFailureAndAgainWhenDockerIsBack(t *testing.T) {
+	p, url := newPlatform(t, map[string][]answer{"GET /runner/v1/ops": {{200, map[string]any{"ops": []any{}}}}})
+	dir := t.TempDir()
+	storeCreds(t, dir, url)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	p.mu.Lock()
+	p.seen = func(r request) {
+		if r.method == http.MethodGet {
+			cancel()
 		}
 	}
+	p.mu.Unlock()
+	api := &recoveringDocker{}
+	sleep := func(ctx context.Context, d time.Duration) error {
+		api.up = true
+		return ctx.Err()
+	}
+	if err := RunHost(ctx, HostOptions{StateDir: dir, Docker: api, Sleep: sleep, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}); err != nil {
+		t.Fatal(err)
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(p.requests) < 3 || p.requests[0].path != "/runner/v1/check-in" || p.requests[1].path != "/runner/v1/check-in" || p.requests[2].path != "/runner/v1/ops" {
+		t.Fatalf("requests %+v", p.requests)
+	}
+	first, _ := p.requests[0].body["facts"].(map[string]any)
+	if msg, _ := first["preflight_error"].(string); !strings.Contains(msg, "not reachable") {
+		t.Errorf("the first check-in does not say Docker is down: %+v", first)
+	}
+	second, _ := p.requests[1].body["facts"].(map[string]any)
+	if _, failed := second["preflight_error"]; failed && second["docker"] != "27.1.0" {
+		t.Errorf("the second check-in still reports Docker down: %+v", second)
+	}
+}
+
+// recoveringDocker is a daemon that cannot be reached until up is set.
+type recoveringDocker struct {
+	hostDocker
+	up bool
+}
+
+func (d *recoveringDocker) ServerVersion(ctx context.Context, o client.ServerVersionOptions) (client.ServerVersionResult, error) {
+	if !d.up {
+		return client.ServerVersionResult{}, errors.New("Cannot connect to the Docker daemon")
+	}
+	return d.hostDocker.ServerVersion(ctx, o)
+}
+
+func (d *recoveringDocker) ContainerList(ctx context.Context, o client.ContainerListOptions) (client.ContainerListResult, error) {
+	if !d.up {
+		return client.ContainerListResult{}, errors.New("Cannot connect to the Docker daemon")
+	}
+	return d.hostDocker.ContainerList(ctx, o)
 }
 
 // The relay's sockets are 0666 below the state directory, so the host runner
