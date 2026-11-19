@@ -15,13 +15,14 @@ class Web::Company::Projects::MembersController < Web::Company::Projects::Applic
   end
 
   def create
-    user = current_company.users.find(collaborator_params[:user_id])
-    collaborator = current_project.project_collaborators.new(user: user)
+    users = current_company.users.find(collaborator_user_ids)
+    collaborators = users.map { |user| current_project.project_collaborators.new(user: user) }
 
-    if collaborator.save
-      redirect_to company_project_members_path(current_project), notice: "#{user.name} added to project"
+    if ProjectCollaborator.transaction { collaborators.all?(&:save) || raise(ActiveRecord::Rollback) }
+      redirect_to company_project_members_path(current_project), notice: added_notice(users)
     else
-      redirect_to company_project_members_path(current_project), inertia: { errors: collaborator.errors }
+      failed = collaborators.find { |collaborator| collaborator.errors.any? }
+      redirect_to company_project_members_path(current_project), inertia: { errors: failed.errors }
     end
   end
 
@@ -37,7 +38,16 @@ class Web::Company::Projects::MembersController < Web::Company::Projects::Applic
 
   private
 
-  def collaborator_params
-    params.require(:collaborator).permit(:user_id)
+  def collaborator_user_ids
+    collaborator = params.require(:collaborator).permit(:user_id, user_ids: [])
+    # A tab opened before the multi-select still posts a single user_id.
+    ids = collaborator[:user_ids].presence || Array(collaborator[:user_id].presence)
+    ids.presence || raise(ActionController::ParameterMissing, :user_ids)
+  end
+
+  def added_notice(users)
+    return "#{users.first.name} added to project" if users.one?
+
+    "#{users.size} members added to project"
   end
 end

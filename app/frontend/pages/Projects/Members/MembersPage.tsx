@@ -1,5 +1,19 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { ActionIcon, Avatar, Badge, Box, Button, Group, Select, Table, Text, TextInput, Tooltip } from '@mantine/core';
+import {
+  ActionIcon,
+  Anchor,
+  Avatar,
+  Badge,
+  Box,
+  Button,
+  Group,
+  MultiSelect,
+  Stack,
+  Table,
+  Text,
+  TextInput,
+  Tooltip,
+} from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { IconCrown, IconPlus, IconSearch, IconTrash, IconUsers } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
@@ -38,7 +52,7 @@ const MembersPage = () => {
   const transferableIds = new Set(ownership.candidates.map((c) => c.id));
   const owner = members.find((m) => m.id === ownerId);
   const [addOpen, setAddOpen] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const basePath = `/company/projects/${project.id}/members`;
@@ -57,23 +71,25 @@ const MembersPage = () => {
     return members.filter((m) => m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q));
   }, [members, search]);
 
+  const allPicked = selectData.length > 0 && selectedUserIds.length === selectData.length;
+
   const handleClose = () => {
     setAddOpen(false);
-    setSelectedUserId(null);
+    setSelectedUserIds([]);
   };
   const requestClose = useUnsavedChanges({
     opened: addOpen,
-    dirty: selectedUserId !== null,
+    dirty: selectedUserIds.length > 0,
     saving: loading,
     onClose: handleClose,
   });
 
   const handleAdd = () => {
-    if (!selectedUserId) return;
+    if (selectedUserIds.length === 0) return;
     setLoading(true);
     router.post(
       basePath,
-      { collaborator: { userId: Number(selectedUserId) } },
+      { collaborator: { userIds: selectedUserIds.map(Number) } },
       {
         preserveScroll: true,
         onFinish: () => setLoading(false),
@@ -255,20 +271,35 @@ const MembersPage = () => {
           onClose={requestClose}
           title="Add Collaborator"
           footer={
-            <Button fullWidth onClick={handleAdd} loading={loading} disabled={!selectedUserId}>
-              Add
+            <Button fullWidth onClick={handleAdd} loading={loading} disabled={selectedUserIds.length === 0}>
+              {selectedUserIds.length > 1 ? `Add ${selectedUserIds.length} members` : 'Add'}
             </Button>
           }
         >
-          <Select
-            label="Select User"
-            placeholder="Choose a company member…"
-            data={selectData}
-            value={selectedUserId}
-            onChange={setSelectedUserId}
-            searchable
-            nothingFoundMessage="No users available"
-          />
+          <Stack gap={6}>
+            <MultiSelect
+              label="Select users"
+              placeholder={selectedUserIds.length === 0 ? 'Choose company members…' : undefined}
+              data={selectData}
+              value={selectedUserIds}
+              onChange={setSelectedUserIds}
+              searchable
+              clearable
+              hidePickedOptions
+              nothingFoundMessage="No users available"
+            />
+            {selectData.length > 1 && !allPicked && (
+              <Anchor
+                component="button"
+                type="button"
+                size="sm"
+                style={{ alignSelf: 'flex-start' }}
+                onClick={() => setSelectedUserIds(selectData.map((option) => option.value))}
+              >
+                Select all ({selectData.length})
+              </Anchor>
+            )}
+          </Stack>
         </ResourceDrawer>
       </Box>
     </>
