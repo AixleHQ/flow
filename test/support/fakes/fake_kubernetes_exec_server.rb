@@ -20,6 +20,11 @@ require "websocket"
 # the client sent that the server could not parse lands in #errors.
 class FakeKubernetesExecServer
   FRAME_BYTES = 32 * 1024
+  # As much as a read can take, like ContainerRuntime::ExecWebsocket::READ_CHUNK_BYTES.
+  # Every read gives up the GVL and has to win it back, which costs a whole thread
+  # timeslice (100 ms) while another thread in the process is busy: in 4 KiB reads the
+  # 200 KiB of stdin in ExecWebsocketTest took 6.5 s per busy thread (task #260).
+  READ_BYTES = 64 * 1024
   PROTOCOLS = %w[v4.channel.k8s.io v5.channel.k8s.io].freeze
 
   Exec = Struct.new(:command, :stdin, :protocol, :client_frame_types, keyword_init: true)
@@ -188,7 +193,7 @@ class FakeKubernetesExecServer
       message = incoming.next
       return message if message
 
-      incoming << socket.readpartial(4096)
+      incoming << socket.readpartial(READ_BYTES)
     end
   rescue EOFError
     nil

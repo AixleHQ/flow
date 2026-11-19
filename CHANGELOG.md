@@ -13,6 +13,15 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Changed
+
+- Runners: a machine recovers from a network outage within about a minute. The
+  runner closes a connection that stopped answering instead of reusing it, which
+  needs the next runner release (0.4.1), and a machine whose reset goes
+  unanswered while it is away after a lost-contact session is reset when it is
+  heard again, not marked Failed. A machine that is heard and still does not
+  answer the reset is marked Failed.
+
 ### Fixed
 - Runners: a machine whose Docker daemon is down now checks in and shows **Failed**
   with the reason, instead of showing Offline while its service restarts in a loop.
