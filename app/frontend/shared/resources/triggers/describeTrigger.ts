@@ -2,14 +2,16 @@ import cronstrue from 'cronstrue';
 
 import { channelName } from 'shared/resources/chat-channels/channelName';
 
+import { MENTION_FIELD, VERDICT_FIELD } from './pullRequestTrigger';
 import { isAttached, TRACKER_EVENT_OPTIONS, type TrackerOption } from './trackerTrigger';
-import type { Trigger } from './types';
+import type { Trigger, TriggerRepository } from './types';
 
 // Where a run can come from, as the Triggers page groups and filters them.
 export const SOURCE_LABELS: Record<string, string> = {
   board: 'Board column',
   chat: 'Chat',
   tracker: 'Task tracker',
+  pull_request: 'Pull request',
   schedule: 'Schedule',
   webhook: 'Webhook',
   event: 'Custom event',
@@ -63,14 +65,32 @@ export function triggerTitle(t: Trigger): string {
     if (t.filter_predicate?.['comment.mentions_me'] === true) return 'Aixle is mentioned in a comment';
     return label;
   }
+  if (source === 'pull_request') return pullRequestTitle(t);
   if (source === 'event') return `Event ${t.event_type}`;
   return 'Incoming webhook';
+}
+
+const VERDICT_SUFFIXES: Record<string, string> = {
+  approved: ' · approved',
+  changes_requested: ' · changes requested',
+  commented: ' · commented',
+};
+
+function pullRequestTitle(t: Trigger): string {
+  const predicate = t.filter_predicate ?? {};
+  if (t.event_type === 'pull_request.review.submitted') {
+    return `Review submitted${VERDICT_SUFFIXES[String(predicate[VERDICT_FIELD])] ?? ''}`;
+  }
+  if (t.event_type === 'pull_request.comment.created') {
+    return `Comment added${predicate[MENTION_FIELD] === true ? ' · mentions Aixle' : ''}`;
+  }
+  return `Pull request ${t.event_type}`;
 }
 
 // Off-board triggers fire unattended, so the run belongs to — and uses the
 // credentials of — whoever added the trigger. A column trigger's run belongs to
 // the person the card puts on it, so its creator is shown as provenance only.
-const OFF_BOARD_SOURCES = new Set(['chat', 'schedule', 'webhook', 'event', 'tracker']);
+const OFF_BOARD_SOURCES = new Set(['chat', 'schedule', 'webhook', 'event', 'tracker', 'pull_request']);
 
 export function creatorLabel(t: Trigger): string {
   const name = t.created_by?.name;
@@ -97,13 +117,24 @@ export function needsChannel(t: Trigger): boolean {
   return triggerSource(t) === 'chat' && !t.chat_channel;
 }
 
-export function triggerMeta(t: Trigger, trackers: TrackerOption[] = []): string {
+export function triggerMeta(
+  t: Trigger,
+  trackers: TrackerOption[] = [],
+  repositories: TriggerRepository[] = [],
+): string {
   const source = triggerSource(t);
   if (source === 'tracker') {
     const tracker = trackers.find((tr) => tr.id === t.project_tracker_id);
     let scope = 'any tracker';
     if (t.project_tracker_id) scope = tracker ? tracker.handle : 'detached tracker';
     if (tracker && !isAttached(tracker)) scope = `${tracker.handle} (detached, not firing)`;
+    return `${scope} · ${AIXLE_CHANGE_LABELS[t.aixle_changes ?? 'ignore'] ?? t.aixle_changes}`;
+  }
+  if (source === 'pull_request') {
+    let scope = 'Any repository';
+    if (t.repository_id) {
+      scope = repositories.find((r) => r.id === t.repository_id)?.fullName ?? `Repository #${t.repository_id}`;
+    }
     return `${scope} · ${AIXLE_CHANGE_LABELS[t.aixle_changes ?? 'ignore'] ?? t.aixle_changes}`;
   }
   if (source === 'board') return `${t.trigger_mode ?? 'auto'} · cooldown ${t.cooldown_seconds ?? 0}s`;

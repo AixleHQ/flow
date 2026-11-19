@@ -30,7 +30,7 @@ class Web::Company::Projects::MembersAuthorizationTest < ActionDispatch::Integra
   test "create is a project write" do
     assert_project_write do
       target = create(:user, :employee, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
-      post company_project_members_path(@project), params: { collaborator: { user_id: target.id } }
+      post company_project_members_path(@project), params: { collaborator: { user_ids: [ target.id ] } }
     end
   end
 

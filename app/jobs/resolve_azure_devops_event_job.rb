@@ -12,7 +12,7 @@ class ResolveAzureDevopsEventJob < ApplicationJob
   retry_on Trackers::EventPipeline::WriteInFlight, wait: Trackers::EventPipeline::WRITE_RETRY_WAIT,
                                                    attempts: Trackers::EventPipeline::WRITE_RETRY_ATTEMPTS
 
-  def perform(subscription_id:, event_type:, resource: {})
+  def perform(subscription_id:, event_type:, resource: {}, occurred_at: nil)
     subscription = AzureDevopsSubscription.find_by(id: subscription_id)
     return if subscription.nil?
 
@@ -21,8 +21,12 @@ class ResolveAzureDevopsEventJob < ApplicationJob
 
     case event_type
     when "build.complete" then resolve_build(integration, resource)
-    when "git.pullrequest.merged", "git.pullrequest.updated" then resolve_pull_request(integration, resource)
+    when "git.pullrequest.merged" then resolve_pull_request(integration, resource)
+    when "git.pullrequest.updated"
+      publish_pull_request_votes(integration, resource, occurred_at)
+      resolve_pull_request(integration, resource)
     when *AzureDevopsSubscription::TRACKER_EVENT_TYPES then publish_tracker_event(subscription, event_type, resource)
+    when *AzureDevopsSubscription::PULL_REQUEST_EVENT_TYPES then publish_pull_request_event(integration, event_type, resource)
     end
   rescue AzureDevops::Error, Trackers::Error => e
     # A transient Azure failure leaves the gate pending, which the reconciliation
@@ -39,6 +43,38 @@ class ResolveAzureDevopsEventJob < ApplicationJob
 
     retries_left = executions < Trackers::EventPipeline::WRITE_RETRY_ATTEMPTS
     Trackers::EventPipeline.new(subscription.integration, wait_for_writes: retries_left).process(notification)
+  end
+
+  # The repository has to be one this connection owns, as for a gate.
+  def publish_pull_request_event(integration, event_type, resource)
+    event = PullRequests::AzureDevops::Events.parse(event_type, resource)
+    external_id = PullRequests::AzureDevops::Events.repository_id(resource)
+    return if event.nil? || external_id.nil?
+
+    repositories = Repository.where(integration_id: integration.id, external_id: external_id).preload(:integration, :scope)
+    PullRequests::EventPipeline.process(event, repositories.to_a)
+  end
+
+  # Only while a review trigger waits on the repository: answering every update
+  # costs a read of the pull request's threads. A failed read loses the vote but
+  # not the gate resolution after it.
+  def publish_pull_request_votes(integration, resource, occurred_at)
+    number = resource["pullRequestId"]
+    external_id = resource.dig("repository", "id")
+    return if number.blank? || external_id.blank?
+
+    repositories = PullRequests::EventPipeline.awaited(
+      Repository.where(integration_id: integration.id, external_id: external_id).preload(:integration, :scope).to_a,
+      event_types: [ PullRequests::EventPipeline::REVIEW_SUBMITTED ]
+    )
+    return if repositories.empty?
+
+    updates = AzureDevops::PullRequestService.new(integration).vote_updates(repositories.first, number)
+    PullRequests::AzureDevops::Events.votes(resource, updates, at: occurred_at).each do |event|
+      PullRequests::EventPipeline.process(event, repositories)
+    end
+  rescue AzureDevops::Error => e
+    Rails.logger.warn("[ResolveAzureDevopsEventJob] votes of pull request #{number}: #{e.code}")
   end
 
   def resolve_build(integration, resource)

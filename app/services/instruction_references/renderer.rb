@@ -63,7 +63,7 @@ module InstructionReferences
       name = DataFlow::AssetSpec.normalize_name(ref.name)
       return missing(ref) unless producer&.output_specs&.any? { |spec| spec.plain? && spec.name == name }
 
-      dir = producer.id == @step.id ? "/workspace/outputs" : Asset::CONTAINER_DIR
+      dir = producer.id == @step.id ? Asset::OUTPUT_DIR : Asset::CONTAINER_DIR
       "`#{dir}/#{name}`"
     end
 

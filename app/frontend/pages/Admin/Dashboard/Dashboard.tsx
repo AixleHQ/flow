@@ -31,7 +31,7 @@ import {
   formatWorkers,
 } from './format';
 import Tiles from './Tiles';
-import type { BillingClass, DashboardData } from './types';
+import type { BillingClass, DashboardData, DashboardPaths } from './types';
 import { useTenantP95 } from './useTenantP95';
 
 const UNBILLED: BillingClass[] = ['unlimited', 'no_customer'];
@@ -118,12 +118,14 @@ function sortValue(row: TenantSummary, key: SortKey): number | string {
 
 interface Props {
   data: DashboardData;
+  paths: DashboardPaths;
   now?: Date;
   timeZone?: string;
 }
 
 export default function Dashboard({
   data,
+  paths,
   now = new Date(),
   timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone,
 }: Props) {
@@ -177,8 +179,8 @@ export default function Dashboard({
   }, [data, grain, chosenPeriod, custom, today]);
 
   const hasData = data.days.length > 0;
-  const currentP95 = useTenantP95(hasData ? view.range : null);
-  const previousP95 = useTenantP95(view.previousByTenant.size ? view.comparison : null);
+  const currentP95 = useTenantP95(paths.base, hasData ? view.range : null);
+  const previousP95 = useTenantP95(paths.base, view.previousByTenant.size ? view.comparison : null);
   const rows = useMemo(
     () => withP95(view.rows, currentP95.status === 'ready' ? currentP95.p95 : undefined),
     [view.rows, currentP95],
@@ -529,6 +531,7 @@ export default function Dashboard({
       {opened && (
         <CompanyDetail
           key={`${opened.tenantId}:${view.range.start}:${view.range.end}`}
+          paths={paths}
           tenant={opened}
           range={view.range}
           span={spanOf(view.range)}

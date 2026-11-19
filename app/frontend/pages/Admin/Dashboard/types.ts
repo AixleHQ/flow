@@ -143,3 +143,11 @@ export interface TenantWait {
   companyId: number;
   p95: number;
 }
+
+/** Where the page's JSON lives, which depends on the copy it is shown in: the admin's or /dashboard. */
+export interface DashboardPaths {
+  /** `/admin/dashboard` or `/dashboard`; the JSON hangs off it. */
+  base: string;
+  /** `/admin/companies`, in the admin only: a company there links to its record. */
+  companyRecords?: string;
+}

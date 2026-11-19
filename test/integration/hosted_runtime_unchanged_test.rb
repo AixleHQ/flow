@@ -12,6 +12,13 @@ require "test_helper"
 # the runner gateway's tables.
 class HostedRuntimeUnchangedTest < ActiveSupport::TestCase
   setup do
+    # A model's first use reads its columns and primary key from the catalog
+    # (pg_index); that read must not land inside whichever trace runs first and
+    # show up as a gateway query.
+    [ RunnerEnvironment, RunnerCredential, RunnerOperation ].each do |model|
+      model.load_schema
+      model.primary_key
+    end
     @company = create(:company, email_domain: "test.com")
     @user = create(:user, :admin, company: @company)
     @project = create(:project, company: @company, owner: @user)

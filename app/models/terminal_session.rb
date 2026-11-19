@@ -47,6 +47,18 @@ class TerminalSession < ApplicationRecord
   # being used or wound up. `running` is not here, since it is set when the
   # launch starts, before a runner's machine is taken.
   LAUNCHED_STATES = %w[ready finishing].freeze
+  # The container is up and in use: running or ready.
+  CONTAINER_UP_STATES = %w[running ready].freeze
+  # The container is up or being wound up: running, ready or finishing.
+  LIVE_STATES = %w[running ready finishing].freeze
+  # May still be using its runtime objects (pod, service, route): not_started
+  # is in, since the launch creates them; queued is out, as it has none yet.
+  USING_RUNTIME_STATES = %w[not_started running ready finishing].freeze
+  # Nothing has started yet: not_started or queued.
+  WAITING_STATES = %w[not_started queued].freeze
+  # The session types that do work, and so count toward usage and are listed:
+  # a login (auth_setup) or a tool setup is neither.
+  WORK_SESSION_TYPES = %w[agent_session workflow_step].freeze
 
   # Whether `state` is an end state (finished, failed or cancelled), for a raw
   # value with no record at hand. #ended? calls it.
@@ -57,6 +69,27 @@ class TerminalSession < ApplicationRecord
   # Whether `state` is one a launch has got past, for a raw value.
   def self.launched_state?(state)
     LAUNCHED_STATES.include?(state.to_s)
+  end
+
+  # Whether `state` is running or ready, for a raw value. #container_up? calls it.
+  def self.container_up_state?(state)
+    CONTAINER_UP_STATES.include?(state.to_s)
+  end
+
+  # Whether `state` is running, ready or finishing, for a raw value. #live? calls it.
+  def self.live_state?(state)
+    LIVE_STATES.include?(state.to_s)
+  end
+
+  # Whether `state` is one that may still use runtime objects, for a raw value.
+  # #using_runtime? calls it.
+  def self.using_runtime_state?(state)
+    USING_RUNTIME_STATES.include?(state.to_s)
+  end
+
+  # Whether `state` is not_started or queued, for a raw value. #waiting? calls it.
+  def self.waiting_state?(state)
+    WAITING_STATES.include?(state.to_s)
   end
 
   # Whether `session_type` is `auth_setup`, for a raw value (a request param, a
@@ -103,6 +136,7 @@ class TerminalSession < ApplicationRecord
   belongs_to :runner_environment, optional: true
   validate :runner_environment_is_the_runners, if: -> { runner_environment_id && will_save_change_to_runner_environment_id? }
   has_one :usage_statistic, dependent: :destroy
+  has_many :insights_otlp_batches, dependent: :delete_all
   has_many :session_logs, dependent: :destroy
   has_many :output_assets, class_name: "Asset", foreign_key: :terminal_session_id
   has_one :step_run, dependent: :nullify
@@ -200,7 +234,13 @@ class TerminalSession < ApplicationRecord
   scope :not_auth_sessions, -> { where.not(session_type: "auth_setup") }
   scope :workflow_steps, -> { where(session_type: "workflow_step") }
   # The container is up and in use: running or ready.
-  scope :container_up, -> { where(state: %w[running ready]) }
+  scope :container_up, -> { where(state: CONTAINER_UP_STATES) }
+  # Running, ready or finishing. Not `container_up`, which leaves `finishing` out.
+  scope :live, -> { where(state: LIVE_STATES) }
+  scope :using_runtime, -> { where(state: USING_RUNTIME_STATES) }
+  scope :waiting, -> { where(state: WAITING_STATES) }
+  # Sessions that do work: agent sessions and workflow steps.
+  scope :work_sessions, -> { where(session_type: WORK_SESSION_TYPES) }
   scope :active, -> { where(state: %w[not_started queued running ready]) }
   scope :finishing, -> { where(state: "finishing") }
   # Waiting for its agent's login to be renewed (Sessions::AuthPause).
@@ -229,6 +269,26 @@ class TerminalSession < ApplicationRecord
 
   def active?
     state.in?(%w[not_started queued running ready])
+  end
+
+  # Running or ready. Not `live?`, which includes `finishing`.
+  def container_up?
+    self.class.container_up_state?(state)
+  end
+
+  # Running, ready or finishing.
+  def live?
+    self.class.live_state?(state)
+  end
+
+  # Not started, running, ready or finishing: may still be using its runtime objects.
+  def using_runtime?
+    self.class.using_runtime_state?(state)
+  end
+
+  # Not started or queued: nothing has begun.
+  def waiting?
+    self.class.waiting_state?(state)
   end
 
   # Finished, failed or cancelled. Not the opposite of #active?, which leaves `finishing` out.
@@ -407,8 +467,12 @@ class TerminalSession < ApplicationRecord
   # Whether the agent sends its collector everything its telemetry offers — logs and
   # traces with prompts, replies and tool content, and the lifecycle hooks
   # (docs/design/agent-telemetry.md) — rather than only the usage Flow counts. Flow keeps
-  # nothing but usage, so the rest stays off until something forwards it.
-  def full_telemetry? = false
+  # nothing but usage, so only a session of a project exported to Insights gets it: the
+  # relay forwards the rest (docs/design/insights-otlp-relay.md).
+  def full_telemetry?
+    @full_telemetry = project&.exports_to_insights? || false if @full_telemetry.nil?
+    @full_telemetry
+  end
 
   def available_tools(ctx: nil)
     ctx ||= Tools::Context.for_session(self)
@@ -568,7 +632,7 @@ class TerminalSession < ApplicationRecord
   # (see #session_list_streams). A dropped update costs a stale row, never the
   # write that caused it.
   def broadcast_session_list_update
-    return if company_id.blank? || SessionsRunsFeed::LISTABLE_SESSION_TYPES.exclude?(session_type)
+    return if company_id.blank? || WORK_SESSION_TYPES.exclude?(session_type)
 
     session_list_streams.each do |stream|
       InertiaCable.broadcast(stream, { type: "session_update", id: id })

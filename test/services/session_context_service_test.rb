@@ -960,7 +960,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
     context_service(session, "ctr1", runtime: runtime_mock).assemble
 
-    step_logs = logged_messages.select { |m| m.include?("[SessionContext] Step") }
+    step_logs = logged_messages.select { |m| m.start_with?("[SessionContext] session=#{session.id} Step ") }
     assert step_logs.any? { |m| m.include?("'config_files'") }
     assert step_logs.any? { |m| m.include?("'mcp_config'") }
     assert step_logs.any? { |m| m.include?("'skills'") }
@@ -1051,8 +1051,10 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
     commands = runtime.execs.map { |cmd| Array(cmd).join(" ") }
     clone = commands.find { |c| c.include?("clone") }
-    assert_includes clone, "git --config-env=http.extraheader=AIXLE_GIT_AUTH_HEADER clone --filter=blob:none --branch=main " \
-                           "https://github.com/acme/my-app.git /workspace/repo/my-app"
+    assert_includes clone, "$AUTHED_GIT clone --filter=blob:none --branch=\"$BRANCH\" \"$URL\" \"$TARGET\""
+    assert_includes clone, "AUTHED_GIT=\"git --config-env=http.extraheader=AIXLE_GIT_AUTH_HEADER\""
+    assert_includes clone, "URL=https://github.com/acme/my-app.git"
+    assert_includes clone, "TARGET=/workspace/repo/my-app"
     assert_includes clone, "credential.https://github.com/acme/my-app.git.helper /workspace/.aixle/git-credential-aixle"
     assert_includes clone, "chown -R 1001:1001 /workspace/repo/my-app"
     assert_includes clone, "git config --system --add safe.directory /workspace/repo/my-app"
@@ -1086,7 +1088,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
     service.send(:inject_repositories)
 
-    assert_equal 2, runtime.execs.count { |cmd| Array(cmd).join(" ").include?("clone --filter=blob:none --branch=main https://github.com/acme/bad.git") }
+    assert_equal 2, runtime.execs.count { |cmd| Array(cmd).join(" ").include?("$AUTHED_GIT clone --filter=blob:none") && Array(cmd).join(" ").include?("URL=https://github.com/acme/bad.git") }
     failed = session.reload.metadata["failed_repos"]
     assert_equal [ repo_bad.id ], failed.map { |f| f["id"] }
     assert_match(/Authentication failed/, failed.first["error"])
@@ -1118,7 +1120,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     context_service(session, "ctr1", runtime: runtime).send(:inject_repositories)
 
     commands = runtime.execs.map { |cmd| Array(cmd).join(" ") }
-    assert commands.any? { |c| c.include?("clone --filter=blob:none --branch=main https://gitlab.example.com/team/service.git") }
+    assert commands.any? { |c| c.include?("clone --filter=blob:none") && c.include?("URL=https://gitlab.example.com/team/service.git") }
     assert commands.none? { |c| c.include?("gitlab.com") || c.include?("glpat-secret") }
   end
 
@@ -1280,8 +1282,28 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
     context_service(session, "ctr1", runtime: runtime_mock).assemble
 
-    assert logged_messages.any? { |m| m.include?("[SessionContext] Step 'bmad_method'") },
+    assert logged_messages.any? { |m| m.include?("[SessionContext] session=#{session.id} Step 'bmad_method' completed in") },
       "Expected bmad_method step timing to be logged"
+  end
+
+  test "assemble_session_context logs the step that failed, with its session and elapsed time" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "cursor_cli",
+                     mode: "interactive", session_config: { "bmad_enabled" => true })
+
+    runtime_mock = mock("runtime")
+    runtime_mock.stubs(:write_file).returns(true)
+    runtime_mock.stubs(:exec).returns([ [], [], 0 ])
+
+    injector_mock = mock("bmad_injector")
+    injector_mock.stubs(:inject!).raises(RuntimeError, "install hung")
+    BmadMethodInjector.stubs(:new).returns(injector_mock)
+
+    Rails.logger.expects(:warn).with do |line|
+      line.match?(/\A\[SessionContext\] session=#{session.id} Step 'bmad_method' failed after [\d.]+ms: RuntimeError: install hung\z/)
+    end
+
+    error = assert_raises(RuntimeError) { context_service(session, "ctr1", runtime: runtime_mock).assemble }
+    assert_equal "install hung", error.message
   end
 
   test "assemble_session_context runs bmad_method after repositories and before context_file" do
@@ -1295,7 +1317,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     Rails.logger.unstub(:info)
     step_order = []
     Rails.logger.stubs(:info).with do |msg|
-      if msg.include?("[SessionContext] Step '")
+      if msg.start_with?("[SessionContext] session=#{session.id} Step '")
         step_name = msg.match(/Step '([\w]+)'/)[1]
         step_order << step_name
       end

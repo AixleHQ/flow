@@ -74,6 +74,7 @@ import {
   companySessionsPath,
   companySwitchPath,
   companyWorkflowCatalogIndexPath,
+  dashboardPath,
   profilePath,
   templatesPath,
 } from 'shared/routes';
@@ -654,9 +655,10 @@ interface SidebarUserFooterProps {
   userName: string;
   collapsed: boolean;
   feedbackEnabled: boolean;
+  dashboardViewer: boolean;
 }
 
-function SidebarUserFooter({ userName, collapsed, feedbackEnabled }: SidebarUserFooterProps) {
+function SidebarUserFooter({ userName, collapsed, feedbackEnabled, dashboardViewer }: SidebarUserFooterProps) {
   const [feedbackOpened, { open: openFeedback, close: closeFeedback }] = useDisclosure(false);
 
   return (
@@ -680,6 +682,12 @@ function SidebarUserFooter({ userName, collapsed, feedbackEnabled }: SidebarUser
           <Menu.Item component={Link} href="/profile" leftSection={<IconUser size={16} />}>
             My Profile
           </Menu.Item>
+          {dashboardViewer && (
+            // A full page load: /dashboard is not an Inertia page.
+            <Menu.Item component="a" href={dashboardPath()} leftSection={<IconChartBar size={16} />}>
+              Platform dashboard
+            </Menu.Item>
+          )}
           {feedbackEnabled && (
             <Menu.Item leftSection={<IconMessage size={16} />} onClick={openFeedback}>
               Send feedback
@@ -793,6 +801,7 @@ function SidebarContent({
           userName={currentUser.name}
           collapsed={collapsed}
           feedbackEnabled={settings?.feedbackEnabled ?? false}
+          dashboardViewer={currentUser.dashboardViewer}
         />
       )}
     </>

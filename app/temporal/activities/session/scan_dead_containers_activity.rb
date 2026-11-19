@@ -30,8 +30,6 @@
 module Activities
   module Session
     class ScanDeadContainersActivity < Base
-      ACTIVE_STATES = %w[running ready].freeze
-
       # Runtime answers that mean "the agent is gone". `:starting` (pod Pending,
       # docker "created") and `:unknown` (control plane unreachable) never qualify —
       # see ContainerRuntime::BaseRuntime#container_status.
@@ -103,7 +101,7 @@ module Activities
 
       def candidate_sessions
         TerminalSession
-          .where(state: ACTIVE_STATES)
+          .container_up
           .where.not(container_id: [ nil, "" ])
           .where("COALESCE(started_at, created_at) < ?", MIN_AGE.ago)
       end
@@ -120,7 +118,7 @@ module Activities
         end
 
         return false if first_seen > CONFIRMATION_DELAY.ago
-        return false unless ACTIVE_STATES.include?(session.reload.state)
+        return false unless session.reload.container_up?
 
         SessionService.fail_session(session: session, error_message: failure_message(session, status, runtime))
         log(:info, "Failed session #{session.id}: container #{status}")

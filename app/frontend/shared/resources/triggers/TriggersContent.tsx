@@ -18,13 +18,21 @@ import { CHAT_PROVIDER_LABELS, SOURCE_LABELS, triggerSource, triggerTitle } from
 import type { TrackerOption } from './trackerTrigger';
 import { TriggerCards } from './TriggerCards';
 import { TriggerFormPanel } from './TriggerFormPanel';
-import type { ChatProviderOption, RunAsOptions, Trigger, TriggerColumnOption, TriggerWorkflowOption } from './types';
+import type {
+  ChatProviderOption,
+  RunAsOptions,
+  Trigger,
+  TriggerColumnOption,
+  TriggerRepository,
+  TriggerWorkflowOption,
+} from './types';
 
 interface Props {
   projectId: number;
   workflows: TriggerWorkflowOption[];
   columns: TriggerColumnOption[];
   trackers: TrackerOption[];
+  repositories?: TriggerRepository[];
   chatProviders?: ChatProviderOption[];
 }
 
@@ -47,7 +55,14 @@ function filterLabel(value: string): string {
 const triggerUrl = (projectId: number, t: Trigger) =>
   apiV1ProjectWorkflowTriggerPath(projectId, t.workflow_id ?? 0, t.id, t.kind === 'column' ? { kind: 'column' } : {});
 
-export function TriggersContent({ projectId, workflows, columns, trackers, chatProviders = [] }: Props) {
+export function TriggersContent({
+  projectId,
+  workflows,
+  columns,
+  trackers,
+  repositories = [],
+  chatProviders = [],
+}: Props) {
   const { canExecute } = useProjectPermissions();
   const readOnly = !canExecute;
   const [triggers, setTriggers] = useState<Trigger[]>([]);
@@ -143,7 +158,7 @@ export function TriggersContent({ projectId, workflows, columns, trackers, chatP
     <Box>
       <PageHeader
         title="Triggers"
-        subtitle="Every way a workflow of this project starts: board columns, chat, task trackers, schedules and webhooks"
+        subtitle="Every way a workflow of this project starts: board columns, chat, task trackers, pull requests, schedules and webhooks"
         actions={addButton}
       />
 
@@ -201,6 +216,7 @@ export function TriggersContent({ projectId, workflows, columns, trackers, chatP
             <TriggerCards
               triggers={shown}
               trackers={trackers}
+              repositories={repositories}
               readOnly={readOnly}
               onEdit={(t) => setPanel({ editing: t })}
               onDelete={remove}
@@ -219,6 +235,7 @@ export function TriggersContent({ projectId, workflows, columns, trackers, chatP
           workflows={workflows}
           columns={columns}
           trackers={trackers}
+          repositories={repositories}
           chatProviders={chatProviders}
           runAs={runAs}
           editing={panel.editing}

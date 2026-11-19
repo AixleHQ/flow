@@ -91,10 +91,12 @@ class Webhooks::AzureDevopsControllerTest < ActionDispatch::IntegrationTest
 
   # == delivery handling ==
 
+  # When Azure says it happened goes along: a vote is found by its time.
   test "accepts a delivery, records it and enqueues the reconciliation" do
-    assert_enqueued_with(job: ResolveAzureDevopsEventJob) do
+    payload = build_payload
+    assert_enqueued_with(job: ResolveAzureDevopsEventJob, args: ->(args) { args.first[:occurred_at] == payload[:createdDate] }) do
       assert_difference -> { AzureDevopsDelivery.count }, 1 do
-        post path, params: build_payload, as: :json, headers: auth
+        post path, params: payload, as: :json, headers: auth
       end
     end
 

@@ -35,6 +35,19 @@ describe('Invitations/Show', () => {
     expect(router.post).toHaveBeenCalledWith('/invitations/tok-123/decline');
   });
 
+  it('names the projects the invitee joins, and mentions none when there are none', () => {
+    const { unmount } = renderPage(
+      <InvitationShow variant="accept" {...baseProps} projects={['Data Pipeline', 'Mobile App']} />,
+    );
+
+    expect(screen.getByText(/access to the projects/i)).toBeInTheDocument();
+    expect(screen.getByText('Data Pipeline, Mobile App')).toBeInTheDocument();
+    unmount();
+
+    renderPage(<InvitationShow variant="accept" {...baseProps} projects={[]} />);
+    expect(screen.queryByText(/access to the project/i)).not.toBeInTheDocument();
+  });
+
   it('wrong_account variant names both emails and logs out before re-visiting', async () => {
     renderPage(<InvitationShow variant="wrong_account" {...baseProps} currentEmail="someone-else@acme.test" />);
 

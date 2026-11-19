@@ -21,7 +21,9 @@ class ProjectCollaborator < ApplicationRecord
 
   def user_belongs_to_same_company
     return unless user && project
-    return if user.company_memberships.active.exists?(company_id: project.company_id)
+    # An invitee can be put on the project ahead of accepting: Project#accessible_by?
+    # and Project.for_user still want an active membership, so they reach it then.
+    return if user.company_memberships.active_or_invited.exists?(company_id: project.company_id)
 
     errors.add(:user, "must belong to the same company as the project")
   end

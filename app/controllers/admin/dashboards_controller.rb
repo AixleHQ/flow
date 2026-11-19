@@ -5,9 +5,8 @@ module Admin
   # whether it is billed for it (docs/design/tenant-usage-report.md). An
   # Administrate page with a React island in it, fed its data once.
   class DashboardsController < Admin::ApplicationController
-    def show
-      @report = Usage::TenantReport.new.to_h.deep_transform_keys { |key| key.to_s.camelize(:lower) }
-      render layout: "administrate/application"
-    end
+    include TenantDashboard
+
+    layout "administrate/application"
   end
 end

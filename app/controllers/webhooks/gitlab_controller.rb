@@ -14,12 +14,21 @@ class Webhooks::GitlabController < ActionController::API
     case event
     when "Pipeline Hook"
       handle_pipeline
+    when *PullRequests::Gitlab::Events::HOOKS
+      handle_pull_request_event(event)
     end
 
     head :ok
   end
 
   private
+
+  def handle_pull_request_event(event)
+    parsed = PullRequests::Gitlab::Events.parse(event, request.request_parameters)
+    return unless parsed && @repository.integration&.active? && PullRequests::EventPipeline.awaited([ @repository ]).any?
+
+    PullRequests::ProcessEventJob.perform_later(repository_ids: [ @repository.id ], event: parsed.to_job)
+  end
 
   def handle_pipeline
     payload = request.request_parameters

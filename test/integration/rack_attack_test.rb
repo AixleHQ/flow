@@ -51,6 +51,16 @@ class RackAttackTest < ActionDispatch::IntegrationTest
     assert_equal "b@example.com", Rack::Attack.login_email(nested)
   end
 
+  test "self-registration of MCP clients is capped per address" do
+    body = { client_name: "Flood", redirect_uris: [ "http://localhost/cb" ] }
+    30.times { post "/mcp-oauth/register", params: body, as: :json }
+    assert_response :created
+
+    post "/mcp-oauth/register", params: body, as: :json
+
+    assert_response :too_many_requests
+  end
+
   test "a query string shaped to break the sign-in throttles is answered, not a server error" do
     get "/mobileredir/openApp.jsp?user=x"
     assert_response :not_found

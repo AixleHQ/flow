@@ -26,6 +26,8 @@ class Webhooks::BitbucketForgeController < ActionController::API
                                                    commit: event.dig("buildStatus", "commit", "hash").to_s.presence)
     when "avi:bitbucket:updated:repository"
       RefreshBitbucketRepositoryJob.perform_later(installation_id: @installation.id, repository_uuid: event.dig("repository", "uuid"))
+    when *PullRequests::Bitbucket::Events::EVENT_TYPES
+      PullRequests::ProcessBitbucketEventJob.perform_later(installation_id: @installation.id, payload: event.to_h)
     when "avi:bitbucket:deleted:repository"
       Rails.logger.info("[Webhooks::BitbucketForgeController] repository #{event.dig('repository', 'uuid')} was deleted " \
                         "in workspace #{@installation.workspace_uuid}")

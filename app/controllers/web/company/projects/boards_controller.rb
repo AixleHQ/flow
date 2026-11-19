@@ -59,7 +59,7 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
         board.board_tasks.active.where(task_type: "epic").order(:title).limit(EPIC_OPTIONS_LIMIT)
              .pluck(:id, :number, :title).map { |id, number, title| { id: id, number: number, title: title } }
       },
-      members: -> { current_project.member_users.map { |u| BoardMemberResource.new(u).to_h } },
+      members: -> { current_project.joined_member_users.map { |u| BoardMemberResource.new(u).to_h } },
       # docs/design/project-teams.md: a task can be assigned to a team instead of a person.
       teams: -> { current_project.project_teams.map { |team| { id: team.id, name: team.name } } },
       workflows: -> { current_project.workflows.order(:name).map { |w| BoardWorkflowResource.new(w).to_h } },

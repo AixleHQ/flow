@@ -1,12 +1,12 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it } from 'vitest';
 
-import { buildCompanyBreakdown, buildTenant, buildUsageDay } from 'test/factories/adminDashboard';
+import { buildCompanyBreakdown, buildDashboardPaths, buildTenant, buildUsageDay } from 'test/factories/adminDashboard';
 import { answerFetch, jsonResponse } from 'test/fetchStub';
 import { render, screen, userEvent, within } from 'test/renderPage';
 
 import Dashboard from './Dashboard';
-import type { CompanyBreakdown, DashboardData } from './types';
+import type { CompanyBreakdown, DashboardData, DashboardPaths } from './types';
 
 const now = new Date('2026-10-19T12:00:00Z');
 
@@ -17,15 +17,17 @@ const data: DashboardData = {
   snapshot: { companies: 1, members: 3, projects: 2 },
 };
 
-const BREAKDOWN = 'GET /admin/dashboard/companies/:id.json';
-
-async function openAcme(answer: CompanyBreakdown | Response = buildCompanyBreakdown(), dayHours: unknown = {}) {
+async function openAcme(
+  answer: CompanyBreakdown | Response = buildCompanyBreakdown(),
+  dayHours: unknown = {},
+  paths: DashboardPaths = buildDashboardPaths(),
+) {
   const fetchSpy = answerFetch({
-    [BREAKDOWN]: answer,
-    'GET /admin/dashboard/companies/:id/hours.json': dayHours,
-    'GET /admin/dashboard/waits.json': [],
+    [`GET ${paths.base}/companies/:id.json`]: answer,
+    [`GET ${paths.base}/companies/:id/hours.json`]: dayHours,
+    [`GET ${paths.base}/waits.json`]: [],
   });
-  render(<Dashboard data={data} now={now} timeZone="America/New_York" />);
+  render(<Dashboard paths={paths} data={data} now={now} timeZone="America/New_York" />);
   await userEvent.click(screen.getByRole('button', { name: 'Acme' }));
   const dialog = within(screen.getByRole('dialog', { name: 'Acme' }));
   return { dialog, fetchSpy };
@@ -49,6 +51,25 @@ describe('CompanyDetail', () => {
     expect(figure(dialog, 'p95 wait').getByText('10 min')).toBeInTheDocument();
     expect(figure(dialog, 'p95 of those that waited').getByText('23.3 min')).toBeInTheDocument();
     expect(dialog.getByText(/0\.3 on average, 2 at p95, 9 at most/)).toBeInTheDocument();
+  });
+
+  it('reads from the copy of the page it is shown in, and outside the admin links to no company record', async () => {
+    const { dialog, fetchSpy } = await openAcme(buildCompanyBreakdown(), {}, { base: '/dashboard' });
+
+    expect(await dialog.findByRole('region', { name: 'Waited over 30 s' })).toHaveTextContent('20%');
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/dashboard/companies/1.json?from=2026-10-01&to=2026-10-31&time_zone=America%2FNew_York',
+      expect.objectContaining({ headers: { Accept: 'application/json' } }),
+    );
+    expect(dialog.getByText(/Oct 1 – Oct 31, 2026 · UTC/)).toBeInTheDocument();
+    expect(dialog.queryByRole('link', { name: 'Company record' })).not.toBeInTheDocument();
+
+    await userEvent.click(await dialog.findByRole('button', { name: 'Wed, Oct 14' }));
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/dashboard/companies/1/hours.json?from=2026-10-01&to=2026-10-31&day=2026-10-14&time_zone=America%2FNew_York',
+      expect.objectContaining({ headers: { Accept: 'application/json' } }),
+    );
   });
 
   it('sets the average utilization beside the time every worker was busy, when the waits began', async () => {

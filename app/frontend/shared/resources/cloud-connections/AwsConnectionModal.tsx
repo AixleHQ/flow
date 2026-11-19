@@ -44,6 +44,7 @@ type Phase = 'form' | 'waiting' | 'select' | 'saving';
 const DEFAULT_BEDROCK_REGION = 'us-east-1';
 const DEFAULT_PROFILE = 'aixle-bedrock';
 const FALLBACK_POLL_SECONDS = 5;
+const UNREACHABLE = 'Could not reach the server. Check your connection and try again.';
 
 export interface AwsConnectionModalProps {
   opened: boolean;
@@ -93,11 +94,18 @@ export function AwsConnectionModal({ opened, onClose, onConnected, embedded = fa
   }, [opened, reset, stopPolling]);
 
   const poll = useCallback(async (flowHandle: string) => {
-    const res = await apiFetch(pollApiV1CloudAwsConnectionPath(), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ handle: flowHandle }),
-    });
+    let res: Response;
+    try {
+      res = await apiFetch(pollApiV1CloudAwsConnectionPath(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ handle: flowHandle }),
+      });
+    } catch {
+      // The sign-in is still waiting on AWS; a dropped connection only costs one check.
+      timer.current = setTimeout(() => void poll(flowHandle), FALLBACK_POLL_SECONDS * 1000);
+      return;
+    }
 
     // 410 means the authorization died; the same handle can never succeed, so start over
     // rather than polling a corpse.
@@ -130,11 +138,17 @@ export function AwsConnectionModal({ opened, onClose, onConnected, embedded = fa
 
   const start = async () => {
     setError(null);
-    const res = await apiFetch(apiV1CloudAwsConnectionPath(), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ start_url: startUrl, sso_region: ssoRegion }),
-    });
+    let res: Response;
+    try {
+      res = await apiFetch(apiV1CloudAwsConnectionPath(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ start_url: startUrl, sso_region: ssoRegion }),
+      });
+    } catch {
+      setError(UNREACHABLE);
+      return;
+    }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       setError(body.message ?? 'Could not start the sign-in.');
@@ -154,11 +168,18 @@ export function AwsConnectionModal({ opened, onClose, onConnected, embedded = fa
 
     setPhase('saving');
     setError(null);
-    const res = await apiFetch(completeApiV1CloudAwsConnectionPath(), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ handle, account_id: accountId, role_name: roleName, region, profile }),
-    });
+    let res: Response;
+    try {
+      res = await apiFetch(completeApiV1CloudAwsConnectionPath(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ handle, account_id: accountId, role_name: roleName, region, profile }),
+      });
+    } catch {
+      setError(UNREACHABLE);
+      setPhase('select');
+      return;
+    }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       setError(body.message ?? 'Could not save the connection.');

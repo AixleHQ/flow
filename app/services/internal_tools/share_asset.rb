@@ -18,8 +18,9 @@ module InternalTools
       description "Make an asset publicly accessible and return a stable, safe share link: a project asset " \
                   "(source \"project\", the default), an output of this workflow run (source \"run\"), or a " \
                   "file attached to a board task (source \"task\", with task_number or task_id). Company " \
-                  "assets cannot be shared. A file this session writes to /workspace/outputs becomes a run " \
-                  "output only after the session ends. The link renders the asset inside a sandboxed iframe " \
+                  "assets cannot be shared. A file this session writes to #{Asset::OUTPUT_DIR} becomes a run " \
+                  "output only after the session ends; to share it now, promote_asset it and share the " \
+                  "project asset. The link renders the asset inside a sandboxed iframe " \
                   "and does not change across asset versions. " \
                   "Only use this tool when the step instructions explicitly ask to share (or make public) " \
                   "an asset; do not call it on your own initiative."
@@ -85,7 +86,8 @@ module InternalTools
     def not_found_message
       case source
       when "project" then "Asset not found in this project — only the project's own assets can be shared"
-      when "run" then "No output of this workflow run matches — outputs of this session appear only after it ends"
+      when "run" then "No output of this workflow run matches — outputs of this session appear only after it " \
+                      "ends; promote_asset the file and share the project asset instead"
       else "Asset not found on this task"
       end
     end

@@ -3,7 +3,7 @@ import { notifications } from '@mantine/notifications';
 import type { ComponentProps } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { buildChatTrigger } from 'test/factories/trigger';
+import { buildChatTrigger, buildPullRequestTrigger, buildTriggerRepository } from 'test/factories/trigger';
 import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
 
 import { type Trigger, TriggersTab } from './TriggersTab';
@@ -134,6 +134,19 @@ describe('Projects/Workflows/TriggersTab', () => {
     expect(screen.getByText('On schedule')).toBeInTheDocument();
     expect(screen.getByText('Chat message')).toBeInTheDocument();
     expect(screen.getByText('Incoming webhook')).toBeInTheDocument();
+    expect(screen.queryByText('Pull request')).not.toBeInTheDocument();
+  });
+
+  it('offers a pull-request trigger in the empty state once the project has a repository on a code host', async () => {
+    installFetch({ triggers: [] });
+
+    renderPage(<TriggersTab {...baseProps({ repositories: [buildTriggerRepository()] })} />);
+    await screen.findByText('Add your first trigger');
+
+    expect(screen.getByText('When a review is submitted or a comment is added on a pull request')).toBeInTheDocument();
+    await userEvent.click(screen.getByText('Pull request'));
+
+    expect(await screen.findByRole('combobox', { name: 'Repository' })).toHaveValue('Any repository in this project');
   });
 
   it('hides the trigger-kind choices in the empty state when read-only', async () => {
@@ -376,6 +389,34 @@ describe('Projects/Workflows/TriggersTab', () => {
     expect(screen.getByText('boards · ignores Aixle changes')).toBeInTheDocument();
     expect(screen.getByText('Aixle is mentioned in a comment')).toBeInTheDocument();
     expect(screen.getByText('any tracker · chains from other workflows')).toBeInTheDocument();
+  });
+
+  it('describes a pull-request trigger by the verdict or mention it waits for and the repository it listens to', async () => {
+    installFetch({
+      triggers: [
+        buildPullRequestTrigger({
+          id: 41,
+          repository_id: 8,
+          filter_predicate: { 'review.verdict': 'changes_requested' },
+        }),
+        buildPullRequestTrigger({
+          id: 42,
+          event_type: 'pull_request.comment.created',
+          aixle_changes: 'other_workflows',
+          filter_predicate: { 'comment.mentions_me': true },
+        }),
+        buildPullRequestTrigger({ id: 43, repository_id: 99 }),
+      ],
+    });
+
+    renderPage(<TriggersTab {...baseProps({ repositories: [buildTriggerRepository()] })} />);
+
+    expect(await screen.findByText('Review submitted · changes requested')).toBeInTheDocument();
+    expect(screen.getByText('acme/storefront · ignores Aixle changes')).toBeInTheDocument();
+    expect(screen.getByText('Comment added · mentions Aixle')).toBeInTheDocument();
+    expect(screen.getByText('Any repository · chains from other workflows')).toBeInTheDocument();
+    expect(screen.getByText('Review submitted')).toBeInTheDocument();
+    expect(screen.getByText('Repository #99 · ignores Aixle changes')).toBeInTheDocument();
   });
 
   it('marks a tracker trigger whose tracker is detached as not firing', async () => {

@@ -17,7 +17,7 @@ class RunListEntryResource < ApplicationResource
   typelize :string
   attribute :state do |run|
     sessions = ordered_step_runs(run).filter_map { |sr| sr.terminal_session&.state }
-    if sessions.include?("queued") && (sessions & %w[running ready finishing]).empty?
+    if WorkflowRun.parked_on_slot?(sessions)
       "queued"
     else
       run.state

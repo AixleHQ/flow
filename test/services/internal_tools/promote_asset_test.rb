@@ -14,13 +14,8 @@ class InternalTools::PromoteAssetTest < ActiveSupport::TestCase
     @wra = create(:workflow_run_asset, workflow_run: @run, name: "report.md",
                   file: WorkflowRunAssetUploader.upload(StringIO.new("hello"), :store))
 
-    step_run = @step_run
-    project = @project
-    user = @user
-    @session = Object.new
-    @session.define_singleton_method(:project) { project }
-    @session.define_singleton_method(:step_run) { step_run }
-    @session.define_singleton_method(:user) { user }
+    @session = create(:terminal_session, :running, user: @user, project: @project, step_run: @step_run)
+    @runtime = stub_container_runtime
   end
 
   def run_tool(params)
@@ -43,7 +38,7 @@ class InternalTools::PromoteAssetTest < ActiveSupport::TestCase
 
   test "the promoter is the session's user, not the run's" do
     session_user = create(:user, company: @company)
-    @session.define_singleton_method(:user) { session_user }
+    @session.update!(user: session_user)
 
     result = run_tool(name: "report.md")
 
@@ -54,7 +49,7 @@ class InternalTools::PromoteAssetTest < ActiveSupport::TestCase
   end
 
   test "answers with an error when the session has no user" do
-    @session.define_singleton_method(:user) { nil }
+    @session.stubs(:user).returns(nil)
 
     result = run_tool(name: "report.md")
 
@@ -116,6 +111,67 @@ class InternalTools::PromoteAssetTest < ActiveSupport::TestCase
 
     assert_equal 1, result[:exit_code]
     assert_includes result[:stderr], "missing.md"
+  end
+
+  # The step's own outputs are collected into run assets only when its session
+  # ends, so promoting one mid-session reads it from the container.
+  test "promotes a file this session wrote to its outputs before the session ends" do
+    @runtime.write_file(@session.container_id, "/workspace/outputs/reports/audit.md", "# Audit")
+
+    result = run_tool(name: "reports/audit.md", folder: "optimize-reports")
+
+    assert_equal 0, result[:exit_code], result[:stderr]
+    asset = Asset.find(JSON.parse(result[:stdout])["asset_id"])
+    assert_equal "reports/audit.md", asset.name
+    assert_equal "optimize-reports", asset.folder
+    assert_equal "# Audit", asset.latest_version.file.read
+  end
+
+  test "the session's own output wins over an earlier step's output of the same name" do
+    @runtime.write_file(@session.container_id, "/workspace/outputs/report.md", "rewritten")
+
+    result = run_tool(name: "report.md")
+
+    assert_equal 0, result[:exit_code], result[:stderr]
+    assert_equal "rewritten", Asset.find(JSON.parse(result[:stdout])["asset_id"]).latest_version.file.read
+  end
+
+  test "an earlier step's output is promoted when this session wrote none" do
+    result = run_tool(name: "report.md")
+
+    assert_equal 0, result[:exit_code], result[:stderr]
+    assert_equal "hello", Asset.find(JSON.parse(result[:stdout])["asset_id"]).latest_version.file.read
+  end
+
+  test "a name that leaves the outputs directory is not read from the container" do
+    @runtime.write_file(@session.container_id, "/workspace/secret.txt", "secret")
+
+    result = run_tool(name: "../secret.txt")
+
+    assert_equal 1, result[:exit_code]
+    assert { Asset.where(scope: @project).none? }
+  end
+
+  test "an empty output is refused" do
+    @runtime.write_file(@session.container_id, "/workspace/outputs/empty.md", "")
+
+    result = run_tool(name: "empty.md")
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/empty/, result[:stderr])
+    assert { Asset.where(scope: @project).none? }
+  end
+
+  test "an output the runtime could not read whole is refused with the reason" do
+    @runtime.stubs(:read_file_result).with(@session.container_id, "/workspace/outputs/big.xlsx").returns(
+      ContainerRuntime::FileRead.new(content: nil, whole: false, reason: "needs S3-compatible storage")
+    )
+
+    result = run_tool(name: "big.xlsx")
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/needs S3-compatible storage/, result[:stderr])
+    assert { Asset.where(scope: @project).none? }
   end
 
   test "raises outside workflow context" do

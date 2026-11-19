@@ -24,4 +24,14 @@ Rails.application.config.middleware.insert_before 0, Rack::Cors do
     resource "/integrations/youtrack/pairings*", headers: %w[Authorization Content-Type], methods: %i[get post options],
                                                  credentials: false, max_age: 600
   end
+
+  # The personal MCP's OAuth discovery and token endpoints, for MCP clients that
+  # run in a browser. No cookie is read on any of them.
+  allow do
+    origins "*"
+    resource "/.well-known/oauth-*", headers: :any, methods: %i[get options], credentials: false, max_age: 600
+    resource "/mcp-oauth/token", headers: :any, methods: %i[post options], credentials: false, max_age: 600
+    resource "/mcp-oauth/register", headers: :any, methods: %i[post options], credentials: false, max_age: 600
+    resource "/mcp-oauth/revoke", headers: :any, methods: %i[post options], credentials: false, max_age: 600
+  end
 end

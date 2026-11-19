@@ -222,6 +222,18 @@ class Rack::Attack
     req.ip if req.post? && req.path == "/csp-violation-report-endpoint"
   end
 
+  # The personal MCP's OAuth server. Registration writes a row for anyone who
+  # asks; Claude and ChatGPT reach both from a few shared egress addresses, so
+  # the token limit is sized for every user behind one of them.
+  throttle("mcp-oauth/register/ip", limit: 30, period: 3600) do |req|
+    req.ip if req.post? && req.path == "/mcp-oauth/register"
+  end
+  throttle("mcp-oauth/token/ip", limit: 300, period: 60) do |req|
+    req.ip if req.post? && %w[/mcp-oauth/token /mcp-oauth/revoke].include?(req.path)
+  end
+  # A guest's authorize request makes Aixle fetch the client's metadata document.
+  throttle("mcp-oauth/authorize/ip", limit: 60, period: 60) { |req| req.ip if req.path == "/mcp-oauth/authorize" }
+
   # Callbacks only. The safelist used to cover the whole /auth/ prefix, which
   # silently exempted the OIDC *start* action — an endpoint a person triggers,
   # not an identity provider.

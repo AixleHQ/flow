@@ -15,14 +15,16 @@ class Web::Company::MembersController < Web::Company::ApplicationController
 
     render inertia: "Company/Members/Index", props: {
       users: memberships.map { |m| MemberResource.new(m).to_h },
-      project_handover: current_membership&.admin? ? ProjectHandover.for_company(current_company) : nil
+      project_handover: current_membership&.admin? ? ProjectHandover.for_company(current_company) : nil,
+      invite_projects: current_membership&.admin? ? invite_projects : []
     }
   end
 
   def create
     result = CompanyInvitation.call(
       company: current_company, inviter: current_user,
-      email: create_params[:email], name: create_params[:name], role: allowed_role
+      email: create_params[:email], name: create_params[:name], role: allowed_role,
+      project_ids: create_params[:project_ids]
     )
 
     if result.sent?
@@ -96,7 +98,13 @@ class Web::Company::MembersController < Web::Company::ApplicationController
   end
 
   def create_params
-    params.require(:user).permit(:email, :name)
+    params.require(:user).permit(:email, :name, project_ids: [])
+  end
+
+  # The projects an invitation can add the person to. Only an admin invites, and
+  # an admin reaches every project of the company.
+  def invite_projects
+    current_company.projects.where.not(state: "archived").order(:name).map { |p| { id: p.id, name: p.name } }
   end
 
   def allowed_role

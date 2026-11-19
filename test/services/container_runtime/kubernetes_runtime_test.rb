@@ -39,6 +39,15 @@ module ContainerRuntime
 
 
 
+    test "an API timeout, overload or dropped connection is transient; a refusal or a bug is not" do
+      assert @runtime.transient_error?(Kubeclient::HttpError.new(nil, "Timed out connecting to server", nil))
+      assert @runtime.transient_error?(Kubeclient::HttpError.new(503, "unavailable", nil))
+      assert @runtime.transient_error?(Errno::ECONNREFUSED.new)
+      assert_not @runtime.transient_error?(Kubeclient::HttpError.new(403, "forbidden", nil))
+      assert_not @runtime.transient_error?(Kubeclient::ResourceNotFoundError.new(404, "gone", nil))
+      assert_not @runtime.transient_error?(NoMethodError.new("undefined method"))
+    end
+
     test "pull_image raises when image blank" do
       assert_raises(ArgumentError) { @runtime.pull_image("") }
       assert_raises(ArgumentError) { @runtime.pull_image(nil) }

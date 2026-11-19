@@ -97,6 +97,14 @@ module ContainerRuntime
       session_objects(session_locator(id)).empty?
     end
 
+    def transient_error?(error)
+      case error
+      when Kubeclient::HttpError then TRANSIENT_API_STATUSES.include?(error.error_code.to_i)
+      when *TRANSIENT_CONNECTION_ERRORS then true
+      else false
+      end
+    end
+
     # Deleting and confirming absence need a namespace/name pair and nothing
     # else. #resolve_handle would additionally infer service ports, which costs
     # a Pod GET per call — on a path the reconciler walks every minute for every
@@ -605,16 +613,12 @@ module ContainerRuntime
       begin
         create_or_find_identical(client, kind, plural, resource)
       rescue Kubeclient::HttpError, *TRANSIENT_CONNECTION_ERRORS => e
-        raise unless attempt < CREATE_ATTEMPTS && transient_api_error?(e)
+        raise unless attempt < CREATE_ATTEMPTS && transient_error?(e)
 
         sleep ready_interval * attempt
         attempt += 1
         retry
       end
-    end
-
-    def transient_api_error?(error)
-      !error.is_a?(Kubeclient::HttpError) || TRANSIENT_API_STATUSES.include?(error.error_code.to_i)
     end
 
     def create_or_find_identical(client, kind, plural, resource)

@@ -3,7 +3,7 @@ import { Alert, Button, Paper, Select, Stack, Text, TextInput, Title } from '@ma
 import { IconAlertCircle, IconCircleCheck } from '@tabler/icons-react';
 import { type FormEvent, useState } from 'react';
 
-import { Logo, PageShell, type SharedProps } from 'shared/ui';
+import { BrandLockup, PageShell, type SharedProps } from 'shared/ui';
 
 interface ConnectableProject {
   id: number;
@@ -51,7 +51,7 @@ export default function YoutrackConnect() {
       <Head title="Connect YouTrack" />
       <Paper p="xl" radius="md" w="100%" maw={440} withBorder>
         <Stack gap="md">
-          <Logo />
+          <BrandLockup />
           <Title order={3}>Connect YouTrack</Title>
 
           {notice ? (

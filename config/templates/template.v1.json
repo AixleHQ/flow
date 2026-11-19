@@ -1065,7 +1065,8 @@
                   "schedule",
                   "webhook",
                   "event",
-                  "tracker"
+                  "tracker",
+                  "pull_request"
                 ]
               },
               "workflow": {

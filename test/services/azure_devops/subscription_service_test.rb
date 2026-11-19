@@ -56,9 +56,25 @@ module AzureDevops
 
       result = verify_connection
 
-      assert_equal AzureDevopsSubscription::EVENT_TYPES.sort, @integration.azure_devops_subscriptions.reload.pluck(:event_type).sort
+      assert_equal (AzureDevopsSubscription::GATE_EVENT_TYPES + AzureDevopsSubscription::TRACKER_EVENT_TYPES).sort,
+                   @integration.azure_devops_subscriptions.reload.pluck(:event_type).sort
       assert_equal [ :active, false, "Connection verified. Service Hooks are in place for CI and Boards events" ],
                    result.values_at(:status, :warning, :message)
+    end
+
+    test "with a pull request trigger waiting on one of its repositories, testing a connection provisions the comment hook" do
+      with_azure_devops_enabled(webhook_base_url: "https://aixle.test")
+      stub_create
+      project = @integration.project
+      repository = create(:repository, :azure_devops, integration: @integration, scope: project)
+      create(:trigger_binding, project: project, workflow: create(:workflow, scope: project), created_by: @integration.connected_by,
+                               event_type: "pull_request.comment.created", repository: repository)
+
+      result = verify_connection
+
+      assert_equal (AzureDevopsSubscription::GATE_EVENT_TYPES + AzureDevopsSubscription::PULL_REQUEST_EVENT_TYPES).sort,
+                   @integration.azure_devops_subscriptions.reload.pluck(:event_type).sort
+      assert_equal "Connection verified. Service Hooks are in place for CI and pull request events", result[:message]
     end
 
     test "testing a connection recreates a hook that was deleted in Azure" do

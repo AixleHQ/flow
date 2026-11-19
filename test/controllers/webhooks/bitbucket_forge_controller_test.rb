@@ -60,6 +60,16 @@ class Webhooks::BitbucketForgeControllerTest < ActionDispatch::IntegrationTest
     assert_response :ok
   end
 
+  test "a pull-request reviewer status or comment is handed to a job, inside Forge's five seconds" do
+    event = { eventType: "avi:bitbucket:updated:pullrequest-reviewer-status", repository: { uuid: "{r-1}" },
+              pullrequest: { id: 8 }, actor: { uuid: "{a-1}" } }
+
+    invoke(bitbucket_forge_events_path, body: { payload: event })
+
+    assert_response :ok
+    assert_enqueued_jobs 1, only: PullRequests::ProcessBitbucketEventJob
+  end
+
   test "a renamed repository is re-read" do
     invoke(bitbucket_forge_events_path, body: { eventType: "avi:bitbucket:updated:repository", repository: { uuid: "{r-1}" } })
 

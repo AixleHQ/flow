@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_14_110000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_18_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -909,6 +909,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_110000) do
     t.check_constraint "scope::text = 'deployment'::text AND company_id IS NULL OR scope::text = 'company'::text AND company_id IS NOT NULL", name: "identity_providers_scope_company_consistency"
   end
 
+  create_table "insights_otlp_batches", force: :cascade do |t|
+    t.integer "attempts", default: 0, null: false
+    t.datetime "claimed_until"
+    t.datetime "created_at", null: false
+    t.bigint "integration_id", null: false
+    t.string "last_error"
+    t.datetime "next_attempt_at"
+    t.binary "payload", null: false
+    t.bigint "project_id", null: false
+    t.integer "record_count", null: false
+    t.string "signal", null: false
+    t.string "state", default: "pending", null: false
+    t.bigint "terminal_session_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["integration_id", "state", "next_attempt_at"], name: "index_insights_otlp_batches_due"
+    t.index ["project_id", "state"], name: "index_insights_otlp_batches_on_project_id_and_state"
+    t.index ["terminal_session_id"], name: "index_insights_otlp_batches_on_terminal_session_id"
+  end
+
   create_table "integration_data", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.datetime "expires_at"
@@ -1027,6 +1046,49 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_110000) do
     t.index ["applied_at", "occurred_at"], name: "idx_on_applied_at_occurred_at_9b9f6d64f1"
     t.index ["event_id"], name: "index_marketplace_subscription_events_on_event_id", unique: true
     t.index ["marketplace_license_id"], name: "idx_on_marketplace_license_id_bbeb7c9440"
+  end
+
+  create_table "mcp_auth_clients", force: :cascade do |t|
+    t.string "client_id", null: false
+    t.string "client_name"
+    t.string "redirect_uris", default: [], null: false, array: true
+    t.datetime "last_used_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["client_id"], name: "index_mcp_auth_clients_on_client_id", unique: true
+  end
+
+  create_table "mcp_auth_grants", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "client_id", null: false
+    t.string "client_kind", null: false
+    t.string "client_name", null: false
+    t.string "redirect_uri", null: false
+    t.string "resource"
+    t.string "scope"
+    t.bigint "proof_provider_ids", default: [], null: false, array: true
+    t.string "code_digest"
+    t.string "code_challenge"
+    t.datetime "code_expires_at"
+    t.datetime "code_used_at"
+    t.datetime "expires_at"
+    t.datetime "last_used_at"
+    t.datetime "revoked_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["code_digest"], name: "index_mcp_auth_grants_on_code_digest", unique: true
+    t.index ["user_id", "revoked_at"], name: "index_mcp_auth_grants_on_user_id_and_revoked_at"
+  end
+
+  create_table "mcp_auth_tokens", force: :cascade do |t|
+    t.bigint "grant_id", null: false
+    t.string "kind", null: false
+    t.string "token_digest", null: false
+    t.datetime "expires_at", null: false
+    t.datetime "rotated_at"
+    t.datetime "created_at", null: false
+    t.index ["grant_id"], name: "index_mcp_auth_tokens_on_grant_id"
+    t.index ["token_digest"], name: "index_mcp_auth_tokens_on_token_digest", unique: true
   end
 
   create_table "mcp_servers", force: :cascade do |t|
@@ -2058,11 +2120,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_110000) do
     t.boolean "copy_attachments", default: false, null: false
     t.bigint "chat_conversation_id"
     t.bigint "run_as_team_id"
+    t.bigint "repository_id"
     t.index ["chat_conversation_id"], name: "index_trigger_bindings_on_chat_conversation_id"
     t.index ["created_by_id"], name: "index_trigger_bindings_on_created_by_id"
     t.index ["project_id", "event_type", "enabled"], name: "idx_on_project_id_event_type_enabled_44a9c97a71"
     t.index ["project_id"], name: "index_trigger_bindings_on_project_id"
     t.index ["project_tracker_id"], name: "index_trigger_bindings_on_project_tracker_id"
+    t.index ["repository_id"], name: "index_trigger_bindings_on_repository_id"
     t.index ["run_as_team_id"], name: "index_trigger_bindings_on_run_as_team_id"
     t.index ["subject_column_id"], name: "index_trigger_bindings_on_subject_column_id"
     t.index ["workflow_id"], name: "index_trigger_bindings_on_workflow_id"
@@ -2215,6 +2279,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_110000) do
     t.datetime "updated_at", null: false
     t.datetime "password_changed_at"
     t.boolean "exclude_from_teams", default: false, null: false
+    t.boolean "dashboard_viewer", default: false, null: false
     t.index ["deleted_at"], name: "index_users_on_deleted_at", where: "(deleted_at IS NOT NULL)"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["mcp_token_digest"], name: "index_users_on_mcp_token_digest", unique: true
@@ -2492,6 +2557,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_110000) do
   add_foreign_key "gates", "board_tasks", on_delete: :cascade
   add_foreign_key "gates", "users", column: "creator_id", on_delete: :nullify
   add_foreign_key "identity_providers", "companies"
+  add_foreign_key "insights_otlp_batches", "integrations", on_delete: :cascade
+  add_foreign_key "insights_otlp_batches", "projects", on_delete: :cascade
+  add_foreign_key "insights_otlp_batches", "terminal_sessions", on_delete: :cascade
   add_foreign_key "integration_data", "integrations", on_delete: :cascade
   add_foreign_key "integrations", "azure_devops_installations", on_delete: :restrict
   add_foreign_key "integrations", "bitbucket_installations", on_delete: :restrict
@@ -2505,6 +2573,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_110000) do
   add_foreign_key "marketplace_licenses", "companies"
   add_foreign_key "marketplace_licenses", "companies", column: "proposed_company_id", on_delete: :nullify
   add_foreign_key "marketplace_subscription_events", "marketplace_licenses"
+  add_foreign_key "mcp_auth_grants", "users", on_delete: :cascade
+  add_foreign_key "mcp_auth_tokens", "mcp_auth_grants", column: "grant_id", on_delete: :cascade
   add_foreign_key "mcp_servers", "companies", on_delete: :cascade, validate: false
   add_foreign_key "mcp_servers", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_mcp_servers_project_company", on_delete: :cascade, validate: false
   add_foreign_key "mcp_servers", "projects", on_delete: :cascade, validate: false
@@ -2637,6 +2707,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_14_110000) do
   add_foreign_key "trigger_bindings", "project_teams", column: "run_as_team_id", on_delete: :nullify
   add_foreign_key "trigger_bindings", "project_trackers", on_delete: :restrict
   add_foreign_key "trigger_bindings", "projects", on_delete: :cascade
+  add_foreign_key "trigger_bindings", "repositories", on_delete: :cascade
   add_foreign_key "trigger_bindings", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "trigger_bindings", "workflows", on_delete: :cascade
   add_foreign_key "trigger_dispatches", "trigger_bindings", on_delete: :nullify

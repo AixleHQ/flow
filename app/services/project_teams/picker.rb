@@ -80,6 +80,7 @@ module ProjectTeams
                                              .index_by(&:user_id)
       credentials = AgentCredential.where(company_id: project.company_id, user_id: user_ids)
                                    .order(created_at: :desc, id: :desc).group_by(&:user_id)
+      @accessible_user_ids = project.accessible_user_ids(user_ids)
 
       candidates = []
       skipped = []
@@ -101,7 +102,7 @@ module ProjectTeams
       return skip.call("was passed over for this run") if @exclude_user_ids.include?(user.id)
       return skip.call("is no longer an active member of the company") if membership.nil?
       return skip.call("is a viewer, and viewers can't start runs") if membership.viewer?
-      return skip.call("no longer has access to the project") unless project.accessible_by?(user)
+      return skip.call("no longer has access to the project") unless @accessible_user_ids.include?(user.id)
       return skip.call("has no agent connected in this company") if credentials.empty?
 
       by_type = credentials.index_by(&:agent_type)
@@ -129,7 +130,8 @@ module ProjectTeams
 
     def needed_runtimes(membership, credentials)
       pinned = steps.map(&:required_agent_runtime).compact_blank
-      fallback = @agent_runtime || membership.default_agent_runtime.presence || credentials.first.agent_type
+      default = credentials.find { |credential| credential.id == membership.default_agent_credential_id }
+      fallback = @agent_runtime || default&.agent_type.presence || credentials.first.agent_type
       unpinned = steps.empty? || steps.any? { |step| step.required_agent_runtime.blank? }
       (pinned + (unpinned ? [ fallback ] : [])).uniq
     end

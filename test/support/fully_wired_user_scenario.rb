@@ -53,6 +53,15 @@ class FullyWiredUserScenario
     ChatIdentity.create!(provider: "slack", workspace_id: "T1", external_user_id: "U1", user: @user,
                          proof: "slack_sign_in", linked_at: Time.current)
     YoutrackPairing.start!(instance_url: "https://acme.youtrack.cloud", project: @project, user: @user)
+    build_mcp_app
+  end
+
+  def build_mcp_app
+    client = MCPAuth::Client.new(client_id: "aocl_wired", kind: "dcr", name: "Wired", host: nil,
+                                 redirect_uris: [ "http://localhost/cb" ])
+    grant, = MCPAuthGrant.authorize!(user: @user, client: client, redirect_uri: "http://localhost/cb",
+                                     code_challenge: "c" * 43, resource: nil, scope: "mcp", proof_provider_ids: [])
+    MCPAuthToken.issue!(grant, "access")
   end
 
   def build_board

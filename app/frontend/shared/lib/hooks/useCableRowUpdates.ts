@@ -31,11 +31,12 @@ const KINDS: Record<string, keyof RowChanges> = { session_update: 'sessionIds', 
  * viewer hands one out.
  *
  * Ids arriving within `debounceMs` of each other are delivered together, so a
- * burst of updates costs one fetch.
+ * burst of updates costs one fetch. A fetch that fails is dropped: the next
+ * update, or the resync after a reconnect, fetches the rows again.
  */
 export function useCableRowUpdates(
   signedStreamName: string | undefined,
-  onChanges: (changes: RowChanges) => void,
+  onChanges: (changes: RowChanges) => void | Promise<void>,
   { debounceMs = 250, resyncIds }: Options = {},
 ) {
   const onChangesRef = useRef(onChanges);
@@ -52,19 +53,23 @@ export function useCableRowUpdates(
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
     const pending: Record<keyof RowChanges, Set<number>> = { sessionIds: new Set(), runIds: new Set() };
 
+    const deliver = (changes: RowChanges) => {
+      void Promise.resolve(onChangesRef.current(changes)).catch(() => {});
+    };
+
     const flush = () => {
       flushTimer = null;
       const changes = { sessionIds: [...pending.sessionIds], runIds: [...pending.runIds] };
       pending.sessionIds.clear();
       pending.runIds.clear();
-      if (changes.sessionIds.length > 0 || changes.runIds.length > 0) onChangesRef.current(changes);
+      if (changes.sessionIds.length > 0 || changes.runIds.length > 0) deliver(changes);
     };
 
     const resync = () => {
       const all = resyncIdsRef.current?.();
       if (!all) return;
       for (let i = 0; i < Math.max(all.sessionIds.length, all.runIds.length); i += RESYNC_BATCH) {
-        onChangesRef.current({
+        deliver({
           sessionIds: all.sessionIds.slice(i, i + RESYNC_BATCH),
           runIds: all.runIds.slice(i, i + RESYNC_BATCH),
         });

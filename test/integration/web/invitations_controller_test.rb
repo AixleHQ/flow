@@ -213,6 +213,28 @@ class Web::InvitationsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "an invitee put on projects ahead sees them on the invitation, and reaches them once they accept" do
+    invitee = create(:user, :employee, :onboarding_completed, :with_agent_credential,
+                     company: create(:company), password: AuthHelper::TEST_PASSWORD)
+    _membership, token = invite(invitee)
+    complete_onboarding_in(invitee, @company)
+    mobile = create(:project, company: @company, owner: @admin, name: "Mobile App")
+    pipeline = create(:project, company: @company, owner: @admin, name: "Data Pipeline")
+    create(:project, company: @company, owner: @admin, name: "Not Picked")
+    [ mobile, pipeline ].each { |project| project.add_collaborator(invitee) }
+    sign_in_as(invitee)
+
+    get invitation_path(token)
+    assert_inertia_props variant: "accept", projects: [ "Data Pipeline", "Mobile App" ]
+    assert_empty Project.for_user_in_company(invitee, @company)
+
+    post accept_invitation_path(token)
+
+    assert_equal [ mobile, pipeline ].to_set, Project.for_user_in_company(invitee, @company).to_set
+    get company_project_members_path(mobile)
+    assert_response :success
+  end
+
   test "decline revokes the membership" do
     invitee = create(:user, :employee, :onboarding_completed, company: create(:company), password: AuthHelper::TEST_PASSWORD)
     membership, token = invite(invitee)

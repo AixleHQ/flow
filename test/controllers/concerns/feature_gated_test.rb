@@ -37,6 +37,20 @@ class FeatureGatedTest < ActionDispatch::IntegrationTest
 
   def get_as_company(path, company = @company) = get(path, headers: { "X-Company-Id" => company.id.to_s })
 
+  test "a browser is shown the not-found page, anything else an empty 404" do
+    with_feature(:external_runners, false) do
+      draw_gated_routes do
+        get "/gated"
+        assert_response :not_found
+        assert_select "h1", "Page not found"
+
+        get "/gated", headers: { "Accept" => "application/json" }
+        assert_response :not_found
+        assert_empty response.body
+      end
+    end
+  end
+
   test "a company-scoped flag is read for the current company" do
     other = create(:company)
     with_feature(:external_runners, true, company: @company) do

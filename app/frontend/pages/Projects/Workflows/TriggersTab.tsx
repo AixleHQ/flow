@@ -1,13 +1,27 @@
 import { Loader } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconBolt, IconClock, IconColumns, IconMessage, IconTicket, IconWebhook } from '@tabler/icons-react';
+import {
+  IconBolt,
+  IconClock,
+  IconColumns,
+  IconGitPullRequest,
+  IconMessage,
+  IconTicket,
+  IconWebhook,
+} from '@tabler/icons-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { apiFetch } from 'shared/lib/apiFetch';
 import { isAttached, type TrackerOption } from 'shared/resources/triggers/trackerTrigger';
 import { TriggerCards } from 'shared/resources/triggers/TriggerCards';
 import { TriggerFormPanel } from 'shared/resources/triggers/TriggerFormPanel';
-import type { ChatProviderOption, RunAsOptions, Trigger, TriggerColumnOption } from 'shared/resources/triggers/types';
+import type {
+  ChatProviderOption,
+  RunAsOptions,
+  Trigger,
+  TriggerColumnOption,
+  TriggerRepository,
+} from 'shared/resources/triggers/types';
 import { apiV1ProjectWorkflowTriggerPath, apiV1ProjectWorkflowTriggersPath } from 'shared/routes';
 
 export type { Trigger } from 'shared/resources/triggers/types';
@@ -17,6 +31,7 @@ interface TriggersTabProps {
   workflowId: number;
   columns: TriggerColumnOption[];
   trackers?: TrackerOption[];
+  repositories?: TriggerRepository[];
   chatProviders?: ChatProviderOption[];
   readOnly: boolean;
 }
@@ -26,6 +41,7 @@ export function TriggersTab({
   workflowId,
   columns,
   trackers = [],
+  repositories = [],
   chatProviders = [],
   readOnly,
 }: TriggersTabProps) {
@@ -143,8 +159,8 @@ export function TriggersTab({
           Triggers <span style={{ color: 'var(--text-3)', fontWeight: 400 }}>— how this workflow launches</span>
         </div>
         <div style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 20 }}>
-          Any enabled trigger can start a run. Off-board triggers (Slack, webhook, tracker) decide what task the run is
-          about via <strong style={{ color: 'var(--text-2)' }}>subject</strong>.
+          Any enabled trigger can start a run. Off-board triggers (Slack, webhook, tracker, pull request) decide what
+          task the run is about via <strong style={{ color: 'var(--text-2)' }}>subject</strong>.
         </div>
 
         {loading ? (
@@ -208,6 +224,16 @@ export function TriggersTab({
                         },
                       ]
                     : []),
+                  ...(repositories.length > 0
+                    ? [
+                        {
+                          kind: 'pull_request',
+                          icon: IconGitPullRequest,
+                          name: 'Pull request',
+                          desc: 'When a review is submitted or a comment is added on a pull request',
+                        },
+                      ]
+                    : []),
                 ].map((opt) => {
                   const Icon = opt.icon;
                   return (
@@ -264,6 +290,7 @@ export function TriggersTab({
           <TriggerCards
             triggers={triggers}
             trackers={trackers}
+            repositories={repositories}
             readOnly={readOnly}
             onEdit={openEdit}
             onDelete={remove}
@@ -280,6 +307,7 @@ export function TriggersTab({
           workflowId={workflowId}
           columns={columns}
           trackers={trackers}
+          repositories={repositories}
           chatProviders={chatProviders}
           runAs={runAs}
           editing={editingTrigger}

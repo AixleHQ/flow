@@ -108,7 +108,7 @@ describe('LoginPage', () => {
     });
 
     it('says so plainly when a workspace accepts nothing at all', () => {
-      renderPage(<LoginPage />, { props: stepTwo([], { dead_end: true }) });
+      renderPage(<LoginPage />, { props: stepTwo([], { deadEnd: true }) });
 
       expect(screen.getByText(/accepts no sign-in method/)).toBeInTheDocument();
       expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
@@ -164,6 +164,36 @@ describe('LoginPage', () => {
       await userEvent.click(screen.getByRole('checkbox', { name: 'Remember me' }));
 
       expect(form.setData).toHaveBeenCalledWith('rememberMe', true);
+    });
+  });
+
+  // A member invited from another domain signs in from exactly such an address,
+  // and so may someone about to sign their company up. The screen cannot say
+  // which without telling a stranger whether the address is registered.
+  describe('step two for a domain no workspace claims', () => {
+    const unclaimed = (over = {}) =>
+      stepTwo(['password', 'magic_link'], { email: 'louis@client.test', companyName: null, ...over });
+
+    it('asks for the password and offers the emailed link', () => {
+      renderPage(<LoginPage />, { props: unclaimed() });
+
+      expect(screen.getByLabelText('Password')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Email me a link' })).toBeInTheDocument();
+    });
+
+    it('offers to create a workspace for the domain where anyone may sign up', () => {
+      renderPage(<LoginPage />, { props: unclaimed({ canCreateWorkspace: true }) });
+
+      expect(screen.getByRole('link', { name: 'Create a workspace for client.test' })).toHaveAttribute(
+        'href',
+        '/workspace/new?email=louis%40client.test',
+      );
+    });
+
+    it('offers no workspace to create where signup is closed', () => {
+      renderPage(<LoginPage />, { props: unclaimed() });
+
+      expect(screen.queryByRole('link', { name: /Create a workspace/ })).not.toBeInTheDocument();
     });
   });
 

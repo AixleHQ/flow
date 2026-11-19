@@ -171,9 +171,11 @@ module ContextBuilders
         Microsoft Teams; name the messenger in `chat_provider`), `schedule`, `webhook` (returns the
         URL and a secret shown only once — pass both to the user), `tracker` (an
         issue in a connected task tracker is created, moves to a status — a column
-        on its board — is assigned, or gets a comment), or `event`.
-        - Unattended kinds (chat, schedule, webhook, event, tracker, and an `auto`
-          column trigger) need `allow_non_interactive` on every step.
+        on its board — is assigned, or gets a comment), `pull_request` (a review
+        is submitted or a comment is added on a pull request of a connected
+        repository), or `event`.
+        - Unattended kinds (chat, schedule, webhook, event, tracker, pull_request,
+          and an `auto` column trigger) need `allow_non_interactive` on every step.
         - A chat trigger listens in one channel connected to the company
           (`chat_channel_id` from `list_chat_channels`). To connect another, call
           `create_chat_connect_code` and give the user its `invite`, `mention` and
@@ -181,6 +183,10 @@ module ContextBuilders
         - A tracker trigger usually wants `subject_policy: find_or_create_task`, so
           every event about one issue lands on the same board task. Moving the
           issue on is the workflow's job, with the tracker_* tools.
+        - A pull request trigger that fixes review feedback wants
+          `filter_predicate: {"review.verdict": "changes_requested"}`, a step with
+          the repository attached, and `subject_policy: existing_task` to land on
+          the task whose run opened the pull request.
         - `schedule` needs a cron expression AND an explicit timezone, or it runs in
           UTC and drifts an hour across daylight saving.
         - Set a cooldown on chatty sources (a busy Slack thread starts a run per

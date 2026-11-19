@@ -3,12 +3,10 @@
 # Company-wide "Sessions & Runs" list. Same name, filter bar and row visual
 # system as the project Sessions & Runs page, plus a Project column. Unlike the
 # project feed this stays session-level: a workflow step is its own row, never
-# folded under a parent run — SessionsRunsFeed::LISTABLE_SESSION_TYPES.
+# folded under a parent run — TerminalSession.work_sessions.
 class Web::Company::SessionsController < Web::Company::ApplicationController
   include SessionListQuery
 
-  # In-flight states, for the visibility-scoped search below.
-  SEARCH_IN_FLIGHT_STATES = %w[not_started queued running ready finishing].freeze
   ROWS_LIMIT = 100
 
   def index
@@ -39,7 +37,7 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
   # whole company, redacted per viewer exactly as here.
   def rows
     ids = Array(params[:ids]).map(&:to_i).uniq.first(ROWS_LIMIT)
-    sessions = company_sessions_scope.where(id: ids, session_type: SessionsRunsFeed::LISTABLE_SESSION_TYPES)
+    sessions = company_sessions_scope.work_sessions.where(id: ids)
                                      .with_cached_resource_counts
                                      .includes(:user, :project, :session_admission,
                                                :tools, :skills, :mcp_servers, :config_items,
@@ -81,8 +79,7 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
   end
 
   def filtered_scope
-    scope = company_sessions_scope.where(session_type: type_session_types)
-                                  .ransack(list_query.except(:s)).result
+    scope = type_sessions_scope.ransack(list_query.except(:s)).result
 
     scope = scope.where(agent_type: params[:agent_type]) if params[:agent_type].present?
     scope = scope.where(user_id: params[:user_id]) if params[:user_id].present?
@@ -103,11 +100,11 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
 
   # "Workflow runs" on this page means workflow-step sessions — the page is not
   # a grouped runs feed.
-  def type_session_types
+  def type_sessions_scope
     case list_type
-    when "run" then %w[workflow_step]
-    when "solo" then %w[agent_session]
-    else SessionsRunsFeed::LISTABLE_SESSION_TYPES
+    when "run" then company_sessions_scope.workflow_steps
+    when "solo" then company_sessions_scope.agent_sessions
+    else company_sessions_scope.work_sessions
     end
   end
 
@@ -118,18 +115,14 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
   # join: the sessions of a deleted user stay findable where they are team work.
   def search_visible_scope
     own = TerminalSession.left_joins(:user).where(terminal_sessions: { user_id: current_user.id })
-    shared = TerminalSession.left_joins(:user).where(
-      "(terminal_sessions.state IN (:in_flight) AND users.share_active_sessions = TRUE) " \
-      "OR (terminal_sessions.state NOT IN (:in_flight) AND users.share_completed_sessions = TRUE)",
-      in_flight: SEARCH_IN_FLIGHT_STATES
-    )
-    own.or(shared)
+    own.or(TerminalSession.left_joins(:user).not_ended.where(users: { share_active_sessions: true }))
+       .or(TerminalSession.left_joins(:user).ended.where(users: { share_completed_sessions: true }))
   end
 
   # Distinct users who own a session in this company's list — the User filter's
   # options. Members who never ran anything would only be noise.
   def user_options
-    ids = company_sessions_scope.where(session_type: SessionsRunsFeed::LISTABLE_SESSION_TYPES)
+    ids = company_sessions_scope.work_sessions
                                 .distinct.pluck(:user_id)
     User.where(id: ids.compact).order(:name).map { |u| { id: u.id, name: u.name.presence || u.email } }
   end
@@ -137,7 +130,7 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
   # Projects with a session in this company's list — the Project filter's
   # options, named as the rows already name them.
   def project_options
-    ids = company_sessions_scope.where(session_type: SessionsRunsFeed::LISTABLE_SESSION_TYPES)
+    ids = company_sessions_scope.work_sessions
                                 .distinct.select(:project_id)
     Project.where(id: ids).order(:name).map { |p| { id: p.id, name: p.name } }
   end
