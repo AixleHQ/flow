@@ -56,6 +56,7 @@ describe('Company/Settings/RunnerPage', () => {
           createdAt: '2026-11-12T09:00:00Z',
           firstSeenIp: '203.0.113.7',
           createdByName: 'Grace Hopper',
+          revokedByOperator: false,
           state: 'idle',
         },
       ],

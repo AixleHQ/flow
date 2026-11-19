@@ -72,6 +72,13 @@ class RunnerEnvironment < ApplicationRecord
     current_session_id.present?
   end
 
+  # The machine left for good by a Revoke on the runner page, not by
+  # `aixle-runner unregister`. A machine revoked before the reason was recorded
+  # has none and reads as unregistered.
+  def revoked_by_operator?
+    gone? && state_reason == REVOKED
+  end
+
   def heard?(now = Time.current, within: ONLINE_WINDOW)
     last_heartbeat_at.present? && last_heartbeat_at >= now - within
   end

@@ -21,9 +21,7 @@ const STATE_HINT: Record<RunnerMachine['state'], string> = {
   gone: 'Unregistered',
 };
 
-/** A `gone` machine says how it left in `stateReason`: revoked from this page, or unregistered on the machine. */
-const stateHint = (machine: RunnerMachine): string =>
-  machine.state === 'gone' && machine.stateReason === 'revoked' ? 'Revoked' : STATE_HINT[machine.state];
+const stateHint = (machine: RunnerMachine): string => (machine.revokedByOperator ? 'Revoked' : STATE_HINT[machine.state]);
 
 const platform = (machine: Pick<RunnerMachine, 'os' | 'arch'>): string =>
   [machine.os, machine.arch].filter(Boolean).join('/') || '—';
