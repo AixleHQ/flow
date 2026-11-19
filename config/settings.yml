@@ -790,7 +790,7 @@ runners:
   release:
     protocol_supported: [1]
     min_version: null
-    recommended_version: "0.4.0"
+    recommended_version: "0.4.1"
     download_url: "https://github.com/AixleHQ/flow/releases/download/runner-v%{version}/aixle-runner-%{platform}"
     binaries:
       # runner-v0.1.0: https://github.com/AixleHQ/flow/releases/tag/runner-v0.1.0
@@ -809,6 +809,10 @@ runners:
       "0.4.0":
         linux-amd64: { sha256: "65895313361d6ef5bcd2553041fa67118e0a9325356af2e93ecc31c8790f20bf" }
         linux-arm64: { sha256: "efcacfabdba63bc737ff04a7d0a0fb06b32cc4009c3fec425d2202b22f678464" }
+      # runner-v0.4.1: https://github.com/AixleHQ/flow/releases/tag/runner-v0.4.1
+      "0.4.1":
+        linux-amd64: { sha256: "d83bf098dcdaa878d757a3fe1998813c949e4d90368bf3c0384fe5c841cffc9f" }
+        linux-arm64: { sha256: "f43667d95d91c9960cac9b57525f3b280ab7cacc1138b173746b74002ed68366" }
 
 # Which product this installation is: `self_hosted`, `saas` or `aws_marketplace`.
 # It decides who may move a company's session limit and who is billed for it.
