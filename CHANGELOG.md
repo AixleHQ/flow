@@ -13,6 +13,13 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Fixed
+- Runners: a machine whose Docker daemon is down now checks in and shows **Failed**
+  with the reason, instead of showing Offline while its service restarts in a loop.
+  The runner no longer exits when Docker is unreachable: it waits for Docker with
+  a growing delay, and reports the machine again once Docker answers. Press
+  **Return to service** on the machine to bring it back to idle.
+
 ## [1.16.0] - 2026-11-19
 
 ### Added
