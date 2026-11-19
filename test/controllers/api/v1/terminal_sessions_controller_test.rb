@@ -49,8 +49,9 @@ module Api
         runner = create(:runner, :project_runner, company: @company, project: other_project, created_by: @user)
 
         with_feature(:external_runners, true, company: @company) do
-          post :create, params: { session_type: "agent_session", agent_type: "claude_code", project_id: @project.id,
-                                  mode: "non_interactive", initial_prompt: "go", runner_id: runner.id }
+          post :create, params: { terminal_session: { session_type: "agent_session", agent_type: "claude_code",
+                                                      project_id: @project.id, mode: "non_interactive",
+                                                      initial_prompt: "go", runner_id: runner.id } }
         end
 
         assert_response :forbidden
@@ -61,8 +62,9 @@ module Api
       test "create answers a runner refused for another reason with 422" do
         runner = create(:runner, company: @company, created_by: @user)
 
-        post :create, params: { session_type: "agent_session", agent_type: "claude_code", project_id: @project.id,
-                                mode: "non_interactive", initial_prompt: "go", runner_id: runner.id }
+        post :create, params: { terminal_session: { session_type: "agent_session", agent_type: "claude_code",
+                                                    project_id: @project.id, mode: "non_interactive",
+                                                    initial_prompt: "go", runner_id: runner.id } }
 
         assert_response :unprocessable_entity
         assert_equal [ "External runners are not enabled for this company." ], response.parsed_body["errors"]
