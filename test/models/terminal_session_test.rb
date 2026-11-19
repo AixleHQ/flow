@@ -736,8 +736,10 @@ class TerminalSessionTest < ActiveSupport::TestCase
   # --- waiting_for_runner_machine? ---
 
   test "waiting_for_runner_machine? is true for a reservation waiting on runner_capacity" do
-    assert admission_waiting_for("runner_capacity").waiting_for_runner_machine?
-    assert admission_waiting_for("runner_capacity").terminal_session.waiting_for_runner_machine?
+    admission = admission_waiting_for("runner_capacity")
+
+    assert admission.waiting_for_runner_machine?
+    assert admission.terminal_session.waiting_for_runner_machine?
   end
 
   test "waiting_for_runner_machine? is false for another wait reason" do
