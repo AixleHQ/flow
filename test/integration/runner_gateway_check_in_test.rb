@@ -201,6 +201,19 @@ class RunnerGatewayCheckInTest < ActionDispatch::IntegrationTest
     assert_nil @environment.current_session_id
   end
 
+  test "a machine that holds a session and reports a failed preflight goes failed and holds no session" do
+    create(:runner_session, :holding, environment: @environment)
+    assert_not_nil @environment.reload.current_session_id
+
+    check_in({ facts: { "preflight_error" => "the Docker daemon is not reachable: down" } })
+
+    assert_response :ok
+    assert_equal "failed", @environment.reload.state
+    assert_nil @environment.current_session_id
+    assert_equal "failed", response.parsed_body.dig("environment", "state")
+    assert_not response.parsed_body.key?("update")
+  end
+
   test "a failed machine stays failed when it reports a clean preflight, and Return to service resets it" do
     check_in({ facts: { "preflight_error" => "the Docker daemon is not reachable: down" } })
     assert_equal "failed", @environment.reload.state
