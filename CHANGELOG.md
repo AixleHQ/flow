@@ -13,6 +13,12 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Fixed
+- Runners: a session waiting for a machine of its runner keeps waiting while the machine is
+  offline, and starts when it is back, instead of failing after about 90 seconds. It fails with
+  the "has no machine online" message once no machine has been heard for 15 minutes. A new
+  launch with no machine online still fails at once.
+
 ## [1.16.0] - 2026-11-19
 
 ### Added

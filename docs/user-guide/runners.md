@@ -141,6 +141,13 @@ returns to **Idle** on its next poll, within seconds), or pick another runner.
 A machine that is busy running a long step is not treated as offline while that
 step is within its time limit, even when it is silent.
 
+A session that is already **waiting for a machine** when its machines go offline
+keeps waiting: the session page says it waits for a machine that is offline and
+names it, and the session starts when a machine is back and free. It fails with
+the "has no machine online" message once no machine of the runner has been heard
+for 15 minutes. A runner whose every machine has failed is refused at once, as
+before.
+
 ### Machines on arm64
 
 The agent images (`ghcr.io/aixlehq/flow-<image>`) are built for `linux/amd64`
