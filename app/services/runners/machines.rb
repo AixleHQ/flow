@@ -234,6 +234,7 @@ module Runners
                                        .lock("FOR UPDATE SKIP LOCKED").first
         if environment.nil?
           availability = availability(runner)
+          wait_while_offline!(runner, session, availability)
           raise NoMachine, unavailable_message(runner, availability) unless availability.available?
 
           # Only the machines that can take a session are counted: a `failed`
@@ -252,6 +253,29 @@ module Runners
       end
     end
     private_class_method :take!
+
+    # A session that already waits for a machine (`runner_capacity`) keeps
+    # waiting while the runner's machines are offline, as a hosted session
+    # waits for capacity: the machine may come back. It fails with the
+    # unavailable message once no machine of the runner has been heard for
+    # ContactLoss::GRACE, the bound of §6.7. A launch that was not waiting
+    # fails at once (§8), and so does a runner with no machine registered.
+    def wait_while_offline!(runner, session, availability)
+      return unless availability.status == :all_offline
+      return unless session.waiting_for_runner_machine?
+
+      now = Time.current
+      return if availability.offline.all? { |machine| ContactLoss.lapsed?(machine, now: now) }
+
+      names = availability.offline.map { |machine| label(machine) }
+      raise ContainerRuntime::CapacityError.new(
+        "Waiting for a machine of runner \"#{runner.name}\": #{availability.offline.one? ? 'its machine is' : 'every machine is'} " \
+        "offline (#{names.join(', ')}). The session starts when one is back and free, " \
+        "and fails if none is heard within #{ContactLoss::GRACE.inspect}.",
+        reason: RUNNER_CAPACITY
+      )
+    end
+    private_class_method :wait_while_offline!
 
     def refuse_revoked!(runner, session)
       return unless runner.retired?

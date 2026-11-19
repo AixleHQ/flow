@@ -18,6 +18,12 @@ class SessionAdmission < ApplicationRecord
   scope :occupied, -> { unreleased.where.not(admitted_at: nil) }
   scope :waiting, -> { unreleased.where(wait_reason: WAIT_REASONS) }
 
+  # Whether this reservation waits for a machine of its session's runner: every
+  # machine is busy, or offline and not yet lapsed (Runners::Machines).
+  def waiting_for_runner_machine?
+    wait_reason == "runner_capacity"
+  end
+
   # What this reservation is ACTUALLY waiting on, for the screens that have to
   # tell a person why nothing is happening yet.
   #
