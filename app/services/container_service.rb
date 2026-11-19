@@ -44,27 +44,35 @@ class ContainerService
   # Run a single lifecycle phase with before/after hooks.
   # Returns accumulated state (serializable for passing between activities).
   def run_phase(phase)
+    start_time = Time.current
     phase = phase.to_sym
 
-    Rails.logger.info("[ContainerService] Phase #{phase} starting")
-    start_time = Time.current
+    Rails.logger.info("#{log_tag} Phase #{phase} starting")
 
     @state.merge!(invoke(:"before_#{phase}"))
     @state.merge!(invoke(phase))
     @state.merge!(invoke(:"after_#{phase}"))
     @state.except!(*CREATE_ONLY_KEYS)
 
-    duration = ((Time.current - start_time) * 1000).to_i
-    Rails.logger.info("[ContainerService] Phase #{phase} completed in #{duration}ms")
+    Rails.logger.info("#{log_tag} Phase #{phase} completed in #{elapsed_ms(start_time)}ms")
 
     @state
   rescue StandardError => e
-    Rails.logger.error("[ContainerService] Phase #{phase} failed: #{e.message}")
+    Rails.logger.error("#{log_tag} Phase #{phase} failed after #{elapsed_ms(start_time)}ms: #{e.class}: #{e.message}")
     Rails.logger.error(e.backtrace&.first(5)&.join("\n"))
     raise PhaseError.new(phase, e)
   end
 
   private
+
+  def log_tag
+    session_id = @state[:session_id]
+    session_id.present? ? "[ContainerService] session=#{session_id}" : "[ContainerService]"
+  end
+
+  def elapsed_ms(start_time)
+    ((Time.current - start_time) * 1000).to_i
+  end
 
   def invoke(hook)
     return {} unless @strategy.respond_to?(hook)

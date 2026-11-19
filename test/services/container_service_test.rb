@@ -143,6 +143,29 @@ class ContainerServiceTest < ActiveSupport::TestCase
     assert_match(/Simulated error/, error.original_error.message)
   end
 
+  test "names the session in every phase log line" do
+    info_lines = []
+    Rails.logger.stubs(:info).with { |line| info_lines << line; true }
+
+    ContainerService.new(strategy: MockStrategy.new, state: { session_id: 42, container_id: "abc" }).run_phase(:exec)
+
+    assert_includes info_lines, "[ContainerService] session=42 Phase exec starting"
+    assert info_lines.any? { |line| line.match?(/\A\[ContainerService\] session=42 Phase exec completed in \d+ms\z/) }
+  end
+
+  test "logs how long a failed phase ran and what stopped it" do
+    strategy = MockStrategy.new
+    strategy.should_error = true
+    strategy.error_phase = :exec
+    Rails.logger.expects(:error).with do |line|
+      line.match?(/\A\[ContainerService\] session=42 Phase exec failed after \d+ms: StandardError: Simulated error in exec\z/)
+    end
+
+    assert_raises(ContainerService::PhaseError) do
+      ContainerService.new(strategy: strategy, state: { session_id: 42, container_id: "abc" }).run_phase(:exec)
+    end
+  end
+
   test "merges state between phases" do
     strategy = MockStrategy.new
     service = ContainerService.new(strategy: strategy, state: { session_id: 1, foo: "bar" })
