@@ -275,9 +275,15 @@ describe('McpServersContent', () => {
 
   // MCPServer refuses any scope but Project, so there is no company tier left to
   // present. This pins that: the word must not reappear in the UI.
-  // Connecting is a top-level redirect off-site, not an edit: it belongs where the
-  // status is shown, not behind a settings form.
-  it('offers Connect in the row when an oauth server is not connected', () => {
+  // Connecting is a top-level redirect off-site, not an edit: it is a row action,
+  // not something behind a settings form. The Connection column only states where
+  // things are, so a button there read as one more badge.
+  const connectionAndActionCells = (serverName: string) => {
+    const cells = within(screen.getByRole('row', { name: new RegExp(serverName) })).getAllByRole('cell');
+    return { connection: cells[4], actions: cells[5] };
+  };
+
+  it('shows a Not connected badge and offers Connect among the row actions', () => {
     renderPage(
       <McpServersContent
         {...baseProps}
@@ -285,10 +291,13 @@ describe('McpServersContent', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument();
+    const { connection, actions } = connectionAndActionCells('Linear');
+    expect(within(connection).getByText('Not connected')).toBeInTheDocument();
+    expect(within(connection).queryByRole('button')).not.toBeInTheDocument();
+    expect(within(actions).getByRole('button', { name: 'Connect' })).toBeInTheDocument();
   });
 
-  it('offers Reconnect when the credential broke', () => {
+  it('shows the failure and offers Reconnect when the credential broke', () => {
     renderPage(
       <McpServersContent
         {...baseProps}
@@ -296,7 +305,22 @@ describe('McpServersContent', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
+    const { connection, actions } = connectionAndActionCells('Linear');
+    expect(within(connection).getByText('Connection failed')).toBeInTheDocument();
+    expect(within(actions).getByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
+  });
+
+  it('offers Reconnect for a credential about to expire that cannot refresh itself', () => {
+    renderPage(
+      <McpServersContent
+        {...baseProps}
+        mcpServers={[makeServer({ id: 3, name: 'Linear', authType: 'oauth', oauthStatus: 'expiring' })]}
+      />,
+    );
+
+    const { connection, actions } = connectionAndActionCells('Linear');
+    expect(within(connection).getByText('Expiring')).toBeInTheDocument();
+    expect(within(actions).getByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
   });
 
   it('shows a plain badge once connected, with nothing left to do', () => {
