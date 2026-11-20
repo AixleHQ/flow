@@ -3,7 +3,7 @@ package tunnel
 import "encoding/binary"
 
 // maxControlQueue bounds the control frames that wait for the writer. An honest
-// peer needs a few per stream; a PING flood from a peer that does not read is cut.
+// peer needs a few per stream; a PING or OPEN flood from a peer that does not read is cut.
 const maxControlQueue = 4096
 
 // writeQueue is what the session's one writer goroutine takes from: a FIFO of
