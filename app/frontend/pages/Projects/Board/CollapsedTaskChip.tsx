@@ -114,7 +114,12 @@ export function CollapsedTaskChip({ task, onClick }: { task: Task; onClick?: (t:
   const { color, hasActiveRun } = collapsedTaskStatus(state);
 
   return (
-    <Tooltip {...CHIP_TOOLTIP_PROPS} label={<CollapsedTaskTooltipLabel task={task} state={state} />} multiline maw={320}>
+    <Tooltip
+      {...CHIP_TOOLTIP_PROPS}
+      label={<CollapsedTaskTooltipLabel task={task} state={state} />}
+      multiline
+      maw={320}
+    >
       <Box
         ref={setNodeRef}
         aria-label={`Drag ${task.title}`}
