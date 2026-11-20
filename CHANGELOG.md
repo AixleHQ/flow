@@ -13,6 +13,10 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Tasks**: a workflow agent can put the card it moves at a chosen place in the column
+  (`position`, 0 = top) instead of always at the bottom.
+
 ### Fixed
 - Runners: starting a session through the API on a runner the project cannot use (another
   project's, or another company's) answers `403` instead of `422`. A machine revoked from its row
