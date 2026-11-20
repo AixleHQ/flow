@@ -41,6 +41,9 @@ governance, community health — carry none.
   project's, or another company's) answers `403` instead of `422`. A machine revoked from its row
   on the runner page reads **Revoked**; one that ran `aixle-runner unregister` still reads
   **Unregistered**. Machines revoked before this change keep reading **Unregistered**.
+- **Tasks**: the tooltip of a task in a collapsed column wraps within a bounded width and shows
+  the status on its own line, so a long title stays on screen. The time in `Running — …` and
+  `Waiting — …` counts up while the tooltip is open.
 
 ### Changed
 
