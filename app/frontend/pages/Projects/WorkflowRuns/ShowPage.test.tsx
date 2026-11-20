@@ -64,7 +64,7 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
         buildStepRun({ id: 102, stepId: 2, stepName: 'Review PRD', stepPosition: 2, state: 'pending' }),
       ],
     });
-    renderAuthedPage(<ShowPage {...seed({ run })} />, { props: seed({ run }) });
+    renderAuthedPage(<ShowPage />, { props: seed({ run }) });
 
     expect(screen.getByText(/"Draft PRD" is suspended · 5 days left to restore/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Restore' }));
