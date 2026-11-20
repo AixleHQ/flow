@@ -54,12 +54,12 @@ describe('scrubRecordingEvent', () => {
           description: 'https://flow.example.com/invitations/s3cr3t?email=a%40b.c',
           startTimestamp: 1,
           endTimestamp: 2,
-          data: { previous: '/oauth/callback?code=c0de' },
+          data: { previous: '/oauth/callback?code=c0de_secret' },
         },
       },
     });
 
-    expect(JSON.stringify([navigation, pageLoad])).not.toMatch(/s3cr3t|t0k|c0de|a%40b/);
+    expect(JSON.stringify([navigation, pageLoad])).not.toMatch(/s3cr3t|t0k|c0de_secret|a%40b/);
     expect(JSON.stringify(pageLoad)).toContain('https://flow.example.com/invitations/[token]');
   });
 });
@@ -97,7 +97,7 @@ describe('initSentry', () => {
       sent.push(String(init?.body));
       return new Response('{}');
     });
-    window.history.replaceState({}, '', '/invitations/s3cr3t?code=c0de');
+    window.history.replaceState({}, '', '/invitations/s3cr3t?code=c0de_secret');
     initSentry(settings);
 
     Sentry.captureException(new Error('boom'));
@@ -109,7 +109,7 @@ describe('initSentry', () => {
     expect(envelopes).toContain('"type":"span"');
     expect(envelopes).toContain('/invitations/[token]?code=%5Bfiltered%5D');
     expect(envelopes).toContain('"infer_ip":"never"');
-    expect(envelopes).not.toMatch(/s3cr3t|c0de/);
+    expect(envelopes).not.toMatch(/s3cr3t|c0de_secret/);
   });
 
   it('records no replay of a page opened on a token link', () => {
