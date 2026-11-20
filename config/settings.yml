@@ -764,6 +764,15 @@ runners:
     # host_port_base + (session id mod host_port_span).
     host_port_base: <%= ENV['RUNNER_PROXY_HOST_PORT_BASE'] || 20_000 %>
     host_port_span: <%= ENV['RUNNER_PROXY_HOST_PORT_SPAN'] || 10_000 %>
+  # The interactive tunnel's session ports with `network: host`
+  # (docs/design/agent-runtimes/runner-relay.md §3.3). `container.start` carries
+  # them as `tunnel.ports`, and sets the image's port variables from them once the
+  # platform has turned the tunnel on for the machine. A session takes five
+  # consecutive ports of the machine, base + (session id mod 1000) * 8 + 0..4, so
+  # the range is base...base + 8000. It must stay clear of the proxy's host ports
+  # above and of the agent image's own ports (Runners::Tunnel.settings_problems).
+  tunnel:
+    host_port_base: <%= ENV['RUNNERS_TUNNEL_HOST_PORT_BASE'] || 30_000 %>
   # The interactive tunnel's relay (docs/design/agent-runtimes/runner-relay.md §2.2,
   # §3.1): the `runner-relay` service that holds one WebSocket per machine.
   #
@@ -772,7 +781,7 @@ runners:
   #   same value). A key of its own, never `encryption.runners_key`: a compromised
   #   relay must not be able to read `runner_operations`. Blank: no ticket is minted.
   # - internal_token: the bearer the relay presents on its short calls to this app
-  #   (RUNNER_RELAY_INTERNAL_TOKEN). Read by the internal endpoints of a later task.
+  #   (RUNNER_RELAY_INTERNAL_TOKEN). Read by the internal endpoints (Api::V1::Internal::RunnerRelay).
   # - public_path: where the runner opens the WebSocket on the gateway's host; the
   #   ingress routes it to the relay.
   # - tunnel_mode: what the check-in's `config.tunnel` tells a runner. Blank (the

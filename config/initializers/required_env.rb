@@ -46,5 +46,9 @@ unless Rails.env.local?
     # fights the agent for it. The rules live with the ports, in app/.
     proxy_problem = Runners::Proxy.settings_problems.first
     raise proxy_problem if proxy_problem
+
+    # The interactive tunnel's ports with `network: host` (Settings.runners.tunnel).
+    tunnel_problem = Runners::Tunnel.settings_problems.first
+    raise tunnel_problem if tunnel_problem
   end
 end

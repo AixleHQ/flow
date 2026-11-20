@@ -1,0 +1,59 @@
+# frozen_string_literal: true
+
+module Runners
+  # The signals the platform sends the `runner-relay` service, so it learns without
+  # long requests which session each machine holds and when to let go
+  # (docs/design/agent-runtimes/runner-relay.md §8.1). One channel, `runner_relay`,
+  # on Action Cable's pub/sub (Redis), JSON messages told apart by their `type`:
+  #
+  #   {"type":"machine_session","environment_id":7,"session_id":123|null,"route_token":"…","ports":{…}}
+  #   {"type":"session_ended","session_id":123}
+  #   {"type":"machine_revoked","environment_id":7}
+  #
+  # Each is published once the surrounding transaction has committed
+  # (ActiveRecord.after_all_transactions_commit, as Operations#wake does): one
+  # that rolled back sends nothing. A publish that fails is logged and swallowed.
+  # Redis pub/sub loses messages anyway, and the relay's reconcile pass (§8.3, the
+  # `checks` endpoint) is what guarantees it converges.
+  module RelaySignals
+    CHANNEL = "runner_relay"
+
+    module_function
+
+    # A session took the machine, or left it (`session_id` nil). The session's
+    # route token and ports are read when the signal is sent, after the commit.
+    def machine_session(environment_id, session_id)
+      deliver do
+        session = TerminalSession.find_by(id: session_id) if session_id
+        {
+          type: "machine_session", environment_id: environment_id, session_id: session&.id,
+          route_token: session&.route_token, ports: (Tunnel.ports(session) if session)
+        }
+      end
+    end
+
+    # A runner session left `ready`.
+    def session_ended(session_id)
+      deliver { { type: "session_ended", session_id: session_id } }
+    end
+
+    # The machine left for good, or its runner was revoked or deleted.
+    def machine_revoked(environment_id)
+      deliver { { type: "machine_revoked", environment_id: environment_id } }
+    end
+
+    # Builds the message and publishes it after the commit. Building it can fail
+    # too (a session deleted meanwhile): it is swallowed the same way.
+    def deliver(&message)
+      ActiveRecord.after_all_transactions_commit { publish(&message) }
+    end
+
+    def publish
+      message = yield
+      ActionCable.server.pubsub.broadcast(CHANNEL, message.to_json)
+    rescue StandardError => e
+      Rails.logger.warn("[Runners::RelaySignals] #{message&.fetch(:type, nil)} signal failed: #{e.class}: #{e.message}")
+    end
+    private_class_method :deliver, :publish
+  end
+end

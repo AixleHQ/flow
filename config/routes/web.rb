@@ -194,6 +194,11 @@ namespace :api, defaults: { format: :json } do
     namespace :internal do
       get "ws_auth", to: "ws_auth#show"
       post "usage_statistics", to: "usage_statistics#create"
+      # The runner-relay service's short calls (docs/design/agent-runtimes/runner-relay.md §8.2).
+      namespace :runner_relay do
+        get "holders/:route_token", to: "holders#show"
+        post "checks", to: "checks#create"
+      end
     end
 
     resources :terminal_sessions, only: %i[show create destroy] do
