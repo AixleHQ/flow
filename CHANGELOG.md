@@ -24,6 +24,7 @@ governance, community health — carry none.
   The page opens archived tasks too.
 
 ### Fixed
+- **Tasks**: a collapsed board column no longer flickers a horizontal scrollbar while a card in it has an active run.
 - **Triggers & gates**: a column trigger in auto mode is refused for a workflow with a step
   that has auto-run off, and the error names the steps — such a trigger never started
   anything. When a column trigger cannot start its run, the card gets a comment saying why

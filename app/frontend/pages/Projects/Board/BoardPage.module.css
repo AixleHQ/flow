@@ -123,8 +123,8 @@
 }
 
 :global(@keyframes priorityBarPulse) {
-  0%, 100% { opacity: 1; transform: scaleY(1); }
-  50% { opacity: 0.5; transform: scaleY(1.15); }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 .addColumnBtn {
