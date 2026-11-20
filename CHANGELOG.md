@@ -16,6 +16,8 @@ governance, community health — carry none.
 ### Added
 - **Tasks**: a workflow agent can put the card it moves at a chosen place in the column
   (`position`, 0 = top) instead of always at the bottom.
+- **Docs**: the Tools page explains how agents list archived tasks with
+  `include_archived`, how to tell them apart in the results, and how to read one.
 
 ### Fixed
 - **Profile**: signing in to Antigravity again is no longer undone by a session that
