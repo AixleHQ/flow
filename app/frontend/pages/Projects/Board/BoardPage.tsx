@@ -87,6 +87,7 @@ import { BoardColumn } from './BoardColumn';
 import styles from './BoardPage.module.css';
 import { BoardPresetPicker } from './BoardPresetPicker';
 import { BoardSettingsDialog } from './BoardSettingsDialog';
+import { normalizeTask } from './normalizeTask';
 import { SelectionBar } from './SelectionBar';
 import { TagFilterCombobox } from './TagFilterCombobox';
 import { TaskCardUI } from './TaskCardUI';
@@ -169,21 +170,6 @@ const EMPTY_TASK_FORM: TaskFormValues = {
   parentTaskId: null,
   boardColumnId: '',
 };
-
-function normalizeTask(t: Task): Task {
-  return {
-    ...t,
-    title: t.title ?? '',
-    tags: t.tags ?? [],
-    archived: t.archived ?? false,
-    pendingGates: t.pendingGates ?? [],
-    ciGates: t.ciGates ?? [],
-    recentWorkflowRuns: t.recentWorkflowRuns ?? [],
-    assetsCount: t.assetsCount ?? 0,
-    childrenCount: t.childrenCount ?? 0,
-    commentsCount: t.commentsCount ?? 0,
-  };
-}
 
 // Mirrors BoardTask::PAGE_SIZE. Only used when the prop is missing (a partial reload of a page
 // rendered before the prop existed) — the server's value wins.

@@ -18,8 +18,10 @@ governance, community health — carry none.
   (`position`, 0 = top) instead of always at the bottom.
 - **Docs**: the Tools page explains how agents list archived tasks with
   `include_archived`, how to tell them apart in the results, and how to read one.
-- **Tasks**: a **Copy link** button in the task drawer copies a link that opens the board
-  with that task.
+- **Tasks**: every task has a page of its own, at `/company/projects/<id>/tasks/<number>`,
+  with the drawer's tabs and the properties beside the description. **Open as page** in the
+  task drawer goes there, and the drawer's new **Copy link** button copies that address.
+  The page opens archived tasks too.
 
 ### Fixed
 - **Triggers & gates**: a column trigger in auto mode is refused for a workflow with a step
