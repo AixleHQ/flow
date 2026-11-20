@@ -5,6 +5,7 @@ module github.com/aixlehq/aixle-runner
 go 1.27.4
 
 require (
+	github.com/coder/websocket v1.8.15
 	github.com/containerd/errdefs v1.0.0
 	github.com/distribution/reference v0.6.0
 	github.com/docker/cli v29.9.3+incompatible

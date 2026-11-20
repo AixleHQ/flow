@@ -12,7 +12,7 @@ module Runners
   #
   # A machine that held one of those sessions stops holding it, so the session's
   # cleanup finds the machine absent and releases its admission at once, instead
-  # of waiting for ops that a revoked runner never answers (PROTOCOL.md §8).
+  # of waiting for ops that a revoked runner never answers (PROTOCOL.md §9).
   module Revocation
     module_function
 

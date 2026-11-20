@@ -3,7 +3,8 @@
 The wire contract between `aixle-runner` and the platform's runner gateway. This document
 describes protocol `1` as the gateway implements it today, and nothing it does not implement
 yet. Later endpoints and ops each add their own section here, with their fixtures, in the task
-that builds them (§8).
+that builds them (§9). §8 is the exception to "the gateway": it is the relay tunnel's frame
+protocol, as the Go package `runner/protocol/tunnel` implements it for both of its ends.
 
 - **This document is the source of truth for the wire.** The design and its rationale are in
   `docs/design/agent-runtimes/DESIGN.md` §6 and §9. Where the two say the same thing, this
@@ -298,7 +299,7 @@ Fixtures: `register/` (`below_min_version`, `no_auto_update` among them), `heade
 
 `aixle-runner unregister`: the machine leaves its runner. No body. `204 No Content` with an empty
 body. The machine's environment is marked gone and every token of the machine is revoked, so its
-next request is `invalid_token`. A session that runs on the machine is not waited for (§8): the
+next request is `invalid_token`. A session that runs on the machine is not waited for (§9): the
 platform enqueues none of its ops from then on.
 
 Fixtures: `unregister/`.
@@ -1214,7 +1215,197 @@ Fixtures: `ops/exec_upload.json`, `ops/exec_upload_failed.json`, `ops/read_file_
   `register` (§5.1) and at `check-in` (§5.9), which it makes when it starts, never in the middle of
   a session. A runner below `recommended_version` is offered the update while it is idle (§5.4).
 
-## 8. Not in protocol 1 yet
+## 8. The relay tunnel
+
+The interactive tunnel carries a browser's connections to the ports of a session container through
+one WebSocket per machine, which the runner opens to the platform's `runner-relay` service. The
+connection is multiplexed: many streams, one binary message per frame. This section is the
+frame protocol, as the Go package [`tunnel/`](tunnel/) implements it for both ends, the relay and
+the runner, so that there is one implementation of it. It describes what the package does and
+nothing it does not.
+
+Not built yet, and so not part of this section: the ticket that authorizes the connection, the
+`GET /runner/v1/tunnel` upgrade, the relay service, and the runner's dialers. The package works
+over any connection that carries messages (`tunnel.Conn`), and `tunnel.NewWSConn` adapts a
+[`coder/websocket`](https://github.com/coder/websocket) connection to it.
+
+### 8.1 Frames
+
+```
+frame = type (1 byte) | stream id (4 bytes) | payload
+```
+
+All integers are big-endian. One frame is one message. Stream id `0` is the connection. The relay
+is the end that opens streams: it assigns their ids (§8.4). The runner is the end that accepts them.
+
+| Type | Code | Stream id | Sent by | Payload | Meaning |
+| --- | --- | --- | --- | --- | --- |
+| `HELLO` | `0x01` | 0 | both, once, the relay first | JSON object | Version and limits (§8.3) |
+| `OPEN` | `0x02` | ≥ 1 | relay | JSON `{"session_id":123,"port":7681}` | Open a stream: dial `port` of the session |
+| `OPEN_OK` | `0x03` | ≥ 1 | runner | none | The dial succeeded; `DATA` may flow both ways |
+| `DATA` | `0x04` | ≥ 1 | both | 1 to `max_frame` bytes | Stream bytes |
+| `WINDOW` | `0x05` | ≥ 1 | both | `u32`, bytes | The sender of this frame may receive that many more `DATA` bytes |
+| `CLOSE` | `0x06` | ≥ 1 | both | none | Half-close: this end will send no more `DATA` |
+| `RESET` | `0x07` | ≥ 1 | both | `u8` code, then optional UTF-8 text | Abort the stream in both directions at once |
+| `PING` | `0x08` | 0 | both | 8 bytes | Heartbeat |
+| `PONG` | `0x09` | 0 | both | the same 8 bytes | Heartbeat answer |
+| `GOAWAY` | `0x0A` | 0 | relay | none | No new streams; finish the open ones and reconnect |
+
+### 8.2 Encoding and refusals
+
+- `HELLO` and `OPEN` payloads are JSON objects. The encoder writes the keys in the order of §8.1 and §8.3,
+  with no whitespace, so that a fixture is byte-exact. The decoder accepts any key order and ignores unknown keys.
+- `WINDOW` is a `u32`. `PING` and `PONG` are 8 bytes, and the `PONG` echoes the `PING`. The relay's `PING` carries a
+  counter that starts at 1; a receiver does not check the value.
+- `RESET` is a code byte and then text of at most 256 bytes. A sender cuts a longer text on a character
+  boundary. A receiver that gets a longer one ignores the text and keeps the code. The text is for logs only.
+- A zero-length `DATA` frame is dropped. `OPEN_OK`, `CLOSE` and `GOAWAY` carry no payload.
+
+A receiver closes the connection with `1002` (protocol error) for each of these:
+
+- a message shorter than 5 bytes;
+- an unknown frame type;
+- a `HELLO`, `PING`, `PONG` or `GOAWAY` with a stream id other than 0, or a stream frame with stream id 0;
+- a payload that does not fit its type (a `WINDOW` that is not 4 bytes, a `PING` or `PONG` that is not 8,
+  a `RESET` without a code, a payload on `OPEN_OK`, `CLOSE` or `GOAWAY`, a `HELLO` or `OPEN` that is not a
+  JSON object with its required fields);
+- a `HELLO` after the handshake, an `OPEN` from the runner, an `OPEN_OK` from the relay, a `GOAWAY` from the runner;
+- a frame for a stream id that was never opened;
+- on the runner, an `OPEN` whose id is not above the last one it received.
+
+A `DATA` frame over the negotiated `max_frame` closes the connection with `1009`.
+
+### 8.3 `HELLO` and negotiation
+
+The relay sends first, as the first message of the connection:
+
+```json
+{"v":1,"max_frame":32768,"max_streams":64,"window":262144,"ping_interval":20,"session_id":123}
+```
+
+`session_id` is the session the machine holds, or `null`. The runner answers with its own limits, each at or
+below the relay's:
+
+```json
+{"v":1,"max_frame":32768,"max_streams":64,"window":262144,"runner_version":"1.4.0"}
+```
+
+Either end may add `"features"`, an array of strings after the other keys (§8.9).
+
+- The connection uses the **minimum of each limit**. `ping_interval`, in seconds, is the relay's.
+- A first message that is not a `HELLO`, or a `v` that the receiver does not speak (`1` only), closes with `1002`.
+- A value that makes the connection unusable closes with `1002`, whether it is the peer's own or the result of the
+  minimum: `max_frame` under 1024 or over 65536, `window` under `max_frame`, `max_streams` of 0, `ping_interval` of 0.
+  A `HELLO` without `v`, `max_frame`, `max_streams` or `window` is the same.
+
+Defaults of both ends: `max_frame` 32768, `max_streams` 64, `window` 262144, `ping_interval` 20.
+
+### 8.4 Streams
+
+- **Ids.** The relay assigns them, from 1, one higher each time. An id is never reused on a connection. The
+  high bit is reserved for a runner-initiated stream, which version 1 does not have.
+- **Open.** The relay sends `OPEN` and waits. The runner checks the session and the port (the package hands both to the caller of `Accept`), dials, and answers
+  `OPEN_OK` or `RESET` with `refused`, `dial_failed` or `timeout`. `DATA` before `OPEN_OK` is a protocol error of the
+  stream (`RESET protocol`). A relay that gets no answer in 10 seconds sends `RESET timeout` and gives the stream up.
+- **Half-close.** `CLOSE` ends one direction, as a TCP FIN. The other end may keep sending. `DATA` after the peer's `CLOSE`,
+  and a second `CLOSE`, are protocol errors of the stream (`RESET protocol`).
+- **Finished.** A stream is finished when both ends have sent `CLOSE`, or after any `RESET`. Frames for the id of a finished stream that
+  arrive later were in flight, and are dropped: they are not errors.
+- **Closing a stream** (`Stream.Close`) is a full close, as `net.Conn`'s is: it sends `CLOSE` and, if the peer has not sent
+  `CLOSE`, `RESET cancelled`.
+
+**Reset codes**, the first payload byte of `RESET`:
+
+| Code | Name | Meaning |
+| --- | --- | --- |
+| 1 | `cancelled` | The browser went away, or the opener gave up |
+| 2 | `refused` | Not this session or not one of the ports, or the stream cap |
+| 3 | `dial_failed` | The runner could not connect to the port |
+| 4 | `timeout` | No `OPEN_OK` in 10 seconds |
+| 5 | `session_changed` | The machine's session changed |
+| 6 | `revoked` | The machine or the session was revoked |
+| 7 | `flow_violation` | `DATA` or `WINDOW` beyond the window (§8.6) |
+| 8 | `protocol` | The stream broke §8.4 |
+| 9 | `internal` | An error on the runner's side of the stream |
+| 10 | `shutdown` | The end that sent it is closing |
+
+### 8.5 Limits
+
+| Limit | Value | When exceeded |
+| --- | --- | --- |
+| Frame payload | `max_frame`, 32768 by default, between 1024 and 65536 | Close `1009` |
+| Streams per connection | `max_streams`, 64 by default | The relay does not send the `OPEN` (`Open` returns `ErrStreamLimit`). A runner answers an `OPEN` above its limit with `RESET refused`, and the stream never reaches `Accept` |
+| Stream window | `window`, 262144 by default | `RESET flow_violation` |
+| Time to `OPEN_OK` | 10 s | `RESET timeout` |
+| Drain after `GOAWAY` | 30 s | The relay closes the connection |
+
+A stream that is reset or finished frees its slot at once.
+
+### 8.6 Flow control and fairness
+
+Credit-based, per stream and per direction. There is no window for the connection.
+
+- Each end starts with `window` bytes of credit for the other. A sender has at most that many `DATA` bytes
+  unacknowledged on a stream, so a receiver buffers at most `window` bytes for it. `DATA` beyond the credit resets the
+  stream with `flow_violation`, and the bytes are dropped.
+- The receiver sends `WINDOW` with the bytes it has handed to its reader, once at least half the window is owed.
+- A `WINDOW` that would make the sender's credit larger than `window` resets the stream with `flow_violation`.
+- A sender with no credit waits, and the wait reaches the connection on its own side. A stalled stream stalls only itself.
+- The bound for a connection is `max_streams × window` of buffered data in each direction: 16 MiB at the defaults.
+- **Fairness.** Each end writes with one goroutine that takes control frames first, in the order they were queued, and then
+  one `DATA` frame of at most `max_frame` bytes from the next stream in turn. A control frame therefore waits for one
+  `DATA` frame at most, and a stream with data waits for one frame of every other stream with data.
+
+### 8.7 What happens to open streams
+
+| Event | Streams |
+| --- | --- |
+| The local side closes a stream | `CLOSE`, and `RESET cancelled` if the peer has not sent `CLOSE` (§8.4) |
+| `RESET` from the peer | That stream ends; a reader gets the code, and bytes not read yet are dropped |
+| A protocol error on the connection (§8.2) | The connection closes with `1002` or `1009`; every stream ends with `protocol` |
+| The local end closes the session | Every stream ends with `shutdown` |
+| The connection is lost, closed by the peer, or closed after a heartbeat timeout or the drain | Every stream ends with the connection's error; nothing resumes |
+
+A stream's `Read` after the peer's `CLOSE` returns the buffered data and then end of file.
+
+### 8.8 Heartbeat, `GOAWAY`, close
+
+- The relay sends `PING` every `ping_interval`, and the runner answers `PONG`. The runner sends its own `PING` when it has heard
+  nothing for more than one interval. Either end that has received no frame of any kind for three intervals closes the
+  connection with `1000`. Pings are frames of this protocol, not WebSocket control frames, because intermediaries answer those.
+- `GOAWAY` from the relay: no new stream is opened (a relay's `Open` returns `ErrGoAway`, a runner's `Accept` returns it once
+  no `OPEN` is waiting, and an `OPEN` that still arrives is answered `RESET refused`). The open streams go on. The relay closes the
+  connection with `1000` when the last stream has ended and everything queued was written, or 30 seconds after the `GOAWAY`.
+
+Close codes of the WebSocket:
+
+| Code | Meaning |
+| --- | --- |
+| 1000 | Normal: a local close, a heartbeat timeout, the end of a drain |
+| 1002 | Protocol error (§8.2, §8.3) |
+| 1009 | A frame over `max_frame` |
+| 1013 | Try again: the relay is full |
+| 4000 | `replaced`: a newer connection of the same machine |
+| 4001 | `revoked`: the machine no longer holds a session, or is revoked |
+| 4002 | `ticket`: the ticket was refused |
+
+The package defines all of them; it sends `1000`, `1002` and `1009`. The others belong to the service that accepts
+the connection.
+
+### 8.9 Evolution inside version 1
+
+Unknown JSON fields are ignored. A frame type added later is sent only when both `HELLO`s list its name in `features`; the
+package keeps the names both ends list (`Limits.Features`) and defines no type that needs one. An unknown type that arrives
+without that closes with `1002`. Anything that changes the meaning of an existing frame or limit is protocol version 2 (§7).
+
+### 8.10 Fixtures
+
+[`fixtures/v1/tunnel/`](fixtures/v1/tunnel/) holds frame sequences, byte-exact, in the text format of
+[`fixtures/README.md`](fixtures/README.md) (`*.frames`, not JSON). There is a file for each frame type and one for each
+scenario of this section. The package's tests run each file twice, with the package as the relay and as the runner, and fail if a
+frame type or a scenario has no file.
+
+## 9. Not in protocol 1 yet
 
 Each of these is designed in DESIGN.md §6 and comes with its own section and fixtures:
 
@@ -1222,8 +1413,8 @@ Each of these is designed in DESIGN.md §6 and comes with its own section and fi
   has no body in protocol 1, and a later release can add the field, which is not a breaking change.
 - `POST /runner/v1/sessions/:id/log` and live-log chunks: not built (Alex, 2026-11-11). A runner
   session's terminal is read as a hosted one's, through `exec` and `tmux capture-pane`, which is
-  one `exec` op (§6.3); the live view of a runner session comes with the interactive tunnel
-  (DESIGN.md §15 task 16). The `local` log driver and the follow of the container's log are not
+  one `exec` op (§6.3); the live view of a runner session comes with the interactive tunnel's browser
+  path (DESIGN.md §15 task 16; the tunnel's frames are §8). The `local` log driver and the follow of the container's log are not
   built either.
 - `POST /runner/v1/sessions/:id/events`: later.
 - A result whose encoded body is over the gateway's 2 MiB cap is still answered

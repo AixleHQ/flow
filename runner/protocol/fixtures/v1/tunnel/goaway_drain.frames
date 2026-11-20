@@ -1,0 +1,24 @@
+# After GOAWAY no stream opens, the open ones finish, and the relay closes when the last is gone.
+# (format: runner/protocol/fixtures/README.md)
+
+> 01 00000000 7b2276223a312c226d61785f6672616d65223a33323736382c226d61785f73747265616d73223a36342c2277696e646f77223a3236323134342c2270696e675f696e74657276616c223a32302c2273657373696f6e5f6964223a6e756c6c7d # relay HELLO {"v":1,"max_frame":32768,"max_streams":64,"window":262144,"ping_interval":20,"session_id":null}
+< 01 00000000 7b2276223a312c226d61785f6672616d65223a33323736382c226d61785f73747265616d73223a36342c2277696e646f77223a3236323134342c2272756e6e65725f76657273696f6e223a22312e302e30227d # runner HELLO {"v":1,"max_frame":32768,"max_streams":64,"window":262144,"runner_version":"1.0.0"}
+@do open session=123 port=7681
+> 02 00000001 7b2273657373696f6e5f6964223a3132332c22706f7274223a373638317d # OPEN {"session_id":123,"port":7681}
+@do accept session=123 port=7681
+< 03 00000001                                  # OPEN_OK
+@do goaway
+> 0a 00000000
+@do open session=123 port=7681 err=goaway
+@do accept side=runner err=goaway
+@do write side=relay data=6c617374
+> 04 00000001 6c617374
+@do read side=runner data=6c617374
+@do write side=runner data=61636b
+< 04 00000001 61636b
+@do read side=relay data=61636b
+@do closewrite side=relay
+> 06 00000001
+@do closewrite side=runner
+< 06 00000001
+@closed 1000 side=relay
