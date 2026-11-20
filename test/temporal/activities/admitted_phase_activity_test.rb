@@ -319,6 +319,86 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
     assert_equal "finished", @session.reload.state
   end
 
+  # == suspend (Sessions::Suspension) ==
+
+  include CheckpointStorageHelper
+
+  # The strategy is where the checkpoint is taken; here it is a stand-in that records
+  # what it was asked and, when asked to suspend, leaves a checkpoint as the real one does.
+  def stub_suspendable_cleanup(take_checkpoint: true)
+    use_checkpoint_storage
+    @session.update!(session_type: "agent_session", mode: "interactive", state: "ready")
+    asked = []
+    session = @session
+    helper = self
+    strategy = Object.new
+    strategy.define_singleton_method(:before_cleanup) do |**state|
+      asked << state[:suspend]
+      helper.create_checkpoint(session) if state[:suspend] && take_checkpoint
+      {}
+    end
+    @session.stubs(:strategy).returns(strategy)
+    SessionAdmission.stubs(:find).with(@admission.id).returns(@admission)
+    @admission.stubs(:terminal_session).returns(@session)
+    @runtime.stubs(:session_absent?).returns(false, true)
+    @runtime.stubs(:cleanup_session)
+    asked
+  end
+
+  test "an interactive session that reaches its limit is suspended, not finished" do
+    asked = stub_suspendable_cleanup
+    @session.update!(ready_at: (Sessions::Suspension::TIME_LIMIT - 1.minute).ago)
+
+    freeze_time do
+      cleanup
+
+      @session.reload
+      assert_equal [ true ], asked
+      assert_equal "suspended", @session.state
+      assert_equal 30.days.from_now, @session.restore_expires_at
+    end
+    assert @admission.reload.released_at, "a suspended session holds no slot"
+  ensure
+    restore_checkpoint_storage
+  end
+
+  test "a session its owner suspended is suspended" do
+    stub_suspendable_cleanup
+    @session.update!(ready_at: 1.hour.ago, finishing_at: Time.current,
+                     metadata: { Sessions::Suspension::REQUESTED_KEY => Time.current.iso8601 })
+
+    cleanup
+
+    assert_equal "suspended", @session.reload.state
+  ensure
+    restore_checkpoint_storage
+  end
+
+  test "a checkpoint that could not be taken ends the session as usual" do
+    asked = stub_suspendable_cleanup(take_checkpoint: false)
+    @session.update!(ready_at: Sessions::Suspension::TIME_LIMIT.ago)
+
+    cleanup
+
+    assert_equal [ true ], asked
+    assert_equal "finished", @session.reload.state
+    assert_nil @session.suspended_at
+  ensure
+    restore_checkpoint_storage
+  end
+
+  test "a session finished well inside its limit is not suspended" do
+    asked = stub_suspendable_cleanup
+    @session.update!(ready_at: 1.hour.ago, finishing_at: Time.current)
+
+    cleanup
+
+    assert_equal [ nil ], asked
+    assert_equal "finished", @session.reload.state
+  ensure
+    restore_checkpoint_storage
+  end
+
   test "output collection does not repeat when cleanup is retried" do
     strategy = mock("strategy")
     @session.stubs(:strategy).returns(strategy)

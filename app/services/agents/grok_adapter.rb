@@ -124,6 +124,12 @@ module Agents
     # to scroll back to. `--no-alt-screen` alone is not enough: it still repaints one
     # viewport-sized frame, so earlier turns never reach the scrollback. `--minimal` (the
     # CLI calls it experimental) prints the conversation into the scrollback.
+    # Resume, measured 2026-11-20. Grok also writes what it learns into memory-v2/,
+    # which is left behind: the conversation is what is being restored.
+    def conversation_paths = [ ".grok/sessions/%2Fworkspace" ]
+    def conversation_id_command = "ls -td .grok/sessions/%2Fworkspace/*/ 2>/dev/null | head -1 | xargs -r basename"
+    def resume_arguments(id) = "--resume #{id}"
+
     def session_command(mode:, model: nil, effort: nil)
       parts = [ "grok", "--yolo", "--minimal" ]
       parts += [ "--model", Shellwords.shellescape(model) ] if model

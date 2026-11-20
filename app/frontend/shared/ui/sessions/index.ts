@@ -4,6 +4,7 @@ export { ConsoleFrame } from './ConsoleFrame';
 export { DetailHeader, type Crumb, type HeaderStat } from './DetailHeader';
 export { LiveTerminal } from './LiveTerminal';
 export { ModeTag } from './ModeTag';
+export { RestoreSessionButton } from './RestoreSessionButton';
 export { FormSection, ModeCards, RuntimeTiles } from './SelectableTiles';
 export { SessionCard, type SessionCardData } from './SessionCard';
 export { StatusTag } from './StatusTag';
