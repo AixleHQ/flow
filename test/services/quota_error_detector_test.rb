@@ -266,6 +266,13 @@ class QuotaErrorDetectorTest < ActiveSupport::TestCase
     end
   end
 
+  test "detects grok free Grok Build limit message" do
+    text = "You've reached your free Grok Build usage limit for now. Get SuperGrok for much higher limits, or try again later"
+    result = QuotaErrorDetector.detect(text)
+    assert result.quota_error?
+    assert_equal :xai, result.provider
+  end
+
   test "detects grok usage balance exhausted classification" do
     result = QuotaErrorDetector.detect("request failed: usage balance exhausted")
     assert result.quota_error?

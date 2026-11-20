@@ -453,6 +453,18 @@ module Agents
       refute settings_for.call({}).key?("promptCacheTtl")
     end
 
+    test "an automatic session denies a permission prompt, an interactive one leaves it to the person" do
+      permissions_for = lambda do |workflow_config|
+        files = @adapter.config_files({ "primaryApiKey" => "sk" }, workflow_config)
+        JSON.parse(files["/home/claude/.claude/settings.json"])["permissions"]
+      end
+
+      assert_equal true, permissions_for.call({ mode: "non_interactive" })["denyInsteadOfPrompting"] # rubocop:disable Minitest/AssertTruthy
+      assert_equal "bypassPermissions", permissions_for.call({ mode: "non_interactive" })["defaultMode"]
+      refute permissions_for.call({ mode: "interactive" }).key?("denyInsteadOfPrompting")
+      refute permissions_for.call({}).key?("denyInsteadOfPrompting")
+    end
+
     test "settings let Claude Code follow the terminal's light or dark theme" do
       files = @adapter.config_files({ "primaryApiKey" => "sk" }, { mode: "interactive" })
       settings = JSON.parse(files["/home/claude/.claude/settings.json"])

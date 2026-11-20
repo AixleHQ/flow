@@ -13,7 +13,7 @@
             {
               "key": "service.version",
               "value": {
-                "stringValue": "1.0.108"
+                "stringValue": "1.0.114"
               }
             },
             {
@@ -34,7 +34,7 @@
           {
             "scope": {
               "name": "github.copilot",
-              "version": "1.0.108"
+              "version": "1.0.114"
             },
             "metrics": [
               {
@@ -72,7 +72,7 @@
                         {
                           "key": "server.address",
                           "value": {
-                            "stringValue": "otlp-capture-70896-mock"
+                            "stringValue": "otlp-capture-85534-mock"
                           }
                         },
                         {
@@ -82,17 +82,17 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1794289420916585110",
-                      "timeUnixNano": "1794289421069703602",
+                      "startTimeUnixNano": "1795148222854241269",
+                      "timeUnixNano": "1795148223596038068",
                       "count": "1",
-                      "sum": 0.055900678,
+                      "sum": 0.19659351,
                       "bucketCounts": [
                         "0",
                         "0",
                         "0",
+                        "0",
+                        "0",
                         "1",
-                        "0",
-                        "0",
                         "0",
                         "0",
                         "0",
@@ -119,8 +119,8 @@
                         40.96,
                         81.92
                       ],
-                      "min": 0.055900678,
-                      "max": 0.055900678
+                      "min": 0.19659351,
+                      "max": 0.19659351
                     }
                   ],
                   "aggregationTemporality": "AGGREGATION_TEMPORALITY_CUMULATIVE"
@@ -161,7 +161,7 @@
                         {
                           "key": "server.address",
                           "value": {
-                            "stringValue": "otlp-capture-70896-mock"
+                            "stringValue": "otlp-capture-85534-mock"
                           }
                         },
                         {
@@ -171,16 +171,16 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1794289420916605402",
-                      "timeUnixNano": "1794289421069706352",
+                      "startTimeUnixNano": "1795148222856576707",
+                      "timeUnixNano": "1795148223596213278",
                       "count": "1",
-                      "sum": 0.033540465,
+                      "sum": 0.093970445,
                       "bucketCounts": [
                         "0",
                         "0",
+                        "0",
+                        "0",
                         "1",
-                        "0",
-                        "0",
                         "0",
                         "0",
                         "0",
@@ -208,8 +208,8 @@
                         40.96,
                         81.92
                       ],
-                      "min": 0.033540465,
-                      "max": 0.033540465
+                      "min": 0.093970445,
+                      "max": 0.093970445
                     }
                   ],
                   "aggregationTemporality": "AGGREGATION_TEMPORALITY_CUMULATIVE"
@@ -250,7 +250,7 @@
                         {
                           "key": "server.address",
                           "value": {
-                            "stringValue": "otlp-capture-70896-mock"
+                            "stringValue": "otlp-capture-85534-mock"
                           }
                         },
                         {
@@ -260,8 +260,8 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1794289420916626069",
-                      "timeUnixNano": "1794289421069708102",
+                      "startTimeUnixNano": "1795148222858108221",
+                      "timeUnixNano": "1795148223596367696",
                       "count": "1",
                       "sum": 155,
                       "bucketCounts": [
@@ -339,7 +339,7 @@
                         {
                           "key": "server.address",
                           "value": {
-                            "stringValue": "otlp-capture-70896-mock"
+                            "stringValue": "otlp-capture-85534-mock"
                           }
                         },
                         {
@@ -349,8 +349,8 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1794289420916644361",
-                      "timeUnixNano": "1794289421069710102",
+                      "startTimeUnixNano": "1795148222858123055",
+                      "timeUnixNano": "1795148223596416113",
                       "count": "1",
                       "sum": 7,
                       "bucketCounts": [
@@ -426,9 +426,15 @@
                           }
                         },
                         {
+                          "key": "gen_ai.token.modality",
+                          "value": {
+                            "stringValue": "unknown"
+                          }
+                        },
+                        {
                           "key": "server.address",
                           "value": {
-                            "stringValue": "otlp-capture-70896-mock"
+                            "stringValue": "otlp-capture-85534-mock"
                           }
                         },
                         {
@@ -436,16 +442,10 @@
                           "value": {
                             "intValue": "8080"
                           }
-                        },
-                        {
-                          "key": "gen_ai.token.modality",
-                          "value": {
-                            "stringValue": "unknown"
-                          }
                         }
                       ],
-                      "startTimeUnixNano": "1794289420916661028",
-                      "timeUnixNano": "1794289421069711810",
+                      "startTimeUnixNano": "1795148222858268973",
+                      "timeUnixNano": "1795148223596715325",
                       "asInt": "155"
                     }
                   ],
@@ -494,7 +494,7 @@
                         {
                           "key": "server.address",
                           "value": {
-                            "stringValue": "otlp-capture-70896-mock"
+                            "stringValue": "otlp-capture-85534-mock"
                           }
                         },
                         {
@@ -504,8 +504,8 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1794289420916676528",
-                      "timeUnixNano": "1794289421069713852",
+                      "startTimeUnixNano": "1795148222858274973",
+                      "timeUnixNano": "1795148223596883284",
                       "asInt": "7"
                     }
                   ],
@@ -554,7 +554,7 @@
                         {
                           "key": "server.address",
                           "value": {
-                            "stringValue": "otlp-capture-70896-mock"
+                            "stringValue": "otlp-capture-85534-mock"
                           }
                         },
                         {
@@ -564,8 +564,8 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1794289420916682695",
-                      "timeUnixNano": "1794289421069715227",
+                      "startTimeUnixNano": "1795148222858284265",
+                      "timeUnixNano": "1795148223596885534",
                       "asInt": "30"
                     }
                   ],
@@ -614,7 +614,7 @@
                         {
                           "key": "server.address",
                           "value": {
-                            "stringValue": "otlp-capture-70896-mock"
+                            "stringValue": "otlp-capture-85534-mock"
                           }
                         },
                         {
@@ -624,8 +624,8 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1794289420916691487",
-                      "timeUnixNano": "1794289421069716602",
+                      "startTimeUnixNano": "1795148222858300557",
+                      "timeUnixNano": "1795148223596887201",
                       "asInt": "5"
                     }
                   ],
@@ -662,7 +662,7 @@
                         {
                           "key": "server.address",
                           "value": {
-                            "stringValue": "otlp-capture-70896-mock"
+                            "stringValue": "otlp-capture-85534-mock"
                           }
                         },
                         {
@@ -672,15 +672,15 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1794289420916729779",
-                      "timeUnixNano": "1794289421069718560",
+                      "startTimeUnixNano": "1795148222858307223",
+                      "timeUnixNano": "1795148223597260413",
                       "count": "1",
-                      "sum": 0.031315231,
+                      "sum": 0.071838034,
                       "bucketCounts": [
                         "0",
                         "0",
-                        "1",
                         "0",
+                        "1",
                         "0",
                         "0",
                         "0",
@@ -709,8 +709,8 @@
                         40.96,
                         81.92
                       ],
-                      "min": 0.031315231,
-                      "max": 0.031315231
+                      "min": 0.071838034,
+                      "max": 0.071838034
                     }
                   ],
                   "aggregationTemporality": "AGGREGATION_TEMPORALITY_CUMULATIVE"
@@ -731,13 +731,13 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1794289420916767404",
-                      "timeUnixNano": "1794289421069719727",
+                      "startTimeUnixNano": "1795148222858314348",
+                      "timeUnixNano": "1795148223597413581",
                       "count": "1",
-                      "sum": 0.055900678,
+                      "sum": 0.19659351,
                       "bucketCounts": [
-                        "1",
                         "0",
+                        "1",
                         "0",
                         "0",
                         "0",
@@ -780,8 +780,8 @@
                         43200,
                         86400
                       ],
-                      "min": 0.055900678,
-                      "max": 0.055900678
+                      "min": 0.19659351,
+                      "max": 0.19659351
                     }
                   ],
                   "aggregationTemporality": "AGGREGATION_TEMPORALITY_CUMULATIVE"
@@ -802,8 +802,8 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1794289420916774988",
-                      "timeUnixNano": "1794289421069720685",
+                      "startTimeUnixNano": "1795148222858318098",
+                      "timeUnixNano": "1795148223597426414",
                       "count": "1",
                       "sum": 1,
                       "bucketCounts": [
@@ -853,8 +853,8 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1794289420916821072",
-                      "timeUnixNano": "1794289421069721644",
+                      "startTimeUnixNano": "1795148222858320515",
+                      "timeUnixNano": "1795148223597430123",
                       "count": "1",
                       "sum": 0,
                       "bucketCounts": [
@@ -904,8 +904,8 @@
                           }
                         }
                       ],
-                      "startTimeUnixNano": "1794289420916883572",
-                      "timeUnixNano": "1794289421069723102",
+                      "startTimeUnixNano": "1795148222858331640",
+                      "timeUnixNano": "1795148223597434289",
                       "count": "1",
                       "sum": 1,
                       "bucketCounts": [
@@ -971,7 +971,7 @@
             {
               "key": "service.version",
               "value": {
-                "stringValue": "1.0.108"
+                "stringValue": "1.0.114"
               }
             },
             {
@@ -992,18 +992,18 @@
           {
             "scope": {
               "name": "github.copilot",
-              "version": "1.0.108"
+              "version": "1.0.114"
             },
             "spans": [
               {
-                "traceId": "527361a8ab3795e415852a6e36396dc2",
-                "spanId": "e1f7344913205a62",
-                "parentSpanId": "29b962070e38b16b",
+                "traceId": "275f817f11a51b4bf8c513a704a50ca2",
+                "spanId": "c5fb89dd2c00f09b",
+                "parentSpanId": "4814403cda7bb1d5",
                 "flags": 257,
                 "name": "chat claude-sonnet-4-5",
                 "kind": "SPAN_KIND_CLIENT",
-                "startTimeUnixNano": "1794289421000000000",
-                "endTimeUnixNano": "1794289421033000000",
+                "startTimeUnixNano": "1795148223315000000",
+                "endTimeUnixNano": "1795148223409000000",
                 "attributes": [
                   {
                     "key": "gen_ai.operation.name",
@@ -1026,7 +1026,7 @@
                   {
                     "key": "gen_ai.conversation.id",
                     "value": {
-                      "stringValue": "1bbad4d6-4605-4f63-a484-9725322c17c7"
+                      "stringValue": "dff2abc3-d06a-48a8-bddf-2a9c6142f625"
                     }
                   },
                   {
@@ -1036,15 +1036,9 @@
                     }
                   },
                   {
-                    "key": "gen_ai.request.reasoning.level",
-                    "value": {
-                      "stringValue": "medium"
-                    }
-                  },
-                  {
                     "key": "server.address",
                     "value": {
-                      "stringValue": "otlp-capture-70896-mock"
+                      "stringValue": "otlp-capture-85534-mock"
                     }
                   },
                   {
@@ -1110,7 +1104,7 @@
                   {
                     "key": "github.copilot.server_duration",
                     "value": {
-                      "doubleValue": 32
+                      "doubleValue": 72
                     }
                   },
                   {
@@ -1128,26 +1122,26 @@
                   {
                     "key": "github.copilot.interaction_id",
                     "value": {
-                      "stringValue": "db72b40b-a8a5-4b98-ba55-e2918a2c8faf"
+                      "stringValue": "d5eebfe8-46ef-4780-9f2c-50d73dcfd43b"
                     }
                   },
                   {
                     "key": "gen_ai.response.time_to_first_chunk",
                     "value": {
-                      "doubleValue": 0.031315231
+                      "doubleValue": 0.071838034
                     }
                   }
                 ],
                 "status": {}
               },
               {
-                "traceId": "527361a8ab3795e415852a6e36396dc2",
-                "spanId": "29b962070e38b16b",
+                "traceId": "275f817f11a51b4bf8c513a704a50ca2",
+                "spanId": "4814403cda7bb1d5",
                 "flags": 257,
                 "name": "invoke_agent",
                 "kind": "SPAN_KIND_INTERNAL",
-                "startTimeUnixNano": "1794289420985000000",
-                "endTimeUnixNano": "1794289421041000000",
+                "startTimeUnixNano": "1795148223249000000",
+                "endTimeUnixNano": "1795148223445000000",
                 "attributes": [
                   {
                     "key": "gen_ai.operation.name",
@@ -1164,13 +1158,13 @@
                   {
                     "key": "gen_ai.conversation.id",
                     "value": {
-                      "stringValue": "1bbad4d6-4605-4f63-a484-9725322c17c7"
+                      "stringValue": "dff2abc3-d06a-48a8-bddf-2a9c6142f625"
                     }
                   },
                   {
                     "key": "server.address",
                     "value": {
-                      "stringValue": "otlp-capture-70896-mock"
+                      "stringValue": "otlp-capture-85534-mock"
                     }
                   },
                   {
@@ -1230,7 +1224,7 @@
                 ],
                 "events": [
                   {
-                    "timeUnixNano": "1794289420985000000",
+                    "timeUnixNano": "1795148223249000000",
                     "name": "github.copilot.mcp.server.lifecycle",
                     "attributes": [
                       {
@@ -1248,7 +1242,7 @@
                     ]
                   },
                   {
-                    "timeUnixNano": "1794289420985000000",
+                    "timeUnixNano": "1795148223249000000",
                     "name": "github.copilot.mcp.server.lifecycle",
                     "attributes": [
                       {
@@ -1266,7 +1260,7 @@
                     ]
                   },
                   {
-                    "timeUnixNano": "1794289420985000000",
+                    "timeUnixNano": "1795148223249000000",
                     "name": "github.copilot.mcp.server.lifecycle",
                     "attributes": [
                       {
@@ -1284,7 +1278,7 @@
                     ]
                   },
                   {
-                    "timeUnixNano": "1794289420985000000",
+                    "timeUnixNano": "1795148223249000000",
                     "name": "github.copilot.mcp.server.lifecycle",
                     "attributes": [
                       {
@@ -1302,7 +1296,7 @@
                     ]
                   },
                   {
-                    "timeUnixNano": "1794289420985000000",
+                    "timeUnixNano": "1795148223249000000",
                     "name": "github.copilot.user.message",
                     "attributes": [
                       {
@@ -1314,7 +1308,7 @@
                       {
                         "key": "github.copilot.user.message.interaction_id",
                         "value": {
-                          "stringValue": "db72b40b-a8a5-4b98-ba55-e2918a2c8faf"
+                          "stringValue": "d5eebfe8-46ef-4780-9f2c-50d73dcfd43b"
                         }
                       },
                       {
@@ -1326,19 +1320,19 @@
                     ]
                   },
                   {
-                    "timeUnixNano": "1794289420999000000",
+                    "timeUnixNano": "1795148223307000000",
                     "name": "github.copilot.session.usage_info",
                     "attributes": [
                       {
                         "key": "github.copilot.token_limit",
                         "value": {
-                          "intValue": "128000"
+                          "intValue": "136000"
                         }
                       },
                       {
                         "key": "github.copilot.current_tokens",
                         "value": {
-                          "intValue": "15464"
+                          "intValue": "14955"
                         }
                       },
                       {

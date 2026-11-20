@@ -36,6 +36,15 @@ governance, community health — carry none.
   network outage, reports cost and token usage of runner sessions, and checks in a machine
   whose Docker daemon is down, which then shows **Failed** with the reason. No minimum runner
   version: older runners keep working.
+- **Sessions & Runs**: agent CLIs raised to Claude Code 2.1.329, Codex 0.171.0,
+  Cursor CLI 2026.11.19-f005e9d, Grok 1.0.89, Antigravity CLI 1.5.13, Kiro CLI 3.5.0
+  and Copilot CLI 1.0.114. In an automatic run, a Claude Code tool call that asks
+  for approval despite the permission bypass (a dangerous `rm`, an MCP sign-in) is
+  denied at once and the run goes on, instead of waiting for an answer. Kiro's
+  code-analysis tools stay off. GPT-6.2 Sol and Astra offer the max and ultra effort
+  levels in Codex. A Grok step that stops on its "free Grok Build usage limit" message
+  fails with that message instead of waiting for the no-output watchdog. Gemini CLI stays at 0.60.0: 0.70.0 still stops `--yolo` at a prompt
+  when the agent edits a build file or runs a workspace script.
 
 ### Fixed
 

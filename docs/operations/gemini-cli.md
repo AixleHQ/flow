@@ -27,13 +27,15 @@ credentials.
   0.64.0 narrowed it (#29672) but kept the prompt, so nearly every session would stop
   there. Neither has a setting, flag or policy rule that turns it off: both override an
   allow decision, an admin policy's included (checked against 0.65.0 on 2026-10-26, live
-  against a scripted model API; rechecked on 0.66.0 on 2026-11-04). Upstream #29833
-  limits the second check to external output, but it ships only from 0.67.0 (in
-  0.67.0-preview.0, not in 0.66.0), and even there running a workspace script that an
-  earlier `find` listed still prompts (upstream #30004). The build-file dialog stays in
-  every release, and no upstream issue asks for a switch. Recheck when a stable release
-  carries both #29833 and a fix for #30004 and makes the build-file check switchable. The
-  weekly canary keeps reporting the newer release; that is expected until then.
+  against a scripted model API; rechecked on 0.66.0 on 2026-11-04 and on 0.70.0 on
+  2026-11-20). Upstream #29833 (in every release from 0.67.0) limits the second check to
+  external output, but running a workspace script that an earlier `find` listed still
+  prompts (upstream #30004, open), and MCP tool output and `gh`/`curl` output count as
+  external, so a path a Flow tool returned would prompt too. The build-file dialog stays
+  in every release. Upstream PR #30268 (open since 2026-11-13) would skip both checks
+  under `--yolo` in a trusted folder, which `/workspace` is. Recheck when a stable release
+  carries #30268 or another switch for both checks. The weekly canary keeps reporting the
+  newer release; that is expected until then.
 - Executable: `gemini`.
 - Authentication: `GEMINI_API_KEY`; personal OAuth is not captured or injected.
 - Configuration: `/home/gemini/.gemini/settings.json`.

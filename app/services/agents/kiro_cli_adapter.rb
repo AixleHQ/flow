@@ -99,7 +99,11 @@ module Agents
       # Off by default in 3.0.0, pinned so a flipped default cannot move the chat onto
       # the alternate screen, where the tmux scrollback and the stored log replay would
       # hold a single frame (Codex flipped its own in 0.157).
-      "chat.startFullscreen" => false
+      "chat.startFullscreen" => false,
+      # Code-to-Spec analysis (`c2s_*` tools plus local code indexing) was opt-in in 3.0.0;
+      # from 3.5.0 it is on unless set to false wherever Kiro's server-side rollout reaches
+      # the account, which would change automatic runs without a changelog entry.
+      "chat.enableC2s" => false
     }.freeze
 
     # Kiro's current engine, the default since CLI 3.0. The flag still outranks a saved
