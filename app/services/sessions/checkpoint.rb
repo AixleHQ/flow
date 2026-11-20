@@ -4,8 +4,8 @@ require "shellwords"
 
 module Sessions
   # Takes a suspended session's checkpoint: one archive, built inside the container and
-  # put straight into object storage over a presigned PUT, as Sessions::LogCollector puts
-  # logs. Design: docs/design/session-suspend-restore.md §4.
+  # put straight into storage over Uploads::ContainerTransfer's URL.
+  # Design: docs/design/session-suspend-restore.md §4.
   #
   #   repos/<repository id>/head.bundle    commits on local branches no remote ref has
   #   repos/<repository id>/tracked.patch  staged and unstaged changes, `git diff --binary HEAD`
@@ -36,7 +36,9 @@ module Sessions
 
     def call
       key = "#{SecureRandom.hex(30)}.tar.gz"
-      url = cache_storage.presign(key, method: :put)[:url]
+      # Signed before the archive is built, so it has to outlive the whole script.
+      url = Uploads::ContainerTransfer.put_url(SessionCheckpointUploader, :cache, key, expires_in: SCRIPT_TIMEOUT + 300,
+                                                                                    host: @runtime.callback_url(:container_assets, @session))
       stdout, stderr, code = @runtime.exec(@container, [ "/bin/bash", "-c", script(url) ],
                                            stdout: true, stderr: true, timeout: SCRIPT_TIMEOUT + 60)
       lines = Array(stdout).join.lines.map { |line| line.chomp.split("\t", -1) }
@@ -48,7 +50,9 @@ module Sessions
         id: key, storage: :cache,
         metadata: { "filename" => "checkpoint.tar.gz", "size" => bytes, "mime_type" => "application/gzip" }
       )
-      SessionCheckpoint.create!(terminal_session: @session, archive: file, byte_size: bytes,
+      # As data, not as the file: Shrine uploads an assigned file object into the cache
+      # again before it promotes it, a second copy of up to 2 GB.
+      SessionCheckpoint.create!(terminal_session: @session, archive: file.to_json, byte_size: bytes,
                                 manifest: manifest(lines, bytes, workspace: archive[2] == "1"))
     end
 
@@ -60,8 +64,6 @@ module Sessions
     end
 
     private
-
-    def cache_storage = SessionCheckpointUploader.storages[:cache]
 
     def repositories
       RepositoryWorkspacePath.stored_map(@session).map { |id, path| [ id.to_s, path.to_s ] }

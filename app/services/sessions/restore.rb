@@ -58,7 +58,8 @@ module Sessions
       checkpoint = @session.restored_from_session&.session_checkpoint
       return record!(resume: false, notes: [ "The saved files were no longer available, so nothing was restored." ]) unless checkpoint
 
-      url = checkpoint.archive.url(expires_in: 1.hour.to_i)
+      url = Uploads::ContainerTransfer.get_url(checkpoint.archive, expires_in: 1.hour.to_i,
+                                                                   host: @runtime.callback_url(:container_assets, @session))
       return record!(resume: false, notes: [ "The saved files could not be fetched, so nothing was restored." ]) if url.blank?
 
       stdout, stderr, code = @runtime.exec(@container, [ "/bin/bash", "-c", script(url, checkpoint) ],

@@ -3,10 +3,11 @@
 require "rubygems/package"
 require "zlib"
 
-# A suspended session's archive goes from the container straight to object storage
-# (Sessions::Checkpoint), so suspend is only offered where the storage signs an upload.
-# The tests' memory storage does not; this swaps in one that does, and that also holds
-# what "the container uploaded" — the bytes a test gives it — under the signed key.
+# A suspended session's archive goes from the container straight to storage
+# (Sessions::Checkpoint) over a URL object storage signs. The tests' memory storage
+# cannot sign one, and the app would stand in for it (Uploads::ContainerTransfer); this
+# swaps in one that signs, and that also holds what "the container uploaded" — the
+# bytes a test gives it — under the signed key.
 #
 # The swap is on SessionCheckpointUploader itself: a Shrine subclass keeps its own copy
 # of the storage registry.
@@ -23,6 +24,7 @@ module CheckpointStorageHelper
   # The store hands out a URL the container can download from, as S3 signs one.
   class Store < Shrine::Storage::Memory
     def url(id, **) = "https://bucket.test/store/#{id}"
+    def presign(id, method: :get, **) = { url: url(id), method: method }
   end
 
   def use_checkpoint_storage(archive: "")
