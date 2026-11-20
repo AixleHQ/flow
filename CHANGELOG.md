@@ -14,6 +14,9 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Fixed
+- **Profile**: signing in to Antigravity again is no longer undone by a session that
+  started before the new login. When that session ended it wrote its older token back
+  over the new one, and the next session was refused with the old login's error.
 - Runners: starting a session through the API on a runner the project cannot use (another
   project's, or another company's) answers `403` instead of `422`. A machine revoked from its row
   on the runner page reads **Revoked**; one that ran `aixle-runner unregister` still reads
