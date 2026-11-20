@@ -29,6 +29,9 @@ governance, community health — carry none.
   anything. When a column trigger cannot start its run, the card gets a comment saying why
   instead of nothing happening. Templates that ship such a trigger ask for auto-run on
   those steps before they switch it to auto.
+- **Tasks**: a card dragged to another column no longer jumps back to its old column for a
+  moment when the board refreshes just after the drop, which made moving several cards in a
+  row flicker.
 - **Profile**: signing in to Antigravity again is no longer undone by a session that
   started before the new login. When that session ended it wrote its older token back
   over the new one, and the next session was refused with the old login's error.

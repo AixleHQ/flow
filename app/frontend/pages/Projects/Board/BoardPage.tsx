@@ -220,6 +220,8 @@ const BoardPage = () => {
   const {
     tasks: localTasks,
     setTasks: setLocalTasks,
+    pinMove,
+    settleMove,
     counts: columnCounts,
     hasMore: columnHasMore,
     loading: columnLoading,
@@ -500,6 +502,8 @@ const BoardPage = () => {
     setTasks: setLocalTasks,
     columns: localColumns,
     setColumns: setLocalColumns,
+    pinMove,
+    settleMove,
   });
 
   const openCreateForColumn = (columnId: number) => {
