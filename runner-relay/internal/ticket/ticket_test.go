@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/alicebob/miniredis/v2"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -95,26 +95,26 @@ func TestVerifyRefusals(t *testing.T) {
 	none := signWith(t, jwt.SigningMethodNone, jwt.UnsafeAllowNoneSignatureType, validMap(now))
 
 	cases := map[string]string{
-		"wrong key":          Sign([]byte("another-key-of-32-characters-xxxx"), claims(now)),
-		"wrong version":      Sign(key, wrongVersion),
-		"no id":              Sign(key, noID),
-		"bad environment":    Sign(key, badEnv),
-		"no exp":             signWith(t, jwt.SigningMethodHS256, key, noExp),
-		"alg none":           none,
-		"alg none, no sig":   strings.TrimSuffix(none, ".") ,
+		"wrong key":           Sign([]byte("another-key-of-32-characters-xxxx"), claims(now)),
+		"wrong version":       Sign(key, wrongVersion),
+		"no id":               Sign(key, noID),
+		"bad environment":     Sign(key, badEnv),
+		"no exp":              signWith(t, jwt.SigningMethodHS256, key, noExp),
+		"alg none":            none,
+		"alg none, no sig":    strings.TrimSuffix(none, "."),
 		"HS512 under the key": signWith(t, jwt.SigningMethodHS512, key, validMap(now)),
 		"HS384 under the key": signWith(t, jwt.SigningMethodHS384, key, validMap(now)),
-		"RS256":              signWith(t, jwt.SigningMethodRS256, rsaKey, validMap(now)),
-		"no prefix":          strings.TrimPrefix(good, Prefix),
-		"empty":              "",
-		"prefix only":        Prefix,
-		"no signature":       Prefix + parts[0] + "." + parts[1],
-		"empty signature":    Prefix + parts[0] + "." + parts[1] + ".",
-		"tampered claims":    Prefix + parts[0] + "." + parts[1] + "x." + parts[2],
-		"tampered signature": Prefix + parts[0] + "." + parts[1] + "." + parts[2][:len(parts[2])-2] + "AA",
-		"four parts":         good + ".x",
-		"not base64":         Prefix + parts[0] + ".!!!." + parts[2],
-		"too long":           Prefix + strings.Repeat("a", MaxLength) + ".b.c",
+		"RS256":               signWith(t, jwt.SigningMethodRS256, rsaKey, validMap(now)),
+		"no prefix":           strings.TrimPrefix(good, Prefix),
+		"empty":               "",
+		"prefix only":         Prefix,
+		"no signature":        Prefix + parts[0] + "." + parts[1],
+		"empty signature":     Prefix + parts[0] + "." + parts[1] + ".",
+		"tampered claims":     Prefix + parts[0] + "." + parts[1] + "x." + parts[2],
+		"tampered signature":  Prefix + parts[0] + "." + parts[1] + "." + parts[2][:len(parts[2])-2] + "AA",
+		"four parts":          good + ".x",
+		"not base64":          Prefix + parts[0] + ".!!!." + parts[2],
+		"too long":            Prefix + strings.Repeat("a", MaxLength) + ".b.c",
 	}
 	for name, token := range cases {
 		t.Run(name, func(t *testing.T) {
