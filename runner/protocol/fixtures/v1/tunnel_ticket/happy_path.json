@@ -1,0 +1,29 @@
+{
+  "description": "A machine that holds a session asks for a tunnel ticket with its access token and no body, and gets `artun_` and the time it expires, in whole seconds (PROTOCOL.md §5.11). Asking again answers another ticket, and the machine's polls go on as before.",
+  "steps": [
+    {"given": "tunnel_on"},
+    {"given": "registered_machine", "as": "m"},
+    {"given": "session_on_machine", "machine": "m", "as": "s"},
+    {"given": "session_holds_machine", "machine": "m", "session": "s"},
+    {
+      "request": {"method": "POST", "path": "/runner/v1/tunnel-ticket", "token": "{{m.access_token}}"},
+      "response": {
+        "status": 200,
+        "headers": {"Cache-Control": "no-store"},
+        "body": {"ticket": {"$prefix": "artun_"}, "expires_at": {"$type": "timestamp"}}
+      }
+    },
+    {
+      "request": {"method": "POST", "path": "/runner/v1/tunnel-ticket", "token": "{{m.access_token}}"},
+      "response": {
+        "status": 200,
+        "headers": {"Cache-Control": "no-store"},
+        "body": {"ticket": {"$prefix": "artun_"}, "expires_at": {"$type": "timestamp"}}
+      }
+    },
+    {
+      "request": {"method": "GET", "path": "/runner/v1/ops?after=0&wait=0", "token": "{{m.access_token}}"},
+      "response": {"status": 200, "headers": {"Cache-Control": "no-store"}, "body": {"ops": []}}
+    }
+  ]
+}

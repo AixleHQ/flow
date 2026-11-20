@@ -181,6 +181,21 @@ ports: `container.start` sends a session's port, and the runner listens there.
 | `RUNNER_PROXY_HOST_PORT_BASE`  | no       | `20000` | With `network: host`, a session listens on the machine's `127.0.0.1` on this base plus its id mod `RUNNER_PROXY_HOST_PORT_SPAN`. |
 | `RUNNER_PROXY_HOST_PORT_SPAN`  | no       | `10000` | The size of that port range, at least 1. Base plus span must not pass 65536, the base must be at least 1024, and the range must not include any of the agent image's own ports (7681, 7682, 4040, 4041, 8443, 8888). A deployed app refuses to boot on a proxy port outside these rules. |
 
+### External runners' interactive tunnel
+
+The `runner-relay` service holds one WebSocket per machine
+(`docs/design/agent-runtimes/runner-relay.md`). The app mints the tickets a machine
+opens it with (`POST /runner/v1/tunnel-ticket`, `runner/protocol/PROTOCOL.md` §5.11); the
+relay verifies them, with the same key. The relay's own variables are `RUNNER_RELAY_*`
+(`runner-relay/internal/config`), and are not read by the app.
+
+| Variable                       | Required | Default | Purpose                                                          |
+| ------------------------------ | -------- | ------- | ---------------------------------------------------------------- |
+| `RUNNERS_RELAY_TICKET_KEY`     | no       | none (development and test: a fixed value) | The HMAC key of tunnel tickets. The relay's `RUNNER_RELAY_TICKET_KEY` must be the same value. A key of its own, never `RUNNERS_SECRET_KEY`: a compromised relay must not read `runner_operations`. Generate with `openssl rand -hex 32`. Without it no ticket is minted. |
+| `RUNNERS_RELAY_INTERNAL_TOKEN` | no       | none    | The bearer the relay presents on its short calls to the app. Read by the internal endpoints of a later release. |
+| `RUNNERS_RELAY_PUBLIC_PATH`    | no       | `/runner/v1/tunnel` | The path on the gateway's host where a runner opens the WebSocket, which the ingress routes to the relay. It is sent to runners in the check-in's `config.tunnel.path`. |
+| `RUNNERS_RELAY_TUNNEL_MODE`    | no       | none    | `session`: tell runners to connect to the relay while their machine holds a session. Blank: tell them nothing, so no runner tries to connect. Turn it on only once the relay is deployed and its ingress route exists. |
+
 ### External runners' agent images
 
 A session on an external runner gets its own default agent images, set apart

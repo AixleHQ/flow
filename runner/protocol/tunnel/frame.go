@@ -255,11 +255,14 @@ func (f Frame) Reset() (ResetCode, string) {
 	return ResetCode(f.Payload[0]), text
 }
 
-func cutText(s string) string {
-	if len(s) <= MaxResetText {
+func cutText(s string) string { return cutUTF8(s, MaxResetText) }
+
+// cutUTF8 returns s cut to at most limit bytes, on a character boundary.
+func cutUTF8(s string, limit int) string {
+	if len(s) <= limit {
 		return s
 	}
-	s = s[:MaxResetText]
+	s = s[:limit]
 	for len(s) > 0 && !utf8.ValidString(s) {
 		s = s[:len(s)-1]
 	}

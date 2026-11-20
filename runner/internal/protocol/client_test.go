@@ -98,6 +98,12 @@ func TestClassify(t *testing.T) {
 		{"400 without the JSON shape", refusal(EndpointResult, 400, ""), ActionBug},
 		{"invalid_registration", refusal(EndpointRegister, 422, "invalid_registration"), ActionFixConfiguration},
 		{"result not_found", refusal(EndpointResult, 404, "not_found"), ActionDrop},
+		{"tunnel-ticket no_session", refusal(EndpointTunnelTicket, 409, "no_session"), ActionBackoff},
+		{"tunnel-ticket not offered", refusal(EndpointTunnelTicket, 404, "not_found"), ActionBackoff},
+		{"tunnel-ticket invalid_token", refusal(EndpointTunnelTicket, 401, "invalid_token"), ActionRefresh},
+		{"tunnel invalid_ticket", refusal(EndpointTunnel, 401, "invalid_ticket"), ActionBackoff},
+		{"tunnel ticket_replayed", refusal(EndpointTunnel, 403, "ticket_replayed"), ActionBackoff},
+		{"tunnel unsupported_protocol", refusal(EndpointTunnel, 400, "unsupported_protocol"), ActionUpdate},
 		{"502 from a proxy", refusal(EndpointOps, 502, ""), ActionBackoff},
 		{"network", &NetworkError{Endpoint: EndpointOps, Err: errors.New("reset")}, ActionBackoff},
 	}
@@ -231,6 +237,83 @@ func TestCheckInRefusalIsClassified(t *testing.T) {
 	r, ok := AsRefusal(err)
 	if !ok || r.Endpoint != EndpointCheckIn || r.Code != "runner_version_unsupported" || Classify(err) != ActionUpdate {
 		t.Fatalf("%v", err)
+	}
+}
+
+func TestCheckInReadsTheTunnelConfig(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"environment":{"id":42,"key":"k","display_name":"d","state":"registered"},` +
+			`"config":{"upload_max_bytes":1,"tunnel":{"mode":"session","path":"/runner/v1/tunnel","future":true}}}`))
+	}))
+	defer server.Close()
+	c, _ := NewClient(server.URL, "1.4.0", nil)
+
+	got, err := c.CheckIn(context.Background(), "aracc_one", CheckInRequest{})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Config.Tunnel == nil || got.Config.Tunnel.Mode != "session" || got.Config.Tunnel.Path != "/runner/v1/tunnel" {
+		t.Fatalf("tunnel config %+v", got.Config.Tunnel)
+	}
+}
+
+func TestTunnelTicketPostsWithTheAccessTokenAndReadsTheTicket(t *testing.T) {
+	var method, path, auth, version, proto, body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method, path, auth = r.Method, r.URL.Path, r.Header.Get("Authorization")
+		version, proto = r.Header.Get("X-Aixle-Runner-Version"), r.Header.Get("X-Aixle-Runner-Protocol")
+		raw := make([]byte, 16)
+		n, _ := r.Body.Read(raw)
+		body = string(raw[:n])
+		_, _ = w.Write([]byte(`{"ticket":"artun_abc.def","expires_at":"2026-11-20T15:00:00Z"}`))
+	}))
+	defer server.Close()
+	c, _ := NewClient(server.URL, "1.4.0", nil)
+
+	got, err := c.TunnelTicket(context.Background(), "aracc_one")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if method != http.MethodPost || path != "/runner/v1/tunnel-ticket" || auth != "Bearer aracc_one" || version != "1.4.0" || proto != "1" || body != "" {
+		t.Errorf("%s %s auth %q version %q protocol %q body %q", method, path, auth, version, proto, body)
+	}
+	if got.Ticket != "artun_abc.def" || !got.ExpiresAt.Equal(time.Date(2026, 11, 20, 15, 0, 0, 0, time.UTC)) {
+		t.Errorf("answer %+v", got)
+	}
+}
+
+func TestTunnelTicketRefusalWhileNoSessionIsHeld(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusConflict)
+		_, _ = w.Write([]byte(`{"error":"no_session","message":"This machine holds no session, so it opens no tunnel."}`))
+	}))
+	defer server.Close()
+	c, _ := NewClient(server.URL, "1.4.0", nil)
+
+	_, err := c.TunnelTicket(context.Background(), "aracc_one")
+
+	r, ok := AsRefusal(err)
+	if !ok || r.Status != 409 || r.Code != "no_session" || Classify(err) != ActionBackoff {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestTunnelURLKeepsTheHostAndAnyPrefix(t *testing.T) {
+	for platform, want := range map[string]string{
+		"https://flow.aixle.com":     "wss://flow.aixle.com/runner/v1/tunnel",
+		"https://flow.aixle.com/":    "wss://flow.aixle.com/runner/v1/tunnel",
+		"http://127.0.0.1:4003":      "ws://127.0.0.1:4003/runner/v1/tunnel",
+		"https://example.com/aixle/": "wss://example.com/aixle/runner/v1/tunnel",
+	} {
+		c, err := NewClient(platform, "1.4.0", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := c.TunnelURL(DefaultTunnelPath); got != want {
+			t.Errorf("%s: %s, want %s", platform, got, want)
+		}
 	}
 }
 

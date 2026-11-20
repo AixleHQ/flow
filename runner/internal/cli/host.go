@@ -38,6 +38,9 @@ type HostOptions struct {
 	// published image sets NoSelfUpdateEnv, since in a container the image tag is
 	// the version (DESIGN.md §14.4).
 	NoSelfUpdate bool
+	// TunnelURL is TunnelURLEnv's value: where the tunnel connects instead of the
+	// platform's own host. Empty, the usual case, is the platform's.
+	TunnelURL string
 	// Sleep waits between the tries of resuming the sessions while Docker is
 	// down. Replaced in tests; nil waits for real.
 	Sleep func(ctx context.Context, d time.Duration) error
@@ -199,7 +202,13 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 		Updater:  updater,
 		Logger:   opts.Logger,
 	}
-	return loop.Run(ctx)
+	// The interactive tunnel (PROTOCOL.md §8): the platform turns it on in the check-in's
+	// config, and the runner then connects to the relay while the machine holds a session.
+	var manager tunnelRunner
+	if m := tunnelManager(answer, client, source, env, opts.TunnelURL, opts.Logger); m != nil {
+		manager = m
+	}
+	return runWithTunnel(ctx, loop.Run, manager, opts.Logger)
 }
 
 // resumeBackoffMax bounds the wait between two tries of resuming the sessions'

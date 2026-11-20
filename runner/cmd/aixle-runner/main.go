@@ -185,7 +185,8 @@ func hostMode(ctx context.Context, args []string, stderr io.Writer) error {
 			return errUsage
 		}
 		return cli.RunHost(ctx, cli.HostOptions{StateDir: *stateDir, Logger: logger,
-			NoSelfUpdate: cli.SelfUpdateOff(os.Getenv(cli.NoSelfUpdateEnv))})
+			NoSelfUpdate: cli.SelfUpdateOff(os.Getenv(cli.NoSelfUpdateEnv)),
+			TunnelURL:    os.Getenv(cli.TunnelURLEnv)})
 	case "proxy":
 		if *socket == "" || *listen == "" {
 			return errUsage
