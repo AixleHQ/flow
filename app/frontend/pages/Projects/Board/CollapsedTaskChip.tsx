@@ -12,7 +12,7 @@ import type { Task } from './types';
 // Status a collapsed ticket chip advertises: the bar colour and the hover tooltip both come
 // from here, so the folded strip still tells you which tickets are running, failed or waiting
 // without unfolding the column.
-function collapsedTaskStatus(task: Task): { color: string; hasActiveRun: boolean; tooltipLabel: string } {
+function collapsedTaskStatus(task: Task): { color: string; hasActiveRun: boolean; statusLine: string } {
   const latestRun = task.recentWorkflowRuns?.[0];
   const hasPendingGates = (task.pendingGates?.length ?? 0) > 0;
   const staleGate = (task.ciGates ?? []).find((g) => gateCiStatus(g) === 'stale');
@@ -34,7 +34,7 @@ function collapsedTaskStatus(task: Task): { color: string; hasActiveRun: boolean
     hasActiveRun = false;
   }
 
-  const tooltipParts: string[] = [`#${task.number} · ${task.title}`];
+  const tooltipParts: string[] = [];
   if (latestRun) {
     if (latestRun.state === 'running' && latestRun.createdAt) {
       tooltipParts.push(`Running — ${formatElapsedTime(latestRun.createdAt)}`);
@@ -50,7 +50,7 @@ function collapsedTaskStatus(task: Task): { color: string; hasActiveRun: boolean
     tooltipParts.push(`CI stale — ${staleGate.diagnosticReason ?? 'no CI result'}`);
   }
 
-  return { color, hasActiveRun, tooltipLabel: tooltipParts.join(' · ') };
+  return { color, hasActiveRun, statusLine: tooltipParts.join(' · ') };
 }
 
 // A compact, draggable stand-in for a task shown inside a collapsed column strip.
@@ -73,10 +73,19 @@ export function CollapsedTaskChip({ task, onClick }: { task: Task; onClick?: (t:
     opacity: isDragging ? 0.4 : 1,
   };
 
-  const { color, hasActiveRun, tooltipLabel } = collapsedTaskStatus(task);
+  const { color, hasActiveRun, statusLine } = collapsedTaskStatus(task);
+
+  // The title may be arbitrarily long, so it wraps within the bounded width and the status sits on
+  // its own line after it, where a long title cannot push it out of view.
+  const tooltipLabel = (
+    <>
+      <div style={{ overflowWrap: 'anywhere' }}>{`#${task.number} · ${task.title}`}</div>
+      {statusLine && <div>{statusLine}</div>}
+    </>
+  );
 
   return (
-    <Tooltip {...CHIP_TOOLTIP_PROPS} label={tooltipLabel}>
+    <Tooltip {...CHIP_TOOLTIP_PROPS} label={tooltipLabel} multiline maw={320}>
       <Box
         ref={setNodeRef}
         aria-label={`Drag ${task.title}`}

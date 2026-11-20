@@ -1554,7 +1554,26 @@ describe('Projects/Board/BoardPage', () => {
     await userEvent.hover(chip);
 
     // A folded column still reports what happened to each ticket, without unfolding it.
-    expect(await screen.findByText('#1 · Wire up authentication · Status: failed')).toBeInTheDocument();
+    expect(await screen.findByText('#1 · Wire up authentication')).toBeInTheDocument();
+    expect(screen.getByText('Status: failed')).toBeInTheDocument();
+  });
+
+  it('wraps a long title in a bounded collapsed chip tooltip, with the status on its own line', async () => {
+    const title = 'Very long title '.repeat(13).trim();
+    const chip = await collapseBacklogAndGetChip(
+      makeTask({ id: 1, title, boardColumnId: 100, recentWorkflowRuns: [runOf({ state: 'failed' })] }),
+    );
+
+    await userEvent.hover(chip);
+
+    const titleLine = await screen.findByText(`#1 · ${title}`);
+    const statusLine = screen.getByText('Status: failed');
+    expect(titleLine).not.toBe(statusLine);
+    expect(titleLine.parentElement).toBe(statusLine.parentElement);
+    expect(titleLine).not.toContainElement(statusLine);
+    const tooltip = screen.getByRole('tooltip');
+    expect(tooltip).toHaveStyle({ maxWidth: '320px' });
+    expect(tooltip).toHaveStyle({ whiteSpace: 'normal' });
   });
 
   it('reports elapsed time instead of a bare state for a running ticket in a collapsed column', async () => {
@@ -1569,7 +1588,7 @@ describe('Projects/Board/BoardPage', () => {
 
     await userEvent.hover(chip);
 
-    expect(await screen.findByText(/^#1 · Wire up authentication · Running — /)).toBeInTheDocument();
+    expect(await screen.findByText(/^Running — /)).toBeInTheDocument();
   });
 
   it('reports a pending gate as "Waiting" in a collapsed column chip tooltip', async () => {
@@ -1585,7 +1604,7 @@ describe('Projects/Board/BoardPage', () => {
 
     await userEvent.hover(chip);
 
-    expect(await screen.findByText(/^#1 · Wire up authentication · Status: paused · Waiting — /)).toBeInTheDocument();
+    expect(await screen.findByText(/^Status: paused · Waiting — /)).toBeInTheDocument();
   });
 
   it('lists each recent run with its outcome, age, duration and failure reason on the workflow chip', async () => {
