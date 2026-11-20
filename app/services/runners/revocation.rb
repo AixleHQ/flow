@@ -18,6 +18,7 @@ module Runners
 
     def end_sessions!(runner)
       held = RunnerEnvironment.where(runner_id: runner.id).holding_session.pluck(:current_session_id)
+      signal_relay(runner)
 
       # A session that holds no machine and is not past its launch is waiting for
       # one, whatever its state says: `running` is set before a machine is taken.
@@ -31,14 +32,27 @@ module Runners
     end
 
     def end_session(runner, session, running:)
-      if running
-        RunnerEnvironment.where(runner_id: runner.id, current_session_id: session.id)
-                         .update_all(current_session_id: nil, updated_at: Time.current)
-      end
+      release_machines(runner, session) if running
       # A compare-and-set: a session that finished or was cancelled meanwhile keeps its outcome.
       SessionService.fail_session_if(session: session, error_message: message(runner, session, running))
     end
     private_class_method :end_session
+
+    # The machines let go of the session. `update_all` runs no callback, so each
+    # machine's signal is sent here.
+    def release_machines(runner, session)
+      scope = RunnerEnvironment.where(runner_id: runner.id, current_session_id: session.id)
+      ids = scope.pluck(:id)
+      scope.update_all(current_session_id: nil, updated_at: Time.current)
+      ids.each { |id| RelaySignals.machine_session(id, nil) }
+    end
+    private_class_method :release_machines
+
+    # The relay closes the connection of every machine of the runner (4001).
+    def signal_relay(runner)
+      RunnerEnvironment.where(runner_id: runner.id).pluck(:id).each { |id| RelaySignals.machine_revoked(id) }
+    end
+    private_class_method :signal_relay
 
     def message(runner, session, running)
       return "Runner \"#{runner.name}\" was revoked, so the session running on it ended." if running

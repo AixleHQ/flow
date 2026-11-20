@@ -41,8 +41,11 @@ module Runners
     end
 
     def release_machine(session)
-      RunnerEnvironment.where(runner_id: session.runner_id, current_session_id: session.id)
-                       .update_all(current_session_id: nil, updated_at: Time.current)
+      scope = RunnerEnvironment.where(runner_id: session.runner_id, current_session_id: session.id)
+      ids = scope.pluck(:id)
+      scope.update_all(current_session_id: nil, updated_at: Time.current)
+      # `update_all` runs no callback: the relay is told here.
+      ids.each { |id| RelaySignals.machine_session(id, nil) }
     end
     private_class_method :release_machine
   end

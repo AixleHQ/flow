@@ -76,6 +76,7 @@ module Runners
     # machine, or a Revoke on the runner page (DESIGN.md §9.3).
     def unregister!(environment, ended_by: RunnerEnvironmentStateMachine::UNREGISTERED)
       held_session_id = release_machine!(environment, ended_by)
+      RelaySignals.machine_revoked(environment.id)
       end_session(environment, held_session_id, ended_by) if held_session_id
     end
 

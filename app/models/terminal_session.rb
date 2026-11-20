@@ -172,6 +172,9 @@ class TerminalSession < ApplicationRecord
   broadcasts_to ->(s) { s }, on: :update
   broadcasts_to ->(s) { s.step_run.workflow_run }, on: :update, if: :step_run
   after_commit :broadcast_session_list_update, on: :update
+  # The relay closes a runner session's streams the moment it leaves `ready`, whichever
+  # way its state was written (the state machine's events or a direct write).
+  after_save :signal_relay_session_ended, if: :left_ready?
 
   # Validations
   validates :session_type, presence: true, inclusion: {
@@ -525,6 +528,14 @@ class TerminalSession < ApplicationRecord
   def on_started
     self.started_at = Time.current
     start_workflow_run_execution
+  end
+
+  def left_ready?
+    runner_id.present? && saved_change_to_state? && state_before_last_save == "ready"
+  end
+
+  def signal_relay_session_ended
+    Runners::RelaySignals.session_ended(id)
   end
 
   def on_ready
