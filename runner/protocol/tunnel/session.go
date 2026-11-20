@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 )
 
 // Role is the end of the connection a Session plays.
@@ -248,6 +249,10 @@ func (s *Session) negotiate(ctx context.Context, own Hello) error {
 	if err := (Limits{MaxFrame: own.MaxFrame, MaxStreams: own.MaxStreams, Window: own.Window, PingInterval: s.cfg.PingInterval}).check(); err != nil {
 		return fmt.Errorf("tunnel: config: %w", err)
 	}
+	if s.cfg.PingInterval%time.Second != 0 {
+		// HELLO carries whole seconds: a fraction would make the two ends time out differently.
+		return fmt.Errorf("tunnel: config: ping_interval %v is not a whole number of seconds", s.cfg.PingInterval)
+	}
 	var peer Hello
 	var lim Limits
 	if s.role == RoleRelay {
@@ -423,8 +428,12 @@ func closeCodeFor(err error) (int, string) {
 
 // cutCloseReason keeps a close reason inside the 123 bytes a WebSocket close allows.
 func cutCloseReason(s string) string {
-	if len(s) > 120 {
-		return s[:120]
+	if len(s) <= 120 {
+		return s
+	}
+	s = s[:120]
+	for len(s) > 0 && !utf8.ValidString(s) {
+		s = s[:len(s)-1]
 	}
 	return s
 }
@@ -793,7 +802,12 @@ func (s *Session) onOpenLocked(f Frame) error {
 		return err
 	}
 	if s.goawayRecv || len(s.streams) >= s.lim.MaxStreams {
-		s.queueLocked(ResetFrame(f.Stream, ResetRefused, "no stream is accepted"))
+		// Past the control queue cap the refusal is dropped, as a PONG is: the relay's
+		// open timeout ends that stream, and a relay that does not read cannot grow
+		// this end's memory.
+		if len(s.wq.ctrl) < maxControlQueue {
+			s.queueLocked(ResetFrame(f.Stream, ResetRefused, "no stream is accepted"))
+		}
 		return nil
 	}
 	st := newStream(s, f.Stream)

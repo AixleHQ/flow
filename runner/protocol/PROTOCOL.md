@@ -1292,7 +1292,7 @@ below the relay's:
 
 Either end may add `"features"`, an array of strings after the other keys (§8.9).
 
-- The connection uses the **minimum of each limit**. `ping_interval`, in seconds, is the relay's.
+- The connection uses the **minimum of each limit**. `ping_interval`, in seconds, is the relay's. A `Config.PingInterval` that is not a whole number of seconds is refused by `Handshake` before anything is sent, so both ends count the same interval.
 - A first message that is not a `HELLO`, or a `v` that the receiver does not speak (`1` only), closes with `1002`.
 - A value that makes the connection unusable closes with `1002`, whether it is the peer's own or the result of the
   minimum: `max_frame` under 1024 or over 65536, `window` under `max_frame`, `max_streams` of 0, `ping_interval` of 0.
@@ -1376,6 +1376,9 @@ A stream's `Read` after the peer's `CLOSE` returns the buffered data and then en
 - `GOAWAY` from the relay: no new stream is opened (a relay's `Open` returns `ErrGoAway`, a runner's `Accept` returns it once
   no `OPEN` is waiting, and an `OPEN` that still arrives is answered `RESET refused`). The open streams go on. The relay closes the
   connection with `1000` when the last stream has ended and everything queued was written, or 30 seconds after the `GOAWAY`.
+- Control frames that wait for the writer are capped at 4096. Past the cap a `PONG` answering a `PING`, and a `RESET refused` answering an
+  `OPEN` that is over the stream cap or after `GOAWAY`, are dropped, not queued: a peer that does not read cannot grow this end's memory.
+  The connection is not closed. A dropped refusal leaves the opener to its open timeout.
 
 Close codes of the WebSocket:
 

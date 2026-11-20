@@ -6,8 +6,10 @@ import (
 	"io"
 	"net"
 	"os"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 func readN(t *testing.T, st *Stream, n int) []byte {
@@ -1014,5 +1016,52 @@ func TestManyStreamsAtOnce(t *testing.T) {
 		if err := <-done; err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestRefusalsAreDroppedPastTheControlQueueCap(t *testing.T) {
+	s, r, _ := runnerVsRaw(t, Config{MaxStreams: 1}, stdHello, 8)
+	const sent = maxControlQueue + 200
+	for id := uint32(1); id <= sent; id++ {
+		r.sendNoWait(OpenFrame(id, Open{SessionID: 1, Port: 7681}))
+	}
+	// The raw end reads nothing, so the writer stalls and the refusals queue up.
+	poll(t, "the runner to read every OPEN", func() bool { return s.framesIn.Load() >= sent })
+	s.mu.Lock()
+	queued := len(s.wq.ctrl)
+	s.mu.Unlock()
+	if queued > maxControlQueue {
+		t.Fatalf("control queue holds %d frames, cap is %d", queued, maxControlQueue)
+	}
+	if s.Err() != nil {
+		t.Fatalf("the session ended: %v", s.Err())
+	}
+}
+
+func TestPingIntervalMustBeWholeSeconds(t *testing.T) {
+	for name, mk := range map[string]func(Conn, Config) *Session{"relay": NewRelay, "runner": NewRunner} {
+		t.Run(name, func(t *testing.T) {
+			a, _ := newMemPair(8)
+			s := mk(a, Config{PingInterval: 1500 * time.Millisecond, Clock: NewFakeClock()})
+			t.Cleanup(func() { s.Close(); noLeaks(t) })
+			err := s.Handshake(context.Background())
+			if err == nil || !strings.Contains(err.Error(), "whole number of seconds") {
+				t.Fatalf("Handshake = %v", err)
+			}
+		})
+	}
+}
+
+func TestCutCloseReasonKeepsValidUTF8(t *testing.T) {
+	long := strings.Repeat("a", 119) + "é" // the two bytes of é straddle byte 120
+	got := cutCloseReason(long)
+	if !utf8.ValidString(got) || len(got) > 120 {
+		t.Fatalf("cutCloseReason = %q (%d bytes)", got, len(got))
+	}
+	if got != strings.Repeat("a", 119) {
+		t.Fatalf("cutCloseReason = %q", got)
+	}
+	if short := "ünder"; cutCloseReason(short) != short {
+		t.Fatal("a short reason changed")
 	}
 }
