@@ -117,7 +117,7 @@ class Runners::RelaySignalsTest < ActiveSupport::TestCase
   end
 
   test "a hosted session leaving ready sends no session_ended" do
-    session = create(:terminal_session, state: "ready")
+    session = create(:terminal_session, :with_user, :with_project, state: "ready")
     clear
 
     session.fail!

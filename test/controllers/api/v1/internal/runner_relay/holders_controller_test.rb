@@ -47,7 +47,7 @@ module Api
           end
 
           test "answers 404 for a hosted session's token" do
-            hosted = create(:terminal_session, state: "ready")
+            hosted = create(:terminal_session, :with_user, :with_project, state: "ready")
             authorize
 
             show(hosted.route_token)
