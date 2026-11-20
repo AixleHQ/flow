@@ -19,6 +19,8 @@ governance, community health — carry none.
   it scrolls, and folds its explanation into a "How to read this dashboard" section.
 
 ### Fixed
+- **Tasks**: a collapsed board column no longer flickers a horizontal scrollbar while a card
+  in it has an active run.
 - **Wrappers**: a wrapper with a parameter named like `max`, `min`, `count` or `size` runs
   again. Every call to it used to hang until it timed out after an hour.
 
