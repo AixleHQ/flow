@@ -29,14 +29,14 @@ yet).
 
 | Runtime | Signals | Content switches set | Flow's own usage reads |
 | --- | --- | --- | --- |
-| Claude Code 2.1.318 | logs, metrics, traces (`CLAUDE_CODE_ENHANCED_TELEMETRY_BETA`) | `OTEL_LOG_USER_PROMPTS`, `OTEL_LOG_ASSISTANT_RESPONSES`, `OTEL_LOG_TOOL_DETAILS`, `OTEL_LOG_TOOL_CONTENT`, `OTEL_LOG_RAW_API_BODIES`; `OTEL_METRICS_INCLUDE_{VERSION,ENTRYPOINT,REPOSITORY}` | metrics |
-| Codex 0.166.0 | logs, metrics, traces (`[otel]` exporters) | `log_user_prompt`, `log_agent_responses`, `log_guardian_assessments`, `[otel.tool_result] max_bytes = 65536` | logs (`response.completed`) |
+| Claude Code 2.1.329 | logs, metrics, traces (`CLAUDE_CODE_ENHANCED_TELEMETRY_BETA`) | `OTEL_LOG_USER_PROMPTS`, `OTEL_LOG_ASSISTANT_RESPONSES`, `OTEL_LOG_TOOL_DETAILS`, `OTEL_LOG_TOOL_CONTENT`, `OTEL_LOG_RAW_API_BODIES`; `OTEL_METRICS_INCLUDE_{VERSION,ENTRYPOINT,REPOSITORY}` | metrics |
+| Codex 0.171.0 | logs, metrics, traces (`[otel]` exporters) | `log_user_prompt`, `log_agent_responses`, `log_guardian_assessments`, `[otel.tool_result] max_bytes = 65536` | logs (`response.completed`) |
 | Gemini CLI 0.60.0 | logs, metrics, traces (`telemetry.traces`) | `telemetry.logPrompts` | logs |
-| Copilot CLI 1.0.108 | traces, metrics (it has no logs) | `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`; `OTEL_INSTRUMENTATION_GENAI_CAPTURE_CONTENT=SPAN_AND_EVENT` in case it is honoured | `chat` spans |
-| Grok 1.0.70 | logs, metrics (`GROK_EXTERNAL_OTEL`) | `OTEL_LOG_USER_PROMPTS`, `OTEL_LOG_TOOL_DETAILS`, `OTEL_LOG_TOOL_CONTENT` | MITM log (no cost in OTLP) |
-| Kiro CLI 3.0.0 | metrics; logs from its hooks (§3) | none exist | credit metrics, MITM fallback |
-| Cursor CLI 2026.10.22 | logs from its hooks (§3) | — | Cursor usage API |
-| Antigravity CLI 1.5.0 | logs from its hooks (§3) | — | stream-json result |
+| Copilot CLI 1.0.114 | traces, metrics (it has no logs) | `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`; `OTEL_INSTRUMENTATION_GENAI_CAPTURE_CONTENT=SPAN_AND_EVENT` in case it is honoured | `chat` spans |
+| Grok 1.0.89 | logs, metrics (`GROK_EXTERNAL_OTEL`) | `OTEL_LOG_USER_PROMPTS`, `OTEL_LOG_TOOL_DETAILS`, `OTEL_LOG_TOOL_CONTENT` | MITM log (no cost in OTLP) |
+| Kiro CLI 3.5.0 | metrics; logs from its hooks (§3) | none exist | credit metrics, MITM fallback |
+| Cursor CLI 2026.11.19 | logs from its hooks (§3) | — | Cursor usage API |
+| Antigravity CLI 1.5.13 | logs from its hooks (§3) | — | stream-json result |
 
 Notes:
 

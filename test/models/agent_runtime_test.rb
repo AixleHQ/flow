@@ -26,6 +26,7 @@ class AgentRuntimeTest < ActiveSupport::TestCase
     assert_equal [], kiro.reasoning_effort_levels("claude-haiku-4.5")
     assert_equal %w[low medium high xhigh max], kiro.reasoning_effort_levels("claude-opus-5.5")
     assert_equal %w[low medium high xhigh max ultra], AgentRuntime.fetch(:codex).reasoning_effort_levels("gpt-6-sol")
+    assert_equal %w[low medium high xhigh max ultra], AgentRuntime.fetch(:codex).reasoning_effort_levels("gpt-6.2-astra")
   end
 
   test "no runtime offers a level without an explicitly chosen model" do
