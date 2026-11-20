@@ -87,7 +87,7 @@ FactoryBot.define do
     trait :onboarding_completed do
       onboarding_state { "completed" }
       onboarding_completed_at { Time.current }
-      position { "dev" }
+      position { "engineering" }
       preferred_agent_language { "en" }
     end
 

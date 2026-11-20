@@ -44,6 +44,11 @@ governance, community health — carry none.
 
 ### Changed
 
+- **Sign-in & onboarding**: onboarding asks which area of the company you work in —
+  Engineering, Product Management, Design, QA, Marketing, Operations, Finance / Accounting,
+  Executive Leadership or Other — instead of a software-delivery role. Earlier answers move to
+  the matching area (a CTO becomes Executive Leadership), and a member's page shows the area by
+  name instead of its internal code.
 - **Connectors**: the Connection column only shows where a connector stands (Connected,
   Expiring, Not connected, Connection failed). **Connect** and **Reconnect** are now regular
   buttons in the row's actions, so they no longer look like one more status badge.

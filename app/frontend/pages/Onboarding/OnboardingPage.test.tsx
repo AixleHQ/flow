@@ -113,7 +113,7 @@ describe('Onboarding/OnboardingPage', () => {
   it('submits the profile step to the backend when position and language are set', async () => {
     renderAuthedPage(<OnboardingPage />, {
       props: {
-        currentUser: userAt({ position: 'dev', preferredAgentLanguage: 'en' }),
+        currentUser: userAt({ position: 'engineering', preferredAgentLanguage: 'en' }),
         authSessions: [],
       },
     });
@@ -123,7 +123,7 @@ describe('Onboarding/OnboardingPage', () => {
     expect(router.patch).toHaveBeenCalledWith(
       '/onboarding',
       expect.objectContaining({
-        onboarding: expect.objectContaining({ position: 'dev', onboardingStateEvent: 'go_next' }),
+        onboarding: expect.objectContaining({ position: 'engineering', onboardingStateEvent: 'go_next' }),
       }),
       expect.anything(),
     );
@@ -397,8 +397,8 @@ describe('Onboarding/OnboardingPage', () => {
       props: { currentUser: userAt({ position: null, preferredAgentLanguage: '' }), authSessions: [] },
     });
 
-    // Click the Developer role card
-    await userEvent.click(screen.getByRole('button', { name: /Developer/ }));
+    // Click the Engineering area card
+    await userEvent.click(screen.getByRole('button', { name: 'Engineering' }));
 
     // Open the searchable Language select and pick an option — drives handleLanguageChange.
     await userEvent.click(screen.getByRole('combobox', { name: /Agent response language/i }));
@@ -412,7 +412,7 @@ describe('Onboarding/OnboardingPage', () => {
         '/onboarding',
         expect.objectContaining({
           onboarding: expect.objectContaining({
-            position: 'dev',
+            position: 'engineering',
             preferredAgentLanguage: 'en',
             onboardingStateEvent: 'go_next',
           }),
@@ -430,7 +430,7 @@ describe('Onboarding/OnboardingPage', () => {
     expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled();
 
     // Clicking a role card sets the position.
-    await userEvent.click(screen.getByRole('button', { name: /QA Engineer/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'QA' }));
 
     // Still disabled until language is chosen
     expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled();
@@ -595,19 +595,23 @@ describe('Onboarding/OnboardingPage', () => {
     expect(router.reload).toHaveBeenCalledWith({ only: ['auth_sessions'] });
   });
 
-  it('renders role radio cards on profile step', () => {
+  it('offers an area card for every part of the company, not only delivery roles', () => {
     renderAuthedPage(<OnboardingPage />, {
       props: { currentUser: userAt({ position: null, preferredAgentLanguage: '' }), authSessions: [] },
     });
 
-    expect(screen.getByRole('button', { name: /Developer/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /QA Engineer/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Product Manager/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Designer/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /CTO/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Other/ })).toBeInTheDocument();
-    // 6 role buttons (Developer, QA Engineer, PM/BA, Designer, CTO, Other)
-    expect(screen.getAllByRole('button').filter((b) => b.getAttribute('aria-pressed') !== null)).toHaveLength(6);
+    const areas = screen.getAllByRole('button').filter((b) => b.getAttribute('aria-pressed') !== null);
+    expect(areas.map((b) => b.textContent)).toEqual([
+      'Engineering',
+      'Product Management',
+      'Design',
+      'QA',
+      'Marketing',
+      'Operations',
+      'Finance / Accounting',
+      'Executive Leadership',
+      'Other',
+    ]);
   });
 
   it('enables Continue only after a role card is clicked and language selected', async () => {
@@ -616,7 +620,7 @@ describe('Onboarding/OnboardingPage', () => {
     });
 
     expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled();
-    await userEvent.click(screen.getByRole('button', { name: /Developer/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Engineering' }));
     expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled();
     await userEvent.click(screen.getByRole('combobox', { name: /Agent response language/i }));
     await userEvent.click(await screen.findByRole('option', { name: 'English' }));
@@ -641,7 +645,7 @@ describe('Onboarding/OnboardingPage', () => {
 
     it('finishes a viewer from the profile step with the complete event', async () => {
       renderAuthedPage(<OnboardingPage />, {
-        props: { currentUser: viewerAt({ position: 'dev', preferredAgentLanguage: 'en' }), authSessions: [] },
+        props: { currentUser: viewerAt({ position: 'engineering', preferredAgentLanguage: 'en' }), authSessions: [] },
       });
 
       await userEvent.click(screen.getByRole('button', { name: /Get started/ }));
@@ -649,7 +653,7 @@ describe('Onboarding/OnboardingPage', () => {
       expect(router.patch).toHaveBeenCalledWith(
         '/onboarding',
         expect.objectContaining({
-          onboarding: expect.objectContaining({ position: 'dev', onboardingStateEvent: 'complete' }),
+          onboarding: expect.objectContaining({ position: 'engineering', onboardingStateEvent: 'complete' }),
         }),
         expect.anything(),
       );

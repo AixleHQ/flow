@@ -41,7 +41,7 @@ function seed(overrides: Partial<UserShowProps> = {}): UserShowProps {
       email: 'jane@example.com',
       role: 'employee',
       state: 'active',
-      position: 'dev',
+      position: 'engineering',
       invitedAt: '2026-01-05T10:00:00Z',
       acceptedAt: '2026-01-06T10:00:00Z',
       invitationExpired: false,
@@ -84,12 +84,13 @@ const okLimits: UserShowProps['usageLimits'] = [
 ];
 
 describe('Company/Users/Show', () => {
-  it('renders the person: name, email, role and membership state', () => {
+  it('renders the person: name, email, role, area and membership state', () => {
     renderUser(seed());
 
     expect(screen.getByRole('heading', { name: 'Jane Doe' })).toBeInTheDocument();
     expect(screen.getByText('jane@example.com')).toBeInTheDocument();
     expect(screen.getByText('Employee')).toBeInTheDocument();
+    expect(screen.getByText('Engineering')).toBeInTheDocument();
     expect(screen.getByText('Active')).toBeInTheDocument();
   });
 
