@@ -28,6 +28,8 @@ module Runners
   module TunnelTicket
     PREFIX = "artun_"
     ALGORITHM = "HS256"
+    # The gem leaves `typ` out; the ticket says what it is, as the design (§3.1) shows.
+    HEADER = { typ: "JWT" }.freeze
     VERSION = 1
     LIFETIME = 60.seconds
     # What a runner is told in the check-in's `config.tunnel.mode` (Settings
@@ -84,7 +86,7 @@ module Runners
         v: VERSION, e: environment.id, r: environment.runner_id, s: environment.current_session_id,
         jti: SecureRandom.urlsafe_base64(16), exp: expires_at.to_i
       }
-      Issued.new(ticket: "#{PREFIX}#{JWT.encode(claims, ticket_key, ALGORITHM)}", expires_at: expires_at.utc)
+      Issued.new(ticket: "#{PREFIX}#{JWT.encode(claims, ticket_key, ALGORITHM, HEADER)}", expires_at: expires_at.utc)
     end
 
     def ticket_key
