@@ -96,7 +96,7 @@ module Runners
       last = base + span - 1
       return unless range.begin <= last && base <= range.end
 
-      "RUNNERS_TUNNEL_HOST_PORT_BASE..+#{SLOTS * BLOCK - 1} (#{range.begin}..#{range.end}) must not overlap the " \
+      "RUNNERS_TUNNEL_HOST_PORT_BASE..+#{(SLOTS * BLOCK) - 1} (#{range.begin}..#{range.end}) must not overlap the " \
         "proxy's host ports RUNNER_PROXY_HOST_PORT_BASE..+RUNNER_PROXY_HOST_PORT_SPAN - 1 (#{base}..#{last})"
     end
 
@@ -104,7 +104,7 @@ module Runners
       taken = Proxy::IMAGE_PORTS.select { |port| range.cover?(port) }
       return if taken.empty?
 
-      "RUNNERS_TUNNEL_HOST_PORT_BASE..+#{SLOTS * BLOCK - 1} (#{range.begin}..#{range.end}) must not include the " \
+      "RUNNERS_TUNNEL_HOST_PORT_BASE..+#{(SLOTS * BLOCK) - 1} (#{range.begin}..#{range.end}) must not include the " \
         "agent image's own ports (#{Proxy::IMAGE_PORTS.join(', ')}), but it includes #{taken.sort.join(', ')}"
     end
     private_class_method :bounds_problem, :proxy_overlap_problem, :image_ports_problem
