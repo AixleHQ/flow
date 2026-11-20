@@ -3,8 +3,9 @@
 The wire contract between `aixle-runner` and the platform's runner gateway. This document
 describes protocol `1` as the gateway implements it today, and nothing it does not implement
 yet. Later endpoints and ops each add their own section here, with their fixtures, in the task
-that builds them (§9). §8 is the exception to "the gateway": it is the relay tunnel's frame
-protocol, as the Go package `runner/protocol/tunnel` implements it for both of its ends.
+that builds them (§9). §8 is the exception to "the gateway": it is the relay tunnel, served by the
+platform's `runner-relay` service, not by the gateway. Its frame protocol is as the Go package
+`runner/protocol/tunnel` implements it for both of its ends.
 
 - **This document is the source of truth for the wire.** The design and its rationale are in
   `docs/design/agent-runtimes/DESIGN.md` §6 and §9. Where the two say the same thing, this
@@ -115,7 +116,11 @@ the platform endpoint's own, not a refusal):
 | `runner_revoked` | 401 | all | The token is valid, but its runner is revoked or deleted. |
 | `credential_reuse_detected` | 401 | `token` | A spent refresh token was presented again, and it was not a retry after a lost response. Its whole family is now revoked (§4). |
 | `runners_disabled` | 403 | all | External runners are turned off for the runner's company. The credentials stay valid. |
-| `not_found` | 404 | `ops/:id/result`, releases | The op does not exist, or belongs to another machine; or the platform pins no such release (§5.6, §5.7). |
+| `not_found` | 404 | `ops/:id/result`, releases, `tunnel-ticket` | The op does not exist, or belongs to another machine; or the platform pins no such release (§5.6, §5.7); or the platform does not offer the interactive tunnel (§5.11). |
+| `no_session` | 409 | `tunnel-ticket` | The machine holds no session, so it opens no tunnel (§5.11). |
+| `invalid_ticket` | 401 | the tunnel upgrade (§8.11) | The ticket is missing, malformed, forged or expired. The relay serves it, not the gateway. |
+| `ticket_replayed` | 403 | the tunnel upgrade (§8.11) | The ticket was used already. |
+| `unavailable` | 503 | the tunnel upgrade (§8.11) | The relay cannot take connections now: it is restarting, or its Redis is down. |
 | `route_not_allowed` | 404 | `proxy` | The route, its method or the path below it is not on the proxy's allow-list (§5.8). |
 | `session_not_on_environment` | 403 | `proxy` | The request carries no key of the session that holds this machine now: the key is missing or wrong, it is another session's, or the machine holds no session (§5.8). |
 | `upstream_unavailable` | 502 | `proxy` | The platform's endpoint for the route did not answer (§5.8). |
@@ -163,6 +168,10 @@ then gets the refusal, not the ops (§5.4).
 | `400` without the JSON refusal shape | A bug in the runner, which sent a body that is not valid JSON: it reports it and does not resend the same body. |
 | `422 invalid_registration` | Reports the problem with its configuration. The registration token is not spent, so `configure` can be run again with the same token once the input is fixed. |
 | `404 not_found` from a result | Drops that result: the op is not this machine's. |
+| `409 no_session` from `tunnel-ticket` | Opens no tunnel, and asks again when the machine holds a session (§5.11). |
+| `404 not_found` from `tunnel-ticket` | The platform stopped offering the tunnel: backs off and retries. |
+| `401 invalid_ticket`, `403 ticket_replayed` from the tunnel upgrade | Mints a new ticket and retries once, then backs off (§8.11). |
+| `503 unavailable` from the tunnel upgrade | Backs off and retries (§8.11). |
 | A refusal of the proxy route (§5.8) | Passes it on to the agent as it is, with its `X-Aixle-Runner-Refusal` header, after the one refresh and retry of an `invalid_token`. The agent's own client decides what to do. |
 
 "Backs off" means retrying with increasing delays, with jitter, so that a fleet of machines does
@@ -230,6 +239,7 @@ A runner keeps its tokens in a file only its own user can read, and never logs t
 | `POST /runner/v1/token` | refresh | `200` with a token pair |
 | `POST /runner/v1/check-in` | access | `200` with the environment, the config and, maybe, `update` |
 | `POST /runner/v1/heartbeat` | access | `204` |
+| `POST /runner/v1/tunnel-ticket` | access | `200` with a ticket for the tunnel, or `409 no_session` |
 | `GET /runner/v1/ops` | access | `200` with up to 20 ops |
 | `POST /runner/v1/ops/:id/result` | access | `200` with the op's state |
 | `GET /runner/v1/releases/:version/:os-:arch` | none | `302` to the binary, with its pinned SHA-256 |
@@ -644,6 +654,13 @@ the machines first.
   largest object the platform takes for an op's output or file (§6.5). It is for the runner's log:
   each upload slot of an op carries its own `max_bytes`, which is what binds. A runner ignores a
   `config` key it does not know.
+- `config.tunnel` is there only when the platform offers the interactive tunnel (§5.11, §8). It is an
+  object: `mode` says when the runner connects, and `path` is the path of the WebSocket on the gateway's
+  host. `"mode": "session"` is the only mode of protocol 1: the runner connects while its machine
+  holds a session and closes the connection when the session is gone (§8.11). A runner that does not
+  know the mode, or finds no `tunnel`, opens no tunnel. A `path` that does not start with
+  `/runner/v1/` is ignored in favour of `/runner/v1/tunnel`. The runner reads it at its check-in, so a
+  platform that turns the tunnel on reaches a machine when the runner next starts.
 - `update` is there under the rule of the `GET ops` answer without ops (§5.4), read after the
   report is recorded: the machine holds no session, the request's version is below
   `recommended_version`, the binary for the machine's `os` and `arch` is pinned, and neither the
@@ -661,7 +678,7 @@ Its own refusals: `422 invalid_check_in`, and `400 runner_version_unsupported`.
 
 Schema: [`schemas/v1/check_in.request.json`](schemas/v1/check_in.request.json).
 
-Fixtures: `check_in/`.
+Fixtures: `check_in/` (`tunnel_config.json` for `config.tunnel`).
 
 ### 5.10 `POST /runner/v1/heartbeat`
 
@@ -688,6 +705,45 @@ it makes anyway. The platform counts a machine as heard for 90 seconds after its
 Its own refusals: none. It answers the common refusals of §3.
 
 Fixtures: `heartbeat/`.
+
+### 5.11 `POST /runner/v1/tunnel-ticket`
+
+The host runner of a machine asking for the ticket it opens the interactive tunnel with (§8). The ticket
+is a short-lived credential for the platform's `runner-relay` service, so that the access token never
+reaches the relay and the throttles of §2 count each ticket request. Authenticated with the
+environment's access token. The request has no body, and the gateway does not read one.
+
+`200 OK`, with `Cache-Control: no-store`:
+
+```json
+{ "ticket": "artun_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ2IjoxLC4uLn0.q1w2e3...", "expires_at": "2026-11-20T15:01:00Z" }
+```
+
+- `ticket` is a bearer credential: the runner presents it once, as `Authorization: Bearer <ticket>`, on the
+  tunnel's upgrade (§8.11), and never logs it. **A runner treats it as opaque**: it does not parse it and
+  does not depend on its format. The platform makes it `artun_` followed by a standard compact JWT
+  (RFC 7519), signed with HS256 under a key that the gateway and the relay share and no runner has. The
+  `artun_` prefix is for secret scanners. The claims are a JSON object,
+  `{"v":1,"e":<environment id>,"r":<runner id>,"s":<session id>,"jti":"<unique id>","exp":<unix seconds>}`.
+  Only the platform and the relay read them, and a runner never believes itself about which session it holds.
+- `expires_at` is 60 seconds after the ticket was minted. The relay refuses a ticket past it, with 5
+  seconds of tolerance for clocks, and a second use of the same ticket.
+
+**The checks** are the common ones of §3. A platform that has no relay configured (no ticket key) then
+answers `404 not_found`. Whether it mints a ticket does not depend on its check-in telling runners to connect
+(§5.9): a platform can answer tickets before it turns the tunnel on for its runners, and a runner asks only after
+its check-in said so; a machine that holds no session answers `409 no_session`, so an idle
+machine opens no connection. The session in the claim is the one that holds the machine when the ticket is
+minted.
+
+**What the runner does.** It asks only when its check-in said the tunnel is on (§5.9) and its machine holds a
+session, and asks again for each connection, a reconnect included: a ticket is used once. A `409
+no_session` is not an error: the runner asks again when the machine holds a session. Any other refusal is
+the common table's (§3).
+
+Its own refusals: `409 no_session`, and `404 not_found` for a platform that does not offer the tunnel.
+
+Fixtures: `tunnel_ticket/`.
 
 ## 6. Ops
 
@@ -1224,8 +1280,10 @@ frame protocol, as the Go package [`tunnel/`](tunnel/) implements it for both en
 the runner, so that there is one implementation of it. It describes what the package does and
 nothing it does not.
 
-Not built yet, and so not part of this section: the ticket that authorizes the connection, the
-`GET /runner/v1/tunnel` upgrade, the relay service, and the runner's dialers. The package works
+§8.1 to §8.10 are the frames. The ticket that authorizes the connection is §5.11, and the upgrade that
+opens it, the refusals of the relay and when the runner connects are §8.11. Not built yet, and so not part
+of this section: the browser's path through the relay, and the runner's dialers, which reach a session's
+ports. Until they exist the runner answers every `OPEN` with `RESET refused` (§8.4). The package works
 over any connection that carries messages (`tunnel.Conn`), and `tunnel.NewWSConn` adapts a
 [`coder/websocket`](https://github.com/coder/websocket) connection to it.
 
@@ -1385,6 +1443,7 @@ Close codes of the WebSocket:
 | Code | Meaning |
 | --- | --- |
 | 1000 | Normal: a local close, a heartbeat timeout, the end of a drain |
+| 1001 | Going away: the relay is shutting down, and closed what its drain left |
 | 1002 | Protocol error (§8.2, §8.3) |
 | 1009 | A frame over `max_frame` |
 | 1013 | Try again: the relay is full |
@@ -1393,7 +1452,8 @@ Close codes of the WebSocket:
 | 4002 | `ticket`: the ticket was refused |
 
 The package defines all of them; it sends `1000`, `1002` and `1009`. The others belong to the service that accepts
-the connection.
+the connection. The relay sends `4000` and `1001` today (§8.11); `4001` comes with the signals that revoke a machine, and `4002`
+is reserved for a ticket the relay can only judge after the upgrade. A runner that receives any close code reconnects as §8.11 says.
 
 ### 8.9 Evolution inside version 1
 
@@ -1407,6 +1467,58 @@ without that closes with `1002`. Anything that changes the meaning of an existin
 [`fixtures/README.md`](fixtures/README.md) (`*.frames`, not JSON). There is a file for each frame type and one for each
 scenario of this section. The package's tests run each file twice, with the package as the relay and as the runner, and fail if a
 frame type or a scenario has no file.
+
+### 8.11 The upgrade, the ticket and when the runner connects
+
+**The upgrade.** The runner opens `GET <path>` on the gateway's host, where `<path>` is `config.tunnel.path` of its
+check-in (§5.9), `/runner/v1/tunnel` by default. The ingress routes that one path to the `runner-relay` service and
+every other `/runner/v1/` path to the gateway, so the runner's only destination is still the platform's host.
+It is a WebSocket upgrade over HTTP/1.1, with these headers:
+
+| Header | Value | Refused with |
+| --- | --- | --- |
+| `Sec-WebSocket-Protocol` | `aixle-runner-relay.v1`, the subprotocol of this protocol | `400 unsupported_protocol` |
+| `X-Aixle-Runner-Protocol` | `1`, as everywhere (§1) | `400 unsupported_protocol` |
+| `X-Aixle-Runner-Version` | The runner's own version, strict SemVer 2.0 (§1) | `400 invalid_runner_version` |
+| `Authorization` | `Bearer <ticket>`, the ticket of §5.11, never in the URL | `401 invalid_ticket`, `403 ticket_replayed` |
+
+**The relay checks, in this order**, and the first failure answers, in the JSON shape of §3: the protocol header and the
+subprotocol, the version, then the ticket (its signature, the claims' version, and `exp` with 5 seconds of tolerance),
+then that the ticket was not used before. A ticket's id is recorded for 90 seconds when it is first used, so a second use
+of it is `403 ticket_replayed`, even where the first connection has ended. The relay answers `503 unavailable` (with
+`Retry-After`) while it cannot record the id or is draining, and accepts no connection then.
+
+| Status | `error` | Meaning |
+| --- | --- | --- |
+| 400 | `unsupported_protocol` | The protocol header is not `1`, or the subprotocol is not offered. |
+| 400 | `invalid_runner_version` | `X-Aixle-Runner-Version` is missing or not a semantic version. |
+| 401 | `invalid_ticket` | The ticket is missing, malformed, forged, of another version, or expired. One answer for every case, so a probe cannot tell them apart. |
+| 403 | `ticket_replayed` | The ticket was used already. |
+| 503 | `unavailable` | The relay cannot take connections now. |
+
+On success the relay answers `101` with the subprotocol, and sends `HELLO` first (§8.3). Its `session_id` is the session
+in the ticket's claims, never one the runner said. The connection then runs by §8.1 to §8.10.
+
+**One connection per machine.** A second connection of the same machine replaces the first: the relay closes the older one with
+code `4000` (§8.8). It does that once the newer one has completed its `HELLO`, so a connection that fails its handshake never
+replaces a working one. A runner that sees `4000` is not told to stay away: it backs off like for any lost connection.
+
+**What the runner does.**
+
+- It connects while its machine holds a session (the check-in's `config.tunnel.mode` is `session`), and not otherwise: an idle
+  machine holds no connection. It closes the connection when the session's container is gone.
+- For each connection it asks for a ticket (§5.11), opens the upgrade and completes the `HELLO`. It never logs the ticket.
+- **A refused ticket** (`401 invalid_ticket` or `403 ticket_replayed`) is met with a new ticket and one retry; a second
+  refusal is a failure.
+- **A failure** (a network error, `503`, a refusal of the ticket request that the table of §3 says to wait out, a
+  connection that ended) is retried with backoff, 1 s growing to 30 s with jitter, as the long-poll's is. The backoff starts
+  over once a connection has held for 30 seconds.
+- **After `GOAWAY`** (§8.8) the runner reconnects at once, after up to 2 seconds of jitter, and the old connection drains
+  until it closes. A `GOAWAY` is not a failure and does not grow the backoff.
+- **`400 unsupported_protocol`** or `400 invalid_runner_version` from the upgrade means the relay and this runner do not
+  speak the same protocol: the tunnel stays off until the runner is updated and restarted. Nothing else of the runner stops.
+- The tunnel is not a liveness signal. Losing it changes nothing about the machine, its session or the grace period; a
+  session with a down tunnel has no terminal, and has not failed (§5.10 is the liveness).
 
 ## 9. Not in protocol 1 yet
 

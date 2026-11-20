@@ -32,6 +32,10 @@ paths = [
 ]
 
 [[allowlists]]
+description = "runner-relay's Go tests: a ticket key made up for the test, and the WebSocket handshake's sample nonce (RFC 6455 §1.3), not credentials"
+paths = ['''^runner-relay/internal/.*_test\.go$''']
+
+[[allowlists]]
 description = "Public claude.ai OAuth client_id — a published identifier that ships in Anthropic's CLI, not a credential"
 paths = ['''^app/services/agents/claude_code_adapter\.rb$''']
 regexTarget = "line"

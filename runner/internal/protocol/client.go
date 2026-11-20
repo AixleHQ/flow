@@ -25,9 +25,13 @@ const (
 	EndpointCheckIn      Endpoint = "check-in"
 	EndpointOps          Endpoint = "ops"
 	EndpointHeartbeat    Endpoint = "heartbeat"
-	EndpointResult       Endpoint = "result"
-	EndpointReleases     Endpoint = "releases"
-	EndpointProxy        Endpoint = "proxy"
+	EndpointTunnelTicket Endpoint = "tunnel-ticket"
+	// EndpointTunnel is the WebSocket upgrade GET /runner/v1/tunnel (§8), which the
+	// platform's relay serves. Its refusals are read by tunnel.Manager.
+	EndpointTunnel   Endpoint = "tunnel"
+	EndpointResult   Endpoint = "result"
+	EndpointReleases Endpoint = "releases"
+	EndpointProxy    Endpoint = "proxy"
 )
 
 // Client calls the gateway. It holds no credentials: every call takes the token
@@ -176,6 +180,32 @@ func (c *Client) PollOps(ctx context.Context, accessToken string, after int64, w
 func (c *Client) Heartbeat(ctx context.Context, accessToken string) error {
 	return c.do(ctx, EndpointHeartbeat, http.MethodPost, "/runner/v1/heartbeat", accessToken, nil, http.StatusNoContent, nil)
 }
+
+// TunnelTicket asks for the ticket the machine opens the interactive tunnel with
+// (§5.11). It takes no body. A machine that holds no session is refused with
+// `409 no_session`.
+func (c *Client) TunnelTicket(ctx context.Context, accessToken string) (TunnelTicket, error) {
+	var out TunnelTicket
+	err := c.do(ctx, EndpointTunnelTicket, http.MethodPost, "/runner/v1/tunnel-ticket", accessToken, nil, http.StatusOK, &out)
+	return out, err
+}
+
+// TunnelURL is the WebSocket URL of the tunnel on the platform, for a path the
+// platform's check-in named (or DefaultTunnelPath), as `wss://host/runner/v1/tunnel`.
+func (c *Client) TunnelURL(path string) string {
+	u := *c.baseURL
+	if u.Scheme == "https" {
+		u.Scheme = "wss"
+	} else {
+		u.Scheme = "ws"
+	}
+	u.Path = strings.TrimRight(u.Path, "/") + path
+	u.RawPath = ""
+	return u.String()
+}
+
+// Version is the X-Aixle-Runner-Version this client sends.
+func (c *Client) Version() string { return c.version }
 
 // Checksums reads the pinned digests of a release (§5.7). It takes no token.
 func (c *Client) Checksums(ctx context.Context, version string) (Checksums, error) {
@@ -402,6 +432,12 @@ func newRefusal(endpoint Endpoint, status int, raw []byte) *Refusal {
 	}
 	r.Code, r.Message = code, message
 	return r
+}
+
+// ParseRefusal reads a refusal from an answer's status and body, for a caller that
+// made the request itself (the tunnel's WebSocket upgrade, §8.11).
+func ParseRefusal(endpoint Endpoint, status int, body []byte) *Refusal {
+	return newRefusal(endpoint, status, body)
 }
 
 // AsRefusal returns the refusal inside err, if there is one.

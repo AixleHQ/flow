@@ -37,7 +37,9 @@ module RunnerGateway
         "runner_revoked" => :unauthorized,
         "runner_version_unsupported" => :bad_request,
         "invalid_registration" => :unprocessable_entity,
-        "invalid_check_in" => :unprocessable_entity
+        "invalid_check_in" => :unprocessable_entity,
+        "not_found" => :not_found,
+        "no_session" => :conflict
       }.freeze
 
       wrap_parameters false

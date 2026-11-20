@@ -172,7 +172,7 @@ per IP, in `Rack::Attack`) apply to requests that reach Rails, not to the relay.
 
 | | **A. Ticket (Recommended)** | B. The relay validates the access token through Rails | C. The relay reads PostgreSQL |
 | --- | --- | --- | --- |
-| Flow | The runner `POST`s `/runner/v1/tunnel-ticket` to the gateway with its access token, as to any endpoint. The answer is a ticket: HMAC-signed claims `{e: environment id, r: runner id, s: current session id or null, jti, exp: now + 60 s}`. The runner opens `GET /runner/v1/tunnel` with `Authorization: Bearer artun_<claims>.<mac>` | The relay sends each token it sees to a short internal endpoint that runs the gateway's check order, and caches the answer 5 s | The relay checks the token digest in `runner_credentials` |
+| Flow | The runner `POST`s `/runner/v1/tunnel-ticket` to the gateway with its access token, as to any endpoint. The answer is a ticket: a JWT (HS256) with the claims `{e: environment id, r: runner id, s: current session id or null, jti, exp: now + 60 s}`. The runner opens `GET /runner/v1/tunnel` with `Authorization: Bearer artun_<JWT>` | The relay sends each token it sees to a short internal endpoint that runs the gateway's check order, and caches the answer 5 s | The relay checks the token digest in `runner_credentials` |
 | Check order, refusals, `runner_revoked`, `runners_disabled`, the 5 s revocation window | Unchanged: the existing endpoint code runs it | Re-implemented behind a second endpoint | Re-implemented in Go |
 | Throttling | **Stays in `Rack::Attack`**: the ticket request is a gateway request, counted per token and per IP. The relay's upgrade needs no Rails call to refuse a bad ticket (a signature check), so a flood of bad upgrades costs the relay CPU only | A new throttle for the internal endpoint, and a flood of bad tokens becomes load on Rails | A flood is database load |
 | The relay's secrets | The ticket key only | The internal token | A database credential |
@@ -192,6 +192,11 @@ checks is copied.
   and refuses a second use (`403 ticket_replayed`). A leaked ticket is thus useless after the runner
   used it, and within its 60 seconds only to a thief who is faster than the runner. If Redis is down
   `/readyz` fails and no connection is accepted.
+- **Format.** `artun_` followed by a standard compact JWT, header `{"alg":"HS256","typ":"JWT"}`, signed
+  under `RUNNERS_RELAY_TICKET_KEY`. Rails signs it with the `jwt` gem and the relay verifies it with
+  `github.com/golang-jwt/jwt/v5`, so neither end has signing code of its own. The relay pins the
+  algorithm to HS256 (`none` and every other `alg` are refused) and requires `exp`. The runner treats the
+  ticket as opaque. The prefix stays for secret scanners.
 - **The ticket goes in the `Authorization` header,** never in the URL, so no access log holds it.
 - **Version header.** The upgrade carries `X-Aixle-Runner-Protocol: 1` and `X-Aixle-Runner-Version`;
   the relay checks the protocol and the WebSocket subprotocol `aixle-runner-relay.v1` and answers

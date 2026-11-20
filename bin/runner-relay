@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# The runner relay for a stack run without Compose's `runner-relay` service
+# (docs/design/agent-runtimes/runner-relay.md §2.3): `bin/dev` starts it from Procfile.dev.
+# It runs the service from source with `go run`, listening on 127.0.0.1:4004 and
+# 127.0.0.1:4005 (admin), with the development defaults of the app's settings.
+#
+# Where Go is not installed, which includes the web container of the Compose stack (there the
+# relay is its own service, `docker compose --profile runners up runner-relay`), it says so and
+# waits: a Procfile process that exits would stop foreman and every process with it.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+if ! command -v go >/dev/null 2>&1; then
+  echo "runner-relay: Go is not installed here, so the relay is not started." \
+       "In Compose it is the runner-relay service of the \`runners\` profile." >&2
+  exec sleep infinity
+fi
+
+export RUNNER_RELAY_LISTEN="${RUNNER_RELAY_LISTEN:-127.0.0.1:${RUNNER_RELAY_PORT:-4004}}"
+export RUNNER_RELAY_ADMIN_LISTEN="${RUNNER_RELAY_ADMIN_LISTEN:-127.0.0.1:${RUNNER_RELAY_ADMIN_PORT:-4005}}"
+export RUNNER_RELAY_REDIS_URL="${RUNNER_RELAY_REDIS_URL:-${REDIS_URL:-redis://localhost:6379/1}}"
+export RUNNER_RELAY_REDIS_CHANNEL_PREFIX="${RUNNER_RELAY_REDIS_CHANNEL_PREFIX:-aixle_development_}"
+export RUNNER_RELAY_RAILS_URL="${RUNNER_RELAY_RAILS_URL:-http://127.0.0.1:${PORT:-4000}}"
+# The development fallbacks of Settings.runners.relay (config/settings/development.yml).
+export RUNNER_RELAY_TICKET_KEY="${RUNNER_RELAY_TICKET_KEY:-${RUNNERS_RELAY_TICKET_KEY:-runner relay development ticket key}}"
+export RUNNER_RELAY_INTERNAL_TOKEN="${RUNNER_RELAY_INTERNAL_TOKEN:-${RUNNERS_RELAY_INTERNAL_TOKEN:-runner relay development internal token}}"
+
+cd runner-relay
+exec go run ./cmd/aixle-runner-relay

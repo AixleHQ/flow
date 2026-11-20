@@ -78,8 +78,11 @@ module Runners
     # What the platform tells a runner about its limits. It is for the runner's
     # log: each upload slot of an op carries the `max_bytes` that binds that
     # upload (ResultUploads).
+    #
+    # `tunnel` is there only when the platform offers the interactive tunnel
+    # (TunnelTicket.config): it tells the runner when to connect to the relay.
     def config
-      { "upload_max_bytes" => ResultUploads.limit }
+      { "upload_max_bytes" => ResultUploads.limit, "tunnel" => TunnelTicket.config }.compact
     end
   end
 end

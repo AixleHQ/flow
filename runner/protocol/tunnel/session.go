@@ -9,7 +9,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unicode/utf8"
 )
 
 // Role is the end of the connection a Session plays.
@@ -427,16 +426,7 @@ func closeCodeFor(err error) (int, string) {
 }
 
 // cutCloseReason keeps a close reason inside the 123 bytes a WebSocket close allows.
-func cutCloseReason(s string) string {
-	if len(s) <= 120 {
-		return s
-	}
-	s = s[:120]
-	for len(s) > 0 && !utf8.ValidString(s) {
-		s = s[:len(s)-1]
-	}
-	return s
-}
+func cutCloseReason(s string) string { return cutUTF8(s, 120) }
 
 func (s *Session) logFrame(dir string, f Frame) {
 	if s.log != nil {

@@ -15,3 +15,11 @@ encryption:
 # and nothing is metered to a billing provider.
 deployment:
   mode: <%= ENV['DEPLOYMENT_MODE'] || 'self_hosted' %>
+
+# The relay's tunnel ticket key and internal token have a development fallback, as the keys above do. The
+# tunnel itself stays off (`tunnel_mode` is blank) until docker-compose.yml, which also
+# starts the relay, turns it on for the `runners` profile.
+runners:
+  relay:
+    ticket_key: <%= ENV['RUNNERS_RELAY_TICKET_KEY'] || 'runner relay development ticket key' %>
+    internal_token: <%= ENV['RUNNERS_RELAY_INTERNAL_TOKEN'] || 'runner relay development internal token' %>

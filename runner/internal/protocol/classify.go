@@ -100,10 +100,21 @@ func Classify(err error) Action {
 	case "runners_disabled":
 		return ActionBackoff
 	case "not_found":
-		if r.Endpoint == EndpointResult {
+		switch r.Endpoint {
+		case EndpointResult:
 			return ActionDrop
+		case EndpointTunnelTicket:
+			// The platform stopped offering the tunnel since the check-in.
+			return ActionBackoff
 		}
 		return ActionBug
+	case "no_session":
+		// The machine holds no session now (§5.11): nothing is wrong, and the runner asks again
+		// when it does.
+		return ActionBackoff
+	case "invalid_ticket", "ticket_replayed":
+		// The relay's refusals (§8.11): a new ticket is minted and the upgrade retried once.
+		return ActionBackoff
 	case "invalid_registration":
 		return ActionFixConfiguration
 	case "invalid_request", "invalid_result", "invalid_check_in":

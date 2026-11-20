@@ -346,6 +346,9 @@ func clientCall(t *testing.T, method, path, token string, headers map[string]*st
 		}
 		c.endpoint = "check-in"
 		c.run = func(ctx context.Context, cl *protocol.Client) (any, error) { return cl.CheckIn(ctx, token, req) }
+	case method == http.MethodPost && path == "/runner/v1/tunnel-ticket" && body == nil:
+		c.endpoint = "tunnel-ticket"
+		c.run = func(ctx context.Context, cl *protocol.Client) (any, error) { return cl.TunnelTicket(ctx, token) }
 	case method == http.MethodPost && path == "/runner/v1/token" && body == nil:
 		c.endpoint = "token"
 		c.run = func(ctx context.Context, cl *protocol.Client) (any, error) { return cl.Refresh(ctx, token) }
@@ -572,7 +575,7 @@ func TestConformanceFixtures(t *testing.T) {
 	}
 
 	// The scenarios the client uses must really have been driven.
-	for _, endpoint := range []string{"register", "check-in", "token", "unregister", "heartbeat", "ops", "releases", "proxy"} {
+	for _, endpoint := range []string{"register", "check-in", "token", "unregister", "heartbeat", "tunnel-ticket", "ops", "releases", "proxy"} {
 		if cov.driven[endpoint] == 0 {
 			t.Errorf("no %s exchange was driven through the client", endpoint)
 		}
@@ -668,7 +671,7 @@ func setup(t *testing.T, w *world, raw json.RawMessage) {
 		w.define(s.As+".deadline_at", w.timestamp(5*time.Minute))
 	case "time_passes":
 		w.clock = w.clock.Add(time.Duration(s.Seconds) * time.Second)
-	case "runner_revoked", "flag_off", "flag_on", "release_pins":
+	case "runner_revoked", "flag_off", "flag_on", "release_pins", "tunnel_on":
 		// The gateway's state is in the fixture's expected answers, which the fake
 		// replays.
 	default:
