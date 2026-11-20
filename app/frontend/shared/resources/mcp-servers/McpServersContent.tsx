@@ -369,6 +369,7 @@ export function McpServersContent({
                           // top-level POST rather than an Inertia visit.
                           <Button
                             size="compact-sm"
+                            w={116}
                             leftSection={<IconPlugConnected size={14} />}
                             loading={connectingId === server.id}
                             loaderProps={{ type: 'dots' }}
