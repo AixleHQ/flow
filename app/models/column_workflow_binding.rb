@@ -15,10 +15,25 @@ class ColumnWorkflowBinding < ApplicationRecord
   validates :board_column_id, uniqueness: true
   validates :cooldown_seconds, numericality: { greater_than_or_equal_to: 0 }
   validate :workflow_accessible_from_project
+  validate :workflow_supports_auto_run, if: :auto?
 
   after_commit :touch_board
 
   private
+
+  # An auto column trigger starts its run with nobody at the terminal
+  # (TriggerEngine launches every trigger non-interactive), so WorkflowService
+  # would refuse the run the moment a card arrives.
+  def workflow_supports_auto_run
+    return unless workflow
+
+    manual_steps = workflow.steps.not_deleted.reject(&:allow_non_interactive)
+    return if manual_steps.empty?
+
+    errors.add(:workflow,
+      "can't start on its own when a card enters the column — turn on auto-run for these steps " \
+      "or make the trigger manual: #{manual_steps.map(&:name).join(', ')}")
+  end
 
   def touch_board
     # Skip when the board is already gone (e.g. project/board cascade destroy).

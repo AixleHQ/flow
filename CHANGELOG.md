@@ -20,6 +20,11 @@ governance, community health — carry none.
   `include_archived`, how to tell them apart in the results, and how to read one.
 
 ### Fixed
+- **Triggers & gates**: a column trigger in auto mode is refused for a workflow with a step
+  that has auto-run off, and the error names the steps — such a trigger never started
+  anything. When a column trigger cannot start its run, the card gets a comment saying why
+  instead of nothing happening. Templates that ship such a trigger ask for auto-run on
+  those steps before they switch it to auto.
 - **Profile**: signing in to Antigravity again is no longer undone by a session that
   started before the new login. When that session ended it wrote its older token back
   over the new one, and the next session was refused with the old login's error.

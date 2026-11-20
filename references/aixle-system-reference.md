@@ -146,8 +146,8 @@ of a trigger's runs for a pull request is still going, its further events for
 that pull request start nothing.
 
 Rules enforced on save:
-- Chat, schedule, webhook, event, tracker and pull request triggers need
-  `allow_non_interactive` on every step.
+- Chat, schedule, webhook, event, tracker and pull request triggers, and column
+  triggers in `auto` mode, need `allow_non_interactive` on every step.
 - `schedule` needs a cron expression; give a timezone too, or it runs in UTC and
   drifts an hour across daylight saving.
 - `create_task` and `find_or_create_task` need `subject_column_id`.

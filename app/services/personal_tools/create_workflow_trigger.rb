@@ -18,7 +18,8 @@ module PersonalTools
                   "IMPORTANT: the off-board kinds (chat, schedule, webhook, event, tracker, pull_request) fire " \
                   "unattended, so EVERY step of the workflow must have auto-run (allow_non_interactive) enabled — " \
                   "otherwise this call is rejected and the error names the steps still waiting on a " \
-                  "human. Column triggers are exempt: their manual mode puts a person on the button. " \
+                  "human. A column trigger in auto mode fires unattended too and has the same rule; " \
+                  "one in manual mode puts a person on the button and does not. " \
                   "kind=webhook also provisions an inbound endpoint and returns webhook_url and " \
                   "webhook_secret; the secret is shown only in this response."
       audience :user
