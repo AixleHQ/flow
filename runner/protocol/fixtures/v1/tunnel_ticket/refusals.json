@@ -1,0 +1,47 @@
+{
+  "description": "The tunnel ticket takes the common refusals of §3, in their order: a bad header before the token, a missing, unknown or wrong-kind token is 401 invalid_token, the flag turned off is 403 runners_disabled until it is back on, and a revoked runner's token is 401 invalid_token. The token is checked before the machine's session, so a dead token learns nothing about it.",
+  "steps": [
+    {"given": "tunnel_on"},
+    {"given": "registered_machine", "as": "m"},
+    {"given": "registration_token", "as": "reg"},
+    {
+      "request": {"method": "POST", "path": "/runner/v1/tunnel-ticket", "token": "aracc_not-a-token", "headers": {"X-Aixle-Runner-Protocol": "2"}},
+      "response": {"status": 400, "body": {"error": "unsupported_protocol", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "POST", "path": "/runner/v1/tunnel-ticket", "token": "{{m.access_token}}", "headers": {"X-Aixle-Runner-Version": "latest"}},
+      "response": {"status": 400, "body": {"error": "invalid_runner_version", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "POST", "path": "/runner/v1/tunnel-ticket"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "POST", "path": "/runner/v1/tunnel-ticket", "token": "aracc_not-a-token"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "POST", "path": "/runner/v1/tunnel-ticket", "token": "{{m.refresh_token}}"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {
+      "request": {"method": "POST", "path": "/runner/v1/tunnel-ticket", "token": "{{reg}}"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    },
+    {"given": "flag_off"},
+    {
+      "request": {"method": "POST", "path": "/runner/v1/tunnel-ticket", "token": "{{m.access_token}}"},
+      "response": {"status": 403, "body": {"error": "runners_disabled", "message": {"$type": "string"}}}
+    },
+    {"given": "flag_on"},
+    {
+      "request": {"method": "POST", "path": "/runner/v1/tunnel-ticket", "token": "{{m.access_token}}"},
+      "response": {"status": 409, "body": {"error": "no_session", "message": {"$type": "string"}}}
+    },
+    {"given": "runner_revoked"},
+    {
+      "request": {"method": "POST", "path": "/runner/v1/tunnel-ticket", "token": "{{m.access_token}}"},
+      "response": {"status": 401, "body": {"error": "invalid_token", "message": {"$type": "string"}}}
+    }
+  ]
+}

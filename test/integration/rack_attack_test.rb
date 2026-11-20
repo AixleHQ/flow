@@ -171,6 +171,21 @@ class RackAttackTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # The tunnel's ticket is a gateway request (runner-relay.md §3.1): the relay's own
+  # upgrade is not throttled, so this is where minting tickets is bounded.
+  test "tunnel tickets count against the runner gateway's per-credential cap" do
+    with_process_mode("runner_gateway") do
+      600.times { |i| post "/runner/v1/tunnel-ticket", headers: { "Authorization" => "Bearer aracc_one" }, env: { "REMOTE_ADDR" => "203.0.113.#{i % 250}" } }
+      assert_not_equal 429, response.status
+
+      post "/runner/v1/tunnel-ticket", headers: { "Authorization" => "Bearer aracc_one" }
+      assert_response :too_many_requests
+
+      post "/runner/v1/tunnel-ticket", headers: { "Authorization" => "Bearer aracc_other" }
+      assert_not_equal 429, response.status
+    end
+  end
+
   # A new bearer value per request earns a new per-token bucket, so the address
   # is what bounds it. No protocol header: the gateway answers 400 before any
   # lookup, which keeps the burst cheap, and the throttle runs ahead of it.
