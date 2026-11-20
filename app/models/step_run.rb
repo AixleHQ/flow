@@ -12,15 +12,16 @@ class StepRun < ApplicationRecord
   has_many :produced_workflow_run_assets, class_name: "WorkflowRunAsset", foreign_key: :produced_by_step_run_id,
                                          dependent: :nullify, inverse_of: :produced_by_step_run
 
-  enumerize :state, in: %i[pending running waiting_input completed failed skipped cancelled], default: :pending,
+  enumerize :state, in: %i[pending running waiting_input suspended completed failed skipped cancelled], default: :pending,
                     predicates: true, scope: true
 
   broadcasts_to :workflow_run, on: :update
 
   scope :ordered, -> { joins(:step).order("steps.position ASC") }
 
-  # A step that has not ended: waiting to start, running, or waiting for input.
-  UNFINISHED_STATES = %w[pending running waiting_input].freeze
+  # A step that has not ended: waiting to start, running, waiting for input, or
+  # suspended with its session until someone restores it (Sessions::Suspension).
+  UNFINISHED_STATES = %w[pending running waiting_input suspended].freeze
   scope :unfinished, -> { where(state: UNFINISHED_STATES) }
   # Completed or skipped: nothing left for the agent to do on it.
   scope :done, -> { where(state: %w[completed skipped]) }
@@ -60,6 +61,22 @@ class StepRun < ApplicationRecord
 
   def mark_waiting!
     update!(state: :waiting_input)
+  end
+
+  def mark_suspended!
+    update!(state: :suspended)
+  end
+
+  # The sessions this step ran in, newest first: its current one and the suspended
+  # ones each Restore continued (TerminalSession#restored_from_session).
+  def session_history
+    sessions = []
+    session = terminal_session
+    while session && sessions.size < 50
+      sessions << session
+      session = session.restored_from_session
+    end
+    sessions
   end
 
   def mark_completed!

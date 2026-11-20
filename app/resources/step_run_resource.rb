@@ -122,6 +122,34 @@ class StepRunResource < ApplicationResource
                            user: params[:viewer], session: ts)
   end
 
+  # == Suspend and restore (Sessions::Suspension) ==
+
+  # The owner of the step's live interactive session may suspend it.
+  typelize :boolean
+  attribute :suspendable do |sr|
+    ts = sr.terminal_session
+    ts.present? && ts.container_up? && owned_by_viewer?(ts) && Sessions::Suspension.supported?(ts)
+  end
+
+  # A suspended step its session's owner can restore, and until when.
+  typelize :boolean
+  attribute :restorable do |sr|
+    ts = sr.terminal_session
+    sr.suspended? && ts.present? && owned_by_viewer?(ts) && Sessions::Suspension.restorable?(ts)
+  end
+
+  typelize "string | null"
+  attribute :restore_expires_at do |sr|
+    sr.suspended? ? sr.terminal_session&.restore_expires_at : nil
+  end
+
+  # Every session the step ran in, newest first: more than one once it was suspended
+  # and restored.
+  typelize "number[]"
+  attribute :session_ids do |sr|
+    sr.terminal_session&.restored_from_session_id ? sr.session_history.map(&:id) : Array(sr.terminal_session_id)
+  end
+
   typelize "SubStepRun[]"
   attribute :sub_step_runs do |sr|
     sr.sub_step_runs

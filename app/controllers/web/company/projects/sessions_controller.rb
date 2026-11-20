@@ -74,7 +74,7 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
   # A workflow-step session shows the run it belongs to in its breadcrumb, and
   # says "Step 2 of 4" instead of "Standalone session". Nil for a standalone.
   def workflow_context_for(session)
-    step_run = session.step_run
+    step_run = session.owning_step_run
     return nil if step_run.nil?
 
     run = step_run.workflow_run

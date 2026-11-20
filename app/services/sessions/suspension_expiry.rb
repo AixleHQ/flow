@@ -9,8 +9,14 @@ module Sessions
   # have; then the archive is deleted and the session is finished. A restored session's
   # archive is kept until the same date, so a failed restore can be tried again, and
   # deleted then.
+  #
+  # A suspended workflow step is different: its run is waiting on it. When its window
+  # closes the step fails and the run carries on as the step's on_failure says. A step
+  # its run no longer waits on (skipped, or the run ended) has its archive deleted at the
+  # next sweep.
   class SuspensionExpiry
     OUTPUTS_PREFIX = "./outputs/"
+    DISCARDED_KEY = "suspend_discarded"
 
     def self.remind_due(now: Time.current)
       TerminalSession.suspended
@@ -24,6 +30,9 @@ module Sessions
 
     def self.expire_due(now: Time.current)
       expired = TerminalSession.suspended.where(restore_expires_at: ...now).find_each.count { |session| new(session).expire! }
+      TerminalSession.suspended.workflow_steps.where(restore_expires_at: now..).find_each do |session|
+        new(session).discard! unless Suspension.step_waiting_on?(session)
+      end
       TerminalSession.where(state: "restored", restore_expires_at: ...now).joins(:session_checkpoint)
                      .find_each { |session| session.session_checkpoint.destroy! }
       expired
@@ -34,6 +43,8 @@ module Sessions
     end
 
     def expire!
+      return expire_step! if @session.workflow_step?
+
       checkpoint = @session.session_checkpoint
       import_outputs(checkpoint) if checkpoint
       checkpoint&.destroy!
@@ -43,6 +54,30 @@ module Sessions
     rescue StandardError => e
       Rails.logger.error("[SuspensionExpiry] session=#{@session.id}: #{e.class}: #{e.message}")
       false
+    end
+
+    # The step's session fails; the run, which reads the step's current session, then
+    # fails the step and goes on as its on_failure says.
+    def expire_step!
+      return discard! unless Suspension.step_waiting_on?(@session)
+
+      @session.session_checkpoint&.destroy!
+      @session.update!(state: "failed", error_message: "Suspended, and not restored before " \
+                                                       "#{@session.restore_expires_at&.utc&.strftime('%Y-%m-%d %H:%M UTC')}",
+                       metadata: @session.metadata.to_h.merge(Suspension::EXPIRED_KEY => true))
+      @session.step_run.update!(state: :running)
+      WorkflowService.notify_container_finished(step_run: @session.step_run)
+      true
+    rescue StandardError => e
+      Rails.logger.error("[SuspensionExpiry] step session=#{@session.id}: #{e.class}: #{e.message}")
+      false
+    end
+
+    # A suspended step its run no longer waits on: nothing can restore it.
+    def discard!
+      @session.session_checkpoint&.destroy!
+      @session.update!(state: "finished", metadata: @session.metadata.to_h.merge(DISCARDED_KEY => true))
+      true
     end
 
     private

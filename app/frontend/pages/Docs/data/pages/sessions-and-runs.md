@@ -70,8 +70,15 @@ After 30 days the saved files are deleted and the session is finished. Anything
 the agent had put in `outputs` becomes an asset of the session, as when a session
 finishes.
 
-Workflow steps are not suspended: a run waits on its steps and ends a step at the
-same limit.
+**An interactive workflow step** is suspended the same way, and its run waits for
+it: the next steps do not start. The run page shows the step as *Suspended* with the
+days left, and whoever the step's session belongs to can **Restore** it there. The
+restored session continues the same step, and when it finishes the run carries on.
+A step can be suspended and restored more than once; its session page links each
+session to the one before. **Skip** moves the run on without it. A suspended step
+that is not restored in time fails, and the run goes on as the step's *On failure*
+setting says. A run waits for a suspended step for at most as long as the run itself
+may last, so a step suspended late in a long run has a shorter window.
 
 ## Watching a run
 
