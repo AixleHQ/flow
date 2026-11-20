@@ -24,16 +24,13 @@ module Sessions
 
     # An interactive workflow step too: its run waits on it by reading the step's current
     # session (WorkflowExecutionWorkflowV2), so a suspended step holds the run until it is
-    # restored, and the restored session completes it. Without storage that signs uploads
-    # the archive has nowhere to go.
+    # restored, and the restored session completes it.
     def supported?(session)
-      return false unless session.mode == "interactive" && session.user_id.present? && storage_signs_uploads?
+      return false unless session.mode == "interactive" && session.user_id.present?
+      # A runner's callback proxy passes no upload to the app, only object storage's own URLs.
+      return false if session.runner_id.present? && !Uploads::ContainerTransfer.signs?(SessionCheckpointUploader.storages[:cache])
 
       session.agent_session? || (session.workflow_step? && session.step_run.present?)
-    end
-
-    def storage_signs_uploads?
-      SessionCheckpointUploader.storages[:cache].respond_to?(:presign)
     end
 
     def requested?(session)

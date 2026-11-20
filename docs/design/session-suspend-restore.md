@@ -23,7 +23,7 @@ Instead, an interactive session is **suspended**:
 | 6 | Assets are restored from the session's own `input_assets`, at their current version |
 | 7 | The CLI resumes its conversation by id. If it cannot, it starts fresh with the old conversation left as a file |
 | 8 | The suspend phase gets its own long timeout. An archive lives 30 days and its owner is told so. After that a sweep deletes it and the session becomes `finished` |
-| 9 | Suspend works wherever the archive can go straight to S3-compatible storage. Without it, a session finishes as today |
+| 9 | Suspend works with every storage. Object storage signs the container's URLs; where the storage cannot (FileSystem in development), the app takes the archive in and hands it back |
 
 ## 3. Lifecycle
 
@@ -49,7 +49,7 @@ ready ──23-hour limit──────────────────�
 - **`restored`:** terminal. The row links to the session that continued it.
 - Both are in `TerminalSession::TERMINAL_STATES`: nothing runs and no slot is held, which is what every reader of that set wants to know.
 
-`Sessions::Suspension.supported?` is true for an `agent_session` in `interactive` mode, owned by a person, where the checkpoint uploader's storage signs uploads (§8).
+`Sessions::Suspension.supported?` is true for an `agent_session` in `interactive` mode, owned by a person. A session on an external runner also needs storage that signs uploads (§8).
 
 Today the final state is written by the cleanup activity with `update!`, not through an AASM event (`app/temporal/activities/container/admitted_phase_activity.rb`). `suspended` must be written in the same place, and the AASM events `suspend` / `mark_suspended` / `mark_restored` are added so the model agrees. The scanners that look for dead or stale sessions skip `suspended` and `restored`, which are terminal. `CleanupStaleActivity` gives a `finishing` session with the suspend flag the checkpoint's budget before it calls it stuck.
 
@@ -79,7 +79,7 @@ If the checkpoint fails (upload refused, archive over the cap, timeout), the ses
 
 ### 4.1 The archive
 
-One `tar.gz` per suspended session (gzip, so the expiry sweep can read it with Ruby's own `Zlib` and `Gem::Package::TarReader`). `Sessions::Checkpoint` writes one bash script that builds it inside the container and uploads it with a presigned PUT, as `Sessions::LogCollector` uploads logs, then records the manifest from what the script printed.
+One `tar.gz` per suspended session (gzip, so the expiry sweep can read it with Ruby's own `Zlib` and `Gem::Package::TarReader`). `Sessions::Checkpoint` writes one bash script that builds it inside the container and uploads it with a PUT to the URL `Uploads::ContainerTransfer` gives (§8), then records the manifest from what the script printed.
 
 ```
 manifest.json
@@ -175,7 +175,7 @@ If the bundle does not apply, it is left at `/workspace/.aixle-restore/<key>.bun
 2. The old row stays `suspended` until the new session reaches `running`, then becomes `restored`. A restore that fails at launch can be tried again.
 3. Provisioning is the usual pipeline, with two changes:
    - Repositories are set up from the manifest (§4.3) instead of a plain clone.
-   - After provisioning and before the CLI starts, the archive is downloaded inside the container with a presigned GET, the way assets are, and unpacked: `workspace/` over `/workspace`, `conversation/` into `$HOME`.
+   - After provisioning and before the CLI starts, the archive is downloaded inside the container from the URL `Uploads::ContainerTransfer` gives (§8), and unpacked: `workspace/` over `/workspace`, `conversation/` into `$HOME`.
 4. The CLI starts with the adapter's resume command (§5.3). A restore notice goes into the context file (§5.4). What the restore did is kept in `metadata.restore` (`resume`, `conversation_id`, `notes`); `Sessions::Restore.launch_command` reads it when the CLI is started.
 
 ### 5.3 Resume command
@@ -242,11 +242,15 @@ Deleting a user or a project deletes their checkpoints and archives with them. T
 
 ## 8. Runtimes and storage
 
-The archive goes from the container straight to S3-compatible storage with a presigned PUT, and comes back with a presigned GET.
+The archive goes from the container to storage with a PUT and comes back with a GET, never through a Temporal worker. `Uploads::ContainerTransfer` gives both URLs:
 
-- **Hosted Docker and Kubernetes:** supported.
-- **External runners with S3-compatible storage:** supported. The runner protocol's 1 MiB inline cap (`ContainerRuntime::RunnerRuntime#read_file_result`, runner `PROTOCOL.md` §6.5) only limits files read back through the runner, and the archive does not go that way.
-- **A deployment without S3-compatible storage:** `Sessions::Suspension.supported?` is false and sessions finish as today. This is the case the 1 MiB cap comes from: a larger file cannot be read at all.
+- **Object storage (S3, every deployment):** it signs them itself, a presigned PUT and a presigned GET.
+- **Storage that cannot sign (FileSystem in development, Memory in tests):** a URL on the app, `/agents/storage?token=…`, at the session's `:container_assets` callback address, the one stored files are downloaded from. The token names one uploader, one storage, one object and one method, and expires. `ContainerStorageController` writes the body into the storage or sends the object back. Where the storage does sign, the endpoint answers 404: the app never stands in for object storage.
+
+By runtime:
+
+- **Hosted Docker and Kubernetes:** supported, with either kind of storage.
+- **External runners:** supported with object storage. The runner protocol's 1 MiB inline cap (`ContainerRuntime::RunnerRuntime#read_file_result`, runner `PROTOCOL.md` §6.5) only limits files read back through the runner, and the archive does not go that way. Without object storage `Sessions::Suspension.supported?` is false: the runner's callback proxy (`Runners::Proxy`) passes only `GET` under `/store`, not the app's upload URL.
 - **Runner with a reused volume:** a restored session may land on a machine whose volume still holds an older checkout. That needs the fetch-and-reset path the code does not have yet (research report §6). Until then, a restore on such a runner clones into a fresh path.
 
 ## 9. UI
@@ -298,6 +302,7 @@ Not checked live: the 23-hour limit itself. It is covered by tests of `Sessions:
 - **No change to the Temporal workflow.** The limit is recognised from the session in the cleanup activity; §3.2.
 - **`tar.gz`, not zstd**, so the expiry sweep can read it without a native library; §4.1.
 - **Workflow steps were left out of the first build** and added in the same PR; §13.
+- **Not only S3.** Storage that cannot sign URLs gets the app's own transfer endpoint, so suspend works in development too; §8.
 
 ## 13. Workflow steps
 

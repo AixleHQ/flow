@@ -37,8 +37,7 @@ governance, community health — carry none.
   and the agent's conversation are kept for 30 days, and **Restore** starts a new session that picks up the same
   conversation. An interactive workflow step can be suspended too: its run waits for it, and **Restore** on the run page
   continues the same step. A suspended session holds no slot; its owner is emailed when it is suspended and three days
-  before it expires. Needs S3-compatible storage; without it sessions finish as before. Operators: a workflow run may now
-  last 40 days instead of 7.
+  before it expires. Operators: a workflow run may now last 40 days instead of 7.
 
 ### Fixed
 - The `flow-web` image runs Ruby 4.0.10, which fixes the seven memory-safety bugs in

@@ -17,15 +17,22 @@ module Sessions
 
     teardown { restore_checkpoint_storage }
 
-    test "an interactive agent session can be suspended where storage signs uploads" do
+    test "an interactive agent session can be suspended" do
       assert Suspension.supported?(@session)
     end
 
-    # The archive goes from the container straight to storage: with nothing to sign the
-    # upload, there is nowhere to put it.
-    test "nothing can be suspended without storage that signs uploads" do
+    # The app stands in for storage that cannot sign the container's URLs.
+    test "a session can be suspended without storage that signs uploads" do
       restore_checkpoint_storage
 
+      assert Suspension.supported?(@session)
+    end
+
+    test "a session on an external runner needs storage that signs uploads" do
+      @session.runner_id = 42
+      assert Suspension.supported?(@session)
+
+      restore_checkpoint_storage
       refute Suspension.supported?(@session)
     end
 

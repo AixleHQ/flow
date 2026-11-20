@@ -102,6 +102,11 @@ export function agentsGitCredentialsPath(options?: object): string {
   return "/" + "agents" + "/" + "git" + "/" + "credentials" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /agents/storage(.:format) */
+export function agentsStoragePath(options?: object): string {
+  return "/" + "agents" + "/" + "storage" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /agents/credentials(.:format) */
 export function agentsCredentialsPath(options?: object): string {
   return "/" + "agents" + "/" + "credentials" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
