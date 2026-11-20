@@ -5,6 +5,8 @@ import { type Dispatch, type SetStateAction, useCallback, useRef, useState } fro
 import { apiMutate } from 'shared/lib/apiFetch';
 import { moveApiV1ProjectTaskPath, reorderApiV1ProjectColumnsPath } from 'shared/routes';
 
+import type { PendingMove } from './useBoardTaskPages';
+
 const jsonHeaders = { 'Content-Type': 'application/json' };
 
 // The board's drag-and-drop lives here rather than inline in BoardPage so the move/reorder
@@ -32,6 +34,9 @@ interface UseBoardDndOptions<T extends DndTask, C extends DndColumn> {
   setTasks: Dispatch<SetStateAction<T[]>>;
   columns: C[];
   setColumns: Dispatch<SetStateAction<C[]>>;
+  /** Keeps a dropped card in place against board reloads until the server shows the move. */
+  pinMove?: (taskId: number, move: PendingMove) => void;
+  settleMove?: (taskId: number, saved: boolean) => void;
 }
 
 interface UseBoardDndResult<T extends DndTask> {
@@ -51,6 +56,8 @@ export function useBoardDnd<T extends DndTask, C extends DndColumn>({
   setTasks,
   columns,
   setColumns,
+  pinMove,
+  settleMove,
 }: UseBoardDndOptions<T, C>): UseBoardDndResult<T> {
   const [activeTask, setActiveTask] = useState<T | null>(null);
   const [hoverColumnId, setHoverColumnId] = useState<number | null>(null);
@@ -192,6 +199,7 @@ export function useBoardDnd<T extends DndTask, C extends DndColumn>({
         .reduce((max, t) => Math.max(max, t.position), 0);
       const position = targetPosition ?? maxInTargetColumn + 1;
 
+      pinMove?.(origTask.id, { fromColumnId: origTask.boardColumnId, boardColumnId: targetColumnId, position });
       setTasks((prev) => {
         const next = prev.map((t) => ({ ...t }));
         const dragged = next.find((t) => t.id === origTask.id);
@@ -229,9 +237,10 @@ export function useBoardDnd<T extends DndTask, C extends DndColumn>({
         body: JSON.stringify({ columnId: targetColumnId, position }),
       });
       // On success the cable confirms via board.touch → broadcast_refresh_to(board) → only: ['tasks', 'columns', 'recent_activities']
+      settleMove?.(origTask.id, !!moved);
       if (!moved) setTasks(preDragSnapshotRef.current);
     },
-    [enabled, projectId, columns, setColumns, setTasks],
+    [enabled, projectId, columns, setColumns, setTasks, pinMove, settleMove],
   );
 
   return { activeTask, hoverColumnId, handleDragStart, handleDragOver, handleDragEnd };
