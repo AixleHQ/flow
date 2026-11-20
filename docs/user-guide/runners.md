@@ -307,6 +307,14 @@ yours to run and secure. Know this before you add one:
 - **The `docker` group is root-equivalent.** `service install` puts the
   `aixle-runner` user in it, because the runner starts containers. Anyone who
   controls that user controls the machine.
+- **Sessions share the machine's kernel.** A container does not stop a kernel
+  exploit, and a session runs whatever the repository and its dependencies
+  contain. Keep the kernel patched, and block kernel modules that load on demand
+  if you don't use them. SCTP is one: any process in a container makes the
+  kernel load it by opening an SCTP socket, Docker's seccomp profile does not
+  stop that, and SCTP has had privilege-escalation bugs. To block it, run
+  `echo 'install sctp /bin/false' | sudo tee /etc/modprobe.d/disable-sctp.conf`.
+  If `lsmod | grep sctp` already lists the module, reboot afterwards.
 - **The runner updates its own binary.** It replaces the binary, which the
   `aixle-runner` user owns, with one whose SHA-256 the platform pins. To allow
   no software change you did not make, run `configure` with `--no-auto-update`
