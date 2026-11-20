@@ -53,6 +53,26 @@ internal `aixle-tools` MCP server:
 Plus the always-present lifecycle and progress tools: `finish_session`,
 `fail_session`, `list_sub_steps`, `mark_sub_step`, `read_tool_result`.
 
+### Archived tasks
+
+Archiving a task hides it from the board, and `board_list_tasks` leaves it out
+the same way. To see archived tasks, pass `include_archived: true`. The page then
+lists archived and active tasks together, and each row's `archived` field
+(`true` or `false`) tells them apart. Search, column, tag and the other filters
+still apply. This call lists the Done column with its archived tasks:
+
+```json
+{ "column_name": "Done", "include_archived": true }
+```
+
+There is no switch for archived tasks only: keep the rows whose `archived` is
+`true`. `board_get_task` reads an archived task by its `#N` or id without the
+flag.
+
+The personal MCP server's `list_board_tasks` works the same way, with the column
+given as `column_id`. It no longer takes the old `archived` parameter; use
+`include_archived`.
+
 ## Custom tools
 
 Create custom tools under **Company → Tools** or **Project → Tools**. A
