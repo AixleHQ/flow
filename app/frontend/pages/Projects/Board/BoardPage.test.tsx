@@ -1573,7 +1573,7 @@ describe('Projects/Board/BoardPage', () => {
       makeTask({ id: 1, title: 'Failing task', boardColumnId: 100, recentWorkflowRuns: [runOf({ state: 'failed' })] }),
     );
 
-    expect(chip).toHaveStyle({ backgroundColor: 'var(--app-danger-fg)' });
+    expect(chip.style.backgroundColor).toBe('var(--app-danger-fg)');
   });
 
   it('colors a gated collapsed column chip as waiting rather than as its running run', async () => {
@@ -1588,7 +1588,7 @@ describe('Projects/Board/BoardPage', () => {
       }),
     );
 
-    expect(chip).toHaveStyle({ backgroundColor: 'var(--app-warning-fg)' });
+    expect(chip.style.backgroundColor).toBe('var(--app-warning-fg)');
   });
 
   it('colors a collapsed column chip with a stale CI gate as needing attention', async () => {
@@ -1608,7 +1608,7 @@ describe('Projects/Board/BoardPage', () => {
       }),
     );
 
-    expect(chip).toHaveStyle({ backgroundColor: 'var(--app-danger-fg)' });
+    expect(chip.style.backgroundColor).toBe('var(--app-danger-fg)');
   });
 
   // --- CI gate state on the card (pending / passed / failed / stale) ---
