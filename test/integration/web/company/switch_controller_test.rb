@@ -15,7 +15,7 @@ class Web::Company::SwitchControllerTest < ActionDispatch::IntegrationTest
                                                 accepted_at: 1.day.ago,
                                                 onboarding_state: "completed",
                                                 onboarding_completed_at: Time.current,
-                                                position: "dev", preferred_agent_language: "en")
+                                                position: "engineering", preferred_agent_language: "en")
     sign_in_as(@user)
   end
 

@@ -22,7 +22,7 @@ class Web::InvitationsControllerTest < ActionDispatch::IntegrationTest
     membership = user.company_memberships.find_by(company: company) ||
                  create(:company_membership, :invited, user: user, company: company, invited_by: @admin)
     membership.update!(onboarding_state: "completed", onboarding_completed_at: Time.current,
-                       position: "dev", preferred_agent_language: "en")
+                       position: "engineering", preferred_agent_language: "en")
     create(:agent_credential, user: user, company: company, agent_type: "claude_code")
     membership
   end
@@ -343,7 +343,7 @@ class Web::InvitationsControllerTest < ActionDispatch::IntegrationTest
                                              invited_by: @admin)
     # Pre-completed for the target company, with its own credential.
     membership.update!(onboarding_state: "completed", onboarding_completed_at: Time.current,
-                       position: "dev", preferred_agent_language: "en")
+                       position: "engineering", preferred_agent_language: "en")
     create(:agent_credential, user: member, company: target, agent_type: "claude_code")
     sign_in_as(member)
 

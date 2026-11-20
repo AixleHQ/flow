@@ -15,7 +15,7 @@ class MembershipOnboardingStateMachineTest < ActiveSupport::TestCase
 
   def membership(role, state: "step2")
     create(:user, role, company: @company, onboarding_state: state,
-                        position: "dev", preferred_agent_language: "en")
+                        position: "engineering", preferred_agent_language: "en")
       .company_memberships.sole
   end
 

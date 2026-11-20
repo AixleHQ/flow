@@ -18,7 +18,7 @@ class Web::CrossCompanyIsolationTest < ActionDispatch::IntegrationTest
                                                 accepted_at: 1.day.ago,
                                                 onboarding_state: "completed",
                                                 onboarding_completed_at: Time.current,
-                                                position: "dev", preferred_agent_language: "en")
+                                                position: "engineering", preferred_agent_language: "en")
 
     @colleague_b = create(:user, :employee, :onboarding_completed, company: @company_b)
 

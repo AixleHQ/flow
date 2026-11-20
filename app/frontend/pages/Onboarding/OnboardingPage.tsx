@@ -18,26 +18,14 @@ import {
 } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
-import {
-  IconBrush,
-  IconBuilding,
-  IconCheck,
-  IconChevronLeft,
-  IconChevronRight,
-  IconClipboardList,
-  IconClock,
-  IconCode,
-  IconDots,
-  IconPlug,
-  IconRefresh,
-  IconTestPipe,
-} from '@tabler/icons-react';
+import { IconCheck, IconChevronLeft, IconChevronRight, IconClock, IconPlug, IconRefresh } from '@tabler/icons-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type TerminalSession from 'types/generated/TerminalSession';
 
 import { apiFetch, apiRequest } from 'shared/lib/apiFetch';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
+import { POSITION_OPTIONS } from 'shared/resources/members/positions';
 import {
   apiV1TerminalSessionsPath,
   finishApiV1TerminalSessionPath,
@@ -48,15 +36,6 @@ import { AGENT_RUNTIMES, AGENT_TYPES } from 'shared/ui/agentRuntimes';
 import { AgentLogo, LiveTerminal } from 'shared/ui/sessions';
 
 import classes from './OnboardingPage.module.css';
-
-const POSITION_OPTIONS = [
-  { value: 'dev', label: 'Developer', icon: IconCode },
-  { value: 'qa', label: 'QA Engineer', icon: IconTestPipe },
-  { value: 'pm_po_ba', label: 'Product Manager / BA', icon: IconClipboardList },
-  { value: 'designer', label: 'Designer', icon: IconBrush },
-  { value: 'cto', label: 'CTO', icon: IconBuilding },
-  { value: 'other', label: 'Other', icon: IconDots },
-];
 
 const LANGUAGE_OPTIONS = [
   { value: 'en', label: 'English' },
@@ -690,12 +669,12 @@ const OnboardingPage = () => {
             <Stack gap="md">
               <Box>
                 <Text size="xs" c="dimmed" fw={500} mb="xs">
-                  Your position{' '}
+                  Your area{' '}
                   <Text component="span" c="red" inherit>
                     *
                   </Text>
                 </Text>
-                <SimpleGrid cols={2} spacing="xs">
+                <SimpleGrid cols={{ base: 1, xs: 3 }} spacing="xs">
                   {POSITION_OPTIONS.map((opt) => {
                     const Icon = opt.icon;
                     const selected = position === opt.value;
