@@ -982,8 +982,10 @@ line of the end under test must be what it writes next. The `@do` verbs are a cl
 (`open`, `accept`, `reject`, `write`, `read`, `closewrite`, `close`, `reset`, `goaway`), each documented in the README.
 The sum of all the files' frame types must equal the ten of §5; the test fails otherwise.
 
-**`PROTOCOL.md`:** a new `## 8. The relay tunnel`, written before "Not in protocol 1 yet", which becomes §9 (its two
-references, at the top of the file and in §5.4, are updated) and loses its tunnel line. It holds the frames table, §5.8's encoding, the
+**`PROTOCOL.md`:** a new `## 8. The relay tunnel`, written before "Not in protocol 1 yet", which becomes §9 (every
+reference to the old §8 is updated in the same change: the two inside `PROTOCOL.md`, the comments in
+`app/services/runners/revocation.rb`, `app/services/runners/registration.rb` and
+`app/controllers/runner_gateway/v1/registrations_controller.rb`, and `DESIGN.md`, in its `DELETE registration` note) and loses its tunnel line. It holds the frames table, §5.8's encoding, the
 limits, the heartbeat, the stream rules and the close codes, as the package implements them and nothing it does not. 16c adds
 the ticket and the upgrade to it; the `tunnel-ticket` endpoint is its own `§5.11`.
 

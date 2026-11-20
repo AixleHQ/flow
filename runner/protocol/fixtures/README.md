@@ -27,6 +27,10 @@ get. Both sides run them:
 
 `v1/` holds the fixtures of protocol `1`. A protocol bump adds `v2/` next to it.
 
+`v1/tunnel/` is the exception: it holds the frame sequences of the relay tunnel (`PROTOCOL.md` §8)
+in a text format of their own, `*.frames`, which [the last section](#the-relay-tunnel-fixtures-v1tunnel)
+describes. The HTTP harnesses above glob `*.json`, so they never read it.
+
 ## What the fixtures do not cover
 
 These clauses of `PROTOCOL.md` are verified outside the portable suite. The Go fake replays only
@@ -188,3 +192,71 @@ fixture.
    every harness in the same change.
 3. When a later task adds an endpoint or an op, it adds that endpoint's or op's section to
    `PROTOCOL.md` and its fixtures here, in the same change.
+
+## The relay tunnel fixtures: `v1/tunnel/`
+
+The tunnel is not a request and a response, so its fixtures are frame sequences in plain text, one
+file per frame type and one per scenario, `v1/tunnel/<name>.frames`. They are not JSON, so that
+the HTTP harnesses, which glob `*.json`, cannot take one for an HTTP scenario. The Go package
+`runner/protocol/tunnel` runs them (`fixture_test.go`), in the Go CI job. Nothing else reads them yet.
+
+A file is a list of lines. A `#` starts a comment, and blank lines are ignored.
+
+```
+# a stream opens, carries "hi" and closes in both directions
+@config max_streams=2                  # the limits of the end under test
+> 01 00000000 7b2276223a312c...        # the relay writes a message, in hex
+< 01 00000000 7b2276223a312c...        # the runner writes a message
+@do open session=123 port=7681         # the end under test calls an action
+@advance 20s                           # the fake clock moves
+```
+
+| Line | Meaning |
+| --- | --- |
+| `> <hex>` | One message written by the relay: the whole frame, `type stream-id payload`. Spaces in the hex are ignored. A byte followed by `{n}` is that byte `n` times (`61{1024}` is 1024 bytes of `0x61`) |
+| `< <hex>` | One message written by the runner |
+| `@config key=value ...` | Limits of the end under test, before the first line that matters: `max_frame`, `max_streams`, `window`, `session_id` (the relay's `HELLO.session_id`), `buffer` (how many messages the in-memory connection holds before a write waits; default 64, 0 makes every write wait for the read) |
+| `@only relay` or `@only runner` | The file runs with the package as that end only. A scenario in which one end misbehaves, or does what the other never does, is one-sided |
+| `@do <verb> [key=value ...]` | An action, called on the end that has the verb (below) |
+| `@advance <duration>` | The fake clock of the end under test moves, and the timers that come due fire (`20s`, `10s`) |
+| `@quiet` | The end under test writes nothing now (the harness waits 20 ms of real time) |
+| `@closed <code>` | The end under test closed the connection with that WebSocket close code, and wrote nothing else first |
+| `@hangup` | The other end closed the connection |
+
+Any `@` line except `@config` and `@only` takes `side=relay` or `side=runner`: it counts only when the package is that end.
+
+**How a file runs.** Each file runs twice, with the package as the relay and as the runner (unless `@only`). The test plays
+the other end through an in-memory connection, from the file's lines:
+
+- A line written by the end under test is read from the connection, and must be exactly the file's bytes.
+- A line written by the other end is written to the connection by the test, which waits until the package has handled it.
+- The handshake starts with the file, so a file begins with the two `HELLO` lines (`@closed` files may end there).
+- An action runs on the end under test only if it belongs to that end. When the package is the relay, the runner's actions
+  (`accept`, `reject`, and any with `side=runner`) are skipped: the file's `<` lines are what the runner did. The same holds the other way.
+- At the end of the file the test checks that every asynchronous action ended as the file says, that the package wrote nothing
+  more, and that no goroutine of the package is left.
+
+**The verbs** are a closed list, and a test fails on any other. `stream=<n>` names a stream by its id (default 1). `side=` is
+required unless the verb has an end of its own.
+
+| Verb | End | Arguments | What it does |
+| --- | --- | --- | --- |
+| `open` | relay | `session`, `port`; optional `reset=<name>`, `err=limit` or `err=goaway` | `Session.Open`, which runs in the background until `OPEN_OK` or a reset. `reset=` says the open ends with that `RESET`. `err=` says `Open` returns at once with `ErrStreamLimit` or `ErrGoAway`, and sends nothing |
+| `accept` | runner | optional `session`, `port`, `reset=<name>`, `err=goaway` | `Session.Accept`, then `Incoming.Accept`, which answers `OPEN_OK`. `session` and `port` are checked against the `OPEN`. `reset=` says `Incoming.Accept` returns that reset. `err=goaway` says `Session.Accept` returns `ErrGoAway` |
+| `reject` | runner | `code=<name>`, optional `text` | `Session.Accept`, then `Incoming.Reject`, which answers `RESET` |
+| `write` | both | `side`, `stream`, `data=<hex>`; optional `reset=<name>` | `Stream.Write`, in the background. The next action on the stream, or the end of the file, waits for it. `reset=` says it ends with that `RESET` |
+| `read` | both | `side`, `stream`, and one of `data=<hex>`, `eof=1`, `reset=<name>`, `closed=1` | `Stream.Read` of exactly that data, or to end of file; or a read that returns a `RESET` with that code, or the error of a closed connection |
+| `closewrite` | both | `side`, `stream` | `Stream.CloseWrite` |
+| `close` | both | `side`, `stream` | `Stream.Close` |
+| `reset` | both | `side`, `stream`, `code=<name>`, optional `text` | `Stream.Reset` |
+| `goaway` | relay | none | `Session.GoAway` |
+
+A `<name>` is a reset code name of `PROTOCOL.md` §8.4 (`cancelled`, `refused`, `dial_failed`, `timeout`, `session_changed`,
+`revoked`, `flow_violation`, `protocol`, `internal`, `shutdown`). A `text` has no spaces.
+
+**What the test enforces.** There is a file for each of the ten frame types (`frame_<type>.frames`, holding that frame) and one
+for each scenario in the test's list, and the test fails if one is missing or if a file is not in the list. Each file's `RESET`
+texts are pinned too: they are for logs, but a fixture is byte-exact.
+
+**Adding a fixture.** Add the file, add its name to `requiredFixtures` in `runner/protocol/tunnel/fixture_test.go`, and write
+the frames from `PROTOCOL.md` §8, not from the package's output: a fixture that is copied from what the code wrote pins nothing.

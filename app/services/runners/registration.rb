@@ -71,7 +71,7 @@ module Runners
     #
     # The machine stops holding its session, if it had one, and the session ends
     # at once with a message that names the machine; its cleanup finds the
-    # machine absent and releases its admission (PROTOCOL.md §8). `ended_by` is
+    # machine absent and releases its admission (PROTOCOL.md §9). `ended_by` is
     # how the message says the machine left: `aixle-runner unregister` from the
     # machine, or a Revoke on the runner page (DESIGN.md §9.3).
     def unregister!(environment, ended_by: RunnerEnvironmentStateMachine::UNREGISTERED)

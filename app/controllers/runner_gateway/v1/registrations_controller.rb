@@ -37,7 +37,7 @@ module RunnerGateway
       end
 
       # A machine unregistered during a session is not refused: `409 busy` is
-      # not built (runner/protocol/PROTOCOL.md §8). The machine stops holding
+      # not built (runner/protocol/PROTOCOL.md §9). The machine stops holding
       # the session, which ends at once and has its admission released
       # (Runners::Registration).
       def destroy

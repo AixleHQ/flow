@@ -1,0 +1,6 @@
+# A runner that does not speak the relay's version closes with 1002 and answers nothing.
+# (format: runner/protocol/fixtures/README.md)
+@only runner
+
+> 01 00000000 7b2276223a322c226d61785f6672616d65223a33323736382c226d61785f73747265616d73223a36342c2277696e646f77223a3236323134342c2270696e675f696e74657276616c223a32302c2273657373696f6e5f6964223a6e756c6c7d # relay HELLO, version 2 {"v":2,"max_frame":32768,"max_streams":64,"window":262144,"ping_interval":20,"session_id":null}
+@closed 1002
