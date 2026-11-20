@@ -1572,8 +1572,9 @@ describe('Projects/Board/BoardPage', () => {
     expect(titleLine.parentElement).toBe(statusLine.parentElement);
     expect(titleLine).not.toContainElement(statusLine);
     const tooltip = screen.getByRole('tooltip');
-    expect(tooltip).toHaveStyle({ maxWidth: '320px' });
-    expect(tooltip).toHaveStyle({ whiteSpace: 'normal' });
+    // `maw={320}` is an inline max-width; `multiline` is what lets the label wrap inside it.
+    expect(tooltip.style.maxWidth).toBe(rem(320));
+    expect(tooltip).toHaveAttribute('data-multiline');
   });
 
   it('reports elapsed time instead of a bare state for a running ticket in a collapsed column', async () => {
@@ -1879,7 +1880,8 @@ describe('Projects/Board/BoardPage', () => {
       makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100 }),
     );
     await userEvent.hover(card);
-    const reference = tooltipBackground(await screen.findByText(/^#1 · Wire up authentication/));
+    await screen.findByText(/^#1 · Wire up authentication/);
+    const reference = tooltipBackground(screen.getByRole('tooltip'));
     expect(reference).not.toBe('');
 
     cleanup();
