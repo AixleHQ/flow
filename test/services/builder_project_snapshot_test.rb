@@ -11,7 +11,7 @@ class BuilderProjectSnapshotTest < ActiveSupport::TestCase
 
   test "lists the project's resources with the ids the tools take" do
     workflow = create(:workflow, scope: @project, name: "Weekly report")
-    create(:step, workflow: workflow)
+    create(:step, :non_interactive, workflow: workflow)
     board = create(:board, project: @project)
     column = create(:board_column, board: board, name: "Review", position: 1)
     ColumnWorkflowBinding.create!(board_column: column, workflow: workflow, trigger_mode: "auto")

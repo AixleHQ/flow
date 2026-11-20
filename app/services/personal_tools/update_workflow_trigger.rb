@@ -10,7 +10,8 @@ module PersonalTools
                   "column triggers and event triggers are separate records whose ids can collide. " \
                   "Only the fields you pass are changed. Column triggers accept trigger_mode and " \
                   "cooldown_seconds only; everything else applies to the off-board kinds. Enabling " \
-                  "an off-board trigger requires auto-run (allow_non_interactive) on every step."
+                  "an off-board trigger, or setting a column trigger to auto, requires auto-run " \
+                  "(allow_non_interactive) on every step."
       audience :user
       tags :workflows
       param :project_id, type: :integer, description: "Project id.", required: true

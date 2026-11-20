@@ -346,6 +346,7 @@ class InternalTools::BoardWriteToolsTest < ActiveSupport::TestCase
 
   test "board_move_task fires the next run for the session's user when the assignee cannot own runs" do
     @task.update!(assignee: assignee_on_card)
+    @workflow.steps.each { |step| step.update!(allow_non_interactive: true) }
     ColumnWorkflowBinding.create!(board_column: @col2, workflow: @workflow, trigger_mode: :auto, cooldown_seconds: 0)
     WorkflowService.expects(:enqueue).once.with(has_entries(user: @user))
                    .returns(create(:workflow_run, workflow: @workflow, project: @project, user: @user))

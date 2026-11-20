@@ -290,10 +290,29 @@ class TriggerEngine
       # A card assigned to a team records the team, and its run goes to the member
       # picked at launch; the event's actor then only owns a run nobody could take.
       team = event.data["team_id"] && event.project&.project_teams&.find_by(id: event.data["team_id"])
-      [ fire_workflow(
+      run = fire_workflow(
         workflow: workflow, project: event.project, task: task,
         actor: actor, event: event, source: source, team: team, **picked
-      ) ].compact
+      )
+      comment_on_refused_column_launch(event, task, workflow, run) if source == "column_workflow_binding"
+      [ run ].compact
+    end
+
+    # A column trigger has no chat thread or tracker issue to report a refusal
+    # to, so without this the card just sits in the column. A replayed event
+    # returns nil from fire_workflow and posts nothing a second time.
+    def comment_on_refused_column_launch(event, task, workflow, run)
+      return if run.nil? || run.persisted?
+
+      column = BoardColumn.find_by(id: event.data["column_id"])&.name || task.board_column&.name
+      reason = run.errors.map { |error| error.message.chomp(".") }.to_sentence.presence || "the workflow did not start"
+      hint = " Turn on auto-run for those steps, or make the trigger manual." if run.errors.include?(:mode)
+      task.task_comments.create!(
+        author_type: :system,
+        body: "The \"#{column}\" column trigger did not start workflow \"#{workflow.name}\": #{reason}.#{hint}"
+      )
+    rescue StandardError => e
+      Rails.logger.warn("[TriggerEngine] refusal comment for event ##{event.id} not posted: #{e.message}")
     end
 
     # cooldown_seconds: at most one run per window per binding. The binding's row

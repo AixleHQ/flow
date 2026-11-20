@@ -28,6 +28,27 @@ class ColumnWorkflowBindingTest < ActiveSupport::TestCase
     assert_nil binding.reload.created_by_id
   end
 
+  test "an auto trigger refuses a workflow with a step that waits for a person, and names the step" do
+    create(:step, workflow: @workflow, name: "Plan", allow_non_interactive: true)
+    create(:step, workflow: @workflow, name: "Review by hand")
+    binding = ColumnWorkflowBinding.new(board_column: @column, workflow: @workflow, trigger_mode: :auto)
+
+    assert_not binding.valid?
+    assert_equal [ "Workflow can't start on its own when a card enters the column — turn on auto-run for " \
+                   "these steps or make the trigger manual: Review by hand" ], binding.errors.full_messages
+  end
+
+  test "a manual trigger takes such a workflow, and an auto one takes it once every step runs on its own" do
+    step = create(:step, workflow: @workflow, name: "Review by hand")
+    binding = ColumnWorkflowBinding.create!(board_column: @column, workflow: @workflow, trigger_mode: :manual)
+
+    assert_raises(ActiveRecord::RecordInvalid) { binding.update!(trigger_mode: :auto) }
+
+    step.update!(allow_non_interactive: true)
+    binding.update!(trigger_mode: :auto)
+    assert_equal "auto", binding.reload.trigger_mode
+  end
+
   test "a trigger created before creators were recorded stays valid" do
     binding = ColumnWorkflowBinding.new(board_column: @column, workflow: @workflow)
 

@@ -443,7 +443,7 @@ class TriggerBinding < ApplicationRecord
   # Off-board triggers (slack / webhook / schedule) fire unattended in
   # non-interactive mode, so every step must allow auto-run — otherwise the launch
   # is silently skipped at fire time (WorkflowService#validate_mode!). Column
-  # triggers are exempt by design: their manual mode puts a human on the button.
+  # triggers live in ColumnWorkflowBinding, which holds its auto mode to the same rule.
   def workflow_supports_auto_run
     return unless enabled? && workflow
 

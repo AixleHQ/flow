@@ -54,12 +54,17 @@ class Templates::SetupChecklistTest < ActiveSupport::TestCase
     assert_equal "done", item("repository:app_repo").status
   end
 
-  test "activating a column trigger restores the template's own mode" do
+  test "a column trigger goes back to the template's auto mode only once every step runs on its own" do
+    binding = ColumnWorkflowBinding.find(item("trigger:0").detail["trigger_id"])
+
+    error = assert_raises(Templates::SetupChecklist::Error) { @checklist.activate_trigger!(item("trigger:0")) }
+    assert_match(/turn on auto-run for these steps or make the trigger manual: Tech design, Implement/, error.message)
+    assert_equal [ "manual", "pending" ], [ binding.reload.trigger_mode, item("trigger:0").status ]
+
+    workflow.steps.each { |step| step.update!(allow_non_interactive: true) }
     @checklist.activate_trigger!(item("trigger:0"))
 
-    binding = ColumnWorkflowBinding.find(item("trigger:0").detail["trigger_id"])
-    assert_equal "auto", binding.trigger_mode
-    assert_equal "done", item("trigger:0").status
+    assert_equal [ "auto", "done" ], [ binding.reload.trigger_mode, item("trigger:0").status ]
   end
 
   test "an unattended trigger on a workflow with manual steps is refused with the reason" do
