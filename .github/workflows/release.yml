@@ -39,7 +39,7 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           section="$version"
           if [[ "$version" == *-* ]]; then section="Unreleased"; fi
-          images="$(jq -r '["web", "otlp-ingest", "agent-base-core", (.runtimes[].image)] | map("`flow-\(.)`") | join(", ")' config/agent_runtimes.json)"
+          images="$(jq -r '["web", "otlp-ingest", "runner-relay", "agent-base-core", (.runtimes[].image)] | map("`flow-\(.)`") | join(", ")' config/agent_runtimes.json)"
           {
             ruby bin/changelog notes "$section"
             echo
