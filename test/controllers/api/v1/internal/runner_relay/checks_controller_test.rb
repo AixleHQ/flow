@@ -7,7 +7,7 @@ module Api
     module Internal
       module RunnerRelay
         # POST /api/v1/internal/runner_relay/checks (runner-relay.md §8.2, §8.3).
-        class ChecksControllerTest < ActionController::TestCase
+        class ChecksControllerTest < ActionDispatch::IntegrationTest
           TOKEN = "relay-internal-token-of-32-characters"
 
           setup do
@@ -17,7 +17,6 @@ module Api
             @machine = create(:runner_environment, runner: @runner)
             @session = create(:runner_session, environment: @machine, state: "ready")
             @machine.update!(current_session_id: @session.id)
-            request.headers["Authorization"] = "Bearer #{TOKEN}"
           end
 
           test "a registered machine that holds its ready session of a live runner with the flag on is valid" do
@@ -77,7 +76,7 @@ module Api
 
           test "a body that is not a list of machines is refused" do
             [ nil, "x", [ 1 ], [ { "session_id" => 1 } ], [ { "environment_id" => "7" } ] ].each do |machines|
-              post :create, params: { machines: machines }, as: :json
+              post_checks(machines)
 
               assert_response :unprocessable_entity, machines.inspect
             end
@@ -86,9 +85,7 @@ module Api
           test "a missing or wrong token is refused, and nothing is checked" do
             Runners::RelayChecks.expects(:valid).never
             [ nil, "Bearer wrong", "Bearer #{TOKEN}x" ].each do |header|
-              request.headers["Authorization"] = header
-
-              post :create, params: { machines: [] }, as: :json
+              post_checks([], header)
 
               assert_response :unauthorized, header.inspect
             end
@@ -101,11 +98,14 @@ module Api
             check_raw(pairs.map { |environment, session| { "environment_id" => environment.id, "session_id" => session.respond_to?(:id) ? session.id : session } })
           end
 
+          def post_checks(machines, authorization = "Bearer #{TOKEN}")
+            post "/api/v1/internal/runner_relay/checks", params: { machines: machines }, as: :json,
+                                                         headers: { "Authorization" => authorization }.compact
+          end
+
           # The company's external_runners flag is on unless a test says otherwise.
           def check_raw(machines, flag: true)
-            with_feature(:external_runners, flag, company: @company) do
-              post :create, params: { machines: machines }, as: :json
-            end
+            with_feature(:external_runners, flag, company: @company) { post_checks(machines) }
 
             assert_response :success
             response.parsed_body["machines"]

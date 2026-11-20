@@ -7,7 +7,7 @@ module Api
     module Internal
       module RunnerRelay
         # GET /api/v1/internal/runner_relay/holders/:route_token (runner-relay.md §8.2).
-        class HoldersControllerTest < ActionController::TestCase
+        class HoldersControllerTest < ActionDispatch::IntegrationTest
           TOKEN = "relay-internal-token-of-32-characters"
 
           setup do
@@ -21,7 +21,7 @@ module Api
           test "answers the session, the machine that holds it, its state and its ports" do
             authorize
 
-            get :show, params: { route_token: @session.route_token }
+            show(@session.route_token)
 
             assert_response :success
             assert_equal({ "session_id" => @session.id, "environment_id" => @machine.id, "state" => "ready",
@@ -32,7 +32,7 @@ module Api
             @machine.update!(current_session_id: nil)
             authorize
 
-            get :show, params: { route_token: @session.route_token }
+            show(@session.route_token)
 
             assert_response :success
             assert_nil response.parsed_body["environment_id"]
@@ -41,7 +41,7 @@ module Api
           test "answers 404 for a token no session has" do
             authorize
 
-            get :show, params: { route_token: "0" * 32 }
+            show("0" * 32)
 
             assert_response :not_found
           end
@@ -50,22 +50,20 @@ module Api
             hosted = create(:terminal_session, state: "ready")
             authorize
 
-            get :show, params: { route_token: hosted.route_token }
+            show(hosted.route_token)
 
             assert_response :not_found
           end
 
           test "refuses a request without the token" do
-            get :show, params: { route_token: @session.route_token }
+            show(@session.route_token)
 
             assert_response :unauthorized
           end
 
           test "refuses a wrong token, and a token of another shape" do
             [ "Bearer wrong", "Bearer #{TOKEN}x", TOKEN, "Basic #{TOKEN}", "Bearer " ].each do |header|
-              request.headers["Authorization"] = header
-
-              get :show, params: { route_token: @session.route_token }
+              show(@session.route_token, header)
 
               assert_response :unauthorized, header
             end
@@ -73,9 +71,8 @@ module Api
 
           test "refuses every request while the platform has no token" do
             Settings.runners.relay.stubs(:internal_token).returns("")
-            request.headers["Authorization"] = "Bearer "
 
-            get :show, params: { route_token: @session.route_token }
+            show(@session.route_token, "Bearer ")
 
             assert_response :unauthorized
           end
@@ -83,7 +80,11 @@ module Api
           private
 
           def authorize
-            request.headers["Authorization"] = "Bearer #{TOKEN}"
+            @authorization = "Bearer #{TOKEN}"
+          end
+
+          def show(route_token, authorization = @authorization)
+            get "/api/v1/internal/runner_relay/holders/#{route_token}", headers: { "Authorization" => authorization }.compact
           end
         end
       end
