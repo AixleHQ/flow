@@ -22,11 +22,14 @@ module Sessions
 
     module_function
 
-    # Workflow steps are left out: their run waits on them with its own limit
-    # (WorkflowExecutionWorkflow::INTERACTIVE_TIMEOUT), and a suspended step would have to
-    # hold the run open. Without storage that signs uploads the archive has nowhere to go.
+    # An interactive workflow step too: its run waits on it by reading the step's current
+    # session (WorkflowExecutionWorkflowV2), so a suspended step holds the run until it is
+    # restored, and the restored session completes it. Without storage that signs uploads
+    # the archive has nowhere to go.
     def supported?(session)
-      session.agent_session? && session.mode == "interactive" && session.user_id.present? && storage_signs_uploads?
+      return false unless session.mode == "interactive" && session.user_id.present? && storage_signs_uploads?
+
+      session.agent_session? || (session.workflow_step? && session.step_run.present?)
     end
 
     def storage_signs_uploads?
@@ -60,15 +63,35 @@ module Sessions
     end
 
     def restorable?(session)
-      session.suspended? && session.session_checkpoint.present? &&
-        (session.restore_expires_at.nil? || session.restore_expires_at.future?)
+      return false unless session.suspended? && session.session_checkpoint.present?
+      return false if session.restore_expires_at&.past?
+
+      !session.workflow_step? || step_waiting_on?(session)
+    end
+
+    # The step still waits on this session: it is the step's current one, the step is
+    # suspended, and its run has not ended (a Skip or a cancel moves on without it).
+    def step_waiting_on?(session)
+      step_run = session.step_run
+      step_run.present? && step_run.suspended? && !step_run.workflow_run.ended? && !step_run.workflow_run.stopped?
+    end
+
+    # A run gets TemporalWorkflowRegistry::RUN_TIMEOUT from its start; a step it waits on
+    # cannot be restored after the run has given up.
+    def window_end(session, now)
+      ends = now + RESTORE_WINDOW
+      run = session.workflow_step? ? session.step_run&.workflow_run : nil
+      return ends unless run
+
+      [ ends, run.created_at + TemporalWorkflowRegistry::RUN_TIMEOUT.seconds - 12.hours ].min
     end
 
     # Called by the cleanup activity once the checkpoint is stored, in place of the
     # usual final state.
     def suspended!(session, now: Time.current)
       session.update!(state: "suspended", finished_at: session.finished_at || now, container_id: nil,
-                      suspended_at: now, restore_expires_at: now + RESTORE_WINDOW)
+                      suspended_at: now, restore_expires_at: window_end(session, now))
+      session.step_run&.mark_suspended! if session.workflow_step?
       ActiveRecord.after_all_transactions_commit { SessionMailer.suspended(session.id).deliver_later }
     end
 

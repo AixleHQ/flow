@@ -313,4 +313,26 @@ class AgentCredentialSyncTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_entity
     assert_equal stored, credential.reload.config_data["state_b64"]
   end
+
+  # == logins whose expiry depends on a key the container may not replace ==
+
+  # Antigravity publishes an expiry only for a consumer login, and `auth_method` is not a
+  # key a container may write back.
+  test "an Antigravity session that started before a new login does not undo it" do
+    session = create(:terminal_session, :running, user: @user, project: @project, company_id: @company.id,
+                                                  agent_type: "antigravity_cli", session_type: "agent_session")
+    credential = AgentCredential.from_artifacts(@user.id, @company.id, "antigravity_cli", {
+      "access_token" => "at-new", "refresh_token" => "rt-new", "token_type" => "Bearer",
+      "expiry" => 1.hour.from_now.utc.iso8601(9), "auth_method" => "consumer"
+    })
+    stale_file = { token: { access_token: "at-old", refresh_token: "rt-old", token_type: "Bearer",
+                            expiry: 30.minutes.from_now.utc.iso8601(9) },
+                   auth_method: "consumer" }.to_json
+
+    post PATH, params: { files: { Agents::AntigravityCliAdapter.new.config_path => stale_file } }.to_json,
+               headers: headers(key: Agents::SessionKey.generate(session), session_id: session.id)
+
+    assert_response :no_content
+    assert_equal "at-new", credential.reload.config_data["access_token"]
+  end
 end

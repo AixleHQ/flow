@@ -23,8 +23,10 @@ governance, community health — carry none.
 - **Sessions & Runs**: an interactive session can be suspended instead of finished, by its owner with **Suspend** or
   by the 23-hour limit, which used to finish it. Its files, each repository's unpushed commits and uncommitted changes,
   and the agent's conversation are kept for 30 days, and **Restore** starts a new session that picks up the same
-  conversation. A suspended session holds no slot; its owner is emailed when it is suspended and three days before it
-  expires. Needs S3-compatible storage; without it sessions finish as before.
+  conversation. An interactive workflow step can be suspended too: its run waits for it, and **Restore** on the run page
+  continues the same step. A suspended session holds no slot; its owner is emailed when it is suspended and three days
+  before it expires. Needs S3-compatible storage; without it sessions finish as before. Operators: a workflow run may now
+  last 40 days instead of 7.
 
 ### Fixed
 - Runners: starting a session through the API on a runner the project cannot use (another

@@ -4,7 +4,9 @@
 class TemporalWorkflowRegistry
   # A run whose steps queue can legitimately outlive a day; one that has been
   # alive for a week is a fault, not a queue.
-  RUN_TIMEOUT = 7.days.to_i
+  # Long enough for a step to wait out its 30-day restore window while suspended
+  # (Sessions::Suspension), with a week of running around it.
+  RUN_TIMEOUT = 40.days.to_i
 
   # workflows.yml names this queue for everything the app runs itself. It is the
   # configured TEMPORAL_TASK_QUEUE — the one the worker polls — so starting a

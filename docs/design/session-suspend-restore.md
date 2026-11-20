@@ -15,7 +15,7 @@ Instead, an interactive session is **suspended**:
 
 | # | Decision |
 |---|---|
-| 1 | Only interactive `agent_session` sessions can be suspended, Aixle Builder included. Workflow steps, `auth_setup` and `tool_setup` never are |
+| 1 | Interactive `agent_session` sessions can be suspended, Aixle Builder included, and so can interactive workflow steps (§13). `auth_setup` and `tool_setup` never are |
 | 2 | Two triggers: reaching the 23-hour limit, and a **Suspend** button. **Finish** still finishes. A session whose container died is still failed: there is nothing left to save |
 | 3 | Restore creates a **new** session (`restored_from_session_id`). The suspended one becomes `restored` once the new one is running |
 | 4 | Outputs are not turned into assets at suspend. The archive holds the whole `/workspace` apart from `repo/`, `assets/`, secret files and rebuildable directories (§4.1) |
@@ -273,7 +273,14 @@ All phases were built in PR #802:
 | 3 | Restore API and buttons, configuration copy, restore script, resume command and fallback, restore notice | `SessionService.restore`, `Sessions::Restore` |
 | 4 | Hourly sweep with outputs to assets, emails, the warning before the limit | `Sessions::SuspensionExpiry`, `SuspendedSessionExpiryWorkflow`, `SessionMailer` |
 
-Still to check live on a deployment with S3: a suspend at the real 23-hour limit, and a restore of each CLI through the product rather than by hand.
+Checked live on staging (S3) on 2026-11-20 with Claude Code and a GitHub repository:
+- **Suspend.** The session became `suspended` with a 58 KB archive in the store bucket. Its manifest named the new branch, the head, the unpushed bundle, the patch, the untracked files and the conversation. The pod was deleted, no outputs were turned into assets, and the email was queued.
+- **Restore.** The new session started with `claude --resume <id>`. Branch, head, the unpushed commit on `main`, the changes, the untracked files and the files under `/workspace` were all back, and the notice was in `CLAUDE.md`. Asked without tools, the agent named the code word and both files.
+- **Expiry**, with the window moved into the past:
+  - a suspended session's two outputs, one nested, became pending-review assets with the right content, its archive was deleted from S3, and the session was `finished`;
+  - a restored session's archive was deleted and its state kept.
+
+Not checked live: the 23-hour limit itself (covered by tests of `Sessions::Suspension.time_limit_reached?` and the cleanup activity), and a restore through the product for the other seven CLIs (their resume commands are the ones the probe used by hand).
 
 ## 11. Out of scope
 
@@ -288,4 +295,23 @@ Still to check live on a deployment with S3: a suspend at the real 23-hour limit
 - **No `suspending` state.** Saving happens in `finishing` (Suspend) or `ready` (the limit); §3.1.
 - **No change to the Temporal workflow.** The limit is recognised from the session in the cleanup activity; §3.2.
 - **`tar.gz`, not zstd**, so the expiry sweep can read it without a native library; §4.1.
-- **Workflow steps are left out.** A run waits on its interactive step with its own 23-hour limit (`WorkflowExecutionWorkflow::INTERACTIVE_TIMEOUT`) and then treats the step as failed. Suspending a step would mean holding the run open for 30 days, relinking `step_run` to the restored session, and deciding what cancel and retry do meanwhile. The checkpoint and restore are session-level, so steps can be added without changing them.
+- **Workflow steps were left out of the first build** and added in the same PR; §13.
+
+## 13. Workflow steps
+
+An interactive workflow step is suspended and restored like a standalone session, and its run waits for it.
+
+**Why the run needs no change.** Runs execute on `WorkflowExecutionWorkflowV2`, which does not wait on a timer or a signal: it polls the step's *current* session (`StepRun#terminal_session`) through `StepSessionStatusActivity` and decides when that session is `finished`, `failed` or `cancelled`. A `suspended` session is none of those, so the run keeps waiting, and the steps after it do not start. (V1's 23-hour `INTERACTIVE_TIMEOUT` is no longer used by runs.)
+
+**A step has several sessions.** `step_runs.terminal_session_id` stays "the step's current session"; each session a restore continued is reachable from the next through `restored_from_session_id`, and `StepRun#session_history` walks the chain. Every step session also carries its `step_run_id` in its metadata, so an earlier session still knows its step (`TerminalSession#owning_step_run`) after the step has moved on to a newer one.
+
+**Lifecycle:**
+1. **Suspend.** The step's session is suspended as a standalone one is: Suspend, or the 23-hour limit. `WorkflowStepStrategy#before_cleanup` takes the checkpoint and does not collect the step's outputs; the session that restores the step leaves them, and downstream steps take them from there. The step becomes `suspended` (a new `StepRun` state, in `UNFINISHED_STATES`).
+2. **Restore** (`SessionService.restore_step`, same API and button). It needs the session's owner, the step still `suspended` on this session, and a run that has not ended or been stopped. The step's next session is built the way step sessions always are (`build_for_workflow_step`, from the step and its run), linked to the suspended one, made the step's current session, and launched. The step goes back to `running`. The checkpoint is put back and the CLI resumes as for a standalone session.
+3. **The run moves on** when the restored session finishes: V2 reads it as the step's current session. If that session is suspended in turn, the run waits again. Several interactive steps in a row each wait in turn.
+4. **Not restored in time.** The sweep fails the step's session and wakes the run. V2 fails the step, and the run follows the step's `on_failure`.
+5. **The run moves on without it.** After a Skip or a run cancel, the step is no longer waiting on the session. The next hourly sweep finishes the session and deletes its archive.
+
+**Run ceiling.** `TemporalWorkflowRegistry::RUN_TIMEOUT` went from 7 to 40 days, so a run can wait out a step's 30-day window. A step's window is capped at its run's start plus `RUN_TIMEOUT` minus 12 hours (`Sessions::Suspension.window_end`); runs started before the change keep their 7-day ceiling, and their steps get the shorter window.
+
+**UI.** On the run page, a suspended step shows *Suspended · N days left* with **Restore** for the step session's owner and **Skip** for whoever controls the run. A live interactive step gets **Suspend** next to **Finish session**.

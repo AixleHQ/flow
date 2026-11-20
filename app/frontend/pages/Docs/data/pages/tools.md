@@ -44,7 +44,7 @@ and lifecycle tools. Every board tool that acts on a task takes either its
 | `board_create_task` | Create a task, optionally in a specific column and assigned to a person (`assignee_id`) or a team (`assignee_team_id`). |
 | `board_update_task` | Update title, description, priority, tags, type, or assignee — a person (`assignee_id`) or a team (`assignee_team_id`); `unassign` clears either. |
 | `board_list_members` | List the project's people and teams, with the ids a task can be assigned to. |
-| `board_move_task` | Move a task to another column. |
+| `board_move_task` | Move a task to another column, optionally to a `position` in it (0 = top; bottom by default). |
 | `board_add_comment` / `board_get_comments` | Add or read comments (Markdown). |
 | `board_attach_asset` / `board_get_task_assets` | Attach or list task files. |
 | `board_manage_tags` | Add or remove a tag on a task or comment. |
@@ -52,6 +52,26 @@ and lifecycle tools. Every board tool that acts on a task takes either its
 | `list_sub_steps` / `mark_sub_step` | Track progress within a step. |
 | `finish_session` / `fail_session` | Signal a non-interactive session done or failed. |
 | `read_tool_result` | Fetch the result of an async container tool. |
+
+### Archived tasks
+
+Archiving a task hides it from the board, and `board_list_tasks` leaves it out
+the same way. To see archived tasks, pass `include_archived: true`. The page then
+lists archived and active tasks together, and each row's `archived` field
+(`true` or `false`) tells them apart. Search, column, tag and the other filters
+still apply. This call lists the Done column with its archived tasks:
+
+```json
+{ "column_name": "Done", "include_archived": true }
+```
+
+There is no switch for archived tasks only: keep the rows whose `archived` is
+`true`. `board_get_task` reads an archived task by its `#N` or id without the
+flag.
+
+The personal MCP server's `list_board_tasks` works the same way, with the column
+given as `column_id`. It no longer takes the old `archived` parameter; use
+`include_archived`.
 
 ## Custom tools
 

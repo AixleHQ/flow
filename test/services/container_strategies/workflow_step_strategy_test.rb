@@ -4,6 +4,8 @@ require "test_helper"
 
 module ContainerStrategies
   class WorkflowStepStrategyTest < ActiveSupport::TestCase
+    include CheckpointStorageHelper
+
     setup do
       @company = create(:company)
       @user = create(:user, :admin, company: @company)
@@ -47,8 +49,9 @@ module ContainerStrategies
         { timeout: 600, await_signal: :container_finished, signal_timeout: 82_800 },
         strategy.phase_config(:exec)
       )
+      # Long enough to take a suspended step's checkpoint (Sessions::Checkpoint).
       assert_equal(
-        { timeout: 120, always: true, retry: { max_attempts: 2, interval: 5 } },
+        { timeout: Sessions::Checkpoint::CLEANUP_TIMEOUT, always: true, retry: { max_attempts: 2, interval: 5 } },
         strategy.phase_config(:cleanup)
       )
       assert_equal({ timeout: 300 }, strategy.phase_config(:something_else))
@@ -108,6 +111,25 @@ module ContainerStrategies
       assert asset.file.present?, "expected the collected output to have an attached file"
 
       assert_operator session.session_logs.reload.count, :>=, 1
+    end
+
+    # The session that restores the step leaves them; downstream steps take them from there.
+    test "a suspended step keeps its outputs in the checkpoint instead of handing them on" do
+      runtime = stub_container_runtime(agent_type: "claude_code")
+      use_checkpoint_storage
+      create(:agent_credential, user: @user, agent_type: "claude_code")
+      session, = create_workflow_step_session
+      runtime.answer_exec("aixle-checkpoint", stdout: "CONVERSATION\t\nARCHIVE\t10\t1\n")
+
+      result = nil
+      assert_no_difference "WorkflowRunAsset.count" do
+        result = build_strategy(session: session).before_cleanup(container_id: "abc123", suspend: true)
+      end
+
+      assert_equal 0, result[:outputs_count]
+      assert session.reload.session_checkpoint
+    ensure
+      restore_checkpoint_storage
     end
 
     test "before_cleanup returns empty hash when no container_id is given" do

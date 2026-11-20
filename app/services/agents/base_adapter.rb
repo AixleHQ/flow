@@ -709,7 +709,10 @@ module Agents
       keys = rotatable_credential_keys & current.keys & incoming.keys
       return current if keys.empty?
 
-      candidate = merge_refreshed_credentials(current, incoming.slice(*keys))
+      # Judged as the credential the rotation would produce, not as the bare rotated keys:
+      # an adapter's expiry can depend on a key the container may not replace (Antigravity
+      # reads `auth_method`), and with no expiry to compare an older token would win.
+      candidate = merge_refreshed_credentials(current, current.merge(incoming.slice(*keys)))
       rotated = current.merge(candidate.slice(*keys))
       return current if rotated == current
       return current unless same_credential_identity?(current, rotated) && plausible_expiry?(rotated)

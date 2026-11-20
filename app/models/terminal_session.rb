@@ -472,6 +472,13 @@ class TerminalSession < ApplicationRecord
   # (integration gating) is deliberately NOT applied here: serving surfaces
   # filter with Tool#available?(ctx) so tools/call can distinguish
   # entitled-but-disconnected from not-entitled.
+  # The step this session worked on. A suspended step's earlier sessions are no longer
+  # its current one (StepRun#terminal_session) once it is restored, but each was built
+  # for it and says so in its metadata.
+  def owning_step_run
+    step_run || (StepRun.find_by(id: metadata.to_h["step_run_id"]) if workflow_step?)
+  end
+
   def aixle_builder?
     metadata&.dig("aixle_builder") == true
   end

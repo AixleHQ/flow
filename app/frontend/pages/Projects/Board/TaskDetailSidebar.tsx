@@ -28,6 +28,7 @@ import {
   IconArrowsMinimize,
   IconBolt,
   IconChartBar,
+  IconCheck,
   IconCircleCheck,
   IconClock,
   IconCloudUpload,
@@ -73,6 +74,7 @@ import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 
 import { apiMutate } from 'shared/lib/apiFetch';
 import { formatDateTime, formatDateTimeShort } from 'shared/lib/formatDate';
+import { useLocalStorage } from 'shared/lib/hooks/useLocalStorage';
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { AssetPreviewModal } from 'shared/resources/assets/AssetPreviewModal';
 import { taskAssetToPreviewItem } from 'shared/resources/assets/previewItem';
@@ -89,6 +91,7 @@ import {
   archiveApiV1ProjectTaskPath,
   unarchiveApiV1ProjectTaskPath,
   triggerWorkflowApiV1ProjectTaskPath,
+  companyProjectBoardPath,
 } from 'shared/routes';
 import { CHART_SERIES } from 'shared/theme/chartPalette';
 import { MarkdownLink } from 'shared/ui/MarkdownLink';
@@ -133,6 +136,16 @@ const AUTHOR_TYPES = [
 // Gate states that still hold the column auto-trigger or still need a person — the only ones worth
 // offering a delete button for.
 const GATE_UNRESOLVED_STATUSES = new Set(['pending', 'stale']);
+
+const DRAWER_SIZE = 620;
+// Expanding must never narrow the drawer — a plain 50vw did, on any screen under 1240px wide.
+const DRAWER_SIZE_WIDE = 'clamp(620px, 90vw, 1200px)';
+
+function fitToContent(textarea: HTMLTextAreaElement | null) {
+  if (!textarea) return;
+  textarea.style.height = 'auto';
+  textarea.style.height = `${textarea.scrollHeight + textarea.offsetHeight - textarea.clientHeight}px`;
+}
 
 const CHART_COLORS = CHART_SERIES;
 const CHART_TOOLTIP_STYLE: React.CSSProperties = {
@@ -275,7 +288,7 @@ export function TaskDetailSidebar({
   const [descValue, setDescValue] = useState('');
   const [pendingDesc, setPendingDesc] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [wide, setWide] = useState(false);
+  const [wide, setWide] = useLocalStorage('board:taskDetail:wide', false);
   const [commentBody, setCommentBody] = useState('');
   const [commentTags, setCommentTags] = useState<string[]>([]);
   const [submittingComment, setSubmittingComment] = useState(false);
@@ -555,7 +568,7 @@ export function TaskDetailSidebar({
         opened
         onClose={onClose}
         position="right"
-        size={wide ? '50vw' : 620}
+        size={wide ? DRAWER_SIZE_WIDE : DRAWER_SIZE}
         withCloseButton={false}
         padding={0}
         styles={{
@@ -585,7 +598,7 @@ export function TaskDetailSidebar({
       opened={!!task}
       onClose={requestClose}
       position="right"
-      size={wide ? '50vw' : 620}
+      size={wide ? DRAWER_SIZE_WIDE : DRAWER_SIZE}
       withCloseButton={false}
       padding={0}
       styles={{
@@ -607,6 +620,15 @@ export function TaskDetailSidebar({
         <ActionIcon variant="subtle" size="sm" title={wide ? 'Collapse' : 'Expand'} onClick={() => setWide(!wide)}>
           {wide ? <IconArrowsMinimize size={16} /> : <IconArrowsMaximize size={16} />}
         </ActionIcon>
+        <CopyButton value={`${window.location.origin}${companyProjectBoardPath(projectId, { n: task.number })}`}>
+          {({ copied, copy }) => (
+            <Tooltip label={copied ? 'Link copied' : 'Copy link'} withArrow>
+              <ActionIcon variant="subtle" size="sm" aria-label="Copy link to task" onClick={copy}>
+                {copied ? <IconCheck size={16} /> : <IconLink size={16} />}
+              </ActionIcon>
+            </Tooltip>
+          )}
+        </CopyButton>
         <Box style={{ flex: 1 }} />
         {canExecute && canTriggerWorkflow && (
           <Button
@@ -946,11 +968,15 @@ export function TaskDetailSidebar({
             {/* Editable description */}
             {editingDesc ? (
               <textarea
+                ref={fitToContent}
                 className={styles.ptDesc}
                 value={descValue}
                 rows={3}
                 autoFocus
-                onChange={(e) => setDescValue(e.currentTarget.value)}
+                onChange={(e) => {
+                  setDescValue(e.currentTarget.value);
+                  fitToContent(e.currentTarget);
+                }}
                 onBlur={saveDescription}
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') {
