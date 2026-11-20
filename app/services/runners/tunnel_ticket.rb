@@ -73,14 +73,13 @@ module Runners
         raise Credentials::Refused.new("not_found", "The platform does not offer the interactive tunnel.")
       end
 
-      session_id = environment.current_session_id
-      if session_id.nil?
+      unless environment.busy?
         raise Credentials::Refused.new("no_session", "This machine holds no session, so it opens no tunnel.")
       end
 
       expires_at = now + LIFETIME
       claims = {
-        v: VERSION, e: environment.id, r: environment.runner_id, s: session_id,
+        v: VERSION, e: environment.id, r: environment.runner_id, s: environment.current_session_id,
         jti: SecureRandom.urlsafe_base64(16), exp: expires_at.to_i
       }
       Issued.new(ticket: sign(claims), expires_at: expires_at.utc)
