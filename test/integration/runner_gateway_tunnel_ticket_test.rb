@@ -34,10 +34,10 @@ class RunnerGatewayTunnelTicketTest < ActionDispatch::IntegrationTest
     assert_equal "no-store", response.headers["Cache-Control"]
     body = response.parsed_body
     assert_equal %w[expires_at ticket], body.keys.sort
-    assert_match(/\Aartun_[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\z/, body["ticket"])
+    assert_match(/\Aartun_[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\z/, body["ticket"])
     assert_match(/\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\z/, body["expires_at"])
 
-    claims = JSON.parse(Base64.urlsafe_decode64(body["ticket"].delete_prefix("artun_").split(".").first))
+    claims = JWT.decode(body["ticket"].delete_prefix("artun_"), KEY, true, algorithm: "HS256").first
     assert_equal({ "v" => 1, "e" => @environment.id, "r" => @runner.id, "s" => session.id }, claims.slice("v", "e", "r", "s"))
     assert_equal Time.iso8601(body["expires_at"]).to_i, claims["exp"]
     assert_in_delta 60, claims["exp"] - Time.current.to_i, 2
