@@ -70,10 +70,19 @@ interface SessionCardProps {
   live?: boolean;
   /** Where the session runs, shown after its agent: the "Runs on" badge. */
   runsOn?: ReactNode;
+  /** The sessions this one continues, oldest first: a suspended step restored in a new one. */
+  earlierSessions?: { id: number; href: string }[];
 }
 
 /** One session inside a workflow run, collapsed to an excerpt until opened. */
-export function SessionCard({ data, sessionHref, defaultOpen = false, live = false, runsOn }: SessionCardProps) {
+export function SessionCard({
+  data,
+  sessionHref,
+  defaultOpen = false,
+  live = false,
+  runsOn,
+  earlierSessions = [],
+}: SessionCardProps) {
   const [open, setOpen] = useState(defaultOpen);
   const doneCount = data.steps.filter((s) => s.state === 'completed').length;
   const duration = formatDuration(data.startedAt, data.completedAt, data.state);
@@ -109,6 +118,19 @@ export function SessionCard({ data, sessionHref, defaultOpen = false, live = fal
         )}
         {runsOn}
         {data.terminalSessionId && <span className={`${classes.num} ${classes.dim}`}>#{data.terminalSessionId}</span>}
+        {earlierSessions.length > 0 && (
+          <span className={`${classes.num} ${classes.dim}`}>
+            restored from{' '}
+            {earlierSessions.map((session, i) => (
+              <span key={session.id}>
+                {i > 0 && ', '}
+                <Link href={session.href} className={classes.earlier}>
+                  #{session.id}
+                </Link>
+              </span>
+            ))}
+          </span>
+        )}
         {data.totalTokens > 0 && <span className={classes.num}>{formatTokens(data.totalTokens)} tokens</span>}
         {data.costCents > 0 && <span className={classes.num}>{formatCost(data.costCents)}</span>}
         <span className={`${classes.num} ${classes.dim}`}>{duration}</span>

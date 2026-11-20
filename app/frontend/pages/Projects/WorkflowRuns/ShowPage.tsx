@@ -331,6 +331,10 @@ const WorkflowRunShowPage = () => {
         live={isActive && liveStepIds.has(entry.step.id)}
         defaultOpen={isActive ? liveStepIds.has(entry.step.id) : isTerminal || entry.step.state === 'failed'}
         sessionHref={entry.step.terminalSessionId ? `${basePath}/sessions/${entry.step.terminalSessionId}` : null}
+        earlierSessions={entry.step.sessionIds
+          .filter((id) => id !== entry.step.terminalSessionId)
+          .reverse()
+          .map((id) => ({ id, href: `${basePath}/sessions/${id}` }))}
       />
     ),
   );
