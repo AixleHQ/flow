@@ -491,6 +491,46 @@ describe('Projects/Board/BoardPage', () => {
     expect(drawer.getByText('Created')).toBeInTheDocument();
   });
 
+  it('copies a link that opens the task on its board', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        selectedTask: makeTask({ id: 1, number: 11, title: 'Wire up authentication', boardColumnId: 100 }),
+        taskComments: [],
+        taskAssets: [],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+      },
+    });
+
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Copy link to task' }));
+
+    expect(await navigator.clipboard.readText()).toBe(`${window.location.origin}/company/projects/7/board?n=11`);
+  });
+
+  it('opens the next task expanded once the drawer has been expanded', async () => {
+    const withSelected = (task: BoardTask) => ({
+      ...populatedProps,
+      selectedTask: task,
+      taskComments: [],
+      taskAssets: [],
+      taskActivities: [],
+      taskWorkflowRuns: [],
+    });
+    renderAuthedPage(<BoardPage />, {
+      props: withSelected(makeTask({ id: 1, number: 11, title: 'Wire up authentication', boardColumnId: 100 })),
+    });
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Expand' }));
+    cleanup();
+
+    renderAuthedPage(<BoardPage />, {
+      props: withSelected(makeTask({ id: 2, number: 12, title: 'Render dashboard charts', boardColumnId: 200 })),
+    });
+
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'Collapse' })).toBeInTheDocument();
+  });
+
   it('links a shared task file to its public page and stops sharing it', async () => {
     const fetchSpy = answerFetch({ 'DELETE /api/v1/projects/7/tasks/1/assets/31/share': {} });
     renderAuthedPage(<BoardPage />, {
