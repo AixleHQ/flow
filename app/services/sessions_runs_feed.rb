@@ -37,6 +37,7 @@ class SessionsRunsFeed
     "completed" => { sessions: %w[finished], runs: %w[completed] },
     "failed" => { sessions: %w[failed], runs: %w[failed] },
     "cancelled" => { sessions: %w[cancelled], runs: %w[cancelled] },
+    "suspended" => { sessions: %w[suspended], runs: [] },
     "pending" => { sessions: %w[not_started], runs: %w[pending paused] }
   }.freeze
 

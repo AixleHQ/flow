@@ -156,6 +156,15 @@ module Agents
 
     # The effort is not a flag: Gemini CLI sets the thinking level in settings.json
     # (#generate_settings), so `effort` is unused here.
+    # Resume, measured 2026-11-20. The chat file's name carries only a prefix of the
+    # session id; the whole id is on its first line.
+    def conversation_paths = %w[.gemini/tmp/workspace]
+    def conversation_id_command
+      "f=$(ls -t .gemini/tmp/workspace/chats/session-*.jsonl 2>/dev/null | head -1); " \
+        "[ -n \"$f\" ] && head -1 \"$f\" | grep -oE 'sessionId\": *\"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'"
+    end
+    def resume_arguments(id) = "--resume #{id}"
+
     def session_command(mode:, model: nil, effort: nil)
       model ? "gemini --model #{Shellwords.shellescape(model)} --yolo" : "gemini --yolo"
     end

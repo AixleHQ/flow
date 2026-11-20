@@ -297,6 +297,17 @@ module Agents
       details.merge(valid: false, error_code: "oauth_token_missing")
     end
 
+    # Resume, measured 2026-11-20: the conversation database, its brain directory and
+    # the map from workspace to conversation.
+    def conversation_paths
+      %w[.gemini/antigravity-cli/conversations .gemini/antigravity-cli/brain
+         .gemini/antigravity-cli/cache/last_conversations.json]
+    end
+    def conversation_id_command
+      "grep -oE '\"/workspace\": *\"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' .gemini/antigravity-cli/cache/last_conversations.json 2>/dev/null | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'"
+    end
+    def resume_arguments(id) = "--conversation=#{id}"
+
     # Automatic sessions run in the TUI like interactive ones, with the step's prompt submitted
     # by `-i` (#prompt_argument). No `--effort`: agy's model ids carry the effort
     # (`gemini-3.8-flash-high`), and `--effort` only applies to a model group, which the

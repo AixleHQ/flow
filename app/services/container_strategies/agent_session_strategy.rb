@@ -43,12 +43,16 @@ module ContainerStrategies
     # `create_container` has 600 s because a runner pulls the image in it
     # (ContainerRuntime::RunnerRuntime, `container.start`); on hosted it is only
     # a larger timeout (DESIGN.md §12.3).
+    SIGNAL_TIMEOUT = 82_800
+
+    # `cleanup` may take a suspended session's checkpoint (Sessions::Checkpoint), whose
+    # archive goes up from the container: its own budget, not the 120 s the logs need.
     def phase_config(phase)
       case phase
       when :pull_image  then { timeout: 600 }
       when :create_container then { timeout: 600 }
-      when :exec        then { timeout: 600, await_signal: :container_finished, signal_timeout: 82_800 }
-      when :cleanup     then { timeout: 120, always: true, retry: { max_attempts: 2, interval: 5 } }
+      when :exec        then { timeout: 600, await_signal: :container_finished, signal_timeout: SIGNAL_TIMEOUT }
+      when :cleanup     then { timeout: cleanup_timeout, always: true, retry: { max_attempts: 2, interval: 5 } }
       else                   { timeout: 300 }
       end
     end
@@ -122,6 +126,9 @@ module ContainerStrategies
         initial_write_error = e
       end
       run_credential_preflight!(adapter, container, cid, initial_write_error: initial_write_error) if credential.present?
+      if session.restored_from_session_id
+        Sessions::Restore.new(session: session, container: container, runtime: runtime, adapter: adapter).call
+      end
       {}
     rescue Encryptable::DecryptionError => e
       # The agent's own login is unreadable: signing in again stores a readable one.
@@ -145,7 +152,10 @@ module ContainerStrategies
 
     # == before_cleanup(container_id:, **) → { logs_count:, outputs_count: } ==
 
-    def before_cleanup(container_id: nil, **)
+    # `suspend:` is the cleanup activity's decision (Sessions::Suspension.due?). A suspended
+    # session keeps its outputs in the checkpoint instead of turning them into assets; if
+    # the checkpoint cannot be taken it ends like any other session.
+    def before_cleanup(container_id: nil, suspend: false, **)
       return {} if container_id.blank?
 
       container = resolve_container(container_id)
@@ -154,7 +164,8 @@ module ContainerStrategies
 
       logs_count, log_contents = collect_logs(container, session, agent_service)
       terminal = collect_terminal_output(container, session)
-      outputs = collect_outputs(container, session)
+      checkpoint = suspend && take_checkpoint(container, session, agent_service.adapter)
+      outputs = checkpoint ? Collection.none : collect_outputs(container, session)
       logs_count += terminal.count
       outputs_count = outputs.count
       report_uncollected_whole(session, terminal.uncollected + outputs.uncollected)
@@ -177,6 +188,16 @@ module ContainerStrategies
     protected
 
     def session_type = "agent_session"
+
+    def cleanup_timeout = session_type == "agent_session" ? Sessions::Checkpoint::CLEANUP_TIMEOUT : 120
+
+    def take_checkpoint(container, session, adapter)
+      Sessions::Checkpoint.new(session: session, container: container, runtime: runtime, adapter: adapter).call
+    rescue StandardError => e
+      Rails.logger.error("[AgentSession] session=#{session.id} checkpoint failed: #{e.class}: #{e.message}")
+      session.update_columns(metadata: session.metadata.to_h.merge(Sessions::Suspension::ERROR_KEY => e.message.truncate(500)))
+      nil
+    end
 
     def ttyd_command
       "bash"
@@ -294,8 +315,8 @@ module ContainerStrategies
     def launch_agent_in_tmux(container)
       session = TerminalSession.find(input[:session_id])
       adapter = AgentCredentialsService.for(input[:agent_type]).adapter
-      cmd = adapter.session_command(mode: session.mode, model: resolve_model(session),
-                                    effort: session.reasoning_effort)
+      cmd = Sessions::Restore.launch_command(session, adapter, mode: session.mode,
+                                             model: resolve_model(session), effort: session.reasoning_effort)
 
       if session.mode == "non_interactive"
         if session.initial_prompt.present?
@@ -422,7 +443,7 @@ module ContainerStrategies
       files = result[0].join.split("\n").reject(&:blank?)
       return Collection.none if files.empty?
 
-      scope_type, scope_id = resolve_output_scope(session)
+      resolve_output_scope(session)
       count = 0
       uncollected = []
 
@@ -443,15 +464,8 @@ module ContainerStrategies
         tmpfile.binmode
         tmpfile.write(content)
         tmpfile.rewind
-        tmpfile.define_singleton_method(:original_filename) { filename }
 
-        asset = Asset.create!(
-          name: relative, folder: "session-#{session.id}",
-          scope_type: scope_type, scope_id: scope_id,
-          created_by: session.user, terminal_session: session,
-          status: "pending_review"
-        )
-        AssetVersion.create!(asset: asset, uploaded_by: session.user, source: :session, file: tmpfile)
+        Sessions::OutputAssets.create!(session, relative, tmpfile)
         count += 1
       rescue StandardError => e
         Rails.logger.warn("[AgentSession] Failed to collect output #{file_path}: #{e.message}")
@@ -465,20 +479,7 @@ module ContainerStrategies
       Collection.none
     end
 
-    # Output scope follows the session's project; project-less sessions fall
-    # back to the user's first active membership's company. A user with zero
-    # active memberships has no valid scope — raise (collect_outputs logs and
-    # skips) instead of creating assets with a nil scope_id.
-    def resolve_output_scope(session)
-      return [ "Project", session.project_id ] if session.project.present?
-
-      company_id = session.user.company_memberships.active.default_order.pick(:company_id)
-      if company_id.nil?
-        raise "cannot resolve output scope: user #{session.user_id} has no active membership (session #{session.id})"
-      end
-
-      [ "Company", company_id ]
-    end
+    def resolve_output_scope(session) = Sessions::OutputAssets.scope_for(session)
 
     # What the cleanup's own reads could not collect whole (a runner session's
     # file or output over 1 MiB, where the platform's storage cannot sign an
