@@ -1,10 +1,7 @@
 # frozen_string_literal: true
 
 class Web::Company::Projects::BoardsController < Web::Company::Projects::ApplicationController
-  # Epics offered as a parent in the create-task drawer. Nesting is one level deep and
-  # boards run to a handful of epics, so the whole list ships; the cap only exists so a
-  # pathological board cannot unbound the payload this change just bounded.
-  EPIC_OPTIONS_LIMIT = 200
+  include BoardTaskDetail
 
   def show
     board = current_project.board
@@ -32,14 +29,11 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
   end
 
   def render_board_page(board)
-    task = params[:n].present? ? find_task(board) : nil
+    task = params[:n].present? ? find_board_task(board, params[:n]) : nil
 
     render inertia: "Projects/Board/BoardPage", props: {
       board: -> { BoardResource.new(board).to_h },
-      columns: -> {
-        board.board_columns.with_tasks_count.includes(column_workflow_binding: :workflow)
-             .order(:position).map { |c| BoardColumnResource.new(c).to_h }
-      },
+      **board_options_props(board),
       # Only the first page of each column. The column pulls its later pages from
       # Api::V1::Projects::Board::TasksController as it is scrolled, so this payload
       # stays the same size whether the board holds fifty tasks or five thousand.
@@ -52,16 +46,6 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
              .in_board_order.then { |tasks| serialize_board_tasks(tasks) }
       },
       tasks_page_size: BoardTask::PAGE_SIZE,
-      # Filter options and the parent-epic picker used to be derived from the task
-      # payload; with only a page per column loaded they have to come from the board.
-      board_tags: -> { board.board_tasks.active.distinct.pluck(Arel.sql("unnest(tags)")).compact.sort },
-      epics: -> {
-        board.board_tasks.active.where(task_type: "epic").order(:title).limit(EPIC_OPTIONS_LIMIT)
-             .pluck(:id, :number, :title).map { |id, number, title| { id: id, number: number, title: title } }
-      },
-      members: -> { current_project.joined_member_users.map { |u| BoardMemberResource.new(u).to_h } },
-      # docs/design/project-teams.md: a task can be assigned to a team instead of a person.
-      teams: -> { current_project.project_teams.map { |team| { id: team.id, name: team.name } } },
       workflows: -> { current_project.workflows.order(:name).map { |w| BoardWorkflowResource.new(w).to_h } },
       view_presets: -> {
         board.board_view_presets.visible_to(current_user).order(:name)
@@ -69,39 +53,12 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
       },
       current_user_id: -> { current_user.id },
       cable_stream: -> { inertia_cable_stream(board) },
-      task_cable_stream: -> { task ? inertia_cable_stream(task) : nil },
       recent_activities: InertiaRails.defer {
         board.board_activities.includes(:actor, :board_task)
              .order(created_at: :desc).limit(20)
              .map { |a| BoardActivityResource.new(a).to_h }
       },
-      selected_task: -> { task ? TaskDetailResource.new(task).to_h : nil },
-      task_comments: -> {
-        next [] unless task
-        task.task_comments.includes(:author).order(created_at: :desc)
-            .map { |c| TaskCommentResource.new(c).to_h }
-      },
-      task_assets: -> {
-        next [] unless task
-        task.task_assets.includes(:tracker_attachment).order(created_at: :desc).map { |a| TaskAssetResource.new(a).to_h }
-      },
-      task_activities: -> {
-        next [] unless task
-        task.board_activities.includes(:actor, :board_task).order(created_at: :desc)
-            .map { |a| BoardActivityResource.new(a).to_h }
-      },
-      task_workflow_runs: -> {
-        next [] unless task
-        # The resource renders a row per step run, timed by its session; without the
-        # preload a task with a run history costs queries per step run.
-        task.workflow_runs.with_total_cost_cents.includes(:workflow, :runner, :user, :team, step_runs: %i[step terminal_session])
-            .order(created_at: :desc)
-            .map { |r| TaskWorkflowRunResource.new(r).to_h }
-      },
-      task_statistics: -> {
-        next nil unless task
-        TaskStatisticsResource.new(TaskStatisticsService.new(task: task).call).to_h
-      }
+      **task_detail_props(task)
     }
   end
 
@@ -127,14 +84,6 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
       task_workflow_runs: [],
       task_statistics: nil
     }
-  end
-
-  def find_task(board)
-    board.board_tasks
-         .includes(:assignee, :assignee_team, :parent_task, :child_tasks, :task_comments, :task_assets, :workflow_runs, :gates)
-         .find_by(number: params[:n])
-    # note: task_assets included here so TaskDetailResource.assets_count avoids N+1;
-    # parent_task so TaskDetailResource.parent_task_title does not fire an extra query
   end
 
   # `?task=` carried the global task id before tasks were numbered per board, and

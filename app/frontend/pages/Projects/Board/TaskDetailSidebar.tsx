@@ -1,4 +1,4 @@
-import { router } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 import {
   ActionIcon,
   Badge,
@@ -26,6 +26,7 @@ import {
   IconArchiveOff,
   IconArrowsMaximize,
   IconArrowsMinimize,
+  IconArrowUpRight,
   IconBolt,
   IconChartBar,
   IconCheck,
@@ -91,7 +92,7 @@ import {
   archiveApiV1ProjectTaskPath,
   unarchiveApiV1ProjectTaskPath,
   triggerWorkflowApiV1ProjectTaskPath,
-  companyProjectBoardPath,
+  companyProjectTaskPath,
 } from 'shared/routes';
 import { CHART_SERIES } from 'shared/theme/chartPalette';
 import { MarkdownLink } from 'shared/ui/MarkdownLink';
@@ -233,6 +234,7 @@ export function TaskDetailSidebar({
   stats,
   canExecute,
   currentUserId,
+  variant = 'drawer',
 }: {
   task: Task | null;
   /** A task number whose props are still in flight — draws the skeleton until it resolves. */
@@ -243,7 +245,8 @@ export function TaskDetailSidebar({
   epics: Array<{ id: number; number: number; title: string }>;
   /** Every tag on the board, offered as autocomplete when tagging this task. */
   knownTags: string[];
-  onClose: () => void;
+  /** Closes the drawer. The page variant has nothing to close. */
+  onClose?: () => void;
   onDelete: (taskId: number) => void;
   /** Opens a task by its board number — the board may hold no card for it (an unloaded child or parent). */
   onOpenTaskNumber: (taskNumber: number) => void;
@@ -259,6 +262,8 @@ export function TaskDetailSidebar({
   canExecute: boolean;
   /** The signed-in user, so a comment's own-author edit window can be gated client-side. */
   currentUserId: number;
+  /** `page` is the task's own page: no drawer chrome, and the properties sit beside the description. */
+  variant?: 'drawer' | 'page';
 }) {
   const [tab, setTab] = useState<string | null>('details');
   const [editingTitle, setEditingTitle] = useState(false);
@@ -566,7 +571,7 @@ export function TaskDetailSidebar({
     return (
       <Drawer
         opened
-        onClose={onClose}
+        onClose={requestClose}
         position="right"
         size={wide ? DRAWER_SIZE_WIDE : DRAWER_SIZE}
         withCloseButton={false}
@@ -576,7 +581,7 @@ export function TaskDetailSidebar({
           body: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
         }}
       >
-        <TaskDetailSkeleton onClose={onClose} />
+        <TaskDetailSkeleton onClose={requestClose} />
       </Drawer>
     );
   }
@@ -592,20 +597,529 @@ export function TaskDetailSidebar({
   const hasRuns = (workflowRuns ?? []).length > 0;
   const showRuns = !!columnWorkflowBinding || hasRuns;
   const assetsCount = (taskAssets ?? []).length || task.assetsCount || 0;
+  const taskPagePath = companyProjectTaskPath(projectId, task.number);
 
-  return (
-    <Drawer
-      opened={!!task}
-      onClose={requestClose}
-      position="right"
-      size={wide ? DRAWER_SIZE_WIDE : DRAWER_SIZE}
-      withCloseButton={false}
-      padding={0}
-      styles={{
-        content: { display: 'flex', flexDirection: 'column', overflow: 'hidden' },
-        body: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
-      }}
-    >
+  const headerSection = (
+    <Box style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 18 }}>
+      {/* Editable title */}
+      {editingTitle ? (
+        <textarea
+          className={styles.ptTitle}
+          value={titleValue}
+          rows={1}
+          onChange={(e) => {
+            setTitleValue(e.currentTarget.value);
+            e.currentTarget.style.height = 'auto';
+            e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
+          }}
+          onBlur={saveTitle}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              saveTitle();
+            }
+            if (e.key === 'Escape') {
+              setTitleValue(task.title);
+              setEditingTitle(false);
+            }
+          }}
+          autoFocus
+        />
+      ) : (
+        // The `#id` is a sibling of the editable title div, never a child of it: putting it
+        // inside would make it part of the text saveTitle reads and persists.
+        <Box style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <div
+            className={styles.ptTitle}
+            onClick={() => canExecute && setEditingTitle(true)}
+            style={{ cursor: canExecute ? 'text' : 'default', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+          >
+            {pendingTitle ?? task.title}
+          </div>
+          <CopyButton value={String(task.number)}>
+            {({ copied, copy }) => (
+              <Tooltip label={copied ? 'Copied' : 'Copy number'} withArrow>
+                <Text c="dimmed" style={{ flexShrink: 0, whiteSpace: 'nowrap', cursor: 'pointer' }} onClick={copy}>
+                  #{task.number}
+                </Text>
+              </Tooltip>
+            )}
+          </CopyButton>
+        </Box>
+      )}
+
+      {/* Status chips: type, priority, workflow */}
+      <Box style={{ display: 'flex', flexWrap: 'wrap', gap: 7, alignItems: 'center' }}>
+        {task.taskType && task.taskType !== 'not_specified' && (
+          <Box
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              letterSpacing: '0.05em',
+              textTransform: 'uppercase',
+              padding: '2px 8px',
+              borderRadius: 4,
+              border: '1px solid rgba(209,207,205,0.12)',
+              background: 'rgba(209,207,205,0.05)',
+              color: 'var(--mantine-color-dimmed)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+            }}
+          >
+            {task.taskType.replace('_', ' ')}
+          </Box>
+        )}
+        {task.priority && (
+          <Box
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              letterSpacing: '0.05em',
+              textTransform: 'uppercase',
+              padding: '2px 8px',
+              borderRadius: 4,
+              border: '1px solid rgba(209,207,205,0.12)',
+              background: 'rgba(209,207,205,0.05)',
+              color: 'var(--mantine-color-dimmed)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+            }}
+          >
+            {task.priority}
+          </Box>
+        )}
+        {columnWorkflowBinding && (
+          <Box
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              padding: '2px 8px',
+              borderRadius: 4,
+              border: '1px solid var(--mantine-color-brand-light-hover)',
+              background: 'var(--mantine-color-brand-light)',
+              color: 'var(--app-primary-strong)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+            }}
+          >
+            <IconBolt size={11} />
+            {columnWorkflowBinding.workflowName}
+          </Box>
+        )}
+      </Box>
+    </Box>
+  );
+
+  const propertiesSection = (
+    <Box style={{ marginBottom: 20 }}>
+      {/* sec-label */}
+      <Box
+        style={{
+          fontSize: 12,
+          fontWeight: 600,
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+          color: 'var(--mantine-color-dimmed)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          paddingBottom: 10,
+          borderBottom: '1px solid var(--app-border-default)',
+          marginBottom: 14,
+        }}
+      >
+        <IconListDetails size={14} color="var(--app-primary-strong)" />
+        Properties
+      </Box>
+
+      {/* props grid */}
+      <Box
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '92px 1fr',
+          gap: '10px 12px',
+          padding: '4px 0 14px',
+          alignItems: 'center',
+        }}
+      >
+        <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
+          Column
+        </Text>
+        <Select
+          data={columns.map((c) => ({ value: String(c.id), label: c.name }))}
+          value={String(task.boardColumnId)}
+          onChange={(v) => {
+            if (v && v !== String(task.boardColumnId)) moveToColumn(v);
+          }}
+          aria-label="Column"
+          size="xs"
+          variant="unstyled"
+          styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
+          disabled={!canExecute}
+        />
+
+        <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
+          Type
+        </Text>
+        <Select
+          data={[
+            { value: 'not_specified', label: 'Not specified' },
+            { value: 'epic', label: 'Epic' },
+            { value: 'story', label: 'Story' },
+            { value: 'bug', label: 'Bug' },
+          ]}
+          value={task.taskType}
+          onChange={(v) => saveField('taskType', v)}
+          size="xs"
+          variant="unstyled"
+          styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
+          disabled={!canExecute}
+        />
+
+        <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
+          Priority
+        </Text>
+        <Select
+          data={[
+            { value: '', label: 'None' },
+            { value: 'critical', label: 'Critical' },
+            { value: 'high', label: 'High' },
+            { value: 'medium', label: 'Medium' },
+            { value: 'low', label: 'Low' },
+          ]}
+          value={task.priority ?? ''}
+          onChange={(v) => saveField('priority', v || null)}
+          clearable
+          size="xs"
+          variant="unstyled"
+          styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
+          disabled={!canExecute}
+        />
+
+        <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
+          Assignee
+        </Text>
+        <Select
+          data={assigneeSelectData(members, teams)}
+          value={assigneeKey(taskAssignee(task))}
+          onChange={saveAssignee}
+          aria-label="Assignee"
+          clearable
+          searchable
+          size="xs"
+          variant="unstyled"
+          styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
+          disabled={!canExecute}
+        />
+
+        {/* Parent epic — for non-epic tasks */}
+        {task.taskType !== 'epic' && parentEpicOptions.length > 0 && (
+          <>
+            <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
+              Parent Epic
+            </Text>
+            <Select
+              data={parentEpicOptions}
+              value={task.parentTaskId ? String(task.parentTaskId) : null}
+              onChange={(v) => saveField('parentTaskId', v)}
+              aria-label="Parent Epic"
+              clearable
+              searchable
+              size="xs"
+              variant="unstyled"
+              styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
+              disabled={!canExecute}
+            />
+          </>
+        )}
+
+        <Text size="xs" c="dimmed" style={{ alignSelf: 'flex-start', paddingTop: 5 }}>
+          Tags
+        </Text>
+        <InlineTagsEditor
+          tags={task.tags ?? []}
+          onChange={(tags) => saveField('tags', tags)}
+          disabled={!canExecute}
+          suggestions={knownTags}
+        />
+
+        <Text size="xs" c="dimmed">
+          Created
+        </Text>
+        <Text size="xs" c="dimmed">
+          {formatDateTime(task.createdAt)}
+        </Text>
+      </Box>
+    </Box>
+  );
+
+  const mainSections = (
+    <>
+      <Box style={{ marginBottom: 18 }}>
+        {/* Editable description */}
+        {editingDesc ? (
+          <textarea
+            ref={fitToContent}
+            className={styles.ptDesc}
+            value={descValue}
+            rows={3}
+            autoFocus
+            onChange={(e) => {
+              setDescValue(e.currentTarget.value);
+              fitToContent(e.currentTarget);
+            }}
+            onBlur={saveDescription}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setDescValue(task.description ?? '');
+                setEditingDesc(false);
+              }
+            }}
+          />
+        ) : (
+          <div
+            className={styles.ptDesc}
+            onClick={() => {
+              if (!canExecute) return;
+              setDescValue(task.description ?? '');
+              setEditingDesc(true);
+            }}
+            style={{
+              cursor: canExecute ? 'text' : 'default',
+              color:
+                (pendingDesc ?? task.description) ? 'var(--mantine-color-dimmed)' : 'var(--mantine-color-placeholder)',
+            }}
+          >
+            {(pendingDesc ?? task.description) ? (
+              <Box className={styles.commentMd}>
+                <Markdown remarkPlugins={[remarkGfm]} components={{ a: MarkdownLink }}>
+                  {pendingDesc ?? task.description ?? ''}
+                </Markdown>
+              </Box>
+            ) : (
+              <span style={{ color: 'var(--mantine-color-placeholder)', fontStyle: 'italic' }}>
+                Click to add description…
+              </span>
+            )}
+          </div>
+        )}
+      </Box>
+
+      {/* Latest run summary (AC-19) — whenever the task has runs, bound column or not */}
+      {hasRuns && (
+        <LatestRunTile run={(workflowRuns ?? [])[0]} projectId={projectId} onViewRuns={() => setTab('runs')} />
+      )}
+
+      {/* Child tasks — for epics */}
+      {task.taskType === 'epic' && (
+        <Box>
+          <Group justify="space-between" mb={4}>
+            <Text size="xs" c="dimmed" fw={600} tt="uppercase">
+              Child Tasks ({childTasks.length})
+            </Text>
+          </Group>
+          {childTasks.length === 0 ? (
+            <Text size="xs" c="dimmed">
+              No child tasks yet
+            </Text>
+          ) : (
+            <Stack gap={2}>
+              {childTasks.map((child) => (
+                <UnstyledButton
+                  key={child.id}
+                  onClick={() => onOpenTaskNumber(child.number)}
+                  px={6}
+                  py={4}
+                  style={{
+                    borderRadius: 4,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    transition: 'background 0.1s',
+                  }}
+                  className={styles.childTaskRow}
+                >
+                  <Badge
+                    size="xs"
+                    variant="filled"
+                    style={{
+                      backgroundColor: TASK_TYPE_COLORS[child.taskType] ?? 'var(--app-text-tertiary)',
+                      color: 'var(--app-on-primary)',
+                      fontSize: 10,
+                      fontWeight: 600,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {child.taskType.replace('_', ' ')}
+                  </Badge>
+                  <Text size="xs" c="brand" style={{ flex: 1 }} lineClamp={1}>
+                    {child.title}
+                  </Text>
+                </UnstyledButton>
+              ))}
+            </Stack>
+          )}
+        </Box>
+      )}
+
+      {/* Parent epic link — for non-epic tasks with parent */}
+      {task.taskType !== 'epic' && task.parentTaskId && (
+        <Box>
+          <Text size="xs" c="dimmed" fw={600} tt="uppercase" mb={4}>
+            Parent Epic
+          </Text>
+          {parentLinkNumber ? (
+            <UnstyledButton onClick={() => onOpenTaskNumber(parentLinkNumber)}>
+              <Text
+                size="sm"
+                c="brand"
+                style={{ textDecoration: 'none' }}
+                onMouseEnter={(e: React.MouseEvent<HTMLElement>) => {
+                  e.currentTarget.style.textDecoration = 'underline';
+                }}
+                onMouseLeave={(e: React.MouseEvent<HTMLElement>) => {
+                  e.currentTarget.style.textDecoration = 'none';
+                }}
+              >
+                {parentTaskTitle}
+              </Text>
+            </UnstyledButton>
+          ) : (
+            // Archived (or otherwise not-loaded) epic: still name it, but there is no
+            // board card to open, so it is plain text rather than a dead link.
+            <Text size="sm">{parentTaskTitle ?? `#${task.parentTaskNumber}`}</Text>
+          )}
+        </Box>
+      )}
+
+      {task.trackerIssues && task.trackerIssues.length > 0 && (
+        <Box>
+          <Group gap={6} mb={4}>
+            <ThemeIcon size={18} variant="light" color="blue" radius="xl">
+              <IconTicket size={12} />
+            </ThemeIcon>
+            <Text size="xs" c="dimmed" fw={600} tt="uppercase">
+              Tracker issues ({task.trackerIssues.length})
+            </Text>
+          </Group>
+          <Stack gap={4}>
+            {task.trackerIssues.map((issue) => {
+              const label = `${TRACKER_LABELS[issue.provider] ?? issue.provider} · ${issue.key}`;
+              return issue.url ? (
+                <Text
+                  key={`${issue.provider}:${issue.key}`}
+                  component="a"
+                  href={issue.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  size="sm"
+                >
+                  {label}
+                </Text>
+              ) : (
+                <Text key={`${issue.provider}:${issue.key}`} size="sm">
+                  {label}
+                </Text>
+              );
+            })}
+          </Stack>
+        </Box>
+      )}
+
+      {/* CI gates — pending, passed, failed and stale. A stale gate is the case this panel exists
+              for: its webhook never arrived, reconciliation could not get a verdict either, and it is
+              now waiting on a person rather than on CI. */}
+      {gatesForPanel.length > 0 && (
+        <Box>
+          <Group gap={6} mb={4}>
+            <ThemeIcon size={18} variant="light" color={hasStaleGate ? 'orange' : 'yellow'} radius="xl">
+              {hasStaleGate ? <IconAlertCircle size={12} /> : <IconHourglass size={12} />}
+            </ThemeIcon>
+            <Text size="xs" c="dimmed" fw={600} tt="uppercase">
+              CI Gates ({gatesForPanel.length})
+            </Text>
+          </Group>
+          <Stack gap={4}>
+            {gatesForPanel.map((wait) => {
+              const kind = gateCiStatus(wait);
+              const link = gateLink(wait);
+              const detail = gateDetail(wait);
+
+              return (
+                // One line per gate, stale ones included: why reconciliation gave up is prose,
+                // so it lives in the chip's tooltip rather than as a second line under the row.
+                <Group key={wait.id} gap={8} align="center" wrap="nowrap">
+                  {/* A floor, not a fixed width: every state word fits inside it so the links
+                          still align, but a chip that ever outgrew it would widen the column
+                          rather than have its label clipped by the badge's ellipsis. */}
+                  <Box miw={GATE_CHIP_WIDTH} style={{ flexShrink: 0 }}>
+                    <GateStatusChip status={kind} tooltip={gateTooltip(wait)} />
+                  </Box>
+                  {link ? (
+                    <Text
+                      component="a"
+                      href={link.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      size="xs"
+                      c="brand"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        flex: 1,
+                        minWidth: 0,
+                        textDecoration: 'none',
+                      }}
+                    >
+                      <IconLink size={10} style={{ flexShrink: 0 }} />
+                      <Box
+                        component="span"
+                        style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                      >
+                        {link.label}
+                      </Box>
+                    </Text>
+                  ) : (
+                    // A gate whose metadata carries no linkable reference still has to say what
+                    // it is waiting on, and the chip only carries the state.
+                    <Text size="xs" c="dimmed" style={{ flex: 1, minWidth: 0 }} lineClamp={1}>
+                      {wait.gateType.replace(/_/g, ' ')}
+                    </Text>
+                  )}
+                  {/* Age, TTL and an unusual conclusion — what the chip cannot say on its own:
+                          "waiting" reads very differently at two minutes and at eleven hours. */}
+                  {detail && (
+                    <Text size="xs" c="dimmed" style={{ fontSize: 11, flexShrink: 0 }}>
+                      {detail}
+                    </Text>
+                  )}
+                  {canExecute && GATE_UNRESOLVED_STATUSES.has(kind) && (
+                    <ActionIcon
+                      size="xs"
+                      variant="subtle"
+                      color="gray"
+                      aria-label={`Delete gate ${wait.id}`}
+                      onClick={() => handleDeleteGate(wait.id)}
+                      loading={deletingGateId === wait.id}
+                    >
+                      <IconX size={12} />
+                    </ActionIcon>
+                  )}
+                </Group>
+              );
+            })}
+          </Stack>
+        </Box>
+      )}
+    </>
+  );
+
+  const body = (
+    <>
       {/* Panel bar — icon actions only, no title here */}
       <Box
         style={{
@@ -617,10 +1131,19 @@ export function TaskDetailSidebar({
           flexShrink: 0,
         }}
       >
-        <ActionIcon variant="subtle" size="sm" title={wide ? 'Collapse' : 'Expand'} onClick={() => setWide(!wide)}>
-          {wide ? <IconArrowsMinimize size={16} /> : <IconArrowsMaximize size={16} />}
-        </ActionIcon>
-        <CopyButton value={`${window.location.origin}${companyProjectBoardPath(projectId, { n: task.number })}`}>
+        {variant === 'drawer' && (
+          <>
+            <ActionIcon variant="subtle" size="sm" title={wide ? 'Collapse' : 'Expand'} onClick={() => setWide(!wide)}>
+              {wide ? <IconArrowsMinimize size={16} /> : <IconArrowsMaximize size={16} />}
+            </ActionIcon>
+            <Tooltip label="Open as page" withArrow>
+              <ActionIcon component={Link} href={taskPagePath} variant="subtle" size="sm" aria-label="Open as page">
+                <IconArrowUpRight size={16} />
+              </ActionIcon>
+            </Tooltip>
+          </>
+        )}
+        <CopyButton value={`${window.location.origin}${taskPagePath}`}>
           {({ copied, copy }) => (
             <Tooltip label={copied ? 'Link copied' : 'Copy link'} withArrow>
               <ActionIcon variant="subtle" size="sm" aria-label="Copy link to task" onClick={copy}>
@@ -678,10 +1201,14 @@ export function TaskDetailSidebar({
             <IconTrash size={16} />
           </ActionIcon>
         )}
-        <ActionIcon variant="subtle" size="sm" title="Close" onClick={requestClose}>
-          <IconX size={16} />
-        </ActionIcon>
+        {variant === 'drawer' && (
+          <ActionIcon variant="subtle" size="sm" title="Close" onClick={requestClose}>
+            <IconX size={16} />
+          </ActionIcon>
+        )}
       </Box>
+
+      {variant === 'page' && <Box style={{ padding: '20px 20px 0' }}>{headerSection}</Box>}
 
       <Tabs
         value={tab}
@@ -705,523 +1232,18 @@ export function TaskDetailSidebar({
 
         {/* Details — fully editable fields */}
         <Tabs.Panel value="details" style={{ flex: 1, overflow: 'auto', padding: 20 }}>
-          {/* Panel header: title, chips */}
-          <Box style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 18 }}>
-            {/* Editable title */}
-            {editingTitle ? (
-              <textarea
-                className={styles.ptTitle}
-                value={titleValue}
-                rows={1}
-                onChange={(e) => {
-                  setTitleValue(e.currentTarget.value);
-                  e.currentTarget.style.height = 'auto';
-                  e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
-                }}
-                onBlur={saveTitle}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    saveTitle();
-                  }
-                  if (e.key === 'Escape') {
-                    setTitleValue(task.title);
-                    setEditingTitle(false);
-                  }
-                }}
-                autoFocus
-              />
-            ) : (
-              // The `#id` is a sibling of the editable title div, never a child of it: putting it
-              // inside would make it part of the text saveTitle reads and persists.
-              <Box style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <div
-                  className={styles.ptTitle}
-                  onClick={() => canExecute && setEditingTitle(true)}
-                  style={{ cursor: canExecute ? 'text' : 'default', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-                >
-                  {pendingTitle ?? task.title}
-                </div>
-                <CopyButton value={String(task.number)}>
-                  {({ copied, copy }) => (
-                    <Tooltip label={copied ? 'Copied' : 'Copy number'} withArrow>
-                      <Text
-                        c="dimmed"
-                        style={{ flexShrink: 0, whiteSpace: 'nowrap', cursor: 'pointer' }}
-                        onClick={copy}
-                      >
-                        #{task.number}
-                      </Text>
-                    </Tooltip>
-                  )}
-                </CopyButton>
-              </Box>
-            )}
+          {variant === 'drawer' && headerSection}
 
-            {/* Status chips: type, priority, workflow */}
-            <Box style={{ display: 'flex', flexWrap: 'wrap', gap: 7, alignItems: 'center' }}>
-              {task.taskType && task.taskType !== 'not_specified' && (
-                <Box
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 600,
-                    letterSpacing: '0.05em',
-                    textTransform: 'uppercase',
-                    padding: '2px 8px',
-                    borderRadius: 4,
-                    border: '1px solid rgba(209,207,205,0.12)',
-                    background: 'rgba(209,207,205,0.05)',
-                    color: 'var(--mantine-color-dimmed)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 5,
-                  }}
-                >
-                  {task.taskType.replace('_', ' ')}
-                </Box>
-              )}
-              {task.priority && (
-                <Box
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 600,
-                    letterSpacing: '0.05em',
-                    textTransform: 'uppercase',
-                    padding: '2px 8px',
-                    borderRadius: 4,
-                    border: '1px solid rgba(209,207,205,0.12)',
-                    background: 'rgba(209,207,205,0.05)',
-                    color: 'var(--mantine-color-dimmed)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 5,
-                  }}
-                >
-                  {task.priority}
-                </Box>
-              )}
-              {columnWorkflowBinding && (
-                <Box
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 600,
-                    padding: '2px 8px',
-                    borderRadius: 4,
-                    border: '1px solid var(--mantine-color-brand-light-hover)',
-                    background: 'var(--mantine-color-brand-light)',
-                    color: 'var(--app-primary-strong)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 5,
-                  }}
-                >
-                  <IconBolt size={11} />
-                  {columnWorkflowBinding.workflowName}
-                </Box>
-              )}
+          {variant === 'page' ? (
+            <Box className={styles.taskPageColumns}>
+              <Box style={{ minWidth: 0 }}>{mainSections}</Box>
+              <Box component="aside">{propertiesSection}</Box>
             </Box>
-          </Box>
-
-          {/* Properties */}
-          <Box style={{ marginBottom: 20 }}>
-            {/* sec-label */}
-            <Box
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase',
-                color: 'var(--mantine-color-dimmed)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                paddingBottom: 10,
-                borderBottom: '1px solid var(--app-border-default)',
-                marginBottom: 14,
-              }}
-            >
-              <IconListDetails size={14} color="var(--app-primary-strong)" />
-              Properties
-            </Box>
-
-            {/* props grid */}
-            <Box
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '92px 1fr',
-                gap: '10px 12px',
-                padding: '4px 0 14px',
-                alignItems: 'center',
-              }}
-            >
-              <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
-                Column
-              </Text>
-              <Select
-                data={columns.map((c) => ({ value: String(c.id), label: c.name }))}
-                value={String(task.boardColumnId)}
-                onChange={(v) => {
-                  if (v && v !== String(task.boardColumnId)) moveToColumn(v);
-                }}
-                aria-label="Column"
-                size="xs"
-                variant="unstyled"
-                styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
-                disabled={!canExecute}
-              />
-
-              <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
-                Type
-              </Text>
-              <Select
-                data={[
-                  { value: 'not_specified', label: 'Not specified' },
-                  { value: 'epic', label: 'Epic' },
-                  { value: 'story', label: 'Story' },
-                  { value: 'bug', label: 'Bug' },
-                ]}
-                value={task.taskType}
-                onChange={(v) => saveField('taskType', v)}
-                size="xs"
-                variant="unstyled"
-                styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
-                disabled={!canExecute}
-              />
-
-              <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
-                Priority
-              </Text>
-              <Select
-                data={[
-                  { value: '', label: 'None' },
-                  { value: 'critical', label: 'Critical' },
-                  { value: 'high', label: 'High' },
-                  { value: 'medium', label: 'Medium' },
-                  { value: 'low', label: 'Low' },
-                ]}
-                value={task.priority ?? ''}
-                onChange={(v) => saveField('priority', v || null)}
-                clearable
-                size="xs"
-                variant="unstyled"
-                styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
-                disabled={!canExecute}
-              />
-
-              <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
-                Assignee
-              </Text>
-              <Select
-                data={assigneeSelectData(members, teams)}
-                value={assigneeKey(taskAssignee(task))}
-                onChange={saveAssignee}
-                aria-label="Assignee"
-                clearable
-                searchable
-                size="xs"
-                variant="unstyled"
-                styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
-                disabled={!canExecute}
-              />
-
-              {/* Parent epic — for non-epic tasks */}
-              {task.taskType !== 'epic' && parentEpicOptions.length > 0 && (
-                <>
-                  <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
-                    Parent Epic
-                  </Text>
-                  <Select
-                    data={parentEpicOptions}
-                    value={task.parentTaskId ? String(task.parentTaskId) : null}
-                    onChange={(v) => saveField('parentTaskId', v)}
-                    aria-label="Parent Epic"
-                    clearable
-                    searchable
-                    size="xs"
-                    variant="unstyled"
-                    styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
-                    disabled={!canExecute}
-                  />
-                </>
-              )}
-
-              <Text size="xs" c="dimmed" style={{ alignSelf: 'flex-start', paddingTop: 5 }}>
-                Tags
-              </Text>
-              <InlineTagsEditor
-                tags={task.tags ?? []}
-                onChange={(tags) => saveField('tags', tags)}
-                disabled={!canExecute}
-                suggestions={knownTags}
-              />
-
-              <Text size="xs" c="dimmed">
-                Created
-              </Text>
-              <Text size="xs" c="dimmed">
-                {formatDateTime(task.createdAt)}
-              </Text>
-            </Box>
-          </Box>
-
-          <Box style={{ marginBottom: 18 }}>
-            {/* Editable description */}
-            {editingDesc ? (
-              <textarea
-                ref={fitToContent}
-                className={styles.ptDesc}
-                value={descValue}
-                rows={3}
-                autoFocus
-                onChange={(e) => {
-                  setDescValue(e.currentTarget.value);
-                  fitToContent(e.currentTarget);
-                }}
-                onBlur={saveDescription}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    setDescValue(task.description ?? '');
-                    setEditingDesc(false);
-                  }
-                }}
-              />
-            ) : (
-              <div
-                className={styles.ptDesc}
-                onClick={() => {
-                  if (!canExecute) return;
-                  setDescValue(task.description ?? '');
-                  setEditingDesc(true);
-                }}
-                style={{
-                  cursor: canExecute ? 'text' : 'default',
-                  color:
-                    (pendingDesc ?? task.description)
-                      ? 'var(--mantine-color-dimmed)'
-                      : 'var(--mantine-color-placeholder)',
-                }}
-              >
-                {(pendingDesc ?? task.description) ? (
-                  <Box className={styles.commentMd}>
-                    <Markdown remarkPlugins={[remarkGfm]} components={{ a: MarkdownLink }}>
-                      {pendingDesc ?? task.description ?? ''}
-                    </Markdown>
-                  </Box>
-                ) : (
-                  <span style={{ color: 'var(--mantine-color-placeholder)', fontStyle: 'italic' }}>
-                    Click to add description…
-                  </span>
-                )}
-              </div>
-            )}
-          </Box>
-
-          {/* Latest run summary (AC-19) — whenever the task has runs, bound column or not */}
-          {hasRuns && (
-            <LatestRunTile run={(workflowRuns ?? [])[0]} projectId={projectId} onViewRuns={() => setTab('runs')} />
-          )}
-
-          {/* Child tasks — for epics */}
-          {task.taskType === 'epic' && (
-            <Box>
-              <Group justify="space-between" mb={4}>
-                <Text size="xs" c="dimmed" fw={600} tt="uppercase">
-                  Child Tasks ({childTasks.length})
-                </Text>
-              </Group>
-              {childTasks.length === 0 ? (
-                <Text size="xs" c="dimmed">
-                  No child tasks yet
-                </Text>
-              ) : (
-                <Stack gap={2}>
-                  {childTasks.map((child) => (
-                    <UnstyledButton
-                      key={child.id}
-                      onClick={() => onOpenTaskNumber(child.number)}
-                      px={6}
-                      py={4}
-                      style={{
-                        borderRadius: 4,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        transition: 'background 0.1s',
-                      }}
-                      className={styles.childTaskRow}
-                    >
-                      <Badge
-                        size="xs"
-                        variant="filled"
-                        style={{
-                          backgroundColor: TASK_TYPE_COLORS[child.taskType] ?? 'var(--app-text-tertiary)',
-                          color: 'var(--app-on-primary)',
-                          fontSize: 10,
-                          fontWeight: 600,
-                          flexShrink: 0,
-                        }}
-                      >
-                        {child.taskType.replace('_', ' ')}
-                      </Badge>
-                      <Text size="xs" c="brand" style={{ flex: 1 }} lineClamp={1}>
-                        {child.title}
-                      </Text>
-                    </UnstyledButton>
-                  ))}
-                </Stack>
-              )}
-            </Box>
-          )}
-
-          {/* Parent epic link — for non-epic tasks with parent */}
-          {task.taskType !== 'epic' && task.parentTaskId && (
-            <Box>
-              <Text size="xs" c="dimmed" fw={600} tt="uppercase" mb={4}>
-                Parent Epic
-              </Text>
-              {parentLinkNumber ? (
-                <UnstyledButton onClick={() => onOpenTaskNumber(parentLinkNumber)}>
-                  <Text
-                    size="sm"
-                    c="brand"
-                    style={{ textDecoration: 'none' }}
-                    onMouseEnter={(e: React.MouseEvent<HTMLElement>) => {
-                      e.currentTarget.style.textDecoration = 'underline';
-                    }}
-                    onMouseLeave={(e: React.MouseEvent<HTMLElement>) => {
-                      e.currentTarget.style.textDecoration = 'none';
-                    }}
-                  >
-                    {parentTaskTitle}
-                  </Text>
-                </UnstyledButton>
-              ) : (
-                // Archived (or otherwise not-loaded) epic: still name it, but there is no
-                // board card to open, so it is plain text rather than a dead link.
-                <Text size="sm">{parentTaskTitle ?? `#${task.parentTaskNumber}`}</Text>
-              )}
-            </Box>
-          )}
-
-          {task.trackerIssues && task.trackerIssues.length > 0 && (
-            <Box>
-              <Group gap={6} mb={4}>
-                <ThemeIcon size={18} variant="light" color="blue" radius="xl">
-                  <IconTicket size={12} />
-                </ThemeIcon>
-                <Text size="xs" c="dimmed" fw={600} tt="uppercase">
-                  Tracker issues ({task.trackerIssues.length})
-                </Text>
-              </Group>
-              <Stack gap={4}>
-                {task.trackerIssues.map((issue) => {
-                  const label = `${TRACKER_LABELS[issue.provider] ?? issue.provider} · ${issue.key}`;
-                  return issue.url ? (
-                    <Text
-                      key={`${issue.provider}:${issue.key}`}
-                      component="a"
-                      href={issue.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      size="sm"
-                    >
-                      {label}
-                    </Text>
-                  ) : (
-                    <Text key={`${issue.provider}:${issue.key}`} size="sm">
-                      {label}
-                    </Text>
-                  );
-                })}
-              </Stack>
-            </Box>
-          )}
-
-          {/* CI gates — pending, passed, failed and stale. A stale gate is the case this panel exists
-              for: its webhook never arrived, reconciliation could not get a verdict either, and it is
-              now waiting on a person rather than on CI. */}
-          {gatesForPanel.length > 0 && (
-            <Box>
-              <Group gap={6} mb={4}>
-                <ThemeIcon size={18} variant="light" color={hasStaleGate ? 'orange' : 'yellow'} radius="xl">
-                  {hasStaleGate ? <IconAlertCircle size={12} /> : <IconHourglass size={12} />}
-                </ThemeIcon>
-                <Text size="xs" c="dimmed" fw={600} tt="uppercase">
-                  CI Gates ({gatesForPanel.length})
-                </Text>
-              </Group>
-              <Stack gap={4}>
-                {gatesForPanel.map((wait) => {
-                  const kind = gateCiStatus(wait);
-                  const link = gateLink(wait);
-                  const detail = gateDetail(wait);
-
-                  return (
-                    // One line per gate, stale ones included: why reconciliation gave up is prose,
-                    // so it lives in the chip's tooltip rather than as a second line under the row.
-                    <Group key={wait.id} gap={8} align="center" wrap="nowrap">
-                      {/* A floor, not a fixed width: every state word fits inside it so the links
-                          still align, but a chip that ever outgrew it would widen the column
-                          rather than have its label clipped by the badge's ellipsis. */}
-                      <Box miw={GATE_CHIP_WIDTH} style={{ flexShrink: 0 }}>
-                        <GateStatusChip status={kind} tooltip={gateTooltip(wait)} />
-                      </Box>
-                      {link ? (
-                        <Text
-                          component="a"
-                          href={link.href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          size="xs"
-                          c="brand"
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            flex: 1,
-                            minWidth: 0,
-                            textDecoration: 'none',
-                          }}
-                        >
-                          <IconLink size={10} style={{ flexShrink: 0 }} />
-                          <Box
-                            component="span"
-                            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                          >
-                            {link.label}
-                          </Box>
-                        </Text>
-                      ) : (
-                        // A gate whose metadata carries no linkable reference still has to say what
-                        // it is waiting on, and the chip only carries the state.
-                        <Text size="xs" c="dimmed" style={{ flex: 1, minWidth: 0 }} lineClamp={1}>
-                          {wait.gateType.replace(/_/g, ' ')}
-                        </Text>
-                      )}
-                      {/* Age, TTL and an unusual conclusion — what the chip cannot say on its own:
-                          "waiting" reads very differently at two minutes and at eleven hours. */}
-                      {detail && (
-                        <Text size="xs" c="dimmed" style={{ fontSize: 11, flexShrink: 0 }}>
-                          {detail}
-                        </Text>
-                      )}
-                      {canExecute && GATE_UNRESOLVED_STATUSES.has(kind) && (
-                        <ActionIcon
-                          size="xs"
-                          variant="subtle"
-                          color="gray"
-                          aria-label={`Delete gate ${wait.id}`}
-                          onClick={() => handleDeleteGate(wait.id)}
-                          loading={deletingGateId === wait.id}
-                        >
-                          <IconX size={12} />
-                        </ActionIcon>
-                      )}
-                    </Group>
-                  );
-                })}
-              </Stack>
-            </Box>
+          ) : (
+            <>
+              {propertiesSection}
+              {mainSections}
+            </>
           )}
         </Tabs.Panel>
 
@@ -2194,6 +2216,25 @@ export function TaskDetailSidebar({
         onIndexChange={handlePreviewIndexChange}
         onClose={closePreview}
       />
+    </>
+  );
+
+  if (variant === 'page') return <Box className={styles.taskPage}>{body}</Box>;
+
+  return (
+    <Drawer
+      opened={!!task}
+      onClose={requestClose}
+      position="right"
+      size={wide ? DRAWER_SIZE_WIDE : DRAWER_SIZE}
+      withCloseButton={false}
+      padding={0}
+      styles={{
+        content: { display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+        body: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+      }}
+    >
+      {body}
     </Drawer>
   );
 }
