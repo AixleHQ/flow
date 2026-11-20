@@ -58,6 +58,34 @@ module Workflows
     end
   end
 
+  # A step suspended, then restored into a new session that runs and finishes: what the
+  # status activity reads off the step's current session at each poll.
+  class SuspendedThenRestoredActivity < Temporalio::Activity::Definition
+    activity_name "workflow_step_session_status_activity"
+    STATES = [
+      { "state" => "suspended", "step_state" => "suspended" },
+      { "state" => "suspended", "step_state" => "suspended" },
+      { "state" => "running", "step_state" => "running" },
+      { "state" => "finished", "step_state" => "running" }
+    ].freeze
+
+    class << self
+      attr_accessor :polls
+    end
+
+    def execute(_input = nil)
+      self.class.polls += 1
+      { "cancelled" => false, "sessions" => { "1" => STATES[[ self.class.polls - 1, STATES.size - 1 ].min] } }
+    end
+  end
+
+  class SuspendedStepProbe < WorkflowExecutionWorkflowV2
+    def run(_input)
+      wait_for_signal(1)
+      { "decision" => @step_decisions[1].to_s }
+    end
+  end
+
   class WorkflowExecutionWorkflowV2Test < ActiveSupport::TestCase
     test "queue waiting can exceed the legacy 23-hour parent timeout" do
       result = run_workflow(QueueWaitProbe, {}, activities: [], task_queue: "queue-wait-test")
@@ -84,6 +112,23 @@ module Workflows
                                                        task_queue: "db-decision-test")
 
       assert_equal "skipped", result["decision"]
+    end
+
+    # A suspended step is not an ended one: the run waits on it, and moves on once the
+    # session that restored it finishes (Sessions::Suspension).
+    test "a suspended step holds the run until its restored session finishes" do
+      SuspendedThenRestoredActivity.polls = 0
+      proxy = Object.new
+      proxy.define_singleton_method(:workflow_step_session_status_activity) do
+        TemporalWorkflowHelper::ActivityRef.new("workflow_step_session_status_activity", "suspended-step-test")
+      end
+      SuspendedStepProbe.stubs(:_preloaded_activities).returns(proxy)
+
+      result = run_workflow(SuspendedStepProbe, {}, activities: [ SuspendedThenRestoredActivity ],
+                                                   task_queue: "suspended-step-test")
+
+      assert_equal "completed", result["decision"]
+      assert_equal 4, SuspendedThenRestoredActivity.polls
     end
 
     # A signal can reach a handler before `run` has executed at all.
