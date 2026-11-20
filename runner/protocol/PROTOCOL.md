@@ -729,8 +729,10 @@ environment's access token. The request has no body, and the gateway does not re
 - `expires_at` is 60 seconds after the ticket was minted. The relay refuses a ticket past it, with 5
   seconds of tolerance for clocks, and a second use of the same ticket.
 
-**The checks** are the common ones of §3. A platform that does not offer the tunnel (no relay is configured
-for it) then answers `404 not_found`; a machine that holds no session answers `409 no_session`, so an idle
+**The checks** are the common ones of §3. A platform that has no relay configured (no ticket key) then
+answers `404 not_found`. Whether it mints a ticket does not depend on its check-in telling runners to connect
+(§5.9): a platform can answer tickets before it turns the tunnel on for its runners, and a runner asks only after
+its check-in said so; a machine that holds no session answers `409 no_session`, so an idle
 machine opens no connection. The session in the claim is the one that holds the machine when the ticket is
 minted.
 

@@ -63,23 +63,27 @@ class Runners::TunnelTicketTest < ActiveSupport::TestCase
   test "a platform without a ticket key issues none, and says the tunnel is not offered" do
     Settings.runners.relay.stubs(:ticket_key).returns("")
 
+    assert_not Runners::TunnelTicket.configured?
     assert_not Runners::TunnelTicket.enabled?
+    assert_nil Runners::TunnelTicket.config
     error = assert_raises(Runners::Credentials::Refused) { Runners::TunnelTicket.issue(environment: @machine) }
     assert_equal "not_found", error.reason
   end
 
-  test "a platform that tells runners nothing about the tunnel issues none" do
+  test "a platform with a key and no mode issues tickets but tells runners nothing, so none asks" do
     Runners::TunnelTicket.stubs(:mode).returns("")
 
+    assert Runners::TunnelTicket.configured?
     assert_not Runners::TunnelTicket.enabled?
     assert_nil Runners::TunnelTicket.config
-    assert_raises(Runners::Credentials::Refused) { Runners::TunnelTicket.issue(environment: @machine) }
+    assert Runners::TunnelTicket.issue(environment: @machine).ticket.start_with?("artun_")
   end
 
   test "a mode runners do not know is off" do
     Runners::TunnelTicket.stubs(:mode).returns("always")
 
     assert_not Runners::TunnelTicket.enabled?
+    assert_nil Runners::TunnelTicket.config
   end
 
   test "the config the check-in sends is the mode and the path" do

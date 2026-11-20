@@ -1,5 +1,5 @@
 {
-  "description": "A platform that does not offer the tunnel (no relay is configured for it) answers 404 not_found, whatever the machine holds. Its check-in tells the runner nothing about a tunnel, so a runner never asks.",
+  "description": "A platform with no relay configured (no ticket key) answers 404 not_found, whatever the machine holds. Its check-in tells the runner nothing about a tunnel either, so a runner never asks.",
   "steps": [
     {"given": "registered_machine", "as": "m"},
     {"given": "session_on_machine", "machine": "m", "as": "s"},

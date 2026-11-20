@@ -149,8 +149,9 @@ class RunnerProtocolConformanceTest < ActionDispatch::IntegrationTest
     when "flag_off", "flag_on"
       flag_override.update!(enabled: step["given"] == "flag_on")
     when "tunnel_on"
-      # The platform offers the interactive tunnel: a relay is configured and the
-      # check-in tells runners to connect (Settings.runners.relay).
+      # The platform offers the interactive tunnel: a relay is configured (a ticket key) and
+      # the check-in tells runners to connect (a mode), Settings.runners.relay.
+      Settings.runners.relay.stubs(:ticket_key).returns("a-ticket-key-of-32-characters-xx")
       Runners::TunnelTicket.stubs(:mode).returns(Runners::TunnelTicket::MODES.first)
     when "time_passes"
       raise FixtureError, "#{where}: `seconds` must be a positive integer" unless step["seconds"].is_a?(Integer) && step["seconds"].positive?

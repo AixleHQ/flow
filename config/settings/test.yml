@@ -47,7 +47,3 @@ feature_flags:
 # enqueued.
 runners:
   op_poll_interval: 0
-  # A key to sign tunnel tickets with (Runners::TunnelTicket). The tunnel stays off
-  # (`tunnel_mode` blank); the tests that need it on turn it on.
-  relay:
-    ticket_key: <%= ENV['RUNNERS_RELAY_TICKET_KEY'] || 'runner relay test ticket key' %>

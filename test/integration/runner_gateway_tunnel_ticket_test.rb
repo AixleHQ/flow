@@ -51,8 +51,8 @@ class RunnerGatewayTunnelTicketTest < ActionDispatch::IntegrationTest
     assert_equal %w[error message], response.parsed_body.keys.sort
   end
 
-  test "a platform that does not offer the tunnel answers 404 not_found" do
-    Runners::TunnelTicket.stubs(:mode).returns("")
+  test "a platform without a ticket key answers 404 not_found" do
+    Settings.runners.relay.stubs(:ticket_key).returns("")
     hold_session
 
     post "/runner/v1/tunnel-ticket", headers: headers_for(@pair["access_token"])
@@ -101,6 +101,16 @@ class RunnerGatewayTunnelTicketTest < ActionDispatch::IntegrationTest
 
     assert_response :ok
     assert_operator @environment.reload.last_heartbeat_at, :>, 1.minute.ago
+  end
+
+  test "a platform that has the key and tells runners nothing about the tunnel still answers a ticket to one that asks" do
+    Runners::TunnelTicket.stubs(:mode).returns("")
+    hold_session
+
+    post "/runner/v1/tunnel-ticket", headers: headers_for(@pair["access_token"])
+
+    assert_response :ok
+    assert_match(/\Aartun_/, response.parsed_body["ticket"])
   end
 
   test "the check-in tells the runner about the tunnel when the platform offers it, and nothing when it does not" do

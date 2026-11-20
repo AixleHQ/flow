@@ -36,11 +36,18 @@ module Runners
 
     module_function
 
-    # Whether the platform offers the tunnel: it has a key to sign tickets with and
-    # a mode to tell the runners. Off by default, so nothing changes for a machine
-    # until the relay is deployed and the deployment turns it on.
+    # Whether tickets can be minted: the platform has a key to sign them with. The relay
+    # is then (or will be) deployed with the same key. Blank, no ticket is minted.
+    def configured?
+      ticket_key.present?
+    end
+
+    # Whether the check-in tells runners to connect (`config.tunnel`): the key is set and
+    # so is a mode. Off by default, so nothing changes for a machine until the relay is
+    # deployed and the deployment turns it on: a runner asks for a ticket only after the
+    # check-in said so.
     def enabled?
-      ticket_key.present? && MODES.include?(mode)
+      configured? && MODES.include?(mode)
     end
 
     def mode
@@ -59,10 +66,10 @@ module Runners
     end
 
     # A ticket for the machine, which must hold a session. Raises Credentials::Refused:
-    # `not_found` when the platform does not offer the tunnel, `no_session` when the
-    # machine holds none.
+    # `not_found` when the platform has no ticket key, `no_session` when the machine
+    # holds none.
     def issue(environment:, now: Time.current)
-      unless enabled?
+      unless configured?
         raise Credentials::Refused.new("not_found", "The platform does not offer the interactive tunnel.")
       end
 
