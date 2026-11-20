@@ -229,6 +229,36 @@ class InternalTools::BoardWriteToolsTest < ActiveSupport::TestCase
     assert_equal @col2.id, @task.board_column_id
   end
 
+  test "board_move_task puts the task at the position it names, and at the bottom without one" do
+    TemporalService.stubs(:start_workflow)
+    TemporalService.stubs(:send_signal)
+    TemporalService.stubs(:cancel_workflow)
+    first = create(:board_task, board: @board, board_column: @col2, position: 1, title: "First")
+    second = create(:board_task, board: @board, board_column: @col2, position: 2, title: "Second")
+    last = create(:board_task, board: @board, board_column: @col1, position: 2, title: "Last")
+
+    to_top = InternalTools::BoardMoveTask.new(
+      params: { task_id: @task.id, column_name: "In Dev", position: 0 }, session: @session
+    ).execute
+    to_bottom = InternalTools::BoardMoveTask.new(
+      params: { task_id: last.id, column_name: "In Dev" }, session: @session
+    ).execute
+
+    assert_equal [ 0, 0 ], [ to_top[:exit_code], to_bottom[:exit_code] ]
+    assert_equal 0, JSON.parse(to_top[:stdout])["position"]
+    assert_equal [ @task.id, first.id, second.id, last.id ], @col2.board_tasks.order(:position).pluck(:id)
+  end
+
+  test "board_move_task refuses a negative position and leaves the task where it was" do
+    result = InternalTools::BoardMoveTask.new(
+      params: { task_id: @task.id, column_name: "In Dev", position: -1 }, session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "position must be a non-negative integer"
+    assert_equal @col1.id, @task.reload.board_column_id
+  end
+
   test "board tools act on the task a #N names, not on a task whose id equals it" do
     TemporalService.stubs(:start_workflow)
     TemporalService.stubs(:send_signal)
