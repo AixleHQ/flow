@@ -50,7 +50,11 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     @step2.update!(position: 0)
     queries = lambda do
       count = 0
-      counter = ->(*, payload) { count += 1 if payload[:sql].match?(/step_runs/) && !payload[:cached] }
+      counter = lambda do |*, payload|
+        next if payload[:name] == "SCHEMA" || payload[:cached]
+
+        count += 1 if payload[:sql].match?(/step_runs/)
+      end
       run = ActiveSupport::Notifications.subscribed(counter, "sql.active_record") do
         WorkflowService.start(workflow: @workflow, project: @project, user: @user, source: :web)
       end
