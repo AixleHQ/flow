@@ -23,4 +23,9 @@ describe('formatElapsedTime', () => {
   it('formats the hours bucket', () => {
     expect(formatElapsedTime('2026-06-25T09:30:00Z')).toBe('2h 30m');
   });
+
+  it('measures against the given now instead of the clock', () => {
+    const now = new Date('2026-06-25T12:00:45Z').getTime();
+    expect(formatElapsedTime('2026-06-25T11:59:30Z', now)).toBe('1m 15s');
+  });
 });
