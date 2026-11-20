@@ -280,7 +280,9 @@ Checked live on staging (S3) on 2026-11-20 with Claude Code and a GitHub reposit
   - a suspended session's two outputs, one nested, became pending-review assets with the right content, its archive was deleted from S3, and the session was `finished`;
   - a restored session's archive was deleted and its state kept.
 
-Not checked live: the 23-hour limit itself (covered by tests of `Sessions::Suspension.time_limit_reached?` and the cleanup activity), and a restore through the product for the other seven CLIs (their resume commands are the ones the probe used by hand).
+Every CLI through the product on staging (2026-11-20): start a session, give the agent a code word, Suspend, Restore, then ask for the word without tools. The restored session launched with the CLI's resume flag in every case. The agent named the word for Claude Code, Codex, Cursor, Gemini, Grok, Antigravity and Copilot. Kiro resumed (`--resume-id`) with its history, but the account was out of quota and could not answer.
+
+Not checked live: the 23-hour limit itself. It is covered by tests of `Sessions::Suspension.time_limit_reached?` and the cleanup activity.
 
 ## 11. Out of scope
 
@@ -315,3 +317,7 @@ An interactive workflow step is suspended and restored like a standalone session
 **Run ceiling.** `TemporalWorkflowRegistry::RUN_TIMEOUT` went from 7 to 40 days, so a run can wait out a step's 30-day window. A step's window is capped at its run's start plus `RUN_TIMEOUT` minus 12 hours (`Sessions::Suspension.window_end`); runs started before the change keep their 7-day ceiling, and their steps get the shorter window.
 
 **UI.** On the run page, a suspended step shows *Suspended · N days left* with **Restore** for the step session's owner and **Skip** for whoever controls the run. A live interactive step gets **Suspend** next to **Finish session**.
+
+**Checked live on staging (2026-11-20)** with a two-step interactive workflow:
+- **Steps in parallel** (no dependency): step one suspended while step two finished. The run stayed `running` until step one was restored. Its restored session resumed the conversation (`claude --resume`), and its output was collected as the step's run asset when it finished. The run then completed. Step one's history read `878,873`.
+- **Steps in sequence** (step two depends on step one): while step one was suspended, step two stayed `pending` with no session. Restoring and finishing step one started step two. Step two was then suspended and restored in turn, and the run completed, with histories `882,881` and `884,883`.
