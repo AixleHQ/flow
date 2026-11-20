@@ -1,0 +1,55 @@
+<!-- Preheader (hidden preview text) -->
+<div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">
+  Its files and conversation are saved until <%= @expires_on %>.&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+</div>
+
+<!-- Card -->
+<tr>
+  <td style="background-color:#121110; border:1px solid #292726; border-radius:8px; padding:44px 44px 40px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+
+      <!-- Heading -->
+      <tr>
+        <td role="heading" aria-level="1" style="font-family:<%= email_font %>; font-size:20px; line-height:28px; font-weight:600; letter-spacing:-0.01em; color:#d1cfcd; padding-bottom:16px;">
+          Session #<%= @session.id %> was suspended
+        </td>
+      </tr>
+
+      <!-- Body -->
+      <tr>
+        <td style="font-family:<%= email_font %>; font-size:14px; line-height:22px; color:#9f9d9c; padding-bottom:28px;">
+          <% if @reason == "user" %>
+            You suspended this session.
+          <% else %>
+            This session reached the 23-hour limit for an interactive session.
+          <% end %>
+          Its files, its repositories' branches and changes, and the agent's conversation are saved.
+          Restore it before <strong style="color:#d1cfcd; font-weight:600;"><%= @expires_on %></strong> to continue where it stopped.
+        </td>
+      </tr>
+
+      <!-- Button -->
+      <tr>
+        <td style="padding-bottom:28px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td bgcolor="#cf6b4a" style="background-color:#cf6b4a; border-radius:5px;">
+                <a href="<%= @session_url %>" target="_blank" role="button" aria-label="Open session #<%= @session.id %>"
+                   style="display:inline-block; padding:11px 24px; font-family:<%= email_font %>; font-size:14px; font-weight:600; line-height:20px; color:#0a0908; text-decoration:none; border-radius:5px;">
+                  Open the session
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+
+      <tr>
+        <td style="font-family:<%= email_font %>; font-size:12px; line-height:18px; color:#5d5b5a; border-top:1px solid #292726; padding-top:24px;">
+          Running processes and anything outside /workspace are not kept. After <%= @expires_on %> the saved files are deleted; anything in outputs becomes an asset of the session, as when a session finishes.
+        </td>
+      </tr>
+
+    </table>
+  </td>
+</tr>

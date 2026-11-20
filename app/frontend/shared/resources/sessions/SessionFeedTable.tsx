@@ -9,7 +9,7 @@ import { useCableRowUpdates } from 'shared/lib/hooks/useCableRowUpdates';
 import { costColor, formatCost, formatDuration, formatTokens } from 'shared/lib/sessionFormat';
 import { companySessionPath, rowsCompanySessionsPath, userPath } from 'shared/routes';
 import { type ListSort, SortableHeader } from 'shared/ui/list-controls';
-import { AgentLogo, agentLabel, ModeTag, StatusTag } from 'shared/ui/sessions';
+import { AgentLogo, agentLabel, ModeTag, RestoreSessionButton, StatusTag } from 'shared/ui/sessions';
 
 import classes from './SessionFeedTable.module.css';
 
@@ -36,11 +36,23 @@ export interface SessionFeedRow {
   // False when the owner's profile keeps this phase of their sessions private —
   // the row still reports what it cost, but it cannot be opened.
   viewable: boolean;
+  /** A suspended session its viewer may restore. Absent from rows served before suspend existed. */
+  restorable?: boolean;
+  restoreExpiresAt?: string | null;
 }
 
 // Sessions whose show page is worth opening (a live or completed run, not a
 // half-provisioned one).
-const OPENABLE_STATES = new Set(['queued', 'ready', 'finished', 'failed', 'cancelled', 'finishing']);
+const OPENABLE_STATES = new Set([
+  'queued',
+  'ready',
+  'finished',
+  'failed',
+  'cancelled',
+  'finishing',
+  'suspended',
+  'restored',
+]);
 
 const SESSION_TYPE_LABEL: Record<string, string> = {
   agent_session: 'Standalone session',
@@ -71,6 +83,8 @@ function stateLabel(state: string): string {
       finished: 'Finished',
       failed: 'Failed',
       not_started: 'Pending',
+      suspended: 'Suspended',
+      restored: 'Restored',
     }[state] ?? state
   );
 }
@@ -306,7 +320,9 @@ function SessionRow({
         </Tooltip>
       </span>
 
-      {openable ? (
+      {s.restorable ? (
+        <RestoreSessionButton sessionId={s.id} restoreExpiresAt={s.restoreExpiresAt ?? null} />
+      ) : openable ? (
         <Tooltip label="Open session">
           <Link
             href={href!}

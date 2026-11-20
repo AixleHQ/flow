@@ -305,6 +305,17 @@ module Agents
 
     # `--effort` picks the model's reasoning-effort variant (1.4.7 lists
     # low|medium|high|xhigh|max); the CLI refuses a level its model does not have.
+    # Resume, measured 2026-11-20: the conversation database, its brain directory and
+    # the map from workspace to conversation.
+    def conversation_paths
+      %w[.gemini/antigravity-cli/conversations .gemini/antigravity-cli/brain
+         .gemini/antigravity-cli/cache/last_conversations.json]
+    end
+    def conversation_id_command
+      "grep -oE '\"/workspace\": *\"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' .gemini/antigravity-cli/cache/last_conversations.json 2>/dev/null | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'"
+    end
+    def resume_arguments(id) = "--conversation=#{id}"
+
     def session_command(mode:, model: nil, effort: nil)
       parts = [ "agy" ]
       parts += [ "--model", Shellwords.shellescape(model) ] if model.present?

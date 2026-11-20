@@ -29,7 +29,7 @@ import {
   parseListSort,
   SortableHeader,
 } from 'shared/ui/list-controls';
-import { AgentLogo, agentLabel, ModeTag, StatusTag } from 'shared/ui/sessions';
+import { AgentLogo, agentLabel, ModeTag, RestoreSessionButton, StatusTag } from 'shared/ui/sessions';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -95,12 +95,22 @@ const STATUS_OPTIONS = [
   { value: 'completed', label: 'Completed' },
   { value: 'failed', label: 'Failed' },
   { value: 'cancelled', label: 'Cancelled' },
+  { value: 'suspended', label: 'Suspended' },
   { value: 'pending', label: 'Pending' },
 ];
 
 // A run's session is never opened straight from the list while it is still
 // being provisioned — there is nothing to show yet.
-const OPENABLE_SESSION_STATES = new Set(['queued', 'cancelled', 'ready', 'finished', 'failed', 'finishing']);
+const OPENABLE_SESSION_STATES = new Set([
+  'queued',
+  'cancelled',
+  'ready',
+  'finished',
+  'failed',
+  'finishing',
+  'suspended',
+  'restored',
+]);
 
 const NO_QUERY: ListQuery = {};
 const NO_OPTIONS: { id: number; name: string }[] = [];
@@ -135,6 +145,8 @@ function stateLabel(entry: ListEntry): string {
       finished: 'Finished',
       failed: 'Failed',
       not_started: 'Pending',
+      suspended: 'Suspended',
+      restored: 'Restored',
     }[entry.state] ?? ''
   );
 }
@@ -542,7 +554,9 @@ function EntryRow({
           {formatDistanceToNow(new Date(entry.startedAt ?? entry.createdAt), { addSuffix: true })}
         </span>
 
-        {openable ? (
+        {!isRun && 'restorable' in entry && entry.restorable ? (
+          <RestoreSessionButton sessionId={entry.id} restoreExpiresAt={entry.restoreExpiresAt} />
+        ) : openable ? (
           <Tooltip label={isRun ? 'Open run' : 'Open session'}>
             <Link
               href={href}
