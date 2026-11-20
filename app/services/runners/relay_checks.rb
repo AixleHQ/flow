@@ -13,25 +13,24 @@ module Runners
   module RelayChecks
     module_function
 
+    # Four queries however many machines are asked about.
     def valid(machines)
-      environments = RunnerEnvironment.where(id: machines.pluck("environment_id")).includes(:runner, :company, :current_session)
-                                      .index_by(&:id)
-      flags = {}
+      environments = RunnerEnvironment.where(id: machines.pluck("environment_id")).index_by(&:id)
+      ready = TerminalSession.where(id: environments.values.filter_map(&:current_session_id), state: "ready").ids.to_set
+      live_runners = Runner.where(id: environments.values.map(&:runner_id).uniq, deleted_at: nil)
+                           .where.not(status: "revoked").ids.to_set
+      companies = Company.where(id: environments.values.map(&:company_id).uniq).index_by(&:id)
+      enabled = {}
+
       machines.map do |machine|
         environment = environments[machine["environment_id"]]
-        environment.present? && valid?(environment, machine["session_id"], flags)
+        next false unless environment&.registered? && environment.current_session_id == machine["session_id"]
+        next false unless ready.include?(environment.current_session_id) && live_runners.include?(environment.runner_id)
+
+        enabled.fetch(environment.company_id) do
+          enabled[environment.company_id] = Feature.enabled?(:external_runners, company: companies[environment.company_id])
+        end
       end
     end
-
-    def valid?(environment, session_id, flags)
-      return false unless environment.registered? && environment.current_session_id == session_id
-      return false unless environment.current_session&.ready?
-
-      runner = environment.runner
-      return false if runner.deleted_at || runner.status == "revoked"
-
-      flags.fetch(environment.company_id) { flags[environment.company_id] = Feature.enabled?(:external_runners, company: environment.company) }
-    end
-    private_class_method :valid?
   end
 end
