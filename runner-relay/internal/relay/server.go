@@ -259,6 +259,12 @@ func (s *Server) serve(ctx context.Context, c *websocket.Conn, claims ticket.Cla
 	s.metrics.TunnelConnects.WithLabelValues(ResultOK).Inc()
 	s.metrics.MachinesConnected.Set(float64(s.registry.Len()))
 	log.Info("a machine connected")
+	// A drain that began while this connection was completing its HELLO has not seen it in the
+	// registry: Drain sets the flag first and then reads the registry, and this adds first and
+	// then reads the flag, so one of the two sees the other.
+	if s.Draining() {
+		m.sess.GoAway()
+	}
 
 	<-m.sess.Done()
 	s.registry.Remove(m)
