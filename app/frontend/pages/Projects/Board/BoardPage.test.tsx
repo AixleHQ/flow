@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { rem } from '@mantine/core';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildBoard } from 'test/factories/board';
 import { buildBoardColumn } from 'test/factories/boardColumn';
@@ -12,7 +12,7 @@ import { buildTaskComment } from 'test/factories/taskComment';
 import { buildTaskStatistics } from 'test/factories/taskStatistics';
 import { buildTaskWorkflowRun } from 'test/factories/taskWorkflowRun';
 import { answerFetch } from 'test/fetchStub';
-import { act, cleanup, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
+import { act, cleanup, fireEvent, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 import type BoardTask from 'types/generated/BoardTask';
 import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 
@@ -1554,7 +1554,27 @@ describe('Projects/Board/BoardPage', () => {
     await userEvent.hover(chip);
 
     // A folded column still reports what happened to each ticket, without unfolding it.
-    expect(await screen.findByText('#1 · Wire up authentication · Status: failed')).toBeInTheDocument();
+    expect(await screen.findByText('#1 · Wire up authentication')).toBeInTheDocument();
+    expect(screen.getByText('Status: failed')).toBeInTheDocument();
+  });
+
+  it('wraps a long title in a bounded collapsed chip tooltip, with the status on its own line', async () => {
+    const title = 'Very long title '.repeat(13).trim();
+    const chip = await collapseBacklogAndGetChip(
+      makeTask({ id: 1, title, boardColumnId: 100, recentWorkflowRuns: [runOf({ state: 'failed' })] }),
+    );
+
+    await userEvent.hover(chip);
+
+    const titleLine = await screen.findByText(`#1 · ${title}`);
+    const statusLine = screen.getByText('Status: failed');
+    expect(titleLine).not.toBe(statusLine);
+    expect(titleLine.parentElement).toBe(statusLine.parentElement);
+    expect(titleLine).not.toContainElement(statusLine);
+    const tooltip = screen.getByRole('tooltip');
+    // `maw={320}` is an inline max-width; `multiline` is what lets the label wrap inside it.
+    expect(tooltip.style.maxWidth).toBe(rem(320));
+    expect(tooltip).toHaveAttribute('data-multiline');
   });
 
   it('reports elapsed time instead of a bare state for a running ticket in a collapsed column', async () => {
@@ -1569,7 +1589,7 @@ describe('Projects/Board/BoardPage', () => {
 
     await userEvent.hover(chip);
 
-    expect(await screen.findByText(/^#1 · Wire up authentication · Running — /)).toBeInTheDocument();
+    expect(await screen.findByText(/^Running — /)).toBeInTheDocument();
   });
 
   it('reports a pending gate as "Waiting" in a collapsed column chip tooltip', async () => {
@@ -1585,7 +1605,66 @@ describe('Projects/Board/BoardPage', () => {
 
     await userEvent.hover(chip);
 
-    expect(await screen.findByText(/^#1 · Wire up authentication · Status: paused · Waiting — /)).toBeInTheDocument();
+    expect(await screen.findByText(/^Status: paused · Waiting — /)).toBeInTheDocument();
+  });
+
+  describe('live time in a collapsed chip tooltip', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    // Only the clock and the interval are faked, so the tooltip's own open/close still runs.
+    const fakeClock = () => {
+      vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+      vi.setSystemTime(new Date('2026-06-01T12:00:00Z'));
+    };
+
+    it('counts up the time of a running ticket while the tooltip is open, and runs no timer while closed', async () => {
+      fakeClock();
+      const chip = await collapseBacklogAndGetChip(
+        makeTask({
+          id: 1,
+          title: 'Wire up authentication',
+          boardColumnId: 100,
+          recentWorkflowRuns: [runOf({ state: 'running', createdAt: '2026-06-01T11:59:50Z' })],
+        }),
+      );
+      const timersWhileClosed = vi.getTimerCount();
+
+      fireEvent.mouseEnter(chip);
+      expect(await screen.findByText('Running — 10s')).toBeInTheDocument();
+      expect(vi.getTimerCount()).toBe(timersWhileClosed + 1);
+
+      act(() => {
+        vi.advanceTimersByTime(3000);
+      });
+      expect(screen.getByText('Running — 13s')).toBeInTheDocument();
+
+      fireEvent.mouseLeave(chip);
+      await waitFor(() => expect(screen.queryByText(/^Running — /)).not.toBeInTheDocument());
+      expect(vi.getTimerCount()).toBe(timersWhileClosed);
+    });
+
+    it('counts up the waiting time of a gated ticket while the tooltip is open', async () => {
+      fakeClock();
+      const chip = await collapseBacklogAndGetChip(
+        makeTask({
+          id: 1,
+          title: 'Wire up authentication',
+          boardColumnId: 100,
+          recentWorkflowRuns: [runOf({ state: 'paused' })],
+          pendingGates: gatesOf({ id: 9, gateType: 'github_checks_completed', createdAt: '2026-06-01T11:59:55Z' }),
+        }),
+      );
+
+      fireEvent.mouseEnter(chip);
+      expect(await screen.findByText('Status: paused · Waiting — 5s')).toBeInTheDocument();
+
+      act(() => {
+        vi.advanceTimersByTime(2000);
+      });
+      expect(screen.getByText('Status: paused · Waiting — 7s')).toBeInTheDocument();
+    });
   });
 
   it('lists each recent run with its outcome, age, duration and failure reason on the workflow chip', async () => {
@@ -1801,7 +1880,8 @@ describe('Projects/Board/BoardPage', () => {
       makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100 }),
     );
     await userEvent.hover(card);
-    const reference = tooltipBackground(await screen.findByText(/^#1 · Wire up authentication/));
+    await screen.findByText(/^#1 · Wire up authentication/);
+    const reference = tooltipBackground(screen.getByRole('tooltip'));
     expect(reference).not.toBe('');
 
     cleanup();
