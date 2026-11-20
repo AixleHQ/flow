@@ -23,6 +23,12 @@ updates:
       # Drop both once the Temporal SDK switches to keywords.
       - dependency-name: "json"
         update-types: ["version-update:semver-major"]
+      # hashie is only transitive (omniauth, snaky_hash). snaky_hash 2.0.2
+      # through 2.0.9 require hashie < 6, and oauth2 2.0.11+ needs snaky_hash
+      # >= 2.0.3, so bundler resolves a hashie 6 bump by walking oauth2 back
+      # from 2.0.25 to 2.0.10. Drop once snaky_hash accepts hashie 6.
+      - dependency-name: "hashie"
+        update-types: ["version-update:semver-major"]
     groups:
       bundler-minor-patch:
         patterns: ["*"]

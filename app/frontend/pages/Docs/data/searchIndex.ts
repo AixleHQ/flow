@@ -64,7 +64,7 @@ export const SEARCH_INDEX: SearchResult[] = [
     slug: 'sessions-and-runs',
     title: 'Sessions & Runs',
     section: 'Using Flow',
-    desc: 'The unified list of runs and agent sessions, the live step terminal, approve, retry, skip and cancel, and reviewing what a run produced.',
+    desc: 'The unified list of runs and agent sessions, suspending an interactive session and restoring it within 30 days, the live step terminal, approve, retry, skip and cancel, and reviewing what a run produced.',
   },
   {
     slug: 'assets',

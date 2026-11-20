@@ -99,7 +99,11 @@ module Agents
       # Off by default in 3.0.0, pinned so a flipped default cannot move the chat onto
       # the alternate screen, where the tmux scrollback and the stored log replay would
       # hold a single frame (Codex flipped its own in 0.157).
-      "chat.startFullscreen" => false
+      "chat.startFullscreen" => false,
+      # Code-to-Spec analysis (`c2s_*` tools plus local code indexing) was opt-in in 3.0.0;
+      # from 3.5.0 it is on unless set to false wherever Kiro's server-side rollout reaches
+      # the account, which would change automatic runs without a changelog entry.
+      "chat.enableC2s" => false
     }.freeze
 
     # Kiro's current engine, the default since CLI 3.0. The flag still outranks a saved
@@ -450,6 +454,12 @@ module Agents
     # `--effort` (2.6 and later) takes low|medium|high|xhigh|max. Which of them a model
     # has is the model's: on 2.34.0 claude-sonnet-4.6 has no xhigh, and `auto` and the
     # Haiku models none. A level the model does not take is a warning, not an error.
+    # Resume: the history loads in a new container (measured 2026-11-20; the account
+    # was out of quota, so recall itself was not shown).
+    def conversation_paths = %w[.kiro/sessions .kiro/session-index]
+    def conversation_id_command = "ls -td .kiro/sessions/*/sess_*/ 2>/dev/null | head -1 | xargs -r basename"
+    def resume_arguments(id) = "--resume-id #{id}"
+
     def session_command(mode:, model: nil, effort: nil)
       flags = [ "--trust-all-tools", "--trust-workspace" ]
       flags << "--model #{Shellwords.shellescape(model)}" if model.present?

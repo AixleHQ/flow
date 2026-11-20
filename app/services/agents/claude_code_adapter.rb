@@ -887,6 +887,12 @@ module Agents
     # Both modes use full Claude TUI to preserve streamed terminal UX.
     # `--effort` takes low|medium|high|xhigh|max; on a model without xhigh or max the CLI
     # steps down to the nearest level it has (checked on 2.1.310).
+    # Resume, measured 2026-11-20 (research/technical-session-restore-and-sharing-research-2026-11-19.md
+    # §3.3): the transcripts alone bring a conversation back in a new container.
+    def conversation_paths = %w[.claude/projects]
+    def conversation_id_command = "ls -t .claude/projects/*/*.jsonl 2>/dev/null | head -1 | xargs -r basename | sed 's/[.]jsonl$//'"
+    def resume_arguments(id) = "--resume #{id}"
+
     def session_command(mode:, model: nil, effort: nil)
       parts = [ "claude" ]
       parts += [ "--model", Shellwords.shellescape(model) ] if model
@@ -1450,8 +1456,9 @@ module Agents
     # nobody to answer a permission prompt. "auto" and "dontAsk" both still block
     # or deny tools that need a scope grant (e.g. DesignSync — "Permission to use
     # DesignSync has been denied because Claude Code is running in don't ask mode").
-    # bypassPermissions never prompts/denies; the startup warning is pre-accepted
-    # via skipDangerousModePermissionPrompt (see generate_settings).
+    # bypassPermissions skips almost every prompt (the exceptions are denied in automatic
+    # runs, see generate_settings); the startup warning is pre-accepted via
+    # skipDangerousModePermissionPrompt.
     PERMISSION_DEFAULT_MODE = "bypassPermissions"
 
     # Claude Code treats availableModels as an allowlist and, for anything outside it,
@@ -1509,6 +1516,10 @@ module Agents
       # less; only a tool call running past five minutes (waiting on CI) pays one rewrite.
       # Interactive sessions keep the 1-hour default: a person pauses between turns.
       settings["promptCacheTtl"] = "5m" if mode.to_s == "non_interactive"
+      # Since 2.1.326 some tool calls ask for approval even under bypassPermissions (a
+      # dangerous rm, an MCP sign-in), and an automatic step has nobody to answer; deny
+      # them at once so the turn goes on. An interactive session has a person to ask.
+      settings["permissions"]["denyInsteadOfPrompting"] = true if mode.to_s == "non_interactive"
 
       if bedrock
         settings["env"] = settings["env"].merge(bedrock_settings_env(bedrock))

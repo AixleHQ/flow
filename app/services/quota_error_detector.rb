@@ -81,7 +81,8 @@ class QuotaErrorDetector
       /Add credits and retry/i,
       /You'?ve hit the rate limit for your plan/i,
       /You hit your (?:weekly|free usage) limit/i,
-      /Purchase credits to keep using Grok/i
+      /Purchase credits to keep using Grok/i,
+      /reached your free Grok Build usage limit/i
     ],
     # Kiro meters in credits, and its CLI exits 1 for every failure — a bad flag and an
     # exhausted plan are the same exit code — so the rendered message is the only thing

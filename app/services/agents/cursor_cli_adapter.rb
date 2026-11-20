@@ -131,6 +131,12 @@ module Agents
     # Cursor has no effort flag: a parameterized model takes it as a bracket override,
     # `--model 'claude-opus-4-8[effort=high]'`. With no model there is nothing to
     # attach it to, and a model that already carries overrides keeps its own.
+    # Resume, measured 2026-11-20: the chat store is keyed by a hash of /workspace, the
+    # same in every container.
+    def conversation_paths = %w[.cursor/chats]
+    def conversation_id_command = "ls -td .cursor/chats/*/*/ 2>/dev/null | head -1 | xargs -r basename"
+    def resume_arguments(id) = "--resume=#{id}"
+
     def session_command(mode:, model: nil, effort: nil)
       command = "agent --force --disable-auto-update"
       return command unless model

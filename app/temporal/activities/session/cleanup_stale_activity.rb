@@ -90,7 +90,11 @@ module Activities
               .where(created_at: ...threshold.ago)
           )
         when :finishing
-          scope.where(finishing_at: ...threshold.ago)
+          # A session being suspended stays in `finishing` while its checkpoint goes up,
+          # which may take the cleanup phase's whole budget.
+          suspending = "terminal_sessions.metadata->>'#{Sessions::Suspension::REQUESTED_KEY}' IS NOT NULL"
+          scope.where(finishing_at: ...threshold.ago).where.not(suspending)
+               .or(scope.where(suspending).where(finishing_at: ...(Sessions::Checkpoint::CLEANUP_TIMEOUT.seconds + threshold).ago))
         else
           scope.where(started_at: ...threshold.ago)
         end

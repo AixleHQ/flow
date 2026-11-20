@@ -260,6 +260,9 @@ module Activities
       def collect_outputs(admission, session, state)
         return state if state[:cleanup_collected]
 
+        # Decided once, with the container still there to take the checkpoint from, and
+        # kept in the phase state so a retried cleanup finalizes the same way.
+        state[:suspend] = true if Sessions::Suspension.due?(session.reload, outcome_error(session, state[:error]))
         begin
           session.strategy.before_cleanup(**strategy_state(state))
         rescue StandardError => e
@@ -282,6 +285,13 @@ module Activities
         ActiveRecord::Base.transaction do
           session.reload
           error = outcome_error(session, state[:error])
+          # A checkpoint that could not be taken leaves no row, and the session ends as
+          # any other does, its outputs already turned into assets by the strategy.
+          if state[:suspend] && error.nil? && !session.cancelled? && session.session_checkpoint.present?
+            Sessions::Suspension.suspended!(session)
+            next
+          end
+
           session.update!(state: outcome_state(session, error), finished_at: session.finished_at || Time.current,
             container_id: nil,
             error_message: TerminalSession.preferred_error_message(session.error_message, error))

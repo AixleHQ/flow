@@ -113,6 +113,8 @@ GET    /api/v1/terminal_sessions/:id
 POST   /api/v1/terminal_sessions
 DELETE /api/v1/terminal_sessions/:id
 POST   /api/v1/terminal_sessions/:id/finish
+POST   /api/v1/terminal_sessions/:id/suspend
+POST   /api/v1/terminal_sessions/:id/restore
 ```
 
 ### Board

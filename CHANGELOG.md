@@ -19,6 +19,18 @@ governance, community health — carry none.
   personal access token is stored, Aixle never receives an administrator credential,
   and deleting the credential or the app stops Flow from signing in (a token already issued lasts up to about an hour). Operators enable it by
   setting `AZURE_DEVOPS_FEDERATION_SIGNING_KEY`.
+### Added
+- **Sessions & Runs**: an interactive session can be suspended instead of finished, by its owner with **Suspend** or
+  by the 23-hour limit, which used to finish it. Its files, each repository's unpushed commits and uncommitted changes,
+  and the agent's conversation are kept for 30 days, and **Restore** starts a new session that picks up the same
+  conversation. A suspended session holds no slot; its owner is emailed when it is suspended and three days before it
+  expires. Needs S3-compatible storage; without it sessions finish as before.
+
+### Fixed
+- Runners: starting a session through the API on a runner the project cannot use (another
+  project's, or another company's) answers `403` instead of `422`. A machine revoked from its row
+  on the runner page reads **Revoked**; one that ran `aixle-runner unregister` still reads
+  **Unregistered**. Machines revoked before this change keep reading **Unregistered**.
 
 ### Changed
 
@@ -37,6 +49,15 @@ governance, community health — carry none.
   network outage, reports cost and token usage of runner sessions, and checks in a machine
   whose Docker daemon is down, which then shows **Failed** with the reason. No minimum runner
   version: older runners keep working.
+- **Sessions & Runs**: agent CLIs raised to Claude Code 2.1.329, Codex 0.171.0,
+  Cursor CLI 2026.11.19-f005e9d, Grok 1.0.89, Antigravity CLI 1.5.13, Kiro CLI 3.5.0
+  and Copilot CLI 1.0.114. In an automatic run, a Claude Code tool call that asks
+  for approval despite the permission bypass (a dangerous `rm`, an MCP sign-in) is
+  denied at once and the run goes on, instead of waiting for an answer. Kiro's
+  code-analysis tools stay off. GPT-6.2 Sol and Astra offer the max and ultra effort
+  levels in Codex. A Grok step that stops on its "free Grok Build usage limit" message
+  fails with that message instead of waiting for the no-output watchdog. Gemini CLI stays at 0.60.0: 0.70.0 still stops `--yolo` at a prompt
+  when the agent edits a build file or runs a workspace script.
 
 ### Fixed
 

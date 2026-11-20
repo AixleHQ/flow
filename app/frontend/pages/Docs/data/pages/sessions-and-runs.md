@@ -33,6 +33,46 @@ disabled until you pick one you actually have a credential for — and drops you
 straight into the session it creates. Finished a session and want another like
 it? A finished session offers to start a fresh one from the same setup.
 
+## Suspending and restoring a session
+
+An interactive session you started by hand, an Aixle Builder session included,
+can be **suspended** instead of finished. Its container stops, and what it was
+working on is kept for 30 days:
+
+- the files under `/workspace`, apart from the repositories, the assets the
+  session was given, and rebuildable folders such as `node_modules`;
+- each repository's branch, its commits that were not pushed, its uncommitted
+  changes and its untracked files;
+- the agent's conversation.
+
+A session is suspended in two ways:
+
+- **Suspend** next to **Finish session**, when you want to come back to it
+  later;
+- **the 23-hour limit** an interactive session runs for, which used to finish it.
+  An hour before the limit the session warns you.
+
+You get an email when a session is suspended, and again three days before its 30
+days are up. A suspended session holds no slot and costs nothing while it waits.
+
+**Restore**, on the session page or on its row in the list, starts a new session
+with the same agent, model and resources. It puts the files and the
+repositories' work back, and the agent picks up the same conversation. The new
+session's page says what it continues and anything that could not be put back.
+A resource that has been archived since is left out. Work the agent could not
+reapply is left in `/workspace/.aixle-restore`.
+
+**What is not kept:** running processes (a dev server, a watcher), and anything
+outside `/workspace` — packages installed globally, caches, `/tmp`. The agent is
+told so and installs what it needs again.
+
+After 30 days the saved files are deleted and the session is finished. Anything
+the agent had put in `outputs` becomes an asset of the session, as when a session
+finishes.
+
+Workflow steps are not suspended: a run waits on its steps and ends a step at the
+same limit.
+
 ## Watching a run
 
 Open a run and you get one card per session, in run order, with the run's
