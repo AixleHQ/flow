@@ -38,6 +38,8 @@ shared path (`WorkflowService.start`). A `trigger_dispatches` ledger records
 | **Pull request event** | a review is submitted, or a comment is added, on a pull request of a connected repository | the workflow's Triggers, or the project's Triggers page ([below](#pull-request-events)) |
 
 Column binding and manual are **board-native** — the task already exists.
+A column binding in `auto` mode starts its run unattended, so like the off-board
+triggers it needs auto-run on every step of its workflow.
 Schedule, chat, webhook, tracker and pull request events originate **off the board** and must therefore
 answer "what task, if any, is this run about?" — that is [`subject_policy`](#subjectpolicy).
 

@@ -13,6 +13,7 @@ import { apiV1ProjectTasksPath } from 'shared/routes';
 export interface PagedTask {
   id: number;
   boardColumnId: number;
+  position: number;
 }
 
 interface PagedColumn {
@@ -44,10 +45,21 @@ interface UseBoardTaskPagesOptions<T extends PagedTask> {
   normalize: (task: T) => T;
 }
 
+/** Where a dropped card was sent, as the move request states it. */
+export interface PendingMove {
+  fromColumnId: number;
+  boardColumnId: number;
+  position: number;
+}
+
 interface UseBoardTaskPagesResult<T extends PagedTask> {
   /** Every task the client holds, flat. Optimistic updates (drag, create) write here. */
   tasks: T[];
   setTasks: Dispatch<SetStateAction<T[]>>;
+  /** Hold a dropped card where it was sent until the server shows it there. */
+  pinMove: (taskId: number, move: PendingMove) => void;
+  /** The move request answered: a saved move starts its expiry, a refused one lets go at once. */
+  settleMove: (taskId: number, saved: boolean) => void;
   /** Total tasks per column — the unpaginated total, not what is loaded. */
   counts: Record<number, number>;
   hasMore: Record<number, boolean>;
@@ -115,6 +127,37 @@ function clearedList<T>(prev: T[]): T[] {
 
 function clearedMap(prev: Record<number, number>): Record<number, number> {
   return Object.keys(prev).length === 0 ? prev : {};
+}
+
+// A board reload already on its way when a card is dropped answers with the card in its old column,
+// and taking that list as it is snaps the card back until the next reload (#309). So a dropped card
+// keeps the place it was sent to until the server shows it there — or, when someone else has moved
+// it meanwhile, until this long after the save.
+export const PIN_TTL_MS = 10_000;
+
+interface Pin extends PendingMove {
+  savedAt: number | null;
+}
+
+function serverShowsMove(task: PagedTask, pin: Pin): boolean {
+  if (task.boardColumnId !== pin.boardColumnId) return false;
+  // Across columns, the column alone tells: no stale list has the card there yet. Within one, only
+  // the position the request sent does.
+  return pin.fromColumnId !== pin.boardColumnId || task.position === pin.position;
+}
+
+function holdPinned<T extends PagedTask>(server: T[], pins: Map<number, Pin>, now: number): T[] {
+  if (pins.size === 0) return server;
+  return server.map((task) => {
+    const pin = pins.get(task.id);
+    if (!pin) return task;
+    const expired = pin.savedAt !== null && now - pin.savedAt > PIN_TTL_MS;
+    if (expired || serverShowsMove(task, pin)) {
+      pins.delete(task.id);
+      return task;
+    }
+    return { ...task, boardColumnId: pin.boardColumnId, position: pin.position };
+  });
 }
 
 function countByColumn(tasks: PagedTask[]): Record<number, number> {
@@ -187,10 +230,24 @@ export function useBoardTaskPages<T extends PagedTask>({
     [filtered, queryTasks, baseTasks, extraTasks],
   );
 
+  const pinsRef = useRef<Map<number, Pin>>(new Map());
+  const pinMove = useCallback((taskId: number, move: PendingMove) => {
+    pinsRef.current.set(taskId, { ...move, savedAt: null });
+  }, []);
+  const settleMove = useCallback((taskId: number, saved: boolean) => {
+    const pin = pinsRef.current.get(taskId);
+    if (!pin) return;
+    if (saved) pin.savedAt = Date.now();
+    else pinsRef.current.delete(taskId);
+  }, []);
+
   // Rendering and drag-and-drop read this copy, which optimistic updates mutate in place; the
-  // server-derived list above replaces it whenever fresh data lands.
+  // server-derived list above replaces it whenever fresh data lands, except for cards still pinned.
   const [tasks, setTasks] = useState<T[]>(merged);
-  useEffect(() => setTasks((prev) => (sameTasks(prev, merged) ? prev : merged)), [merged]);
+  useEffect(() => {
+    const next = holdPinned(merged, pinsRef.current, Date.now());
+    setTasks((prev) => (sameTasks(prev, next) ? prev : next));
+  }, [merged]);
 
   const loadedByColumn = useMemo(() => countByColumn(tasks), [tasks]);
   const loadedRef = useRef(loadedByColumn);
@@ -292,5 +349,5 @@ export function useBoardTaskPages<T extends PagedTask>({
     };
   }, [enabled, filtered, baseTasks, pageSize, fetchPage]);
 
-  return { tasks, setTasks, counts, hasMore, loading, loadMore, filtered };
+  return { tasks, setTasks, pinMove, settleMove, counts, hasMore, loading, loadMore, filtered };
 }

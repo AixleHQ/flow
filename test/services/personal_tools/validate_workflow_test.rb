@@ -42,11 +42,13 @@ module PersonalTools
       assert validate["warnings"].any? { |w| w.include?("no agent") }
     end
 
+    # The trigger is saved first: a step whose auto-run goes off later is what
+    # the save-time rule on the trigger cannot catch.
     test "an unattended trigger requires every step to allow non-interactive runs" do
-      create(:step, workflow: @workflow, name: "Draft", instructions: "Draft it", allow_non_interactive: false)
       board = create(:board, project: @project)
       column = create(:board_column, board: board, name: "Planning", position: 1)
       ColumnWorkflowBinding.create!(board_column: column, workflow: @workflow, trigger_mode: "auto")
+      create(:step, workflow: @workflow, name: "Draft", instructions: "Draft it", allow_non_interactive: false)
 
       errors = validate["errors"]
 

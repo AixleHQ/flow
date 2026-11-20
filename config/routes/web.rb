@@ -658,6 +658,7 @@ scope module: :web, defaults: { format: :html } do
         # favorite per (user, project), and the actor is always current_user.
         resource :favorite, only: %i[create destroy]
         resource :board, only: %i[show]
+        resources :tasks, only: %i[show], param: :number
         resources :template_installs, only: %i[show] do
           resources :setup_items, only: %i[update]
         end

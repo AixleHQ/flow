@@ -7,7 +7,7 @@ import { buildBoardTask } from 'test/factories/boardTask';
 import { act, renderHook, waitFor } from 'test/renderPage';
 import type BoardTask from 'types/generated/BoardTask';
 
-import { boardFilterParams, useBoardTaskPages, type BoardTaskFilters } from './useBoardTaskPages';
+import { PIN_TTL_MS, boardFilterParams, useBoardTaskPages, type BoardTaskFilters } from './useBoardTaskPages';
 
 const PROJECT_ID = 7;
 const PAGE_SIZE = 2;
@@ -235,6 +235,71 @@ describe('useBoardTaskPages', () => {
     // A render loop here does not fail an assertion, it exhausts the worker's heap — so the bound
     // is what keeps that from reaching CI as a mysterious OOM.
     expect(renderCount).toBeLessThan(10);
+  });
+
+  describe('a pinned move', () => {
+    const renderWithServer = () =>
+      renderHook(
+        ({ tasks }: { tasks: BoardTask[] }) =>
+          useBoardTaskPages<BoardTask>({
+            projectId: PROJECT_ID,
+            enabled: true,
+            columns: [BACKLOG, IN_PROGRESS],
+            initialTasks: tasks,
+            pageSize: PAGE_SIZE,
+            filters: NO_FILTERS,
+            normalize: (t) => t,
+          }),
+        { initialProps: { tasks: initialTasks } },
+      );
+    const placeOf = (tasks: BoardTask[], id: number) => {
+      const found = tasks.find((t) => t.id === id);
+      return [found?.boardColumnId, found?.position];
+    };
+
+    afterEach(() => vi.useRealTimers());
+
+    it('lets go at once when the save is refused', () => {
+      const { result, rerender } = renderWithServer();
+
+      act(() => {
+        result.current.pinMove(1, { fromColumnId: 100, boardColumnId: 200, position: 1 });
+        result.current.settleMove(1, false);
+      });
+      rerender({ tasks: [...initialTasks] });
+
+      expect(placeOf(result.current.tasks, 1)).toEqual([100, 0]);
+    });
+
+    it('holds a reorder within a column until the server has the new position', () => {
+      const { result, rerender } = renderWithServer();
+
+      act(() => result.current.pinMove(1, { fromColumnId: 100, boardColumnId: 100, position: 1 }));
+      rerender({ tasks: [...initialTasks] });
+      expect(placeOf(result.current.tasks, 1)).toEqual([100, 1]);
+
+      rerender({ tasks: [task(1, 100, 1), task(2, 100, 0), task(9, 200, 0)] });
+      rerender({ tasks: [...initialTasks] });
+      expect(placeOf(result.current.tasks, 1)).toEqual([100, 0]);
+    });
+
+    // Someone else moving the card on: the server never shows it where it was dropped.
+    it('gives way to the server once the saved move has gone unconfirmed past its expiry', () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-11-20T10:00:00Z'));
+      const { result, rerender } = renderWithServer();
+
+      act(() => {
+        result.current.pinMove(1, { fromColumnId: 100, boardColumnId: 200, position: 1 });
+        result.current.settleMove(1, true);
+      });
+      rerender({ tasks: [...initialTasks] });
+      expect(placeOf(result.current.tasks, 1)).toEqual([200, 1]);
+
+      vi.setSystemTime(new Date(Date.now() + PIN_TTL_MS + 1));
+      rerender({ tasks: [...initialTasks] });
+      expect(placeOf(result.current.tasks, 1)).toEqual([100, 0]);
+    });
   });
 
   it('fetches nothing until the project has a board', () => {

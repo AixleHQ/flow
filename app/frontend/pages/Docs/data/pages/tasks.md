@@ -46,6 +46,9 @@ Open a card and the detail drawer has tabs:
   by author type to read only what people wrote, or only what agents produced.
 - **Analytics** — what this single card has cost: run time, tokens, spend.
 
+**Open as page** (↗ in the drawer header) opens the card as a page of its own,
+and **Copy link** copies its address to share.
+
 **Activity** (top of the board) opens a slide-over with everything that has
 happened on the board recently — it stays open while you keep working.
 

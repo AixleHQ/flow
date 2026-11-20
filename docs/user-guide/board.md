@@ -34,6 +34,13 @@ When a card enters a bound column in auto mode and:
 a new non-interactive `WorkflowRun` starts. The agent reads the card
 title, description, comments, and attached assets as context.
 
+Nobody is at the terminal when a column starts a run on its own, so a column in
+`auto` mode takes only a workflow whose every step has auto-run on. Saving one
+with a step that has it off is refused, and the error names the step; switch the
+step's auto-run on or make the trigger `manual`. If a step's auto-run is turned
+off after the trigger was set up, the card gets a comment saying why its run did
+not start.
+
 ## Presets
 
 When creating a project, pick one of three column presets:
@@ -83,6 +90,12 @@ full stack.
 Every task has a numeric id that is stable for its lifetime. It appears next to
 the task title on the card, in collapsed-column chips (hover to see), and in the
 detail drawer header. Clicking `#42` copies the number to the clipboard.
+
+Every task also has a page of its own at `/company/projects/<project>/tasks/42`.
+**Open as page** (↗ in the drawer header) goes there, and **Copy link** copies
+that address — the one to share or to keep in release notes. The page has the
+drawer's tabs, with the properties beside the description, and still opens once
+the task is archived.
 
 ### Finding a card by id
 

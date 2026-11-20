@@ -491,7 +491,7 @@ describe('Projects/Board/BoardPage', () => {
     expect(drawer.getByText('Created')).toBeInTheDocument();
   });
 
-  it('copies a link that opens the task on its board', async () => {
+  it('copies a link to the task page', async () => {
     const user = userEvent.setup();
     renderAuthedPage(<BoardPage />, {
       props: {
@@ -506,7 +506,25 @@ describe('Projects/Board/BoardPage', () => {
 
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Copy link to task' }));
 
-    expect(await navigator.clipboard.readText()).toBe(`${window.location.origin}/company/projects/7/board?n=11`);
+    expect(await navigator.clipboard.readText()).toBe(`${window.location.origin}/company/projects/7/tasks/11`);
+  });
+
+  it('opens the task as its own page from the drawer', () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        selectedTask: makeTask({ id: 1, number: 11, title: 'Wire up authentication', boardColumnId: 100 }),
+        taskComments: [],
+        taskAssets: [],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+      },
+    });
+
+    expect(within(screen.getByRole('dialog')).getByRole('link', { name: 'Open as page' })).toHaveAttribute(
+      'href',
+      '/company/projects/7/tasks/11',
+    );
   });
 
   it('opens the next task expanded once the drawer has been expanded', async () => {

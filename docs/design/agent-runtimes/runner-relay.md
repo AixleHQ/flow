@@ -1,6 +1,6 @@
 # The Go runner relay service: the interactive tunnel, and the home of the runner's long-held connections
 
-**Status:** proposal for review (task #253, "Runners 16a"), revised after Alex's review of PR #796 (2026-11-19). Nothing here is built.
+**Status:** proposal for review (task #253, "Runners 16a"), revised after Alex's review of PR #796 (2026-11-19). Nothing here is built. **Round 2 (task #267, "Runners 16b", 2026-11-19):** §5.7 compares our own multiplexer with smux, yamux and SSH channels and recommends keeping §5 (own protocol); §5.8, §12, §13 and §13.1 are written for it. **The choice is Alex's, at Review Result.**
 **Naming (Alex, 2026-11-19):** the service is **`runner-relay`** everywhere: the directory `runner-relay/`, the binary `aixle-runner-relay`, the image and the Helm workload `runner-relay`, the variables `RUNNER_RELAY_*`, the metric prefix `runner_relay_`, the Redis channel `runner_relay` and the internal endpoints `/api/v1/internal/runner_relay/…`. It is not `runner-gateway`: that name belongs to the Rails deployment until row 26, and the Go service never becomes the whole gateway (the token checks, `Rack::Attack` and every short endpoint stay in Rails). In the text, "the relay" means this service.
 **Parent:** [`DESIGN.md`](DESIGN.md) §6.9.5 (the tunnel) and §15 row 16. It refines §6.9.5 and
 replaces row 16 with the rows 16b to 16g of §13 below, and adds the rows 24 to 26 for the
@@ -64,7 +64,7 @@ HTTP and its tests need no network. The relay's Docker build context is the repo
 
 **WebSocket library:** `github.com/coder/websocket` (context-aware API, no global state, small).
 `gorilla/websocket` is the alternative and would also do; the choice is a one-line detail for 16b,
-both ends use the same one.
+both ends use the same one. The package's dependency rule (the standard library and this library only) holds under the recommended multiplexer; §5.7 says what changes if a multiplexer library is chosen instead.
 
 ### 2.2 Process and configuration
 
@@ -282,7 +282,7 @@ standard library.
 
 ## 5. The relay protocol (version 1)
 
-One WebSocket per machine, binary messages, **one frame per message**. All integers are big-endian.
+One WebSocket per machine, binary messages, **one frame per message**. All integers are big-endian. This is our own protocol (option A of §5.7, recommended); §5.7 compares it with smux, yamux and SSH channels, and §5.8 fixes the encoding details the fixtures pin.
 
 ```
 frame  = type (1 byte) | stream id (4 bytes) | payload
@@ -388,6 +388,155 @@ Resuming a stream after a reconnect needs both sides to retain unacknowledged by
 offset, which is the complexity `DESIGN.md` §6.9.7 rules out for a rare case with no data at risk: the terminal's
 state is in tmux, the IDE's in the container, and an upload is retried by its client. The cost is a brief
 blank terminal on a network blip, which the session page already recovers from by reconnecting ttyd.
+
+### 5.7 Alternatives for the multiplexer (Alex's round of 2026-11-19, task #267)
+
+The wire format ships in `aixle-runner` on customers' machines, so the choice of the multiplexer is made
+before any code. §5 above is option A. This section compares it with the libraries and recommends one. **The
+choice is Alex's, at Review Result.** §5.7.4 says what a different pick changes.
+
+**How it was checked.** The sources were read, not recalled: `xtaci/smux` v1.5.60 (2026-11-12),
+`hashicorp/yamux` master `98ba9c9` (2026-10-12; the last tag is v0.1.2, 2024-09), `golang.org/x/crypto/ssh`
+(2026-11-09) and `coder/websocket` `12c866f`. File names below are in those trees. Nothing was run: the
+numbers are the code's constants and defaults, not measurements.
+
+#### 5.7.1 The options
+
+- **A. Our own protocol,** as §5 specifies it, in `runner/protocol/tunnel`.
+- **B. smux v2.** Header of 8 bytes (version, command, 16-bit length, stream id), commands `SYN`, `FIN`,
+  `PSH`, `NOP`, and for v2 `UPD` (consumed bytes and window).
+- **C. yamux.** Header of 12 bytes (version 0, type, flags, stream id, length); types data, window update,
+  ping, go away; flags `SYN`, `ACK`, `FIN`, `RST`.
+- **D. SSH channels,** `golang.org/x/crypto/ssh`, a `direct-tcpip`-style channel per stream.
+- **E. Complete tunnel tools** (chisel, frp, Coder's tailnet). They are products with their own control plane,
+  authentication and listeners. Chisel and frp expose TCP ports through their own server and client and have no
+  embeddable stream API with our `OPEN` carrying a session id, our ticket or our `GOAWAY`/revocation semantics, and the
+  browser side needs HTTP routing by route token (§7), not a forwarded port. Coder's tailnet is a WireGuard
+  mesh with DERP relays and a coordinator: it solves "reach a workspace from anywhere", needs a client library
+  and a coordination service on the platform, and puts a second network stack on the customer's machine for
+  five known local ports. None of them fits the tunnel as a component. **Rejected; no table row.**
+- **F. Others, one line each.** HTTP/2 or gRPC streams over the WebSocket (`x/net/http2`): the same
+  per-stream windows, but HPACK, SETTINGS and header semantics that a raw-TCP stream does not need, and no
+  reset-with-our-codes. QUIC (`quic-go`): streams, resets with codes and flow control built in, but it runs
+  over UDP, and the runner's only outbound destination is the gateway's HTTPS host (§1, decision 4).
+  `libp2p/go-yamux` is a fork of C with a different config surface. `hashicorp/go-plugin` and `net/rpc` are
+  RPC frameworks, not multiplexers. **None is carried further.**
+
+#### 5.7.2 Comparison against §5 and §6
+
+| Need (where it comes from) | **A. Own** | **B. smux v2** | **C. yamux** | **D. SSH** |
+| --- | --- | --- | --- | --- |
+| Open with session and port; answer with a reason (§5.1) | `OPEN` JSON, `OPEN_OK` or `RESET` code | No payload on `SYN` (`frame.go`). A header and an answer would be the first bytes of every stream: a layer of ours, one round trip | `SYN` may carry data (`spec.md`), no reason on refusal. The answer is the same layer of ours | Native: the channel open carries data, a refusal carries a reason code and text (`channel.go`) |
+| Reset with a code (§5.1, §5.5) | 10 codes | None. `Close()` sends `FIN` and discards (`stream.go`) | `RST` exists but is not public and carries no reason (`stream.go`: `RST` is sent on close timeout or backlog overflow) | None: `Close` only. A code would be a channel request of ours |
+| Half-close (§5.1) | `CLOSE` | `CloseWrite()` (in v1.5.60) | `Close()` is a half-close; issue #133 (open since 2024): writes to a half-closed stream stall when the send window is exhausted | `CloseWrite()` |
+| Per-stream window, bounded buffers (§5.2) | Negotiated, 256 KiB | Sender assumes 262144 whatever the peer set (`initialPeerWindow`, `frame.go`); the default `MaxStreamBuffer` is 65536, and the default version is 1 (`mux.go`), so v2 must be set on both ends | 256 KiB initial, `MaxStreamWindowSize` cannot go below it (`VerifyConfig`) | Constant 2 MiB (`channelWindowSize = 64 × 32 KiB`), not configurable |
+| Bound per connection (§5.2) | `max_streams × window` = 16 MiB | One shared `MaxReceiveBuffer` (4 MiB default). When it is empty `recvLoop` waits (`session.go`), which stops every stream, so it must be at least `streams × window` to be safe, and then it bounds nothing | No connection bound | 64 × 2 MiB = 128 MiB per direction at 64 streams |
+| Frame cap and fairness: a keystroke next to an IDE download (§5.2) | 32 KiB, control first, one `DATA` per stream in turn | Best match: `MaxFrameSize` up to 65535 (default 32 KiB), control frames before data, data round-robin across streams (`shaper.go`) | **No cap:** one frame carries up to the whole window, `min(window, len(b))` (`stream.go`), so a busy stream can hold the connection for 256 KiB. A wrapper that writes at most 32 KiB per call fixes it; the queue is one FIFO (`sendCh`), not a scheduler | 32 KiB packets, one writer under a lock: no control priority and no stream scheduling |
+| Stream cap (§5.3) | In the protocol (`RESET refused`) | None. We count and refuse in our layer | `AcceptBacklog` bounds streams not yet accepted, not open ones. We count | None, but the open can be refused with a reason |
+| Heartbeat, three silent intervals (§5.4) | `PING`/`PONG`, fake clock | `NOP` keep-alive with interval and timeout, real timers | Ping keep-alive (30 s default), real timers | `keepalive` request sent by our timer |
+| `GOAWAY` drain (§5.4) | `GOAWAY` | None (`ErrGoAway` means stream ids ran out) | `GoAway` frame with an error code, no drain semantics (a new stream is refused) | None |
+| Revoke every stream at once (§6) | Close the connection | `Session.Close()` | `Session.Close()` | Close the connection |
+| `HELLO`, limits, versioning (§5, §5.8) | In the protocol | None: our own first stream, and a mismatch of the `smux` version byte kills the session | None: version byte is fixed at 0 | The SSH banner and algorithm negotiation, which is a second negotiation surface |
+| Tests | In-memory message pair, fake clock | Byte stream (`net.Pipe`), real timers | Byte stream, real timers | Byte stream, real timers, keys in every test |
+| Licence and dependencies in the customer's binary | None | MIT; requires `pion/transport/v5`; Go 1.24 | MPL-2.0 (file-level copyleft: a notice and the source of its files, unmodified is enough); no module requirements; Go 1.23 | BSD-3; the module graph holds `x/sys`, `x/net`, `x/term` |
+| Maintenance | Ours | One maintainer, active (commits this month); issue #69 "Blocked streams under heavy load" open since 2020 | HashiCorp (IBM), v0.x, quiet; used in HashiCorp's Nomad, Consul and `go-plugin`; issues #133 and #43 open | Go team, active |
+
+**Over the WebSocket.** B to D run over `websocket.NetConn(ctx, c, websocket.MessageBinary)`, which turns
+messages into a byte stream. Each library frame is then framed twice: a WebSocket message header (2 to 8 bytes,
+plus 4 of mask on the runner's side) around a library header (8 for B, 12 for C) and, for D, a packet with a
+length, padding and a MAC inside TLS. `NetConn` turns the read limit off, so the library, not the WebSocket,
+bounds a frame. A has one frame per message and a 5-byte header; the receiver reads one message and knows its
+boundary. The cost of B and C here is small; D adds a second layer of encryption and a key exchange on every
+connect, and keys to manage on customers' machines.
+
+**What we still build on top of each library** (all the checks are §5's own):
+
+| | A | B smux | C yamux | D SSH |
+| --- | --- | --- | --- | --- |
+| `HELLO` and limits negotiation | yes | yes | yes | yes (a first request) |
+| Per-stream open header and its answer, with reasons | in the protocol | yes | yes | no |
+| Reset with a code | in the protocol | yes: a trailer or a side channel, and the library's `Close` still runs its own state | yes, the same | yes |
+| Stream cap | in the protocol | yes | yes | in the open handler |
+| Fairness between keystrokes and bulk | in the protocol | no | write chunking, and no control priority | no |
+| `GOAWAY` drain | in the protocol | yes | partly | yes |
+| Heartbeat with a testable clock | in the protocol | wrapper over the library's timers | the same | the same |
+| In-memory tests | in the protocol | `net.Pipe` plus a message adapter | the same | the same, plus keys |
+
+The library gives a pair of windows and a writer. It leaves the protocol of §5 (open, answer, reset, caps,
+drain, negotiation) to us, **on top of the library's own stream states.** Every extra layer has its own lifecycle:
+a stream that the library thinks is open and our layer has already refused, a `Close` that is a half-close for
+the library and a full close for us. Those pairs of states are where multiplexer bugs live, which was the
+reason for one shared implementation in §2.1.
+
+#### 5.7.3 Recommendation: A, our own protocol
+
+1. **Fit.** A is the only option in which every row of §5.7.2 is native. B comes closest (the scheduler is what
+   §5.2 asks for), but it has no reset, no open payload, no `GOAWAY`, no stream cap and no `HELLO`.
+2. **The layer we would write is the protocol.** What B or C would save is the window accounting and the writer
+   loop, a few hundred lines (an estimate, not a measurement). What they would add is the stream preamble,
+   the reset trailer, the cap, `HELLO` and the adapters, plus the tests of the two state machines together.
+3. **Tests.** A runs on a message connection pair with a fake clock, so the heartbeat, the open timeout and
+   fairness are deterministic, and the fixtures of §12 are byte-exact. Libraries use real timers, and their
+   frames are pinned by captures of a library version, not by a specification we own.
+4. **The customer's binary.** No new licence (C is MPL-2.0), no new module (B pulls `pion/transport`, D pulls
+   `x/` modules) and no change of the dependency rule of §2.1: standard library and the WebSocket library.
+5. **Ownership of the wire** (§5.8): `v`, the WebSocket subprotocol and `features` are ours to evolve under
+   `min_version`; with a library the wire is also its authors' version, and for B a mismatch of the version byte
+   ends the session.
+
+**The cost of A, stated.** We own the bugs. The mitigations are in §12: `go test -race`, byte-exact fixtures,
+tests for the reset races, a fuzz test of the decoder, and one implementation shared by both ends.
+
+**The runner-up is B (smux v2)**, if Alex prefers a library: its scheduler and frame cap match §5.2, it has
+half-close, it is MIT, and the dependency on `pion/transport` is the only extra module. C is third: the missing
+frame cap is fixable by chunking, but MPL-2.0 in the customer's binary, the stalled half-closed writes (#133)
+and the FIFO writer are three reasons against. D is last: a second encryption layer, a fixed 2 MiB window, and
+keys, for one benefit (a native open with a reason).
+
+#### 5.7.4 What a different pick changes
+
+The public API of the package (§13.1) does not expose frames, so the callers in 16c to 16e (the registry, the
+`Transport`, the runner's tunnel manager and dialers) are the same for any pick. A different pick changes:
+
+| Document part | Change |
+| --- | --- |
+| §2.1 | The dependency rule: add the library (and for C the MPL-2.0 notice with the runner's release files) |
+| §5 | Frames `OPEN` to `GOAWAY` become the stream preamble and trailer of §5.7.2's "on top" column; `HELLO` becomes the first stream; the limits stay |
+| §12, §13 16b | The codec tests become tests of the preamble and the adapter; the fixtures pin the preamble bytes and, for B or C, a captured sequence of the pinned library version |
+| `go.mod` of `runner/` and `runner-relay/` | The library at an exact version, the same in both |
+| §14 | The library's version becomes part of the wire: both ends move together under `min_version` |
+
+Nothing else (tickets, authorization, routes, signals, the takeover) changes.
+
+### 5.8 The wire as a contract: encoding the fixtures pin, evolution and upgrades
+
+This is what makes §5 a specification a second implementation (or a later version of this one) can follow.
+16b writes it into `PROTOCOL.md`.
+
+- **Encoding.**
+  - The frame is `type (1) | stream id (4, big-endian) | payload`, one per binary WebSocket message. A message
+    shorter than 5 bytes, or a `HELLO`, `PING`, `PONG`, `GOAWAY` with a non-zero stream id, or a stream frame
+    with stream id 0, is a protocol error (close 1002).
+  - `OPEN` and `HELLO` payloads are JSON objects. The encoder writes the keys in the order of §5 and no
+    whitespace, so a fixture is byte-exact. The decoder accepts any order and ignores unknown keys.
+  - `WINDOW` is a `u32`; `PING` and `PONG` are 8 bytes, echoed; `RESET` is a code byte and then optional UTF-8 text
+    of at most 256 bytes (longer is cut by the sender and ignored by the receiver).
+- **Negotiation.** The connection uses the minimum of each number. A value that makes the connection unusable
+  closes with 1002: `max_frame` under 1024 or over 65536, `window` under `max_frame`, `max_streams` of 0,
+  `ping_interval` of 0.
+- **Credit.** A `WINDOW` that would make a sender's credit larger than the negotiated `window` is a
+  `flow_violation` of that stream. A `WINDOW` for a finished stream is dropped.
+- **Stream ids.** The relay's ids rise by one from 1. A runner that receives an `OPEN` whose id is not above
+  the last one closes with 1002. An `OPEN` for an id that is in use is the same.
+- **Evolution inside version 1.** Unknown JSON fields are ignored. A new frame type is sent only when both
+  `HELLO`s list its name in `features` (an array of strings, absent means none); an unknown type that arrives
+  without that closes with 1002, as §5 says. Anything that changes the meaning of an existing frame or limit is
+  version 2.
+- **Upgrades.** The WebSocket subprotocol (`aixle-runner-relay.v1`), the `X-Aixle-Runner-Protocol` header and
+  `HELLO.v` carry the version. The relay serves versions `[N-1, N]` and refuses a runner below `min_version`
+  at check-in (`DESIGN.md` §14.4), so a protocol break is rolled out as a runner release first and a relay
+  release second. A runner that is mid-session keeps its connection until it ends (the tunnel is not a liveness
+  signal, §3.2), so the break never kills a session.
 
 ## 6. Cleanup, revocation and caps, in one place
 
@@ -716,15 +865,28 @@ machines: the `503 Retry-After` of §7.1 covers it, and the runner reconnects wi
 
 Follows `docs/testing.md` and each area's existing conventions.
 
-- **`runner/protocol/tunnel` (Go):** table tests of the codec; the multiplexer between two in-memory
-  connections: open, data in both directions, half-close in both orders, reset races (reset while data is in
-  flight), flow control (a sender blocks at zero credit, a window update releases it, an oversized frame
-  resets the stream), fairness (a busy stream does not delay a ping or another stream), the stream cap, the
-  heartbeat timeout with a fake clock. `go test -race`.
-- **Fixtures.** `runner/protocol/fixtures/v1/tunnel/` holds frame sequences (a byte-exact hex for each frame
-  type and a sequence per scenario above), run by the Go package, and by the Rails tests for the one Rails-side
-  contract (the ticket, `tunnel-ticket`'s fixtures in the existing `ops`/`register` format), as the other
-  endpoints do through `runner_protocol_conformance_test.rb`.
+- **`runner/protocol/tunnel` (Go),** the tests of task 16b (`go test -race`, as the Go CI job already runs):
+  - **Codec:** table tests of every frame type's encoding and decoding, and the refusals of §5.8 (a short message,
+    a stream id of 0 on a stream frame, a non-zero id on a connection frame, an unknown type, a `HELLO` with an
+    out-of-range limit). A `FuzzDecode` seeded from the fixtures; the CI job runs its seed corpus, as `go test` does.
+  - **The multiplexer between two in-memory connections** (a message pair with a fake clock, no network):
+    open and data in both directions; half-close in both orders; a reset while data is in flight (both sides, and a
+    `DATA` for a stream that was just reset is dropped); flow control (a sender blocks at zero credit, a
+    `WINDOW` releases it, a frame over the credit resets with `flow_violation`, a `WINDOW` over the window
+    resets the same); fairness (a stream with a full window of `DATA` does not delay a `PING` by more than one
+    frame, nor the first byte of another stream by more than one frame per busy stream); the stream cap
+    (`RESET refused` at the 65th, and the slot is free again after a reset); the open timeout; the heartbeat
+    (a `PING` every interval, a close after three silent intervals, with the fake clock), `GOAWAY` (no new
+    `Open`, open streams finish, the connection closes after the last stream or 30 s); a close of the
+    connection resets every stream with the same error on both sides; the `HELLO` negotiation (the minimum, an
+    unknown field ignored, an unknown type closes with 1002).
+  - **Leaks:** every test ends with both sessions closed and checks that no goroutine of the package is left.
+- **Fixtures.** `runner/protocol/fixtures/v1/tunnel/` holds frame sequences in a text format of their own
+  (`*.frames`, §13.1), **not** `*.json`: the HTTP harnesses glob `*/*.json` (`runner/internal/protocol/conformance_test.go`)
+  and `**/*.json` (`test/integration/runner_protocol_conformance_test.rb`), and would read a tunnel file as an HTTP
+  scenario. One file for each frame type (a byte-exact hex) and one per scenario above. The package's tests read them and
+  fail if a frame type or a scenario has no file. The Rails tests read none of them: the one Rails-side contract is the
+  ticket (`tunnel-ticket`'s fixtures, in the existing `ops`/`register` JSON format, task 16c).
 - **`runner-relay/` (Go):** the ticket verifier (valid, expired, replayed, wrong key, wrong version), the edge handler
   with a fake machine (routing by token and surface, the header cross-check, the path strip, `ide` unstripped,
   `503` for a disconnected machine, `404` for a stranger), signal handling (`machine_session`, `session_ended`,
@@ -748,7 +910,7 @@ design) and 16b to 16g. The takeover rows 24 to 26 follow in the same table.
 
 | Task | Content | Depends on |
 | --- | --- | --- |
-| **16b** | **The tunnel package.** `runner/protocol/tunnel`: codec, multiplexer, flow control, fairness, limits and heartbeat over an abstract connection, with the in-memory test harness and the fixtures `fixtures/v1/tunnel/`. `PROTOCOL.md` gets a new section for the relay frames (§5 above) and removes the "not in protocol 1 yet" line for the tunnel. Go CI job unchanged (it already covers `runner/`). No service, no Rails | — |
+| **16b** | **The tunnel package** (§13.1). `runner/protocol/tunnel`: codec, multiplexer, flow control, fairness, limits and heartbeat over an abstract connection, our own protocol of §5 and §5.8 (§5.7), with the in-memory test harness and the fixtures `fixtures/v1/tunnel/`. `PROTOCOL.md` gets a new section for the relay frames and removes the tunnel from "Not in protocol 1 yet". Go CI job unchanged (it already covers `runner/`). No service, no Rails | — |
 | **16c** | **The service skeleton and the runner's connection.** `runner-relay/` module, config, `/healthz` `/readyz` `/metrics`, the Dockerfile, a Go CI job (`runner-relay (Go)`, in the required `Checks`), the `images.yml` entry (a patch for Alex); the `Settings.runners.relay` keys; `Runners::TunnelTicket` and `POST /runner/v1/tunnel-ticket` with `PROTOCOL.md` §5.11 and fixtures; the ticket verifier and `jti` replay guard; `GET /runner/v1/tunnel` upgrade, `HELLO`, heartbeat, `replaced`, `GOAWAY`; the runner's `tunnel` manager (ticket, connect, reconnect with backoff); Compose and `Procfile.dev`. A machine connects while it holds a session; no browser path yet | 16b |
 | **16d** | **The platform's half.** `Runners::Tunnel.ports(session)` and `tunnel` in `container.start`'s payload (with the schema and the fixture change) and the `network: host` port variables; the `runner_relay` publishers (`machine_session`, `session_ended`, `machine_revoked`); the internal `holders` and `checks` endpoints and the relay's internal token. The relay does not consume them yet | 16c |
 | **16e** | **The browser path.** The relay's edge handler (routing by token and surface, the stream `Transport`, path rules, header cross-check), signal subscription, the reconcile pass, revocation; the runner's `Dialer`s (the sidecar's `dial.sock` and the `network: host` dial) and the port check at start (`ports_in_use`); the readiness measurement of §9. End to end on the `local` adapter in Compose. `external_runners` stays on the test company only | 16d |
@@ -760,6 +922,70 @@ design) and 16b to 16g. The takeover rows 24 to 26 follow in the same table.
 | 27 (deferred) | **More than one relay replica** (§11): the Redis registry and forwarding. Cut when a deployment needs it | 16g |
 
 16f runs in parallel with 16d and 16e. 24 to 26 are not part of the phase 4 release.
+
+### 13.1 Task 16b in detail
+
+The public API does not expose frames, so 16c to 16e are the same under any multiplexer (§5.7.4). Names are
+proposals for the developer to keep or refine; the behaviour is the contract.
+
+**Files** in `runner/protocol/tunnel/` (package `tunnel`; nothing from `runner/internal/`, and imports of the standard
+library and the WebSocket library only; the WebSocket library appears in `wsconn.go` alone):
+
+| File | Content |
+| --- | --- |
+| `frame.go` | `Type`, `Frame`, `Encode`, `Decode`, the JSON payload structs (`Hello`, `Open`) with their fixed key order, `ResetCode` and its names |
+| `conn.go` | `type Conn interface { ReadMessage(ctx) ([]byte, error); WriteMessage(ctx, []byte) error; Close(code int, reason string) error }`, the close codes of §5.4 |
+| `wsconn.go` | The adapter from `*websocket.Conn` to `Conn` (`coder/websocket`, binary messages; a close code maps to `CloseError`) |
+| `clock.go` | `Clock` (`Now`, `NewTicker`, `NewTimer`), the real one, and the fake one for tests |
+| `session.go` | `Session`: `NewRelay(conn, Config)` and `NewRunner(conn, Config)` (`Config` holds the limits offered, the clock and the logger), `Handshake`, `Open(ctx, sessionID, port) (*Stream, error)`, `Accept(ctx) (*Incoming, error)`, `GoAway()`, `Close()`, `Done()`, `Err()` |
+| `stream.go` | `Stream` implements `net.Conn` (`Read`, `Write`, `CloseWrite`, `Close`, deadlines), plus `Reset(code, text)` and `Err()`; `Incoming` has `SessionID`, `Port`, `Accept() (*Stream, error)` and `Reject(code, text)` |
+| `writer.go` | The one writer goroutine: a control queue (FIFO) and a ring of streams that have credit and data, one `DATA` frame per turn |
+| `window.go` | Credit accounting of one direction (the send side blocks, the receive side owes `WINDOW`) |
+| `errors.go` | `ResetError{Code, Text}`, `ErrSessionClosed`, `ErrStreamLimit`, `ErrGoAway` |
+| `*_test.go`, `testdata/` | §12; an in-memory `Conn` pair and the fixture reader |
+
+**Behaviour that is a decision, not a detail:**
+
+- **One writer goroutine and one reader goroutine per session;** a stream's `Write` hands its bytes to its own
+  queue and blocks until the writer takes them or the stream ends. The writer takes control frames first, then
+  one `DATA` frame (at most `max_frame`) of the next stream in the ring, so a control frame waits for one
+  data frame at most (§5.2).
+- **`Stream.Close` is a full close,** as `net.Conn`'s is: it sends `CLOSE` and, if the peer has not sent
+  `CLOSE`, `RESET cancelled`, which is §5.5's browser disconnect. `CloseWrite` is the half-close. A `Read` that meets the
+  peer's `CLOSE` returns `io.EOF` after the buffered data; a `RESET` returns `*ResetError`.
+- **The receive buffer** is a bounded queue of `window` bytes; `Read` takes from it and, when half the window is owed,
+  queues `WINDOW`. A frame that does not fit resets the stream with `flow_violation` and the bytes are dropped.
+- **`Open` waits for `OPEN_OK`** up to 10 s (the `ctx` or the timer, whichever is first, then `RESET timeout`), and
+  returns `ErrStreamLimit` without sending when the negotiated cap is reached (§5.3), `ErrGoAway` after a `GoAway`.
+- **The runner side applies the cap too:** an `OPEN` above `max_streams` is answered `RESET refused` and never
+  reaches `Accept`.
+- **A protocol error** (a malformed frame, an unknown type, a frame that breaks §5.8) closes the connection with 1002
+  through `Conn.Close` and resets every stream with `protocol`; `Session.Err()` returns the cause. A frame for a stream that
+  has finished is not an error: it is dropped (§5.1). A local `Close` resets every stream with `shutdown`; a lost
+  connection resets them with the read error.
+- **No logging of payloads;** `Config.Logger` (`*slog.Logger`, may be nil) receives frame types and ids at debug level.
+
+**Fixture format** (`fixtures/v1/tunnel/*.frames`, documented in `fixtures/README.md`): plain text, one directive per
+line, `#` starts a comment.
+
+```
+# a stream opens, carries "hi" and closes in both directions
+> 01 00000000 7b2276223a312c...      # the relay writes a message (hex, spaces ignored)
+< 01 00000000 7b2276223a312c...      # the runner writes a message
+@do open session=123 port=7681       # the harness calls the named action on the side that has it
+@advance 20s                         # the fake clock moves
+```
+
+A `>` or `<` line is one WebSocket message, written as hex. The test runs each file twice, with the package as the
+relay and as the runner, and drives the other end from the file: the lines of the other end are written, and each
+line of the end under test must be what it writes next. The `@do` verbs are a closed list in the test
+(`open`, `accept`, `reject`, `write`, `read`, `closewrite`, `close`, `reset`, `goaway`), each documented in the README.
+The sum of all the files' frame types must equal the ten of §5; the test fails otherwise.
+
+**`PROTOCOL.md`:** a new `## 8. The relay tunnel`, written before "Not in protocol 1 yet", which becomes §9 (its two
+references, at the top of the file and in §5.4, are updated) and loses its tunnel line. It holds the frames table, §5.8's encoding, the
+limits, the heartbeat, the stream rules and the close codes, as the package implements them and nothing it does not. 16c adds
+the ticket and the upgrade to it; the `tunnel-ticket` endpoint is its own `§5.11`.
 
 ## 14. Edge cases and risks
 
@@ -780,6 +1006,9 @@ Harm levels are those of `DESIGN.md` §6.9.7 (H1 security or data loss, H2 a ses
 | A rootless Docker's socket permissions for `dial.sock` | H2, sometimes | 16e verifies on the staging machine's configuration; the existing socket works with the same ownership approach in the other direction |
 | Memory: 16 MiB per machine at full windows | H2, rare | Sized in 16f from the metric `runner_relay_write_queue_bytes`; the caps are configuration. A session uses a few hundred KiB in practice |
 | A large IDE download stalls a terminal | H4 | Per-stream windows and the writer's fairness (§5.2) |
+| A bug in our multiplexer ships in customers' runners, and a fix needs a runner release | H2, rare | Own implementation is the cost of option A (§5.7.3). `go test -race`, byte-exact fixtures, the fuzz test, one implementation for both ends; `min_version` and self-update (`DESIGN.md` §14.4) roll a fix out |
+| The tunnel fixtures are read as HTTP scenarios by the existing harnesses | H4 | They use `*.frames`, not `*.json` (§12, §13.1) |
+| Two runner versions in the field speak different versions of the wire | H3 | `v`, the subprotocol and `features` (§5.8); the relay serves `[N-1, N]` |
 | The time skew between Rails and the relay, over 60 s | H2, rare | The ticket's `exp` is checked with 5 s tolerance; `runner_relay_tunnel_connects_total{result="bad_ticket"}` shows it |
 | Hosted routes for a session not yet created fall to the relay | H4 | `404` for an unknown token (§7.1), which a hosted pod's route replaces as soon as it exists |
 | The takeover's two short requests per poll cycle (three after a gap) | H3 | Within the limits (§10.2); revisit with real load |
@@ -811,10 +1040,14 @@ Harm levels are those of `DESIGN.md` §6.9.7 (H1 security or data loss, H2 a ses
 | 24 | The `aixle-infra` facts (priorities, single host, `TRAEFIK_ENTRYPOINT`, same-namespace policy) are taken as stated in the review comments; §2.3 is fixed now | Alex, 2026-11-19 (round instructions) |
 | 25 | The tunnel route matches the gateway's hosts, not `route_domain_host`, with an explicit priority above 100; no cap on waiting polls per client IP | Alex, 2026-11-19 (design review, round 2; §2.3, §10.2) |
 | 25 | `PROTOCOL.md` stays unedited by this design (accepted); each building task writes its section | Alex, 2026-11-19 (round instructions); §1 |
+| 26 | **Recommended, for Alex's choice:** the multiplexer is our own protocol (option A); smux v2 is the runner-up. The public API of the package hides the choice from 16c to 16e | Task #267, comment of 2026-11-19; §5.7 |
+| 27 | The wire's evolution rules (`features`, the minimum of each limit, floors for the limits, ids that only rise) and the `*.frames` fixture format are the design's, written to remove choices from 16b | §5.8, §13.1; the HTTP harnesses glob `*.json` |
 
 ## 16. Deferred, and what to check
 
 - **More than one replica** (§11, row 27).
+- **Switching to a multiplexer library later** (§5.7): possible behind the package's API without touching 16c to 16e; not planned. QUIC and HTTP/2 were not carried further (§5.7.1).
+- **Measuring** the terminal's latency next to a busy IDE stream on a real machine: 16e's end-to-end check, not 16b's tests (16b proves the frame order, not the milliseconds).
 - **Sentry in the relay**, a per-viewer stream cap, per-viewer re-authorization of open terminals (a separate task for hosted and runners together), WebSocket compression on the stream: not needed for phase 4.
 - **`kubernetes` and `coder` specifics** beyond the `Dialer` seam (§3.3): rows 17 and 19.
 - **Commands over the persistent WebSocket** (§10.2.1): decided when row 24 is cut; (a) is preferred.

@@ -1887,6 +1887,11 @@ export function companyProjectBoardPath(project_id: ScalarType, options?: object
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "board" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
+/** /company/projects/:project_id/tasks/:number(.:format) */
+export function companyProjectTaskPath(project_id: ScalarType, number: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "tasks" + "/" + number + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","number","format"]);
+}
+
 /** /company/projects/:project_id/template_installs/:template_install_id/setup_items/:id(.:format) */
 export function companyProjectTemplateInstallSetupItemPath(project_id: ScalarType, template_install_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "template_installs" + "/" + template_install_id + "/" + "setup_items" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","template_install_id","id","format"]);

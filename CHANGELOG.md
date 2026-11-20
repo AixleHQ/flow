@@ -27,8 +27,29 @@ governance, community health — carry none.
   continues the same step. A suspended session holds no slot; its owner is emailed when it is suspended and three days
   before it expires. Needs S3-compatible storage; without it sessions finish as before. Operators: a workflow run may now
   last 40 days instead of 7.
+- **Tasks**: a workflow agent can put the card it moves at a chosen place in the column
+  (`position`, 0 = top) instead of always at the bottom.
+- **Docs**: the Tools page explains how agents list archived tasks with
+  `include_archived`, how to tell them apart in the results, and how to read one.
+- **Tasks**: every task has a page of its own, at `/company/projects/<id>/tasks/<number>`,
+  with the drawer's tabs and the properties beside the description. **Open as page** in the
+  task drawer goes there, and the drawer's new **Copy link** button copies that address.
+  The page opens archived tasks too.
 
 ### Fixed
+- **Triggers & gates**: a column trigger in auto mode is refused for a workflow with a step
+  that has auto-run off, and the error names the steps — such a trigger never started
+  anything. When a column trigger cannot start its run, the card gets a comment saying why
+  instead of nothing happening. Templates that ship such a trigger ask for auto-run on
+  those steps before they switch it to auto.
+- **Tasks**: a card dragged to another column no longer jumps back to its old column for a
+  moment when the board refreshes just after the drop, which made moving several cards in a
+  row flicker.
+- **Profile**: signing in to Antigravity again is no longer undone by a session that
+  started before the new login. When that session ended it wrote its older token back
+  over the new one, and the next session was refused with the old login's error.
+- **Tasks**: editing a task description no longer shrinks the field to three lines — it opens
+  at the height of the text and grows as you type.
 - Runners: starting a session through the API on a runner the project cannot use (another
   project's, or another company's) answers `403` instead of `422`. A machine revoked from its row
   on the runner page reads **Revoked**; one that ran `aixle-runner unregister` still reads

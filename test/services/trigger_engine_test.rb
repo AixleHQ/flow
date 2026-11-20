@@ -228,6 +228,31 @@ class TriggerEngineTest < ActiveSupport::TestCase
     assert_equal 1, TriggerDispatch.count
   end
 
+  # The binding predates the step whose auto-run is off — the order the save-time
+  # rule cannot see.
+  test "a column trigger the workflow refuses tells the card why, once" do
+    board = create(:board, project: @project)
+    column = create(:board_column, board: board, name: "In Dev")
+    binding = ColumnWorkflowBinding.create!(
+      board_column: column, workflow: @workflow, trigger_mode: :auto, cooldown_seconds: 0
+    )
+    create(:step, workflow: @workflow, name: "Review by hand")
+    create(:agent_credential, user: @user, company: @company)
+    task = create(:board_task, board: board, board_column: column)
+
+    TriggerEngine.fire_for_column_binding(binding: binding, task: task, actor: @user)
+    event = TriggerEvent.find_by!(event_type: TriggerEngine::COLUMN_EVENT_TYPE, board_task_id: task.id)
+    event.update!(relay_state: "pending")
+    TriggerEngine.dispatch_pending(event)
+
+    assert_empty WorkflowRun.where(board_task: task)
+    assert_equal "skipped", TriggerDispatch.find_by!(trigger_event: event).status
+    comments = task.task_comments.where(author_type: :system).pluck(:body)
+    assert_equal 1, comments.size
+    assert_match(/\AThe "In Dev" column trigger did not start workflow "#{Regexp.escape(@workflow.name)}": .*Review by hand.*\. Turn on auto-run for those steps, or make the trigger manual\.\z/,
+                 comments.first)
+  end
+
   # == relay / outbox dispatch_pending ==
 
   test "dispatch_pending marks the event dispatched and is a no-op on re-call" do

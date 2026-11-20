@@ -14,6 +14,7 @@ import type BoardColumn from 'types/generated/BoardColumn';
 import type BoardTask from 'types/generated/BoardTask';
 
 import { useBoardDnd } from './useBoardDnd';
+import { useBoardTaskPages, type BoardTaskFilters } from './useBoardTaskPages';
 
 const PROJECT_ID = 7;
 const BACKLOG = buildBoardColumn({ id: 100, name: 'Backlog', position: 0 });
@@ -53,6 +54,42 @@ const useBoardHarness = (initialTasks: BoardTask[], initialColumns: BoardColumn[
   const [columns, setColumns] = useState<BoardColumn[]>(initialColumns);
   const dnd = useBoardDnd({ projectId: PROJECT_ID, enabled: true, tasks, setTasks, columns, setColumns });
   return { tasks, setTasks, columns, setColumns, ...dnd };
+};
+
+const NO_FILTERS: BoardTaskFilters = {
+  search: '',
+  assigneeId: null,
+  assigneeTeamId: null,
+  taskType: null,
+  priority: null,
+  tags: [],
+  showArchived: false,
+};
+
+// BoardPage's real wiring: the task list comes from useBoardTaskPages — the props page in, every
+// board reload replacing it — and the drag hook writes into that list and pins what it moves.
+const useWiredBoard = (serverTasks: BoardTask[]) => {
+  const pages = useBoardTaskPages<BoardTask>({
+    projectId: PROJECT_ID,
+    enabled: true,
+    columns: [BACKLOG, IN_PROGRESS],
+    initialTasks: serverTasks,
+    pageSize: 25,
+    filters: NO_FILTERS,
+    normalize: (t) => t,
+  });
+  const [columns, setColumns] = useState<BoardColumn[]>([BACKLOG, IN_PROGRESS]);
+  const dnd = useBoardDnd({
+    projectId: PROJECT_ID,
+    enabled: true,
+    tasks: pages.tasks,
+    setTasks: pages.setTasks,
+    columns,
+    setColumns,
+    pinMove: pages.pinMove,
+    settleMove: pages.settleMove,
+  });
+  return { ...pages, ...dnd };
 };
 
 type FetchCall = Parameters<typeof fetch>;
@@ -115,6 +152,31 @@ describe('useBoardDnd', () => {
     });
 
     await waitFor(() => expect(result.current.tasks.find((t) => t.id === task.id)?.boardColumnId).toBe(100));
+  });
+
+  // #309: a board reload that left before the save comes back with the card in its old column.
+  it('keeps a dropped card in its new column when a reload from before the save lands', async () => {
+    answerFetch({ 'PATCH /api/v1/projects/:project/tasks/:task/move': {} });
+    const card = buildBoardTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100, position: 0 });
+    const other = buildBoardTask({ id: 2, title: 'Render dashboard charts', boardColumnId: 200, position: 0 });
+    const { result, rerender } = renderHook(({ server }: { server: BoardTask[] }) => useWiredBoard(server), {
+      initialProps: { server: [card, other] },
+    });
+    const columnOf = (id: number) => result.current.tasks.find((t) => t.id === id)?.boardColumnId;
+
+    act(() => result.current.handleDragStart(pickUp(card)));
+    await act(async () => {
+      await result.current.handleDragEnd(dropOnColumn(card, IN_PROGRESS));
+    });
+
+    rerender({ server: [{ ...card }, { ...other }] });
+    expect(columnOf(card.id)).toBe(200);
+
+    // The reload that has the move confirms it; from then on the server's word goes again.
+    rerender({ server: [{ ...card, boardColumnId: 200, position: 1 }, { ...other }] });
+    expect(columnOf(card.id)).toBe(200);
+    rerender({ server: [{ ...card }, { ...other }] });
+    expect(columnOf(card.id)).toBe(100);
   });
 
   // fetch resolves for a refusal too; a 403/422 must not leave the card where it was dropped.

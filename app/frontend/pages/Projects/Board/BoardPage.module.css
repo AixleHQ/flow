@@ -353,3 +353,35 @@
   border-bottom-color: var(--app-primary);
   font-weight: 500;
 }
+
+/* Task page: the detail panel as a page of its own */
+.taskPage {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--app-border-default);
+  border-radius: 8px;
+  background: var(--app-bg-paper);
+}
+
+.taskPageColumns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 32px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .taskPageColumns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .taskPageColumns > aside {
+    order: -1;
+  }
+}
+
+.taskPageBack {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
