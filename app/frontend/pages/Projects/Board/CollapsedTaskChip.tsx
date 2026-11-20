@@ -3,6 +3,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Box, Tooltip } from '@mantine/core';
 
 import { formatElapsedTime } from 'shared/lib/formatElapsedTime';
+import { useElapsedTimer } from 'shared/lib/hooks/useElapsedTimer';
 
 import { CHIP_TOOLTIP_PROPS } from './chipTooltip';
 import { gateCiStatus } from './gates';
@@ -12,7 +13,7 @@ import type { Task } from './types';
 // Status a collapsed ticket chip advertises: the bar colour and the hover tooltip both come
 // from here, so the folded strip still tells you which tickets are running, failed or waiting
 // without unfolding the column.
-function collapsedTaskStatus(task: Task): { color: string; hasActiveRun: boolean; tooltipLabel: string } {
+function collapsedTaskStatus(task: Task): { color: string; hasActiveRun: boolean } {
   const latestRun = task.recentWorkflowRuns?.[0];
   const hasPendingGates = (task.pendingGates?.length ?? 0) > 0;
   const staleGate = (task.ciGates ?? []).find((g) => gateCiStatus(g) === 'stale');
@@ -34,7 +35,17 @@ function collapsedTaskStatus(task: Task): { color: string; hasActiveRun: boolean
     hasActiveRun = false;
   }
 
-  const tooltipParts: string[] = [`#${task.number} · ${task.title}`];
+  return { color, hasActiveRun };
+}
+
+// The status line of the tooltip. Runs while the tooltip is open, so the elapsed times it reads
+// from the clock are current each time the label re-renders.
+function collapsedTaskStatusLine(task: Task): string {
+  const latestRun = task.recentWorkflowRuns?.[0];
+  const hasPendingGates = (task.pendingGates?.length ?? 0) > 0;
+  const staleGate = (task.ciGates ?? []).find((g) => gateCiStatus(g) === 'stale');
+
+  const tooltipParts: string[] = [];
   if (latestRun) {
     if (latestRun.state === 'running' && latestRun.createdAt) {
       tooltipParts.push(`Running — ${formatElapsedTime(latestRun.createdAt)}`);
@@ -50,7 +61,22 @@ function collapsedTaskStatus(task: Task): { color: string; hasActiveRun: boolean
     tooltipParts.push(`CI stale — ${staleGate.diagnosticReason ?? 'no CI result'}`);
   }
 
-  return { color, hasActiveRun, tooltipLabel: tooltipParts.join(' · ') };
+  return tooltipParts.join(' · ');
+}
+
+// The label is mounted only while the tooltip is open, so its one-second timer runs for the
+// hovered chip alone and a board with many collapsed chips does not tick for all of them.
+function CollapsedTaskTooltipLabel({ task }: { task: Task }) {
+  useElapsedTimer(true);
+  const statusLine = collapsedTaskStatusLine(task);
+  // The title may be arbitrarily long, so it wraps within the bounded width and the status sits on
+  // its own line after it, where a long title cannot push it out of view.
+  return (
+    <>
+      <div style={{ overflowWrap: 'anywhere' }}>{`#${task.number} · ${task.title}`}</div>
+      {statusLine && <div>{statusLine}</div>}
+    </>
+  );
 }
 
 // A compact, draggable stand-in for a task shown inside a collapsed column strip.
@@ -73,10 +99,10 @@ export function CollapsedTaskChip({ task, onClick }: { task: Task; onClick?: (t:
     opacity: isDragging ? 0.4 : 1,
   };
 
-  const { color, hasActiveRun, tooltipLabel } = collapsedTaskStatus(task);
+  const { color, hasActiveRun } = collapsedTaskStatus(task);
 
   return (
-    <Tooltip {...CHIP_TOOLTIP_PROPS} label={tooltipLabel}>
+    <Tooltip {...CHIP_TOOLTIP_PROPS} label={<CollapsedTaskTooltipLabel task={task} />} multiline maw={320}>
       <Box
         ref={setNodeRef}
         aria-label={`Drag ${task.title}`}
