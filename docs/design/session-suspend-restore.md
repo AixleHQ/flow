@@ -273,7 +273,14 @@ All phases were built in PR #802:
 | 3 | Restore API and buttons, configuration copy, restore script, resume command and fallback, restore notice | `SessionService.restore`, `Sessions::Restore` |
 | 4 | Hourly sweep with outputs to assets, emails, the warning before the limit | `Sessions::SuspensionExpiry`, `SuspendedSessionExpiryWorkflow`, `SessionMailer` |
 
-Still to check live on a deployment with S3: a suspend at the real 23-hour limit, and a restore of each CLI through the product rather than by hand.
+Checked live on staging (S3) on 2026-11-20 with Claude Code and a GitHub repository:
+- **Suspend.** The session became `suspended` with a 58 KB archive in the store bucket. Its manifest named the new branch, the head, the unpushed bundle, the patch, the untracked files and the conversation. The pod was deleted, no outputs were turned into assets, and the email was queued.
+- **Restore.** The new session started with `claude --resume <id>`. Branch, head, the unpushed commit on `main`, the changes, the untracked files and the files under `/workspace` were all back, and the notice was in `CLAUDE.md`. Asked without tools, the agent named the code word and both files.
+- **Expiry**, with the window moved into the past:
+  - a suspended session's two outputs, one nested, became pending-review assets with the right content, its archive was deleted from S3, and the session was `finished`;
+  - a restored session's archive was deleted and its state kept.
+
+Not checked live: the 23-hour limit itself (covered by tests of `Sessions::Suspension.time_limit_reached?` and the cleanup activity), and a restore through the product for the other seven CLIs (their resume commands are the ones the probe used by hand).
 
 ## 11. Out of scope
 
