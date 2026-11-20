@@ -342,6 +342,7 @@ Read [docs/testing.md](../testing.md) before writing a test — it is the doctri
 - **Never read `ENV[...]` from app code** — add the key to `config/settings.yml` and read `Settings.*` (pre-Settings boot files are the only exception)
 - **Never skip `frozen_string_literal: true`** in Ruby files
 - **Never use `new Date()` on Alba-serialized dates** — use `shared/lib/formatDate` helpers
+- **Never hand-build what a standard or a library already does** (formats, protocols, tokens, signatures, crypto, clients) — see `docs/architecture/implementation-patterns.md` → Anti-Patterns
 
 ---
 
