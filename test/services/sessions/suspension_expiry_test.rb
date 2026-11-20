@@ -73,5 +73,54 @@ module Sessions
 
       assert_no_enqueued_emails { SuspensionExpiry.remind_due }
     end
+
+    # == workflow steps ==
+
+    def suspended_step_session(expires_at:, step_state: "suspended", run_state: "running")
+      workflow = create(:workflow, scope: @project)
+      run = create(:workflow_run, workflow: workflow, project: @project, user: @user, state: run_state)
+      step_run = create(:step_run, workflow_run: run, step: create(:step, workflow: workflow), state: step_state)
+      session = create(:terminal_session, user: @user, project: @project, session_type: "workflow_step",
+                                          mode: "interactive", state: "suspended", suspended_at: 2.days.ago,
+                                          restore_expires_at: expires_at)
+      step_run.update!(terminal_session: session)
+      create_checkpoint(session)
+      [ session, step_run ]
+    end
+
+    # The run reads the step's current session: a failed one fails the step, and the run
+    # goes on as the step's on_failure says.
+    test "a step not restored in time fails, and its run is woken to move on" do
+      session, step_run = suspended_step_session(expires_at: 1.hour.ago)
+      WorkflowService.expects(:notify_container_finished).with(step_run: step_run).once
+
+      assert_equal 1, SuspensionExpiry.expire_due
+
+      session.reload
+      assert_equal "failed", session.state
+      assert_match(/not restored before/, session.error_message)
+      assert_nil session.session_checkpoint
+      assert_equal "running", step_run.reload.state
+    end
+
+    test "a step its run moved on from has its archive deleted without waiting for the window" do
+      session, = suspended_step_session(expires_at: 20.days.from_now, step_state: "skipped")
+
+      SuspensionExpiry.expire_due
+
+      session.reload
+      assert_equal "finished", session.state
+      assert session.metadata[SuspensionExpiry::DISCARDED_KEY]
+      assert_nil session.session_checkpoint
+    end
+
+    test "a suspended step its run still waits on is left alone inside its window" do
+      session, = suspended_step_session(expires_at: 20.days.from_now)
+
+      SuspensionExpiry.expire_due
+
+      assert session.reload.suspended?
+      assert session.session_checkpoint
+    end
   end
 end

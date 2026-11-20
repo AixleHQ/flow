@@ -23,12 +23,14 @@ import { useElapsedTimer } from 'shared/lib/hooks/useElapsedTimer';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { runOwnerLabel } from 'shared/lib/runOwner';
 import { costColor, formatCost, formatDuration, formatFileSize, formatTokens } from 'shared/lib/sessionFormat';
+import { restoreDaysLeft, restoreSession } from 'shared/lib/sessionRestore';
 import { RunsOnBadge } from 'shared/resources/runners/runnerChoice';
 import { useRunsOnMeta } from 'shared/resources/runners/useRunsOnMeta';
 import {
   exportAllApiV1ProjectWorkflowRunWorkflowRunAssetsPath,
   exportApiV1ProjectWorkflowRunWorkflowRunAssetPath,
   finishApiV1TerminalSessionPath,
+  suspendApiV1TerminalSessionPath,
   shareApiV1ProjectWorkflowRunWorkflowRunAssetPath,
 } from 'shared/routes';
 import {
@@ -198,6 +200,8 @@ const WorkflowRunShowPage = () => {
   );
 
   const failedSteps = useMemo(() => sortedSteps.filter((s) => s.state === 'failed'), [sortedSteps]);
+  // The run waits on a suspended step until someone restores its session, or skips it.
+  const suspendedSteps = useMemo(() => sortedSteps.filter((s) => s.state === 'suspended'), [sortedSteps]);
   const failedStep = failedSteps[0] ?? null;
   const skippedCount = sortedSteps.filter((s) => s.state === 'skipped').length;
 
@@ -215,6 +219,28 @@ const WorkflowRunShowPage = () => {
       setActionLoading(false);
     }
   }, []);
+
+  const handleSuspendSession = useCallback(async (sessionId: number) => {
+    setActionLoading(true);
+    try {
+      const suspended = await apiMutate(
+        suspendApiV1TerminalSessionPath(sessionId),
+        { method: 'POST' },
+        'The session could not be suspended',
+      );
+      if (suspended) router.reload({ only: ['run'] });
+    } finally {
+      setActionLoading(false);
+    }
+  }, []);
+
+  const handleRestoreStep = useCallback(
+    async (sessionId: number) => {
+      setActionLoading(true);
+      if (!(await restoreSession(sessionId, () => runPath))) setActionLoading(false);
+    },
+    [runPath],
+  );
 
   const handlePromote = useCallback(async () => {
     if (!promoteOpen) return;
@@ -572,6 +598,15 @@ const WorkflowRunShowPage = () => {
                           </Button>
                         </>
                       )}
+                      {step.suspendable && step.state !== 'waiting_input' && (
+                        <Button
+                          variant="default"
+                          loading={actionLoading}
+                          onClick={() => handleSuspendSession(step.terminalSessionId!)}
+                        >
+                          Suspend
+                        </Button>
+                      )}
                       {canControl && canFinishSession(step) && step.state !== 'waiting_input' && (
                         <Button loading={actionLoading} onClick={() => handleFinishSession(step.terminalSessionId!)}>
                           Finish session
@@ -579,6 +614,31 @@ const WorkflowRunShowPage = () => {
                       )}
                     </div>
                   ))}
+
+              {isActive &&
+                suspendedSteps.map((step) => {
+                  const days = restoreDaysLeft(step.restoreExpiresAt);
+                  return (
+                    <div className={classes.actionBar} key={step.id}>
+                      <span className={classes.actionBarText}>
+                        &quot;{step.stepName ?? 'This session'}&quot; is suspended
+                        {days === null ? '' : ` · ${days} ${days === 1 ? 'day' : 'days'} left to restore`}. The run
+                        continues once it is restored and finished.
+                      </span>
+                      {step.restorable && (
+                        <Button loading={actionLoading} onClick={() => handleRestoreStep(step.terminalSessionId!)}>
+                          Restore
+                        </Button>
+                      )}
+                      {canControl && (
+                        <Button variant="subtle" color="gray" onClick={() => setSkipStepId(step.id)}>
+                          Skip
+                        </Button>
+                      )}
+                      {!step.restorable && !canControl && <span className={classes.actionBarText}>{notYoursNote}</span>}
+                    </div>
+                  );
+                })}
 
               {!isActive &&
                 failedSteps.map((step) => (

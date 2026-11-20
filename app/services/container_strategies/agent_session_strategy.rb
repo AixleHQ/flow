@@ -189,7 +189,7 @@ module ContainerStrategies
 
     def session_type = "agent_session"
 
-    def cleanup_timeout = session_type == "agent_session" ? Sessions::Checkpoint::CLEANUP_TIMEOUT : 120
+    def cleanup_timeout = Sessions::Checkpoint::CLEANUP_TIMEOUT
 
     def take_checkpoint(container, session, adapter)
       Sessions::Checkpoint.new(session: session, container: container, runtime: runtime, adapter: adapter).call
