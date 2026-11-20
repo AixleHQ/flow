@@ -36,14 +36,24 @@ class Runners::TunnelTicketTest < ActiveSupport::TestCase
     assert_match(/\A[A-Za-z0-9_-]{22}\z/, claims["jti"])
   end
 
-  test "the ticket is artun_, the claims and an HMAC-SHA256 of the claims text under the key, in base64url without padding" do
+  test "the ticket is artun_ and a JWT signed with HS256 under the key" do
     ticket = Runners::TunnelTicket.issue(environment: @machine).ticket
 
     assert ticket.start_with?("artun_")
-    text, mac = ticket.delete_prefix("artun_").split(".")
-    assert_no_match(/[=+\/]/, ticket, "base64url, no padding")
-    expected = Base64.urlsafe_encode64(OpenSSL::HMAC.digest("SHA256", KEY, text), padding: false)
-    assert_equal expected, mac
+    claims, header = JWT.decode(ticket.delete_prefix("artun_"), KEY, true, algorithm: "HS256")
+    assert_equal({ "alg" => "HS256", "typ" => "JWT" }, header)
+    assert_equal %w[e exp jti r s v], claims.keys.sort
+    assert_raises(JWT::VerificationError) { JWT.decode(ticket.delete_prefix("artun_"), "another-key", true, algorithm: "HS256") }
+  end
+
+  test "the shared vector, which the relay's verifier is tested with, decodes with the gem" do
+    vector = File.read(Rails.root.join("runner-relay/internal/ticket/testdata/ticket.txt")).strip
+
+    claims, header = JWT.decode(vector.delete_prefix("artun_"), KEY, true,
+                                algorithm: "HS256", verify_expiration: false)
+
+    assert_equal({ "alg" => "HS256", "typ" => "JWT" }, header)
+    assert_equal({ "v" => 1, "e" => 42, "r" => 7, "s" => 123, "jti" => "shared-vector-jti", "exp" => 1_800_000_060 }, claims)
   end
 
   test "each ticket has an id of its own" do
@@ -105,6 +115,6 @@ class Runners::TunnelTicketTest < ActiveSupport::TestCase
   private
 
   def claims_of(ticket)
-    JSON.parse(Base64.urlsafe_decode64(ticket.delete_prefix("artun_").split(".").first))
+    JWT.decode(ticket.delete_prefix("artun_"), KEY, true, algorithm: "HS256", verify_expiration: false).first
   end
 end

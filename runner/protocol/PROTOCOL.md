@@ -716,16 +716,16 @@ environment's access token. The request has no body, and the gateway does not re
 `200 OK`, with `Cache-Control: no-store`:
 
 ```json
-{ "ticket": "artun_eyJ2IjoxLC4uLn0.q1w2e3...", "expires_at": "2026-11-20T15:01:00Z" }
+{ "ticket": "artun_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ2IjoxLC4uLn0.q1w2e3...", "expires_at": "2026-11-20T15:01:00Z" }
 ```
 
 - `ticket` is a bearer credential: the runner presents it once, as `Authorization: Bearer <ticket>`, on the
-  tunnel's upgrade (§8.11), and never logs it. It is `artun_`, then the claims, a `.` and a MAC, the
-  claims and the MAC each in base64url without padding. The claims are a JSON object,
-  `{"v":1,"e":<environment id>,"r":<runner id>,"s":<session id>,"jti":"<unique id>","exp":<unix seconds>}`,
-  and the MAC is HMAC-SHA256 of the claims text exactly as sent, under a key that the gateway and the
-  relay share and no runner has. **A runner does not read the claims**: only the platform and the relay
-  do, and a runner never believes itself about which session it holds.
+  tunnel's upgrade (§8.11), and never logs it. **A runner treats it as opaque**: it does not parse it and
+  does not depend on its format. The platform makes it `artun_` followed by a standard compact JWT
+  (RFC 7519), signed with HS256 under a key that the gateway and the relay share and no runner has. The
+  `artun_` prefix is for secret scanners. The claims are a JSON object,
+  `{"v":1,"e":<environment id>,"r":<runner id>,"s":<session id>,"jti":"<unique id>","exp":<unix seconds>}`.
+  Only the platform and the relay read them, and a runner never believes itself about which session it holds.
 - `expires_at` is 60 seconds after the ticket was minted. The relay refuses a ticket past it, with 5
   seconds of tolerance for clocks, and a second use of the same ticket.
 

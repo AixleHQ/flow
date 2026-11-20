@@ -3,24 +3,21 @@
 //
 // The gateway mints a ticket for a machine that holds an access token
 // (Runners::TunnelTicket in the Rails app), and the machine presents it once as
-// `Authorization: Bearer artun_<claims>.<mac>` when it opens the tunnel. The claims
-// are base64url (no padding) JSON, the mac is the base64url HMAC-SHA256 of the
-// claims text, as it was written, under the key both sides hold:
+// `Authorization: Bearer artun_<JWT>` when it opens the tunnel. The JWT is a standard
+// compact one, HS256 under the key both sides hold, signed by the `jwt` gem on the
+// gateway and verified here with github.com/golang-jwt/jwt/v5. The claims:
 //
 //	{"v":1,"e":<environment id>,"r":<runner id>,"s":<session id or null>,"jti":"…","exp":<unix seconds>}
 package ticket
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -41,8 +38,8 @@ const (
 	ReplayKeyPrefix = "relay:jti:"
 )
 
-// ErrInvalid is returned for a ticket that is malformed, has a bad signature or
-// version, or is expired. The caller answers `401 invalid_ticket` and learns
+// ErrInvalid is returned for a ticket that is malformed, has a bad signature,
+// algorithm or version, or is expired. The caller answers `401 invalid_ticket` and learns
 // nothing more about why, so a probe cannot tell the cases apart.
 var ErrInvalid = errors.New("ticket: invalid")
 
@@ -68,49 +65,52 @@ func NewVerifier(key []byte) *Verifier {
 	return &Verifier{key: append([]byte(nil), key...), Now: time.Now}
 }
 
+// wireClaims is the JWT's payload: the ticket's claims, with `jti` and `exp` as the
+// registered claims the library validates.
+type wireClaims struct {
+	Version       int    `json:"v"`
+	EnvironmentID int64  `json:"e"`
+	RunnerID      int64  `json:"r"`
+	SessionID     *int64 `json:"s"`
+	jwt.RegisteredClaims
+}
+
 // Sign makes a ticket for claims. The gateway is the signer in production; the
 // service uses it in its tests, so the format is pinned against its own verifier.
 func Sign(key []byte, claims Claims) string {
-	body, err := json.Marshal(claims)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, wireClaims{
+		Version: claims.Version, EnvironmentID: claims.EnvironmentID, RunnerID: claims.RunnerID, SessionID: claims.SessionID,
+		RegisteredClaims: jwt.RegisteredClaims{ID: claims.ID, ExpiresAt: jwt.NewNumericDate(time.Unix(claims.ExpiresAt, 0))},
+	})
+	signed, err := token.SignedString(key)
 	if err != nil {
-		panic("ticket: claims do not encode: " + err.Error())
+		panic("ticket: claims do not sign: " + err.Error())
 	}
-	text := base64.RawURLEncoding.EncodeToString(body)
-	return Prefix + text + "." + base64.RawURLEncoding.EncodeToString(mac(key, text))
+	return Prefix + signed
 }
 
-func mac(key []byte, text string) []byte {
-	h := hmac.New(sha256.New, key)
-	h.Write([]byte(text))
-	return h.Sum(nil)
-}
-
-// Verify checks the signature, the claims' version and `exp` (with Tolerance). It
-// does not record the id: single use is the Guard's.
+// Verify checks the signature (HS256 only: `none` and every other algorithm are
+// refused), `exp` (required, with Tolerance) and the claims' version. It does not
+// record the id: single use is the Guard's.
 func (v *Verifier) Verify(token string) (Claims, error) {
 	if len(token) > MaxLength || !strings.HasPrefix(token, Prefix) {
 		return Claims{}, ErrInvalid
 	}
-	text, sig, ok := strings.Cut(strings.TrimPrefix(token, Prefix), ".")
-	if !ok || text == "" || strings.Contains(sig, ".") {
+	var w wireClaims
+	parser := jwt.NewParser(
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithExpirationRequired(),
+		jwt.WithLeeway(Tolerance),
+		jwt.WithTimeFunc(v.Now),
+	)
+	if _, err := parser.ParseWithClaims(strings.TrimPrefix(token, Prefix), &w, func(*jwt.Token) (any, error) { return v.key, nil }); err != nil {
 		return Claims{}, ErrInvalid
 	}
-	given, err := base64.RawURLEncoding.DecodeString(sig)
-	if err != nil || !hmac.Equal(given, mac(v.key, text)) {
-		return Claims{}, ErrInvalid
-	}
-	body, err := base64.RawURLEncoding.DecodeString(text)
-	if err != nil {
-		return Claims{}, ErrInvalid
-	}
-	var c Claims
-	if err := json.Unmarshal(body, &c); err != nil {
-		return Claims{}, ErrInvalid
+	c := Claims{
+		Version: w.Version, EnvironmentID: w.EnvironmentID, RunnerID: w.RunnerID, SessionID: w.SessionID,
+		ID: w.ID, ExpiresAt: w.ExpiresAt.Unix(),
 	}
 	if c.Version != Version || c.ID == "" || c.EnvironmentID <= 0 || c.RunnerID <= 0 || (c.SessionID != nil && *c.SessionID <= 0) {
-		return Claims{}, ErrInvalid
-	}
-	if v.Now().After(time.Unix(c.ExpiresAt, 0).Add(Tolerance)) {
 		return Claims{}, ErrInvalid
 	}
 	return c, nil

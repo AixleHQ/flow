@@ -9,12 +9,13 @@ module Runners
   # `runner-relay` service serves. The access token never reaches the relay.
   #
   #   issued = Runners::TunnelTicket.issue(environment: environment)
-  #   issued.ticket       # "artun_<claims>.<mac>"
+  #   issued.ticket       # "artun_<header>.<claims>.<signature>"
   #   issued.expires_at   # 60 seconds from now
   #
-  # The ticket is `artun_` + the claims + `.` + the MAC, both base64url without
-  # padding. The claims are JSON, the MAC is HMAC-SHA256 of the claims text exactly as
-  # it was written, under `Settings.runners.relay.ticket_key`:
+  # The ticket is `artun_` + a standard compact JWT (HS256, the `jwt` gem), signed under
+  # `Settings.runners.relay.ticket_key`. The relay verifies it with a JWT library too
+  # (runner-relay/internal/ticket), so neither end has signing code of its own. The prefix
+  # is for secret scanners; it is stripped before decoding. The claims:
   #
   #   {"v":1,"e":<environment id>,"r":<runner id>,"s":<session id or null>,"jti":"…","exp":<unix seconds>}
   #
@@ -26,6 +27,7 @@ module Runners
   # use of one `jti`; both are its own checks (runner-relay/internal/ticket).
   module TunnelTicket
     PREFIX = "artun_"
+    ALGORITHM = "HS256"
     VERSION = 1
     LIFETIME = 60.seconds
     # What a runner is told in the check-in's `config.tunnel.mode` (Settings
@@ -82,15 +84,8 @@ module Runners
         v: VERSION, e: environment.id, r: environment.runner_id, s: environment.current_session_id,
         jti: SecureRandom.urlsafe_base64(16), exp: expires_at.to_i
       }
-      Issued.new(ticket: sign(claims), expires_at: expires_at.utc)
+      Issued.new(ticket: "#{PREFIX}#{JWT.encode(claims, ticket_key, ALGORITHM)}", expires_at: expires_at.utc)
     end
-
-    def sign(claims)
-      text = Base64.urlsafe_encode64(JSON.generate(claims), padding: false)
-      mac = OpenSSL::HMAC.digest("SHA256", ticket_key, text)
-      "#{PREFIX}#{text}.#{Base64.urlsafe_encode64(mac, padding: false)}"
-    end
-    private_class_method :sign
 
     def ticket_key
       Settings.runners.relay.ticket_key.to_s
