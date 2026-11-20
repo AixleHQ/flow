@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { rem } from '@mantine/core';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildBoard } from 'test/factories/board';
 import { buildBoardColumn } from 'test/factories/boardColumn';
@@ -12,7 +12,7 @@ import { buildTaskComment } from 'test/factories/taskComment';
 import { buildTaskStatistics } from 'test/factories/taskStatistics';
 import { buildTaskWorkflowRun } from 'test/factories/taskWorkflowRun';
 import { answerFetch } from 'test/fetchStub';
-import { act, cleanup, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
+import { act, cleanup, fireEvent, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 import type BoardTask from 'types/generated/BoardTask';
 import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 
@@ -1605,6 +1605,65 @@ describe('Projects/Board/BoardPage', () => {
     await userEvent.hover(chip);
 
     expect(await screen.findByText(/^Status: paused · Waiting — /)).toBeInTheDocument();
+  });
+
+  describe('live time in a collapsed chip tooltip', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    // Only the clock and the interval are faked, so the tooltip's own open/close still runs.
+    const fakeClock = () => {
+      vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+      vi.setSystemTime(new Date('2026-06-01T12:00:00Z'));
+    };
+
+    it('counts up the time of a running ticket while the tooltip is open, and runs no timer while closed', async () => {
+      fakeClock();
+      const chip = await collapseBacklogAndGetChip(
+        makeTask({
+          id: 1,
+          title: 'Wire up authentication',
+          boardColumnId: 100,
+          recentWorkflowRuns: [runOf({ state: 'running', createdAt: '2026-06-01T11:59:50Z' })],
+        }),
+      );
+      const timersWhileClosed = vi.getTimerCount();
+
+      fireEvent.mouseEnter(chip);
+      expect(await screen.findByText('Running — 10s')).toBeInTheDocument();
+      expect(vi.getTimerCount()).toBe(timersWhileClosed + 1);
+
+      act(() => {
+        vi.advanceTimersByTime(3000);
+      });
+      expect(screen.getByText('Running — 13s')).toBeInTheDocument();
+
+      fireEvent.mouseLeave(chip);
+      await waitFor(() => expect(screen.queryByText(/^Running — /)).not.toBeInTheDocument());
+      expect(vi.getTimerCount()).toBe(timersWhileClosed);
+    });
+
+    it('counts up the waiting time of a gated ticket while the tooltip is open', async () => {
+      fakeClock();
+      const chip = await collapseBacklogAndGetChip(
+        makeTask({
+          id: 1,
+          title: 'Wire up authentication',
+          boardColumnId: 100,
+          recentWorkflowRuns: [runOf({ state: 'paused' })],
+          pendingGates: gatesOf({ id: 9, gateType: 'github_checks_completed', createdAt: '2026-06-01T11:59:55Z' }),
+        }),
+      );
+
+      fireEvent.mouseEnter(chip);
+      expect(await screen.findByText('Status: paused · Waiting — 5s')).toBeInTheDocument();
+
+      act(() => {
+        vi.advanceTimersByTime(2000);
+      });
+      expect(screen.getByText('Status: paused · Waiting — 7s')).toBeInTheDocument();
+    });
   });
 
   it('lists each recent run with its outcome, age, duration and failure reason on the workflow chip', async () => {
