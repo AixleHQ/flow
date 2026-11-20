@@ -11,7 +11,12 @@ class CompanyMembership < ApplicationRecord
   # agent credential per company so vendor spend is billed to the company that
   # incurred it.
   AGENT_LANGUAGES = %w[en ru es zh fr de ja pt it pl uk].freeze
-  POSITIONS = %w[qa pm_po_ba dev designer cto other].freeze
+  POSITIONS = %w[engineering product design qa marketing operations finance executive other].freeze
+  # The role values onboarding sent before positions became areas. An onboarding
+  # page loaded before that release still sends them, and enumerize would store
+  # nil for an unknown value. Remove once that release has fully rolled out.
+  LEGACY_POSITIONS = { "dev" => "engineering", "pm_po_ba" => "product", "designer" => "design",
+                       "cto" => "executive" }.freeze
   AVAILABLE_AGENTS = AgentRuntime.ids.freeze
 
   # Associations
@@ -44,6 +49,10 @@ class CompanyMembership < ApplicationRecord
   # Per-company role lives ONLY here (platform-level super_admin is users.super_admin)
   enumerize :role, in: %i[employee admin viewer], default: :employee, predicates: true, scope: true
   enumerize :position, in: POSITIONS, predicates: true
+
+  def position=(value)
+    super(LEGACY_POSITIONS.fetch(value.to_s, value))
+  end
 
   # ── SCIM (CAP-6) ──
   # A customer's directory sees a membership as a User: the person exists

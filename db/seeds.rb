@@ -62,7 +62,7 @@ puts "Client company created: #{client_company.name} (#{client_company.email_dom
 # Onboarding lives on the MEMBERSHIP (per company: own role, own agents, own
 # separately-billed credential), so seeding a "ready to use" user means seeding a
 # completed membership, not user columns.
-ensure_membership = lambda do |user, company, role, position: :dev, language: "en", onboarded: true|
+ensure_membership = lambda do |user, company, role, position: :engineering, language: "en", onboarded: true|
   CompanyMembership.find_or_create_by!(user: user, company: company) do |membership|
     membership.role = role
     membership.state = :active
@@ -86,7 +86,7 @@ company_admin = User.find_or_create_by!(email: seed_company_admin_email) do |use
   user.password_confirmation = test_password
   user.state = :active
 end
-ensure_membership.call(company_admin, test_company, :admin, position: :pm_po_ba)
+ensure_membership.call(company_admin, test_company, :admin, position: :product)
 puts "User created: #{company_admin.email} (company admin)"
 
 # Company users with onboarding completed
@@ -96,9 +96,9 @@ john = User.find_or_create_by!(email: "john@#{seed_company_email_domain}") do |u
   user.password_confirmation = test_password
   user.state = :active
 end
-ensure_membership.call(john, test_company, :employee, position: :dev)
+ensure_membership.call(john, test_company, :employee, position: :engineering)
 # Dual-membership demo: John is also a viewer in Client Co
-ensure_membership.call(john, client_company, :viewer, position: :dev)
+ensure_membership.call(john, client_company, :viewer, position: :engineering)
 puts "User created: #{john.email} (also viewer in #{client_company.name})"
 
 joane = User.find_or_create_by!(email: "joane@#{seed_company_email_domain}") do |user|
@@ -107,7 +107,7 @@ joane = User.find_or_create_by!(email: "joane@#{seed_company_email_domain}") do 
   user.password_confirmation = test_password
   user.state = :active
 end
-ensure_membership.call(joane, test_company, :employee, position: :dev, language: "ru")
+ensure_membership.call(joane, test_company, :employee, position: :engineering, language: "ru")
 puts "User created: #{joane.email}"
 
 ivan = User.find_or_create_by!(email: "ivan@#{seed_company_email_domain}") do |user|

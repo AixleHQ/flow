@@ -10,6 +10,7 @@ import { PeriodFilter } from 'shared/analytics/PeriodFilter';
 import { formatDateMedium } from 'shared/lib/formatDate';
 import { getInitials } from 'shared/lib/getInitials';
 import { MemberStatusBadge, RoleTag } from 'shared/resources/members/MembersContent';
+import { positionLabel } from 'shared/resources/members/positions';
 import { SessionFeedTable, type SessionFeedRow } from 'shared/resources/sessions/SessionFeedTable';
 import { UsageAnalytics } from 'shared/resources/usage/UsageAnalytics';
 import { UsageLimitsCard, type UsageLimitsEntry } from 'shared/resources/usage/UsageLimitsCard';
@@ -112,7 +113,7 @@ function UserShow({
               <MemberStatusBadge member={member} />
               {member.position && (
                 <Badge size="sm" variant="default">
-                  {member.position}
+                  {positionLabel(member.position)}
                 </Badge>
               )}
               <Text size="xs" c="dimmed">

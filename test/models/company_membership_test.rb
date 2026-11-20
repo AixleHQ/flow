@@ -470,7 +470,7 @@ class CompanyMembershipTest < ActiveSupport::TestCase
 
   def membership_at_agent_step(role)
     create(:company_membership, role: role, user: create(:user), company: @company,
-                                onboarding_state: "step2", position: "cto", preferred_agent_language: "en")
+                                onboarding_state: "step2", position: "executive", preferred_agent_language: "en")
   end
 
   test "an admin or employee without an agent finishes onboarding by skipping, and the skip is recorded" do
@@ -533,7 +533,7 @@ class CompanyMembershipTest < ActiveSupport::TestCase
   def onboarded_viewer(**attrs)
     create(:company_membership, :viewer, user: create(:user), company: @company,
                                          onboarding_state: "completed", onboarding_completed_at: 1.day.ago,
-                                         position: "dev", preferred_agent_language: "en", **attrs)
+                                         position: "engineering", preferred_agent_language: "en", **attrs)
   end
 
   test "promoting an onboarded viewer to employee reopens onboarding at the agent step" do
