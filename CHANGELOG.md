@@ -21,6 +21,9 @@ governance, community health — carry none.
 
 ### Changed
 
+- **Connectors**: the Connection column only shows where a connector stands (Connected,
+  Expiring, Not connected, Connection failed). **Connect** and **Reconnect** are now regular
+  buttons in the row's actions, so they no longer look like one more status badge.
 - Runners: a machine recovers from a network outage within about a minute. The
   runner closes a connection that stopped answering instead of reusing it, which
   needs the next runner release (0.4.1), and a machine whose reset goes

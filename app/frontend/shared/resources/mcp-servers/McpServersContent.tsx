@@ -45,11 +45,11 @@ import { ToolDriftModal } from './ToolDriftModal';
 
 // Maps a server's per-user oauth_status to a connection badge (functional labels,
 // not colour alone, so the state reads without relying on hue).
-const OAUTH_STATUS_BADGE: Record<string, { tone: StatusTone; color: string; label: string }> = {
-  active: { tone: 'success', color: 'green', label: 'Connected' },
-  expiring: { tone: 'warning', color: 'yellow', label: 'Expiring' },
-  pending: { tone: 'neutral', color: 'gray', label: 'Not connected' },
-  error: { tone: 'danger', color: 'red', label: 'Reconnect' },
+const OAUTH_STATUS_BADGE: Record<string, { tone: StatusTone; label: string }> = {
+  active: { tone: 'success', label: 'Connected' },
+  expiring: { tone: 'warning', label: 'Expiring' },
+  pending: { tone: 'neutral', label: 'Not connected' },
+  error: { tone: 'danger', label: 'Connection failed' },
 };
 
 interface McpServersContentProps {
@@ -267,8 +267,8 @@ export function McpServersContent({
                 <ResourceTh w={110}>Transport</ResourceTh>
                 <ResourceTh w={110}>Scope</ResourceTh>
                 <ResourceTh w={120}>Status</ResourceTh>
-                <ResourceTh w={140}>Connection</ResourceTh>
-                <ResourceTh align="right" w={100}>
+                <ResourceTh w={150}>Connection</ResourceTh>
+                <ResourceTh align="right" w={220}>
                   Actions
                 </ResourceTh>
               </Table.Tr>
@@ -281,6 +281,9 @@ export function McpServersContent({
                 // there too. A hand-authored server gets a plain plug glyph instead,
                 // since there is no publisher icon to stand in for.
                 const fromCatalog = !!server.connectorName;
+                const oauthBadge =
+                  server.authType === 'oauth' ? OAUTH_STATUS_BADGE[server.oauthStatus ?? 'pending'] : null;
+                const needsConnect = server.authType === 'oauth' && server.oauthStatus !== 'active';
                 return (
                   <Table.Tr key={server.id}>
                     <Table.Td>
@@ -349,40 +352,37 @@ export function McpServersContent({
                       />
                     </Table.Td>
                     <Table.Td>
-                      <Group gap={4}>
-                        {server.authType === 'oauth' ? (
-                          server.oauthStatus === 'active' ? (
-                            <StatusBadge tone={OAUTH_STATUS_BADGE.active.tone} size="sm">
-                              {OAUTH_STATUS_BADGE.active.label}
-                            </StatusBadge>
-                          ) : (
-                            // The state and the fix for it live in the same place. Connecting starts
-                            // a flow and redirects off-site, so it is a top-level POST rather than an
-                            // Inertia visit.
-                            <Button
-                              size="compact-xs"
-                              variant="light"
-                              color={OAUTH_STATUS_BADGE[server.oauthStatus ?? 'pending'].color}
-                              loading={connectingId === server.id}
-                              loaderProps={{ type: 'dots' }}
-                              disabled={connectingId !== null && connectingId !== server.id}
-                              onClick={() => {
-                                setConnectingId(server.id);
-                                postNavigate(`/oauth/mcp/${server.id}/connect`, { return_to: basePath });
-                              }}
-                            >
-                              {server.oauthStatus === 'error' ? 'Reconnect' : 'Connect'}
-                            </Button>
-                          )
-                        ) : (
-                          <Text size="xs" c="dimmed">
-                            —
-                          </Text>
-                        )}
-                      </Group>
+                      {oauthBadge ? (
+                        <StatusBadge tone={oauthBadge.tone} size="sm">
+                          {oauthBadge.label}
+                        </StatusBadge>
+                      ) : (
+                        <Text size="xs" c="dimmed">
+                          —
+                        </Text>
+                      )}
                     </Table.Td>
                     <Table.Td>
-                      <Group gap={4} justify="flex-end">
+                      <Group gap={4} justify="flex-end" wrap="nowrap">
+                        {needsConnect && (
+                          // Connecting starts a flow and redirects off-site, so it is a
+                          // top-level POST rather than an Inertia visit.
+                          <Button
+                            size="compact-sm"
+                            leftSection={<IconPlugConnected size={14} />}
+                            loading={connectingId === server.id}
+                            loaderProps={{ type: 'dots' }}
+                            disabled={connectingId !== null && connectingId !== server.id}
+                            onClick={() => {
+                              setConnectingId(server.id);
+                              postNavigate(`/oauth/mcp/${server.id}/connect`, { return_to: basePath });
+                            }}
+                          >
+                            {server.oauthStatus === 'error' || server.oauthStatus === 'expiring'
+                              ? 'Reconnect'
+                              : 'Connect'}
+                          </Button>
+                        )}
                         {server.kind === 'custom' && (
                           <HistoryButton
                             projectId={projectId}
