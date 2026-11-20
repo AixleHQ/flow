@@ -234,6 +234,28 @@ module Activities
         assert_match(/workflow ended without cleanup/, stale.error_message)
       end
 
+      # Its checkpoint may take the cleanup phase's whole budget to go up.
+      test "a session being suspended is not taken for a stuck finish" do
+        suspending = create(:terminal_session, :finishing, user: @user, finishing_at: 15.minutes.ago,
+          temporal_workflow_id: "wf-suspending", metadata: { Sessions::Suspension::REQUESTED_KEY => 15.minutes.ago.iso8601 })
+
+        result = run_activity(CleanupStaleActivity)
+
+        assert_equal 0, result[:cleaned_finishing]
+        assert_equal "finishing", suspending.reload.state
+      end
+
+      test "a suspend that outlived the cleanup budget is reaped like any stuck finish" do
+        stuck = create(:terminal_session, :finishing, user: @user, finishing_at: 2.hours.ago,
+          temporal_workflow_id: "wf-stuck-suspend", metadata: { Sessions::Suspension::REQUESTED_KEY => 2.hours.ago.iso8601 })
+        @runtime_mock.stubs(:resolve_container).with(stuck.container_id).returns(nil)
+
+        result = run_activity(CleanupStaleActivity)
+
+        assert_equal 1, result[:cleaned_finishing]
+        assert_equal "failed", stuck.reload.state
+      end
+
       test "completes finishing session stuck past threshold when container is alive" do
         stale = create(:terminal_session, :finishing, user: @user,
           session_type: "agent_session", finishing_at: 15.minutes.ago)

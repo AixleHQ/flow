@@ -1,6 +1,6 @@
 # Suspending and restoring interactive sessions
 
-Status: proposal, not built. Decisions taken on 2026-11-20. The facts it builds on are in [research/technical-session-restore-and-sharing-research-2026-11-19.md](../research/technical-session-restore-and-sharing-research-2026-11-19.md), including the live probe of conversation resume for all eight agent CLIs.
+Status: built 2026-11-20 (PR #802). Decisions taken the same day; §12 lists where the build differs from the proposal. The facts it builds on are in [research/technical-session-restore-and-sharing-research-2026-11-19.md](../research/technical-session-restore-and-sharing-research-2026-11-19.md), including the live probe of conversation resume for all eight agent CLIs.
 
 ## 1. What and why
 
@@ -30,33 +30,40 @@ Instead, an interactive session is **suspended**:
 ### 3.1 States
 
 ```
-running / ready ──suspend──▶ suspending ──▶ suspended ──restore──▶ restored
-                                  │              │
-                                  │              └──30 days──▶ finished (expired)
-                                  └──checkpoint failed──▶ finished
+ready ──Suspend──▶ finishing (+ suspend_requested_at) ──┐
+ready ──23-hour limit───────────────────────────────────┤
+                                                         ▼
+                                   cleanup takes the checkpoint
+                                     │                    │
+                                 stored                 failed
+                                     ▼                    ▼
+                                suspended              finished
+                                 │      │
+                     Restore, new │      │ 30 days
+                  session ready   ▼      ▼
+                             restored   finished (suspend_expired)
 ```
 
-- **`suspending`:** the checkpoint is being taken. It is shown as "Saving…".
+- **While the checkpoint is taken** the session is `finishing` with `metadata.suspend_requested_at` (Suspend), or still `ready` (the limit). There is no separate `suspending` state: every list, scope and scanner already knows what `finishing` and `ready` mean. The page shows "Saving files and conversation…" for a finishing session with the flag (`TerminalSessionResource#suspending`).
 - **`suspended`:** a checkpoint exists, there is no container, and the Restore button is shown.
 - **`restored`:** terminal. The row links to the session that continued it.
+- Both are in `TerminalSession::TERMINAL_STATES`: nothing runs and no slot is held, which is what every reader of that set wants to know.
 
-`suspendable?` is true for an `agent_session` in `interactive` mode, owned by a person, on a runtime that can upload straight to object storage (§8).
+`Sessions::Suspension.supported?` is true for an `agent_session` in `interactive` mode, owned by a person, where the checkpoint uploader's storage signs uploads (§8).
 
-Today the final state is written by the cleanup activity with `update!`, not through an AASM event (`app/temporal/activities/container/admitted_phase_activity.rb`). `suspended` must be written in the same place, and the AASM events `suspend` / `mark_suspended` / `mark_restored` are added so the model agrees. The scanners that look for dead or stale sessions (`scan_dead_containers_activity`, `cleanup_stale_activity`) skip `suspending`, `suspended` and `restored`.
+Today the final state is written by the cleanup activity with `update!`, not through an AASM event (`app/temporal/activities/container/admitted_phase_activity.rb`). `suspended` must be written in the same place, and the AASM events `suspend` / `mark_suspended` / `mark_restored` are added so the model agrees. The scanners that look for dead or stale sessions skip `suspended` and `restored`, which are terminal. `CleanupStaleActivity` gives a `finishing` session with the suspend flag the checkpoint's budget before it calls it stuck.
 
 ### 3.2 The 23-hour limit
 
-`ContainerWorkflow#await_signal_if_needed` swallows the timeout (`rescue Timeout::Error → nil`), so the cleanup phase cannot tell a timeout from Finish. The change:
-- On timeout, set `@state[:suspend] = true` when the session is suspendable.
-- The cleanup phase reads that flag and takes the suspend branch (§4).
+`ContainerWorkflow#await_signal_if_needed` swallows the timeout (`rescue Timeout::Error → nil`), so the cleanup phase is not told it was a timeout. The cleanup activity works it out from the session instead (`Sessions::Suspension.time_limit_reached?`): an interactive session that reaches cleanup with no error, no finish asked for, and `ready_at` within 30 minutes of the limit was ended by the limit. Every other way an interactive session ends carries an error (a dead container, contact loss, a revoked membership) or a finish.
 
-This changes workflow code, so in-flight workflows need a patch marker: `Temporalio::Workflow.patched(:suspend_interactive_on_timeout)`. A workflow that started before the release finishes as before.
+So the workflow code does not change, and no Temporal patch is needed: a workflow already running when the release lands is suspended at its limit like a new one.
 
 ### 3.3 The Suspend button
 
 **Suspend** on the session page and in the sessions list, for the owner, while the session is `running` or `ready`. API: `POST /api/v1/terminal_sessions/:id/suspend`.
 
-It goes the same way as Finish: the session moves to `suspending`, then gets the `container_finished` signal with `suspend: true`. The workflow copies that into `@state[:suspend]`.
+It goes the same way as Finish: `SessionService.suspend` records `suspend_requested_at`, moves the session to `finishing` and sends the same `container_finished` signal. The cleanup activity reads the request off the session.
 
 ### 3.4 What suspend still does
 
@@ -72,7 +79,7 @@ If the checkpoint fails (upload refused, archive over the cap, timeout), the ses
 
 ### 4.1 The archive
 
-One archive per suspended session: `tar` compressed with zstd, falling back to gzip if `zstd` is not in the image. It is built inside the container by a script the adapter-independent strategy writes, and uploaded with a presigned PUT, as `Sessions::LogCollector` uploads logs.
+One `tar.gz` per suspended session (gzip, so the expiry sweep can read it with Ruby's own `Zlib` and `Gem::Package::TarReader`). `Sessions::Checkpoint` writes one bash script that builds it inside the container and uploads it with a presigned PUT, as `Sessions::LogCollector` uploads logs, then records the manifest from what the script printed.
 
 ```
 manifest.json
@@ -84,8 +91,9 @@ repos/<key>/        per repository: head.bundle, tracked.patch, untracked.tar
 Left out of `workspace/`:
 - `repo/`, which is handled per repository;
 - `assets/`, restored from the session;
-- `.mcp.json` and `.aixle/`, which hold secrets and are provisioned fresh;
-- rebuildable directories at any depth: `node_modules`, `.venv`, `venv`, `__pycache__`, `.next`, `.turbo`, `.cache`, `target`, `dist`, `build`. The list lives in one constant, and the manifest records what was dropped.
+- `.mcp.json` and `.aixle/`, which hold secrets and are provisioned fresh, and `_bmad/`, which is installed again;
+- the agent's context file when it lives in `/workspace` (Cursor's `AGENTS.md`), which the new session writes again;
+- rebuildable directories at any depth: `node_modules`, `.venv`, `venv`, `__pycache__`, `.next`, `.turbo`, `.cache`, `.gradle`, `target`, `dist`, `build` (`Sessions::Checkpoint::REBUILDABLE_DIRS`). The manifest records what was left out.
 
 **Cap.** The cap is 2 GB compressed. If the full archive would exceed it, `workspace/` is dropped and the rest is kept. The conversation and the git work are small and matter most. The manifest records what was dropped and the session page says so.
 
@@ -126,9 +134,7 @@ It then writes:
 2. `git fetch head.bundle 'refs/heads/*:refs/heads/*'`, then `git checkout <branch>` and `git reset --hard <head_sha>`.
 3. `git apply --binary tracked.patch`, then extract `untracked.tar`.
 
-Two things are unproven and get a probe before any code (§10):
-- whether a bundle fetch works on a blobless clone (the bundle's prerequisite commits must be present as objects);
-- that `--branches --not --remotes` is right after a session pushed only some branches.
+Probed before the code, in the agent image against a real repository (2026-11-20): a bundle fetch works on a blobless clone, with an unpushed commit on the cloned branch and a new local branch both restored. The fetch refuses to update the checked-out branch, so the restore detaches HEAD first. The generated checkpoint and restore scripts were then run end to end in the image: branch, head, unpushed commits, uncommitted and staged changes, untracked files, `outputs/`, other files under `/workspace` and the conversation all came back.
 
 If the bundle does not apply, it is left at `/workspace/.aixle-restore/<key>.bundle` and the restore notice says so. The work is still there for the agent or the person to recover by hand.
 
@@ -170,7 +176,7 @@ If the bundle does not apply, it is left at `/workspace/.aixle-restore/<key>.bun
 3. Provisioning is the usual pipeline, with two changes:
    - Repositories are set up from the manifest (§4.3) instead of a plain clone.
    - After provisioning and before the CLI starts, the archive is downloaded inside the container with a presigned GET, the way assets are, and unpacked: `workspace/` over `/workspace`, `conversation/` into `$HOME`.
-4. The CLI starts with the adapter's resume command (§5.3). A restore notice goes into the context file (§5.4).
+4. The CLI starts with the adapter's resume command (§5.3). A restore notice goes into the context file (§5.4). What the restore did is kept in `metadata.restore` (`resume`, `conversation_id`, `notes`); `Sessions::Restore.launch_command` reads it when the CLI is started.
 
 ### 5.3 Resume command
 
@@ -221,7 +227,7 @@ A restored session can itself be suspended and restored again.
 ## 7. Data model
 
 **`terminal_sessions`:**
-- `state` gains `suspending`, `suspended` and `restored`. The column is a string, so there is no enum migration.
+- `state` gains `suspended` and `restored`. The column is a string, so there is no enum migration.
 - `restored_from_session_id`: a nullable foreign key to `terminal_sessions`. Deleting the old row nullifies it.
 - `suspended_at` and `restore_expires_at`: nullable datetimes, indexed for the sweep.
 
@@ -240,7 +246,7 @@ The archive goes from the container straight to S3-compatible storage with a pre
 
 - **Hosted Docker and Kubernetes:** supported.
 - **External runners with S3-compatible storage:** supported. The runner protocol's 1 MiB inline cap (`ContainerRuntime::RunnerRuntime#read_file_result`, runner `PROTOCOL.md` §6.5) only limits files read back through the runner, and the archive does not go that way.
-- **A deployment without S3-compatible storage:** `suspendable?` is false and sessions finish as today. This is the case the 1 MiB cap comes from: a larger file cannot be read at all.
+- **A deployment without S3-compatible storage:** `Sessions::Suspension.supported?` is false and sessions finish as today. This is the case the 1 MiB cap comes from: a larger file cannot be read at all.
 - **Runner with a reused volume:** a restored session may land on a machine whose volume still holds an older checkout. That needs the fetch-and-reset path the code does not have yet (research report §6). Until then, a restore on such a runner clones into a fresh path.
 
 ## 9. UI
@@ -257,13 +263,17 @@ The archive goes from the container straight to S3-compatible storage with a pre
 
 ## 10. Plan
 
-| Phase | Content |
-|---|---|
-| 0 | **Probes on staging, before any code.** Bundle round trip on a blobless clone, with unpushed commits on a pushed branch and on a new local branch. Archive size and time on a real repository with `node_modules`. Resume with a mismatched CLI version, to see how each CLI fails |
-| 1 | **Data model and states.** States, columns, `session_checkpoints`, the `suspendable?` rule, scanners skipping the new states |
-| 2 | **Suspend.** The archive script, manifest, upload and fallback to finish; adapter `conversation_paths` and `conversation_id`; the Temporal flag behind `patched`; the Suspend API and button |
-| 3 | **Restore.** The API and button, configuration copy, provisioning from the manifest, `resume_command` per adapter, fallback, restore notice |
-| 4 | **Expiry and notifications.** Sweep, outputs to assets at expiry, emails, the banner before the limit |
+All phases were built in PR #802:
+
+| Phase | Content | Where |
+|---|---|---|
+| 0 | Bundle round trip on a blobless clone; the generated scripts run end to end in the agent image | §4.3 |
+| 1 | States, columns, `session_checkpoints`, `Sessions::Suspension`, scanners | migration `20261120100000`, `TerminalSession`, `CleanupStaleActivity` |
+| 2 | Checkpoint script and manifest, fallback to finish, adapter `conversation_paths` / `conversation_id_command` / `resume_arguments`, Suspend API and buttons | `Sessions::Checkpoint`, `AgentSessionStrategy#before_cleanup`, `AdmittedPhaseActivity` |
+| 3 | Restore API and buttons, configuration copy, restore script, resume command and fallback, restore notice | `SessionService.restore`, `Sessions::Restore` |
+| 4 | Hourly sweep with outputs to assets, emails, the warning before the limit | `Sessions::SuspensionExpiry`, `SuspendedSessionExpiryWorkflow`, `SessionMailer` |
+
+Still to check live on a deployment with S3: a suspend at the real 23-hour limit, and a restore of each CLI through the product rather than by hand.
 
 ## 11. Out of scope
 
@@ -272,3 +282,10 @@ The archive goes from the container straight to S3-compatible storage with a pre
 - Pinning asset versions at injection.
 - Workflow steps: retry already exists for them.
 - Anything outside `/workspace`: global installs, caches, `/tmp`, running processes.
+
+## 12. Where the build differs from the proposal
+
+- **No `suspending` state.** Saving happens in `finishing` (Suspend) or `ready` (the limit); §3.1.
+- **No change to the Temporal workflow.** The limit is recognised from the session in the cleanup activity; §3.2.
+- **`tar.gz`, not zstd**, so the expiry sweep can read it without a native library; §4.1.
+- **Workflow steps are left out.** A run waits on its interactive step with its own 23-hour limit (`WorkflowExecutionWorkflow::INTERACTIVE_TIMEOUT`) and then treats the step as failed. Suspending a step would mean holding the run open for 30 days, relinking `step_run` to the restored session, and deciding what cancel and retry do meanwhile. The checkpoint and restore are session-level, so steps can be added without changing them.

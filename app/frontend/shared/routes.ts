@@ -402,6 +402,16 @@ export function finishApiV1TerminalSessionPath(id: ScalarType, options?: object)
   return "/" + "api" + "/" + "v1" + "/" + "terminal_sessions" + "/" + id + "/" + "finish" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
+/** /api/v1/terminal_sessions/:id/suspend(.:format) */
+export function suspendApiV1TerminalSessionPath(id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "terminal_sessions" + "/" + id + "/" + "suspend" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /api/v1/terminal_sessions/:id/restore(.:format) */
+export function restoreApiV1TerminalSessionPath(id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "terminal_sessions" + "/" + id + "/" + "restore" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
 /** /api/v1/terminal_sessions/:id/reset(.:format) */
 export function resetApiV1TerminalSessionPath(id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "terminal_sessions" + "/" + id + "/" + "reset" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);

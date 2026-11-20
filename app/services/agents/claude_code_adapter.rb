@@ -887,6 +887,12 @@ module Agents
     # Both modes use full Claude TUI to preserve streamed terminal UX.
     # `--effort` takes low|medium|high|xhigh|max; on a model without xhigh or max the CLI
     # steps down to the nearest level it has (checked on 2.1.310).
+    # Resume, measured 2026-11-20 (research/technical-session-restore-and-sharing-research-2026-11-19.md
+    # §3.3): the transcripts alone bring a conversation back in a new container.
+    def conversation_paths = %w[.claude/projects]
+    def conversation_id_command = "ls -t .claude/projects/*/*.jsonl 2>/dev/null | head -1 | xargs -r basename | sed 's/[.]jsonl$//'"
+    def resume_arguments(id) = "--resume #{id}"
+
     def session_command(mode:, model: nil, effort: nil)
       parts = [ "claude" ]
       parts += [ "--model", Shellwords.shellescape(model) ] if model

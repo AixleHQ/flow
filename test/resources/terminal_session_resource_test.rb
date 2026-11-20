@@ -203,4 +203,49 @@ class TerminalSessionResourceTest < ActiveSupport::TestCase
     assert_nil props["runner"]
     assert_not_includes props.to_json, "Their VPC"
   end
+
+  # == suspend and restore ==
+
+  include CheckpointStorageHelper
+
+  def viewed_by(session, viewer) = TerminalSessionResource.new(session.reload, params: { viewer: viewer }).to_h
+
+  test "the owner of a live interactive session may suspend it, and sees when the limit falls" do
+    use_checkpoint_storage
+    session = create(:terminal_session, :running, :agent_session, user: @user, project: @project,
+                                                                  mode: "interactive", state: "ready", ready_at: 1.hour.ago)
+
+    mine = viewed_by(session, @user)
+    theirs = viewed_by(session, create(:user, :with_company))
+
+    assert mine["suspendable"]
+    assert_in_delta (1.hour.ago + Sessions::Suspension::TIME_LIMIT).to_i, Time.zone.parse(mine["suspendsAt"]).to_i, 2
+    refute theirs["suspendable"]
+  ensure
+    restore_checkpoint_storage
+  end
+
+  test "a suspended session says what was saved and that its owner may restore it" do
+    use_checkpoint_storage
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, mode: "interactive")
+    Sessions::Suspension.suspended!(session)
+    create_checkpoint(session, manifest: { "reason" => "time_limit", "repos" => [ { "repository_id" => 1 } ] })
+
+    payload = viewed_by(session, @user)
+
+    assert payload["restorable"]
+    assert_equal({ "bytes" => session.session_checkpoint.byte_size, "workspaceIncluded" => true, "repositories" => 1,
+                   "reason" => "time_limit" }, payload["checkpoint"])
+    refute payload["suspendable"]
+  ensure
+    restore_checkpoint_storage
+  end
+
+  test "a restored session points at the session that continued it" do
+    origin = create(:terminal_session, :agent_session, user: @user, project: @project, state: "restored")
+    continued = create(:terminal_session, :agent_session, user: @user, project: @project, restored_from_session: origin)
+
+    assert_equal continued.id, viewed_by(origin, @user)["restoredSessionId"]
+    assert_equal origin.id, viewed_by(continued, @user)["restoredFromSessionId"]
+  end
 end

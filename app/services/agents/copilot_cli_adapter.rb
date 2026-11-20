@@ -153,6 +153,12 @@ module Agents
     # The built-in GitHub MCP server is off: it would act with the user's own token across
     # all of GitHub, while the session's repositories are already reachable through the
     # platform's git and gh setup.
+    # Resume, measured 2026-11-20: the session directory alone is enough, and the
+    # command keeps #session_command's token prefix, without which the CLI asks for /login.
+    def conversation_paths = [ "#{COPILOT_DIR}/session-state" ]
+    def conversation_id_command = "ls -td #{COPILOT_DIR}/session-state/*/ 2>/dev/null | head -1 | xargs -r basename"
+    def resume_arguments(id) = "--resume=#{id}"
+
     def session_command(mode:, model: nil, effort: nil)
       parts = [
         %(COPILOT_GITHUB_TOKEN="$(cat #{token_path})"),

@@ -202,11 +202,24 @@ module ContainerRuntime
       self
     end
 
+    # Answers the next exec whose command contains `substring`, ahead of every other
+    # route: for a whole shell program whose effects the fake cannot model
+    # (Sessions::Checkpoint and Sessions::Restore run one script each). The test states
+    # what the script printed and how it exited.
+    def answer_exec(substring, stdout: "", stderr: "", exit_code: 0)
+      (@exec_answers ||= []) << { substring: substring, stdout: stdout, stderr: stderr, exit_code: exit_code }
+      self
+    end
+
     def exec(_id, cmd, _opts = {})
       @execs << cmd
       if (hook = @exec_hooks&.find { |substring, _| command_string(cmd).include?(substring) })
         @exec_hooks.delete(hook)
         hook.last.call
+      end
+      if (answer = @exec_answers&.find { |a| command_string(cmd).include?(a[:substring]) })
+        @exec_answers.delete(answer)
+        return [ [ answer[:stdout] ], [ answer[:stderr] ], answer[:exit_code] ]
       end
       raising = @raising_execs.find { |r| command_string(cmd).include?(r[:substring]) }
       raise raising[:error] if raising

@@ -40,7 +40,7 @@ class SessionService
         metadata: metadata.presence,
         **params.slice(:mode, :initial_prompt, :requested_model, :reasoning_effort, :session_config,
                        :tool_ids, :skill_ids, :mcp_server_ids, :input_asset_ids, :repository_ids,
-                       :config_item_ids, :runner_id)
+                       :config_item_ids, :runner_id, :restored_from_session_id)
       )
 
       return session if refuse_runner_pick(session, params)
@@ -78,6 +78,36 @@ class SessionService
       else
         session.finish! if session.may_finish?
       end
+    end
+
+    # Ends an interactive session the way the 23-hour limit does: its files and its
+    # conversation are kept for Restore (Sessions::Suspension). The cleanup activity
+    # reads the request off the session, so the signal is the same one Finish sends.
+    def suspend(session:)
+      unless Sessions::Suspension.supported?(session) && session.container_up? && session.temporal_workflow_id.present?
+        raise TerminalSession::InvalidStateError, "This session cannot be suspended"
+      end
+
+      stop_admission_operations(session)
+      session.change_jsonb!(:metadata) { |doc| doc[Sessions::Suspension::REQUESTED_KEY] = Time.current.utc.iso8601 }
+      session.start_finishing!
+      signal_container_finished(session)
+      session
+    end
+
+    # Starts the session that continues a suspended one. A restore already on its way is
+    # returned instead of a second one; one that failed can be tried again.
+    def restore(session:, user:)
+      unless session.user_id == user.id && Sessions::Suspension.restorable?(session)
+        raise TerminalSession::InvalidStateError, "This session cannot be restored"
+      end
+
+      pending = TerminalSession.where(restored_from_session_id: session.id).where.not(state: %w[failed cancelled]).first
+      return pending if pending
+
+      create_and_start(user: user, project: session.project, session_type: "agent_session",
+                       agent_type: session.agent_type, configured_agent: session.configured_agent,
+                       params: Sessions::Restore.params_for(session))
     end
 
     # `refresh_tokens:` is set on the one call that precedes an actual launch.

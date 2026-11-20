@@ -1,0 +1,7 @@
+Session #<%= @session.id %> was suspended
+
+<% if @reason == "user" %>You suspended this session.<% else %>This session reached the 23-hour limit for an interactive session.<% end %> Its files, its repositories' branches and changes, and the agent's conversation are saved. Restore it before <%= @expires_on %> to continue where it stopped:
+
+<%= @session_url %>
+
+Running processes and anything outside /workspace are not kept. After <%= @expires_on %> the saved files are deleted; anything in outputs becomes an asset of the session, as when a session finishes.

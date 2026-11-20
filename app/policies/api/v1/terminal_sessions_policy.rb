@@ -8,6 +8,8 @@ module Api
       def create? = !read_only?
       def destroy? = !read_only?
       def finish? = !read_only?
+      def suspend? = !read_only?
+      def restore? = !read_only?
       def reset? = !read_only?
     end
   end
