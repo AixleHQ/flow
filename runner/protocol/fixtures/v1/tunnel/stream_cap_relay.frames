@@ -1,0 +1,22 @@
+# The relay does not send an OPEN above max_streams; a reset frees the slot.
+# (format: runner/protocol/fixtures/README.md)
+@config max_streams=2
+
+> 01 00000000 7b2276223a312c226d61785f6672616d65223a33323736382c226d61785f73747265616d73223a322c2277696e646f77223a3236323134342c2270696e675f696e74657276616c223a32302c2273657373696f6e5f6964223a6e756c6c7d # relay HELLO {"v":1,"max_frame":32768,"max_streams":2,"window":262144,"ping_interval":20,"session_id":null}
+< 01 00000000 7b2276223a312c226d61785f6672616d65223a33323736382c226d61785f73747265616d73223a322c2277696e646f77223a3236323134342c2272756e6e65725f76657273696f6e223a22312e302e30227d # runner HELLO {"v":1,"max_frame":32768,"max_streams":2,"window":262144,"runner_version":"1.0.0"}
+@do open session=123 port=7681
+> 02 00000001 7b2273657373696f6e5f6964223a3132332c22706f7274223a373638317d # OPEN {"session_id":123,"port":7681}
+@do accept session=123 port=7681
+< 03 00000001                                  # OPEN_OK
+@do open session=123 port=7681
+> 02 00000002 7b2273657373696f6e5f6964223a3132332c22706f7274223a373638317d # OPEN {"session_id":123,"port":7681}
+@do accept session=123 port=7681
+< 03 00000002                                  # OPEN_OK
+@do open session=123 port=7681 err=limit
+# Nothing was sent. A reset frees the slot, and the next stream is id 3.
+@do reset side=relay stream=1 code=cancelled
+> 07 00000001 01
+@do open session=123 port=7681
+> 02 00000003 7b2273657373696f6e5f6964223a3132332c22706f7274223a373638317d # OPEN {"session_id":123,"port":7681}
+@do accept session=123 port=7681
+< 03 00000003                                  # OPEN_OK

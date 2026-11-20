@@ -1361,7 +1361,7 @@ implementation choices behind them:
 - **`token`** treats a second use of a spent refresh token as reuse (§9.2) even after that
   token's own 30-day expiry, because the family it was rotated into may still be live.
 - **`DELETE registration`** refuses nothing of its own yet: the `409 busy` refusal and
-  `--force` are not built (`PROTOCOL.md` §8). Since task 8a it also ends the machine's hold on
+  `--force` are not built (`PROTOCOL.md` §9). Since task 8a it also ends the machine's hold on
   a session, whose next ops then answer `no_session_container`, so that session fails as one
   whose container is gone (§5.3).
 - **`GET ops`** (§15 task 5b) selects the ops and marks them `delivered` in one transaction,

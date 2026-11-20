@@ -1,0 +1,18 @@
+# The connection uses the minimum of each limit: the runner answers lower values.
+# (format: runner/protocol/fixtures/README.md)
+@only relay
+
+> 01 00000000 7b2276223a312c226d61785f6672616d65223a33323736382c226d61785f73747265616d73223a36342c2277696e646f77223a3236323134342c2270696e675f696e74657276616c223a32302c2273657373696f6e5f6964223a6e756c6c7d # relay HELLO {"v":1,"max_frame":32768,"max_streams":64,"window":262144,"ping_interval":20,"session_id":null}
+< 01 00000000 7b2276223a312c226d61785f6672616d65223a313032342c226d61785f73747265616d73223a322c2277696e646f77223a323034382c2272756e6e65725f76657273696f6e223a22312e302e30227d # runner HELLO {"v":1,"max_frame":1024,"max_streams":2,"window":2048,"runner_version":"1.0.0"}
+@do open session=123 port=7681
+> 02 00000001 7b2273657373696f6e5f6964223a3132332c22706f7274223a373638317d # OPEN {"session_id":123,"port":7681}
+@do accept session=123 port=7681
+< 03 00000001                                  # OPEN_OK
+@do open session=123 port=7681
+> 02 00000002 7b2273657373696f6e5f6964223a3132332c22706f7274223a373638317d # OPEN {"session_id":123,"port":7681}
+@do accept session=123 port=7681
+< 03 00000002                                  # OPEN_OK
+@do open session=123 port=7681 err=limit
+@do write side=relay data=61{1500}
+> 04 00000001 61{1024}                         # at most max_frame (1024)
+> 04 00000001 61{476}
