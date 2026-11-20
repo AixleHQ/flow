@@ -420,6 +420,29 @@ module Agents
       assert_equal :not_needed, @adapter.refresh!(credential)[:status]
     end
 
+    # == Write-back from a container ==
+
+    def container_login(access_token:, expiry:)
+      { "access_token" => access_token, "refresh_token" => "rt-1", "token_type" => "Bearer",
+        "expiry" => expiry.utc.iso8601(9), "auth_method" => "consumer" }
+    end
+
+    # A session that started before the user signed in again still holds the old token
+    # when it ends. Taking it back would undo the new login.
+    test "a container's older token does not replace a newer stored login" do
+      stored = container_login(access_token: "at-new", expiry: 1.hour.from_now)
+      older = container_login(access_token: "at-old", expiry: 30.minutes.from_now)
+
+      assert_equal stored, @adapter.merge_container_credentials(stored, older)
+    end
+
+    test "a token the container renewed replaces the stored one" do
+      stored = container_login(access_token: "at-old", expiry: 5.minutes.from_now)
+      renewed = container_login(access_token: "at-new", expiry: 1.hour.from_now)
+
+      assert_equal "at-new", @adapter.merge_container_credentials(stored, renewed)["access_token"]
+    end
+
     # == Remaining-quota snapshot ==
 
     def usage_probe_runtime
