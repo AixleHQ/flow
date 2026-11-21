@@ -66,7 +66,11 @@ they own, with:
 Its key and secret go to the deployment as `BITBUCKET_OAUTH_CLIENT_ID` and
 `BITBUCKET_OAUTH_CLIENT_SECRET`, read as `Settings.bitbucket.oauth.client_id` /
 `.client_secret` (added to `config/settings.yml`, `.env.example` and the deploy config in
-one change, per the configuration rule). Without both, the feature is off: the tools are
+one change, per the configuration rule). The keys stay nested, unlike GitLab's flat
+`gitlab.oauth_client_id`, because the `bitbucket` section already groups each connection
+method's settings (`bitbucket.forge`), and `oauth` is one more method; `Bitbucket::AppConfig`
+reads them as `oauth_client_id` / `oauth_client_secret` all the same. The same deploy change
+(`aixle-infra`) **removes the unused `BITBUCKET_OAUTH_SECRET` from `aixle-app-secrets`**. Without both, the feature is off: the tools are
 unavailable and the profile card says so. This client is separate from the Forge app and
 unrelated to how the integration connects.
 
@@ -144,14 +148,25 @@ body, so without the change the exchange fails with `invalid_client`. The change
 - Both call sites, which already receive the provider, send `Authorization: Basic
   base64(client_id:client_secret)` for `:basic` and leave the secret (and `client_id`) out of the body.
 - Nothing changes for any other provider. A test covers each mode.
+- A third call site sends the client secret in the body: `Oauth::TokenService.revoke!`.
+  Bitbucket has no revocation endpoint, so it is never reached for this provider. If Atlassian
+  adds one, it must be sent with Basic client authentication as well; `revoke!` reads
+  `client_auth` like the other two.
+
+**Standard and library comparison (D4).** Basic client authentication is the standard
+mechanism (RFC 6749 §2.3.1), and the `oauth2` gem (2.0.25, already in the bundle) implements it
+(`auth_scheme: :basic_auth`). The engine nevertheless keeps its own token calls: they carry the
+SSRF guards, `SafeHttp`, the trusted-host rule and the refresh lease, which the gem does not
+provide, and moving all providers onto the gem is a larger change than this task. So the engine
+gets a small `client_auth` switch now, and the move to the gem is a deferred question (§9).
 
 RFC 9207: Bitbucket sends no `iss`, which `issuer_matches?` already accepts. PKCE is sent as
-for every provider; Bitbucket is reported to accept it, and spike item S1 confirms it
+for every provider; Bitbucket is reported to accept it, and staging item S1 confirms it
 (a refusal would add a `pkce: false` entry key, nothing more).
 
-`refuse_github_connect?` already covers every provider in `UserConnections::PROVIDERS`.
+`refuse_user_connect?` (`Web::OauthController`) already covers every provider in `UserConnections::PROVIDERS`.
 
-`after_connect: "Bitbucket::UserConnection"` calls `record_identity!` and stores
+The `after_connect` lambda calls `Bitbucket::UserConnection.record_identity!` and stores
 `metadata["bitbucket_user"] = { id, nickname, name, avatar_url, commit_email, fetched_at }`
 (`id` is the account UUID). A failed lookup raises `Oauth::TokenExchangeError`, the stored
 identity is cleared and the credential kept, as for GitLab.
@@ -220,36 +235,40 @@ weaker than GitHub's and GitLab's disconnect, and is called out in R5.
 
 ## 4. API / interface changes
 
-### 4.1 `Bitbucket::UserConnection` and `Bitbucket::UserTokenService` (new)
+### 4.1 `Bitbucket::UserConnection` and the `Bitbucket::Api` extension
 
 `Bitbucket::UserConnection` mirrors `Gitlab::UserConnection`: `PROVIDER`, `LABEL = "Bitbucket"`,
 `configured?` (`AppConfig.oauth_enabled?`: both values set), `record_identity!`,
 `identity_for` (refetch when older than 24 hours), `commit_email(identity)`,
 `latest_connection_of`, `disconnect!` (§2.5).
 
-`Bitbucket::UserTokenService` is the adapter for calls made with a person's token. The
-`gitlab` and `octokit` libraries have no Bitbucket counterpart in use (the newest Ruby
-client was last released in 2018), so it sits on our own `Bitbucket::Client`, as the
-implementation-patterns rule allows, with a new credential kind: `Bitbucket::Credential::KINDS`
-gains `:user_oauth`, whose git username is `x-token-auth` and whose headers are the Bearer
-the others use, with no refresher. The host is `Bitbucket::AppConfig::API_HOST`, never one
-a request names.
+There is no second Bitbucket seam. `Bitbucket::Api` is the typed Bitbucket API and the one seam
+tests replace (`FakeBitbucket::Api` is its canonical fake), so calls made with a person's token
+extend it instead of adding a service and a fake of their own. `Bitbucket::Api` is instantiated
+with the person's credential, `Bitbucket::Credential.new(kind: :access_token, ...)`. That kind
+already behaves as the person's token does: Bearer headers, git username `x-token-auth`, no
+refresher. No new credential kind. The host is `Bitbucket::AppConfig::API_HOST`, never one a
+request names. Two operations are added, with the matching methods on `FakeBitbucket::Api`:
 
-- `user(token)`: `GET /2.0/user` and `GET /2.0/user/emails`; returns `{ id: uuid, nickname:,
+- `current_user`: `GET /2.0/user` and `GET /2.0/user/emails`; returns `{ id: uuid, nickname:,
   name: display_name, avatar_url:, commit_email: }` where `commit_email` is the person's
   **primary, confirmed** address, or nil (D8). `username` is not used: Bitbucket removed it
   from user objects in its privacy changes.
-- `repository_access(token, full_names)`: for each workspace among the names, one
-  `GET /2.0/user/workspaces/{workspace}/permissions/repositories` filtered to the session's
-  repositories; returns `{ full_name => "admin" | "write" | "read" | nil }`. The
-  cross-workspace form of this endpoint is gone (410 since 2026-04-14), hence per workspace.
-  Only `admin` and `write` cover a repository.
+- `repository_permissions(full_names)`: for each workspace among the names, one
+  `GET /2.0/user/workspaces/{workspace}/permissions/repositories` (documented in Bitbucket's
+  OpenAPI spec as "List repository permissions in a workspace for a user", scopes `account` and
+  `repository`; it is not the admin-only `GET /2.0/workspaces/{workspace}/permissions/repositories`).
+  `q` is documented on `repository.name`, not `full_name`, so the call may filter by name and
+  the code **matches `full_name` exactly**. Pages are followed. Returns
+  `{ full_name => "admin" | "write" | "read" | nil }`. The cross-workspace form of this endpoint
+  is gone (410 since 2026-04-14), hence per workspace. Only `admin` and `write` cover a
+  repository. If the staging check (S4) shows a gap, `GET /2.0/repositories/{workspace}?role=contributor`
+  (paginated, exact `full_name` match) is the fallback.
 
-Errors map to `InvalidToken` (401, after the client's single retry), `Forbidden` (403, 404 and
-other refusals), `Unavailable` (5xx, network, and a 429 that outlasted the client's own
-retries: the message says to retry in a moment), from `Bitbucket::Error`. Nothing carries a
-token or a response body. A canonical fake, `FakeBitbucket::UserTokenService`, goes in
-`test/support/fakes/` next to the GitLab one.
+Errors map to `InvalidToken` (401), `Forbidden` (403, 404 and other refusals), `Unavailable`
+(5xx, network, and a 429 that outlasted the client's own retries: the message says to retry in a
+moment), from `Bitbucket::Error`. A user credential has no refresher, so `Bitbucket::Client`
+raises on the first 401 and makes no retry. Nothing carries a token or a response body.
 
 ### 4.2 Tools
 
@@ -271,8 +290,10 @@ the provider part, as `GitlabUserTokenContext` does:
   integration modes (Forge app, token) qualify; the integration's own credential is never
   used. None: "This session has no Bitbucket repositories on an active Bitbucket connection."
 - **Coverage:** `repository_access` once per call. `write` or `admin` covers; anything else
-  goes into `skipped` ("<name> cannot push to it"). None covered: refuse, naming them. A 401
-  marks the credential `error` and answers with the reconnect message.
+  goes into `skipped` ("<name> cannot push to it"). None covered: refuse, naming them. On a 401 the tool
+  calls `credential.mark_refresh_error!` (status `error` only at the third consecutive failure,
+  with the reconnect email on that edge, as for GitLab) and refuses with the reconnect message,
+  as `GitlabUserTokenContext` does. The tool never writes the status itself.
 - **Identity:** usable only with `id`, `nickname` and `commit_email`. Without a confirmed
   email the tool refuses with a Bitbucket-specific message (it overrides `no_identity_message`):
   the person needs a confirmed email address on Bitbucket, which commits are made with.
@@ -322,9 +343,9 @@ the disconnect text (which says the authorization stays listed in Atlassian), an
      client authentication for `:basic`.
    - `Bitbucket::AppConfig.oauth_client_id`, `oauth_client_secret`, `oauth_enabled?`;
      `config/settings.yml` (`bitbucket.oauth`), `.env.example`, deploy config.
-2. **Connection.** `Bitbucket::Credential` kind `:user_oauth`; `Bitbucket::UserTokenService` and
-   its fake; `Bitbucket::UserConnection`; `OauthCredential` constants and scopes;
-   `ActAsConsent` provider list.
+2. **Connection.**    `Bitbucket::Api` and `FakeBitbucket::Api` (`current_user`, `repository_permissions`);
+   `Bitbucket::UserConnection`; `OauthCredential` constants and scopes; `ActAsConsent` provider
+   list; strict input in `ActAsConsentsController` (D12).
 3. **Tools.** `BitbucketUserTokenContext`, the two tools, the `:bitbucket_identity` tag in
    `Tools::TagCatalog`. Steps 1–2 can merge alone, since nothing calls them.
 4. **Profile.** `UserConnections`, resources (`rails typelizer:generate`), `Connections.tsx`
@@ -346,18 +367,25 @@ the disconnect text (which says the authorization stays listed in Atlassian), an
      (`docs/product/changelog-product-areas.md`).
    - `docs/index.md`: the design entry (this change); mark this design built in the
      implementation pull request.
-6. **Spike and staging check** (§6). The spike (S1–S8) runs first, before step 1 merges,
-   because S1 and S2 can change the engine change and the refresh rule.
+6. **Staging check** (§6). No spike runs first. As with GitLab (#238, checked on staging in
+   #266), the implementation uses the cautious defaults: Basic client auth, PKCE, no early
+   refresh. S1–S8 are the checklist of the check against a real Bitbucket on staging.
+   Prerequisites (Alex):
+   - a staging OAuth client (callback `https://staging.flow.aixle.com/oauth/callback`,
+     Authorization code, the scopes of §2.2);
+   - its secret in SSM and its id in the config map, through an `aixle-infra` change that also
+     removes the unused `BITBUCKET_OAUTH_SECRET` from `aixle-app-secrets`;
+   - a Bitbucket account with write access to the staging test company's repository.
 
 ## 6. Testing approach
 
 Following `docs/testing.md` (real database, app-owned seams, WebMock only in adapter
 contract tests; no `any_instance`, no stubbing a vendor library).
 
-- **Adapter:** `test/services/bitbucket/user_token_service_test.rb`, WebMock contract tests on
-  `Bitbucket::Client` for `GET /2.0/user` and `/user/emails` (primary and confirmed, only an
-  unconfirmed one, none), the per-workspace permission lookup (admin, write, read, absent),
-  and the error mappings including 429. Payloads taken from the OpenAPI spec and the spike.
+- **Adapter:** the `Bitbucket::Api` tests, WebMock contract tests on `Bitbucket::Client` for
+  `GET /2.0/user` and `/user/emails` (primary and confirmed, only an unconfirmed one, none), the
+  per-workspace permission lookup (admin, write, read, absent, a non-admin caller, several
+  workspaces, pagination, exact `full_name` match) and the error mappings including 429. Payloads taken from the OpenAPI spec.
 - **Engine:** `test/services/oauth/providers_test.rb` for `client_auth`; a token exchange and a
   refresh with `:basic` send the Basic header and no secret in the body, while Sentry, Railway,
   GitHub and GitLab still send it in the body; the callback for a `User` owner connecting
@@ -366,7 +394,7 @@ contract tests; no `any_instance`, no stubbing a vendor library).
 - **Models:** `ActAsConsent` accepts `bitbucket`; the connection scopes.
 - **Tools:** `bitbucket_user_token_test.rb`, `bitbucket_user_token_for_test.rb` in the shape of
   the GitLab ones: every error, the consent matrix, a read-only repository in `skipped`,
-  nothing covered refuses, no confirmed email refuses, a 401 marks the credential, the refresh
+  nothing covered refuses, no confirmed email refuses, a 401 raises the failure counter and refuses with the reconnect message (the third marks `error`), the refresh
   floor (under `REFRESH_SKEW` left is refreshed first, more is not), the issuance row, masking,
   no token in any error. Repositories in app mode and in token mode both qualify.
 - **Refactor guard:** the GitHub and GitLab tool tests pass unchanged.
@@ -377,9 +405,11 @@ contract tests; no `any_instance`, no stubbing a vendor library).
   member of the OAuth client's workspace; push and open a pull request as that user with the
   token; a repository where the user has only read access appears in `skipped`; the same token
   value is returned twice inside a refresh window and a fresh one after the sweep; disconnect and
-  confirm the refresh path no longer works.
+  confirm that the credential and consent rows are gone and that no call to Bitbucket was made
+  (the refresh path cannot be observed: we hold no refresh token afterwards and do not revoke).
 
-**Spike, before step 1 (a throwaway script against a test client, about half a day).**
+**Staging checklist, run against a real Bitbucket after the implementation merges** (it replaces
+a spike before the implementation; a result that differs is a follow-up change).
 
 | # | Question | If the answer differs |
 |---|---|---|
@@ -425,6 +455,11 @@ contract tests; no `any_instance`, no stubbing a vendor library).
 - **R9. Same Bitbucket account for two Flow users** is allowed, as for GitHub and GitLab.
 - **R10. Frontend contract change.** The profile page's props gain a key (§4.3); page, test and
   generated types move in one change.
+- **R12. Rotating the OAuth client.** Credentials are keyed by `(issuer, client_id)`, and GitHub,
+  GitLab and Bitbucket alike have no current-client filter. Rotating the client means deleting
+  the old one at Bitbucket; the old connections then fail to refresh, end in `error` and their
+  owners get the reconnect email. A current-client filter, if wanted, is one change for every
+  provider (#275).
 - **R11. Repositories in a workspace the person is not in.** A Forge-app integration can reach a
   workspace its user is not a member of; the lookup returns nothing for it and the repository is
   `skipped`, as intended.
@@ -444,8 +479,8 @@ contract tests; no `any_instance`, no stubbing a vendor library).
 | D9 | `write` or `admin` on the repository is the coverage threshold. | Bitbucket permission levels |
 | D10 | Disconnect deletes the credential and consents and does not revoke, as no endpoint is documented. | §2.5 |
 | D11 | Tool steps stay shared through `UserTokenContext`; GitHub and GitLab messages are unchanged. | `UserTokenContext` |
-| D12 | Consent, issuance, masking and impersonation rules are GitHub's, unchanged. | github-user-identity.md |
-| D13 | Calls with the person's token use our `Bitbucket::Client`, not a library, because none is in use. | implementation-patterns.md "API clients" |
+| D12 | Consent, issuance, masking and impersonation rules are GitHub's, except that `ActAsConsentsController` gets strict input: at least one recognized switch is required, unknown request-body keys are refused, and the switches stay exact JSON booleans. Today it selects recognized keys before validating, so `{}`, a misspelled key or an unknown extra key is accepted and can create a no-op row. Cases for `{}`, misspellings, unknown extras, strings, integers, null and mixed valid/invalid payloads are added for Bitbucket. | github-user-identity.md; implementation-patterns.md strict input |
+| D13 | Calls with the person's token go through `Bitbucket::Api` (on our `Bitbucket::Client`), not a library, because none is in use and `Bitbucket::Api` is the one seam. | implementation-patterns.md "API clients"; testing.md |
 
 ## 9. Deferred questions
 
@@ -456,4 +491,12 @@ contract tests; no `any_instance`, no stubbing a vendor library).
 - **Routing the token through the git credential helper:** later opt-in, as for GitHub and GitLab.
 - **Bitbucket Data Center** (D3).
 - **Switching the board's workflows, `pull_request_*` and gates to act as the user:** out of scope (task).
+- **Move the engine's token, refresh and revoke calls onto the `oauth2` gem** (2.0.25, already
+  bundled), see D4.
+- **Client rotation** (a current-client filter for display, vending and the sweep), for every
+  provider at once: #275, after the rest of this work (R12).
+- **Atomic connect:** verify the identity before the credential is stored or promoted, and keep
+  the previous known-good credential when a reconnect fails. Today a failed `after_connect`
+  keeps the credential, as GitHub and GitLab do; this design follows them. One engine change
+  for every provider: #275.
 - **Azure DevOps provider:** out of scope, as in the GitHub design.
