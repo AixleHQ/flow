@@ -34,7 +34,7 @@ end
 
 def percentile(values, fraction)
   sorted = values.sort
-  sorted[[(sorted.size * fraction).ceil - 1, 0].max]
+  sorted[[ (sorted.size * fraction).ceil - 1, 0 ].max]
 end
 
 def median(values)
@@ -47,10 +47,10 @@ def seconds(from, to)
   Time.parse(to) - Time.parse(from)
 end
 
-list = ["run", "list", "-R", options[:repo], "-w", options[:workflow], "--status", "success",
-        "-L", options[:limit].to_s, "--json", "databaseId"]
-list += ["--event", options[:event]] if options[:event]
-list += ["--branch", options[:branch]] if options[:branch]
+list = [ "run", "list", "-R", options[:repo], "-w", options[:workflow], "--status", "success",
+         "-L", options[:limit].to_s, "--json", "databaseId" ]
+list += [ "--event", options[:event] ] if options[:event]
+list += [ "--branch", options[:branch] ] if options[:branch]
 run_ids = gh_json(*list).map { |run| run["databaseId"] }
 abort "bin/ci-timings: no successful runs found" if run_ids.empty?
 
