@@ -133,10 +133,9 @@ jobs:
       - name: Start database
         if: ${{ inputs.needs-db }}
         # In the background, so pulling the Postgres image overlaps the image build below. After
-        # the Docker restart above, which would stop the container. "Wait for database" reads the
-        # outcome.
-        run: |
-          nohup bash -c 'docker compose -f "$COMPOSE_FILE" up -d db >"$RUNNER_TEMP/db-start.log" 2>&1; echo $? >"$RUNNER_TEMP/db-start.status"' >/dev/null 2>&1 &
+        # the Docker restart above, which would stop the container. "Wait for database" runs `up`
+        # again: a no-op once this one has finished, and a retry that shows the error if it failed.
+        run: docker compose -f "$COMPOSE_FILE" up -d db >/dev/null 2>&1 &
 
       - name: Build test image
         # Materialised here rather than pulled whole from a registry: the image
@@ -165,11 +164,7 @@ jobs:
       - name: Wait for database
         if: ${{ inputs.needs-db }}
         run: |
-          # Started in the background before the image build: wait for that to finish, then for
-          # Postgres to accept connections.
-          until [ -s "$RUNNER_TEMP/db-start.status" ]; do sleep 1; done
-          cat "$RUNNER_TEMP/db-start.log"
-          [ "$(cat "$RUNNER_TEMP/db-start.status")" = 0 ]
+          docker compose -f "$COMPOSE_FILE" up -d db
           until docker compose -f "$COMPOSE_FILE" exec -T db pg_isready -U postgres; do sleep 1; done
 
       - name: Prepare database
