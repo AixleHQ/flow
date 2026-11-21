@@ -20,7 +20,7 @@ import (
 // nil when the platform's check-in does not turn the tunnel on: no `config.tunnel`, or a
 // mode this runner does not know. A platform that has no relay deployed says nothing, so
 // no runner of a machine on it ever tries to connect.
-func tunnelManager(answer protocol.CheckIn, client *protocol.Client, source *tokens.Source, env *docker.Environment, override string, logger *slog.Logger) *tunnel.Manager {
+func tunnelManager(answer protocol.CheckIn, client *protocol.Client, source *tokens.Source, env *docker.Environment, serving *tunnel.Serving, override string, logger *slog.Logger) *tunnel.Manager {
 	cfg := answer.Config.Tunnel
 	if cfg == nil {
 		return nil
@@ -44,6 +44,7 @@ func tunnelManager(answer protocol.CheckIn, client *protocol.Client, source *tok
 		Tokens:    source,
 		Connector: &tunnel.WSConnector{URL: target, Version: version.Version},
 		Holds:     env.HoldsSession,
+		Serving:   serving,
 		Logger:    logger,
 	}
 }

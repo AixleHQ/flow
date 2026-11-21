@@ -1,0 +1,114 @@
+package tunnel_test
+
+import (
+	"context"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/aixlehq/aixle-runner/internal/credentials"
+	"github.com/aixlehq/aixle-runner/internal/docker"
+	"github.com/aixlehq/aixle-runner/internal/protocol"
+	"github.com/aixlehq/aixle-runner/internal/proxy"
+	"github.com/aixlehq/aixle-runner/internal/tokens"
+	"github.com/aixlehq/aixle-runner/internal/tunnel"
+)
+
+// The runner's half of the browser-path end-to-end run: a real container.start on the local
+// Docker daemon (real sidecar, real agent image), and the tunnel manager connected to a real
+// relay. Control files in E2E_CTL: `stop-container` runs container.stop, `exit` ends it.
+
+type memStore struct{}
+
+func (memStore) Save(credentials.Credentials) error { return nil }
+func (memStore) Delete() error                      { return nil }
+
+type noRefresh struct{}
+
+func (noRefresh) Refresh(context.Context, string) (protocol.TokenPair, error) {
+	return protocol.TokenPair{}, nil
+}
+
+// mint signs a ticket as the gateway does: an HS256 JWT under the shared key.
+type mint struct{ key []byte }
+
+func (m mint) TunnelTicket(context.Context, string) (protocol.TunnelTicket, error) {
+	b64 := base64.RawURLEncoding.EncodeToString
+	jti := make([]byte, 12)
+	rand.Read(jti)
+	claims, _ := json.Marshal(map[string]any{"v": 1, "e": 42, "r": 7, "s": 555, "jti": hex.EncodeToString(jti), "exp": time.Now().Add(time.Minute).Unix()})
+	head := b64([]byte(`{"alg":"HS256","typ":"JWT"}`)) + "." + b64(claims)
+	mac := hmac.New(sha256.New, m.key)
+	mac.Write([]byte(head))
+	return protocol.TunnelTicket{Ticket: "artun_" + head + "." + b64(mac.Sum(nil))}, nil
+}
+
+func TestE2EDriver(t *testing.T) {
+	image := os.Getenv("E2E_IMAGE")
+	if image == "" {
+		t.Skip("E2E_IMAGE is not set")
+	}
+	ctl := os.Getenv("E2E_CTL")
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	api, err := docker.Connect()
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, _ := os.MkdirTemp("", "rd")
+	binary := filepath.Join(state, "aixle-runner")
+	build := exec.Command("go", "build", "-o", binary, "../../cmd/aixle-runner")
+	build.Env = append(os.Environ(), "CGO_ENABLED=0")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	serving := &tunnel.Serving{}
+	env := &docker.Environment{API: api, Key: "e2e", StateDir: state, Logger: logger, Background: ctx, Tunnel: serving,
+		Proxy: proxy.NewHost(state, binary, http.NotFoundHandler(), logger), TunnelReadyTimeout: 90 * time.Second}
+	const session = int64(555)
+	payload, _ := json.Marshal(map[string]any{
+		"image": image, "proxy_port": 7690,
+		"tunnel": map[string]any{"ports": map[string]int{"tty": 7681, "view": 7682, "fs": 4040, "upload": 4041, "ide": 8443}},
+		"env": map[string]string{"ROUTE_TOKEN": "e2eroutetoken0123456789abcdef00", "VSCODE_TOKEN": "e2etoken", "TTYD_CMD": "bash"},
+	})
+	env.Reset(ctx, nil)
+	start := time.Now()
+	if r := env.ContainerStart(ctx, session, payload); r.Status != protocol.StatusOK {
+		t.Fatalf("container.start: %#v %v", r, r.Error)
+	}
+	t.Logf("container.start answered after %v", time.Since(start).Round(100*time.Millisecond))
+	defer func() { env.ContainerStop(context.Background(), session, json.RawMessage(`{}`)); env.Reset(context.Background(), nil) }()
+
+	source := tokens.NewSource(memStore{}, noRefresh{}, credentials.Credentials{URL: "http://platform.invalid", TokenPair: protocol.TokenPair{
+		AccessToken: "aracc_e2e", AccessTokenExpiresAt: time.Now().Add(24 * time.Hour),
+		RefreshToken: "arref_e2e", RefreshTokenExpiresAt: time.Now().Add(48 * time.Hour)}})
+	manager := &tunnel.Manager{
+		Gateway: mint{key: []byte(os.Getenv("E2E_TICKET_KEY"))}, Tokens: source, Logger: logger, Serving: serving,
+		Connector: &tunnel.WSConnector{URL: os.Getenv("E2E_RELAY_WS"), Version: "0.5.0"},
+		Holds:     env.HoldsSession, PollEvery: time.Second,
+	}
+	go manager.Run(ctx)
+	os.WriteFile(filepath.Join(ctl, "ready"), nil, 0o644)
+	for {
+		if _, err := os.Stat(filepath.Join(ctl, "stop-container")); err == nil {
+			os.Remove(filepath.Join(ctl, "stop-container"))
+			r := env.ContainerStop(ctx, session, json.RawMessage(`{}`))
+			t.Logf("container.stop: %v", r.Status)
+		}
+		if _, err := os.Stat(filepath.Join(ctl, "exit")); err == nil {
+			return
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}

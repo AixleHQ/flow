@@ -126,11 +126,21 @@ func (h *Host) serve(sessionID int64, listener net.Listener, handler http.Handle
 	}()
 }
 
+// DialDir creates the session's dial directory, where its sidecar listens for the
+// tunnel's streams (dial.go), and returns it. A directory left by an earlier start (a
+// restarted host runner) is kept, as the socket directory is: a running sidecar has it
+// mounted.
+func (h *Host) DialDir(sessionID int64) (string, error) {
+	return MakeDialDir(h.StateDir, sessionID)
+}
+
 // Close stops the session's relay, at once: its container is gone or going,
-// and a call still in flight is cut. Its socket directory is removed.
+// and a call still in flight is cut. Its socket directory and its dial directory are
+// removed.
 func (h *Host) Close(sessionID int64) {
 	h.stopServer(sessionID)
 	_ = os.RemoveAll(h.SocketDir(sessionID))
+	_ = os.RemoveAll(DialDir(h.StateDir, sessionID))
 }
 
 // stopServer stops the session's relay server, if it has one, and leaves its
@@ -156,6 +166,7 @@ func (h *Host) CloseAll() {
 		_ = server.Close()
 	}
 	_ = os.RemoveAll(h.root())
+	_ = os.RemoveAll(DialRoot(h.StateDir))
 }
 
 // Stop stops every relay when the host runner stops, cutting the calls in

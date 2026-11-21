@@ -1,6 +1,7 @@
-// Package relay is the service's tunnel endpoint: the `GET /runner/v1/tunnel`
-// upgrade, the registry of connected machines, and the drain
-// (docs/design/agent-runtimes/runner-relay.md §3.1, §5.3, §5.4).
+// Package relay is the service: the `GET /runner/v1/tunnel` upgrade, the registry of
+// connected machines, the drain, the browser's edge handler (`/t/<token>/<surface>/…`),
+// the signals from the platform and the reconcile pass
+// (docs/design/agent-runtimes/runner-relay.md §3.1, §5.3, §5.4, §7, §8).
 package relay
 
 import (
@@ -12,10 +13,12 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
 
+	"github.com/aixlehq/aixle-runner-relay/internal/rails"
 	"github.com/aixlehq/aixle-runner-relay/internal/ticket"
 	"github.com/aixlehq/aixle-runner/protocol/tunnel"
 )
@@ -45,6 +48,15 @@ type Options struct {
 	Guard    ticket.Guard
 	Metrics  *Metrics
 	Logger   *slog.Logger
+	// Registry is the table of machines; nil is the in-memory one.
+	Registry Registry
+	// Rails answers the short calls of §8.2; nil leaves the browser path with the
+	// registry alone, and the reconcile pass off.
+	Rails RailsAPI
+	// CheckInterval is the reconcile pass's period; zero is 60 s.
+	CheckInterval time.Duration
+	// SignalIdle is how long the subscription may be quiet before it is pinged; zero is 15 s.
+	SignalIdle time.Duration
 
 	// The limits offered in HELLO (§5.3); zero takes the package's defaults.
 	MaxFrame     int
@@ -59,16 +71,30 @@ type Options struct {
 	Clock tunnel.Clock
 }
 
-// Server is the relay's tunnel endpoint.
+// RailsAPI is what the relay asks of the platform (§8.2); internal/rails.Client is it.
+type RailsAPI interface {
+	Holders(ctx context.Context, routeToken string) (rails.Holder, error)
+	Checks(ctx context.Context, machines []rails.Machine) ([]bool, error)
+}
+
+// Server is the relay: the tunnel endpoint and the browser's edge.
 type Server struct {
 	opts     Options
 	log      *slog.Logger
-	registry *Registry
+	registry Registry
 	metrics  *Metrics
 
 	mu       sync.Mutex
 	draining bool
 	wg       sync.WaitGroup // one per connected machine, until its session ended
+
+	// The signal subscription and the reconcile loop, for /readyz (§2.4). A part that
+	// was never started is not asked about.
+	signalsExpected   atomic.Bool
+	subscribed        atomic.Bool
+	reconcileExpected atomic.Bool
+	lastPass          atomic.Int64 // unix nanoseconds of the last pass that ended
+	reconcileNow      chan struct{}
 }
 
 // New returns a Server.
@@ -85,7 +111,10 @@ func New(opts Options) *Server {
 	if opts.GuardTimeout == 0 {
 		opts.GuardTimeout = 3 * time.Second
 	}
-	return &Server{opts: opts, log: opts.Logger, registry: NewRegistry(), metrics: opts.Metrics}
+	if opts.Registry == nil {
+		opts.Registry = NewRegistry()
+	}
+	return &Server{opts: opts, log: opts.Logger, registry: opts.Registry, metrics: opts.Metrics, reconcileNow: make(chan struct{}, 1)}
 }
 
 type discard struct{}
@@ -93,23 +122,38 @@ type discard struct{}
 func (discard) Write(p []byte) (int, error) { return len(p), nil }
 
 // Registry is the connected machines.
-func (s *Server) Registry() *Registry { return s.registry }
+func (s *Server) Registry() Registry { return s.registry }
 
-// Handler serves the tunnel upgrade.
+// Handler serves the tunnel upgrade and the browser's edge.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+Path, s.upgrade)
+	mux.HandleFunc(EdgePrefix, s.edge)
 	return mux
 }
 
 // Ready says whether the service takes new connections: Redis answers (a ticket
-// cannot be accepted without it) and no drain is under way. It does not depend on
-// Rails: a Rails outage must not take down the connections that are open.
+// cannot be accepted without it), the signal subscription is live, the last
+// reconcile pass is not older than three intervals, and no drain is under way. It does
+// not depend on Rails being up: a pass that Rails did not answer still counts, so a
+// Rails outage does not take down the connections that are open (§2.4).
 func (s *Server) Ready(ctx context.Context) error {
 	if s.Draining() {
 		return errors.New("draining")
 	}
-	return s.opts.Guard.Ping(ctx)
+	if err := s.opts.Guard.Ping(ctx); err != nil {
+		return err
+	}
+	if s.signalsExpected.Load() && !s.subscribed.Load() {
+		return errors.New("the signal subscription is not live")
+	}
+	if s.reconcileExpected.Load() {
+		last := s.lastPass.Load()
+		if last == 0 || time.Since(time.Unix(0, last)) > 3*s.checkInterval() {
+			return errors.New("the last reconcile pass is too old")
+		}
+	}
+	return nil
 }
 
 // Draining says whether Drain was called.
@@ -225,6 +269,7 @@ func (s *Server) serve(ctx context.Context, c *websocket.Conn, claims ticket.Cla
 		cfg.SessionID = *claims.SessionID
 	}
 	m.sess = tunnel.NewRelay(conn, cfg)
+	s.newProxy(m)
 	log := s.log.With("environment_id", m.EnvironmentID, "runner_id", m.RunnerID, "session_id", m.SessionID,
 		"runner_version", runnerVersion)
 
@@ -267,6 +312,7 @@ func (s *Server) serve(ctx context.Context, c *websocket.Conn, claims ticket.Cla
 	}
 
 	<-m.sess.Done()
+	m.transport.CloseIdleConnections()
 	s.registry.Remove(m)
 	s.metrics.MachinesConnected.Set(float64(s.registry.Len()))
 	log.Info("a machine disconnected", "reason", errString(m.sess.Err()), "seconds", int(time.Since(m.ConnectedAt).Seconds()))

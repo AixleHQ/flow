@@ -238,7 +238,9 @@ implementation per way of reaching a session's ports, so `kubernetes` adds its o
   agent's network namespace. The sidecar gets a second Unix socket, **`dial.sock`**, in a directory of
   the host runner's state directory that is bind-mounted read-write into the sidecar and read by the
   host runner. For each stream the host runner connects to it, writes one line with the port, and the
-  sidecar dials `127.0.0.1:<port>` and pipes the two. The sidecar takes the allowed ports on its command
+  sidecar dials `127.0.0.1:<port>` and pipes the two. The sidecar answers the line first, `OK` or `ERR <reason>`, so
+  that a port that does not answer is `RESET dial_failed` and not a stream that opens and breaks
+  (`PROTOCOL.md` §8.12). The sidecar takes the allowed ports on its command
   line at start (from `container.start`'s payload) and refuses any other. This keeps rootless Docker
   working, where a container's IP is not reachable from the machine (`DESIGN.md` §6.9.5); the existing socket
   runs the other way (sidecar to host runner), so a second one is needed. It needs no credential in
@@ -703,10 +705,28 @@ touched: it feeds the monitor and the MCP tool, not the browser.
 The one new behaviour is **readiness**. Hosted sessions wait for their ports before `ready`
 (`DockerRuntime#wait_for_ports`); a runner session is `ready` when its container runs (`DESIGN.md` §6.9.4), possibly before
 ttyd listens. A dial that fails in that window is `RESET dial_failed` and the browser gets `502`; ttyd's
-own client and the page's frame retry. 16e measures how long the window is on the local adapter, and if it is
-visible, `container.start` waits for the five ports (the runner checks them with the same dial) before it
-answers, which keeps the platform's `ready` honest and costs a few seconds of session start. **Open choice,
-left to 16e with its measurement.**
+own client and the page's frame retry.
+
+**Measured and decided in 16e (2026-11-21).** The window is visible. On a Linux machine with Docker 25
+(a Coder workspace, 4 cores), with the stock `flow-kiro-cli` image started with `docker start`, five runs
+(a script that polls each port from the host about every 0.3 s; it is attached to task #271) gave the time until each port accepted a
+connection, in seconds after `docker start` was issued:
+
+| Surface (port) | Runs | Time to first accept |
+| --- | --- | --- |
+| `upload` (4041), `fs` (4040) | 5 | 1.5 to 1.7 |
+| `ide` (8443) | 5 | 2.6 to 3.1 |
+| `tty` (7681), `view` (7682) | 5 | 3.5 to 3.7 |
+
+The terminal, the surface a person opens first, is the last to listen, about 3.6 s after the start. The platform marks
+a runner session `ready` when `container.start`'s result is posted, which is within the poll of the result, well under
+that, so a page that opens on `ready` would meet a `502` from `tty` more often than not. **So `container.start` waits.**
+After the container starts, and before it answers, the runner dials each of the five ports with the dial the tunnel's
+streams use (the sidecar's `dial.sock`, or the machine's `127.0.0.1` with `network: host`) until all answer, for at most 30 s
+(`DockerRuntime::PORT_READY_TIMEOUT`), and only then serves them. A session whose ports do not answer in time, or
+whose container stops meanwhile, is `container_start_failed`, and the container, the sidecar and the relay are removed.
+The wait costs a session about 3.5 s of start time, which is when its terminal could first be opened anyway. It runs
+only when the tunnel is on for the machine and the payload names the ports; with the tunnel off nothing changes.
 
 ## 10. The takeover: the ops long-poll and the callback proxy
 
