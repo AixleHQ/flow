@@ -1,8 +1,10 @@
 # frozen_string_literal: true
 
 # A reasoning-effort level can be set only when both the runtime and the model are
-# chosen explicitly, and it must be one that this runtime takes for this model, as
-# config/agent_runtimes.json lists them (AgentRuntime#reasoning_effort_levels):
+# chosen explicitly, and it must be one this runtime's CLI takes
+# (AgentRuntime#reasoning_effort_grammar). Which levels a given model takes comes from the
+# vendor's catalogue for the account that runs it, which a step does not know, so the
+# model pickers apply that (AgentRuntime#reasoning_effort_levels) and this does not:
 #
 #   validates :reasoning_effort, reasoning_effort: { runtime: :required_agent_runtime, model: :preferred_model }
 #
@@ -20,7 +22,7 @@ class ReasoningEffortValidator < ActiveModel::EachValidator
 
     runtime = AgentRuntime.all.find { |r| r.id == runtime_id.to_s }
     return if runtime.nil? # the runtime's own inclusion validation reports it
-    return if runtime.reasoning_effort?(value, model)
+    return if runtime.reasoning_effort?(value)
 
     record.errors.add(attribute, unsupported_message(runtime, value.to_s, model))
   end
@@ -28,7 +30,7 @@ class ReasoningEffortValidator < ActiveModel::EachValidator
   private
 
   def unsupported_message(runtime, level, model)
-    levels = runtime.reasoning_effort_levels(model)
+    levels = runtime.reasoning_effort_grammar
     target = "#{runtime.id} with model #{model}"
     return "is not available for #{target}" if levels.empty?
 

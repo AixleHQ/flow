@@ -6,10 +6,13 @@ module Antigravity
   # Contract test for the Antigravity transport layer: the request it sends,
   # the shape it returns, and how each failure mode maps onto ApiError.
   class ApiTest < ActiveSupport::TestCase
-    test "models sends the bearer token and the consumer project body" do
+    # Task #324: under any other client name the endpoint answers 403 and the pickers fell
+    # back to a fixed list.
+    test "models sends the bearer token, agy's client name and the consumer project body" do
       request = stub_request(:post, Api::MODELS_URL)
                 .with(
-                  headers: { "Authorization" => "Bearer tok-123", "Content-Type" => "application/json" },
+                  headers: { "Authorization" => "Bearer tok-123", "Content-Type" => "application/json",
+                             "User-Agent" => "antigravity/cli/#{AgentRuntime.fetch(:antigravity_cli).cli_version}" },
                   body: { project: Api::CONSUMER_PROJECT }.to_json
                 )
                 .to_return(status: 200, body: { models: {} }.to_json)

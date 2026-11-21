@@ -391,6 +391,35 @@ class InteractivePromptDetectorTest < ActiveSupport::TestCase
     refute_predicate InteractivePromptDetector.detect(COPILOT_TRUST_PANE, agent_type: "codex"), :blocked?
   end
 
+  # Antigravity CLI 1.5.13, captured on staging with /workspace left out of
+  # trustedWorkspaces: the `-i` prompt waits behind the dialog.
+  def antigravity_trust_pane = file_fixture("terminal_panes/antigravity_cli/workspace_trust.txt").read
+
+  test "detects Antigravity waiting on its workspace-trust dialog" do
+    result = InteractivePromptDetector.detect(antigravity_trust_pane, agent_type: "antigravity_cli")
+
+    assert result.blocked?
+    assert_equal :antigravity_workspace_trust, result.prompt_id
+    assert_match(/trustedWorkspaces/, result.message)
+  end
+
+  test "detects Antigravity waiting on its first-run onboarding" do
+    pane = "Welcome to Antigravity CLI!\nChoose your color scheme:\n  > terminal\n    light\n    dark\n" \
+           "    [Next]\n  ↑/↓ Navigate · enter Confirm\n#{' ' * 89}auto · Gemini 3.8 Flash · high\n"
+
+    result = InteractivePromptDetector.detect(pane, agent_type: "antigravity_cli")
+
+    assert result.blocked?
+    assert_equal :antigravity_onboarding, result.prompt_id
+  end
+
+  test "an Antigravity screen at rest is not a dialog" do
+    idle = file_fixture("terminal_panes/antigravity_cli/turn_ended.txt").read
+
+    refute_predicate InteractivePromptDetector.detect(idle, agent_type: "antigravity_cli"), :blocked?
+    refute_predicate InteractivePromptDetector.detect(antigravity_trust_pane, agent_type: "codex"), :blocked?
+  end
+
   test "reports healthy for ordinary output and for nothing at all" do
     assert_equal false, InteractivePromptDetector.detect(CODEX_CHAT_SCREEN, agent_type: "codex").blocked? # rubocop:disable Minitest/RefuteFalse
     assert_equal false, InteractivePromptDetector.detect(CLAUDE_CHAT_SCREEN, agent_type: "claude_code").blocked? # rubocop:disable Minitest/RefuteFalse

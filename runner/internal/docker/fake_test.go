@@ -79,8 +79,13 @@ type fakeEngine struct {
 	// removeBlocksRole keeps the removal of the containers with this role label
 	// from answering until the client gives up. removeBlocked is how long the
 	// last such removal was held, and onRemoveBlocked runs when one arrives.
+	// removeRecorded is closed once removeBlocked is set: the handler learns that
+	// the client gave up only after the client itself has, so a test that reads
+	// removeBlocked as soon as the op returns can find it still unset
+	// (heldRemoval).
 	removeBlocksRole string
 	removeBlocked    time.Duration
+	removeRecorded   chan struct{}
 	onRemoveBlocked  func()
 	// removeError refuses every container removal with a 500.
 	removeError string
@@ -337,6 +342,10 @@ func (f *fakeEngine) serveContainers(w http.ResponseWriter, r *http.Request, p s
 			<-r.Context().Done()
 			f.mu.Lock()
 			f.removeBlocked = time.Since(arrived)
+			if f.removeRecorded != nil {
+				close(f.removeRecorded)
+				f.removeRecorded = nil
+			}
 			f.mu.Unlock()
 			return
 		}
@@ -740,6 +749,29 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 // newFakeEngine starts the fake and returns an SDK client of it.
+// blockRemovalOf makes the removal of the containers with this role block until
+// the client gives up (removeBlocksRole), and answers a channel heldRemoval waits on.
+func (f *fakeEngine) blockRemovalOf(role string) <-chan struct{} {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.removeBlocksRole = role
+	f.removeRecorded = make(chan struct{})
+	return f.removeRecorded
+}
+
+// heldRemoval is how long the blocked removal was held, once the fake has recorded it.
+func (f *fakeEngine) heldRemoval(t *testing.T, recorded <-chan struct{}) time.Duration {
+	t.Helper()
+	select {
+	case <-recorded:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the blocked removal was never recorded: it did not arrive, or its client never gave up")
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.removeBlocked
+}
+
 func newFakeEngine(t *testing.T) (*fakeEngine, *client.Client) {
 	t.Helper()
 	f := &fakeEngine{

@@ -313,6 +313,41 @@ class SessionServiceTest < ActiveSupport::TestCase
     assert_equal 0, @user.terminal_sessions.count
   end
 
+  # Task #324: Antigravity CLI, asked for a model the account lacks, quietly ran its default
+  # model; the step said nothing about it.
+  test "create_and_start refuses a model the account's live catalogue does not offer, on a CLI that would run another" do
+    AgentCredential.from_artifacts(@user.id, @company.id, "antigravity_cli",
+                                   { "access_token" => "at", "auth_method" => "consumer" })
+    stub_request(:post, Antigravity::Api::MODELS_URL).to_return(status: 200, body: {
+      models: { "gemini-3.8-flash-high" => { displayName: "Gemini 3.8 Flash (High)" } },
+      agentModelSorts: [ { groups: [ { modelIds: [ "gemini-3.8-flash-high" ] } ] } ]
+    }.to_json)
+
+    error = assert_raises(AgentCredential::ModelUnavailable) do
+      SessionService.create_and_start(user: @user, project: @project, session_type: "agent_session",
+                                       agent_type: "antigravity_cli", params: { requested_model: "gemini-3.7-flash-high" })
+    end
+
+    assert_equal "Antigravity CLI does not offer the model gemini-3.7-flash-high on this account " \
+                 "(it offers gemini-3.8-flash-high). Choose another model.", error.message
+    assert_kind_of AgentCredential::PreflightError, error
+    assert_equal 0, @user.terminal_sessions.count
+  end
+
+  # A fallback list says nothing about the account, and an unreachable catalogue must not
+  # stop a launch.
+  test "create_and_start does not hold a model against a catalogue the vendor did not answer" do
+    mock_temporal_start
+    AgentCredential.from_artifacts(@user.id, @company.id, "antigravity_cli",
+                                   { "access_token" => "at", "auth_method" => "consumer" })
+    stub_request(:post, Antigravity::Api::MODELS_URL).to_return(status: 403, body: "{}")
+
+    session = SessionService.create_and_start(user: @user, project: @project, session_type: "agent_session",
+                                              agent_type: "antigravity_cli", params: { requested_model: "gemini-3.7-flash-high" })
+
+    assert session.persisted?
+  end
+
   # The production shape (2026-09-17): a token that died while a live session pinned it
   # out of the refresh sweep. The row is still `active` — no refresh was ever attempted,
   # so nothing recorded an error — and the container it would launch could only print
@@ -683,6 +718,21 @@ class SessionServiceTest < ActiveSupport::TestCase
   end
 
   # == create_for_workflow_step ==
+
+  test "create_for_workflow_step refuses a step model the Grok account does not offer, before any container" do
+    login = { Agents::GrokAdapter::OAUTH_SCOPE => { "key" => "session", "token_type" => "Bearer" } }.to_json
+    create(:agent_credential, user: @user, company: @company, agent_type: "grok",
+                              config_data: AgentCredentialsService.for("grok").adapter.extract_credentials(login))
+    stub_request(:get, Grok::Api::MODELS_URL).to_return(status: 200, body: { data: [ { id: "grok-4.7" } ] }.to_json)
+    workflow = create(:workflow, scope: @project)
+    step = create(:step, workflow: workflow, required_agent_runtime: "grok", preferred_model: "grok-4.6")
+    step_run = create(:step_run, workflow_run: create(:workflow_run, workflow: workflow, project: @project, user: @user), step: step)
+
+    error = assert_raises(AgentCredential::ModelUnavailable) { SessionService.create_for_workflow_step(step_run: step_run) }
+
+    assert_equal "Grok does not offer the model grok-4.6 on this account (it offers grok-4.7). Choose another model.", error.message
+    assert_equal 0, TerminalSession.where(user: @user).count
+  end
 
   test "create_for_workflow_step creates session bound to step_run" do
     mock_temporal_start

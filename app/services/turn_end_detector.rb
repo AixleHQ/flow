@@ -43,11 +43,10 @@ class TurnEndDetector
       # Lines the CLI draws under the prompt's first line: the rest of a wrapped
       # placeholder and the hint, which wraps too on a narrow pane.
       lines_below_prompt: 3,
-      turn_summary: /\A\s*▸ Credits: turn [\d.,]+ • session/,
-      # The status chrome between the summary and the prompt: separators, the trust
-      # and root notices (up to four lines when the root warning is not shortened),
-      # and the model line, each of which wraps on a narrow pane.
-      summary_within: 12
+      # The turn summary, above the status chrome between it and the prompt: separators,
+      # the trust and root notices (up to four lines when the root warning is not
+      # shortened), and the model line, each of which wraps on a narrow pane.
+      above: { match: /\A\s*▸ Credits: turn [\d.,]+ • session/, within: 12 }
     },
     # Copilot CLI 1.0.108 (TUI). The pane ends on a hint line under the prompt box. A
     # finished turn leaves `← open sidebar · Interactive · …`, cut down to `Interactive`
@@ -63,8 +62,22 @@ class TurnEndDetector
     "copilot_cli" => {
       prompt: /\A\s*(?:← open sidebar · Interactive · |Interactive\s{2,})/,
       lines_below_prompt: 0,
-      turn_summary: /Session: [\d.,]+ AIC used\z/,
-      summary_within: 6
+      above: { match: /Session: [\d.,]+ AIC used\z/, within: 6 }
+    },
+    # Antigravity CLI 1.5.13 (TUI, `-i`). The pane ends on a footer that starts with
+    # `? for shortcuts` at rest and `esc to cancel` while a turn runs, at every width (the
+    # model part on its right is dropped below about 60 columns). Above it sit a rule, the
+    # input box line and another rule; the box line is the `> Auto mode: …` placeholder, or
+    # a bare `>` once anything has been typed into it. A turn that left a command running in
+    # the background puts a task panel between the box and the footer and is resumed by agy
+    # itself when the command ends, so an input box anywhere but two lines up is no turn
+    # end. agy prints no per-turn summary; the screen before the `-i` prompt is submitted
+    # looks the same, but lasts under a second, and Sessions::Checks::TurnEnd waits for a
+    # second pass on the same screen.
+    "antigravity_cli" => {
+      prompt: /\A\s*\? for shortcuts\b/,
+      lines_below_prompt: 0,
+      above: { match: /\A>(?:\z| Auto mode: )/, at: 2 }
     }
   }.freeze
 
@@ -79,9 +92,19 @@ class TurnEndDetector
     prompt_at = screen.rindex { |line| line.match?(signature[:prompt]) }
     return false if prompt_at.nil? || prompt_at < screen.length - 1 - signature[:lines_below_prompt]
 
-    above = screen[[ prompt_at - signature[:summary_within], 0 ].max...prompt_at]
-    above.any? { |line| line.match?(signature[:turn_summary]) }
+    lines_above(screen, prompt_at, signature[:above]).any? { |line| line.match?(signature[:above][:match]) }
   end
+
+  # What has to show above the prompt for the screen to be a finished turn: a line
+  # `within` that many lines of it (a turn summary), or the line exactly `at` that many
+  # lines up (an input box that is empty).
+  def self.lines_above(screen, prompt_at, above)
+    return screen[[ prompt_at - above[:within], 0 ].max...prompt_at] if above[:within]
+
+    at = prompt_at - above.fetch(:at)
+    at >= 0 ? [ screen[at] ] : []
+  end
+  private_class_method :lines_above
 
   def self.current_screen(text)
     Sessions::ScreenDigest.lines(text, last: TAIL_LINES)

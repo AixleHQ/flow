@@ -31,6 +31,23 @@ module Grok
       assert_requested request
     end
 
+    test "models reads the CLI proxy's list with the CLI auth header and the session token" do
+      request = stub_request(:get, Api::MODELS_URL)
+                .with(headers: { "Authorization" => "Bearer token", "X-XAI-Token-Auth" => Api::GROK_CLI_AUTH_HEADER,
+                                 "x-userid" => "u-1" })
+                .to_return(status: 200, body: { object: "list", data: [ { id: "grok-4.7" } ] }.to_json,
+                           headers: { "Content-Type" => "application/json" })
+
+      assert_equal [ { "id" => "grok-4.7" } ], Api.models(access_token: "token", user_id: "u-1")
+      assert_requested request
+    end
+
+    test "models raises UnauthorizedError on 401" do
+      stub_request(:get, Api::MODELS_URL).to_return(status: 401, body: "expired")
+
+      assert_raises(Api::UnauthorizedError) { Api.models(access_token: "token") }
+    end
+
     test "billing raises UnauthorizedError on 401" do
       stub_request(:get, billing_url).to_return(status: 401, body: "expired")
 
