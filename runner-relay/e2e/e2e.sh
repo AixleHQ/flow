@@ -11,6 +11,7 @@ set -u
 REPO=${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}
 E=$REPO/runner-relay/e2e
 D=/tmp/e2e; CTL=$D/ctl; LOG=$D/logs
+TICKET_KEY=$(openssl rand -hex 16)   # made up per run, never committed
 IMG=${IMG:-ghcr.io/aixlehq/flow-kiro-cli:latest}
 CHANNEL=aixle_e2e_runner_relay
 mkdir -p "$CTL" "$LOG" "$D/shots"; rm -f "$CTL"/* "$LOG"/*; rm -rf "$D"/rd*
@@ -41,7 +42,7 @@ start_relay() {
   RUNNER_RELAY_LISTEN=0.0.0.0:4004 RUNNER_RELAY_ADMIN_LISTEN=127.0.0.1:4005 \
   RUNNER_RELAY_REDIS_URL=redis://127.0.0.1:16379/1 RUNNER_RELAY_REDIS_CHANNEL_PREFIX=aixle_e2e_ \
   RUNNER_RELAY_RAILS_URL=http://127.0.0.1:4000 RUNNER_RELAY_INTERNAL_TOKEN=e2e-internal-token \
-  RUNNER_RELAY_TICKET_KEY=e2e-ticket-key-0123456789abcdef RUNNER_RELAY_CHECK_INTERVAL=5s \
+  RUNNER_RELAY_TICKET_KEY=$TICKET_KEY RUNNER_RELAY_CHECK_INTERVAL=5s \
   nohup $D/e2e-relay >> $LOG/relay.log 2>&1 &
   echo $! > $D/relay.pid
 }
@@ -56,7 +57,7 @@ step "start the runner side: a real container.start on the local daemon, and the
 docker run -d --name e2e-driver --network host -v /var/run/docker.sock:/var/run/docker.sock -v /tmp:/tmp \
   -v $REPO:/src -v $E/runner_driver.go.txt:/src/runner/internal/tunnel/e2e_driver_test.go -v gomod:/go/pkg/mod \
   -e TMPDIR=$D -e E2E_IMAGE=$IMG -e E2E_CTL=$CTL -e E2E_RELAY_WS=ws://127.0.0.1:4004/runner/v1/tunnel \
-  -e E2E_TICKET_KEY=e2e-ticket-key-0123456789abcdef -w /src/runner golang:1.27 \
+  -e E2E_TICKET_KEY=$TICKET_KEY -w /src/runner golang:1.27 \
   go test ./internal/tunnel -run E2EDriver -v -count=1 -timeout 60m >/dev/null
 for i in $(seq 1 180); do [ -f $CTL/ready ] && break; sleep 1; done
 [ -f $CTL/ready ] && ok "container.start answered with the five ports answering" || { bad "the driver never became ready"; docker logs e2e-driver 2>&1 | tail -20; exit 1; }
