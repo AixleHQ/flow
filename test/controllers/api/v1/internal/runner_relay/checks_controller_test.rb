@@ -35,12 +35,16 @@ module Api
             assert_equal [ false ], check_raw([ { "environment_id" => @machine.id, "session_id" => nil } ])
           end
 
-          test "a session_id that is a scalar but not an Integer, absent or null is refused" do
-            [ "#{@session.id}", @session.id.to_f, true ].each do |session_id|
+          test "a session_id that is not an Integer, absent or null is refused" do
+            [ "#{@session.id}", 1.5, true, [ @session.id ], { "id" => @session.id } ].each do |session_id|
               post_checks([ { "environment_id" => @machine.id, "session_id" => session_id } ])
 
               assert_response :unprocessable_entity, session_id.inspect
             end
+          end
+
+          test "a question with a null session_id is valid and answered false" do
+            assert_equal [ false ], check_raw([ { "environment_id" => @machine.id, "session_id" => nil } ])
           end
 
           test "a question with no session_id is valid and answered false" do
@@ -86,7 +90,7 @@ module Api
           end
 
           test "an environment_id that is not an Integer is refused" do
-            [ "#{@machine.id}", @machine.id.to_f, true, nil, [ @machine.id ], {} ].each do |environment_id|
+            [ "#{@machine.id}", 1.5, true, nil, [ @machine.id ], {} ].each do |environment_id|
               post_checks([ { "environment_id" => environment_id, "session_id" => @session.id } ])
 
               assert_response :unprocessable_entity, environment_id.inspect
@@ -95,7 +99,7 @@ module Api
 
           test "a body whose shape is not a list of machines is refused" do
             valid = { "environment_id" => @machine.id, "session_id" => @session.id }
-            [ nil, "x", { "0" => valid }, [ 1 ], [ valid, 1 ], [ {} ],
+            [ nil, "x", 7, { "0" => valid }, [ 1 ], [ valid, 1 ], [ "x" ], [ [ valid ] ], [ {} ],
               [ { "session_id" => 1 } ], [ { "environment_id" => "7" } ] ].each do |machines|
               post_checks(machines)
 
@@ -109,8 +113,16 @@ module Api
             assert_response :unprocessable_entity
           end
 
-          test "keys other than the two ids are ignored" do
+          test "keys other than the two ids are ignored, in a machine and in the body" do
             assert_equal [ true ], check_raw([ { "environment_id" => @machine.id, "session_id" => @session.id, "extra" => "x" } ])
+
+            with_feature(:external_runners, true, company: @company) do
+              post "/api/v1/internal/runner_relay/checks", as: :json, headers: { "Authorization" => "Bearer #{TOKEN}" },
+                   params: { machines: [ { environment_id: @machine.id, session_id: @session.id } ], later: [ 1 ] }
+            end
+
+            assert_response :success
+            assert_equal [ true ], response.parsed_body["machines"]
           end
 
           test "a missing or wrong token is refused, and nothing is checked" do
