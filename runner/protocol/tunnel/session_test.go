@@ -640,6 +640,27 @@ func TestRunnerRefusesOpenAfterGoAway(t *testing.T) {
 	}
 }
 
+// The relay's GOAWAY and its close can both be read before the runner calls Accept:
+// the drain must still reach it as ErrGoAway (the flake of #278).
+func TestRunnerAcceptReportsGoAwayWhenTheCloseFollowsIt(t *testing.T) {
+	s, r, _ := runnerVsRaw(t, Config{}, stdHello, 8)
+	r.send(Frame{Type: TypeGoAway})
+	r.c.Close(CloseNormal, "drained")
+	<-s.Done()
+	if _, err := s.Accept(context.Background()); !errors.Is(err, ErrGoAway) {
+		t.Fatalf("Accept = %v, want ErrGoAway", err)
+	}
+}
+
+func TestRunnerAcceptReportsAClosedSessionWhenTheCloseHasNoGoAway(t *testing.T) {
+	s, r, _ := runnerVsRaw(t, Config{}, stdHello, 8)
+	r.c.Close(CloseNormal, "gone")
+	<-s.Done()
+	if _, err := s.Accept(context.Background()); !errors.Is(err, ErrSessionClosed) {
+		t.Fatalf("Accept = %v, want ErrSessionClosed", err)
+	}
+}
+
 func TestClosedConnectionResetsEveryStreamOnBothSides(t *testing.T) {
 	a := newMemPairSessions(t)
 	rs1, ns1 := a.open(1, 1)
