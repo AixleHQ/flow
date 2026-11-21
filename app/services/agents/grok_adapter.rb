@@ -130,16 +130,16 @@ module Agents
     def conversation_id_command = "ls -td .grok/sessions/%2Fworkspace/*/ 2>/dev/null | head -1 | xargs -r basename"
     def resume_arguments(id) = "--resume #{id}"
 
-    # A model the account does not offer only gets "Couldn't switch model: unknown model
-    # id" on screen, and the session runs the default model (1.0.89), so a chosen model is
-    # looked up in `grok models` first (`  * grok-4.7 (default)` per model).
     def session_command(mode:, model: nil, effort: nil)
       parts = [ "grok", "--yolo", "--minimal" ]
       parts += [ "--model", Shellwords.shellescape(model) ] if model
       parts += [ "--reasoning-effort", Shellwords.shellescape(effort) ] if effort.present?
-      command = parts.join(" ")
-      model ? "#{listed_model_check("grok models | tr -d '*' | awk '{print $1}'", model, cli: 'Grok')} && #{command}" : command
+      parts.join(" ")
     end
+
+    # An unknown model id gets "Couldn't switch model: unknown model id" on screen, and the
+    # session runs the default model (1.0.89).
+    def runs_default_model_for_unknown? = true
 
     # Context file: a home-level rule file. `$GROK_HOME/rules/*.md` is the root the CLI
     # documents as "always scanned; applies to all projects" — every session, every
@@ -355,7 +355,8 @@ module Agents
         {
           model_id: model_id,
           display_name: model_id,
-          description: (model["description"].presence || model_description(model)).to_s.truncate(MODEL_DESCRIPTION_LIMIT)
+          description: (model["description"].presence || model_description(model)).to_s.truncate(MODEL_DESCRIPTION_LIMIT),
+          reasoning_effort_levels: catalogue_effort_levels(model)
         }
       end
 
@@ -553,6 +554,15 @@ module Agents
       parts << "input: #{modalities.join(', ')}" if modalities.present?
       parts << "context: #{context} tokens" if context.present?
       parts.join(" · ")
+    end
+
+    # The CLI proxy's list says per model whether it takes an effort and which
+    # (`reasoning_efforts`); the public catalogue says neither, so nil.
+    def catalogue_effort_levels(model)
+      return nil unless model.key?("supports_reasoning_effort")
+      return [] unless model["supports_reasoning_effort"]
+
+      Array(model["reasoning_efforts"]).filter_map { |level| level.is_a?(Hash) ? (level["value"] || level["id"]) : level }
     end
 
     # A signed-in account reads the CLI's own list; an API key, the public catalogue.

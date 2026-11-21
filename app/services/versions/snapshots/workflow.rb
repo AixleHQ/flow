@@ -66,7 +66,18 @@ module Versions
         def restorable_step(step)
           sub_steps = Array(step["sub_steps"]).map { |sub| with_column_defaults(::SubStep, SUB_STEP_FIELDS, sub) }
           lists = STEP_REFERENCES.keys.index_with { [] }
-          with_column_defaults(::Step, STEP_FIELDS, lists.merge(step)).merge("sub_steps" => sub_steps)
+          attrs = with_column_defaults(::Step, STEP_FIELDS, lists.merge(step)).merge("sub_steps" => sub_steps)
+          attrs.merge("reasoning_effort" => restorable_effort(attrs))
+        end
+
+        # A level the step's runtime no longer takes (task #324: Cursor CLI and Antigravity
+        # CLI stopped taking any) restores as none, as the migration that dropped it from
+        # the step itself did; otherwise the step, and the whole revert with it, would fail
+        # validation.
+        def restorable_effort(attrs)
+          level = attrs["reasoning_effort"]
+          runtime = AgentRuntime.all.find { |candidate| candidate.id == attrs["required_agent_runtime"].to_s }
+          level if level.blank? || runtime.nil? || runtime.reasoning_effort?(level)
         end
 
         # A snapshot holds the columns its version had. A column added since then

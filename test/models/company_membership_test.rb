@@ -215,6 +215,25 @@ class CompanyMembershipTest < ActiveSupport::TestCase
                  models.to_h { |m| [ m[:model_id], m[:reasoning_effort_levels] ] })
   end
 
+  # Task #324: a level the vendor's catalogue says the model lacks is not offered, whatever
+  # the registry's fallback rule would.
+  test "agent_models_for_props offers the levels the catalogue lists for each model, within what the CLI takes" do
+    Rails.stubs(:cache).returns(ActiveSupport::Cache::MemoryStore.new)
+    membership = create(:company_membership, user: @user, company: @company)
+    cred = create(:agent_credential, :claude_code, user: @user, company: @company)
+    Rails.cache.write(cred.models_cache_key, [
+      { model_id: "claude-sonnet-4-6", reasoning_effort_levels: %w[low medium high max] },
+      { model_id: "claude-haiku-4-5", reasoning_effort_levels: [] },
+      { model_id: "claude-opus-5-5", reasoning_effort_levels: nil }
+    ])
+
+    models = membership.agent_models_for_props.first[:models]
+
+    assert_equal({ "claude-sonnet-4-6" => %w[low medium high max], "claude-haiku-4-5" => [],
+                   "claude-opus-5-5" => %w[low medium high xhigh max] },
+                 models.to_h { |m| [ m[:model_id], m[:reasoning_effort_levels] ] })
+  end
+
   # Every model picker is a Mantine Select, which throws on a repeated value and takes the
   # page down with it. Copilot CLI's catalogue listed `auto` twice on a staging account.
   test "agent_models_for_props offers each model once" do

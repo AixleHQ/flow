@@ -133,12 +133,13 @@ module Agents
       refute_includes command, "-i"
     end
 
-    test "an automatic session ends on -i so the appended prompt becomes its value" do
+    test "an automatic session takes its prompt as the value of -i" do
       command = @adapter.session_command(mode: "non_interactive", model: "gpt-5.3-codex", effort: "high")
 
       assert_includes command, "--model gpt-5.3-codex"
       assert_includes command, "--reasoning-effort high"
-      assert command.end_with?("--no-ask-user -i")
+      assert command.end_with?("--no-ask-user")
+      assert_equal '-i "$(cat /tmp/.aixle-prompt)"', @adapter.prompt_argument('"$(cat /tmp/.aixle-prompt)"')
     end
 
     test "the session env routes telemetry to this session and pins the token's host" do
@@ -213,6 +214,18 @@ module Agents
       assert_equal :api, result[:source]
       assert_equal %w[auto claude-sonnet-5.5 gpt-5.3-codex], result[:models].pluck(:model_id)
       assert_equal "Claude Sonnet 5.5", result[:models].second[:display_name]
+    end
+
+    test "each model carries the efforts the CLI listed for it" do
+      credential = create(:agent_credential, :copilot_cli, user: @user, company: @company, metadata: {
+        CopilotCliAdapter::MODELS_METADATA_KEY => [ { "id" => "gpt-6-sol", "reasoning_efforts" => %w[none low high] },
+                                                    { "id" => "auto", "reasoning_efforts" => [] }, { "id" => "older" } ]
+      })
+
+      models = @adapter.fetch_available_models_with_source(credential.config_data, credential: credential)[:models]
+
+      assert_equal({ "gpt-6-sol" => %w[none low high], "auto" => [], "older" => nil },
+                   models.to_h { |m| [ m[:model_id], m[:reasoning_effort_levels] ] })
     end
 
     # Read off a staging account (1.0.108): the ACP model option lists Auto twice.

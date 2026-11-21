@@ -34,26 +34,28 @@ class AgentRuntimeTest < ActiveSupport::TestCase
     AgentRuntime.all.each do |runtime|
       assert_equal [], runtime.reasoning_effort_levels(nil), runtime.id
       assert_equal [], runtime.reasoning_effort_levels(""), runtime.id
-      assert_not runtime.reasoning_effort?("low", nil), runtime.id
     end
   end
 
-  # Measured with bin/agent-effort-probe on staging, 2026-11-21 (task #324): Claude Code 2.1.329
-  # lowers xhigh and max to high on these models and ignores any level on the 4.5 Haiku and
-  # Sonnet; Kiro CLI 3.5.0 does the same on its own list.
-  test "Claude Code and Kiro offer only the levels each model takes" do
+  # Task #324: the vendor's catalogue says which levels each model takes (Anthropic's
+  # `capabilities.effort`, Codex's `supported_reasoning_levels`, …); the registry's rule only
+  # stands in when it does not say.
+  test "a level the catalogue lists for the model wins over the registry, within what the CLI takes" do
     claude = AgentRuntime.fetch(:claude_code)
-    kiro = AgentRuntime.fetch(:kiro_cli)
 
-    assert_equal [], claude.reasoning_effort_levels("claude-haiku-4-5-20251001")
-    assert_equal [], claude.reasoning_effort_levels("claude-sonnet-4-5-20250929")
-    assert_equal %w[low medium high], claude.reasoning_effort_levels("claude-opus-4-5-20251101")
-    assert_equal %w[low medium high max], claude.reasoning_effort_levels("claude-sonnet-4-6")
-    assert_equal %w[low medium high xhigh max], claude.reasoning_effort_levels("claude-opus-5-5")
-    assert_equal [], kiro.reasoning_effort_levels("glm-5")
-    assert_equal [], kiro.reasoning_effort_levels("claude-opus-4.5")
-    assert_equal %w[low medium high max], kiro.reasoning_effort_levels("claude-opus-4.6")
-    assert_equal %w[low medium high xhigh], kiro.reasoning_effort_levels("grok-4.7")
+    assert_equal %w[low medium high max], claude.reasoning_effort_levels("claude-sonnet-4-6", offered: %w[low medium high max])
+    assert_equal [], claude.reasoning_effort_levels("claude-haiku-4-5-20251001", offered: [])
+    assert_equal %w[low high], AgentRuntime.fetch(:copilot_cli).reasoning_effort_levels("gpt-6-sol", offered: %w[none low high])
+    assert_equal %w[low medium high xhigh max], claude.reasoning_effort_levels("claude-sonnet-4-6", offered: nil)
+  end
+
+  test "a runtime's grammar is every level its CLI takes for some model" do
+    assert_equal %w[low medium high xhigh max ultra], AgentRuntime.fetch(:codex).reasoning_effort_grammar
+    assert_equal %w[low high], AgentRuntime.fetch(:gemini_cli).reasoning_effort_grammar
+    assert_equal [], AgentRuntime.fetch(:cursor_cli).reasoning_effort_grammar
+    assert AgentRuntime.fetch(:kiro_cli).reasoning_effort?("xhigh")
+    assert_not AgentRuntime.fetch(:gemini_cli).reasoning_effort?("medium")
+    assert_not AgentRuntime.fetch(:antigravity_cli).reasoning_effort?("low")
   end
 
   # Task #324: the effort is part of a Cursor model id, and a level on top of it makes the
