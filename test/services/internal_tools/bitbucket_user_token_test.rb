@@ -153,6 +153,7 @@ class InternalTools::BitbucketUserTokenTest < ActiveSupport::TestCase
 
   test "refuses with a could-not-check error, not a cannot-push one, when nothing could be checked" do
     consent!(in_own_tasks: true)
+    @fake.permissions = {}
     @fake.unchecked_permissions = [ "acme/api" ]
 
     result = run_tool
