@@ -3,7 +3,7 @@
 **Status:** design, with the first four layers implemented (branch
 `artempartos/harness-cred-refresh-strategy`). Each section below marks what has landed and
 what has not.
-**Date:** 2026-09-17
+**Date:** 2026-09-17 (§7 added 2026-11-21, task #219)
 **Scope:** the seven agent runtimes in `CompanyMembership::AVAILABLE_AGENTS`, their stored
 credentials, and everything that reads, refreshes, injects or recaptures them.
 
@@ -35,7 +35,7 @@ Four mechanisms, each independently correct, none aware of the others:
 | M1 | Launch top-up | `AgentCredential#refresh_if_expiring!` (`app/models/agent_credential.rb:219`) | session launch, `SESSION_REFRESH_THRESHOLD = 60.minutes` |
 | M2 | Proactive sweep | `Activities::AgentCredentials::RefreshExpiringTokensActivity` (`:21`), `*/5` Temporal | `refreshable.refresh_due(15.minutes).without_live_session` |
 | M3 | Cleanup merge-back | `AgentSessionStrategy#persist_refreshed_credentials` (`app/services/container_strategies/agent_session_strategy.rb:425`) | inside `before_cleanup` only |
-| M4 | Launch gate | `SessionService#preflight_agent_credential!` | session launch, refuses a `status: error` row |
+| M4 | Launch gate | `SessionService#preflight_agent_credential!` | session launch, refuses a `status: error` row, and (until task #219, §7) an expired login a live session holds |
 
 ### Per-runtime coverage
 
@@ -528,3 +528,234 @@ deleted container took the work with it.
 - **P2** — replay the 2026-09-05 incident shape against the event log and confirm it
   distinguishes rotation from ageing.
 - **P4** — rebuild all images, diff recorded CLI versions, run the login pass per runtime.
+
+---
+
+## 7. A launch while a holder carries the live token (task #219, 2026-11-21)
+
+### 7.1 What happened
+
+A step launch is refused with "Your Kiro Cli login has expired. Go to profile settings and
+sign in again" while a running session already holds a working token, and nobody has to sign in
+for the next launch to succeed. Seen twice: 2026-11-10 12:53:18 UTC (task #217, run 55269)
+and 2026-11-21 14:09 UTC (task #271, run 80446). Production runs one to three Kiro sessions on one
+credential almost all the time, so the window comes round about hourly.
+
+The chain, from production Loki (task #219 description has the lines):
+
+1. Kiro's token lives about an hour. Every launch finds a live holder, so
+   `AgentCredential#refresh_if_expiring!` returns `:held` and logs "starting on N minutes of token life"
+   (40, 28, 20, 11, 8 and 1 minutes in the 2026-11-10 window).
+2. The sweep stands down each time: `a holder is mid-turn`
+   (`RefreshExpiringTokensActivity#refresh_held`, rotating credentials only).
+3. The stored copy expires. The next launch reaches `SessionService#preflight_agent_credential!`,
+   and `AgentCredential#unrecoverably_expired?` (`base_login_expired?` + `rotating_refresh?` +
+   `held_by_live_session?`) says "dead, and unrepairable because held", and refuses.
+4. Seconds later a holder finishes and its cleanup (`persist_refreshed_credentials`) writes the
+   token the CLI refreshed in the container. The stored copy is healthy again.
+
+The refusal is wrong in its premise. The check assumes a held credential cannot be renewed,
+while the holder's own copy is usually *the* live token and the stored copy is only stale
+because nothing carried the holder's refresh back. Two defects stack: the live write-back
+does not deliver (7.3), and the gate treats the stored copy as the only candidate (7.2).
+
+### 7.2 The gate must look at the holders, not refuse
+
+`unrecoverably_expired?` has three callers and one wrong rule:
+
+| Caller | Context | Effect today |
+|---|---|---|
+| `SessionService.create_for_workflow_step` (`preflight_agent_credential!`, no session yet) | worker activity `LaunchStepSessionActivity` | the incident: the step fails in under a second |
+| `SessionService.create_and_start` and `revalidate_admission!` | web request, and the admission phase | refuses an interactive launch; a queued session is cancelled |
+| `AgentSessionStrategy#refresh_expiring_credential!` (`:held` + `base_login_expired?`) | container launch | second refusal site with the same premise |
+| `ProjectTeams::Picker` | team member choice | treats the credential as unusable and skips the member |
+
+**Decision: recover, then decide.** A new service `Agents::HolderRecovery`
+(`app/services/agents/holder_recovery.rb`, next to `CredentialDelivery`) runs when a launch finds
+the base login expired and live holders. It returns `:renewed`, or raises
+`AgentCredential::PreflightError` with the right reason. In order:
+
+1. **Pull.** For each holder with a container, `adapter.read_live_credential(runtime, container_id)`
+   (new hook, 7.3) returns the credential as that container holds it, or `nil`. The result goes
+   through the existing write-back rules under the row lock, exactly like the controller and the
+   cleanup: `without_retired_grants`, then `merge_container_credentials` (same account, strictly later
+   expiry, plausible expiry), then `AgentCredential.from_artifacts` inside
+   `AgentCredential.rotating_for_session(holder.id)`. The freshest holder wins by the same
+   comparison. If the base login is no longer expired, done.
+2. **Idle holders: refresh and deliver.** If every holder is parked (the sweep's `parked?` test), the
+   sweep would have refreshed on its next tick, so do it now: `renew!(source: :launch)`, then
+   `Agents::CredentialDelivery`. This is the sweep's held path, extracted
+   (`RefreshExpiringTokensActivity#refresh_held`, `#parked?`, `#deliver_to` move into the service and
+   the activity calls it, so the two cannot drift).
+3. **Busy holders: wait.** A holder mid-turn refreshes on its next request, because its token has
+   expired. Poll step 1 every `POLL = 5.seconds` for at most `WAIT = 60.seconds`
+   (a constant on the service, from the 3 s debounce + 15 s floor of the watcher plus margin).
+4. **Last resort.** Still expired, so no holder has a live token. A holder stuck on the login banner
+   is the usual case (`Sessions::AuthPause`). Now a server refresh is safe, since nothing live is
+   running on a better grant: `renew!(source: :launch)`. Success starts the launch. A permanent failure
+   condemns the credential through `record_refresh_outcome` as it does today and raises the existing
+   sign-in message. A transient failure raises the new reason below.
+
+Waiting needs the container runtime, which only the worker has, and a web request must not block for a
+minute. So:
+
+- `create_and_start` (web) keeps a cheap check only. It no longer refuses an expired login that
+  holders carry: it refuses a login that is dead *now* (not refreshable, or condemned, as today) and lets
+  a held one through. The session is created `queued`.
+- `revalidate_admission!` and `create_for_workflow_step` run in activities and call the recovery.
+  Implementation must confirm that the activities' start-to-close timeouts exceed the 60 s wait plus the
+  launch work; if not, raise the timeout on those two activities, not the wait.
+- `AgentSessionStrategy#refresh_expiring_credential!` keeps its `:held` branch as a backstop, but the
+  message follows the same reason split. After recovery it should not be reachable with an expired base.
+
+**`AgentCredential#unrecoverably_expired?` is renamed `login_dead?`** and loses the holders clause:
+base login expired and the runtime has no server-side refresh (the case that really cannot be
+repaired). `Picker` uses it, so a held, expired, refreshable credential no longer hides a team member.
+
+**The message names the remedy.** `AgentCredential::PreflightError` gains `reason: :renewing`:
+
+> Your Kiro Cli login is being renewed by a running session and could not be confirmed in time. Try again in a minute.
+
+with no "profile settings" call to action. `:expired` ("sign in again") is raised only after a permanent
+refusal by the vendor or for a login with no refresh path; `:unreadable` is unchanged. The controller and
+the activity pass `e.message` through, so no UI change is needed. The reason is exposed as `e.reason` for the tests.
+
+### 7.3 The live write-back must carry the CLI's refresh
+
+Nothing in the logs shows Kiro's write-back ever changing the row: no
+`took a kiro_cli token rotated in the container` line from 11:40 to 13:30, while holders refreshed. The
+`POST /agents/credentials` 204s listed in the task are **not** evidence the Kiro watcher posted: the
+endpoint answers every runtime, and a 204 is also the answer to an unchanged or rejected post.
+Reading the code, four causes fit, and the design closes all of them because the logs cannot tell them apart:
+
+| # | Cause | Where | Closed by |
+|---|---|---|---|
+| H1 | The state database is in WAL mode: a refresh lands in `data.sqlite3-wal`, the main file's bytes do not change, and the watcher reads only the main file | `docker/base/watcher/index.js` (`collect`, polling chokidar on one path) | reader below: a SQLite snapshot, which includes the WAL |
+| H2 | The CLI writes the refreshed token only when it exits | the CLI | pull (7.2) reads the live token on demand |
+| H3 | The post is accepted but the merge rejects it: `merge_container_credentials` demands the same `profile_arn` (`credential_identity`) and a strictly later expiry, and a container database with no profile row fails the identity test | `BaseAdapter#merge_container_credentials` | Kiro-specific merge below, and a logged reason on every rejection |
+| H4 | The state database also holds the chat history, grows past 256 KB, and both the watcher (`CREDENTIAL_SYNC_MAX_BYTES`, silent `continue`) and the controller (`MAX_BODY_BYTES`, 413) drop it. Base64 adds a third on top | watcher, controller | the reader sends only the login rows |
+
+`without_retired_grants` is not a cause for Kiro: `KiroCliAdapter` does not override `refresh_tokens`, so
+it returns `{}` and drops nothing.
+
+**Decision: report the login, not the database.**
+
+- `BaseAdapter#read_live_credential(runtime, container_id)` (default: reads `auth_file_paths` through the
+  existing container read and `extract_credentials`; returns `nil` on any failure). The Kiro override runs
+  a python3 script like `TOKEN_SWAP_SCRIPT`: SQLite `backup()` of the state database into a temporary file
+  (this reads the WAL and takes no lock the CLI waits on), then prints the `auth_kv` login rows and the
+  `api.codewhisperer.profile` state row as a small SQLite file or JSON, base64. Nothing else leaves the container.
+- The watcher gets the same read as an option. The adapter publishes the command in an env var
+  (`CREDENTIAL_SYNC_READER`, next to `CREDENTIAL_SYNC_PATHS`, set where those are set in
+  `agent_session_strategy`); when present, `collect()` runs it instead of reading the file, and it also
+  watches the `-wal` file's mtime so a WAL-only change schedules a post. Other runtimes keep today's behaviour.
+- `KiroCliAdapter#merge_container_credentials` is overridden: it takes the token row (and registration row)
+  from the incoming login, applies the existing rules (same `profile_arn` when both have one, strictly later
+  `expires_at`, `plausible_expiry?`), and splices it into the *stored* database with `blob_with_token`, the
+  routine the server-side refresh already uses. The stored database is never replaced by a container's, so
+  one session's chat history stops being written into the credential. A login with no profile row is
+  accepted when the stored one has a profile (the stored profile stays).
+- `BaseAdapter#merge_container_credentials` logs a reason when it returns `current` (`no_rotatable_keys`,
+  `not_fresher`, `identity_changed`, `implausible_expiry`) at info, with the credential id. That is the
+  answer to "why didn't it take", for every runtime, the next time.
+
+The agent images carry the watcher, so the reader is live only after they are rebuilt (as in 2d). Until then
+the pull in 7.2 is what keeps the launch working, and it needs no image change: the gate fix does not wait
+for the rebuild.
+
+### 7.4 The three questions
+
+1. **Why the write-back did not carry the refresh.** Not established from logs. H1 and H4 are the
+   likeliest (the Kiro CLI keeps one SQLite file the watcher reads whole, and a refresh happens inside a
+   long-lived process); H2 and H3 cannot be excluded. The design does not depend on the answer: the pull
+   covers all four, and the reader covers H1 and H4. **Implementation step 1 is the reproduction**
+   (below), whose output goes into this section, so that the document says which one it was.
+2. **When the CLI refreshes.** Not established. The one datapoint is session 58993: launched with 8 minutes
+   of life (expiry about 12:52:46), its cleanup persisted a new token at 12:53:23, 37 s after that expiry.
+   That fits refresh-on-expiry, not far ahead of it. The wait in 7.2 is sized for refresh-on-expiry: a
+   busy holder refreshes within one request of the expiry, then the write-back adds 3 to 20 s.
+3. **Parallel in-container refreshes of one grant.** Not established. Sessions 58993 and 59009 both started
+   on the stored copy and both persisted a refreshed token with a later expiry (12:53:23 and about 13:06:28),
+   so replaying the grant worked at least once. One datapoint does not show that Kiro's refresh token is not
+   rotating (`credential_lifecycle` still declares `:rotating`). The design stays on the safe side: the pull
+   comes before any server refresh, a server refresh with live holders happens only when all are parked
+   (their copy is delivered right after) or when no holder has a live token, and the launch never refreshes
+   under a busy holder.
+
+### 7.5 Implementation steps
+
+1. **Reproduce on Coder** (`coder_*`, a Kiro credential for a test user). Start a Kiro session on a login
+   with under 2 minutes left and let it pass the expiry. Record: (a) `PRAGMA journal_mode` and the sizes of
+   `data.sqlite3` and `-wal` over time; (b) when `auth_kv` changes relative to the expiry (answers 2);
+   (c) whether the watcher posts (`Credential sync: reported`), and the controller's merge outcome with the
+   new rejection log (answers 1); (d) start a second session on the same stored copy and see whether both
+   refresh (answers 3). Paste results into 7.4. This is not a blocker for the other steps.
+2. `BaseAdapter#read_live_credential` (default) and `KiroCliAdapter` override with its script; the
+   `merge_container_credentials` reason log; the Kiro merge override.
+3. `Agents::HolderRecovery`; move the held path out of `RefreshExpiringTokensActivity` into it.
+4. `AgentCredential#login_dead?` (rename of `unrecoverably_expired?`, holders clause removed);
+   `PreflightError reason: :renewing`; callers: `SessionService` (three sites), `Picker`,
+   `AgentSessionStrategy#refresh_expiring_credential!`.
+5. Watcher reader option and `-wal` watch; env var from the strategy. Image rebuild is a deployment step,
+   not code.
+6. Update this document's M4 row, 2b/2c text and Layer 4's sweep counters (add `recovered_at_launch`).
+
+### 7.6 Testing
+
+Minitest, factories, no `any_instance` or vendor stubbing (`.rubocop/cops/testing`). Container reads use
+the existing fake runtime of `Agents::CredentialDelivery` tests.
+
+- `test/services/agents/holder_recovery_test.rb`: **evidence 3** (stored Kiro token expired, one live
+  holder whose container holds a later token): the launch is not refused and the stored row moves
+  forward; a busy holder that has not refreshed yet, then does on the second poll (the wait; inject the
+  clock and the poll interval, as the sweep tests do); all holders parked: refresh and delivery;
+  no holder with a live token and a permanent refusal: `PreflightError` with `:expired`; the same with a
+  transient failure: `:renewing`; an unreadable container counts as "no token", never as idle.
+- `test/models/agent_credential_test.rb`: replace the three `unrecoverably_expired?` tests with `login_dead?`:
+  expired and not refreshable is dead; expired and held is not.
+- `test/integration/agent_credential_sync_test.rb`: **the live write-back stores a Kiro token the CLI
+  refreshed**, using the existing `kiro_state` helper, with a post whose database holds only login rows and
+  a later `expires_at`; and a post carrying a database with no profile row.
+- `test/services/agents/kiro_cli_adapter_test.rb`: the merge splices into the stored database and leaves its
+  other tables; refuses another account, an older token, an implausible expiry; logs the reason.
+- `test/models/agent_credential_preflight_error_test.rb` (or the model test): the `:renewing` message has no
+  "sign in".
+- `test/temporal/activities/agent_credentials/refresh_expiring_tokens_activity_test.rb`: unchanged
+  behaviour after the extraction.
+- Watcher: its existing JS test, a case for the reader command and the WAL mtime.
+
+### 7.7 Edge cases and risks
+
+- **Two launches at once** both recover. The pull is idempotent (the second finds nothing later) and a server
+  refresh goes through `with_refresh_lease`, which makes the later one wait for the first, as at launch today.
+- **A holder in `finishing`**: `TerminalSession.active` includes it. Its container may vanish mid-pull; the
+  read returns `nil`, and cleanup's own merge may arrive at the same time. Both go through `with_lock`.
+- **A pulled token is older than the stored one** (the stored copy was refreshed by the sweep meanwhile): the
+  merge keeps the stored one; no regression.
+- **A compromised container** can post any login rows. The merge rules of `BaseAdapter` still hold, and the
+  Kiro merge takes only the token and registration rows, never settings, tables or triggers
+  (`blob_with_token` already refuses a database with `auth_kv` triggers).
+- **The wait runs in an activity** holding a worker slot for up to 60 s per refused-to-be launch; bounded and
+  rare (about hourly per credential).
+- **Overlap with #273** (session lifecycle refactoring): this change stays in the credential preflight and the
+  write-back and does not move session state. The three `SessionService` call sites change by one argument.
+- **IdC logins** still die at the directory's session cap (§3.2); recovery ends in step 4 with a permanent
+  refusal and the sign-in message, which is then correct.
+
+### 7.8 Decisions and assumptions
+
+| Decision | Source |
+|---|---|
+| Recover from holders and refuse only a really dead login | task #219 "What the fix must do" |
+| Pull before refresh, never refresh under a busy holder | §3.1 and the 2026-09-05 incident (this document); question 3 is unanswered |
+| Wait in the worker, not in the web request | `SessionService` call sites; the container runtime is worker-only (2d) |
+| Kiro write-back carries the login rows, and the merge splices them into the stored database | H4 and the 256 KB caps in `docker/base/watcher/index.js` and `AgentCredentialSyncController` |
+| Keep Claude, Codex and the others on the file write-back | not part of the incident; the default `read_live_credential` and `merge_container_credentials` stay |
+| Step 1 reproduction cannot be done in this design session (no Kiro login on hand); it is the first implementation step | assumption |
+
+### 7.9 Deferred
+
+- The 2c lease (`held_until`), still open above. This design needs no hold marker.
+- The refresh broker for Kiro (2d): needs question 3 answered first.
+- Moving state out of `SessionService` (#273).
+- Sweep counters and the event log (Layer 4) beyond the one counter added in step 6.
