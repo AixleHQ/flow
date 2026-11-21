@@ -16,6 +16,15 @@ class Runners::ProtocolSchemaTest < ActiveSupport::TestCase
     end
   end
 
+  test "the relay's schema files are named, and valid JSON Schemas" do
+    files = Runners::ProtocolSchema::RELAY_DIRECTORY.glob("*.json").map { |path| path.basename(".json").to_s }
+
+    assert_equal Runners::ProtocolSchema::RELAY_SCHEMAS.sort, files.sort
+    Runners::ProtocolSchema::RELAY_SCHEMAS.each do |name|
+      assert JSONSchemer.valid_schema?(JSON.parse(Runners::ProtocolSchema.path(name).read)), "#{name} is not a valid schema"
+    end
+  end
+
   test "an unknown schema is an error, not a pass" do
     assert_raises(ArgumentError) { Runners::ProtocolSchema.valid?("nope", {}) }
   end
