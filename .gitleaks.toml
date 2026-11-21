@@ -68,3 +68,10 @@ condition = "AND"
 paths = ['''^runner/internal/.+_test\.go$''']
 regexTarget = "line"
 regexes = ['''const (?:envKey|otherKey) += "aixle-r\d+-[0-9a-f]+"''']
+
+[[allowlists]]
+description = "runner-relay's end-to-end script, first committed with a made-up ticket key (653a0c90); the key is now generated per run. A test value, not a credential, and the scan reads every commit of a pull request"
+condition = "AND"
+paths = ['''^runner-relay/e2e/e2e\.sh$''']
+regexTarget = "line"
+regexes = ['''e2e-ticket-key-0123456789abcdef''']

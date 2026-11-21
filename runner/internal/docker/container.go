@@ -31,6 +31,9 @@ const (
 	// ClassContainerNotOwned: a container has the session's name but not the
 	// environment's and the session's labels.
 	ClassContainerNotOwned = "container_not_owned"
+	// ClassPortsInUse: with `network: host`, one of the session's five tunnel ports is
+	// in use on the machine. Nothing is created (PROTOCOL.md §6.2).
+	ClassPortsInUse = "ports_in_use"
 )
 
 // volumeName is what a cache mount's `name` may be: what Docker accepts in a
@@ -65,6 +68,44 @@ type ContainerStartPayload struct {
 	// Required whenever the environment runs the proxy, and with `network:
 	// host`.
 	ProxyPort int `json:"proxy_port"`
+	// Tunnel is the five ports of the session's interactive surfaces, which the tunnel
+	// reaches and serves for this session alone (PROTOCOL.md §6.2, §8.12). Absent from
+	// a platform that has no tunnel.
+	Tunnel *TunnelPayload `json:"tunnel"`
+}
+
+// TunnelPayload is `container.start`'s `tunnel`.
+type TunnelPayload struct {
+	Ports map[string]int `json:"ports"`
+}
+
+// TunnelSurfaces are the five surfaces of `tunnel.ports`, in the order of the
+// session's consecutive ports.
+var TunnelSurfaces = []string{"tty", "view", "fs", "upload", "ide"}
+
+// list is the ports in the order of TunnelSurfaces, or the refusal of a payload that is
+// not the five distinct ports of 1024 to 65535.
+func (t *TunnelPayload) list() ([]int, *protocol.Result) {
+	if len(t.Ports) != len(TunnelSurfaces) {
+		return nil, invalid("`tunnel.ports` must have exactly the keys %s", strings.Join(TunnelSurfaces, ", "))
+	}
+	seen := map[int]bool{}
+	ports := make([]int, 0, len(TunnelSurfaces))
+	for _, surface := range TunnelSurfaces {
+		port, ok := t.Ports[surface]
+		if !ok {
+			return nil, invalid("`tunnel.ports` must have exactly the keys %s", strings.Join(TunnelSurfaces, ", "))
+		}
+		if port < MinProxyPort || port > MaxProxyPort {
+			return nil, invalid("`tunnel.ports.%s` must be an integer from %d to %d, got %d", surface, MinProxyPort, MaxProxyPort, port)
+		}
+		if seen[port] {
+			return nil, invalid("`tunnel.ports` must name five different ports, %d is named twice", port)
+		}
+		seen[port] = true
+		ports = append(ports, port)
+	}
+	return ports, nil
 }
 
 // Mount is one entry of `container.start`'s `mounts`: a cache volume of the
@@ -298,6 +339,21 @@ func (e *Environment) ContainerStart(ctx context.Context, sessionID int64, raw j
 	if r != nil {
 		return *r
 	}
+	// The tunnel's five ports, when the platform sent them and turned the tunnel on for
+	// this machine (the runner's Serving exists only then).
+	var tunnelPorts []int
+	if p.Tunnel != nil {
+		var r *protocol.Result
+		if tunnelPorts, r = p.Tunnel.list(); r != nil {
+			return *r
+		}
+		if e.Tunnel == nil {
+			tunnelPorts = nil
+		}
+	}
+	if len(tunnelPorts) > 0 {
+		config.Labels[LabelTunnelPorts] = joinPorts(tunnelPorts)
+	}
 	name := e.ContainerName(sessionID)
 
 	existing, err := e.containers(ctx)
@@ -317,6 +373,16 @@ func (e *Environment) ContainerStart(ctx context.Context, sessionID int64, raw j
 		}
 		return protocol.ErrorResult(ClassContainerExists, fmt.Sprintf(
 			"environment %s already has a container (%s): run container.stop or env.scrub first", e.Key, strings.Join(names, ", ")))
+	}
+
+	// With `network: host` the session's ports are the machine's own: they must be free
+	// before anything is created (the platform chose them; this side verifies, §3.3).
+	if len(tunnelPorts) > 0 && host.NetworkMode == "host" {
+		if busy := portsInUse(tunnelPorts); len(busy) > 0 {
+			return protocol.ErrorResult(ClassPortsInUse, fmt.Sprintf(
+				"with network: host the session's tunnel ports %s are needed on this machine, and %s in use (%s), so the session cannot start here. Nothing was created",
+				joinPorts(tunnelPorts), plural(len(busy), "port is", "ports are"), joinPorts(busy)))
+		}
 	}
 
 	// Pulled once the cheap refusals above are out of the way, so a session
@@ -351,14 +417,15 @@ func (e *Environment) ContainerStart(ctx context.Context, sessionID int64, raw j
 	// owns the network namespace the agent joins, so that it outlives the
 	// agent's last call; with `network: host` the host runner listens itself.
 	sidecar := ""
+	hostNetwork := host.NetworkMode == "host"
 	if e.Proxy != nil {
-		if host.NetworkMode == "host" {
+		if hostNetwork {
 			if r := e.openListener(sessionID, p.ProxyPort); r != nil {
 				return *r
 			}
 			config.Labels[LabelProxyPort] = strconv.Itoa(p.ProxyPort)
 		} else {
-			id, r := e.startSidecar(ctx, sessionID, config.Image, host.NetworkMode, p.ProxyPort)
+			id, r := e.startSidecar(ctx, sessionID, config.Image, host.NetworkMode, p.ProxyPort, tunnelPorts)
 			if r != nil {
 				return *r
 			}
@@ -375,6 +442,12 @@ func (e *Environment) ContainerStart(ctx context.Context, sessionID int64, raw j
 	}
 	if sidecar != "" {
 		e.watchSidecar(sessionID, sidecar)
+	}
+	if dialer := e.tunnelDialer(sessionID, hostNetwork, sidecar, tunnelPorts); dialer != nil {
+		if r := e.serveTunnel(ctx, sessionID, name, tunnelPorts, dialer); r != nil {
+			e.abandonAgent(ctx, sessionID, name, sidecar)
+			return *r
+		}
 	}
 	return result
 }
@@ -497,6 +570,11 @@ func (e *Environment) ContainerStop(ctx context.Context, sessionID int64, raw js
 		return protocol.ErrorResult(ClassContainerNotOwned, fmt.Sprintf(
 			"the container %s does not carry the labels %s=%s and %s=%s, so it is not this session's; it was not stopped or removed",
 			name, LabelEnvironment, e.Key, LabelSession, session))
+	}
+	// The streams of the session end with `session_changed` before its container goes
+	// (PROTOCOL.md §8.7), and nothing more is served for it.
+	if e.Tunnel != nil {
+		e.Tunnel.Clear(sessionID)
 	}
 	// By ID, so that what is removed is the container whose labels were checked.
 	removed, err := e.removeContainer(ctx, inspected.Container.ID, true)

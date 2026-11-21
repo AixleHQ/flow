@@ -34,8 +34,8 @@ type Config struct {
 	RedisURL           string
 	RedisChannelPrefix string
 
-	// RailsURL and InternalToken are for the short calls to Rails (§8.2), which
-	// a later task makes.
+	// RailsURL and InternalToken are for the short calls to Rails (§8.2): `holders`
+	// for the browser path and `checks` for the reconcile pass. Both are required.
 	RailsURL      string
 	InternalToken string
 
@@ -106,10 +106,15 @@ func FromEnv(getenv func(string) string) (Config, error) {
 	if len(c.TicketKey) < MinTicketKeyLength {
 		errs = append(errs, fmt.Errorf("RUNNER_RELAY_TICKET_KEY is required and must be at least %d characters", MinTicketKeyLength))
 	}
-	if c.RailsURL != "" {
+	if c.RailsURL == "" {
+		errs = append(errs, errors.New("RUNNER_RELAY_RAILS_URL is required"))
+	} else {
 		if u, err := url.Parse(c.RailsURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 			errs = append(errs, errors.New("RUNNER_RELAY_RAILS_URL must be an http:// or https:// URL"))
 		}
+	}
+	if c.InternalToken == "" {
+		errs = append(errs, errors.New("RUNNER_RELAY_INTERNAL_TOKEN is required"))
 	}
 	if c.MaxFrame < 1024 || c.MaxFrame > 65536 {
 		errs = append(errs, errors.New("RUNNER_RELAY_MAX_FRAME must be between 1024 and 65536"))

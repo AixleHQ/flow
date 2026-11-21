@@ -126,6 +126,9 @@ func (e *Environment) removeContainers(ctx context.Context, class string) ([]str
 	if e.Proxy != nil {
 		defer e.Proxy.CloseAll()
 	}
+	if e.Tunnel != nil {
+		e.Tunnel.ClearAll()
+	}
 	for _, c := range found {
 		if c.Labels[LabelRole] == RoleProxy {
 			e.retire(c.ID)

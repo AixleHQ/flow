@@ -19,6 +19,7 @@ import (
 
 	"github.com/aixlehq/aixle-runner-relay/internal/admin"
 	"github.com/aixlehq/aixle-runner-relay/internal/config"
+	"github.com/aixlehq/aixle-runner-relay/internal/rails"
 	"github.com/aixlehq/aixle-runner-relay/internal/relay"
 	"github.com/aixlehq/aixle-runner-relay/internal/ticket"
 )
@@ -50,14 +51,20 @@ func run(logger *slog.Logger) error {
 	defer rdb.Close()
 
 	metrics := relay.NewMetrics()
+	platform := rails.New(cfg.RailsURL, cfg.InternalToken)
+	platform.Observe = func(endpoint, status string, d time.Duration) {
+		metrics.RailsRequestSeconds.WithLabelValues(endpoint, status).Observe(d.Seconds())
+	}
 	server := relay.New(relay.Options{
-		Verifier:   ticket.NewVerifier(cfg.TicketKey),
-		Guard:      ticket.RedisGuard{Client: rdb},
-		Metrics:    metrics,
-		Logger:     logger,
-		MaxFrame:   cfg.MaxFrame,
-		MaxStreams: cfg.MaxStreams,
-		Window:     cfg.StreamWindow,
+		Verifier:      ticket.NewVerifier(cfg.TicketKey),
+		Guard:         ticket.RedisGuard{Client: rdb},
+		Metrics:       metrics,
+		Logger:        logger,
+		MaxFrame:      cfg.MaxFrame,
+		MaxStreams:    cfg.MaxStreams,
+		Window:        cfg.StreamWindow,
+		Rails:         platform,
+		CheckInterval: cfg.CheckInterval,
 	})
 
 	public := &http.Server{Handler: server.Handler(), ReadHeaderTimeout: 10 * time.Second}
@@ -79,6 +86,12 @@ func run(logger *slog.Logger) error {
 
 	stop, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+
+	// The platform's signals and the reconcile pass that makes up for a lost one (§8).
+	background, stopBackground := context.WithCancel(context.Background())
+	defer stopBackground()
+	go server.RunSignals(background, rdb, cfg.RedisChannelPrefix+relay.SignalChannel)
+	go server.RunReconciler(background)
 	select {
 	case err := <-failed:
 		return err
