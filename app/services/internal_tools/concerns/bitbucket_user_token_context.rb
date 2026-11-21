@@ -65,7 +65,7 @@ module InternalTools
       end
 
       # The person's own token, once for all the repositories they can write to.
-      def mint_tokens!(user, credential, user_token, repositories, identity)
+      def mint_tokens!(user, credential, user_token, repositories, _identity)
         covered, skipped = check_coverage!(user, credential, user_token, repositories)
         if covered.empty?
           raise UserTokenContext::Refusal,
