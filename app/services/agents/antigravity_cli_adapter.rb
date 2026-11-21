@@ -324,7 +324,7 @@ module Agents
       parts << "--dangerously-skip-permissions"
       parts << "-i" if mode.to_s == "non_interactive"
       command = parts.join(" ")
-      model.present? ? "#{model_check(model)} && #{command}" : command
+      model.present? ? "#{listed_model_check('agy models | cut -f1', model, cli: 'Antigravity CLI')} && #{command}" : command
     end
 
     # agy keeps one transcript per conversation, named after the conversation id, in print
@@ -490,12 +490,6 @@ module Agents
         next
       end
       nil
-    end
-
-    def model_check(model)
-      quoted = Shellwords.shellescape(model)
-      "{ agy models | cut -f1 | grep -qxF -- #{quoted} || " \
-        "{ echo Antigravity CLI does not offer the model #{quoted} on this account.; false; }; }"
     end
 
     def usage_events(transcripts, terminal_session)

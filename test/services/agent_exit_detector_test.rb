@@ -17,7 +17,8 @@ class AgentExitDetectorTest < ActiveSupport::TestCase
     assert_equal 1, result.status
     assert result.output.start_with?("Cannot use this model: composer-2.5[effort=low]. Available models: auto, gpt-5.3"),
            result.output
-    assert result.output.end_with?("deepse ek-v41-flash-1017-high, deepseek-v41-flash-1017-max"), result.output
+    assert result.output.end_with?("deepseek-v41-flash-1017-high, deepseek-v41-flash-1017-max"), result.output
+    assert_includes result.output, "gpt-5.3-codex-low, gpt-5.3-codex-low-fast"
   end
 
   test "a CLI that exits cleanly is still an exit" do

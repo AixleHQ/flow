@@ -975,6 +975,16 @@ module Agents
 
     protected
 
+    # A launch prefix for a CLI that, asked for a model its account does not offer, quietly
+    # runs its default model instead (Antigravity CLI, Grok; task #324): the launch stops,
+    # saying so, unless `list_command` (the CLI's own model list, one id per line) names
+    # `model`, and Sessions::Checks::AgentExited turns that into the step's error.
+    def listed_model_check(list_command, model, cli:)
+      quoted = Shellwords.shellescape(model)
+      "{ #{list_command} | grep -qxF -- #{quoted} || " \
+        "{ echo #{cli} does not offer the model #{quoted} on this account.; false; }; }"
+    end
+
     # Unparseable input is {} — including nil, which JSON.parse raises TypeError on
     # rather than the ParserError this used to catch. Callers reach here with whatever
     # a container, a vendor file or an absent database row handed over, and "there was

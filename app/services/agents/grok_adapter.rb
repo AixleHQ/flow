@@ -130,11 +130,15 @@ module Agents
     def conversation_id_command = "ls -td .grok/sessions/%2Fworkspace/*/ 2>/dev/null | head -1 | xargs -r basename"
     def resume_arguments(id) = "--resume #{id}"
 
+    # A model the account does not offer only gets "Couldn't switch model: unknown model
+    # id" on screen, and the session runs the default model (1.0.89), so a chosen model is
+    # looked up in `grok models` first (`  * grok-4.7 (default)` per model).
     def session_command(mode:, model: nil, effort: nil)
       parts = [ "grok", "--yolo", "--minimal" ]
       parts += [ "--model", Shellwords.shellescape(model) ] if model
       parts += [ "--reasoning-effort", Shellwords.shellescape(effort) ] if effort.present?
-      parts.join(" ")
+      command = parts.join(" ")
+      model ? "#{listed_model_check("grok models | tr -d '*' | awk '{print $1}'", model, cli: 'Grok')} && #{command}" : command
     end
 
     # Context file: a home-level rule file. `$GROK_HOME/rules/*.md` is the root the CLI
@@ -328,14 +332,10 @@ module Agents
     # The xAI model catalogue, which also carries per-token prices (see #price_sheet).
     MODELS_URL = "https://api.x.ai/v1/language-models"
 
-    # Used only when the catalogue is unreachable or the credential is a session token
-    # the public API declines. Deliberately minimal: `grok-4.5` is what the CLI itself
-    # reports as its default model, and the other two are the current coding models in
-    # the published catalogue. The live call is the source of truth.
+    # Used only when no catalogue answers. Deliberately minimal: the CLI's default model
+    # (`grok models`, 1.0.89). The live call is the source of truth.
     FALLBACK_MODELS = [
-      { model_id: "grok-4.5", display_name: "grok-4.5", description: "Grok 4.5 — the Grok CLI default model" },
-      { model_id: "grok-4.6", display_name: "grok-4.6", description: "Grok 4.6 — the model behind Grok Build" },
-      { model_id: "grok-code-fast-1", display_name: "grok-code-fast-1", description: "Fast, low-cost coding model" }
+      { model_id: "grok-4.7", display_name: "grok-4.7", description: "Grok 4.7 — the Grok CLI default model" }
     ].freeze
 
     MODEL_DESCRIPTION_LIMIT = 120
@@ -355,7 +355,7 @@ module Agents
         {
           model_id: model_id,
           display_name: model_id,
-          description: model_description(model).truncate(MODEL_DESCRIPTION_LIMIT)
+          description: (model["description"].presence || model_description(model)).to_s.truncate(MODEL_DESCRIPTION_LIMIT)
         }
       end
 
@@ -457,6 +457,12 @@ module Agents
 
     # The OAuth session token, distinct from an API key: only a signed-in session
     # has a billing view to read.
+    def api_key(credentials)
+      return nil unless credentials.is_a?(Hash)
+
+      credentials["api_key"].presence || auth_scopes(credentials["auth"]).dig(API_KEY_SCOPE, TOKEN_FIELD)
+    end
+
     def oauth_session_token(credentials)
       return nil unless credentials.is_a?(Hash)
 
@@ -549,7 +555,13 @@ module Agents
       parts.join(" · ")
     end
 
+    # A signed-in account reads the CLI's own list; an API key, the public catalogue.
     def fetch_model_catalog(credentials)
+      session = oauth_session_token(credentials)
+      if session.present? && api_key(credentials).blank?
+        return Grok::Api.models(access_token: session, user_id: grok_user_id(credentials)).presence
+      end
+
       token = bearer_token(credentials)
       return nil if token.blank?
 
