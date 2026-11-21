@@ -154,6 +154,7 @@ What the controllers return — no envelope around the resource:
   - **Company:** `state` (active/suspended/archived)
   - **TerminalSession:** `state` (not_started/queued/running/ready/finishing/finished/failed/cancelled)
   - **WorkflowRun:** `state` (pending/running/paused/completed/failed/cancelled)
+- **A state changes only through its events.** Other code does not write `state` with `update` or `state =`; a move the machine lacks is added to the machine (see Anti-Patterns → change a record's state past its owner)
 
 ### Model Predicates
 
@@ -273,4 +274,15 @@ What a model's state, type or columns mean is decided in the model. Other code a
 - **Never** build our own format, protocol, token, signature, parser, serializer, multiplexer or client before looking for a standard and a library that implements it → look first among the project's dependencies (`Gemfile`, `package.json`, the Go modules `runner/` and `runner-relay/`), then for a well-maintained library; use it unless it can't do the job. When we still build our own, the design compares it with the standard and the libraries considered and says why; with no design, the PR does. The rule applies to every language in the repository. Examples: JWT for signed tokens (`jwt` gem in Rails, `golang-jwt/jwt/v5` in the Go modules); the API-client rule below; our own relay multiplexer, kept on evidence after comparing smux, yamux and SSH channels (`docs/design/agent-runtimes/runner-relay.md` §5.7)
 - **Never** hand-write security-sensitive code (tokens, signatures, cryptography) when a vetted library exists → use the library and pin the algorithm explicitly (e.g. `HS256`), never take it from the input
 - **Never** hand-write a client for an API that a library we already use covers (a specific case of the two rules above) → before writing HTTP code, look in the `Gemfile` for a library for that API (`octokit`, `gitlab`) and use it. If the library lacks a call, use its generic request method for that call. Write our own client only when the library can't do the job, and say why in the PR. OAuth token exchange, refresh and revocation go through the OAuth engine, not through a provider's service; the OAuth engine (`Oauth::TokenService`) is the client for these calls. Examples: `Github::UserTokenService` on Octokit, `Gitlab::TokenService` on the `gitlab` gem, `Oauth::TokenService` for the OAuth calls
+- **Never** change a record's state past its owner (`update`, `update!`, `update_column(s)`, `update_all` or `state =` from other code) → call the method that owns the change. A change that has a method of its own, or side effects, is made by calling that method:
+  - an AASM event for a state;
+  - the model's own method;
+  - the service that owns the change, such as `Runners::Machines` for a machine's hold.
+  - **No `update_all` or `update_column(s)` on such columns without a strong reason.** They skip callbacks and validations. A strong reason is, for example, a bulk write that cannot be done row by row. When there is one, the owner offers the write as its own method, a comment there says why, and that method does explicitly what the skipped callbacks would have done (signals, broadcasts, counters). A handful of rows, or one query saved, is not a reason: load the records and call the method on each.
+  - **A move the state machine lacks is added to the state machine.** A `state` value is never written past it because no event offers that move.
+  - **Ordinary edits stay plain.** An attribute with no owner method and no side effects, such as a name saved from a form, is still written with `update!`.
+  - **Examples:**
+    - Freeing a machine. `Runners::ContactLoss` and `Runners::Revocation` did `update_all(current_session_id: nil)`, while `Runners::Machines.release!` saves the row. `update_all` runs no callback, so each of them sent the relay's signal by hand. A session has at most one machine row (`current_session_id` has a unique index), so there was nothing to save by skipping the callbacks. #270 replaces both with one `Runners::Machines` method that saves the row.
+    - Avoid: `AdmittedPhaseActivity#finalize_session` writes `TerminalSession#state` with `update!`, with moves the state machine does not have (`finished → failed`, `running → finished`). The transitions live in the code instead of the state machine. #273 refactors it; the fix adds the moves to the state machine and calls its events.
+  - **Review:** code review flags a new violation as `[Must]`.
 - Existing code that breaks these rules is not a precedent: new code doesn't copy it
