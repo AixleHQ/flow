@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
-require Rails.root.join("db/migrate/20261121100000_align_step_reasoning_efforts_with_the_clis")
+require Rails.root.join("db/migrate/20261121110000_align_step_reasoning_efforts_with_the_clis")
 
 class AlignStepReasoningEffortsWithTheClisTest < ActiveSupport::TestCase
   def step_with(runtime, model, level)
