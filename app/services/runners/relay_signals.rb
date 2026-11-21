@@ -23,36 +23,34 @@ module Runners
     # A session took the machine, or left it (`session_id` nil). The session's
     # route token and ports are read when the signal is sent, after the commit.
     def machine_session(environment_id, session_id)
-      deliver do
+      deliver("machine_session") do
         session = TerminalSession.find_by(id: session_id) if session_id
-        {
-          type: "machine_session", environment_id: environment_id, session_id: session&.id,
-          route_token: session&.route_token, ports: (Tunnel.ports(session) if session)
-        }
+        route = RelayRoute.describe(session, environment_id: environment_id) if session
+        { environment_id: environment_id, session_id: session&.id, route_token: route&.fetch(:route_token), ports: route&.fetch(:ports) }
       end
     end
 
     # A runner session left `ready`.
     def session_ended(session_id)
-      deliver { { type: "session_ended", session_id: session_id } }
+      deliver("session_ended") { { session_id: session_id } }
     end
 
     # The machine left for good, or its runner was revoked or deleted.
     def machine_revoked(environment_id)
-      deliver { { type: "machine_revoked", environment_id: environment_id } }
+      deliver("machine_revoked") { { environment_id: environment_id } }
     end
 
     # Builds the message and publishes it after the commit. Building it can fail
-    # too (a session deleted meanwhile): it is swallowed the same way.
-    def deliver(&message)
-      ActiveRecord.after_all_transactions_commit { publish(&message) }
+    # too (a session deleted meanwhile): it is swallowed the same way, and logged
+    # with the signal's `type`.
+    def deliver(type, &message)
+      ActiveRecord.after_all_transactions_commit { publish(type, &message) }
     end
 
-    def publish
-      message = yield
-      ActionCable.server.pubsub.broadcast(CHANNEL, message.to_json)
+    def publish(type)
+      ActionCable.server.pubsub.broadcast(CHANNEL, { type: type, **yield }.to_json)
     rescue StandardError => e
-      Rails.logger.warn("[Runners::RelaySignals] #{message&.fetch(:type, nil)} signal failed: #{e.class}: #{e.message}")
+      Rails.logger.warn("[Runners::RelaySignals] #{type} signal failed: #{e.class}: #{e.message}")
     end
     private_class_method :deliver, :publish
   end

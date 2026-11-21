@@ -32,21 +32,11 @@ module Runners
     end
 
     def end_session(runner, session, running:)
-      release_machines(runner, session) if running
+      Machines.let_go!(session) if running
       # A compare-and-set: a session that finished or was cancelled meanwhile keeps its outcome.
       SessionService.fail_session_if(session: session, error_message: message(runner, session, running))
     end
     private_class_method :end_session
-
-    # The machines let go of the session. `update_all` runs no callback, so each
-    # machine's signal is sent here.
-    def release_machines(runner, session)
-      scope = RunnerEnvironment.where(runner_id: runner.id, current_session_id: session.id)
-      ids = scope.pluck(:id)
-      scope.update_all(current_session_id: nil, updated_at: Time.current)
-      ids.each { |id| RelaySignals.machine_session(id, nil) }
-    end
-    private_class_method :release_machines
 
     # The relay closes the connection of every machine of the runner (4001).
     def signal_relay(runner)

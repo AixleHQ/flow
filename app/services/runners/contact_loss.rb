@@ -33,20 +33,11 @@ module Runners
       # A compare-and-set: a session that finished or was cancelled meanwhile keeps its outcome.
       failed = SessionService.fail_session_if(session: session, expected_state: session.state, error_message: MESSAGE)
       if failed
-        release_machine(session) if session.runner.retired?
+        Machines.let_go!(session) if session.runner.retired?
       else
         session.clear_contact_lost!
       end
       failed
     end
-
-    def release_machine(session)
-      scope = RunnerEnvironment.where(runner_id: session.runner_id, current_session_id: session.id)
-      ids = scope.pluck(:id)
-      scope.update_all(current_session_id: nil, updated_at: Time.current)
-      # `update_all` runs no callback: the relay is told here.
-      ids.each { |id| RelaySignals.machine_session(id, nil) }
-    end
-    private_class_method :release_machine
   end
 end

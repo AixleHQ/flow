@@ -71,7 +71,7 @@ class Runners::RelaySignalsTest < ActiveSupport::TestCase
   test "the loss of contact with a revoked runner's machine sends machine_session without a session" do
     session = held_session
 
-    Runners::ContactLoss.send(:release_machine, session)
+    Runners::Machines.let_go!(session)
 
     assert_equal [ machine_session(@machine, nil) ], signals
     assert_nil @machine.reload.current_session_id

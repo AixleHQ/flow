@@ -30,10 +30,21 @@ module Api
                          check([ other, @session ], [ @machine, @session ], [ @machine, @session.id + 1 ])
           end
 
-          test "a machine that does not exist is not valid, nor is a session that is not an id" do
+          test "a machine that does not exist is not valid, nor is a null session" do
             assert_equal [ false ], check_raw([ { "environment_id" => 0, "session_id" => @session.id } ])
             assert_equal [ false ], check_raw([ { "environment_id" => @machine.id, "session_id" => nil } ])
-            assert_equal [ false ], check_raw([ { "environment_id" => @machine.id, "session_id" => "#{@session.id}" } ])
+          end
+
+          test "a session_id that is not an Integer, absent or null is refused" do
+            [ "#{@session.id}", @session.id.to_f, true, [ @session.id ], {} ].each do |session_id|
+              post_checks([ { "environment_id" => @machine.id, "session_id" => session_id } ])
+
+              assert_response :unprocessable_entity, session_id.inspect
+            end
+          end
+
+          test "a question with no session_id is valid and answered false" do
+            assert_equal [ false ], check_raw([ { "environment_id" => @machine.id } ])
           end
 
           test "a machine that no longer holds the session is not valid" do

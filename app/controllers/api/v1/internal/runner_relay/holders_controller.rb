@@ -12,15 +12,11 @@ module Api
         # null when none does.
         class HoldersController < RunnerRelay::ApplicationController
           def show
-            session = TerminalSession.where.not(runner_id: nil).find_by(route_token: params[:route_token].to_s)
+            session = TerminalSession.on_runner.find_by(route_token: params[:route_token].to_s)
             return head :not_found if session.nil?
 
-            render json: {
-              session_id: session.id,
-              environment_id: RunnerEnvironment.find_by(current_session_id: session.id)&.id,
-              state: session.state,
-              ports: Runners::Tunnel.ports(session)
-            }
+            holder = Runners::Machines.held_by(session)
+            render json: Runners::RelayRoute.describe(session, environment_id: holder&.id).except(:route_token)
           end
         end
       end

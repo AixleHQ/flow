@@ -59,6 +59,26 @@ class Runners::MachinesTest < ActiveSupport::TestCase
     assert_equal @machine, Runners::Machines.acquire!(runner_session)
   end
 
+  test "let_go! frees the machine the session holds, with no failure counted" do
+    session = runner_session
+    @machine.update!(current_session_id: session.id, consecutive_failures: 1)
+
+    Runners::Machines.let_go!(session)
+
+    assert_nil @machine.reload.current_session_id
+    assert_equal 1, @machine.consecutive_failures
+  end
+
+  test "let_go! leaves a machine that another session holds alone" do
+    held = runner_session
+    other = runner_session
+    @machine.update!(current_session_id: held.id)
+
+    Runners::Machines.let_go!(other)
+
+    assert_equal held.id, @machine.reload.current_session_id
+  end
+
   test "a failed machine is held by no session and takes none, whatever happens to the session" do
     first = runner_session
     Runners::Machines.acquire!(first)
