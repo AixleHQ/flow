@@ -17,9 +17,6 @@ module Sessions
       # the checks that read the whole pane.
       SCROLLBACK_LINES = 1000
 
-      # How much of a dead pane is read for what its CLI printed last.
-      EXIT_OUTPUT_LINES = 200
-
       Part = Data.define(:name, :script, :parse)
 
       REGISTRY = {
@@ -48,20 +45,6 @@ module Sessions
             clock, *rows = text.split("\n").map(&:strip).reject(&:empty?)
             Clients.new(clock: clock.to_i, rows: rows.map { |row| row.split.then { |ro, at| [ ro == "1", at.to_i ] } })
           end
-        ),
-        # Whether the process the agent pane runs has exited, and with what status. An
-        # automatic session's CLI is that process (AgentSessionStrategy#launch_agent_in_tmux)
-        # and the pane is kept once it exits (`remain-on-exit`), so tmux holds the answer.
-        # Only a dead pane is captured, joined (`-J`), so a long line comes back whole.
-        agent_exit: Part.new(
-          name: :agent_exit,
-          script: "{ d=$(tmux display-message -p -t agent '\#{pane_dead} \#{pane_dead_status}' 2>/dev/null) && " \
-                  "echo \"$d\" && { [ \"${d%% *}\" != 1 ] || tmux capture-pane -t agent -p -J -S -#{EXIT_OUTPUT_LINES} 2>/dev/null; }; }",
-          parse: lambda do |text|
-            state, *pane = text.split("\n")
-            dead, status = state.to_s.split
-            AgentExit.new(dead: dead == "1", status: status&.to_i, pane: pane.join("\n"))
-          end
         )
       }.freeze
 
@@ -72,19 +55,6 @@ module Sessions
         # Whether a writable client sent input within `duration`.
         def input_within?(duration)
           rows.any? { |read_only, input_at| !read_only && clock - input_at < duration.to_i }
-        end
-      end
-
-      # tmux's own last line on a pane it keeps ("Pane is dead (status 1, <date>)").
-      PANE_DEAD_NOTICE = /\APane is dead \(/
-
-      AgentExit = Data.define(:dead, :status, :pane) do
-        def dead? = dead
-
-        # What the CLI printed last, as one line.
-        def output(rows: 12)
-          Sessions::ScreenDigest.lines(pane, last: rows + 1).reject { |line| line.match?(PANE_DEAD_NOTICE) }
-                                .last(rows).map(&:strip).join(" ").squeeze(" ")
         end
       end
 

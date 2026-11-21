@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+"""Run each launch of an effort plan inside an agent container and say whether the CLI
+took the model and the level.
+
+The plan comes from `bin/rails "agents:effort_plan[<email>,<agent_type>]"` (one JSON object
+per line). Copy this script into a session container of the same runtime, started for the
+same member so it carries their login, and run it there as the container's own user (the
+one that owns the `agent` tmux session):
+
+    kubectl cp bin/agent-effort-probe <pod>:/tmp/agent-effort-probe -c main
+    kubectl exec -i <pod> -c main -- python3 /tmp/agent-effort-probe < plan.jsonl > results.jsonl
+
+Every launch is typed into a tmux session of its own, exactly as AgentSessionStrategy
+types it, with a one-line question for a prompt. A verdict per launch, one JSON object per
+line on stdout:
+
+    accepted   the answer to the question appeared: the CLI ran the model at that level
+    exited     the CLI exited before answering; `detail` is what it printed (task #324)
+    no_answer  neither within PROBE_TIMEOUT seconds; `detail` is the screen, for a person
+    skipped    the level is not on the command line (Gemini CLI's settings.json)
+
+Each accepted launch spends one short turn on the member's account.
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+QUESTION = "Reply with only the result of 4096 + 4096, digits only."
+ANSWER = re.compile(r"(?<![\d.,])8192(?![\d.,])")
+# AgentExitDetector::LAUNCH_SUFFIX and MARKER.
+LAUNCH_SUFFIX = '; echo "[aixle] agent exited with status $?"'
+EXIT_MARKER = re.compile(r"^\[aixle\] agent exited with status (\d+)$", re.M)
+PROMPT_PATH = "/tmp/.aixle-effort-probe-prompt"
+TIMEOUT = int(os.environ.get("PROBE_TIMEOUT", "120"))
+WORKSPACE = os.environ.get("PROBE_WORKSPACE", "/workspace")
+
+
+def tmux(*args):
+    return subprocess.run(["tmux", *args], capture_output=True, text=True, check=False)
+
+
+def screen(session):
+    # -J joins wrapped rows, so the typed command is one line and the output after it
+    # reads as the CLI printed it.
+    return tmux("capture-pane", "-t", session, "-p", "-J", "-S", "-3000").stdout
+
+
+def after_command(text):
+    """What the pane shows below the typed command line; all of it while a TUI holds the
+    alternate screen (Copilot CLI), where the command line is not on screen."""
+    at = text.rfind(LAUNCH_SUFFIX)
+    if at < 0:
+        return text
+    newline = text.find("\n", at)
+    return "" if newline < 0 else text[newline + 1:]
+
+
+def tail(text, rows=12):
+    return "\n".join([line.rstrip() for line in text.splitlines() if line.strip()][-rows:])
+
+
+def probe(index, row):
+    if not row.get("on_command_line", True):
+        return {"verdict": "skipped", "detail": "the level is not on the launch command"}
+
+    session = f"effort-probe-{index}"
+    tmux("kill-session", "-t", session)
+    tmux("new-session", "-d", "-s", session, "-x", "200", "-y", "50", "-c", WORKSPACE)
+    for _ in range(50):
+        if re.search(r"[#$]\s*$", screen(session), re.M):
+            break
+        time.sleep(0.2)
+
+    typed = f'{row["command"]} "$(cat {PROMPT_PATH})"{LAUNCH_SUFFIX}'
+    tmux("send-keys", "-t", session, "-l", typed)
+    tmux("send-keys", "-t", session, "Enter")
+
+    started = time.monotonic()
+    verdict = None
+    while time.monotonic() - started < TIMEOUT:
+        time.sleep(2)
+        output = after_command(screen(session))
+        exited = EXIT_MARKER.search(output)
+        if exited:
+            printed = " ".join(output[: exited.start()].split())
+            verdict = {"verdict": "exited", "status": int(exited.group(1)), "detail": printed[:600]}
+            break
+        if ANSWER.search(output):
+            verdict = {"verdict": "accepted"}
+            break
+
+    if verdict is None:
+        verdict = {"verdict": "no_answer", "detail": tail(after_command(screen(session)))}
+    verdict["seconds"] = round(time.monotonic() - started, 1)
+    tmux("kill-session", "-t", session)
+    return verdict
+
+
+def main():
+    with open(PROMPT_PATH, "w", encoding="utf-8") as prompt:
+        prompt.write(QUESTION)
+
+    rows = [json.loads(line) for line in sys.stdin if line.strip()]
+    for index, row in enumerate(rows, 1):
+        result = {key: row.get(key) for key in ("agent_type", "model", "effort")}
+        result.update(probe(index, row))
+        print(json.dumps(result), flush=True)
+        print(f"[{index}/{len(rows)}] {row.get('model')} {row.get('effort')}: {result['verdict']}",
+              file=sys.stderr, flush=True)
+
+
+if __name__ == "__main__":
+    main()

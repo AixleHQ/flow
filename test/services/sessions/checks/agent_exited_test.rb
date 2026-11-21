@@ -7,11 +7,7 @@ module Sessions
     class AgentExitedTest < ActiveSupport::TestCase
       include SecretLeakAssertions
 
-      # What tmux keeps of an 80-column pane whose Cursor CLI refused its model (task #324),
-      # captured joined: the CLI's line whole, then tmux's own notice.
-      CURSOR_REFUSAL = "Cannot use this model: composer-2.5[effort=low]. Available models: auto, gpt-5.3-codex-low, " \
-                       "gpt-5.3-codex-low-fast, composer-2.5, composer-2.5-fast\n\n" \
-                       "Pane is dead (status 1, Sat Nov 21 10:35:44 2026)\n"
+      PROMPT = "root@terminal-0123456789abcdef:/workspace#"
 
       setup do
         @user = create(:user, :with_company)
@@ -29,51 +25,30 @@ module Sessions
         cleanup_runtime_overrides
       end
 
+      def cursor_rejected_pane = file_fixture("terminal_panes/cursor_cli/model_rejected.txt").read
+
       # One pass over the session with only this check. @return [Symbol, nil] its outcome
-      def pass
+      def pass(text)
+        @runtime.set_terminal_pane(text, last_output_at: 1.minute.ago)
         Monitor.new(checks: [ AgentExited ]).visit(@session.reload).last&.outcome
       end
 
-      test "fails a step whose CLI exited, with its status and its own words" do
-        @runtime.set_agent_exit(1, pane: CURSOR_REFUSAL)
-
-        assert_equal :failed, pass
+      test "fails a step whose CLI refused its model, with the CLI's own words" do
+        assert_equal :failed, pass(cursor_rejected_pane)
 
         @session.reload
         assert_equal "failed", @session.state
-        assert_equal "Session terminated: the agent CLI exited with status 1 without calling `finish_session`. " \
-                     "Its last output: Cannot use this model: composer-2.5[effort=low]. Available models: auto, " \
-                     "gpt-5.3-codex-low, gpt-5.3-codex-low-fast, composer-2.5, composer-2.5-fast",
-                     @session.error_message
-      end
-
-      test "a CLI that exits cleanly without finishing the step fails it too" do
-        @runtime.set_agent_exit(0)
-
-        assert_equal :failed, pass
-        assert_equal "Session terminated: the agent CLI exited with status 0 without calling `finish_session`.",
-                     @session.reload.error_message
+        assert @session.error_message.start_with?(
+          "Session terminated: the agent CLI exited with status 1 without calling `finish_session`. " \
+          "Its last output: Cannot use this model: composer-2.5[effort=low]. Available models: auto,"
+        ), @session.error_message
+        assert_operator @session.error_message.length, :<=, AgentExited::MAX_MESSAGE_LENGTH
       end
 
       test "leaves a step whose CLI is still running" do
-        @runtime.set_agent_exit(nil)
-
-        assert_nil pass
+        assert_nil pass("#{PROMPT} agent --force \"$(cat /tmp/.aixle-prompt)\"; echo \"[aixle] agent exited with status $?\"\n" \
+                        "  Cursor Agent\n  → Plan, search, build anything\n")
         assert_equal "ready", @session.reload.state
-      end
-
-      test "leaves a step whose pane could not be read" do
-        @runtime.fail_exec("display-message")
-
-        assert_nil pass
-        assert_equal "ready", @session.reload.state
-      end
-
-      test "the message is cut to its limit" do
-        @runtime.set_agent_exit(1, pane: "#{'x' * 2000}\n")
-
-        assert_equal :failed, pass
-        assert_equal AgentExited::MAX_MESSAGE_LENGTH, @session.reload.error_message.length
       end
 
       test "an interactive step is left to the person who can start the CLI again" do
@@ -98,9 +73,10 @@ module Sessions
       test "a secret in the CLI's output does not reach the failure message" do
         @session.config_items << create(:config_item, :secret, scope: @project, name: "PROJECT_X_API_KEY",
                                                               value: RECORDED_SECRET)
-        @runtime.set_agent_exit(1, pane: "Error: invalid API key #{RECORDED_SECRET}\n")
+        pane = "#{PROMPT} agent; echo \"[aixle] agent exited with status $?\"\n" \
+               "Error: invalid API key #{RECORDED_SECRET}\n[aixle] agent exited with status 1\n#{PROMPT}\n"
 
-        assert_equal :failed, pass
+        assert_equal :failed, pass(pane)
 
         message = @session.reload.error_message
         assert_match(/Its last output: Error: invalid API key/, message)

@@ -195,9 +195,9 @@ class AgentCredential < ApplicationRecord
     # server's keys; signing in again stores a fresh one.
     # No credential means no row at all; `agent_type:` then names the one agent
     # missing for a member who holds a login for some other agent here.
-    def initialize(credential = nil, reason: :expired, agent_type: nil, message: nil)
+    def initialize(credential = nil, reason: :expired, agent_type: nil)
       @credential = credential
-      super(message || (credential ? broken_message(credential, reason) : missing_message(agent_type)))
+      super(credential ? broken_message(credential, reason) : missing_message(agent_type))
     end
 
     private
@@ -211,16 +211,6 @@ class AgentCredential < ApplicationRecord
       return NO_CREDENTIALS if agent_type.nil?
 
       "No #{agent_type.titleize} login. Connect it in Profile settings to run this."
-    end
-  end
-
-  # The session asks for a model the login's account does not offer, on a CLI that would
-  # quietly run its default model instead (Agents::BaseAdapter#runs_default_model_for_unknown?).
-  class ModelUnavailable < PreflightError
-    def initialize(credential, model, offered)
-      text = "#{AgentRuntime.fetch(credential.agent_type).label} does not offer the model #{model} on this account"
-      text += " (it offers #{offered.join(', ')})" if offered.any?
-      super(credential, message: "#{text}. Choose another model.")
     end
   end
 

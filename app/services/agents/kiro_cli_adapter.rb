@@ -534,18 +534,16 @@ module Agents
     # sessions will actually accept; the API answers for a credential that has no
     # capture yet. The CLI's JSON is snake_case and the API's camelCase — #model_entry
     # reads both.
-    #
-    # The CLI's list carries no reasoning effort; the API's does, per model, so the API is
-    # asked for the levels either way, and a model it does not answer for gets none listed
-    # (nil: the registry's rule stands in).
     def fetch_available_models(credentials, credential: nil)
-      body = api_call(credentials, LIST_MODELS_TARGET) || {}
-      api_models = Array(body["models"]).select { |model| model.is_a?(Hash) }
-      levels = api_models.to_h { |model| [ model_id_of(model), catalogue_effort_levels(model) ] }
+      cached = Array(credential&.metadata&.dig(MODELS_METADATA_KEY))
+      return cached.filter_map { |model| model_entry(model) } if cached.present?
 
-      models = Array(credential&.metadata&.dig(MODELS_METADATA_KEY)).presence || api_models.presence ||
-               [ body["defaultModel"] ].compact
-      models.filter_map { |model| model_entry(model)&.merge(reasoning_effort_levels: levels[model_id_of(model)]) }
+      body = api_call(credentials, LIST_MODELS_TARGET)
+      return [] if body.blank?
+
+      models = Array(body["models"])
+      models = [ body["defaultModel"] ].compact if models.empty?
+      models.filter_map { |model| model_entry(model) }
     end
 
     # Facts worth keeping on the credential that a container is the cheapest place to
@@ -1379,23 +1377,6 @@ module Agents
     # Context window: a number from the CLI, a nested limits object from the API.
     def context_window_of(model)
       model["context_window_tokens"] || model.dig("tokenLimits", "maxInputTokens")
-    end
-
-    # The API lists the request fields a model takes beyond the prompt as a JSON schema;
-    # an effort is the `effort` enum in it (`output_config.effort` for the Claude models,
-    # `reasoning.effort` for GPT and Grok). A model with no such schema takes none.
-    def catalogue_effort_levels(model)
-      schema = model["additionalModelRequestFieldsSchema"]
-      return [] unless schema.is_a?(Hash)
-
-      Array(schema_effort_enum(schema))
-    end
-
-    def schema_effort_enum(node)
-      return nil unless node.is_a?(Hash)
-      return node.dig("effort", "enum") if node.dig("effort", "enum").is_a?(Array)
-
-      node.each_value.lazy.filter_map { |child| schema_effort_enum(child) }.first
     end
 
     def model_entry(model)

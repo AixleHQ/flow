@@ -92,16 +92,25 @@ module Agents
 
     test "runs automatic sessions in the TUI, the prompt submitted by -i" do
       assert_equal "agy --dangerously-skip-permissions", @adapter.session_command(mode: "interactive")
-      assert_equal "agy --dangerously-skip-permissions", @adapter.session_command(mode: "non_interactive")
-      assert_equal '-i "$(cat /tmp/.aixle-prompt)"', @adapter.prompt_argument('"$(cat /tmp/.aixle-prompt)"')
+      assert_equal "agy --dangerously-skip-permissions -i", @adapter.session_command(mode: "non_interactive")
     end
 
-    # Task #324: the model id carries the effort, and in the TUI a level agy cannot apply,
-    # like a model the account lacks, silently runs the default model instead.
-    test "session_command never passes a reasoning effort, and the model is checked before launch" do
-      assert_equal "agy --model claude-sonnet-4-6 --dangerously-skip-permissions",
-                   @adapter.session_command(mode: "non_interactive", model: "claude-sonnet-4-6", effort: "high")
-      assert_predicate @adapter, :runs_default_model_for_unknown?
+    # Task #324: the model id carries the effort, and in the TUI a level agy cannot apply
+    # silently runs the default model instead.
+    test "session_command never passes a reasoning effort" do
+      command = @adapter.session_command(mode: "non_interactive", model: "claude-sonnet-4-6", effort: "high")
+
+      assert_not_includes command, "--effort"
+      assert command.end_with?("&& agy --model claude-sonnet-4-6 --dangerously-skip-permissions -i"), command
+    end
+
+    # In the TUI agy runs its default model when it does not know the one asked for, and
+    # says so only in its log. The check stops the launch with a message instead.
+    test "a chosen model is looked up in agy's own model list before agy starts" do
+      assert_equal "{ agy models | cut -f1 | grep -qxF -- gemini-3.8-flash-low || " \
+                   "{ echo Antigravity CLI does not offer the model gemini-3.8-flash-low on this account.; false; }; } " \
+                   "&& agy --model gemini-3.8-flash-low --dangerously-skip-permissions",
+                   @adapter.session_command(mode: "interactive", model: "gemini-3.8-flash-low")
     end
 
     test "fetches agent models from the authenticated Antigravity catalogue in API order" do
@@ -206,8 +215,8 @@ module Agents
       assert_equal AntigravityCliAdapter::FALLBACK_MODELS, result[:models]
     end
 
-    test "omits the model flag when none is selected so Antigravity uses its default" do
-      assert_equal "agy --dangerously-skip-permissions", @adapter.session_command(mode: "non_interactive", model: nil)
+    test "omits the model flag and the check when none is selected so Antigravity uses its default" do
+      assert_equal "agy --dangerously-skip-permissions -i", @adapter.session_command(mode: "non_interactive", model: nil)
     end
 
     test "generates Antigravity MCP schema" do

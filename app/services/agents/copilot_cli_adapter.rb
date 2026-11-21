@@ -167,12 +167,9 @@ module Agents
       ]
       parts += [ "--model", Shellwords.shellescape(model) ] if model.present?
       parts += [ "--reasoning-effort", Shellwords.shellescape(effort) ] if effort.present?
-      parts << "--no-ask-user" if mode.to_s == "non_interactive"
+      parts += [ "--no-ask-user", "-i" ] if mode.to_s == "non_interactive"
       parts.join(" ")
     end
-
-    # `-i` runs the prompt and keeps the TUI (an automatic session ends by finish_session).
-    def prompt_argument(prompt) = "-i #{prompt}"
 
     def context_file_path
       "#{copilot_dir}/copilot-instructions.md"
@@ -339,8 +336,7 @@ module Agents
       return nil unless model.is_a?(Hash) && model["id"].present?
 
       { model_id: model["id"], display_name: model["name"].presence || model["id"],
-        description: model["description"].to_s.truncate(120),
-        reasoning_effort_levels: (model["reasoning_efforts"] if model["reasoning_efforts"].is_a?(Array)) }
+        description: model["description"].to_s.truncate(120) }
     end
 
     def otlp_chat_events(payload, terminal_session)

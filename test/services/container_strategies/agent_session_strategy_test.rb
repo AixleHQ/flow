@@ -785,18 +785,13 @@ module ContainerStrategies
 
     # The prompt is the whole task: in an environment variable it would sit in the
     # pod spec and in every process the agent starts.
-    #
-    # Task #324: the CLI then replaces the pane's shell, and the pane is kept once it exits,
-    # so tmux reports its exit (Sessions::Checks::AgentExited).
-    test "a non_interactive session's CLI becomes the agent pane's process, its prompt read from a file only the agent can read" do
+    test "a non_interactive prompt reaches the CLI from a file only the agent can read" do
       @session.update!(agent_type: "codex", mode: "non_interactive", initial_prompt: "Run tests")
       strategy = build_strategy(agent_type: "codex")
       container_mock = mock("container")
-      prompt = '"$(cat /tmp/.aixle-prompt)"'
 
       mock_adapter = mock("adapter")
       mock_adapter.expects(:session_command).with(mode: "non_interactive", model: nil, effort: nil).returns("codex --yolo")
-      mock_adapter.stubs(:prompt_argument).with(prompt).returns("-i #{prompt}")
       mock_adapter.stubs(:container_uid).returns(1001)
       mock_service = mock("service")
       mock_service.stubs(:adapter).returns(mock_adapter)
@@ -807,14 +802,12 @@ module ContainerStrategies
       runtime_mock.expects(:write_file)
                   .with(container_mock, "/tmp/.aixle-prompt", "Run tests", mode: 0o600, uid: 1001, gid: 1001)
                   .returns(true)
-      runtime_mock.expects(:write_file)
-                  .with(container_mock, "/tmp/.aixle-launch", "codex --yolo -i #{prompt}\n", mode: 0o700, uid: 1001, gid: 1001)
-                  .returns(true)
       runtime_mock.expects(:exec).with do |container, command|
-        script = command[2]
-        container == container_mock && command[0..1] == %w[sh -c] &&
-          script.include?("tmux set-option -w -t agent remain-on-exit on \\; respawn-pane -k -t agent ") &&
-          Shellwords.split(script).last == "bash -ic 'exec bash /tmp/.aixle-launch'"
+        send_keys = command[2].match(/tmux send-keys -t agent (.+?) Enter;/)&.[](0)
+        delivered_command = Shellwords.split(send_keys).fetch(4)
+
+        container == container_mock && command[0] == "sh" && command[1] == "-c" &&
+          delivered_command == %(codex --yolo "$(cat /tmp/.aixle-prompt)"#{AgentExitDetector::LAUNCH_SUFFIX})
       end
 
       strategy.send(:launch_agent_in_tmux, container_mock)
@@ -823,13 +816,22 @@ module ContainerStrategies
     test "the session's reasoning effort reaches the launch command the way its CLI takes it" do
       @session.update!(mode: "interactive", requested_model: "claude-opus-5", reasoning_effort: "high")
 
-      assert_equal "claude --model claude-opus-5 --effort high", launched_command(build_strategy)
+      assert_equal "claude --model claude-opus-5 --effort high#{AgentExitDetector::LAUNCH_SUFFIX}",
+                   launched_command(build_strategy)
     end
 
     test "a session without a reasoning effort launches exactly as before" do
       @session.update!(mode: "interactive", requested_model: "claude-opus-5", reasoning_effort: nil)
 
-      assert_equal "claude --model claude-opus-5", launched_command(build_strategy)
+      assert_equal "claude --model claude-opus-5#{AgentExitDetector::LAUNCH_SUFFIX}", launched_command(build_strategy)
+    end
+
+    # Task #324: a CLI that refuses its arguments drops back to the shell, and only the
+    # status line tells Sessions::Checks::AgentExited that it did.
+    test "the launch prints the CLI's exit status once it returns" do
+      @session.update!(mode: "interactive", requested_model: nil)
+
+      assert_equal %(claude; echo "[aixle] agent exited with status $?"), launched_command(build_strategy)
     end
 
     test "build_env_vars carries no prompt" do

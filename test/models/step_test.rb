@@ -179,12 +179,22 @@ class StepTest < ActiveSupport::TestCase
     assert_includes step.errors[:reasoning_effort], "is not available for cursor_cli with model composer-2.5"
   end
 
-  # Which levels a model takes comes from the vendor's catalogue for the account that runs
-  # it, which a step does not know: the model pickers offer those, and the step is held to
-  # what its CLI takes at all.
-  test "the level is checked against what the runtime's CLI takes, not against one model" do
-    assert build(:step, workflow: @workflow, required_agent_runtime: "kiro_cli", preferred_model: "claude-sonnet-4.6",
+  test "the level is checked against the step's preferred model where the runtime's levels depend on it" do
+    assert build(:step, workflow: @workflow, required_agent_runtime: "kiro_cli", preferred_model: "claude-opus-5.5",
                         reasoning_effort: "xhigh").valid?
+
+    step = build(:step, workflow: @workflow, required_agent_runtime: "kiro_cli", preferred_model: "claude-sonnet-4.6",
+                        reasoning_effort: "xhigh")
+    assert_not step.valid?
+    assert_includes step.errors[:reasoning_effort].first, "choose one of: low, medium, high, max"
+  end
+
+  test "a runtime and model with no level at all refuse any" do
+    step = build(:step, workflow: @workflow, required_agent_runtime: "gemini_cli", preferred_model: "gemini-2.5-pro",
+                        reasoning_effort: "low")
+
+    assert_not step.valid?
+    assert_includes step.errors[:reasoning_effort], "is not available for gemini_cli with model gemini-2.5-pro"
   end
 
   test "a level on a step that leaves its runtime to resolution is refused" do
@@ -215,7 +225,7 @@ class StepTest < ActiveSupport::TestCase
     assert_equal "claude_code", step.reload.required_agent_runtime
 
     assert step.update(required_agent_runtime: "kiro_cli"), step.errors.full_messages.to_sentence
-    assert_not step.update(required_agent_runtime: "cursor_cli")
+    assert_not step.update(preferred_model: "claude-sonnet-4.6")
     assert_equal "xhigh", step.reload.reasoning_effort
   end
 

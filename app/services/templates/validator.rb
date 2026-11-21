@@ -132,7 +132,7 @@ module Templates
 
           runtime = AgentRuntime.fetch(step["required_agent_runtime"])
           model = step["preferred_model"]
-          next if model.present? && runtime.reasoning_effort?(level)
+          next if runtime.reasoning_effort?(level, model)
 
           label = "workflow #{workflow['key']} step #{step['key']} reasoning_effort"
           @errors << "#{label}: #{unsupported_effort(runtime, level, model)}"
@@ -143,7 +143,7 @@ module Templates
     def unsupported_effort(runtime, level, model)
       return "needs an explicitly chosen model" if model.blank?
 
-      levels = runtime.reasoning_effort_grammar
+      levels = runtime.reasoning_effort_levels(model)
       target = "#{runtime.id} with model #{model}"
       return "#{target} takes no reasoning effort" if levels.empty?
 

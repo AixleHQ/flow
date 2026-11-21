@@ -59,7 +59,5 @@ module Sessions
 
     # Parts::Clients, or nil when the clients could not be read.
     def clients = @parts[:clients]
-
-    def agent_exit = @parts[:agent_exit]
   end
 end

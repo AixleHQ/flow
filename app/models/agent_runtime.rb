@@ -23,9 +23,9 @@ AgentRuntime = Data.define(:id, :label, :image, :cli_version, :reasoning_effort)
     all.find { |runtime| runtime.id == id.to_s }&.label || id.to_s.humanize
   end
 
-  # Every effort level any runtime takes for any model, in order. The enum of the
-  # create_workflow_step and update_workflow_step MCP tools, and the order every runtime's
-  # levels are listed in; a step's level is checked against its own runtime's grammar.
+  # Every effort level any runtime takes for any model. Only the enum of the
+  # create_workflow_step and update_workflow_step MCP tools uses it: a step's level is
+  # checked against its own runtime and model by reasoning_effort_levels(model).
   def self.reasoning_effort_levels
     @reasoning_effort_levels ||= all.flat_map do |runtime|
       spec = runtime.reasoning_effort || {}
@@ -33,29 +33,20 @@ AgentRuntime = Data.define(:id, :label, :image, :cli_version, :reasoning_effort)
     end.uniq.freeze
   end
 
-  # Every level this runtime's CLI takes for some model, in the registry's order: what
-  # a step's or session's level is validated against (ReasoningEffortValidator). Empty for a
-  # runtime whose model id carries the effort.
-  def reasoning_effort_grammar
-    spec = reasoning_effort || {}
-    self.class.reasoning_effort_levels & (Array(spec["levels"]) + Array(spec["models"]).flat_map { |rule| Array(rule["levels"]) })
-  end
-
-  # The levels the model pickers offer for `model`. `offered` is what the vendor's
-  # catalogue says that model takes (the adapter's model entry `reasoning_effort_levels`),
-  # kept to the levels this CLI takes; without one, the registry's rule for the model
-  # stands in. A level is set only on an explicitly chosen model, so a blank one has none.
-  # docs/architecture/agent-runtime-registry.md says where each runtime's come from.
-  def reasoning_effort_levels(model, offered: nil)
+  # The reasoning-effort levels this runtime's CLI takes for `model`, in the
+  # registry's order. A level is set only on an explicitly chosen model, so a blank
+  # one has none. Empty too when the CLI cannot set one for that model: the
+  # registry's `reasoning_effort` field and docs/architecture/agent-runtime-registry.md
+  # say how each CLI was checked.
+  def reasoning_effort_levels(model)
     spec = reasoning_effort
     return [] if spec.blank? || model.blank?
-    return reasoning_effort_grammar & offered.map(&:to_s) if offered
 
     rule = Array(spec["models"]).find { |entry| Regexp.new(entry.fetch("match")).match?(model.to_s) }
     Array(rule ? rule.fetch("levels") : spec.fetch("levels"))
   end
 
-  def reasoning_effort?(level)
-    level.present? && reasoning_effort_grammar.include?(level.to_s)
+  def reasoning_effort?(level, model)
+    level.present? && reasoning_effort_levels(model).include?(level.to_s)
   end
 end

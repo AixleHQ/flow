@@ -128,20 +128,20 @@ module Api
       end
 
       # session_type is the caller's choice here, so workflow_step grants no exemption.
-      test "create refuses a level the runtime does not take, whatever the session type" do
+      test "create refuses a level the runtime and model do not take, whatever the session type" do
         create(:agent_credential, user: @user, company: @company, agent_type: "gemini_cli")
 
         %w[agent_session workflow_step].each do |session_type|
           assert_no_difference -> { TerminalSession.count } do
             post :create, body: {
               terminalSession: { sessionType: session_type, agentType: "gemini_cli", projectId: @project.id,
-                                 requestedModel: "gemini-3-pro", reasoningEffort: "medium" }
+                                 requestedModel: "gemini-2.5-pro", reasoningEffort: "low" }
             }.to_json, as: :json
           end
 
           assert_response :unprocessable_entity
           assert_includes JSON.parse(response.body)["errors"],
-                          "Reasoning effort medium is not available for gemini_cli with model gemini-3-pro (choose one of: low, high)"
+                          "Reasoning effort is not available for gemini_cli with model gemini-2.5-pro"
         end
       end
 

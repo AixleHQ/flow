@@ -271,20 +271,6 @@ module Agents
       assert_equal "mine", @adapter.default_env_vars(@session, callbacks: hosted_callbacks)["GEMINI_API_KEY"]
     end
 
-    # The catalogue says only whether a model thinks; one that does not takes no level, and
-    # the registry's rule decides between Gemini 3 levels and Gemini 2.5 budgets.
-    test "fetch_available_models_with_source offers no level on a model that does not think" do
-      stub_request(:get, /generativelanguage\.googleapis\.com/).to_return(status: 200, body: { models: [
-        { name: "models/gemini-3.8-flash", thinking: true, supportedGenerationMethods: %w[generateContent createCachedContent] },
-        { name: "models/gemini-3.8-flash-tts", supportedGenerationMethods: %w[generateContent createCachedContent] }
-      ] }.to_json)
-
-      models = @adapter.fetch_available_models_with_source({ "api_key" => "k" })[:models]
-
-      assert_equal({ "gemini-3.8-flash" => nil, "gemini-3.8-flash-tts" => [] },
-                   models.to_h { |m| [ m[:model_id], m[:reasoning_effort_levels] ] })
-    end
-
     test "mcp_config pins the Playwright MCP command to the baked version (task #340)" do
       servers = [
         OpenStruct.new(name: "playwright", transport: "stdio",

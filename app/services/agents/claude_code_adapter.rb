@@ -1325,18 +1325,8 @@ module Agents
       (data["data"] || []).filter_map do |m|
         next unless m["id"].to_s.include?("claude")
 
-        { model_id: m["id"], display_name: m["display_name"] || m["id"], description: "#{m["max_input_tokens"]} max input tokens",
-          reasoning_effort_levels: catalogue_effort_levels(m.dig("capabilities", "effort")) }
+        { model_id: m["id"], display_name: m["display_name"] || m["id"], description: "#{m["max_input_tokens"]} max input tokens" }
       end
-    end
-
-    # The catalogue's `capabilities.effort`: whether the model takes an effort at all, then
-    # one `{ "supported" => … }` entry per level. Nil when the entry does not say.
-    def catalogue_effort_levels(effort)
-      return nil unless effort.is_a?(Hash)
-      return [] unless effort["supported"]
-
-      effort.filter_map { |level, entry| level if entry.is_a?(Hash) && entry["supported"] }
     end
 
     # Build normalized events from OTLP payload (same format as Cursor API events).

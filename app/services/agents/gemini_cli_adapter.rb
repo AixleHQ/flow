@@ -262,11 +262,7 @@ module Agents
 
         next unless methods.include?("createCachedContent")
 
-        # The catalogue says only whether a model thinks (`thinking`, absent when it does
-        # not), not at which levels: one that does not takes none, and the registry's rule
-        # decides the rest.
-        { model_id: model_id, display_name: display_name, description: m["description"].to_s.truncate(120),
-          reasoning_effort_levels: ([] unless m["thinking"]) }
+        { model_id: model_id, display_name: display_name, description: m["description"].to_s.truncate(120) }
       end
 
       if models.present?
