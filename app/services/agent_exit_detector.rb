@@ -26,6 +26,7 @@ class AgentExitDetector
   # (the `$?"` may itself be split across two rows). The CLI's output is what lies between
   # that row and the marker.
   COMMAND_END = /\?"\z/
+  COMMAND_START = /\A\S+@\S+:\S*[#$] /
 
   # How far above the marker the CLI's output is looked for, and how many of its rows are
   # kept when the command line has scrolled out of reach.
@@ -53,8 +54,25 @@ class AgentExitDetector
   def self.output_before(lines, marker_at)
     above = lines[0...marker_at]
     command_end = above.rindex { |line| line.match?(COMMAND_END) }
-    rows = command_end ? above[(command_end + 1)..] : above.last(FALLBACK_OUTPUT_ROWS)
-    rows.map(&:strip).join(" ").squeeze(" ")
+    return above.last(FALLBACK_OUTPUT_ROWS).map(&:strip).join(" ").squeeze(" ") unless command_end
+
+    unwrap(above[(command_end + 1)..], pane_width(above, command_end)).squeeze(" ").strip
   end
   private_class_method :output_before
+
+  # The capture is not joined (`capture-pane -J`), so a line longer than the pane arrives
+  # cut into rows of the pane's width. The typed command is one such line: every row of it
+  # but the last is exactly that wide. Nil when the command fitted on one row.
+  def self.pane_width(above, command_end)
+    command_start = above[0..command_end].rindex { |line| line.match?(COMMAND_START) }
+    return nil if command_start.nil? || command_start == command_end
+
+    above[command_start...command_end].map(&:length).max
+  end
+  private_class_method :pane_width
+
+  def self.unwrap(rows, width)
+    rows.each_with_index.map { |row, i| width && row.length >= width && i < rows.size - 1 ? row : "#{row} " }.join
+  end
+  private_class_method :unwrap
 end
