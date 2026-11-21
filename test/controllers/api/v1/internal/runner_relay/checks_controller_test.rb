@@ -35,8 +35,8 @@ module Api
             assert_equal [ false ], check_raw([ { "environment_id" => @machine.id, "session_id" => nil } ])
           end
 
-          test "a session_id that is not an Integer, absent or null is refused" do
-            [ "#{@session.id}", @session.id.to_f, true, [ @session.id ], {} ].each do |session_id|
+          test "a session_id that is a scalar but not an Integer, absent or null is refused" do
+            [ "#{@session.id}", @session.id.to_f, true ].each do |session_id|
               post_checks([ { "environment_id" => @machine.id, "session_id" => session_id } ])
 
               assert_response :unprocessable_entity, session_id.inspect
@@ -85,12 +85,32 @@ module Api
             assert_equal [], check_raw([])
           end
 
-          test "a body that is not a list of machines is refused" do
-            [ nil, "x", [ 1 ], [ { "session_id" => 1 } ], [ { "environment_id" => "7" } ] ].each do |machines|
+          test "an environment_id that is not an Integer is refused" do
+            [ "#{@machine.id}", @machine.id.to_f, true, nil, [ @machine.id ], {} ].each do |environment_id|
+              post_checks([ { "environment_id" => environment_id, "session_id" => @session.id } ])
+
+              assert_response :unprocessable_entity, environment_id.inspect
+            end
+          end
+
+          test "a body whose shape is not a list of machines is refused" do
+            valid = { "environment_id" => @machine.id, "session_id" => @session.id }
+            [ nil, "x", { "0" => valid }, [ 1 ], [ valid, 1 ], [ {} ],
+              [ { "session_id" => 1 } ], [ { "environment_id" => "7" } ] ].each do |machines|
               post_checks(machines)
 
               assert_response :unprocessable_entity, machines.inspect
             end
+          end
+
+          test "a body with no machines key is refused" do
+            post "/api/v1/internal/runner_relay/checks", params: {}, as: :json, headers: { "Authorization" => "Bearer #{TOKEN}" }
+
+            assert_response :unprocessable_entity
+          end
+
+          test "keys other than the two ids are ignored" do
+            assert_equal [ true ], check_raw([ { "environment_id" => @machine.id, "session_id" => @session.id, "extra" => "x" } ])
           end
 
           test "a missing or wrong token is refused, and nothing is checked" do
