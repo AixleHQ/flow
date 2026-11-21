@@ -142,6 +142,71 @@ and never swap constants at runtime.
 - [ ] `docker compose exec -T web make check_all` is green — including the coverage floors
 - [ ] Shrunk a frozen allowlist while you were in the area? Even better.
 
+## 9. Test tags: running a test only when it matters
+
+A tag changes **when** a test runs in CI, and nothing else. Marking a test, a test class or a test
+file with a tag is all it takes: nobody edits a list of tests in a workflow. A test without a tag
+runs everywhere, as it always did.
+
+**The rules live in one file, `config/test_tags.json`**, one entry per tag, read by the Rails suite
+(`test/support/test_tags.rb`), the Vitest suite (`vitest.config.ts`, `Makefile`) and CI
+(`bin/test-tags`). An entry has a `description` and one of two rules:
+
+| Rule | A pull request runs the tag | A push runs it |
+|---|---|---|
+| `develop` | never | always |
+| `paths` (with a `paths` list of globs) | when a changed file matches a glob | always |
+
+A push means every event that is not a pull request (`develop`, `staging`, a manual run), so the
+full suite still runs on every integrated commit. When CI cannot read the pull request's diff, it
+runs everything.
+
+### Tags that exist
+
+| Tag | Rule | Tests |
+|---|---|---|
+| `schema_parity` | `paths`: `db/migrate/**/*`, `db/schema.rb`, `test/db/schema_parity_test.rb` | `SchemaParityTest`, which replays every migration (about 40 s) |
+
+### Put a test under a tag
+
+- **Rails (Minitest).** In the class: `tags :schema_parity` tags every test of the class and of its
+  subclasses. `tag :schema_parity` on the line before a `test "..." do` tags that test only.
+  A name that is not in `config/test_tags.json` raises when the file loads.
+- **Vitest.** Per test: `test('...', { tags: ['name'] }, () => {})`. Per suite:
+  `describe('...', { tags: ['name'] }, () => {})`. For the whole file, a `@module-tag name` line in
+  a JSDoc comment at the top of the file. Vitest refuses a tag the config does not list;
+  `vitest.config.ts` lists every tag of the JSON file.
+
+### Add a tag
+
+Add an entry to `config/test_tags.json` (a lower-case word, a description, a rule). Nothing else:
+the Rails and Vitest sides, the CI step and `TestTags`' own test read the file. Choose `paths` for a
+test that only a known set of files can break, and `develop` for one that nothing in a pull request
+is likely to break and that costs more than it tells.
+
+**Moving a test under a tag, or changing a test to make it faster, is a change to the test:** it
+needs the owner's ok in review, like any other change that could narrow what a test checks.
+
+### Run tagged tests
+
+- Locally every test runs, tagged or not: `make check_all`, `bin/rails test` and `yarn test` ignore
+  tags unless told otherwise. To run one tag's tests, run their file: `bin/rails test
+  test/db/schema_parity_test.rb`. For Vitest, `yarn test --tags-filter=name`.
+- To leave tags out the way a pull request does: `TEST_EXCLUDE_TAGS="schema_parity" bin/rails test`,
+  or `make rails-test TEST_EXCLUDE_TAGS=schema_parity` (the Makefile turns the list into one
+  `--tags-filter='!tag'` per tag for Vitest).
+- To see what a pull request would leave out: `bin/test-tags exclude --event pull_request --base
+  origin/develop`.
+
+### Why our own for Rails
+
+Minitest filters by test name only. The maintained tag gems do not fit: `minitest-tagz` was last
+released in 2019 and requires minitest ~> 5. The Rails side is a declaration plus a filter in
+`runnable_methods`, which is where Minitest picks a class's tests, about 40 lines. Vitest has tags
+built in (4.1 and later) and uses them as they are. For choosing by changed files, a
+`dorny/paths-filter` step would put each tag's paths in the workflow, once per tag, and not beside
+the tag; `bin/test-tags` reads them from the same file as the tag.
+
 ## Roadmap after Phase 0
 
 - **Phase 1 — done.** Authorization backfill at the **request layer**: a dedicated

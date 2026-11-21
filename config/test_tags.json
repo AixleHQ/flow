@@ -1,0 +1,11 @@
+{
+  "schema_parity": {
+    "description": "Replays db/migrate into a scratch database and diffs db/schema.rb (SchemaParityTest, about 40 s).",
+    "rule": "paths",
+    "paths": [
+      "db/migrate/**/*",
+      "db/schema.rb",
+      "test/db/schema_parity_test.rb"
+    ]
+  }
+}

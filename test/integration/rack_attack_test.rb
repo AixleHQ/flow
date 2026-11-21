@@ -158,16 +158,28 @@ class RackAttackTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # The two runner-gateway caps are exercised at a lower limit: 600 and 3000 requests through the
+  # whole stack took 76 s and 12 s. The numbers themselves are pinned by the next test.
+  test "the runner gateway's caps are 600 a minute per credential and 3000 per address" do
+    credential = Rack::Attack.throttles.fetch("runner-gateway/credential")
+    address = Rack::Attack.throttles.fetch("runner-gateway/ip")
+
+    assert_equal [ 600, 60 ], [ credential.limit, credential.period ]
+    assert_equal [ 3000, 60 ], [ address.limit, address.period ]
+  end
+
   test "the runner gateway is capped per credential, whichever address it calls from" do
     with_process_mode("runner_gateway") do
-      600.times { |i| post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_one" }, env: { "REMOTE_ADDR" => "203.0.113.#{i % 250}" } }
-      assert_not_equal 429, response.status
+      with_throttle_limit("runner-gateway/credential", 6) do
+        6.times { |i| post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_one" }, env: { "REMOTE_ADDR" => "203.0.113.#{i}" } }
+        assert_not_equal 429, response.status
 
-      post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_one" }
-      assert_response :too_many_requests
+        post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_one" }
+        assert_response :too_many_requests
 
-      post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_other" }
-      assert_not_equal 429, response.status
+        post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_other" }
+        assert_not_equal 429, response.status
+      end
     end
   end
 
@@ -191,14 +203,16 @@ class RackAttackTest < ActionDispatch::IntegrationTest
   # lookup, which keeps the burst cheap, and the throttle runs ahead of it.
   test "the runner gateway is capped per address, whatever bearer value each request sends" do
     with_process_mode("runner_gateway") do
-      3000.times { |i| post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_guess#{i}" } }
-      assert_not_equal 429, response.status
+      with_throttle_limit("runner-gateway/ip", 30) do
+        30.times { |i| post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_guess#{i}" } }
+        assert_not_equal 429, response.status
 
-      post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_one-more" }
-      assert_response :too_many_requests
+        post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_one-more" }
+        assert_response :too_many_requests
 
-      post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_one-more" }, env: { "REMOTE_ADDR" => "198.51.100.7" }
-      assert_not_equal 429, response.status
+        post "/runner/v1/token", headers: { "Authorization" => "Bearer arref_one-more" }, env: { "REMOTE_ADDR" => "198.51.100.7" }
+        assert_not_equal 429, response.status
+      end
     end
   end
 
@@ -218,6 +232,15 @@ class RackAttackTest < ActionDispatch::IntegrationTest
   end
 
   private
+
+  # Runs the block with one throttle's limit lowered, keeping its discriminator and period.
+  def with_throttle_limit(name, limit)
+    original = Rack::Attack.throttles.fetch(name)
+    Rack::Attack.throttle(name, limit: limit, period: original.period, &original.block)
+    yield
+  ensure
+    Rack::Attack.throttles[name] = original
+  end
 
   def rack_request(headers, method: "POST", path: "/mcp")
     Rack::Attack::Request.new(Rack::MockRequest.env_for(path, { method: method }.merge(headers)))

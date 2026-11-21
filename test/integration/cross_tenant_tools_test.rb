@@ -93,6 +93,9 @@ class CrossTenantToolsTest < ActiveSupport::TestCase
   def probe(entries, minimum:, marker: MARKER, skip: [])
     failures = []
     probed = 0
+    # B's state before any call. Every call runs in a savepoint that is rolled back, so it is the
+    # state before each of them, and read once instead of once per call.
+    before = fingerprint(@b, shared: skip)
     entries.each do |name, schema, callable|
       schema ||= {}
       properties = schema["properties"] || {}
@@ -103,7 +106,6 @@ class CrossTenantToolsTest < ActiveSupport::TestCase
         probed += 1
         params = call_params(properties, schema["required"] || [], foreign: param)
         outcome = isolated do
-          before = fingerprint(@b, shared: skip)
           result = begin
             yield(callable, params)
           rescue StandardError => e
