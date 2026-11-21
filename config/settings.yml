@@ -288,6 +288,12 @@ bitbucket:
   merge_poll_interval: <%= (ENV['BITBUCKET_MERGE_POLL_INTERVAL'] || 1.0).to_f %>
   open_timeout: <%= (ENV['BITBUCKET_OPEN_TIMEOUT'] || 5).to_i %>
   read_timeout: <%= (ENV['BITBUCKET_READ_TIMEOUT'] || 30).to_i %>
+  # The deployment's Bitbucket OAuth client (docs/design/bitbucket-user-identity.md §2.1).
+  # Optional: with both values, people connect their own Bitbucket account and agents can
+  # act as them; without them the feature is off.
+  oauth:
+    client_id: "<%= ENV['BITBUCKET_OAUTH_CLIENT_ID'] %>"
+    client_secret: "<%= ENV['BITBUCKET_OAUTH_CLIENT_SECRET'] %>"
 
 # Credential vending for the in-container git helper (GitHub and GitLab
 # repositories). Reached over the internal network, like cloud.credentials_url.

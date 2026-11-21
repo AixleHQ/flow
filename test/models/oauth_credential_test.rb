@@ -417,6 +417,43 @@ class OauthCredentialTest < ActiveSupport::TestCase
     assert_equal live, OauthCredential.live_gitlab_connection_of(@user)
   end
 
+  test "the Bitbucket identity is read from bitbucket_user, with nickname as the login" do
+    bitbucket = create(:oauth_credential, :bitbucket_user, owner: @user)
+
+    assert_equal [ "bb-user", "Bee Bucket", "https://a.test/bb" ],
+                 [ bitbucket.account_login, bitbucket.account_name, bitbucket.account_avatar_url ]
+  end
+
+  test "bitbucket_connections_of finds only that person's Bitbucket credentials" do
+    mine = create(:oauth_credential, :bitbucket_user, owner: @user)
+    create(:oauth_credential, :bitbucket_user, owner: create(:user, company: @company))
+    create(:oauth_credential, :gitlab_user, owner: @user)
+
+    assert_equal [ mine ], OauthCredential.bitbucket_connections_of(@user).to_a
+  end
+
+  test "latest_bitbucket_connection_of returns a revoked connection, live_bitbucket_connection_of does not" do
+    revoked = create(:oauth_credential, :bitbucket_user, owner: @user, status: :revoked)
+
+    assert_equal revoked, OauthCredential.latest_bitbucket_connection_of(@user)
+    assert_nil OauthCredential.live_bitbucket_connection_of(@user)
+
+    live = create(:oauth_credential, :bitbucket_user, owner: @user)
+    live.touch
+
+    assert_equal live, OauthCredential.live_bitbucket_connection_of(@user)
+  end
+
+  test "a refresh response with a rotated refresh token and `scopes` is stored for Bitbucket" do
+    credential = create(:oauth_credential, :bitbucket_user, owner: @user, refresh_token: "old-refresh")
+
+    credential.apply_token_response!("access_token" => "new", "refresh_token" => "rotated", "expires_in" => 7200,
+                                     "scopes" => "account repository")
+
+    assert_equal "rotated", credential.reload.refresh_token
+    assert_equal "new", credential.access_token
+  end
+
   test "for_github_user finds credentials by the GitHub account id in metadata" do
     credential = create(:oauth_credential, :github_user, owner: @user)
     create(:oauth_credential, owner: @user, provider: "sentry",

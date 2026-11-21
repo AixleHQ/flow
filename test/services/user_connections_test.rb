@@ -153,10 +153,43 @@ class UserConnectionsTest < ActiveSupport::TestCase
   test "available_providers, connections_of, consents_of and label answer for every provider" do
     github = create(:oauth_credential, :github_user, owner: @user)
 
-    assert_equal %w[github gitlab], UserConnections.available_providers.keys
-    assert_equal({ "github" => github, "gitlab" => nil }, UserConnections.connections_of(user: @user))
-    assert_equal %w[github gitlab], UserConnections.consents_of(user: @user, company: @company).keys
+    assert_equal %w[github gitlab bitbucket], UserConnections.available_providers.keys
+    assert_equal({ "github" => github, "gitlab" => nil, "bitbucket" => nil }, UserConnections.connections_of(user: @user))
+    assert_equal %w[github gitlab bitbucket], UserConnections.consents_of(user: @user, company: @company).keys
     assert_equal "GitLab", UserConnections.label(provider: "gitlab")
-    assert_raises(UserConnections::UnknownProvider) { UserConnections.label(provider: "bitbucket") }
+    assert_equal "Bitbucket", UserConnections.label(provider: "bitbucket")
+    assert_raises(UserConnections::UnknownProvider) { UserConnections.label(provider: "azure_devops") }
+  end
+
+  test "Bitbucket is available only with both OAuth client values" do
+    Settings.bitbucket.oauth.stubs(:client_id).returns("bb-cid")
+    Settings.bitbucket.oauth.stubs(:client_secret).returns("")
+
+    assert_not UserConnections.available?(provider: "bitbucket")
+
+    Settings.bitbucket.oauth.stubs(:client_secret).returns("bb-secret")
+
+    assert UserConnections.available?(provider: "bitbucket")
+  end
+
+  test "disconnecting Bitbucket deletes the credentials and consents and sends nothing to Bitbucket" do
+    credential = create(:oauth_credential, :bitbucket_user, owner: @user)
+    create(:act_as_consent, :own, user: @user, project: @alpha, provider: "bitbucket")
+    create(:act_as_consent, :own, user: @user, project: @beta, provider: "github")
+
+    UserConnections.disconnect!(user: @user, provider: "bitbucket")
+
+    assert_nil OauthCredential.find_by(id: credential.id)
+    assert_equal 0, ActAsConsent.where(user: @user, provider: "bitbucket").count
+    assert_equal 1, ActAsConsent.where(user: @user, provider: "github").count
+    assert_not_requested :any, /bitbucket/
+  end
+
+  test "update_consent! stores a Bitbucket row" do
+    consent = UserConnections.update_consent!(user: @user, company: @company, provider: "bitbucket",
+                                              project_id: @alpha.id, in_others_tasks: true)
+
+    assert_equal "bitbucket", consent.provider
+    assert consent.in_others_tasks
   end
 end

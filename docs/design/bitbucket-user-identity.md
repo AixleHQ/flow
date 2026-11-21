@@ -1,6 +1,6 @@
 # Agents act as the user on Bitbucket
 
-**Task:** #239 · **Status:** proposal · **Date:** 2026-11-20
+**Task:** #239 · **Status:** built · **Date:** 2026-11-20
 
 Builds on [gitlab-user-identity.md](./gitlab-user-identity.md) (#238, built), the closer
 precedent, and [github-user-identity.md](./github-user-identity.md) (#214, built). Read

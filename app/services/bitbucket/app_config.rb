@@ -24,6 +24,12 @@ module Bitbucket
       [ forge_app_id, forge_environment_id ].all?(&:present?)
     end
 
+    # The OAuth client people connect their own account through
+    # (docs/design/bitbucket-user-identity.md §2.1). Both values or the feature is off.
+    def oauth_client_id = oauth&.client_id.presence
+    def oauth_client_secret = oauth&.client_secret.presence
+    def oauth_enabled? = [ oauth_client_id, oauth_client_secret ].all?(&:present?)
+
     def token_min_remaining = (settings&.token_min_remaining || 300).to_i
     def merge_poll_interval = (settings&.merge_poll_interval || 1.0).to_f
     def open_timeout = (settings&.open_timeout || 5).to_i
@@ -31,5 +37,6 @@ module Bitbucket
 
     def settings = Settings.bitbucket
     def forge = settings&.forge
+    def oauth = settings&.oauth
   end
 end

@@ -1,7 +1,7 @@
 import { Head, router, usePage } from '@inertiajs/react';
 import { Avatar, Button, Card, Group, Stack, Switch, Table, Text, Title } from '@mantine/core';
 import { modals } from '@mantine/modals';
-import { IconBrandGithub, IconBrandGitlab } from '@tabler/icons-react';
+import { IconBrandBitbucket, IconBrandGithub, IconBrandGitlab } from '@tabler/icons-react';
 import { useState } from 'react';
 
 import type { ActAsConsent, UserConnection } from '@/types/generated';
@@ -20,7 +20,7 @@ import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { ProfileTabs } from './ProfileTabs';
 
-type Provider = 'github' | 'gitlab';
+type Provider = 'github' | 'gitlab' | 'bitbucket';
 
 interface PageProps {
   /** Whether this installation has each provider's OAuth client id and secret. */
@@ -32,7 +32,7 @@ interface PageProps {
 
 type Switchable = 'inOwnTasks' | 'inOthersTasks';
 
-const PROVIDERS: Provider[] = ['github', 'gitlab'];
+const PROVIDERS: Provider[] = ['github', 'gitlab', 'bitbucket'];
 
 const PROVIDER_INFO: Record<
   Provider,
@@ -64,6 +64,17 @@ const PROVIDER_INFO: Record<
       'Agents can no longer act as you on GitLab, and the permissions you set for each project are removed.',
     consentWarning:
       "A token handed out in a project can do anything you can on GitLab, not only in that project's repositories.",
+  },
+  bitbucket: {
+    name: 'Bitbucket',
+    icon: IconBrandBitbucket,
+    pitch: 'Let agents push and open pull requests as you.',
+    notConfigured:
+      "This installation has not configured Bitbucket's OAuth client (client id and secret), so accounts cannot be connected.",
+    disconnectNote:
+      'Agents can no longer act as you on Bitbucket, and the permissions you set for each project are removed. Bitbucket cannot revoke the grant from here: it stays listed in your Atlassian account until you remove it there, and a token already handed out works until it expires, at most two hours.',
+    consentWarning:
+      "A token handed out in a project can do anything you can on Bitbucket, not only in that project's repositories. Commits are made with your primary confirmed Bitbucket email address, which anyone who can read the repository's history can see.",
   },
 };
 
