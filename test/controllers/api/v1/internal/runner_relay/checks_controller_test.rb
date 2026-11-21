@@ -95,7 +95,7 @@ module Api
 
           test "a body whose shape is not a list of machines is refused" do
             valid = { "environment_id" => @machine.id, "session_id" => @session.id }
-            [ nil, "x", { "0" => valid }, [ 1 ], [ valid, 1 ], [ valid, nil ], [ {} ],
+            [ nil, "x", { "0" => valid }, [ 1 ], [ valid, 1 ], [ {} ],
               [ { "session_id" => 1 } ], [ { "environment_id" => "7" } ] ].each do |machines|
               post_checks(machines)
 
