@@ -69,6 +69,9 @@ class Runner < ApplicationRecord
   # Not disabled, revoked or deleted: the runners whose health is checked
   # (Runners::HealthCheck).
   scope :live, -> { not_deleted.where(status: RunnerStateMachine::HEALTH_STATES.map(&:to_s)) }
+  # Neither revoked nor deleted: the runners a machine may still talk to.
+  # `retired?` is the same question for one record.
+  scope :not_retired, -> { not_deleted.where.not(status: "revoked") }
   # Never seen, or last seen before `time`.
   scope :not_seen_since, ->(time) { where(last_seen_at: nil).or(where(arel_table[:last_seen_at].lt(time))) }
   # What a picker offers: the company's runners and the project's own, live

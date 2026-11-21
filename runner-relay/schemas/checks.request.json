@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/AixleHQ/flow/runner-relay/schemas/checks.request.json",
+  "title": "POST /api/v1/internal/runner_relay/checks: the request body",
+  "description": "runner-relay.md §8.2. A body that fails this schema is 422. Other fields are ignored: the relay and Rails deploy separately, so a newer relay must not be refused by an older platform. As in any JSON Schema, a number with no fractional part (7.0) is an integer.",
+  "type": "object",
+  "required": ["machines"],
+  "properties": {
+    "machines": {
+      "description": "The machines to check; the answers come back in this order.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["environment_id"],
+        "properties": {
+          "environment_id": { "type": "integer" },
+          "session_id": {
+            "description": "The session the relay believes the machine holds. Absent or `null`: none.",
+            "type": ["integer", "null"]
+          }
+        }
+      }
+    }
+  }
+}

@@ -57,6 +57,9 @@ class RunnerEnvironment < ApplicationRecord
   scope :not_heard_since, ->(time) { where(last_heartbeat_at: nil).or(where(arel_table[:last_heartbeat_at].lteq(time))) }
 
   before_validation { self.company_id ||= runner&.company_id }
+  # A session taking or leaving the machine is told to the relay (runner-relay.md §8.1).
+  # Writes that skip callbacks (`update_all`) send it themselves.
+  after_save :signal_relay_machine_session, if: :saved_change_to_current_session_id?
 
   validates :key, presence: true
   validates :origin, presence: true
@@ -106,6 +109,10 @@ class RunnerEnvironment < ApplicationRecord
   end
 
   private
+
+  def signal_relay_machine_session
+    Runners::RelaySignals.machine_session(id, current_session_id)
+  end
 
   def facts_is_an_object
     errors.add(:facts, "must be an object") unless facts.is_a?(Hash)

@@ -172,6 +172,9 @@ class TerminalSession < ApplicationRecord
   broadcasts_to ->(s) { s }, on: :update
   broadcasts_to ->(s) { s.step_run.workflow_run }, on: :update, if: :step_run
   after_commit :broadcast_session_list_update, on: :update
+  # The relay closes a runner session's streams the moment it leaves `ready`, whichever
+  # way its state was written (the state machine's events or a direct write).
+  after_save :signal_relay_session_ended, if: :left_ready?
 
   # Validations
   validates :session_type, presence: true, inclusion: {
@@ -232,6 +235,8 @@ class TerminalSession < ApplicationRecord
   end
 
   # Scopes
+  # A session that runs on an external runner.
+  scope :on_runner, -> { where.not(runner_id: nil) }
   scope :auth_sessions, -> { where(session_type: "auth_setup") }
   scope :agent_sessions, -> { where(session_type: "agent_session") }
   scope :not_ended, -> { where.not(state: TERMINAL_STATES) }
@@ -327,6 +332,11 @@ class TerminalSession < ApplicationRecord
 
   def agent_session?
     session_type == "agent_session"
+  end
+
+  # The same question as the `on_runner` scope, for one record.
+  def on_runner?
+    runner_id.present?
   end
 
   def workflow_step?
@@ -525,6 +535,14 @@ class TerminalSession < ApplicationRecord
   def on_started
     self.started_at = Time.current
     start_workflow_run_execution
+  end
+
+  def left_ready?
+    on_runner? && saved_change_to_state? && state_before_last_save == "ready"
+  end
+
+  def signal_relay_session_ended
+    Runners::RelaySignals.session_ended(id)
   end
 
   def on_ready

@@ -8,6 +8,7 @@ module Runners
   #
   #   environment = Runners::Machines.acquire!(session)            # raises CapacityError when every machine is busy
   #   Runners::Machines.release!(environment, session, failed:)    # after its env.scrub or env.reset succeeded
+  #   Runners::Machines.let_go!(session)                           # a revoked or retired runner's session: the machine is free
   #   Runners::Machines.fail!(environment, reason, holder: session) # its env.reset failed: out of rotation
   #   Runners::Machines.return_to_service!(environment)            # a failed machine: env.reset, then free again
   #   Runners::Machines.availability(runner)                       # => Availability, for the launch's checks
@@ -88,6 +89,20 @@ module Runners
         else
           held.update!(current_session_id: nil, state_reason: nil)
         end
+      end
+    end
+
+    # The machine the session holds stops holding it, with no count of the
+    # session's outcome: for a session whose runner is revoked or deleted, whose
+    # machine no `env.scrub` will ever answer, where #release! would count a
+    # failure streak that means nothing. Under the machine's row lock, and only
+    # while the session holds it. A machine holds at most one session
+    # (`current_session_id` is unique), so there is one row. Saved, not written
+    # past the model, so its callback tells the relay.
+    def let_go!(session)
+      RunnerEnvironment.transaction do
+        held = RunnerEnvironment.where(runner_id: session.runner_id, current_session_id: session.id).lock.first
+        held&.update!(current_session_id: nil)
       end
     end
 
