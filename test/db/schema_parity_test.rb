@@ -22,7 +22,12 @@ require "tmpdir"
 # This test replays the migrations into a throwaway database and diffs the dump
 # against the committed schema, which catches the whole class of drift rather
 # than the one column that happened to blow up first.
+#
+# Tagged :schema_parity (config/test_tags.json): a pull request runs it only when it changes
+# db/migrate or db/schema.rb, and every push runs it.
 class SchemaParityTest < ActiveSupport::TestCase
+  tags :schema_parity
+
   PARITY_DATABASE = "aixle_schema_parity"
 
   # Replaying ~200 migrations in a subprocess is slow by nature; it is worth one
