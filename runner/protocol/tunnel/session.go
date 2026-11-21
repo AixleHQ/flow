@@ -546,7 +546,8 @@ func (s *Session) openTimedOut(st *Stream) {
 }
 
 // Accept waits for the next OPEN (runner only). It returns ErrGoAway once the
-// relay sent GOAWAY and no OPEN is left, and an error when the session ended.
+// relay sent GOAWAY and no OPEN is left, and an error when the session ended. A
+// connection the relay closed with 1000 after its GOAWAY still returns ErrGoAway.
 func (s *Session) Accept(ctx context.Context) (*Incoming, error) {
 	if s.role != RoleRunner {
 		return nil, errWrongRole
@@ -555,6 +556,10 @@ func (s *Session) Accept(ctx context.Context) (*Incoming, error) {
 	defer s.mu.Unlock()
 	for {
 		switch {
+		case s.err != nil && s.drainedLocked():
+			// The relay's GOAWAY and its close can be read one after the other before
+			// Accept looks: the close must not hide the GOAWAY (PROTOCOL.md §8.8).
+			return nil, ErrGoAway
 		case s.err != nil:
 			return nil, fmt.Errorf("%w: %w", ErrSessionClosed, s.err)
 		case !s.started:
@@ -576,6 +581,13 @@ func (s *Session) Accept(ctx context.Context) (*Incoming, error) {
 		}
 		s.mu.Lock()
 	}
+}
+
+// drainedLocked says whether the session ended because the relay closed the connection
+// with 1000 after sending GOAWAY: the drain finishing, not a lost connection.
+func (s *Session) drainedLocked() bool {
+	var closed *CloseError
+	return s.goawayRecv && errors.As(s.err, &closed) && closed.Code == CloseNormal
 }
 
 // beat is the heartbeat, called every ping interval. The relay sends PING each time;
