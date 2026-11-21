@@ -32,6 +32,13 @@ governance, community health — carry none.
   model or a flag, crashed, or quit — now fails within a minute or two with the CLI's own
   message, such as `Cannot use this model: …`. It used to sit at an idle shell until someone
   cancelled the run, or fail after 30 minutes saying it may be blocked on a prompt.
+- **Workflows**: a Grok account signed in with grok.com sees its own models in the model
+  pickers. The picker used to fall back to a fixed list the account could not use, and the
+  step then ran Grok's default model instead. A Grok or Antigravity step whose model the
+  account does not offer now fails at once, saying so.
+- **Workflows**: Claude Code and Kiro CLI offer only the reasoning-effort levels each model
+  takes. Steps that had a level the model lacks keep what the CLI actually ran: `high`
+  instead of a higher level, or none on a model without one.
 - **Sessions & Runs**: Antigravity CLI usage is priced right. Its input tokens never included
   the cached ones, but were priced as if they did, which undercounted the cost of sessions
   that read from the cache.
@@ -69,8 +76,7 @@ governance, community health — carry none.
   level lose it.
 - **Sessions & Runs**: automatic Antigravity CLI steps run in its terminal UI, like
   interactive ones, so the live terminal shows the conversation and a turn that ends
-  without `finish_session` gets the usual reminder. A step whose model the Antigravity
-  account no longer offers fails at once, saying so, instead of running on another model.
+  without `finish_session` gets the usual reminder.
 - **Sign-in & onboarding**: onboarding asks which area of the company you work in —
   Engineering, Product Management, Design, QA, Marketing, Operations, Finance / Accounting,
   Executive Leadership or Other — instead of a software-delivery role. Earlier answers move to
