@@ -318,7 +318,7 @@ module ContainerStrategies
         cmd
       end
 
-      send_tmux_command(container, tmux_cmd)
+      send_tmux_command(container, "#{tmux_cmd}#{AgentExitDetector::LAUNCH_SUFFIX}")
       Rails.logger.info("[AgentSession] Launched agent in tmux: #{cmd}")
     end
 

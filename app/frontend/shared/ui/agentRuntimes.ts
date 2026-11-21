@@ -12,6 +12,8 @@ interface AgentRuntime {
   description: string;
   /** Mantine palette color for the runtime's badges. */
   mantineColor: string;
+  /** Where a runtime that takes no reasoning-effort level gets its effort instead. */
+  reasoningEffortNote: string | undefined;
 }
 
 // Badge color is the one thing the registry leaves to the UI. Keyed by AgentType, so a
@@ -40,6 +42,7 @@ export const AGENT_RUNTIMES = Object.fromEntries(
       vendor: runtime.vendor,
       description: runtime.description,
       mantineColor: MANTINE_COLORS[runtime.id as AgentType],
+      reasoningEffortNote: runtime.reasoning_effort.note,
     },
   ]),
 ) as Record<AgentType, AgentRuntime>;

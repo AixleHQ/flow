@@ -22,12 +22,13 @@ module Sessions
   # that cannot use a pass's minute-old view (the token-refresh sweep, decision 12 of #211).
   class Monitor
     # The order is the order of precedence: a session that cannot go on (quota, a dialog
-    # nobody will answer) is failed before anything waits on it, a refused login is paused
-    # before a turn end is reminded, and silence is judged last, once nothing else has
-    # taken the session over on this pass.
+    # nobody will answer, a CLI that exited) is failed before anything waits on it, a
+    # refused login is paused before a turn end is reminded, and silence is judged last,
+    # once nothing else has taken the session over on this pass.
     CHECKS = [
       Checks::QuotaError,
       Checks::BlockingPrompt,
+      Checks::AgentExited,
       Checks::AuthPause,
       Checks::TurnEnd,
       Checks::NoOutput

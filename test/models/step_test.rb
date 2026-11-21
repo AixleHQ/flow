@@ -157,17 +157,26 @@ class StepTest < ActiveSupport::TestCase
   # A level and its model are kept consistent: on the default model there is nothing to
   # check a level against, so it is refused.
   test "a level on a step left on the default model is refused" do
-    step = build(:step, workflow: @workflow, required_agent_runtime: "cursor_cli", reasoning_effort: "high")
+    step = build(:step, workflow: @workflow, required_agent_runtime: "claude_code", reasoning_effort: "high")
 
     assert_not step.valid?
     assert_includes step.errors[:reasoning_effort], "needs an explicitly chosen model"
   end
 
-  test "a Cursor step takes a level once it names a model" do
-    step = build(:step, workflow: @workflow, required_agent_runtime: "cursor_cli", preferred_model: "claude-opus-4-8",
+  test "a step takes a level once it names a model" do
+    step = build(:step, workflow: @workflow, required_agent_runtime: "claude_code", preferred_model: "claude-opus-5",
                         reasoning_effort: "high")
 
     assert step.valid?, step.errors.full_messages.to_sentence
+  end
+
+  # Task #324: Cursor CLI refused `composer-2.5[effort=low]` and the step hung.
+  test "a Cursor step takes no level: the effort is part of its model" do
+    step = build(:step, workflow: @workflow, required_agent_runtime: "cursor_cli", preferred_model: "composer-2.5",
+                        reasoning_effort: "low")
+
+    assert_not step.valid?
+    assert_includes step.errors[:reasoning_effort], "is not available for cursor_cli with model composer-2.5"
   end
 
   test "the level is checked against the step's preferred model where the runtime's levels depend on it" do

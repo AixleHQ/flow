@@ -48,7 +48,7 @@ One adapter per runtime in `app/services/agents/`, registered in `AgentCredentia
 | `CursorCliAdapter` | `cursor_cli` | Cursor's usage API, matched to request windows from the MITM log at cleanup |
 | `CodexAdapter` | `codex` | OTLP logs, streamed; the MITM log at cleanup as a fallback |
 | `GeminiCliAdapter` | `gemini_cli` | OTLP telemetry, streamed |
-| `AntigravityCliAdapter` | `antigravity_cli` | The CLI's stream-json `result` event, at cleanup |
+| `AntigravityCliAdapter` | `antigravity_cli` | The CLI's conversation transcripts (`brain/*/…/transcript.jsonl`), at cleanup |
 | `GrokAdapter` | `grok` | The MITM log, at cleanup |
 | `KiroCliAdapter` | `kiro_cli` | OTLP credit telemetry, streamed; MITM-captured usage summaries, then the account's credit counter, as fallbacks |
 | `CopilotCliAdapter` | `copilot_cli` | OTLP traces, streamed: the AI credits on each model call's `chat` span |

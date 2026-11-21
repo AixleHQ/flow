@@ -128,22 +128,21 @@ module Agents
     # the newest release (~180 MB) two seconds in, replacing the version the image pins.
     # The prompt is appended by AgentSessionStrategy, read from its prompt file.
     #
-    # Cursor has no effort flag: a parameterized model takes it as a bracket override,
-    # `--model 'claude-opus-4-8[effort=high]'`. With no model there is nothing to
-    # attach it to, and a model that already carries overrides keeps its own.
+    # No effort: Cursor takes it as part of the model id (`claude-opus-5-5-high`), which is
+    # what the model list offers. A bracket override is accepted only as a model's complete
+    # variant string (`claude-opus-5-5[context=300k,effort=low,fast=false]`); a partial one
+    # such as `composer-2.5[effort=low]` makes the CLI exit with "Cannot use this model"
+    # (task #324, measured on 2026.11.19-f005e9d).
+    def session_command(mode:, model: nil, effort: nil)
+      command = "agent --force --disable-auto-update"
+      model ? "#{command} --model #{Shellwords.shellescape(model)}" : command
+    end
+
     # Resume, measured 2026-11-20: the chat store is keyed by a hash of /workspace, the
     # same in every container.
     def conversation_paths = %w[.cursor/chats]
     def conversation_id_command = "ls -td .cursor/chats/*/*/ 2>/dev/null | head -1 | xargs -r basename"
     def resume_arguments(id) = "--resume=#{id}"
-
-    def session_command(mode:, model: nil, effort: nil)
-      command = "agent --force --disable-auto-update"
-      return command unless model
-
-      model = "#{model}[effort=#{effort}]" if effort.present? && !model.include?("[")
-      "#{command} --model #{Shellwords.shellescape(model)}"
-    end
 
     # Context file: /workspace/AGENTS.md (auto-read by Cursor at startup, no git required)
     def context_file_path

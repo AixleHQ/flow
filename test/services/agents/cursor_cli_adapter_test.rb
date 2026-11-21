@@ -205,22 +205,17 @@ module Agents
                    @adapter.session_command(mode: "interactive", model: "claude sonnet")
     end
 
-    # Cursor takes the effort as a bracket override on a parameterized model.
-    test "session_command attaches the reasoning effort to the model as a bracket override" do
-      command = @adapter.session_command(mode: "interactive", model: "claude-opus-4-8", effort: "high")
-
-      assert_equal "agent --force --disable-auto-update --model claude-opus-4-8\\[effort\\=high\\]", command
-      assert_equal [ "agent", "--force", "--disable-auto-update", "--model", "claude-opus-4-8[effort=high]" ],
-                   Shellwords.split(command)
-    end
-
-    test "session_command leaves the effort out without a model, or when the model has overrides" do
-      assert_equal "agent --force --disable-auto-update", @adapter.session_command(mode: "interactive", effort: "high")
-      assert_equal [ "--model", "claude-opus-4-8[context=1m]" ],
-                   Shellwords.split(@adapter.session_command(mode: "interactive", model: "claude-opus-4-8[context=1m]",
+    # Task #324: the CLI refuses a partial bracket override such as
+    # `composer-2.5[effort=low]` and exits. A session row that still carries a level
+    # from before Cursor stopped offering one must launch on its model alone.
+    test "session_command passes the model as it is and never attaches a reasoning effort" do
+      assert_equal [ "agent", "--force", "--disable-auto-update", "--model", "composer-2.5" ],
+                   Shellwords.split(@adapter.session_command(mode: "non_interactive", model: "composer-2.5", effort: "low"))
+      assert_equal [ "--model", "claude-opus-5-5[context=300k,effort=low,fast=false]" ],
+                   Shellwords.split(@adapter.session_command(mode: "interactive",
+                                                             model: "claude-opus-5-5[context=300k,effort=low,fast=false]",
                                                              effort: "high")).last(2)
-      assert_equal "agent --force --disable-auto-update --model gpt-5.1",
-                   @adapter.session_command(mode: "interactive", model: "gpt-5.1", effort: nil)
+      assert_equal "agent --force --disable-auto-update", @adapter.session_command(mode: "interactive", effort: "high")
     end
 
     # =========================================================================
