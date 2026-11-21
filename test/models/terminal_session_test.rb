@@ -582,11 +582,19 @@ class TerminalSessionTest < ActiveSupport::TestCase
     end
   end
 
-  test "a Cursor session with a chosen model takes a level" do
-    session = build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "cursor_cli",
-                                       requested_model: "claude-opus-4-8", reasoning_effort: "high")
+  test "a session with a chosen model takes a level" do
+    session = build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "kiro_cli",
+                                       requested_model: "claude-opus-5.5", reasoning_effort: "high")
 
     assert session.valid?, session.errors.full_messages.to_sentence
+  end
+
+  test "a Cursor session takes no level, whatever its model" do
+    session = build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "cursor_cli",
+                                       requested_model: "claude-opus-5-5-high", reasoning_effort: "low")
+
+    assert_not session.valid?
+    assert_includes session.errors[:reasoning_effort], "is not available for cursor_cli with model claude-opus-5-5-high"
   end
 
   test "ended? and ended_state? are true for finished, failed and cancelled only" do

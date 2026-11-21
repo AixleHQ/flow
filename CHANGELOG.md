@@ -28,6 +28,13 @@ governance, community health — carry none.
   Ruby's strings and regular expressions announced on 2026-11-18 (among them
   GHSA-34m4-m9fh-gqp5). One of them lets anyone who can reach the server run code on it
   without signing in. Self-hosted installations: upgrade to this release.
+- **Sessions & Runs**: an automatic step whose agent CLI exits — because it refused its
+  model or a flag, crashed, or quit — now fails within a minute or two with the CLI's own
+  message, such as `Cannot use this model: …`. It used to sit at an idle shell until someone
+  cancelled the run, or fail after 30 minutes saying it may be blocked on a prompt.
+- **Sessions & Runs**: Antigravity CLI usage is priced right. Its input tokens never included
+  the cached ones, but were priced as if they did, which undercounted the cost of sessions
+  that read from the cache.
 - **Triggers & gates**: a column trigger in auto mode is refused for a workflow with a step
   that has auto-run off, and the error names the steps — such a trigger never started
   anything. When a column trigger cannot start its run, the card gets a comment saying why
@@ -55,6 +62,15 @@ governance, community health — carry none.
   set on Settings → General, instead of an installation ceiling, and gains a
   *Prioritising projects* section: how reserving workers keeps the projects that
   matter most from waiting, and what a reservation costs.
+- **Workflows**: Cursor CLI and Antigravity CLI no longer offer a separate reasoning effort.
+  Both take the effort as part of the model, so pick the model's Low, Medium, High (or Max)
+  variant. A level on top of it made Cursor CLI refuse the model and exit, and made
+  Antigravity CLI quietly run its default model instead. Steps on these runtimes that had a
+  level lose it.
+- **Sessions & Runs**: automatic Antigravity CLI steps run in its terminal UI, like
+  interactive ones, so the live terminal shows the conversation and a turn that ends
+  without `finish_session` gets the usual reminder. A step whose model the Antigravity
+  account no longer offers fails at once, saying so, instead of running on another model.
 - **Sign-in & onboarding**: onboarding asks which area of the company you work in —
   Engineering, Product Management, Design, QA, Marketing, Operations, Finance / Accounting,
   Executive Leadership or Other — instead of a software-delivery role. Earlier answers move to

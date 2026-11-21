@@ -575,10 +575,8 @@ describe('SessionNewForm', () => {
       },
       {
         agentType: 'cursor_cli',
-        models: [
-          { modelId: 'claude-opus-4-8', displayName: 'Opus 4.8', reasoningEffortLevels: ['low', 'medium', 'high'] },
-        ],
-        defaultModel: 'claude-opus-4-8',
+        models: [{ modelId: 'claude-opus-5-5-high', displayName: 'Opus 5.5 High', reasoningEffortLevels: [] }],
+        defaultModel: 'claude-opus-5-5-high',
       },
       {
         agentType: 'kiro_cli',
@@ -709,16 +707,20 @@ describe('SessionNewForm', () => {
       fetchSpy.mockRestore();
     });
 
-    it("offers Cursor CLI's levels once a model is chosen", async () => {
+    // Task #324: a level on top of a Cursor model makes the CLI refuse it and exit.
+    it('is disabled for Cursor CLI, which takes the effort as part of the model', async () => {
       const user = userEvent.setup();
       renderAuthedPage(<SessionNewForm {...makeProps({ agentModels })} />, { props: authProps(['cursor_cli']) });
 
       await user.click(screen.getByText('Cursor CLI'));
-      await pickModel(user, 'Opus 4.8');
-      await user.click(screen.getByRole('combobox', { name: 'Reasoning effort' }));
+      await pickModel(user, 'Opus 5.5 High');
 
-      const options = await screen.findAllByRole('option');
-      expect(options.map((o) => o.textContent)).toEqual(['Low', 'Medium', 'High']);
+      expect(screen.getByRole('combobox', { name: 'Reasoning effort' })).toBeDisabled();
+      expect(
+        screen.getByText(
+          "Cursor CLI takes the effort as part of the model: pick the model's Low, Medium, High or Max variant.",
+        ),
+      ).toBeInTheDocument();
     });
 
     it('offers exactly the levels the server sent for the selected model', async () => {

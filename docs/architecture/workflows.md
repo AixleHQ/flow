@@ -801,6 +801,7 @@ pass and hands the snapshot to them (task #211).
   |---|---|---|---|
   | `Checks::QuotaError` | live steps older than a minute | `scrollback`, `log_mtime` | fails the session on its recorded error, or on its own provider's quota message on the current screen once the pane has been quiet for a minute (`QuotaErrorDetector`) |
   | `Checks::BlockingPrompt` | the same, `non_interactive` only | `scrollback` | fails the session on a dialog it cannot answer (`InteractivePromptDetector`) |
+  | `Checks::AgentExited` | the same, `ready` only | `scrollback` | fails the session once its agent CLI has exited back to the shell, quoting what the CLI printed (`AgentExitDetector`, below) |
   | `Checks::AuthPause` | the same as `QuotaError` | `scrollback`, `log_mtime` | pauses, heals, unpauses or expires a refused login (`Sessions::AuthPause`) |
   | `Checks::TurnEnd` | `ready`, `non_interactive`, not auth-paused | `scrollback`, `clients` | types a reminder after a turn end, fails after the last one (below) |
   | `Checks::NoOutput` | `ready` steps that are not interactive and not auth-paused, from their start | `scrollback`, `log_mtime` | fails a session whose screen (Kiro) or log (other runtimes) has not changed for 30 minutes (below) |
@@ -849,6 +850,7 @@ pass and hands the snapshot to them (task #211).
   |---|---|---|
   | `QuotaError` | nothing | — |
   | `BlockingPrompt` | nothing | — |
+  | `AgentExited` | nothing | — |
   | `AuthPause` | nothing | `auth_paused_at`, `auth_pause_reason`, `auth_renewed_at`, `auth_heal_attempts`, `auth_heal_attempted_at` (also written by a delivery's `resume!` and by a refused login the CLI writes back) |
   | `TurnEnd` | `turn_end_screen`, `turn_end_seen_at` (the turn end seen on an earlier pass) | `turn_end_nudges` (the reminder count) |
   | `NoOutput` | `screen_digest`, `screen_changed_at` (the screen and when it last changed; screen-rule runtimes only) | — |
@@ -906,6 +908,21 @@ error ended the turn. Two sweeps cover that state:
   - The prompt is matched on its start (`› ask a question`), because a narrow
     pane wraps the placeholder. The signature is checked against captures at
     30x20, 80x24, 160x45 and 220x50.
+- **A CLI that exited.** The launch is typed into a shell in the `agent` tmux
+  session, so a CLI that refuses its arguments, crashes or quits drops back to
+  that shell, where nothing would ever call `finish_session` (task #324: Cursor
+  CLI refused `composer-2.5[effort=low]` with "Cannot use this model" and the
+  step sat at an idle prompt until a person cancelled the run).
+  `AgentSessionStrategy#launch_agent_in_tmux` appends
+  `AgentExitDetector::LAUNCH_SUFFIX` to the command, which prints
+  `[aixle] agent exited with status <n>` once the CLI returns.
+  `Checks::AgentExited` fails an unattended `ready` step whose pane shows that
+  line followed by nothing but shell prompts, on the first pass after it
+  appears. The message carries the exit status and what the CLI printed between
+  the typed command and the status line, redacted and cut to 500 characters.
+  An agent printing the same words inside its TUI is not taken for an exit,
+  because the TUI's chrome follows them. An interactive step is left alone: its
+  person can start the CLI again.
 - **The silence watchdog.** `Sessions::Checks::NoOutput` runs on every pass of
   `Sessions::Monitor`, last, and reads every unattended `ready` step from its
   start, so a silent session is ended 30 to 31 minutes after it stopped
