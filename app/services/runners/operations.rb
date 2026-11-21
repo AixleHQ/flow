@@ -272,23 +272,25 @@ module Runners
       end
     end
 
+    # The op is committed: a poll that missed this wake-up still takes it at its
+    # next read, at the latest when its wait ends.
     def wake(environment_id, sequence)
-      pubsub.broadcast(channel_for(environment_id), { type: WAKE_UP, sequence: sequence }.to_json)
-    rescue StandardError => e
-      # The op is committed: a poll that missed this wake-up still takes it at
-      # its next read, at the latest when its wait ends.
-      Rails.logger.warn("[Runners::Operations] wake-up of runner_env_#{environment_id} failed: #{e.class}: #{e.message}")
+      BestEffortBroadcast.call(channel_for(environment_id),
+                               context: "[Runners::Operations] wake-up of runner_env_#{environment_id}") do
+        { type: WAKE_UP, sequence: sequence }
+      end
     end
 
     # Ends the environment's older waiting poll, which hears this on its
     # subscription. Sent once subscribed, so of two polls that start together
     # at least the later one's announcement reaches the earlier one: at most
     # one of them keeps waiting, and both may answer empty.
+    # A lost announcement leaves the older poll to wait out its own `wait`, as
+    # before this rule.
     def announce(channel, poll_id)
-      pubsub.broadcast(channel, { type: ANNOUNCEMENT, poll_id: poll_id }.to_json)
-    rescue StandardError => e
-      # The older poll then waits out its own `wait`, as before this rule.
-      Rails.logger.warn("[Runners::Operations] announcing a poll on #{channel} failed: #{e.class}: #{e.message}")
+      BestEffortBroadcast.call(channel, context: "[Runners::Operations] announcing a poll on #{channel}") do
+        { type: ANNOUNCEMENT, poll_id: poll_id }
+      end
     end
 
     # A message heard on the channel as a Hash, or nil for one that is not a

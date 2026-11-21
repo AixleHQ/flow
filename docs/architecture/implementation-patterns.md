@@ -235,6 +235,7 @@ What a model's state, type or columns mean is decided in the model. Other code a
 - **Services:** custom exceptions → `Temporalio::Error::ApplicationError`
 - **Temporal:** `TemporalExceptions.wrap(error, retryable:, benign:)`
 - **Frontend:** `apiFetch` response checks + Mantine notifications for toasts
+- **A broadcast whose loss is acceptable goes through `BestEffortBroadcast.call(channel, context:) { message }`,** which publishes on Action Cable's pub/sub and logs and swallows a failure. Don't write `pubsub.broadcast` with a `rescue` again (`Runners::Operations#wake`, `#announce` and `Runners::RelaySignals` use it). Deferring until the commit stays `ActiveRecord.after_all_transactions_commit` at the caller.
 
 ### Logging
 - **Backend:** Lograge (structured JSON) + Sentry (error tracking)

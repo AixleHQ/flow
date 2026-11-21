@@ -12,7 +12,8 @@ module Runners
   #
   # Each is published once the surrounding transaction has committed
   # (ActiveRecord.after_all_transactions_commit, as Operations#wake does): one
-  # that rolled back sends nothing. A publish that fails is logged and swallowed.
+  # that rolled back sends nothing. A publish that fails is logged and swallowed
+  # (BestEffortBroadcast).
   # Redis pub/sub loses messages anyway, and the relay's reconcile pass (§8.3, the
   # `checks` endpoint) is what guarantees it converges.
   module RelaySignals
@@ -48,9 +49,7 @@ module Runners
     end
 
     def publish(type)
-      ActionCable.server.pubsub.broadcast(CHANNEL, { type: type, **yield }.to_json)
-    rescue StandardError => e
-      Rails.logger.warn("[Runners::RelaySignals] #{type} signal failed: #{e.class}: #{e.message}")
+      BestEffortBroadcast.call(CHANNEL, context: "[Runners::RelaySignals] #{type} signal") { { type: type, **yield } }
     end
     private_class_method :deliver, :publish
   end
