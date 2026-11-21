@@ -9,10 +9,15 @@ module Runners
   #   Runners::ProtocolSchema.valid?("op_result.request", body)
   #
   # A new gateway endpoint that takes a body or parameters adds its schema to
-  # that directory and names it in SCHEMAS.
+  # that directory and names it in SCHEMAS. The relay's internal API
+  # (docs/design/agent-runtimes/runner-relay.md §8.2) is JSON from another
+  # machine too: its schemas are in runner-relay/schemas/, named in RELAY_SCHEMAS,
+  # and are checked the same way.
   module ProtocolSchema
     DIRECTORY = Rails.root.join("runner/protocol/schemas/v1")
     SCHEMAS = %w[register.request check_in.request ops.query op_result.request releases.params].freeze
+    RELAY_DIRECTORY = Rails.root.join("runner-relay/schemas")
+    RELAY_SCHEMAS = %w[checks.request].freeze
 
     class << self
       def valid?(name, document)
@@ -20,9 +25,12 @@ module Runners
       end
 
       def path(name)
-        raise ArgumentError, "no runner protocol schema #{name.inspect}" unless SCHEMAS.include?(name)
+        directory = if SCHEMAS.include?(name) then DIRECTORY
+        elsif RELAY_SCHEMAS.include?(name) then RELAY_DIRECTORY
+        else raise ArgumentError, "no runner protocol schema #{name.inspect}"
+        end
 
-        DIRECTORY.join("#{name}.json")
+        directory.join("#{name}.json")
       end
 
       private
@@ -34,7 +42,7 @@ module Runners
       end
 
       def schemas
-        @schemas ||= SCHEMAS.index_with { |name| JSONSchemer.schema(JSON.parse(path(name).read)) }.freeze
+        @schemas ||= (SCHEMAS + RELAY_SCHEMAS).index_with { |name| JSONSchemer.schema(JSON.parse(path(name).read)) }.freeze
       end
     end
   end

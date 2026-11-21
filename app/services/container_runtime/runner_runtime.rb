@@ -627,18 +627,24 @@ module ContainerRuntime
     # platform alone configures (Runners::Proxy.port): the sidecar's, or with
     # `network: host`, where there is no sidecar, the host runner's listener's
     # on the machine's 127.0.0.1 (PROTOCOL.md §6.2).
+    #
+    # `tunnel` names the five ports of the session's interactive surfaces
+    # (Runners::Tunnel, runner-relay.md §3.3). With `network: host` the image's
+    # port variables in `env` come from them, once the platform has turned the
+    # tunnel on; a runner that does not know the field ignores it.
     def container_payload(session, spec)
       config = session.runner&.config || {}
       {
         "image" => runner_image(config, session),
-        "env" => env_hash(spec[:env_vars]),
+        "env" => env_hash(spec[:env_vars]).merge(Runners::Tunnel.env_vars(session)),
         "workspace_volume" => setting(config, "container.workspace_volume"),
         "mounts" => mounts(config),
         "network" => setting(config, "container.network"),
         "pid" => setting(config, "container.pid"),
         "resources" => resources(config, (spec[:host_config] || {}).stringify_keys),
         "privilege_escalation" => spec[:privilege_escalation] == true,
-        "proxy_port" => Runners::Proxy.port(session)
+        "proxy_port" => Runners::Proxy.port(session),
+        "tunnel" => { "ports" => Runners::Tunnel.ports(session) }
       }
     end
 

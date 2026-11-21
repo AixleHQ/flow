@@ -236,6 +236,7 @@ What a model's state, type or columns mean is decided in the model. Other code a
 - **Services:** custom exceptions → `Temporalio::Error::ApplicationError`
 - **Temporal:** `TemporalExceptions.wrap(error, retryable:, benign:)`
 - **Frontend:** `apiFetch` response checks + Mantine notifications for toasts
+- **A broadcast whose loss is acceptable goes through `BestEffortBroadcast.call(channel, context:) { message }`,** which publishes on Action Cable's pub/sub and logs and swallows a failure. Don't write `pubsub.broadcast` with a `rescue` again (`Runners::Operations#wake`, `#announce` and `Runners::RelaySignals` use it). Deferring until the commit stays `ActiveRecord.after_all_transactions_commit` at the caller.
 
 ### Logging
 - **Backend:** Lograge (structured JSON) + Sentry (error tracking)
@@ -261,7 +262,7 @@ What a model's state, type or columns mean is decided in the model. Other code a
 - **Never** use global loading states → track loading per request (local state around `apiFetch`)
 - **Never** validate only on submit → use on blur + on submit
 - **Never** put business logic in a controller (queries beyond finding the record in the request's scope, building domain rows, find-or-create with race handling, defaults) → a service with named parameters; the controller turns the request into parameters, calls it and renders (see Structure Patterns → Services and Error Handling)
-- **Never** accept lenient input at an interface (`ActiveModel::Type::Boolean.new.cast`, `"true"`/`1` taken as a boolean, a value of the wrong type ignored) → strict types: a wrong type is refused, and the schema or the permitted params are the only definition
+- **Never** accept lenient input at an interface (`ActiveModel::Type::Boolean.new.cast`, `"true"`/`1` taken as a boolean, a value of the wrong type ignored) → strict types: a wrong type is refused, and there is one definition. JSON that another machine sends (the runner gateway, the relay's internal API) is validated with a JSON Schema through `Runners::ProtocolSchema`; forms and writes to models use Strong Parameters
 - **Never** keep state in an object that doesn't own it → ask whose the state is and how long it lives. An object keeps only what is its own for its whole life: configuration, clients, values memoized for that life (`@project ||=` in a controller, which lives for one request). What belongs to one call, one record or one run (a request, a session, a task) goes in as an argument and comes back as a result, or is stored on that record. Instance variables that accumulate across calls, `Thread.current`, globals and class-level mutable state are the usual signs of state in the wrong place
 - **Never** give a reader side effects → a method that returns state doesn't reset or change it
 - **Never** check a capability with `respond_to?` on an object behind an abstraction (`ContainerRuntime::BaseRuntime`, the strategies, the agent adapters) → declare the method on the base with a default, as `list_session_resources` is `[]` on a runner

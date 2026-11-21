@@ -662,7 +662,10 @@ answers in milliseconds and holds no connection.
 - `POST /api/v1/internal/runner_relay/checks` (`...ChecksController#create`), body
   `{"machines": [{"environment_id": 7, "session_id": 123}]}`, answer `{"machines": [true]}`. A machine is
   valid when it is registered, its runner is not revoked, the company's `external_runners` flag is on and it
-  still holds that session (and that session is still `ready`).
+  still holds that session (and that session is still `ready`). The body is validated with a JSON Schema,
+  `runner-relay/schemas/checks.request.json` (checked through `Runners::ProtocolSchema`, as the runner gateway's
+  bodies are): `machines` is an array of objects, `environment_id` an integer, `session_id` an integer, `null`
+  or absent; anything else is `422`. Other keys are ignored, so a newer relay is not refused by an older platform.
 
 **No change to `WsAuthController`.** The relay does not decide viewer authorization, so nothing is extracted
 from it: `terminal-auth` stays the only authorization of a browser (decision 2).
