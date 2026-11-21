@@ -57,6 +57,11 @@ func (p *fakeProxy) OpenSocket(sessionID int64) (string, error) {
 	return dir, os.MkdirAll(dir, 0o755)
 }
 
+func (p *fakeProxy) DialDir(sessionID int64) (string, error) {
+	dir := filepath.Join(p.dir, "dial", strconv.FormatInt(sessionID, 10))
+	return dir, os.MkdirAll(dir, 0o777)
+}
+
 func (p *fakeProxy) OpenListener(sessionID int64, port int) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()

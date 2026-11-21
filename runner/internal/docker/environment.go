@@ -14,6 +14,7 @@ import (
 	"github.com/moby/moby/client"
 
 	"github.com/aixlehq/aixle-runner/internal/protocol"
+	"github.com/aixlehq/aixle-runner/internal/tunnel"
 )
 
 // The labels the host runner puts on what it creates (DESIGN.md §6.8, §7.2).
@@ -25,6 +26,9 @@ const (
 	// container: the short-lived one of `env.scrub` that empties the outputs
 	// (`scrub`), and a session's proxy sidecar (`proxy`).
 	LabelRole = "aixle.com/role"
+	// LabelTunnelPorts is the session's five tunnel ports on its agent container, so
+	// that a restarted host runner serves them again (Resume).
+	LabelTunnelPorts = "aixle.com/tunnel-ports"
 )
 
 // Result error classes of the agent-container ops (runner/protocol/PROTOCOL.md §6).
@@ -77,6 +81,14 @@ type Environment struct {
 	// `container.start` starts a session's proxy through it: a sidecar, or with
 	// `network: host` a listener. Nil starts none.
 	Proxy ProxyHost
+	// Tunnel is what the runner serves through the interactive tunnel: `container.start`
+	// sets the session and its five ports, `container.stop` and the resets clear them.
+	// Nil when the platform has not turned the tunnel on for this machine: `tunnel` in
+	// the payload is then ignored, and nothing about the container changes.
+	Tunnel *tunnel.Serving
+	// TunnelReadyTimeout bounds how long `container.start` waits for the five ports to
+	// answer. Zero is 30 seconds, as a hosted session waits.
+	TunnelReadyTimeout time.Duration
 	// Background is the context the sidecars' watchers run under, the host
 	// runner's own. Nil is context.Background().
 	Background context.Context

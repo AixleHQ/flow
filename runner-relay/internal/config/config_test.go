@@ -10,8 +10,10 @@ func env(m map[string]string) func(string) string { return func(k string) string
 
 func TestFromEnvDefaults(t *testing.T) {
 	c, err := FromEnv(env(map[string]string{
-		"RUNNER_RELAY_REDIS_URL":  "redis://redis:6379/1",
-		"RUNNER_RELAY_TICKET_KEY": "0123456789abcdef0123",
+		"RUNNER_RELAY_REDIS_URL":      "redis://redis:6379/1",
+		"RUNNER_RELAY_TICKET_KEY":     "0123456789abcdef0123",
+		"RUNNER_RELAY_RAILS_URL":      "http://web:4000",
+		"RUNNER_RELAY_INTERNAL_TOKEN": "tok",
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -71,7 +73,9 @@ func TestFromEnvReportsEveryProblemWithoutEchoingSecrets(t *testing.T) {
 func TestFromEnvRequiresRedisAndKey(t *testing.T) {
 	_, err := FromEnv(env(nil))
 	if err == nil || !strings.Contains(err.Error(), "RUNNER_RELAY_REDIS_URL is required") ||
-		!strings.Contains(err.Error(), "RUNNER_RELAY_TICKET_KEY") {
+		!strings.Contains(err.Error(), "RUNNER_RELAY_TICKET_KEY") ||
+		!strings.Contains(err.Error(), "RUNNER_RELAY_RAILS_URL is required") ||
+		!strings.Contains(err.Error(), "RUNNER_RELAY_INTERNAL_TOKEN is required") {
 		t.Fatalf("got %v", err)
 	}
 }

@@ -18,10 +18,10 @@ var quiet = slog.New(slog.NewTextHandler(io.Discard, nil))
 func TestTheTunnelStaysOffUnlessThePlatformTurnsItOn(t *testing.T) {
 	off := protocol.CheckIn{}
 	unknown := protocol.CheckIn{Config: protocol.CheckInConfig{Tunnel: &protocol.TunnelConfig{Mode: "always"}}}
-	if tunnelManager(off, nil, nil, nil, "", quiet) != nil {
+	if tunnelManager(off, nil, nil, nil, nil, "", quiet) != nil {
 		t.Error("a check-in without config.tunnel turned the tunnel on")
 	}
-	if tunnelManager(unknown, nil, nil, nil, "", quiet) != nil {
+	if tunnelManager(unknown, nil, nil, nil, nil, "", quiet) != nil {
 		t.Error("a mode this runner does not know turned the tunnel on")
 	}
 }
@@ -42,7 +42,7 @@ func TestTunnelOverrideKeepsThePlatformURLsRule(t *testing.T) {
 
 func TestAnUnusableTunnelOverrideKeepsTheTunnelOff(t *testing.T) {
 	on := protocol.CheckIn{Config: protocol.CheckInConfig{Tunnel: &protocol.TunnelConfig{Mode: "session"}}}
-	if tunnelManager(on, nil, nil, nil, "http://nope", quiet) != nil {
+	if tunnelManager(on, nil, nil, nil, nil, "http://nope", quiet) != nil {
 		t.Error("an override that is not a ws URL left the tunnel on")
 	}
 }

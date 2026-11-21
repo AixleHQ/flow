@@ -30,3 +30,21 @@ http:
           - X-Requested-With
           - Cookie
         accessControlAllowCredentials: true
+  # A runner session's terminal, read-only view, file panel, upload and IDE
+  # (docs/design/agent-runtimes/runner-relay.md §2.3, §7.1). A runner session creates no route of
+  # its own: every `/t/…` that no hosted session's own route claims goes to the runner-relay,
+  # behind the same `terminal-auth`. Hosted sessions' routes carry no explicit priority, so
+  # Traefik ranks them by rule length, and this one stays below them at priority 2. The relay
+  # runs in web's network namespace (the `runner-relay` service), listening on RUNNER_RELAY_PORT.
+  routers:
+    runner-relay-browser:
+      rule: "PathPrefix(`/t/`)"
+      priority: 2
+      middlewares:
+        - terminal-auth
+      service: runner-relay
+  services:
+    runner-relay:
+      loadBalancer:
+        servers:
+          - url: 'http://web:{{ env "RUNNER_RELAY_PORT" | default "4004" }}'
