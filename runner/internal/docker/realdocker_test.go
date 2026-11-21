@@ -42,10 +42,13 @@ func TestRealDockerBridgeSessionServesItsFivePortsThroughTheSidecar(t *testing.T
 	}
 	defer api.Close()
 
-	state := t.TempDir()
-	if err := os.Chmod(state, 0o700); err != nil {
+	// A short path: a Unix socket's path is limited to about 100 bytes, which t.TempDir's
+	// name of the test overruns.
+	state, err := os.MkdirTemp("", "rd")
+	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { os.RemoveAll(state) })
 	binary := filepath.Join(state, "aixle-runner")
 	build := exec.Command("go", "build", "-o", binary, "../../cmd/aixle-runner")
 	build.Env = append(os.Environ(), "CGO_ENABLED=0")
