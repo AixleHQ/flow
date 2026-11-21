@@ -76,7 +76,7 @@ class UserConnectionsTest < ActiveSupport::TestCase
     assert_raises(UserConnections::UnknownProvider) { UserConnections.connection(user: @user, provider: "azure_devops") }
     assert_raises(UserConnections::UnknownProvider) { UserConnections.disconnect!(user: @user, provider: "azure_devops") }
     assert_raises(UserConnections::UnknownProvider) do
-      UserConnections.update_consent!(user: @user, company: @company, provider: "bitbucket", project_id: @alpha.id)
+      UserConnections.update_consent!(user: @user, company: @company, provider: "azure_devops", project_id: @alpha.id)
     end
   end
 
