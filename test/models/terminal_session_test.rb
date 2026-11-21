@@ -534,14 +534,14 @@ class TerminalSessionTest < ActiveSupport::TestCase
 
   # --- reasoning_effort ---
 
-  test "a standalone session's reasoning effort must be one its runtime takes for its model" do
+  test "a standalone session's reasoning effort must be one its runtime takes" do
     assert build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "codex",
                                     requested_model: "gpt-6-sol", reasoning_effort: "ultra").valid?
 
-    session = build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "codex",
-                                       requested_model: "gpt-5.5", reasoning_effort: "ultra")
+    session = build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "gemini_cli",
+                                       requested_model: "gemini-3-pro", reasoning_effort: "ultra")
     assert_not session.valid?
-    assert_includes session.errors[:reasoning_effort].first, "ultra is not available for codex with model gpt-5.5"
+    assert_includes session.errors[:reasoning_effort].first, "ultra is not available for gemini_cli with model gemini-3-pro"
   end
 
   test "a word that is no reasoning-effort level is rejected with one message" do
@@ -556,9 +556,9 @@ class TerminalSessionTest < ActiveSupport::TestCase
   # session_type is caller-controlled on the public create API, so it grants no exemption.
   test "a workflow step's session is held to the same rule" do
     session = build(:terminal_session, user: @user, project: @project, session_type: "workflow_step",
-                                       agent_type: "gemini_cli", requested_model: "gemini-2.5-pro", reasoning_effort: "low")
+                                       agent_type: "antigravity_cli", requested_model: "gemini-3.8-flash-high", reasoning_effort: "low")
     assert_not session.valid?
-    assert_includes session.errors[:reasoning_effort], "is not available for gemini_cli with model gemini-2.5-pro"
+    assert_includes session.errors[:reasoning_effort], "is not available for antigravity_cli with model gemini-3.8-flash-high"
 
     session = build(:terminal_session, user: @user, project: @project, session_type: "workflow_step",
                                        agent_type: "gemini_cli", reasoning_effort: "low")

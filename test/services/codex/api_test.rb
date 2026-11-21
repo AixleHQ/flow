@@ -56,6 +56,18 @@ module Codex
       assert_equal "gpt-5.6-terra", hidden.upgrade_target
     end
 
+    test "models reads the efforts each model takes" do
+      stub_request(:get, models_url).to_return(models_response([
+        { "slug" => "gpt-6-luna", "supported_reasoning_levels" => [ { "effort" => "low" }, { "effort" => "max" } ] },
+        { "slug" => "gpt-legacy" }
+      ]))
+
+      luna, legacy = Api.models(access_token: "tok")
+
+      assert_equal %w[low max], luna.reasoning_levels
+      assert_nil legacy.reasoning_levels
+    end
+
     test "models falls back to the slug when the catalog omits a display name" do
       stub_request(:get, models_url).to_return(models_response([ { "slug" => "gpt-5.4" } ]))
 

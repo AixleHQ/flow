@@ -57,9 +57,28 @@ Two rules apply, on steps and sessions alike:
 1. A level can be set only when both the runtime and the model are chosen explicitly: a
    step's `required_agent_runtime` and `preferred_model`, or a session's `agent_type` and
    `requested_model`.
-2. A level that is set must be one that this runtime takes for this model.
+2. A level that is set must be one this runtime's CLI takes for some model: its grammar,
+   `AgentRuntime#reasoning_effort_grammar` (every level in `reasoning_effort`, rules
+   included).
 
-`ReasoningEffortValidator` checks both, with one message per failure, so the REST API and
+Which levels a given model takes is the vendor's to say, per account, and a step does not
+know which account will run it, so the model pickers apply that and the validator does
+not. Each adapter puts the levels its vendor's catalogue lists on a model entry
+(`reasoning_effort_levels`); `AgentRuntime#reasoning_effort_levels(model, offered:)` keeps
+them to the grammar, and falls back to the registry's rule for the model when the
+catalogue does not say (task #324):
+
+| Runtime | Where a model's levels come from |
+| --- | --- |
+| Claude Code | Anthropic's `/v1/models`, `capabilities.effort` (`supported`, then one entry per level) |
+| Codex | the Codex models API, `supported_reasoning_levels[].effort` |
+| Copilot CLI | the CLI's ACP `reasoning_effort` option per model, captured into the credential's metadata (`docker/copilot-cli/aixle-copilot-models.mjs`) |
+| Grok | for a signed-in account, the CLI proxy's `/v1/models`, `supports_reasoning_effort` and `reasoning_efforts`; an API key's public catalogue says nothing, so the rule |
+| Kiro CLI | the API's `ListAvailableModels`, the `effort` enum in `additionalModelRequestFieldsSchema` (none without a schema); the CLI's own list carries none |
+| Gemini CLI | the models API says only `thinking`: a model that does not think takes none, the rule decides the rest |
+| Cursor CLI, Antigravity CLI | none: the model id carries the effort |
+
+`ReasoningEffortValidator` checks both rules, with one message per failure, so the REST API and
 the MCP tools answer 422. A step is checked on every save; a session, workflow step
 sessions included, when it is created. Clearing the model or the runtime while a level is
 set is refused the same way, so the caller clears the level with them. The step editor
@@ -82,13 +101,13 @@ docs:
 
 | Runtime | Pin | How the level is set | Levels offered | Depends on the model |
 | --- | --- | --- | --- | --- |
-| Claude Code | 2.1.329 | `claude --effort <level>` | low, medium, high, xhigh, max; the 4.6 Opus and Sonnet have no xhigh, the 4.5 Opus stops at high, the 4.5 Haiku and Sonnet have none | Yes: the CLI steps an unsupported level down to high, or drops it on a model with none, silently (probed 2026-11-21). An unknown word is a warning, and the session runs at the default. |
+| Claude Code | 2.1.329 | `claude --effort <level>` | low, medium, high, xhigh, max | Yes, from Anthropic's catalogue (above): on 2026-11-21 the 4.6 Opus and Sonnet had no xhigh, the 4.5 Opus stopped at high, the 4.5 Haiku and Sonnet had none. The CLI steps an unsupported level down to high, or drops it, silently. An unknown word is a warning, and the session runs at the default. |
 | Cursor CLI | 2026.11.19-f005e9d | None: the effort is part of the model id (`claude-opus-5-5-low`, `gpt-5.2-high`), and the model list offers every variant | none | Yes, and per model: Cursor's `AvailableModels` (`useModelParameters`) gives each model its own parameters (`effort` on Claude models, `reasoning` with `extra-high` on GPT models, only `fast` on Composer). A bracket override is accepted only as a model's complete variant string (`claude-opus-5-5[context=300k,effort=low,fast=false]`); a partial one (`composer-2.5[effort=low]`, `claude-opus-4-8[effort=low]`) makes the CLI print "Cannot use this model" and exit, checked live 2026-11-21 (task #324). |
 | Codex | 0.171.0 | No flag: the `model_reasoning_effort` config key, passed as `codex -c model_reasoning_effort=<level>` | low…xhigh; up to max on `gpt-6-luna` / `gpt-5.6-luna`; up to ultra on the Sol, Terra, Astra and Daybreak models | Yes: from the model catalog bundled in the binary (`supported_reasoning_levels`). The CLI's enum also has `none` and `minimal`, which no bundled model lists. |
 | Gemini CLI | 0.60.0 | No flag: `modelConfigs.customOverrides` in `~/.gemini/settings.json`, matching the `chat-base-3` alias with `thinkingConfig.thinkingLevel` `LOW` or `HIGH` (written by `GeminiCliAdapter#generate_settings`) | low, high | Yes: Gemini 3 models take a thinking level (HIGH is the default), Gemini 2.5 models take a token budget instead, which this setting does not cover, so `gemini-2.*` offers none. Matching the alias keeps the level off the CLI's internal utility calls. |
 | Antigravity CLI | 1.5.13 | None: the effort is part of the model id (`gemini-3.8-flash-low`), and the model list offers every variant | none | Yes, and per model: `fetchAvailableModels` gives a model group its levels (`gemini-3.8-flash`: low, medium, high; the Claude and GPT-OSS models none). `--effort` applies only to a group (`--model gemini-3.8-flash --effort low`, or no `--model`); with a model id, a level the model lacks, or an unknown model, the TUI runs the account's default model and only its log says why, while print mode exits 1. Checked live 2026-11-21 (task #324). |
-| Grok | 1.0.89 | `grok --reasoning-effort <level>` (alias `--effort`), honoured in the TUI as well as headless | low, medium, high, xhigh | Yes: the model catalogue says which models support it (`reasoning_efforts` on the CLI proxy's list), and a model without reasoning effort ignores the flag. A model the account lacks runs the default model, so the launch checks `grok models` first. |
-| Kiro CLI | 3.5.0 | `kiro-cli chat --effort <level>` | low, medium, high, xhigh, max; the 4.6 Opus and Sonnet have no xhigh; the Grok models stop at xhigh; `auto`, the Haiku models, the 4.5 Opus and Sonnet, deepseek-3.2, minimax-m2.5/m2.1, glm-5 and qwen3-coder-next have none | Yes: an unsupported level is lowered to high, or dropped on a model with none (probed on 3.5.0, 2026-11-21; 2.34.0 printed `failed to set effort`). |
+| Grok | 1.0.89 | `grok --reasoning-effort <level>` (alias `--effort`), honoured in the TUI as well as headless | low, medium, high, xhigh | Yes: the model catalogue says which models support it (`reasoning_efforts` on the CLI proxy's list), and a model without reasoning effort ignores the flag. A model the account lacks runs the default model, so the session checks it against the catalogue when it is created. |
+| Kiro CLI | 3.5.0 | `kiro-cli chat --effort <level>` | low, medium, high, xhigh, max; the rules (`auto` and the Haiku models none, claude-sonnet-4.6 no xhigh) only stand in when the API does not answer | Yes, from the API's request schema per model (above). An unsupported level is lowered to high, or dropped on a model with none (3.5.0, 2026-11-21; 2.34.0 printed `failed to set effort`). |
 | Copilot CLI | 1.0.114 | `copilot --reasoning-effort <level>` | low, medium, high, xhigh, max; GPT-5.3-Codex and the Grok models stop at xhigh; Gemini and MAI models take low, medium and high; `auto` and Claude Haiku 4.5 have none (some GPT models also take `none`, which is not offered) | Yes: read for every model of the account's catalogue from the CLI's ACP `reasoning_effort` option (`docker/copilot-cli/aixle-copilot-models.mjs`), 2026-11-10. The catalogue is per plan, so a model missing here falls under the default levels. |
 
 Every runtime but Cursor CLI and Antigravity CLI takes a level; those two take the effort
@@ -96,12 +115,11 @@ through the model id. The UI disables the select, with the reason, where the cho
 runtime and model offer none: every Cursor and Antigravity model (with the registry's
 `note`), Gemini 2.5 models, and Kiro's `auto` and Haiku models.
 
-The registry does not keep a full per-model matrix. Where a vendor decides per model
-whether a level is honoured and the CLI lowers or ignores a level the model doesn't
-support (Claude Code's xhigh and max, Grok's models without reasoning effort, Kiro), it
-lists the levels the CLI accepts, and the select says so under the field. Where the CLI
-refuses the launch instead, the registry has to be exact per model, because the CLI exits
-and the step fails (`Sessions::Checks::AgentExited`, in `docs/architecture/workflows.md`).
+The registry does not keep a per-model matrix: the catalogues above are the per-model
+truth, and the registry's rules only stand in when one does not answer. A level the select
+offers from a rule may still be lowered or ignored by the CLI, and the select says so under
+the field. A CLI that exits on a combination it refuses fails the step at once
+(`Sessions::Checks::AgentExited`, in `docs/architecture/workflows.md`).
 
 When a pin is raised, re-check the CLI's levels and update `reasoning_effort` with it:
 `--help` for a flag, a launch with a bogus level for the accepted list, and for Codex the
@@ -111,27 +129,6 @@ bundled catalog's `supported_reasoning_levels`. The template schema
 and model through `AgentRuntime`, so a new level needs no schema edit. A level the new pin no longer takes (for the CLI or for one model) comes with a data
 migration that clears or replaces it on the steps that have it, because a step is validated
 on every save and would otherwise refuse unrelated edits.
-
-### Probing every offered launch
-
-The checks above read the CLI; the probe runs it. `Agents::EffortProbePlan` lists every
-launch the model pickers offer a member for one runtime: each model their credential
-lists, with each level the registry gives it, typed as the adapter types it. Run it after a
-pin is raised and when a vendor changes its models, on staging, where the test company's
-logins are:
-
-```bash
-kubectl exec deploy/web -- bin/rails "agents:effort_plan[<email>,<agent_type>]" > plan.jsonl
-# start an interactive session of that runtime as the same member, then in its pod:
-kubectl cp bin/agent-effort-probe <pod>:/tmp/agent-effort-probe -c main
-kubectl exec -i <pod> -c main -- python3 /tmp/agent-effort-probe < plan.jsonl > results.jsonl
-```
-
-`bin/agent-effort-probe` types each launch into a tmux session of its own, with a one-line
-question as the prompt, and reports `accepted` (the answer came), `exited` (the CLI quit,
-with what it printed), `no_answer` (the screen, for a person to read) or `skipped` (the
-level is not on the command line: Gemini CLI). Every `exited` or `no_answer` row is a
-registry rule to fix. An accepted launch spends one short turn on the member's account.
 
 ## Raising a CLI pin
 

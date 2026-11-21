@@ -93,9 +93,11 @@ the fallback exists so the picker is never empty.
 
 A model the account does not offer does not stop the CLI: it shows `Couldn't switch model:
 Invalid params: "unknown model id"` and runs the default model. So a chosen model is looked
-up in `grok models` before `grok` starts, and a missing one ends the launch with `Grok does
-not offer the model … on this account.`, which fails the step
-(`Sessions::Checks::AgentExited`).
+up in that list when the session is created (`SessionService#preflight_model!`), and a
+missing one fails the step before any container starts, saying `Grok does not offer the
+model … on this account (it offers …)`. The list also says per model whether it takes a
+reasoning effort and which (`reasoning_efforts`), and the model pickers offer exactly
+those.
 
 ## 4. Session behaviour
 
