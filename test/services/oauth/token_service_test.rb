@@ -468,15 +468,15 @@ module Oauth
       cred = build_credential(owner: @user, oauth_client: client, provider: "bitbucket", access_token: "old",
                               refresh_token: "old-refresh", expires_at: 1.minute.from_now)
       basic = "Basic #{Base64.strict_encode64('bb-key:bb+secret%2F1')}"
-      stub = stub_request(:post, TOKEN_ENDPOINT)
-             .with(headers: { "Authorization" => basic })
-             .to_return(status: 200, headers: { "Content-Type" => "application/json" },
-                        body: { access_token: "new", refresh_token: "rotated", expires_in: 7200,
-                                scopes: "account repository" }.to_json)
+      stub_request(:post, TOKEN_ENDPOINT)
+        .with(headers: { "Authorization" => basic })
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                   body: { access_token: "new", refresh_token: "rotated", expires_in: 7200,
+                           scopes: "account repository" }.to_json)
 
       assert_equal "new", Oauth::TokenService.fresh(cred)
 
-      assert_requested(stub) do |req|
+      assert_requested(:post, TOKEN_ENDPOINT, headers: { "Authorization" => basic }) do |req|
         req.body.include?("grant_type=refresh_token") && !req.body.include?("client_secret") &&
           !req.body.include?("client_id")
       end

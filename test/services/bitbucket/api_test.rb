@@ -116,7 +116,7 @@ module Bitbucket
 
     test "repository permissions are looked up per workspace and matched on the full name" do
       acme = stub_request(:get, "#{BITBUCKET_API}/user/workspaces/acme/permissions/repositories")
-             .with(query: { "pagelen" => "100", "q" => 'repository.name="api" OR repository.name="docs"' })
+             .with(query: { "pagelen" => "100", "q" => 'repository.name="api" OR repository.name="docs" OR repository.name="absent"' })
              .to_return(json({ "values" => [
                                { "permission" => "write", "repository" => { "full_name" => "acme/api" } },
                                { "permission" => "read", "repository" => { "full_name" => "acme/docs" } },
