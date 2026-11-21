@@ -154,7 +154,7 @@ runs everywhere, as it always did.
 
 | Rule | A pull request runs the tag | A push runs it |
 |---|---|---|
-| `develop` | never | always |
+| `push` | never | always |
 | `paths` (with a `paths` list of globs) | when a changed file matches a glob | always |
 
 A push means every event that is not a pull request (`develop`, `staging`, a manual run), so the
@@ -165,7 +165,7 @@ runs everything.
 
 | Tag | Rule | Tests |
 |---|---|---|
-| `schema_parity` | `paths`: `db/migrate/**/*`, `db/schema.rb`, `test/db/schema_parity_test.rb` | `SchemaParityTest`, which replays every migration (about 40 s) |
+| `schema_parity` | `paths`: `db/migrate/**/*`, `db/schema.rb`, `Gemfile.lock`, `config/application.rb`, `test/db/schema_parity_test.rb` | `SchemaParityTest`, which replays every migration (about 40 s) |
 
 ### Put a test under a tag
 
@@ -181,7 +181,7 @@ runs everything.
 
 Add an entry to `config/test_tags.json` (a lower-case word, a description, a rule). Nothing else:
 the Rails and Vitest sides, the CI step and `TestTags`' own test read the file. Choose `paths` for a
-test that only a known set of files can break, and `develop` for one that nothing in a pull request
+test that only a known set of files can break, and `push` for one that nothing in a pull request
 is likely to break and that costs more than it tells.
 
 **Moving a test under a tag, or changing a test to make it faster, is a change to the test:** it

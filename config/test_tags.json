@@ -5,6 +5,8 @@
     "paths": [
       "db/migrate/**/*",
       "db/schema.rb",
+      "Gemfile.lock",
+      "config/application.rb",
       "test/db/schema_parity_test.rb"
     ]
   }

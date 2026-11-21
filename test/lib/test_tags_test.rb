@@ -8,7 +8,7 @@ class TestTagsTest < ActiveSupport::TestCase
   SCRIPT = Rails.root.join("bin/test-tags").to_s
 
   PATHS = { "description" => "d", "rule" => "paths", "paths" => [ "db/migrate/**/*", "db/schema.rb" ] }.freeze
-  DEVELOP = { "description" => "d", "rule" => "develop" }.freeze
+  PUSH = { "description" => "d", "rule" => "push" }.freeze
 
   test "the committed tags are all valid" do
     tags = TestTags.load
@@ -16,8 +16,8 @@ class TestTagsTest < ActiveSupport::TestCase
     assert_includes tags.names, "schema_parity"
   end
 
-  test "a pull request leaves out a develop-only tag whatever it changes" do
-    tags = TestTags.new("slow" => DEVELOP)
+  test "a pull request leaves out a push-only tag whatever it changes" do
+    tags = TestTags.new("slow" => PUSH)
 
     assert_equal [ "slow" ], tags.excluded_for_pull_request([ "db/schema.rb" ])
     assert_equal [ "slow" ], tags.excluded_for_pull_request([])
@@ -32,15 +32,15 @@ class TestTagsTest < ActiveSupport::TestCase
   end
 
   test "an unknown diff leaves nothing out" do
-    tags = TestTags.new("slow" => DEVELOP, "parity" => PATHS)
+    tags = TestTags.new("slow" => PUSH, "parity" => PATHS)
 
     assert_empty tags.excluded_for_pull_request(nil)
   end
 
   test "a malformed entry is refused" do
-    assert_raises(TestTags::Error) { TestTags.new("Slow" => DEVELOP) }
-    assert_raises(TestTags::Error) { TestTags.new("slow" => DEVELOP.merge("description" => " ")) }
-    assert_raises(TestTags::Error) { TestTags.new("slow" => DEVELOP.merge("rule" => "nightly")) }
+    assert_raises(TestTags::Error) { TestTags.new("Slow" => PUSH) }
+    assert_raises(TestTags::Error) { TestTags.new("slow" => PUSH.merge("description" => " ")) }
+    assert_raises(TestTags::Error) { TestTags.new("slow" => PUSH.merge("rule" => "nightly")) }
     assert_raises(TestTags::Error) { TestTags.new("slow" => PATHS.merge("paths" => [])) }
   end
 

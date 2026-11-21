@@ -10,13 +10,14 @@ require "json"
 # Plain Ruby with no gems: bin/test-tags runs on the CI runner, outside the image.
 #
 # A rule is one of:
-#   "develop"  the tag runs on pushes only; a pull request leaves it out.
+#   "push"     the tag runs on pushes only (every event that is not a pull request); a pull
+#              request leaves it out.
 #   "paths"    the tag runs on pushes, and on a pull request that changes a file matching one of
 #              the entry's "paths" globs.
 # A test without a tag runs everywhere.
 class TestTags
   PATH = File.expand_path("../config/test_tags.json", __dir__)
-  RULES = %w[develop paths].freeze
+  RULES = %w[push paths].freeze
   NAME = /\A[a-z][a-z0-9_]*\z/
 
   Error = Class.new(StandardError)
