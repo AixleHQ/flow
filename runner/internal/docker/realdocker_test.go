@@ -32,6 +32,19 @@ const RealDockerImageEnv = "AIXLE_RUNNER_REAL_DOCKER_IMAGE"
 // binary, the agent image, the dial socket mounted read-write), waits for the five
 // ports, and speaks HTTP to each through the dialer the relay's streams use.
 func TestRealDockerBridgeSessionServesItsFivePortsThroughTheSidecar(t *testing.T) {
+	realDockerSession(t, "bridge", map[string]int{"tty": 7681, "view": 7682, "fs": 4040, "upload": 4041, "ide": 8443}, nil)
+}
+
+// TestRealDockerHostNetworkSessionServesItsFivePortsOnTheMachine is the same with
+// `network: host`: the five ports are the machine's own, the image reads them from its
+// variables, and the runner dials 127.0.0.1.
+func TestRealDockerHostNetworkSessionServesItsFivePortsOnTheMachine(t *testing.T) {
+	realDockerSession(t, "host", map[string]int{"tty": 31200, "view": 31201, "fs": 31202, "upload": 31203, "ide": 31204},
+		map[string]string{"TTYD_PORT": "31200", "VIEW_PORT": "31201", "WATCHER_PORT": "31202", "UPLOAD_PORT": "31203", "VSCODE_PORT": "31204"})
+}
+
+func realDockerSession(t *testing.T, network string, ports map[string]int, extraEnv map[string]string) {
+	t.Helper()
 	image := os.Getenv(RealDockerImageEnv)
 	if image == "" {
 		t.Skip(RealDockerImageEnv + " is not set")
@@ -66,10 +79,12 @@ func TestRealDockerBridgeSessionServesItsFivePortsThroughTheSidecar(t *testing.T
 		TunnelReadyTimeout: 90 * time.Second,
 	}
 	const session = int64(987654)
-	ports := map[string]int{"tty": 7681, "view": 7682, "fs": 4040, "upload": 4041, "ide": 8443}
+	containerEnv := map[string]string{"ROUTE_TOKEN": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "TTYD_CMD": "bash"}
+	for k, v := range extraEnv {
+		containerEnv[k] = v
+	}
 	payload, _ := json.Marshal(map[string]any{
-		"image": image, "proxy_port": 7690, "tunnel": map[string]any{"ports": ports},
-		"env": map[string]string{"ROUTE_TOKEN": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "TTYD_CMD": "bash"},
+		"image": image, "network": network, "proxy_port": 7690, "tunnel": map[string]any{"ports": ports}, "env": containerEnv,
 	})
 	t.Cleanup(func() {
 		stop := context.Background()
@@ -106,8 +121,9 @@ func TestRealDockerBridgeSessionServesItsFivePortsThroughTheSidecar(t *testing.T
 		}
 		t.Logf("%-6s :%d  %s", surface, port, strings.TrimSpace(status))
 	}
-	// A port the sidecar was not given is refused, whatever the runner's own table says.
-	if dialer, ok := serving.Authorize(session, 7681); ok {
+	// With the bridge network, a port the sidecar was not given is refused by the sidecar
+	// itself, whatever the runner's own table says.
+	if dialer, ok := serving.Authorize(session, ports["tty"]); ok && network == "bridge" {
 		if _, err := dialer.Dial(ctx, 22); err == nil {
 			t.Fatal("the sidecar dialed a port outside its list")
 		}
