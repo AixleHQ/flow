@@ -71,7 +71,7 @@ step "1. the surfaces, as the owner and as a second viewer (Playwright)"
 check main | tee $LOG/check-main.log; [ ${PIPESTATUS[0]} = 0 ] && ok "browser checks passed" || bad "browser checks failed"
 
 step "2. kill the relay: the page gets a refusal; restart it: the terminal comes back, the session did not fail"
-kill "$(cat $D/relay.pid)"; sleep 2
+kill -9 "$(cat $D/relay.pid)"; sleep 2   # a crash, not a drain: SIGTERM drains for up to 30 s
 code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Cookie: viewer=owner' http://127.0.0.1:8088/t/e2eroutetoken0123456789abcdef00/tty/)
 echo "while the relay is down, the page answers $code"
 before=$(connected); start_relay
@@ -81,11 +81,12 @@ docker inspect -f '{{.State.Running}}' aixle-e2e-555 2>/dev/null | grep -q true 
 check again | tee $LOG/check-again.log; [ ${PIPESTATUS[0]} = 0 ] && ok "the terminal works again" || bad "the terminal does not work after the restart"
 
 watch() { check watch 90000 > $1 2>&1 & echo $!; }
+wait_opened() { for i in $(seq 1 100); do grep -q OPENED $1 2>/dev/null && return 0; sleep 0.2; done; return 1; }
 wait_closed() { # file, max ms
   local s=$(now_ms); while [ $(( $(now_ms) - s )) -lt $2 ]; do grep -q WATCH $1 2>/dev/null && { echo $(( $(now_ms) - s )); return 0; }; sleep 0.2; done; return 1; }
 
 step "3. session_ended closes the open terminal"
-touch $CTL/session_gone; w=$(watch $LOG/watch-ended.log); sleep 6
+touch $CTL/session_gone; w=$(watch $LOG/watch-ended.log); wait_opened $LOG/watch-ended.log && ok "a terminal is open through the relay" || bad "no terminal opened"
 publish '{"type":"session_ended","session_id":555}'
 t=$(wait_closed $LOG/watch-ended.log 8000) && ok "the terminal closed ${t} ms after the signal: $(grep WATCH $LOG/watch-ended.log)" || bad "the terminal stayed open after session_ended"
 code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Cookie: viewer=owner' http://127.0.0.1:8088/t/e2eroutetoken0123456789abcdef00/tty/)
@@ -93,7 +94,7 @@ code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Cookie: viewer=owner' http://1
 rm -f $CTL/session_gone
 
 step "4. a lost signal: the platform says the machine is no longer valid, and no signal comes"
-w=$(watch $LOG/watch-lost.log); sleep 6; touch $CTL/invalid
+w=$(watch $LOG/watch-lost.log); wait_opened $LOG/watch-lost.log || bad "no terminal opened"; touch $CTL/invalid
 t=$(wait_closed $LOG/watch-lost.log 15000) && ok "the reconcile pass closed it ${t} ms after the platform changed (interval 5 s)" || bad "the reconcile pass did not close it"
 grep -q "reconcile pass found" $LOG/relay.log && ok "the relay logged the revocation" || bad "no revocation logged"
 rm -f $CTL/invalid
@@ -102,7 +103,7 @@ before=$(connected); for i in $(seq 1 60); do [ "$(connected)" -gt "$before" ] &
 step "5. machine_revoked closes the machine's connection with 4001 and its terminals"
 check again >/dev/null 2>&1   # warms the route again
 b5=$(connected)
-w=$(watch $LOG/watch-revoked.log); sleep 6
+w=$(watch $LOG/watch-revoked.log); wait_opened $LOG/watch-revoked.log || bad "no terminal opened"
 publish '{"type":"machine_revoked","environment_id":42}'
 t=$(wait_closed $LOG/watch-revoked.log 8000) && ok "the terminal closed ${t} ms after the signal" || bad "the terminal stayed open after machine_revoked"
 grep -q "was revoked; closing its connection" $LOG/relay.log && ok "the relay closed the machine's connection" || bad "no close logged"
@@ -110,7 +111,7 @@ grep -q "was revoked; closing its connection" $LOG/relay.log && ok "the relay cl
 step "6. container.stop resets the streams with session_changed before the container goes"
 for i in $(seq 1 60); do [ "$(connected)" -gt "$b5" ] && break; sleep 1; done
 sleep 2; check again >/dev/null 2>&1
-w=$(watch $LOG/watch-stop.log); sleep 6; touch $CTL/stop-container
+w=$(watch $LOG/watch-stop.log); wait_opened $LOG/watch-stop.log || bad "no terminal opened"; touch $CTL/stop-container
 t=$(wait_closed $LOG/watch-stop.log 20000) && ok "the terminal closed ${t} ms after container.stop was run" || bad "the terminal stayed open through container.stop"
 
 step "metrics"

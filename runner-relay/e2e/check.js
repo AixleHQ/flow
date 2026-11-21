@@ -30,6 +30,7 @@ const ttyd = (page, path, input, wait) =>
       };
       ws.onmessage = (e) => {
         const d = new Uint8Array(e.data);
+        window.__bytes = (window.__bytes || 0) + d.length;
         if (String.fromCharCode(d[0]) === '0') out += new TextDecoder().decode(d.slice(1));
       };
       ws.onerror = () => done('error');
@@ -52,7 +53,13 @@ async function context(browser, viewer) {
     const page = await (await context(browser, 'owner')).newPage();
     await page.goto(`${T}/tty/`);
     const started = Date.now();
+    let opened = false;
+    const poll = setInterval(async () => {
+      const n = await page.evaluate(() => window.__bytes || 0).catch(() => 0);
+      if (n > 0 && !opened) { opened = true; console.log('OPENED'); }
+    }, 200);
     const r = await ttyd(page, '/tty/ws', null, Number(process.argv[3] || 60000));
+    clearInterval(poll);
     console.log(`WATCH  ${r.state} after ${Date.now() - started} ms`);
     await browser.close();
     return;
@@ -102,7 +109,7 @@ async function context(browser, viewer) {
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
     const up = await owner.request.post(`${T}/upload`, { data: png, headers: { 'Content-Type': 'image/png' } });
     const body = await up.text();
-    check('owner: an upload is stored', up.status() === 200 && body.includes('/'), `status ${up.status()} ${body.slice(0, 80)}`);
+    check('owner: an upload is stored', up.status() === 201 && body.includes('/tmp/aixle-uploads/'), `status ${up.status()} ${body.slice(0, 80)}`);
 
     // Nothing without a viewer.
     const anon = await browser.newContext();
