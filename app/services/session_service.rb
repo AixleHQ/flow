@@ -22,7 +22,8 @@ class SessionService
       # this user, instead of starting a session that fails silently at provisioning.
       preflight_oauth!(user, params[:mcp_server_ids])
       preflight_cloud!(user, company || project&.company)
-      preflight_agent_credential!(user, company || project&.company, agent_type, session_type: session_type)
+      credential = preflight_agent_credential!(user, company || project&.company, agent_type, session_type: session_type)
+      preflight_model!(credential, params[:requested_model])
       preflight_url_safety!(params[:mcp_server_ids])
       preflight_company_active!(company || project&.company)
 
@@ -233,9 +234,10 @@ class SessionService
                 run_credentials(workflow_run).order(created_at: :desc).first&.agent_type ||
                 "claude_code"
 
-      preflight_agent_credential!(workflow_run.user, workflow_run.project&.company, runtime)
+      credential = preflight_agent_credential!(workflow_run.user, workflow_run.project&.company, runtime)
 
       run_model = workflow_run.shared_context&.dig("requested_model")
+      preflight_model!(credential, step.preferred_model.presence || run_model)
 
       session = TerminalSession.create!(
         user: workflow_run.user,
@@ -430,6 +432,26 @@ class SessionService
       # because no refresh was ever attempted. Launching on it produces a container that
       # prints "Login expired" and nothing else.
       raise AgentCredential::PreflightError, credential if credential.unrecoverably_expired?(excluding_session_id: excluding_session_id)
+
+      credential
+    end
+
+    # Some CLIs, asked for a model their account does not offer, quietly run their default
+    # model (task #324: Antigravity CLI and Grok did, with no error anywhere a person would
+    # look). For those the model is looked up in the account's catalogue before anything
+    # starts, and only a catalogue the vendor answered counts: a fallback list says nothing
+    # about the account, and an unreachable one must not stop a launch.
+    def preflight_model!(credential, model)
+      return if credential.nil? || model.blank?
+
+      adapter = AgentCredentialsService.for(credential.agent_type).adapter
+      return unless adapter.runs_default_model_for_unknown?
+
+      catalogue = adapter.fetch_available_models_with_source(credential.config_data, credential: credential)
+      return unless catalogue[:source] == :api
+
+      offered = Array(catalogue[:models]).pluck(:model_id)
+      raise AgentCredential::ModelUnavailable.new(credential, model, offered) unless offered.include?(model)
     end
 
     # Re-validate selected custom MCP server URLs right before launch (F34). The

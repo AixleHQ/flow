@@ -36,7 +36,7 @@ yet).
 | Grok 1.0.89 | logs, metrics (`GROK_EXTERNAL_OTEL`) | `OTEL_LOG_USER_PROMPTS`, `OTEL_LOG_TOOL_DETAILS`, `OTEL_LOG_TOOL_CONTENT` | MITM log (no cost in OTLP) |
 | Kiro CLI 3.5.0 | metrics; logs from its hooks (§3) | none exist | credit metrics, MITM fallback |
 | Cursor CLI 2026.11.19 | logs from its hooks (§3) | — | Cursor usage API |
-| Antigravity CLI 1.5.13 | logs from its hooks (§3) | — | stream-json result |
+| Antigravity CLI 1.5.13 | logs from its hooks (§3) | — | conversation transcript |
 
 Notes:
 
@@ -115,7 +115,7 @@ What each runtime's hooks carry:
 | --- | --- | --- | --- |
 | Kiro | `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Stop`, `SessionEnd` | prompt; tool name, input and result | model, tokens, credits (its OTLP metrics) |
 | Cursor | `sessionStart`, `beforeSubmitPrompt`, `preToolUse`, `postToolUse`, `postToolUseFailure`, `afterAgentThought`, `afterAgentResponse`, `stop`, `subagentStart`, `subagentStop`, `preCompact`, `sessionEnd` | prompt; model; tool input, output and duration; reply and thinking; per-turn input, output and cache tokens | cost |
-| Antigravity | `SessionStart`, `PreInvocation`, `PostInvocation`, `PreToolUse`, `PostToolUse`, `Stop` | prompt; model; invocation and step numbers; tool name, arguments and error; why the turn ended | model output, tool result, tokens (its stream-json result, which Flow reads, has the tokens); event name in the payload (1.5.4) |
+| Antigravity | `SessionStart`, `PreInvocation`, `PostInvocation`, `PreToolUse`, `PostToolUse`, `Stop` | prompt; model; invocation and step numbers; tool name, arguments and error; why the turn ended | model output, tool result, tokens (its conversation transcript, which Flow reads, has the tokens); event name in the payload (1.5.4) |
 
 Left out on purpose: Cursor's shell, MCP and file events repeat its generic tool events
 (`beforeReadFile` with every file read in full), and an unknown event name makes it drop the

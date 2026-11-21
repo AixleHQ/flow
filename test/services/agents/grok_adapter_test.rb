@@ -147,16 +147,20 @@ module Agents
     end
 
     test "session_command passes the reasoning effort as --reasoning-effort" do
-      assert_equal "grok --yolo --minimal --model grok-4.5 --reasoning-effort xhigh",
-                   @adapter.session_command(mode: "interactive", model: "grok-4.5", effort: "xhigh")
+      assert_equal "grok --yolo --minimal --model grok-4.7 --reasoning-effort xhigh",
+                   @adapter.session_command(mode: "interactive", model: "grok-4.7", effort: "xhigh")
       assert_equal "grok --yolo --minimal", @adapter.session_command(mode: "non_interactive", effort: nil)
     end
 
     test "session_command shell-escapes the requested model" do
-      assert_equal "grok --yolo --minimal --model grok-4.5",
-                   @adapter.session_command(mode: "interactive", model: "grok-4.5")
       assert_equal "grok --yolo --minimal --model grok\\ 4.5\\;rm",
                    @adapter.session_command(mode: "interactive", model: "grok 4.5;rm")
+    end
+
+    # Task #324: an unknown model id only gets a notice on screen, and the session runs the
+    # default model, so SessionService checks the model before launch.
+    test "the model is checked before launch" do
+      assert_predicate @adapter, :runs_default_model_for_unknown?
     end
 
     # == Environment ==
@@ -399,15 +403,36 @@ module Agents
       assert_equal "input: text, image · context: 500000 tokens", result[:models].first[:description]
     end
 
-    test "fetch_available_models authenticates with the session token when there is no API key" do
-      stub = stub_request(:get, GrokAdapter::MODELS_URL)
-             .with(headers: { "Authorization" => "Bearer grok-session-token" })
-             .to_return(status: 200, body: { models: [ { id: "grok-4.6" } ] }.to_json)
+    # Task #324: the public catalogue answers a signed-in account without API credits with
+    # 403, and the pickers then offered models the CLI did not know.
+    test "fetch_available_models reads a signed-in account's models from the CLI's own proxy" do
+      stub = stub_request(:get, Grok::Api::MODELS_URL)
+             .with(headers: { "Authorization" => "Bearer grok-session-token", "X-XAI-Token-Auth" => "xai-grok-cli" })
+             .to_return(status: 200, body: { object: "list", data: [
+               { id: "grok-4.7", name: "Grok 4.7", description: "SpaceXAI's latest frontier model",
+                 supports_reasoning_effort: true,
+                 reasoning_efforts: [ { id: "xhigh", value: "xhigh" }, { id: "high", value: "high", default: true } ] },
+               { id: "grok-code-fast-1", supports_reasoning_effort: false }
+             ] }.to_json)
 
-      models = @adapter.fetch_available_models(@adapter.extract_credentials(oauth_auth_json))
+      result = @adapter.fetch_available_models_with_source(@adapter.extract_credentials(oauth_auth_json))
 
       assert_requested stub
-      assert_equal [ "grok-4.6" ], models.map { |m| m[:model_id] }
+      assert_not_requested :get, GrokAdapter::MODELS_URL
+      assert_equal :api, result[:source]
+      assert_equal [ { model_id: "grok-4.7", display_name: "grok-4.7", description: "SpaceXAI's latest frontier model",
+                       reasoning_effort_levels: %w[xhigh high] },
+                     { model_id: "grok-code-fast-1", display_name: "grok-code-fast-1", description: "",
+                       reasoning_effort_levels: [] } ],
+                   result[:models]
+    end
+
+    test "fetch_available_models falls back when the CLI's proxy refuses a signed-in account" do
+      stub_request(:get, Grok::Api::MODELS_URL).to_return(status: 401, body: "")
+
+      result = @adapter.fetch_available_models_with_source(@adapter.extract_credentials(oauth_auth_json))
+
+      assert_equal :fallback, result[:source]
     end
 
     test "fetch_available_models falls back to the pinned list when the catalogue is unavailable" do
@@ -520,7 +545,7 @@ module Agents
     # the answer, so `usage` arrives in the final SSE chunk of a possibly truncated body.
     # This is the primary path: if it records nothing, ordinary sessions report no usage.
     test "collect_usage records the OAuth path's streamed usage from the grok.com proxy" do
-      stub_request(:get, GrokAdapter::MODELS_URL).to_return(status: 401, body: "")
+      stub_request(:get, Grok::Api::MODELS_URL).to_return(status: 401, body: "")
       create(:agent_credential, user: @user, company: @company, agent_type: "grok",
                                 config_data: @adapter.extract_credentials(oauth_auth_json))
 

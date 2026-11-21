@@ -48,9 +48,7 @@ module Agents
     SUBSCRIPTION_USAGE_KEY = "subscription_usage"
     USAGE_PROBE_COMMAND = [ "agy", "-p", "/usage", "--output-format", "json", "--print-timeout", "20s" ].freeze
 
-    # API-equivalent prices in USD per million tokens. Antigravity's result event
-    # reports cache reads as a subset of input tokens, so cached input is removed
-    # from the regular input bucket before pricing. Keep this table beside the
+    # API-equivalent prices in USD per million tokens. Keep this table beside the
     # runtime's model catalogue: model ids are Antigravity ids, not provider ids.
     MODEL_PRICING = {
       "gemini-3.8-flash-high" => { input: 0.75, output: 3.75, cache_read: 0.075 },
@@ -258,10 +256,6 @@ module Agents
       MITM_DOMAINS.dup
     end
 
-    def session_log_paths
-      super + %w[/var/log/mitm/http.log]
-    end
-
     def fetch_available_models(credentials, credential: nil)
       fetch_available_models_with_source(credentials, credential: credential)[:models]
     end
@@ -276,7 +270,7 @@ module Agents
       end
       models = model_ids.uniq.filter_map do |model_id|
         model = data.dig("models", model_id)
-        next unless model.is_a?(Hash)
+        next unless model.is_a?(Hash) && model["disabled"] != true
 
         { model_id: model_id, display_name: model["displayName"].presence || model_id }
       end
@@ -303,41 +297,52 @@ module Agents
       details.merge(valid: false, error_code: "oauth_token_missing")
     end
 
-    # `--effort` picks the model's reasoning-effort variant (1.4.7 lists
-    # low|medium|high|xhigh|max); the CLI refuses a level its model does not have.
+    # Automatic sessions run in the TUI like interactive ones, with the step's prompt submitted
+    # by `-i` (#prompt_argument). No `--effort`: agy's model ids carry the effort
+    # (`gemini-3.8-flash-high`), and `--effort` only applies to a model group, which the
+    # model list never offers. In the TUI an unknown model, or `--effort` on a model id, does
+    # not stop agy: it runs the account's default model and says so only in its own log
+    # (1.5.13), which is why the model is checked before launch (#runs_default_model_for_unknown?).
     def session_command(mode:, model: nil, effort: nil)
       parts = [ "agy" ]
       parts += [ "--model", Shellwords.shellescape(model) ] if model.present?
-      parts += [ "--effort", Shellwords.shellescape(effort) ] if effort.present?
       parts << "--dangerously-skip-permissions"
-      # --output-format must precede --print: `agy` treats a bare --print as taking
-      # the next token as its own prompt value, so --print immediately followed by
-      # --output-format silently swallows the flag as literal prompt text instead of
-      # parsing it — confirmed against the real 1.1.27 binary.
-      parts += [ "--output-format", "stream-json", "--print" ] if mode == "non_interactive"
       parts.join(" ")
     end
 
-    # Antigravity writes its NDJSON stream to stdout. The base entrypoint pipes
-    # stdout to terminal_output.log, which cleanup persists immediately before
-    # calling this hook. Only terminal `result` events are used: step_update
-    # usage is per-step and the result usage is already the cumulative run total.
+    def prompt_argument(prompt) = "-i #{prompt}"
+
+    def runs_default_model_for_unknown? = true
+
+    # agy keeps one transcript per conversation, named after the conversation id, in print
+    # mode and in the TUI alike. Every model call is a PLANNER_RESPONSE line with that call's
+    # tokens: input without cache reads, output with thinking (1.5.13, checked against
+    # print mode's own `result` totals).
+    TRANSCRIPT_GLOB = "/home/antigravity/.gemini/antigravity-cli/brain/*/.system_generated/logs/transcript.jsonl"
+    TRANSCRIPT_PATH = %r{\A/home/antigravity/\.gemini/antigravity-cli/brain/([^/]+)/\.system_generated/logs/transcript\.jsonl\z}
+    TRANSCRIPT_SUFFIX = ".transcript.jsonl"
+
+    def session_log_paths
+      super + [ "/var/log/mitm/http.log", TRANSCRIPT_GLOB ]
+    end
+
+    # brain/<conversation id>/.system_generated/logs/transcript.jsonl → <id>.transcript.jsonl
+    def session_log_name(path)
+      match = TRANSCRIPT_PATH.match(path)
+      match ? "#{match[1]}#{TRANSCRIPT_SUFFIX}" : super
+    end
+
     def collect_usage(terminal_session, artifacts = {})
-      # The result event carries the run's cumulative total, and Accumulator.record
-      # always increments — so a cleanup retry (max_attempts: 2) re-parsing the same
-      # log would double every value already persisted. Once a statistic exists for
-      # this session, this source has already had its say.
+      # Accumulator.record always increments, so a cleanup retry (max_attempts: 2) re-reading
+      # the same transcripts would double every value already persisted.
       return if terminal_session.usage_statistic.present?
 
-      output = artifacts["logs/terminal_output.log"].presence || terminal_output(terminal_session)
-      events = usage_events(output, terminal_session)
+      transcripts = artifacts.select { |name, _| name.to_s.end_with?(TRANSCRIPT_SUFFIX) }.values
+      events = usage_events(transcripts, terminal_session)
       return if events.empty?
 
-      UsageStatistics::Accumulator.record(
-        terminal_session: terminal_session,
-        events: events,
-        source: "antigravity_stream_json"
-      )
+      UsageStatistics::Accumulator.record(terminal_session: terminal_session, events: events,
+                                          source: "antigravity_transcript")
     end
 
     # Antigravity's remaining quota is read from the CLI itself (`agy`'s `/usage`
@@ -417,8 +422,6 @@ module Agents
 
     private
 
-    ANSI_ESCAPE = /\e(?:\[[0-?]*[ -\/]*[@-~]|\][^\a]*(?:\a|\e\\))/.freeze
-
     # The `/usage` print-mode envelope is a single JSON line; the CLI may
     # interleave other output around it. Each bucket becomes one window.
     def usage_windows_from_probe(stdout)
@@ -476,60 +479,36 @@ module Agents
       nil
     end
 
-    def terminal_output(terminal_session)
-      terminal_session.session_logs.find_by(name: "terminal_output.log")&.file&.read
-    rescue StandardError => e
-      Rails.logger.warn("[AntigravityCliAdapter] unable to read terminal output: #{e.message}")
-      nil
-    end
+    def usage_events(transcripts, terminal_session)
+      totals = Hash.new { |hash, model| hash[model] = { input: 0, output: 0, cached: 0 } }
+      transcripts.each do |transcript|
+        transcript.each_line do |line|
+          call = parse_json(line)
+          next unless call.is_a?(Hash) && call["type"] == "PLANNER_RESPONSE"
 
-    def usage_events(output, terminal_session)
-      return [] if output.blank?
+          sums = totals[call["model"].presence || terminal_session.requested_model.presence || default_model_for(terminal_session)]
+          sums[:input] += call["input_tokens"].to_i
+          sums[:output] += call["output_tokens"].to_i
+          sums[:cached] += call["cache_read_tokens"].to_i
+        end
+      end
 
-      stream_model = nil
-      output.each_line.filter_map do |raw_line|
-        event = parse_stream_event(raw_line)
-        next unless event
+      totals.filter_map do |model, sums|
+        next if sums.values.all?(&:zero?)
 
-        stream_model ||= event.dig("init", "model") || event["model"]
-        next unless event["event"] == "result"
-
-        result = event["result"]
-        usage = result.is_a?(Hash) ? result["usage"] : nil
-        next unless usage.is_a?(Hash)
-
-        input = usage["input_tokens"].to_i
-        output_tokens = usage["output_tokens"].to_i
-        cached = usage["cache_read_tokens"].to_i
-        next if input.zero? && output_tokens.zero? && cached.zero?
-
-        model = result["model"].presence || stream_model.presence || terminal_session.requested_model.presence ||
-          default_model_for(terminal_session)
         {
           "model" => model,
           "timestamp" => terminal_session.finished_at&.to_i&.to_s,
           "tokenUsage" => {
-            "inputTokens" => input,
-            "outputTokens" => output_tokens,
-            "cacheReadTokens" => cached,
+            "inputTokens" => sums[:input],
+            "outputTokens" => sums[:output],
+            "cacheReadTokens" => sums[:cached],
             "cacheWriteTokens" => 0,
-            "reasoningTokens" => usage["thinking_tokens"].to_i,
-            "totalCents" => usage_cost_cents(model, input, output_tokens, cached)
+            "totalCents" => usage_cost_cents(model, sums[:input], sums[:output], sums[:cached])
           },
-          "source" => "antigravity_stream_json"
+          "source" => "antigravity_transcript"
         }
       end
-    end
-
-    def parse_stream_event(raw_line)
-      line = raw_line.to_s.gsub(ANSI_ESCAPE, "").strip
-      json_start = line.index("{")
-      return nil unless json_start
-
-      parsed = JSON.parse(line[json_start..])
-      parsed if parsed.is_a?(Hash)
-    rescue JSON::ParserError
-      nil
     end
 
     def default_model_for(terminal_session)
@@ -537,6 +516,7 @@ module Agents
                     .find_by(agent_type: "antigravity_cli")&.default_model
     end
 
+    # Input excludes cache reads, so each bucket is priced on its own.
     def usage_cost_cents(model, input_tokens, output_tokens, cache_read_tokens)
       pricing = MODEL_PRICING[model]
       unless pricing
@@ -544,9 +524,7 @@ module Agents
         return 0.0
       end
 
-      cached = [ cache_read_tokens, input_tokens ].min
-      uncached = input_tokens - cached
-      ((uncached * pricing[:input]) + (cached * pricing[:cache_read]) +
+      ((input_tokens * pricing[:input]) + (cache_read_tokens * pricing[:cache_read]) +
         (output_tokens * pricing[:output])) / 10_000.0
     end
 

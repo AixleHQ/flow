@@ -25,7 +25,11 @@
       "cli_version": "2026.11.19-f005e9d",
       "cli_latest": { "url": "https://cursor.com/install", "pattern": "downloads\\.cursor\\.com/lab/([^/]+)/" },
       "cli_releases": { "url": "https://cursor.com/docs/cli/changelog" },
-      "reasoning_effort": { "levels": ["low", "medium", "high"], "models": [] }
+      "reasoning_effort": {
+        "levels": [],
+        "models": [],
+        "note": "Cursor CLI takes the effort as part of the model: pick the model's Low, Medium, High or Max variant."
+      }
     },
     {
       "id": "codex",
@@ -73,7 +77,11 @@
       "cli_version": "1.5.13",
       "cli_latest": null,
       "cli_releases": { "github": "google-antigravity/antigravity-cli", "tag_prefix": "" },
-      "reasoning_effort": { "levels": ["low", "medium", "high"], "models": [] }
+      "reasoning_effort": {
+        "levels": [],
+        "models": [],
+        "note": "Antigravity CLI takes the effort as part of the model: pick the model's Low, Medium or High variant."
+      }
     },
     {
       "id": "grok",

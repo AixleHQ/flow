@@ -145,6 +145,31 @@ class InteractivePromptDetector
                "(Agents::CopilotCliAdapter#generate_config); the session worked somewhere else."
     },
     {
+      # Antigravity CLI 1.5.13 (TUI) holds the `-i` prompt behind this dialog when
+      # /workspace is missing from trustedWorkspaces. Its last line is the footer's
+      # right-hand part alone (`auto · Gemini 3.8 Flash · high`), the left part blank.
+      id: :antigravity_workspace_trust,
+      agent_types: %w[antigravity_cli],
+      markers: [ /Do you trust the contents of this project\?/, /Navigate · enter Confirm/ ],
+      footer: /\A\s*(?:↑\/↓ Navigate · enter Confirm|(?:auto|plan|accept-edits) · .+)\z/,
+      message: "Antigravity CLI is blocked on its workspace-trust dialog " \
+               '("Do you trust the contents of this project?"), which a non_interactive ' \
+               "session cannot answer. /workspace is supposed to be trusted by trustedWorkspaces " \
+               "in settings.json (Agents::AntigravityCliAdapter#settings)."
+    },
+    {
+      # The same CLI's first-run onboarding, which holds the `-i` prompt too. Flow writes
+      # cache/onboarding.json, which skips it, for a consumer (Google OAuth) login only.
+      id: :antigravity_onboarding,
+      agent_types: %w[antigravity_cli],
+      markers: [ /Welcome to Antigravity CLI!/, /Choose your color scheme:/ ],
+      footer: /\A\s*(?:↑\/↓ Navigate · enter Confirm|(?:auto|plan|accept-edits) · .+)\z/,
+      message: "Antigravity CLI is blocked on its first-run onboarding (\"Choose your color " \
+               'scheme:"), which a non_interactive session cannot answer. Flow skips it with ' \
+               "cache/onboarding.json only for a Google OAuth (consumer) login; sign in to " \
+               "Antigravity with Google OAuth, or run the step interactively."
+    },
+    {
       # Read from the 1.0.108 bundle: offered on a model's rate limit unless
       # `continueOnAutoMode` is set, which Agents::CopilotCliAdapter::SETTINGS does.
       id: :copilot_rate_limit_switch,
