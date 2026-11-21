@@ -13,8 +13,8 @@ class CiTimingsTest < ActiveSupport::TestCase
     assert_equal 7, CiTimings.percentile([ 7 ], 0.9)
   end
 
-  test "a run's wall clock runs from its creation to its last successful job's end" do
-    report = CiTimings.summarize([ ci_run("10:00:00", [
+  test "a run's wall clock runs from its start to its last successful job's end" do
+    report = CiTimings.summarize([ ci_sample("10:00:00", [
       ci_job("Rails", "10:00:20", "10:00:30", "10:05:30"),
       ci_job("Lint", "10:00:05", "10:00:10", "10:02:10")
     ]) ])
@@ -22,8 +22,27 @@ class CiTimingsTest < ActiveSupport::TestCase
     assert_equal [ 330.0 ], report.wall_clocks
   end
 
+  test "a re-run keeps the run's creation, so each successful attempt is a sample measured from its own start" do
+    jobs = ->(finish) { [ ci_job("Rails", "10:00:00", "10:00:10", finish) ] }
+    failed_first = { "conclusion" => "failure", "run_started_at" => stamp("10:00:00") }
+    rerun = { "conclusion" => "success", "run_started_at" => stamp("10:30:00") }
+    first_ok = { "conclusion" => "success", "run_started_at" => stamp("11:00:00") }
+    second_ok = { "conclusion" => "success", "run_started_at" => stamp("11:20:00") }
+
+    samples = [
+      CiTimings.sample(failed_first) { flunk "jobs of a failed attempt are not fetched" },
+      CiTimings.sample(rerun) { jobs.call("10:35:00") },
+      CiTimings.sample(first_ok) { jobs.call("11:05:30") },
+      CiTimings.sample(second_ok) { jobs.call("11:24:00") }
+    ].compact
+    report = CiTimings.summarize(samples)
+
+    assert_equal 3, samples.size
+    assert_equal [ 300.0, 330.0, 240.0 ], report.wall_clocks
+  end
+
   test "a job's duration is start to end and its queue wait is creation to start" do
-    report = CiTimings.summarize([ ci_run("10:00:00", [ ci_job("Rails", "10:00:00", "10:00:40", "10:05:40") ]) ])
+    report = CiTimings.summarize([ ci_sample("10:00:00", [ ci_job("Rails", "10:00:00", "10:00:40", "10:05:40") ]) ])
     stats = report.jobs["Rails"]
 
     assert_equal [ 300.0 ], stats.durations
@@ -38,7 +57,7 @@ class CiTimingsTest < ActiveSupport::TestCase
       ci_step("Tear down", "10:02:00", "10:02:05", conclusion: "failure"),
       ci_step("Post", nil, nil, conclusion: "skipped")
     ])
-    report = CiTimings.summarize([ ci_run("10:00:00", [ skipped, failed, ok ]) ])
+    report = CiTimings.summarize([ ci_sample("10:00:00", [ skipped, failed, ok ]) ])
 
     assert_equal [ "Lint" ], report.jobs.keys
     assert_equal [ 125.0 ], report.wall_clocks
@@ -46,7 +65,7 @@ class CiTimingsTest < ActiveSupport::TestCase
   end
 
   test "a run with no successful job adds no wall clock" do
-    report = CiTimings.summarize([ ci_run("10:00:00", [ ci_job("Lint", "10:00:00", "10:00:05", "10:01:00", conclusion: "failure") ]) ])
+    report = CiTimings.summarize([ ci_sample("10:00:00", [ ci_job("Lint", "10:00:00", "10:00:05", "10:01:00", conclusion: "failure") ]) ])
 
     assert_empty report.wall_clocks
     assert_equal 1, report.run_count
@@ -54,7 +73,7 @@ class CiTimingsTest < ActiveSupport::TestCase
 
   test "the report lists jobs longest median first, with the steps over the threshold under their job" do
     runs = [ "10:02:00", "10:04:00", "10:06:00" ].map do |long_end|
-      ci_run("10:00:00", [
+      ci_sample("10:00:00", [
         ci_job("Short", "10:00:00", "10:00:10", "10:01:10"),
         ci_job("Long", "10:00:00", "10:00:20", long_end,
             steps: [ ci_step("Tests", "10:00:20", "10:00:50"), ci_step("Setup", "10:00:00", "10:00:03") ])
@@ -71,8 +90,8 @@ class CiTimingsTest < ActiveSupport::TestCase
 
   private
 
-  def ci_run(created, jobs)
-    { "created_at" => stamp(created), "jobs" => jobs }
+  def ci_sample(created, jobs)
+    { "started_at" => stamp(created), "jobs" => jobs }
   end
 
   def ci_job(name, created, started, completed, conclusion: "success", steps: [])
