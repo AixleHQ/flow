@@ -616,20 +616,23 @@ module Agents
       end
       return nil if counts[:input_tokens].nil? && counts[:output_tokens].nil?
 
-      output_tokens = counts[:output_tokens].to_i
+      cached = counts[:cache_read_tokens].to_i
+      ticks = text[/"cost_in_usd_ticks"\s*:\s*(\d+)/, 1]
       # Reasoning tokens are billed as completion tokens but the API also reports them
-      # inside completion_tokens, so they are recorded, not added.
+      # inside completion_tokens, so they are recorded, not added. The input count
+      # includes the cached tokens; the platform counts them apart.
       {
         "model" => text[/"model"\s*:\s*"([^"]+)"/, 1],
         "timestamp" => timestamp,
         "tokenUsage" => {
-          "inputTokens" => counts[:input_tokens].to_i,
-          "outputTokens" => output_tokens,
-          "cacheReadTokens" => counts[:cache_read_tokens].to_i,
+          "inputTokens" => [ counts[:input_tokens].to_i - cached, 0 ].max,
+          "outputTokens" => counts[:output_tokens].to_i,
+          "cacheReadTokens" => cached,
           "cacheWriteTokens" => 0,
           "reasoningTokens" => counts[:reasoning_tokens].to_i,
-          "totalCents" => 0.0
+          "totalCents" => ticks ? (ticks.to_i / TICKS_PER_CENT).round(6) : 0.0
         },
+        "costReported" => ticks.present?,
         "source" => "mitm"
       }
     end
@@ -638,7 +641,10 @@ module Agents
       body = entry["body"].to_s
       return "" if body.blank?
 
-      entry["body_encoding"] == "base64" ? Base64.decode64(body).force_encoding("UTF-8") : body
+      # A base64 body is binary as often as not: 1.0.89 downloads a 5 MB
+      # `/v1/bundle/archive` through the proxy, and its invalid bytes, matched as they
+      # were, raised and lost every session's usage.
+      entry["body_encoding"] == "base64" ? Base64.decode64(body).force_encoding("UTF-8").scrub : body
     rescue ArgumentError
       ""
     end
@@ -651,18 +657,27 @@ module Agents
     # / 1e8. Uncached input, cached input and output are priced separately.
     PRICE_SCALE = 100_000_000.0
 
+    # xAI reports what each response cost (`usage.cost_in_usd_ticks`, 10^10 ticks to the
+    # dollar, https://docs.x.ai/docs/api-reference). The price sheet only stands in for a
+    # response without it, and a signed-in account cannot read the sheet at all (the
+    # public catalogue answers its token with 403).
+    TICKS_PER_CENT = 100_000_000.0
+
     def apply_costs!(events, terminal_session)
+      return if events.all? { |event| event["costReported"] }
+
       prices = price_sheet(terminal_session)
       return if prices.blank?
 
       events.each do |event|
+        next if event["costReported"]
+
         price = prices[event["model"]]
         next if price.blank?
 
         usage = event["tokenUsage"]
         cached = usage["cacheReadTokens"].to_i
-        uncached_input = [ usage["inputTokens"].to_i - cached, 0 ].max
-        cents = ((uncached_input * price[:prompt]) + (cached * price[:cached]) + (usage["outputTokens"].to_i * price[:completion])) / PRICE_SCALE
+        cents = ((usage["inputTokens"].to_i * price[:prompt]) + (cached * price[:cached]) + (usage["outputTokens"].to_i * price[:completion])) / PRICE_SCALE
         usage["totalCents"] = cents.round(6)
       end
     end

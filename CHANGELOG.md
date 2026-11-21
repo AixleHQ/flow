@@ -24,6 +24,12 @@ governance, community health — carry none.
   The page opens archived tasks too.
 
 ### Fixed
+- **Sessions & Runs**: Grok sessions record their tokens and cost. Since Grok CLI 1.0.89
+  downloads a binary archive through the logged proxy, reading the log failed and no
+  session got any usage; the cost is now the one xAI reports for each response.
+- **Sessions & Runs**: Copilot CLI sessions count every model call. The CLI's telemetry for
+  a session's last calls was lost when its container stopped (a short step recorded none);
+  the calls are now read from the CLI's own transcript at the end of the session.
 - The `flow-web` image runs Ruby 4.0.10, which fixes the seven memory-safety bugs in
   Ruby's strings and regular expressions announced on 2026-11-18 (among them
   GHSA-34m4-m9fh-gqp5). One of them lets anyone who can reach the server run code on it

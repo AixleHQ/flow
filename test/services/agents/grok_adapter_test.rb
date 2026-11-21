@@ -470,8 +470,9 @@ module Agents
 
       @adapter.collect_usage(@session, { "logs/http.log" => "#{mitm_line(chat_completion_body)}\n" })
 
+      # The 400 cached tokens are counted apart from the 1_000 the API reports as input.
       stat = @session.reload.usage_statistic
-      assert_equal 1_000, stat.input_tokens
+      assert_equal 600, stat.input_tokens
       assert_equal 200, stat.output_tokens
       assert_equal 400, stat.cache_read_tokens
       assert_equal 0, stat.cache_write_tokens
@@ -497,7 +498,7 @@ module Agents
       })
 
       stat = @session.reload.usage_statistic
-      assert_equal 1_000, stat.input_tokens
+      assert_equal 600, stat.input_tokens
       assert_equal 200, stat.output_tokens
       assert_equal [ "grok-4.5" ], stat.models
     end
@@ -529,7 +530,7 @@ module Agents
       @adapter.collect_usage(@session, { "logs/http.log" => "#{log}\n" })
 
       stat = @session.reload.usage_statistic
-      assert_equal 2_048, stat.input_tokens
+      assert_equal 1_024, stat.input_tokens
       assert_equal 512, stat.output_tokens
       assert_equal 1_024, stat.cache_read_tokens
       assert_equal [ "grok-4.5" ], stat.models
@@ -612,8 +613,35 @@ module Agents
       @adapter.collect_usage(@session, { "logs/http.log" => "#{mitm_line(chat_completion_body)}\n" })
 
       stat = @session.reload.usage_statistic
-      assert_equal 1_000, stat.input_tokens
+      assert_equal 600, stat.input_tokens
       assert_equal 0, stat.cost_cents
+    end
+
+    # 1.0.89 downloads a 5 MB binary `/v1/bundle/archive` through the proxy; matched
+    # with its invalid bytes as they were, it raised and lost every session's usage.
+    test "collect_usage reads the responses around a binary body" do
+      stub_request(:get, GrokAdapter::MODELS_URL).to_return(status: 401, body: "")
+      archive = { direction: "response", host: "cli-chat-proxy.grok.com", path: "/v1/bundle/archive", status_code: 200,
+                  body_encoding: "base64", body: Base64.strict_encode64("PK\x03\x04\xFF\xFE\x00usage".b) }.to_json
+
+      @adapter.collect_usage(@session, { "logs/http.log" => "#{archive}\n#{mitm_line(chat_completion_body)}\n" })
+
+      assert_equal 600, @session.reload.usage_statistic.input_tokens
+    end
+
+    # Measured on 1.0.89: every `/v1/responses` answer carries its cost, and a signed-in
+    # account cannot read the price sheet at all.
+    test "collect_usage takes the cost xAI reports for each response" do
+      body = { model: "grok-4.7", usage: { input_tokens: 15_480, input_tokens_details: { cached_tokens: 1_664 },
+                                           output_tokens: 600, output_tokens_details: { reasoning_tokens: 582 },
+                                           cost_in_usd_ticks: 320_640_000 } }.to_json
+
+      @adapter.collect_usage(@session, { "logs/http.log" => "#{mitm_line(body, host: 'cli-chat-proxy.grok.com', path: '/v1/responses')}\n" })
+
+      stat = @session.reload.usage_statistic
+      assert_equal [ 13_816, 1_664, 600 ], [ stat.input_tokens, stat.cache_read_tokens, stat.output_tokens ]
+      assert_equal BigDecimal("3.2064"), stat.total_cents_precise
+      assert_not_requested :get, GrokAdapter::MODELS_URL
     end
 
     # == Subscription usage ==
