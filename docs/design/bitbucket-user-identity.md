@@ -166,7 +166,9 @@ for every provider; Bitbucket is reported to accept it, and staging item S1 conf
 
 `refuse_user_connect?` (`Web::OauthController`) already covers every provider in `UserConnections::PROVIDERS`.
 
-The `after_connect` lambda calls `Bitbucket::UserConnection.record_identity!` and stores
+The `after_connect` lambda calls `Bitbucket::UserConnection.record_identity!`. It composes the
+identity from `Api#current_user` and `Api#user_emails`, picks the primary confirmed address
+(D8), and stores
 `metadata["bitbucket_user"] = { id, nickname, name, avatar_url, commit_email, fetched_at }`
 (`id` is the account UUID). A failed lookup raises `Oauth::TokenExchangeError`, the stored
 identity is cleared and the credential kept, as for GitLab.
@@ -248,12 +250,17 @@ extend it instead of adding a service and a fake of their own. `Bitbucket::Api` 
 with the person's credential, `Bitbucket::Credential.new(kind: :access_token, ...)`. That kind
 already behaves as the person's token does: Bearer headers, git username `x-token-auth`, no
 refresher. No new credential kind. The host is `Bitbucket::AppConfig::API_HOST`, never one a
-request names. Two operations are added, with the matching methods on `FakeBitbucket::Api`:
+request names. One existing operation is extended and two are added, with the matching methods
+on `FakeBitbucket::Api`:
 
-- `current_user`: `GET /2.0/user` and `GET /2.0/user/emails`; returns `{ id: uuid, nickname:,
-  name: display_name, avatar_url:, commit_email: }` where `commit_email` is the person's
-  **primary, confirmed** address, or nil (D8). `username` is not used: Bitbucket removed it
-  from user objects in its privacy changes.
+- `current_user` (exists, `GET /2.0/user`): extended compatibly. It keeps `uuid`, `account_id`,
+  `display_name` and `nickname`, and gains `avatar_url`. Nothing else about it changes, so
+  `Bitbucket::IntegrationService` and its tests are unaffected, and the integration check
+  never calls `/user/emails`. `username` is not used: Bitbucket removed it from user objects in
+  its privacy changes.
+- `user_emails`: `GET /2.0/user/emails`, one endpoint per operation as in the rest of
+  `Bitbucket::Api`. Returns the person's addresses with their `is_primary` and `is_confirmed`
+  flags. Pages are followed.
 - `repository_permissions(full_names)`: for each workspace among the names, one
   `GET /2.0/user/workspaces/{workspace}/permissions/repositories` (documented in Bitbucket's
   OpenAPI spec as "List repository permissions in a workspace for a user", scopes `account` and
@@ -343,7 +350,7 @@ the disconnect text (which says the authorization stays listed in Atlassian), an
      client authentication for `:basic`.
    - `Bitbucket::AppConfig.oauth_client_id`, `oauth_client_secret`, `oauth_enabled?`;
      `config/settings.yml` (`bitbucket.oauth`), `.env.example`, deploy config.
-2. **Connection.**    `Bitbucket::Api` and `FakeBitbucket::Api` (`current_user`, `repository_permissions`);
+2. **Connection.**    `Bitbucket::Api` and `FakeBitbucket::Api` (`current_user` gains `avatar_url`; `user_emails`, `repository_permissions` are new);
    `Bitbucket::UserConnection`; `OauthCredential` constants and scopes; `ActAsConsent` provider
    list; strict input in `ActAsConsentsController` (D12).
 3. **Tools.** `BitbucketUserTokenContext`, the two tools, the `:bitbucket_identity` tag in
@@ -383,7 +390,7 @@ Following `docs/testing.md` (real database, app-owned seams, WebMock only in ada
 contract tests; no `any_instance`, no stubbing a vendor library).
 
 - **Adapter:** the `Bitbucket::Api` tests, WebMock contract tests on `Bitbucket::Client` for
-  `GET /2.0/user` and `/user/emails` (primary and confirmed, only an unconfirmed one, none), the
+  `GET /2.0/user` (including `avatar_url`; the existing keys unchanged) and `GET /2.0/user/emails` (primary and confirmed, only an unconfirmed one, none), the
   per-workspace permission lookup (admin, write, read, absent, a non-admin caller, several
   workspaces, pagination, exact `full_name` match) and the error mappings including 429. Payloads taken from the OpenAPI spec.
 - **Engine:** `test/services/oauth/providers_test.rb` for `client_auth`; a token exchange and a
