@@ -43,6 +43,12 @@ governance, community health — carry none.
 - **Sessions & Runs**: Antigravity CLI usage is priced right. Its input tokens never included
   the cached ones, but were priced as if they did, which undercounted the cost of sessions
   that read from the cache.
+- **Sessions & Runs**: Grok sessions record their tokens and cost. Since Grok CLI 1.0.89
+  downloads a binary archive through the logged proxy, reading the log failed and no
+  session got any usage; the cost is now the one xAI reports for each response.
+- **Sessions & Runs**: Copilot CLI sessions count every model call. The CLI's telemetry for
+  a session's last calls was lost when its container stopped (a short step recorded none);
+  the calls are now read from the CLI's own transcript at the end of the session.
 - **Triggers & gates**: a column trigger in auto mode is refused for a workflow with a step
   that has auto-run off, and the error names the steps — such a trigger never started
   anything. When a column trigger cannot start its run, the card gets a comment saying why

@@ -69,6 +69,11 @@ module Agents
     ].freeze
 
     OTEL_SOURCE = "otlp_copilot"
+    TRANSCRIPT_SOURCE = "copilot_transcript"
+    TRANSCRIPT_SUFFIX = ".events.jsonl"
+    # Set on the session once cleanup has counted the calls OTLP did not deliver
+    # (#collect_usage); a span that arrives after it is already counted.
+    RECONCILED_KEY = "usage_reconciled_at"
     CHAT_OPERATION = "chat"
     NANO_AIU_PER_CREDIT = 1_000_000_000.0
 
@@ -259,10 +264,36 @@ module Agents
     # `invoke_agent` span that wraps a turn repeats the turn's total, so it is skipped
     # rather than added on top.
     def ingest_usage(payload, terminal_session)
+      return :accepted if terminal_session.metadata.to_h[RECONCILED_KEY].present?
+
       events = otlp_chat_events(payload, terminal_session)
       return :accepted if events.empty?
 
       UsageStatistics::Accumulator.record(terminal_session: terminal_session, events: events, source: OTEL_SOURCE)
+    end
+
+    # The CLI exports its spans on a timer, and the container is stopped soon after
+    # finish_session, so the spans of a session's last calls never leave it: 2 of 4 calls
+    # arrived for a step on 2026-11-18, none for a 10-second one. Its transcript records
+    # every call (`session.usage_record`) with the same tokens and AI credits, so cleanup
+    # counts the calls OTLP did not deliver. The session is marked first, so a span that
+    # arrives from then on is dropped instead of counted a second time.
+    def collect_usage(terminal_session, artifacts = {})
+      transcript = artifacts.select { |name, _| name.to_s.end_with?(TRANSCRIPT_SUFFIX) }.values
+                            .flat_map { |log| log.each_line.filter_map { |line| transcript_event(parse_json(line)) } }
+      return if transcript.empty?
+
+      terminal_session.merge_jsonb!(:metadata, RECONCILED_KEY => Time.current.utc.iso8601)
+      recorded = Array(terminal_session.reload.usage_statistic&.events_data).map { |event| call_key(event) }.tally
+      missing = transcript.reject do |event|
+        key = call_key(event)
+        next false unless recorded[key].to_i.positive?
+
+        recorded[key] -= 1
+      end
+      return if missing.empty?
+
+      UsageStatistics::Accumulator.record(terminal_session: terminal_session, events: missing, source: TRANSCRIPT_SOURCE)
     end
 
     # The CLI's own transcript: every user and assistant message, tool call and result
@@ -355,29 +386,66 @@ module Agents
       attrs = span["attributes"]
       return nil unless otlp_value(attrs, "gen_ai.operation.name") == CHAT_OPERATION
 
-      input = otlp_value(attrs, "gen_ai.usage.input_tokens").to_i
-      cache_read = otlp_value(attrs, "gen_ai.usage.cache_read.input_tokens").to_i
-      cache_write = otlp_value(attrs, "gen_ai.usage.cache_write.input_tokens").to_i
-      credits = otlp_value(attrs, "github.copilot.nano_aiu").to_f / NANO_AIU_PER_CREDIT
+      call_event(
+        model: otlp_value(attrs, "gen_ai.request.model"),
+        timestamp: span["endTimeUnixNano"].presence && (span["endTimeUnixNano"].to_i / 1_000_000).to_s,
+        input: otlp_value(attrs, "gen_ai.usage.input_tokens"), output: otlp_value(attrs, "gen_ai.usage.output_tokens"),
+        cache_read: otlp_value(attrs, "gen_ai.usage.cache_read.input_tokens"),
+        cache_write: otlp_value(attrs, "gen_ai.usage.cache_write.input_tokens"),
+        nano_aiu: otlp_value(attrs, "github.copilot.nano_aiu"), source: OTEL_SOURCE
+      ).merge("conversationId" => otlp_value(attrs, "gen_ai.conversation.id"), "spanId" => span["spanId"]).compact
+    end
+
+    # One `session.usage_record` line of the CLI's transcript (1.0.114).
+    def transcript_event(record)
+      return nil unless record.is_a?(Hash) && record["type"] == "session.usage_record"
+
+      usage = record.dig("data", "usage")
+      return nil unless usage.is_a?(Hash)
+
+      call_event(
+        model: usage["model"], timestamp: transcript_time(record["timestamp"]),
+        input: usage["inputTokens"], output: usage["outputTokens"],
+        cache_read: usage["cacheReadTokens"], cache_write: usage["cacheWriteTokens"],
+        nano_aiu: usage.dig("copilotUsage", "totalNanoAiu"), source: TRANSCRIPT_SOURCE
+      ).merge("conversationId" => usage.dig("accounting", "sourceSessionId"),
+              "usageId" => usage.dig("accounting", "usageId")).compact
+    end
+
+    def call_event(model:, timestamp:, input:, output:, cache_read:, cache_write:, nano_aiu:, source:)
+      cache_read = cache_read.to_i
+      cache_write = cache_write.to_i
+      credits = nano_aiu.to_f / NANO_AIU_PER_CREDIT
       rate = Settings.agents.copilot.ai_credit_usd.to_f
 
       {
-        "model" => otlp_value(attrs, "gen_ai.request.model").presence,
-        "timestamp" => span["endTimeUnixNano"].presence && (span["endTimeUnixNano"].to_i / 1_000_000).to_s,
+        "model" => model.presence,
+        "timestamp" => timestamp,
         "tokenUsage" => {
           # The CLI's input count includes the cached tokens; the platform counts them apart.
-          "inputTokens" => [ input - cache_read - cache_write, 0 ].max,
-          "outputTokens" => otlp_value(attrs, "gen_ai.usage.output_tokens").to_i,
+          "inputTokens" => [ input.to_i - cache_read - cache_write, 0 ].max,
+          "outputTokens" => output.to_i,
           "cacheReadTokens" => cache_read,
           "cacheWriteTokens" => cache_write,
           "totalCents" => (credits * rate * 100).round(6)
         },
         "creditsUsed" => credits.round(6),
         "creditRateUsd" => rate,
-        "conversationId" => otlp_value(attrs, "gen_ai.conversation.id"),
-        "spanId" => span["spanId"],
-        "source" => OTEL_SOURCE
-      }.compact
+        "source" => source
+      }
+    end
+
+    # What a call is recognised by in either source: neither carries an id the other has.
+    def call_key(event)
+      usage = event["tokenUsage"].to_h
+      [ event["model"], *usage.values_at("inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens"),
+        event["creditsUsed"] ]
+    end
+
+    def transcript_time(value)
+      value.present? ? (Time.zone.parse(value.to_s).to_f * 1000).to_i.to_s : nil
+    rescue ArgumentError
+      nil
     end
 
     # OTLP/JSON carries a value as stringValue, intValue (a string), doubleValue or boolValue.
