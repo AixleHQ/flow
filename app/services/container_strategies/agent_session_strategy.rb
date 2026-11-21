@@ -19,6 +19,10 @@ module ContainerStrategies
     # agent runs.
     PROMPT_PATH = "/tmp/.aixle-prompt"
 
+    # The script an automatic session's agent pane runs instead of its shell (see
+    # #launch_as_pane_process).
+    LAUNCH_PATH = "/tmp/.aixle-launch"
+
     # Raised by an adapter's #credential_preflight when the credential written
     # to the container fails launch-time verification (see BaseAdapter).
     class ProvisioningError < StandardError
@@ -284,21 +288,42 @@ module ContainerStrategies
       raise ProvisioningError.new(result[:error_code], details)
     end
 
+    # An interactive session's CLI is typed into the pane's shell, which its person can
+    # start it again from. An automatic session's CLI becomes the pane's own process
+    # instead, so that its exit is tmux's to report (Sessions::Checks::AgentExited).
     def launch_agent_in_tmux(container)
       session = TerminalSession.find(input[:session_id])
-      agent_service = AgentCredentialsService.for(input[:agent_type])
-      cmd = agent_service.adapter.session_command(mode: session.mode, model: resolve_model(session),
-                                                  effort: session.reasoning_effort)
+      adapter = AgentCredentialsService.for(input[:agent_type]).adapter
+      cmd = adapter.session_command(mode: session.mode, model: resolve_model(session),
+                                    effort: session.reasoning_effort)
 
-      tmux_cmd = if session.mode == "non_interactive" && session.initial_prompt.present?
-        write_prompt!(container, agent_prompt(session), agent_service.adapter.container_uid)
-        "#{cmd} \"$(cat #{PROMPT_PATH})\""
+      if session.mode == "non_interactive"
+        if session.initial_prompt.present?
+          write_prompt!(container, agent_prompt(session), adapter.container_uid)
+          cmd = "#{cmd} #{adapter.prompt_argument("\"$(cat #{PROMPT_PATH})\"")}"
+        end
+        launch_as_pane_process(container, cmd, adapter.container_uid)
       else
-        cmd
+        send_tmux_command(container, cmd)
+      end
+      Rails.logger.info("[AgentSession] Launched agent in tmux: #{cmd}")
+    end
+
+    # The pane's shell is replaced by the CLI (`respawn-pane -k`), and the pane is kept
+    # once the CLI exits (`remain-on-exit`), with what it printed and its exit status. The
+    # CLI starts from an interactive bash that execs into the launch script, so it gets
+    # the environment a command typed into the pane would, ~/.bashrc included (Cursor CLI
+    # is on the PATH only through it). The pane's pipe to /tmp/terminal_output.log
+    # survives the respawn.
+    def launch_as_pane_process(container, cmd, uid)
+      unless runtime.write_file(container, LAUNCH_PATH, "#{cmd}\n", mode: 0o700, uid: uid, gid: uid)
+        raise "Could not write the session's launch script into the container"
       end
 
-      send_tmux_command(container, "#{tmux_cmd}#{AgentExitDetector::LAUNCH_SUFFIX}")
-      Rails.logger.info("[AgentSession] Launched agent in tmux: #{cmd}")
+      script = "for i in $(seq 1 30); do tmux has-session -t agent 2>/dev/null && break; sleep 0.2; done; " \
+               "tmux set-option -w -t agent remain-on-exit on \\; " \
+               "respawn-pane -k -t agent #{Shellwords.shellescape("bash -ic 'exec bash #{LAUNCH_PATH}'")}"
+      runtime.exec(container, [ "sh", "-c", script ])
     end
 
     def agent_prompt(session)

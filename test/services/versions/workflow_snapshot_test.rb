@@ -75,6 +75,22 @@ class Versions::WorkflowSnapshotTest < ActiveSupport::TestCase
     assert_equal "high", @build.reload.reasoning_effort
   end
 
+  # Task #324: Cursor CLI stopped taking a level, and versions saved before keep one.
+  test "a level the step's runtime no longer takes comes back as none on revert" do
+    Versions.save!(@workflow, actor: @actor) do
+      @build.update!(required_agent_runtime: "cursor_cli", preferred_model: "composer-2.5")
+    end
+    v1 = @workflow.latest_version
+    steps = v1.snapshot["steps"]
+    EntityVersion.where(id: v1.id)
+                 .update_all(snapshot: v1.snapshot.merge("steps" => [ steps.first.merge("reasoning_effort" => "low"), *steps.drop(1) ]))
+    Versions.save!(@workflow, actor: @actor) { @build.update!(preferred_model: "claude-opus-5-5-low") }
+
+    Versions.revert!(@workflow, to: v1.reload, actor: @actor)
+
+    assert_equal [ "composer-2.5", nil ], [ @build.reload.preferred_model, @build.reasoning_effort ]
+  end
+
   # A key a snapshot lacks is a column added after that version was saved, so the
   # revert gives it the column's default rather than keeping the row's current value.
   test "reverting to a snapshot without a column restores that column's default" do

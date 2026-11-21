@@ -263,7 +263,8 @@ module Agents
           {
             model_id: model.slug,
             display_name: model.display_name,
-            description: model.description.truncate(MODEL_DESCRIPTION_LIMIT)
+            description: model.description.truncate(MODEL_DESCRIPTION_LIMIT),
+            reasoning_effort_levels: model.reasoning_levels
           }
         end
     rescue StandardError => e

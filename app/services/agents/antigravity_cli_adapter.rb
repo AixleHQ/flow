@@ -298,23 +298,21 @@ module Agents
     end
 
     # Automatic sessions run in the TUI like interactive ones, with the step's prompt submitted
-    # by `-i` (AgentSessionStrategy appends it). No `--effort`: agy's model ids carry the
-    # effort (`gemini-3.8-flash-high`), and `--effort` only applies to a model group, which
-    # the model list never offers.
-    #
-    # In the TUI an unknown model, or `--effort` on a model id, does not stop agy: it runs
-    # the account's default model and says so only in its own log (1.5.13). So a chosen
-    # model is looked up in `agy models` first, and a model the account does not offer ends
-    # the launch with a message, which Sessions::Checks::AgentExited turns into the step's
-    # error (task #324).
+    # by `-i` (#prompt_argument). No `--effort`: agy's model ids carry the effort
+    # (`gemini-3.8-flash-high`), and `--effort` only applies to a model group, which the
+    # model list never offers. In the TUI an unknown model, or `--effort` on a model id, does
+    # not stop agy: it runs the account's default model and says so only in its own log
+    # (1.5.13), which is why the model is checked before launch (#runs_default_model_for_unknown?).
     def session_command(mode:, model: nil, effort: nil)
       parts = [ "agy" ]
       parts += [ "--model", Shellwords.shellescape(model) ] if model.present?
       parts << "--dangerously-skip-permissions"
-      parts << "-i" if mode.to_s == "non_interactive"
-      command = parts.join(" ")
-      model.present? ? "#{listed_model_check('agy models | cut -f1', model, cli: 'Antigravity CLI')} && #{command}" : command
+      parts.join(" ")
     end
+
+    def prompt_argument(prompt) = "-i #{prompt}"
+
+    def runs_default_model_for_unknown? = true
 
     # agy keeps one transcript per conversation, named after the conversation id, in print
     # mode and in the TUI alike. Every model call is a PLANNER_RESPONSE line with that call's
