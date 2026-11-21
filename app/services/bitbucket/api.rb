@@ -25,7 +25,32 @@ module Bitbucket
     def current_user
       user = @client.get("user")
       { uuid: Identifiers.uuid(user["uuid"]), account_id: user["account_id"], display_name: user["display_name"],
-        nickname: user["nickname"] }
+        nickname: user["nickname"], avatar_url: user.dig("links", "avatar", "href") }
+    end
+
+    # The addresses of the person the credential acts as (`email` scope), with the flags
+    # that say which one Bitbucket treats as theirs. Pages are followed.
+    def user_emails
+      values, = @client.paginate("user", "emails", params: { pagelen: REPOSITORY_PAGE }, limit: 100)
+      values.map do |email|
+        { email: email["email"], is_primary: email["is_primary"] == true, is_confirmed: email["is_confirmed"] == true }
+      end
+    end
+
+    # What the person the credential acts as can do in each of the repositories named by
+    # `full_names`: { full_name => "admin" | "write" | "read" | nil }. One lookup per
+    # workspace (the cross-workspace form is gone). `q` is documented on `repository.name`,
+    # not `full_name`, so it only narrows the list and the match on `full_name` is exact.
+    def repository_permissions(full_names)
+      result = full_names.index_with { nil }
+      full_names.group_by { |full_name| full_name.split("/", 2).first }.each do |workspace, names|
+        filter = names.map { |name| %(repository.name="#{quoted(name.split('/', 2).last)}") }.join(" OR ")
+        workspace_permissions(workspace, filter).each do |entry|
+          full_name = entry.dig("repository", "full_name").to_s
+          result[full_name] = entry["permission"].presence if result.key?(full_name)
+        end
+      end
+      result
     end
 
     def workspace(workspace)
@@ -163,6 +188,16 @@ module Bitbucket
     end
 
     private
+
+    # A workspace the person has no access to answers 403 or 404, which for them is "no
+    # permission on anything there", not a failure of the lookup.
+    def workspace_permissions(workspace, filter)
+      values, = @client.paginate("user", "workspaces", workspace, "permissions", "repositories",
+                                 params: { pagelen: REPOSITORY_PAGE, q: filter }, limit: 1000)
+      values
+    rescue Error::PermissionDenied, Error::NotFound
+      []
+    end
 
     # Values go into a BBQL string literal; a quote or backslash in a branch name
     # must not end it.

@@ -14,9 +14,10 @@ class Oauth::ProvidersTest < ActiveSupport::TestCase
     assert Oauth::Providers.known?("railway")
     assert Oauth::Providers.known?("github")
     assert Oauth::Providers.known?("gitlab")
+    assert Oauth::Providers.known?("bitbucket")
     refute Oauth::Providers.known?(nil)
 
-    assert_equal %w[sentry railway github gitlab].sort, Oauth::Providers.provider_names.sort
+    assert_equal %w[sentry railway github gitlab bitbucket].sort, Oauth::Providers.provider_names.sort
     assert_equal "https://sentry.io", Oauth::Providers.config("sentry")[:issuer]
   end
 
@@ -114,5 +115,42 @@ class Oauth::ProvidersTest < ActiveSupport::TestCase
     assert_empty Oauth::Providers.trusted_hosts("github")
     assert_empty Oauth::Providers.trusted_hosts("mcp:abc")
     assert_empty Oauth::Providers.trusted_hosts(nil)
+  end
+
+  test "the bitbucket entry has fixed Cloud endpoints, no scope and Basic client authentication" do
+    config = Oauth::Providers.config("bitbucket")
+
+    assert_equal "https://bitbucket.org", config[:issuer]
+    assert_equal "https://bitbucket.org/site/oauth2/authorize", config[:authorization_endpoint]
+    assert_equal "https://bitbucket.org/site/oauth2/access_token", config[:token_endpoint]
+    assert_equal "", config[:scopes]
+    assert_equal %w[User], config[:owner_types]
+    assert_nil config[:revocation_endpoint]
+    assert_empty Oauth::Providers.trusted_hosts("bitbucket")
+  end
+
+  test "client_auth is basic for bitbucket and post for every other provider" do
+    assert_equal :basic, Oauth::Providers.client_auth("bitbucket")
+    %w[sentry railway github gitlab mcp:example.com].each do |provider|
+      assert_equal :post, Oauth::Providers.client_auth(provider), provider
+    end
+  end
+
+  test "client_for reads the Bitbucket OAuth client's settings" do
+    Settings.bitbucket.oauth.stubs(:client_id).returns("bb-cid")
+    Settings.bitbucket.oauth.stubs(:client_secret).returns("bb-secret")
+
+    client = Oauth::Providers.client_for("bitbucket")
+
+    assert_equal "https://bitbucket.org", client.issuer
+    assert_equal "bb-cid", client.client_id
+    assert_equal "bb-secret", client.client_secret
+    assert_equal "", client.scopes.to_s
+  end
+
+  test "client_for raises MissingClientConfig when the Bitbucket OAuth client is not set" do
+    Settings.bitbucket.oauth.stubs(:client_id).returns("")
+
+    assert_raises(Oauth::MissingClientConfig) { Oauth::Providers.client_for("bitbucket") }
   end
 end

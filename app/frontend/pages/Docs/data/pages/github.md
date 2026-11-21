@@ -352,8 +352,8 @@ failed.
 By default an agent's commits are authored as *Aixle Flow* and its pull requests
 are opened by the GitHub App, so a squash merge lands on the base branch as the
 App's bot. To have work in your own name, connect your GitHub account and let
-agents use it. (GitLab has the same:
-[Acting as yourself](/docs/gitlab#acting-as-yourself).)
+agents use it. (GitLab and Bitbucket have the same:
+[GitLab](/docs/gitlab#acting-as-yourself), [Bitbucket](/docs/bitbucket#acting-as-yourself).)
 
 **Connect.** Open **Profile → Connected accounts** and press **Connect GitHub**.
 GitHub asks you to authorize the Aixle App; Flow keeps the connection fresh for

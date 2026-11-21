@@ -358,6 +358,8 @@ deployment, and invocations are verified against its app id and environment.
 | `BITBUCKET_MERGE_POLL_INTERVAL`  | no       | `1.0`   | Seconds between re-reads while confirming a merge Bitbucket accepted asynchronously. |
 | `BITBUCKET_OPEN_TIMEOUT`         | no       | `5`     | Connection open timeout, in seconds. |
 | `BITBUCKET_READ_TIMEOUT`         | no       | `30`    | Response read timeout, in seconds. |
+| `BITBUCKET_OAUTH_CLIENT_ID`      | no       | unset   | Key of the deployment's Bitbucket OAuth client (Authorization code grant, callback `<protocol>://<domain>/oauth/callback`). With the secret, it turns on **Profile → Connected accounts → Bitbucket**, so people connect their own account and agents can act as them. A client has one callback URL, so each deployment registers its own. |
+| `BITBUCKET_OAUTH_CLIENT_SECRET`  | no       | unset   | Secret of that OAuth client. |
 
 ### Jira
 

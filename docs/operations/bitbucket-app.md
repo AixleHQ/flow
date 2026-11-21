@@ -116,3 +116,25 @@ its token is dropped and every Aixle connection on it goes into **Error**. A rei
 under a new installation id, unbound; a workspace admin connects it again from the settings page,
 and the company's existing Bitbucket connections move to the new installation with their
 repositories.
+
+## OAuth client for people's own accounts
+
+Separate from the Forge app and unrelated to how a workspace connects: an **OAuth client**
+(called an *OAuth consumer* in older workspaces) lets people connect their own Bitbucket account
+under **Profile → Connected accounts**, so agents can act as them (design:
+[`docs/design/bitbucket-user-identity.md`](../design/bitbucket-user-identity.md)). Without it the
+feature is off and the profile card says connecting Bitbucket accounts is not configured.
+
+An owner of any Bitbucket workspace the operator controls registers it, under **Workspace
+settings → Apps and features → OAuth clients → Add client**:
+
+- **Callback URL:** `<PROTOCOL>://<DOMAIN>/oauth/callback`. A client holds one callback URL, so
+  staging and production each need their own client.
+- **Grant:** *Authorization code* ticked (Bitbucket then also issues refresh tokens).
+- **Scopes:** `account`, `email`, `repository`, `repository:write`, `pullrequest`,
+  `pullrequest:write`. Scopes are fixed on the client; Flow does not request any per grant.
+
+Its key and secret go to the deployment as `BITBUCKET_OAUTH_CLIENT_ID` and
+`BITBUCKET_OAUTH_CLIENT_SECRET`. Bitbucket Cloud only. Deleting or replacing the client ends every
+connection made with it: the people's connections fail to refresh and show *Needs reconnect*.
+

@@ -27,6 +27,14 @@ governance, community health — carry none.
   continues the same step. A suspended session holds no slot; its owner is emailed when it is suspended and three days
   before it expires. Needs S3-compatible storage; without it sessions finish as before. Operators: a workflow run may now
   last 40 days instead of 7.
+- **Integrations**: agents can act as you on Bitbucket, as they can on GitHub and GitLab.
+  Connect your Bitbucket account under **Profile → Connected accounts**, allow it per
+  project, and give a step the `bitbucket_user_token` or `bitbucket_user_token_for` tool.
+  Like GitLab's, the token is not limited to the session's repositories (Bitbucket cannot do
+  that), and the user guide says what bounds it instead. Commits use your primary confirmed
+  Bitbucket email, and disconnecting cannot revoke the grant at Bitbucket. The operator
+  registers a Bitbucket OAuth client with the callback `<PROTOCOL>://<DOMAIN>/oauth/callback`
+  and sets `BITBUCKET_OAUTH_CLIENT_ID` and `BITBUCKET_OAUTH_CLIENT_SECRET`.
 - **Tasks**: a workflow agent can put the card it moves at a chosen place in the column
   (`position`, 0 = top) instead of always at the bottom.
 - **Docs**: the Tools page explains how agents list archived tasks with
@@ -83,6 +91,8 @@ governance, community health — carry none.
 - **Sessions & Runs**: automatic Antigravity CLI steps run in its terminal UI, like
   interactive ones, so the live terminal shows the conversation and a turn that ends
   without `finish_session` gets the usual reminder.
+- **Profile**: the consent switches on **Connected accounts** now refuse a request that names
+  no switch, an unknown field, or a value that is not true or false, for every provider.
 - **Sign-in & onboarding**: onboarding asks which area of the company you work in —
   Engineering, Product Management, Design, QA, Marketing, Operations, Finance / Accounting,
   Executive Leadership or Other — instead of a software-delivery role. Earlier answers move to
