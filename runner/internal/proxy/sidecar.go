@@ -25,6 +25,11 @@ type SidecarOptions struct {
 	Logger *slog.Logger
 	// Ready, when set, receives the listener's address once it accepts.
 	Ready chan<- string
+	// DialSocket, when set, is where the sidecar listens for the host runner's stream
+	// dials (dial.go), and DialPorts the only ports it dials: the session's five. With
+	// no DialSocket the sidecar serves no tunnel stream.
+	DialSocket string
+	DialPorts  []int
 }
 
 // RunSidecar is `aixle-runner --mode proxy`: it listens on opts.Listen, in the
@@ -49,8 +54,15 @@ func RunSidecar(ctx context.Context, opts SidecarOptions) error {
 		opts.Ready <- listener.Addr().String()
 	}
 
-	done := make(chan error, 1)
+	done := make(chan error, 2)
 	go func() { done <- server.Serve(listener) }()
+	if opts.DialSocket != "" {
+		go func() {
+			if err := ServeDial(ctx, opts.DialSocket, opts.DialPorts, logger); err != nil {
+				done <- fmt.Errorf("the dial socket: %w", err)
+			}
+		}()
+	}
 	select {
 	case err := <-done:
 		return err
