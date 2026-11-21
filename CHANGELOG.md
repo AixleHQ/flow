@@ -24,6 +24,10 @@ governance, community health — carry none.
   The page opens archived tasks too.
 
 ### Fixed
+- The `flow-web` image runs Ruby 4.0.10, which fixes the seven memory-safety bugs in
+  Ruby's strings and regular expressions announced on 2026-11-18 (among them
+  GHSA-34m4-m9fh-gqp5). One of them lets anyone who can reach the server run code on it
+  without signing in. Self-hosted installations: upgrade to this release.
 - **Triggers & gates**: a column trigger in auto mode is refused for a workflow with a step
   that has auto-run off, and the error names the steps — such a trigger never started
   anything. When a column trigger cannot start its run, the card gets a comment saying why
