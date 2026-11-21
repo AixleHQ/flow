@@ -14,16 +14,16 @@ class CiTimingsTest < ActiveSupport::TestCase
   end
 
   test "a run's wall clock runs from its creation to its last successful job's end" do
-    report = CiTimings.summarize([ run("10:00:00", [
-      job("Rails", "10:00:20", "10:00:30", "10:05:30"),
-      job("Lint", "10:00:05", "10:00:10", "10:02:10")
+    report = CiTimings.summarize([ ci_run("10:00:00", [
+      ci_job("Rails", "10:00:20", "10:00:30", "10:05:30"),
+      ci_job("Lint", "10:00:05", "10:00:10", "10:02:10")
     ]) ])
 
     assert_equal [ 330.0 ], report.wall_clocks
   end
 
   test "a job's duration is start to end and its queue wait is creation to start" do
-    report = CiTimings.summarize([ run("10:00:00", [ job("Rails", "10:00:00", "10:00:40", "10:05:40") ]) ])
+    report = CiTimings.summarize([ ci_run("10:00:00", [ ci_job("Rails", "10:00:00", "10:00:40", "10:05:40") ]) ])
     stats = report.jobs["Rails"]
 
     assert_equal [ 300.0 ], stats.durations
@@ -31,14 +31,14 @@ class CiTimingsTest < ActiveSupport::TestCase
   end
 
   test "skipped and failed jobs and steps are left out of every figure" do
-    skipped = job("Refresh Layer Cache", "10:00:00", "10:00:00", "10:00:00", conclusion: "skipped")
-    failed = job("Vitest", "10:00:00", "10:00:05", "10:09:05", conclusion: "failure")
-    ok = job("Lint", "10:00:00", "10:00:05", "10:02:05", steps: [
-      step("Run check", "10:00:10", "10:02:00"),
-      step("Tear down", "10:02:00", "10:02:05", conclusion: "failure"),
-      step("Post", nil, nil, conclusion: "skipped")
+    skipped = ci_job("Refresh Layer Cache", "10:00:00", "10:00:00", "10:00:00", conclusion: "skipped")
+    failed = ci_job("Vitest", "10:00:00", "10:00:05", "10:09:05", conclusion: "failure")
+    ok = ci_job("Lint", "10:00:00", "10:00:05", "10:02:05", steps: [
+      ci_step("Run check", "10:00:10", "10:02:00"),
+      ci_step("Tear down", "10:02:00", "10:02:05", conclusion: "failure"),
+      ci_step("Post", nil, nil, conclusion: "skipped")
     ])
-    report = CiTimings.summarize([ run("10:00:00", [ skipped, failed, ok ]) ])
+    report = CiTimings.summarize([ ci_run("10:00:00", [ skipped, failed, ok ]) ])
 
     assert_equal [ "Lint" ], report.jobs.keys
     assert_equal [ 125.0 ], report.wall_clocks
@@ -46,7 +46,7 @@ class CiTimingsTest < ActiveSupport::TestCase
   end
 
   test "a run with no successful job adds no wall clock" do
-    report = CiTimings.summarize([ run("10:00:00", [ job("Lint", "10:00:00", "10:00:05", "10:01:00", conclusion: "failure") ]) ])
+    report = CiTimings.summarize([ ci_run("10:00:00", [ ci_job("Lint", "10:00:00", "10:00:05", "10:01:00", conclusion: "failure") ]) ])
 
     assert_empty report.wall_clocks
     assert_equal 1, report.run_count
@@ -54,10 +54,10 @@ class CiTimingsTest < ActiveSupport::TestCase
 
   test "the report lists jobs longest median first, with the steps over the threshold under their job" do
     runs = [ "10:02:00", "10:04:00", "10:06:00" ].map do |long_end|
-      run("10:00:00", [
-        job("Short", "10:00:00", "10:00:10", "10:01:10"),
-        job("Long", "10:00:00", "10:00:20", long_end,
-            steps: [ step("Tests", "10:00:20", "10:00:50"), step("Setup", "10:00:00", "10:00:03") ])
+      ci_run("10:00:00", [
+        ci_job("Short", "10:00:00", "10:00:10", "10:01:10"),
+        ci_job("Long", "10:00:00", "10:00:20", long_end,
+            steps: [ ci_step("Tests", "10:00:20", "10:00:50"), ci_step("Setup", "10:00:00", "10:00:03") ])
       ])
     end
     output = CiTimings.render(CiTimings.summarize(runs), step_threshold: 20)
@@ -71,16 +71,16 @@ class CiTimingsTest < ActiveSupport::TestCase
 
   private
 
-  def run(created, jobs)
+  def ci_run(created, jobs)
     { "created_at" => stamp(created), "jobs" => jobs }
   end
 
-  def job(name, created, started, completed, conclusion: "success", steps: [])
+  def ci_job(name, created, started, completed, conclusion: "success", steps: [])
     { "name" => name, "conclusion" => conclusion, "created_at" => stamp(created),
       "started_at" => stamp(started), "completed_at" => stamp(completed), "steps" => steps }
   end
 
-  def step(name, started, completed, conclusion: "success")
+  def ci_step(name, started, completed, conclusion: "success")
     { "name" => name, "conclusion" => conclusion, "started_at" => started && stamp(started), "completed_at" => completed && stamp(completed) }
   end
 
