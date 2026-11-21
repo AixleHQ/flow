@@ -166,9 +166,10 @@ func (s *Server) resolve(ctx context.Context, token string) (route SessionRoute,
 		return route, http.StatusServiceUnavailable, "unavailable"
 	}
 	// The answer may be older than a signal that arrived while the call was out. It is
-	// stored only if the registry still has no session for the machine, the care
-	// revokeStale takes too; this request uses it either way.
-	if _, ok := s.registry.Session(route.EnvironmentID); !ok {
+	// stored only if the registry still has no routed session for the machine (the
+	// placeholder a connection's ticket leaves has no token), the care revokeStale takes
+	// too; this request uses it either way.
+	if cur, ok := s.registry.Session(route.EnvironmentID); !ok || cur.RouteToken == "" {
 		s.assign(route)
 	}
 	return route, 0, ""
