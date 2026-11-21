@@ -64,7 +64,16 @@
           "pids_limit": 4096
         },
         "privilege_escalation": false,
-        "proxy_port": 7690
+        "proxy_port": 7690,
+        "tunnel": {
+          "ports": {
+            "tty": 7681,
+            "view": 7682,
+            "fs": 4040,
+            "upload": 4041,
+            "ide": 8443
+          }
+        }
       }
     },
     {
@@ -166,7 +175,16 @@
                   "pids_limit": 4096
                 },
                 "privilege_escalation": false,
-                "proxy_port": 7690
+                "proxy_port": 7690,
+                "tunnel": {
+                  "ports": {
+                    "tty": 7681,
+                    "view": 7682,
+                    "fs": 4040,
+                    "upload": 4041,
+                    "ide": 8443
+                  }
+                }
               }
             },
             {

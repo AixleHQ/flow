@@ -49,6 +49,38 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert_equal 7800, @host_runner.operations.sole[:payload]["proxy_port"]
   end
 
+  test "container.start carries the bridge session's tunnel ports, and no port variable" do
+    @runner.update!(config: @runner.config.deep_merge("container" => { "network" => "bridge" }))
+
+    @runtime.create_container(spec(env_vars: [ "TTYD_PORT=7681" ]))
+
+    payload = @host_runner.operations.sole[:payload]
+    assert_equal({ "ports" => { "tty" => 7681, "view" => 7682, "fs" => 4040, "upload" => 4041, "ide" => 8443 } }, payload["tunnel"])
+    assert_equal({ "TTYD_PORT" => "7681" }, payload["env"])
+  end
+
+  test "with network: host and the tunnel off, the strategy's port variables are left as they are" do
+    @runtime.create_container(spec(env_vars: [ "TTYD_PORT=7681", "VIEW_PORT=7682", "WATCHER_PORT=4040" ]))
+
+    off = @host_runner.operations.sole[:payload]
+    assert_equal({ "TTYD_PORT" => "7681", "VIEW_PORT" => "7682", "WATCHER_PORT" => "4040" }, off["env"])
+    assert_equal 5, off["tunnel"]["ports"].values.uniq.size
+  end
+
+  test "with network: host and the tunnel on, the port variables are the session's tunnel ports" do
+    Settings.runners.relay.stubs(:ticket_key).returns("a-ticket-key-of-32-characters-xx")
+    Runners::TunnelTicket.stubs(:mode).returns("session")
+
+    @runtime.create_container(spec(env_vars: [ "TTYD_PORT=7681", "SESSION_ID=#{@session.id}" ]))
+
+    payload = @host_runner.operations.sole[:payload]
+    ports = payload["tunnel"]["ports"]
+    assert_equal({ "TTYD_PORT" => ports["tty"].to_s, "SESSION_ID" => @session.id.to_s, "VIEW_PORT" => ports["view"].to_s,
+                   "WATCHER_PORT" => ports["fs"].to_s, "UPLOAD_PORT" => ports["upload"].to_s,
+                   "VSCODE_PORT" => ports["ide"].to_s }, payload["env"])
+    assert_not_equal 7681, ports["tty"]
+  end
+
   test "the runner's image override is the image started" do
     @runner.update!(config: @runner.config.deep_merge("container" => { "image_override" => "registry.internal/agents/claude:7" }))
 
@@ -127,7 +159,8 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
       "network" => "host", "pid" => "private",
       "resources" => { "cpus" => 2, "memory_bytes" => 8.gigabytes, "pids_limit" => 4096 },
       "privilege_escalation" => false,
-      "proxy_port" => 20_000 + (@session.id % 10_000)
+      "proxy_port" => 20_000 + (@session.id % 10_000),
+      "tunnel" => { "ports" => Runners::Tunnel.ports(@session) }
     }, start[:payload])
     assert_not start[:payload].key?("session_id"), "the session is in the envelope, not the payload"
     assert_equal [ IMAGE ], @host_runner.machine.images, "container.start pulled the image"

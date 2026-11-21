@@ -192,9 +192,10 @@ relay verifies them, with the same key. The relay's own variables are `RUNNER_RE
 | Variable                       | Required | Default | Purpose                                                          |
 | ------------------------------ | -------- | ------- | ---------------------------------------------------------------- |
 | `RUNNERS_RELAY_TICKET_KEY`     | no       | none (development and test: a fixed value) | The HMAC key of tunnel tickets. The relay's `RUNNER_RELAY_TICKET_KEY` must be the same value. A key of its own, never `RUNNERS_SECRET_KEY`: a compromised relay must not read `runner_operations`. Generate with `openssl rand -hex 32`. Without it no ticket is minted. |
-| `RUNNERS_RELAY_INTERNAL_TOKEN` | no       | none    | The bearer the relay presents on its short calls to the app. Read by the internal endpoints of a later release. |
+| `RUNNERS_RELAY_INTERNAL_TOKEN` | no       | none    | The bearer the relay presents on its short calls to the app. Read by the internal endpoints `/api/v1/internal/runner_relay/*`, which refuse every call while it is blank. |
 | `RUNNERS_RELAY_PUBLIC_PATH`    | no       | `/runner/v1/tunnel` | The path on the gateway's host where a runner opens the WebSocket, which the ingress routes to the relay. It is sent to runners in the check-in's `config.tunnel.path`. |
 | `RUNNERS_RELAY_TUNNEL_MODE`    | no       | none    | `session`: tell runners to connect to the relay while their machine holds a session. Blank: tell them nothing, so no runner tries to connect. Turn it on only once the relay is deployed and its ingress route exists. |
+| `RUNNERS_TUNNEL_HOST_PORT_BASE` | no       | `30000` | With `network: host`, a session's five tunnel ports are this base plus (its id mod 1000) × 8, plus 0 to 4. The range is 8000 ports from the base: it must fit below 65536, start at 1024 or above, and include neither the proxy's host ports (`RUNNER_PROXY_HOST_PORT_BASE` and its span) nor any of the agent image's own ports. A deployed app refuses to boot on a range outside these rules. |
 
 ### External runners' agent images
 
