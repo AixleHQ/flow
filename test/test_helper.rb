@@ -15,7 +15,10 @@ COVERAGE_ENABLED = ENV["SKIP_COVERAGE"].to_s.strip != "1"
 # (the coverage floor is enforced on the unit `rails test`, see COVERAGE_MIN below).
 if COVERAGE_ENABLED
   SimpleCov.start("rails") do
-    primary_coverage :line
+    # Line coverage in oneshot mode: Ruby records only whether a line ran, not how often, which
+    # takes about 34 s off a Rails shard. SimpleCov turns it back into a line array (1 for run,
+    # 0 for not run), so the shards' results still merge by bin/collate-coverage.
+    coverage :line, oneshot: true, primary: true
     # Parallel workers each write a result under a distinct command_name (see
     # parallelize_setup below); the parent process merges them and enforces the
     # floor on the merged total. Keep the merge window well above the suite
