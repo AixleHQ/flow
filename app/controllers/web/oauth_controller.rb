@@ -400,7 +400,8 @@ class Web::OauthController < Web::ApplicationController
     server
   end
 
-  # POST token_endpoint as application/x-www-form-urlencoded (client_secret_post).
+  # POST token_endpoint as application/x-www-form-urlencoded (client_secret_post, or HTTP
+  # Basic for a provider whose entry says client_auth: :basic).
   # Returns the parsed JSON hash (string keys). Raises Oauth::TokenExchangeError on
   # any non-2xx response, network error, or unparseable body. NEVER interpolates
   # the code or any token into logs or exception messages. When present, the RFC
@@ -416,19 +417,16 @@ class Web::OauthController < Web::ApplicationController
       grant_type: "authorization_code",
       code: code,
       redirect_uri: redirect_uri,
-      code_verifier: code_verifier,
-      client_id: client.client_id
+      code_verifier: code_verifier
     }
-    body[:client_secret] = client.client_secret if client.confidential?
     body[:resource] = resource if resource.present?
 
     uri = URI.parse(client.token_endpoint)
     http = SafeHttp.http_for(uri, open_timeout: Oauth::TokenService::TOKEN_TIMEOUT,
                                   read_timeout: Oauth::TokenService::TOKEN_TIMEOUT,
                                   trusted_hosts: Oauth::Providers.trusted_hosts(provider))
-    req = Net::HTTP::Post.new(uri)
+    req = Oauth::TokenService.token_request(uri, body, client, provider)
     req["Accept"] = "application/json"
-    req.set_form_data(body)
     res = http.request(req)
     raise Oauth::TokenExchangeError, "status=#{res.code}" unless res.is_a?(Net::HTTPSuccess)
 

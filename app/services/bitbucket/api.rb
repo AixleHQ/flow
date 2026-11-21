@@ -11,6 +11,7 @@ module Bitbucket
   # send a call to whatever now owns the old name.
   class Api
     REPOSITORY_PAGE = 100
+    PERMISSION_LIMIT = 1000
     # Bitbucket refuses a larger page for pull requests and their comments.
     PULL_REQUEST_PAGE = 50
     STATES = { "open" => %w[OPEN], "merged" => %w[MERGED], "closed" => %w[DECLINED SUPERSEDED],
@@ -25,7 +26,37 @@ module Bitbucket
     def current_user
       user = @client.get("user")
       { uuid: Identifiers.uuid(user["uuid"]), account_id: user["account_id"], display_name: user["display_name"],
-        nickname: user["nickname"] }
+        nickname: user["nickname"], avatar_url: user.dig("links", "avatar", "href") }
+    end
+
+    # The addresses of the person the credential acts as (`email` scope), with the flags
+    # that say which one Bitbucket treats as theirs. Pages are followed.
+    def user_emails
+      values, = @client.paginate("user", "emails", params: { pagelen: REPOSITORY_PAGE }, limit: 100)
+      values.map do |email|
+        { email: email["email"], is_primary: email["is_primary"] == true, is_confirmed: email["is_confirmed"] == true }
+      end
+    end
+
+    # What the person the credential acts as can do in each of the repositories named by
+    # `full_names`, as { levels: { full_name => "admin" | "write" | "read" | nil },
+    # unchecked: [full_name] }. One lookup per workspace (the cross-workspace form is
+    # gone). The list is paged whole and matched on `full_name` exactly: `q` is documented
+    # on `repository.name`, the display name, which is not the slug in `full_name`. A
+    # repository absent from a list that was cut short is `unchecked`: nothing is known
+    # about it, which is not the same as "no permission".
+    def repository_permissions(full_names)
+      levels = full_names.index_with { nil }
+      unchecked = []
+      full_names.group_by { |full_name| full_name.split("/", 2).first }.each do |workspace, names|
+        entries, truncated = workspace_permissions(workspace)
+        entries.each do |entry|
+          full_name = entry.dig("repository", "full_name").to_s
+          levels[full_name] = entry["permission"].presence if levels.key?(full_name)
+        end
+        unchecked.concat(names.select { |name| levels[name].nil? }) if truncated
+      end
+      { levels: levels, unchecked: unchecked }
     end
 
     def workspace(workspace)
@@ -163,6 +194,15 @@ module Bitbucket
     end
 
     private
+
+    # [entries, truncated]. A workspace the person has no access to answers 403 or 404,
+    # which for them is "no permission on anything there", not a failure of the lookup.
+    def workspace_permissions(workspace)
+      @client.paginate("user", "workspaces", workspace, "permissions", "repositories",
+                       params: { pagelen: REPOSITORY_PAGE }, limit: PERMISSION_LIMIT)
+    rescue Error::PermissionDenied, Error::NotFound
+      [ [], false ]
+    end
 
     # Values go into a BBQL string literal; a quote or backslash in a branch name
     # must not end it.

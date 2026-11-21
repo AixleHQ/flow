@@ -1,13 +1,14 @@
 # frozen_string_literal: true
 
-# The accounts a person connected (GitHub and GitLab) and what agents may do with them
+# The accounts a person connected (GitHub, GitLab and Bitbucket) and what agents may do with them
 # in each project (docs/design/github-user-identity.md §4.2). The profile's
 # "Connected accounts" page calls this; it takes named parameters, never the request.
 module UserConnections
   # Provider name => the module that knows how to connect and disconnect it.
   PROVIDERS = {
     Github::UserConnection::PROVIDER => Github::UserConnection,
-    Gitlab::UserConnection::PROVIDER => Gitlab::UserConnection
+    Gitlab::UserConnection::PROVIDER => Gitlab::UserConnection,
+    Bitbucket::UserConnection::PROVIDER => Bitbucket::UserConnection
   }.freeze
 
   class Error < StandardError; end

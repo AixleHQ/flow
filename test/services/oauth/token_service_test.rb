@@ -461,6 +461,42 @@ module Oauth
       assert_not_requested :post, "https://gitlab.corp.internal/oauth/token"
     end
 
+    # == client authentication: Bitbucket sends the client as HTTP Basic ==
+
+    test "a bitbucket refresh authenticates the client with HTTP Basic and keeps it out of the body" do
+      client = build_client(client_id: "bb-key", client_secret: "bb secret/1")
+      cred = build_credential(owner: @user, oauth_client: client, provider: "bitbucket", access_token: "old",
+                              refresh_token: "old-refresh", expires_at: 1.minute.from_now)
+      basic = "Basic #{Base64.strict_encode64('bb-key:bb+secret%2F1')}"
+      stub_request(:post, TOKEN_ENDPOINT)
+        .with(headers: { "Authorization" => basic })
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                   body: { access_token: "new", refresh_token: "rotated", expires_in: 7200,
+                           scopes: "account repository" }.to_json)
+
+      assert_equal "new", Oauth::TokenService.fresh(cred)
+
+      assert_requested(:post, TOKEN_ENDPOINT, headers: { "Authorization" => basic }) do |req|
+        req.body.include?("grant_type=refresh_token") && !req.body.include?("client_secret") &&
+          !req.body.include?("client_id")
+      end
+      assert_equal "rotated", cred.reload.refresh_token
+    end
+
+    test "a provider that does not say client_auth: :basic still sends the secret in the body" do
+      client = build_client(client_id: "gh-id", client_secret: "gh-secret")
+      cred = build_credential(owner: @user, oauth_client: client, provider: "github", access_token: "old",
+                              refresh_token: "old-refresh", expires_at: 1.minute.from_now)
+      stub_token_endpoint(access_token: "new", expires_in: 3600)
+
+      Oauth::TokenService.fresh(cred)
+
+      assert_requested(:post, TOKEN_ENDPOINT) do |req|
+        req.body.include?("client_id=gh-id") && req.body.include?("client_secret=gh-secret") &&
+          req.headers["Authorization"].nil?
+      end
+    end
+
     # == revoke!: RFC 7009 through the provider's revocation endpoint ==
 
     test "revoke! posts the token with the grant's client to the revocation endpoint of the registry" do

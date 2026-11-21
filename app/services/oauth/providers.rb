@@ -62,6 +62,23 @@ module Oauth
         owner_types: %w[User],
         after_connect: ->(credential) { Gitlab::UserConnection.record_identity!(credential) },
         trust_endpoint_host: true
+      },
+      # A person's own Bitbucket Cloud account, through the deployment's OAuth client
+      # (docs/design/bitbucket-user-identity.md §2.3). Cloud only, so the hosts are fixed.
+      # The client scopes are set on the client itself and cannot be narrowed per grant,
+      # so none is requested. Bitbucket authenticates the client with HTTP Basic, and
+      # offers no revocation endpoint.
+      "bitbucket" => {
+        issuer: Bitbucket::AppConfig::WEB_HOST,
+        authorization_endpoint: "#{Bitbucket::AppConfig::WEB_HOST}/site/oauth2/authorize",
+        token_endpoint: "#{Bitbucket::AppConfig::WEB_HOST}/site/oauth2/access_token",
+        scopes: "",
+        oauth_app: -> {
+          { client_id: Bitbucket::AppConfig.oauth_client_id, client_secret: Bitbucket::AppConfig.oauth_client_secret }
+        },
+        owner_types: %w[User],
+        client_auth: :basic,
+        after_connect: ->(credential) { Bitbucket::UserConnection.record_identity!(credential) }
       }
     }.freeze
 
@@ -76,6 +93,13 @@ module Oauth
       entry = REGISTRY.fetch(provider.to_s)
       resolver = entry[:endpoints]
       resolver ? entry.merge(resolver.call) : entry
+    end
+
+    # How the client authenticates at the token endpoint: `:post` (client_id and
+    # client_secret in the form body, the default) or `:basic` (RFC 6749 §2.3.1, HTTP
+    # Basic, with nothing of the client in the body).
+    def client_auth(provider)
+      REGISTRY.dig(provider.to_s, :client_auth) || :post
     end
 
     # Hosts the token call may reach although they resolve privately: the operator's

@@ -162,10 +162,7 @@ module Oauth
       uri = URI.parse(endpoint)
       trusted = Oauth::Providers.trusted_hosts(cred.provider)
       http = SafeHttp.http_for(uri, open_timeout: TOKEN_TIMEOUT, read_timeout: TOKEN_TIMEOUT, trusted_hosts: trusted)
-      req = Net::HTTP::Post.new(uri)
-      body = { token: cred.access_token, client_id: client.client_id }
-      body[:client_secret] = client.client_secret if client.confidential?
-      req.set_form_data(body)
+      req = token_request(uri, { token: cred.access_token }, client, cred.provider)
       response = http.request(req)
       raise Oauth::RevocationError, "revocation status=#{response.code}" unless response.is_a?(Net::HTTPSuccess)
 
@@ -179,8 +176,7 @@ module Oauth
     # Returns parsed JSON (string keys). NEVER logs token material.
     def perform_refresh!(cred)
       client = cred.oauth_client
-      body = { grant_type: "refresh_token", refresh_token: cred.refresh_token, client_id: client.client_id }
-      body[:client_secret] = client.client_secret if client.confidential?
+      body = { grant_type: "refresh_token", refresh_token: cred.refresh_token }
 
       # SECURITY (oauth-unification §5): a source:"dcr" token_endpoint is
       # attacker-authored — re-validate at time-of-use, since a persisted endpoint is
@@ -197,9 +193,8 @@ module Oauth
 
       uri = URI.parse(client.token_endpoint)
       http = SafeHttp.http_for(uri, open_timeout: TOKEN_TIMEOUT, read_timeout: TOKEN_TIMEOUT, trusted_hosts: trusted)
-      req = Net::HTTP::Post.new(uri)
+      req = token_request(uri, body, client, cred.provider)
       req["Accept"] = "application/json"
-      req.set_form_data(body)
       res = http.request(req)
       raise "refresh status=#{res.code}" unless res.is_a?(Net::HTTPSuccess)
 
@@ -213,6 +208,26 @@ module Oauth
       raise "refresh response carried no access token (status=#{res.code})" unless token_granted?(parsed)
 
       parsed
+    end
+
+    # The POST to a token-endpoint (code exchange, refresh, revocation) with the client's
+    # credentials on it the way its provider wants them (Oauth::Providers.client_auth): in
+    # the form (`client_id` and, for a confidential client, `client_secret`), or as HTTP
+    # Basic with neither in the form (RFC 6749 §2.3.1: both are form-urlencoded before they
+    # are joined). A client with no secret has nothing to send as Basic, so it identifies
+    # itself in the form. `fields` is not changed.
+    def token_request(uri, fields, client, provider)
+      request = Net::HTTP::Post.new(uri)
+      if Oauth::Providers.client_auth(provider) == :basic && client.confidential?
+        request.basic_auth(URI.encode_www_form_component(client.client_id),
+                           URI.encode_www_form_component(client.client_secret))
+        request.set_form_data(fields)
+      else
+        identity = { client_id: client.client_id }
+        identity[:client_secret] = client.client_secret if client.confidential?
+        request.set_form_data(fields.merge(identity))
+      end
+      request
     end
 
     # GitHub answers a bad code or a bad refresh token with HTTP 200 and an `error`
