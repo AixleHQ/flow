@@ -87,7 +87,7 @@ module RunnerGateway
 
       def runner_live?(runner_id)
         Rails.cache.fetch("runner_gateway/runner_live/#{runner_id}", expires_in: STATUS_TTL) do
-          Runner.where(id: runner_id, deleted_at: nil).where.not(status: "revoked").exists?
+          Runner.not_retired.exists?(id: runner_id)
         end
       end
 

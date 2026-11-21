@@ -19,20 +19,23 @@ module Api
           private
 
           # The questions as plain hashes with integer ids, or nil when the body is
-          # not a list of objects that carry both.
+          # not a list of objects that carry both: a `session_id` is an Integer, or
+          # absent or null.
           def machines_param
             list = params[:machines]
             return unless list.is_a?(Array)
 
-            list.map do |entry|
-              return nil unless entry.respond_to?(:to_unsafe_h)
+            questions = list.map { |entry| question(entry) }
+            questions if questions.all?
+          end
 
-              hash = entry.to_unsafe_h
-              environment_id, session_id = hash.values_at("environment_id", "session_id")
-              return nil unless environment_id.is_a?(Integer)
+          def question(entry)
+            return unless entry.respond_to?(:to_unsafe_h)
 
-              { "environment_id" => environment_id, "session_id" => (session_id if session_id.is_a?(Integer)) }
-            end
+            environment_id, session_id = entry.to_unsafe_h.values_at("environment_id", "session_id")
+            return unless environment_id.is_a?(Integer) && (session_id.nil? || session_id.is_a?(Integer))
+
+            { "environment_id" => environment_id, "session_id" => session_id }
           end
         end
       end

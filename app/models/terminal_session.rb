@@ -235,6 +235,8 @@ class TerminalSession < ApplicationRecord
   end
 
   # Scopes
+  # A session that runs on an external runner.
+  scope :on_runner, -> { where.not(runner_id: nil) }
   scope :auth_sessions, -> { where(session_type: "auth_setup") }
   scope :agent_sessions, -> { where(session_type: "agent_session") }
   scope :not_ended, -> { where.not(state: TERMINAL_STATES) }
@@ -330,6 +332,11 @@ class TerminalSession < ApplicationRecord
 
   def agent_session?
     session_type == "agent_session"
+  end
+
+  # The same question as the `on_runner` scope, for one record.
+  def on_runner?
+    runner_id.present?
   end
 
   def workflow_step?
@@ -531,7 +538,7 @@ class TerminalSession < ApplicationRecord
   end
 
   def left_ready?
-    runner_id.present? && saved_change_to_state? && state_before_last_save == "ready"
+    on_runner? && saved_change_to_state? && state_before_last_save == "ready"
   end
 
   def signal_relay_session_ended

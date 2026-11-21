@@ -16,9 +16,8 @@ module Runners
     # Four queries however many machines are asked about.
     def valid(machines)
       environments = RunnerEnvironment.where(id: machines.pluck("environment_id")).index_by(&:id)
-      ready = TerminalSession.where(id: environments.values.filter_map(&:current_session_id), state: "ready").ids.to_set
-      live_runners = Runner.where(id: environments.values.map(&:runner_id).uniq, deleted_at: nil)
-                           .where.not(status: "revoked").ids.to_set
+      ready = TerminalSession.ready.where(id: environments.values.filter_map(&:current_session_id)).ids.to_set
+      live_runners = Runner.not_retired.where(id: environments.values.map(&:runner_id).uniq).ids.to_set
       companies = Company.where(id: environments.values.map(&:company_id).uniq).index_by(&:id)
       enabled = {}
 
