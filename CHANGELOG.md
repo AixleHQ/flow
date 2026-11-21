@@ -51,6 +51,10 @@ governance, community health — carry none.
 
 ### Changed
 
+- **Docs**: *Session queues* describes workers as the company's own number,
+  set on Settings → General, instead of an installation ceiling, and gains a
+  *Prioritising projects* section: how reserving workers keeps the projects that
+  matter most from waiting, and what a reservation costs.
 - **Sign-in & onboarding**: onboarding asks which area of the company you work in —
   Engineering, Product Management, Design, QA, Marketing, Operations, Finance / Accounting,
   Executive Leadership or Other — instead of a software-delivery role. Earlier answers move to
