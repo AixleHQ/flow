@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
-require Rails.root.join("db/migrate/20261120100000_map_membership_positions_to_areas")
+require Rails.root.join("db/migrate/20261120100001_map_membership_positions_to_areas")
 
 class MapMembershipPositionsToAreasTest < ActiveSupport::TestCase
   test "each stored role moves to the area that holds it" do

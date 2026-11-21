@@ -100,12 +100,35 @@ type CheckIn struct {
 	Update      *Update       `json:"update,omitempty"`
 }
 
+// TunnelConfig is `config.tunnel` of a check-in answer (§5.9): present only when the
+// platform offers the interactive tunnel.
+type TunnelConfig struct {
+	// Mode says when the runner connects: "session" is while its machine holds a
+	// session. A mode this runner does not know is the same as none.
+	Mode string `json:"mode"`
+	// Path is where the WebSocket opens on the platform's host; empty is DefaultTunnelPath.
+	Path string `json:"path,omitempty"`
+}
+
+// DefaultTunnelPath is the tunnel's path when the platform names none.
+const DefaultTunnelPath = "/runner/v1/tunnel"
+
+// TunnelTicket is the 200 answer of tunnel-ticket (§5.11).
+type TunnelTicket struct {
+	// Ticket is the bearer of the tunnel's upgrade. It is a secret for its minute of
+	// life: never log it.
+	Ticket    string    `json:"ticket"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
 // CheckInConfig is the config of a check-in answer.
 type CheckInConfig struct {
 	// UploadMaxBytes is the largest upload the platform takes for an op's output
 	// or file (§6.5). Each upload slot carries its own `max_bytes`, which is what
 	// binds; this value is for the runner's log.
 	UploadMaxBytes int64 `json:"upload_max_bytes"`
+	// Tunnel is nil unless the platform offers the interactive tunnel.
+	Tunnel *TunnelConfig `json:"tunnel,omitempty"`
 }
 
 // Op is one op of a GET ops answer (§6). SessionID is set on a session op and

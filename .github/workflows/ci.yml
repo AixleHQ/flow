@@ -172,7 +172,7 @@ jobs:
   checks:
     name: Checks
     if: ${{ !cancelled() }}
-    needs: [ lint, system, rails, vitest, coverage, secret-scan, runner ]
+    needs: [ lint, system, rails, vitest, coverage, secret-scan, runner, runner-relay ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -323,6 +323,53 @@ jobs:
             CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath -ldflags "-s -w" \
               -o "$RUNNER_TEMP/aixle-runner-linux-$arch" ./cmd/aixle-runner
           done
+
+  # The runner relay, the self-contained Go module under runner-relay/
+  # (docs/design/agent-runtimes/runner-relay.md §2.1). It requires the runner module's
+  # runner/protocol/tunnel package through `replace => ../runner`, so a change in that
+  # package is tested here too. No path filter, as for the runner job above: it is part of
+  # `Checks`, and takes about a minute.
+  runner-relay:
+    name: runner-relay (Go)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: runner-relay
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          # The version pinned in go.mod's `go` line.
+          go-version-file: runner-relay/go.mod
+          cache: false
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt would reformat these files:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      # go.mod and go.sum must be what `go mod tidy` would write: the Docker build
+      # downloads exactly what go.sum lists.
+      - name: go mod tidy
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+      - name: go test
+        run: go test -race ./...
+
+      - name: Build
+        run: CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "$RUNNER_TEMP/aixle-runner-relay" ./cmd/aixle-runner-relay
 
   secret-scan:
     name: Secret Scan

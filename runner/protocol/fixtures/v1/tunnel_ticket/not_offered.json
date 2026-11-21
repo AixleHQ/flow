@@ -1,0 +1,12 @@
+{
+  "description": "A platform with no relay configured (no ticket key) answers 404 not_found, whatever the machine holds. Its check-in tells the runner nothing about a tunnel either, so a runner never asks.",
+  "steps": [
+    {"given": "registered_machine", "as": "m"},
+    {"given": "session_on_machine", "machine": "m", "as": "s"},
+    {"given": "session_holds_machine", "machine": "m", "session": "s"},
+    {
+      "request": {"method": "POST", "path": "/runner/v1/tunnel-ticket", "token": "{{m.access_token}}"},
+      "response": {"status": 404, "body": {"error": "not_found", "message": {"$type": "string"}}}
+    }
+  ]
+}

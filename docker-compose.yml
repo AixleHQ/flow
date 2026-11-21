@@ -64,6 +64,10 @@ x-web-environment: &web-environment
   # port nothing listens on. The runner gateway forwards the callback proxy's
   # `assets` route to this host (Runners::Proxy.upstream_url).
   CONTAINER_ASSET_HOST: web:${PORT:-4000}
+  # The interactive tunnel (docs/design/agent-runtimes/runner-relay.md): the check-in tells a
+  # runner to connect to the relay while its machine holds a session. The relay itself is the
+  # `runner-relay` service below, in the `runners` profile.
+  RUNNERS_RELAY_TUNNEL_MODE: ${RUNNERS_RELAY_TUNNEL_MODE:-session}
   MCP_PORT: ${MCP_PORT:-4002}
   RUNNER_GATEWAY_PORT: ${RUNNER_GATEWAY_PORT:-4003}
   VITE_RUBY_PORT: ${VITE_RUBY_PORT:-4001}
@@ -122,6 +126,10 @@ services:
       - '${BIND_ADDRESS:-127.0.0.1}:${VITE_RUBY_PORT:-4001}:${VITE_RUBY_PORT:-4001}'
       - '${BIND_ADDRESS:-127.0.0.1}:${MCP_PORT:-4002}:${MCP_PORT:-4002}'  # MCP server (separate Puma via Procfile.dev)
       - '${BIND_ADDRESS:-127.0.0.1}:${RUNNER_GATEWAY_PORT:-4003}:${RUNNER_GATEWAY_PORT:-4003}'  # runner gateway (separate Puma via Procfile.dev)
+      # The runner-relay service shares this container's network namespace (below), so its
+      # ports are published here.
+      - '${BIND_ADDRESS:-127.0.0.1}:${RUNNER_RELAY_PORT:-4004}:${RUNNER_RELAY_PORT:-4004}'  # runner-relay: the runners' tunnel
+      - '${BIND_ADDRESS:-127.0.0.1}:${RUNNER_RELAY_ADMIN_PORT:-4005}:${RUNNER_RELAY_ADMIN_PORT:-4005}'  # runner-relay: /healthz /readyz /metrics /drain
     depends_on:
       db:
         condition: service_healthy
@@ -247,9 +255,52 @@ services:
       - runner_local_docker_root:/var/lib/docker:ro
     environment:
       RUNNER_LOCAL_DIR: ${RUNNER_LOCAL_DIR:-/tmp/aixle-runner-local}
+      # The tunnel's WebSocket opens on the relay, on this namespace's loopback. The platform's
+      # ingress would send `/runner/v1/tunnel` to the relay and the rest of `/runner/v1/` to the
+      # gateway, which the plain-http gateway address of this stack cannot do.
+      AIXLE_RUNNER_TUNNEL_URL: ws://127.0.0.1:${RUNNER_RELAY_PORT:-4004}/runner/v1/tunnel
     depends_on:
       web:
         condition: service_healthy
+      runner-relay:
+        condition: service_started
+    restart: on-failure:5
+    attach: false
+
+  # The runner relay (docs/design/agent-runtimes/runner-relay.md): the Go service that holds one
+  # WebSocket per machine. Only with the `runners` profile, as `runner-local` is, whose machine
+  # connects to it while it holds a session. It shares web's network namespace, as `runner-local`
+  # does, so the runner reaches it on 127.0.0.1, the only address aixle-runner accepts plain ws on
+  # (AIXLE_RUNNER_TUNNEL_URL above); redis and web resolve from there as they do for web.
+  # Built from the repository root: runner-relay/go.mod replaces the runner module with ../runner.
+  # No browser path yet, so Traefik does not route to it.
+  runner-relay:
+    profiles: [ runners ]
+    build:
+      context: .
+      dockerfile: runner-relay/Dockerfile
+    image: ${RUNNER_RELAY_IMAGE:-runner-relay}
+    network_mode: "service:web"
+    environment:
+      RUNNER_RELAY_LISTEN: 127.0.0.1:${RUNNER_RELAY_PORT:-4004}
+      RUNNER_RELAY_ADMIN_LISTEN: 127.0.0.1:${RUNNER_RELAY_ADMIN_PORT:-4005}
+      RUNNER_RELAY_REDIS_URL: redis://redis:6379/1
+      RUNNER_RELAY_REDIS_CHANNEL_PREFIX: aixle_development_
+      RUNNER_RELAY_RAILS_URL: http://127.0.0.1:${PORT:-4000}
+      # The development fallback of Settings.runners.relay.ticket_key: the same value, or no
+      # ticket the app mints verifies here.
+      RUNNER_RELAY_TICKET_KEY: ${RUNNERS_RELAY_TICKET_KEY:-runner relay development ticket key}
+      RUNNER_RELAY_INTERNAL_TOKEN: ${RUNNERS_RELAY_INTERNAL_TOKEN:-runner relay development internal token}
+    depends_on:
+      web:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:${RUNNER_RELAY_ADMIN_PORT:-4005}/readyz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
     restart: on-failure:5
     attach: false
 

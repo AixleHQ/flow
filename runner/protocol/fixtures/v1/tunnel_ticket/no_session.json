@@ -1,0 +1,21 @@
+{
+  "description": "A machine that holds no session gets 409 no_session, so an idle machine opens no connection. Once a session holds the machine, the same request answers a ticket.",
+  "steps": [
+    {"given": "tunnel_on"},
+    {"given": "registered_machine", "as": "m"},
+    {
+      "request": {"method": "POST", "path": "/runner/v1/tunnel-ticket", "token": "{{m.access_token}}"},
+      "response": {"status": 409, "body": {"error": "no_session", "message": {"$type": "string"}}}
+    },
+    {"given": "session_on_machine", "machine": "m", "as": "s"},
+    {
+      "request": {"method": "POST", "path": "/runner/v1/tunnel-ticket", "token": "{{m.access_token}}"},
+      "response": {"status": 409, "body": {"error": "no_session", "message": {"$type": "string"}}}
+    },
+    {"given": "session_holds_machine", "machine": "m", "session": "s"},
+    {
+      "request": {"method": "POST", "path": "/runner/v1/tunnel-ticket", "token": "{{m.access_token}}"},
+      "response": {"status": 200, "body": {"ticket": {"$prefix": "artun_"}, "expires_at": {"$type": "timestamp"}}}
+    }
+  ]
+}

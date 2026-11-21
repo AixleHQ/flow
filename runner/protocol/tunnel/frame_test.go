@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func mustHex(t testing.TB, s string) []byte {
@@ -253,4 +254,37 @@ func FuzzDecode(f *testing.F) {
 			fr.Credit()
 		}
 	})
+}
+
+// cutText and cutCloseReason share one helper with their own limits.
+func TestCutUTF8CutsOnACharacterBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		in    string
+		limit int
+		want  string
+	}{
+		{"abc", 3, "abc"},
+		{"abcd", 3, "abc"},
+		{"aé", 2, "a"},   // é is two bytes: the cut would split it
+		{"aé", 3, "aé"},  // it fits
+		{"日本語", 4, "日"},  // three bytes each
+		{"日本語", 8, "日本"}, // 6 bytes fit, the third character does not
+		{"😀😀", 5, "😀"},   // four bytes each
+		{"", 0, ""},
+		{"abc", 0, ""},
+	} {
+		got := cutUTF8(tc.in, tc.limit)
+		if got != tc.want || !utf8.ValidString(got) {
+			t.Errorf("cutUTF8(%q, %d) = %q, want %q", tc.in, tc.limit, got, tc.want)
+		}
+	}
+	if got := cutText(strings.Repeat("é", MaxResetText)); len(got) != MaxResetText {
+		t.Errorf("cutText kept %d bytes, want %d (whole characters)", len(got), MaxResetText)
+	}
+	if got := cutText(strings.Repeat("é", MaxResetText) + "x"); len(got) != MaxResetText {
+		t.Errorf("cutText over the limit kept %d bytes", len(got))
+	}
+	if got := cutCloseReason(strings.Repeat("é", 100)); len(got) != 120 || !utf8.ValidString(got) {
+		t.Errorf("cutCloseReason kept %d bytes", len(got))
+	}
 }
