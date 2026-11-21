@@ -38,6 +38,24 @@ class AgentRuntimeTest < ActiveSupport::TestCase
     end
   end
 
+  # Measured with bin/agent-effort-probe on staging, 2026-11-21 (task #324): Claude Code 2.1.329
+  # lowers xhigh and max to high on these models and ignores any level on the 4.5 Haiku and
+  # Sonnet; Kiro CLI 3.5.0 does the same on its own list.
+  test "Claude Code and Kiro offer only the levels each model takes" do
+    claude = AgentRuntime.fetch(:claude_code)
+    kiro = AgentRuntime.fetch(:kiro_cli)
+
+    assert_equal [], claude.reasoning_effort_levels("claude-haiku-4-5-20251001")
+    assert_equal [], claude.reasoning_effort_levels("claude-sonnet-4-5-20250929")
+    assert_equal %w[low medium high], claude.reasoning_effort_levels("claude-opus-4-5-20251101")
+    assert_equal %w[low medium high max], claude.reasoning_effort_levels("claude-sonnet-4-6")
+    assert_equal %w[low medium high xhigh max], claude.reasoning_effort_levels("claude-opus-5-5")
+    assert_equal [], kiro.reasoning_effort_levels("glm-5")
+    assert_equal [], kiro.reasoning_effort_levels("claude-opus-4.5")
+    assert_equal %w[low medium high max], kiro.reasoning_effort_levels("claude-opus-4.6")
+    assert_equal %w[low medium high xhigh], kiro.reasoning_effort_levels("grok-4.7")
+  end
+
   # Task #324: the effort is part of a Cursor model id, and a level on top of it makes the
   # CLI refuse the model and exit.
   test "Cursor offers no level on any model" do
