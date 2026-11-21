@@ -105,6 +105,21 @@ func (s *Server) machineSession(sig signal) error {
 // streams only.
 func (s *Server) assign(route SessionRoute) {
 	previous, had := s.registry.SetSession(route.EnvironmentID, route)
+	s.endReplaced(route, previous, had)
+}
+
+// assignIfAbsent records route only if the machine holds no routed session, in one
+// registry call, and says whether it did.
+func (s *Server) assignIfAbsent(route SessionRoute) bool {
+	previous, had, stored := s.registry.SetSessionIfAbsent(route.EnvironmentID, route)
+	if stored {
+		s.endReplaced(route, previous, had)
+	}
+	return stored
+}
+
+// endReplaced resets the streams of the session a new route replaced.
+func (s *Server) endReplaced(route, previous SessionRoute, had bool) {
 	if had && previous.SessionID != 0 && previous.SessionID != route.SessionID {
 		s.endOnMachine(route.EnvironmentID, previous.SessionID, tunnel.ResetSessionChange, "the machine's session changed")
 	}
