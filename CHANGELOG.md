@@ -45,6 +45,10 @@ governance, community health — carry none.
   The page opens archived tasks too.
 
 ### Fixed
+- The `flow-web` image runs Ruby 4.0.10, which fixes the seven memory-safety bugs in
+  Ruby's strings and regular expressions announced on 2026-11-18 (among them
+  GHSA-34m4-m9fh-gqp5). One of them lets anyone who can reach the server run code on it
+  without signing in. Self-hosted installations: upgrade to this release.
 - **Sessions & Runs**: an automatic step whose agent CLI exits — because it refused its
   model or a flag, crashed, or quit — now fails within a minute or two with the CLI's own
   message, such as `Cannot use this model: …`. It used to sit at an idle shell until someone
@@ -60,6 +64,12 @@ governance, community health — carry none.
 - **Sessions & Runs**: Antigravity CLI usage is priced right. Its input tokens never included
   the cached ones, but were priced as if they did, which undercounted the cost of sessions
   that read from the cache.
+- **Sessions & Runs**: Grok sessions record their tokens and cost. Since Grok CLI 1.0.89
+  downloads a binary archive through the logged proxy, reading the log failed and no
+  session got any usage; the cost is now the one xAI reports for each response.
+- **Sessions & Runs**: Copilot CLI sessions count every model call. The CLI's telemetry for
+  a session's last calls was lost when its container stopped (a short step recorded none);
+  the calls are now read from the CLI's own transcript at the end of the session.
 - **Triggers & gates**: a column trigger in auto mode is refused for a workflow with a step
   that has auto-run off, and the error names the steps — such a trigger never started
   anything. When a column trigger cannot start its run, the card gets a comment saying why
@@ -83,6 +93,10 @@ governance, community health — carry none.
 
 ### Changed
 
+- **Docs**: *Session queues* describes workers as the company's own number,
+  set on Settings → General, instead of an installation ceiling, and gains a
+  *Prioritising projects* section: how reserving workers keeps the projects that
+  matter most from waiting, and what a reservation costs.
 - **Workflows**: Cursor CLI and Antigravity CLI no longer offer a separate reasoning effort.
   Both take the effort as part of the model, so pick the model's Low, Medium, High (or Max)
   variant. A level on top of it made Cursor CLI refuse the model and exit, and made

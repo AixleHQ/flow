@@ -1468,8 +1468,9 @@ Close codes of the WebSocket:
 | 4002 | `ticket`: the ticket was refused |
 
 The package defines all of them; it sends `1000`, `1002` and `1009`. The others belong to the service that accepts
-the connection. The relay sends `4000` and `1001` today (§8.11); `4001` comes with the signals that revoke a machine, and `4002`
-is reserved for a ticket the relay can only judge after the upgrade. A runner that receives any close code reconnects as §8.11 says.
+the connection. The relay sends `4000` and `1001` (§8.11), and `4001` in two cases: on the `machine_revoked` signal, and
+when a reconcile pass finds that the platform no longer confirms the machine (a `false` from `checks`). `4002` is reserved
+for a ticket the relay can only judge after the upgrade. A runner that receives any close code reconnects as §8.11 says.
 
 ### 8.9 Evolution inside version 1
 

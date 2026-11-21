@@ -48,6 +48,11 @@ type Registry interface {
 	// SetSession records the session an environment holds (a zero route.SessionID: none)
 	// and returns the one it held before.
 	SetSession(environmentID int64, route SessionRoute) (previous SessionRoute, had bool)
+	// SetSessionIfAbsent records route only when the environment holds no routed session
+	// (the placeholder a ticket leaves has no route token and counts as none), under one
+	// lock, so a signal cannot land between the check and the store. It says whether it
+	// stored, and returns the session the placeholder named, if there was one.
+	SetSessionIfAbsent(environmentID int64, route SessionRoute) (previous SessionRoute, had, stored bool)
 	// ClearSession forgets the route of a session wherever it is held, and returns the
 	// environments that held it.
 	ClearSession(sessionID int64) []int64
@@ -260,6 +265,24 @@ func (r *MemoryRegistry) SetSession(environmentID int64, route SessionRoute) (Se
 		r.byToken[route.RouteToken] = environmentID
 	}
 	return previous, had
+}
+
+func (r *MemoryRegistry) SetSessionIfAbsent(environmentID int64, route SessionRoute) (SessionRoute, bool, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	previous, had := r.sessions[environmentID]
+	if had && previous.RouteToken != "" {
+		return previous, had, false
+	}
+	if route.SessionID == 0 {
+		return previous, had, false
+	}
+	route.EnvironmentID = environmentID
+	r.sessions[environmentID] = route
+	if route.RouteToken != "" {
+		r.byToken[route.RouteToken] = environmentID
+	}
+	return previous, had, true
 }
 
 func (r *MemoryRegistry) ClearSession(sessionID int64) []int64 {

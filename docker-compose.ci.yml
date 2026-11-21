@@ -13,6 +13,9 @@ services:
       # (empty → on). `docker compose run` only forwards declared env vars, so it must
       # be listed here.
       RUN_COVERAGE: ${RUN_COVERAGE:-}
+      # Tags a pull request leaves out of the Rails and Vitest runs (bin/test-tags,
+      # config/test_tags.json); empty runs everything. Forwarded for the same reason.
+      TEST_EXCLUDE_TAGS: ${TEST_EXCLUDE_TAGS:-}
       APP_VERSION: ci
       DB_HOST: db
       DB_PORT: 5432

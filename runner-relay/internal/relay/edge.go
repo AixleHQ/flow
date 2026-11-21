@@ -165,7 +165,11 @@ func (s *Server) resolve(ctx context.Context, token string) (route SessionRoute,
 		s.log.Warn("the platform's holders answer has no usable ports", "session_id", route.SessionID)
 		return route, http.StatusServiceUnavailable, "unavailable"
 	}
-	s.assign(route)
+	// The answer may be older than a signal that arrived while the call was out. It is
+	// stored only if the registry still has no routed session for the machine (the
+	// placeholder a connection's ticket leaves has no token), decided by the registry in
+	// one call; this request uses it either way.
+	s.assignIfAbsent(route)
 	return route, 0, ""
 }
 

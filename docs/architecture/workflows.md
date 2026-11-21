@@ -784,7 +784,7 @@ pass and hands the snapshot to them (task #211).
   | `scrollback` | `tmux capture-pane -t agent -p -S -1000` | the pane; the current screen, its last 40 nonblank lines, right-trimmed (`Snapshot#screen`, `#screen_digest`, through `Sessions::ScreenDigest`) |
   | `log_mtime` | `stat -c %Y /tmp/terminal_output.log` | when the pane last sent a byte (`Snapshot#last_output_at`, `#quiet_for?`), counted only from a read that also captured the pane |
   | `clients` | `date +%s && tmux list-clients -t agent -F '#{client_readonly} #{client_activity}'` | whether a writable client typed recently, on the container's clock (`Clients#input_within?`) |
-  | `agent_exit` | `tmux display-message -p -t agent '#{pane_dead} #{pane_dead_status}'`, then, for a dead pane only, `tmux capture-pane -t agent -p -J -S -200` | whether the pane's process (an automatic session's CLI) has exited, its status, and its last lines joined (`AgentExit#dead?`, `#status`, `#output`) |
+  | `agent_exit` | `tmux display-message -p -t agent '#{pane_dead}:#{pane_dead_status}:#{pane_dead_signal}'`, then, for a dead pane only, `tmux capture-pane -t agent -p -J -S -200` | whether the pane's process (an automatic session's CLI) has exited, its status or the signal that killed it, and its last lines joined (`AgentExit#dead?`, `#status`, `#signal`, `#output`) |
 
   The snapshot's source is replaceable per runtime (`Snapshot.source_for`).
   Today it is always an exec (`Sessions::Snapshot::ExecSource`); with task 8c a
@@ -915,11 +915,12 @@ error ended the turn. Two sweeps cover that state:
   shell with `bash -ic 'exec bash /tmp/.aixle-launch'` (`respawn-pane -k`), so the CLI
   gets the environment a typed command would, `~/.bashrc` included, and the pane's pipe
   to `terminal_output.log` carries on. When the CLI exits, tmux keeps the pane with
-  what it printed and reports `#{pane_dead}` and `#{pane_dead_status}`; the
+  what it printed and reports `#{pane_dead}` and `#{pane_dead_status}`, or
+  `#{pane_dead_signal}` instead of a status when a signal killed the pane's process; the
   `agent_exit` part reads them, and captures a dead pane joined (`capture-pane -J`) so
   a long line comes back whole. `Checks::AgentExited` fails an unattended `ready` step
-  on the first pass that finds its pane dead, with the exit status and the CLI's last
-  lines, redacted and cut to 500 characters (task #324: Cursor CLI refused
+  on the first pass that finds its pane dead, with the exit status (or the signal) and
+  the CLI's last lines, redacted and cut to 500 characters (task #324: Cursor CLI refused
   `composer-2.5[effort=low]` with "Cannot use this model" and the step sat until a
   person cancelled the run). Nothing on the screen is read to decide it. An interactive
   session's CLI is still typed into the pane's shell, which its person can start it

@@ -89,6 +89,10 @@ jobs:
       frontend-line-coverage: ${{ steps.line-coverage.outputs.frontend }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # A pull request checks out a merge commit; its first parent is the base, so two
+          # commits are enough for `git diff HEAD^1 HEAD` (bin/test-tags).
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 1 }}
 
       - name: Enable the containerd image store
         # Handing the 1.45 GB image from a buildx builder container to the
@@ -126,6 +130,13 @@ jobs:
         with:
           driver: docker
 
+      - name: Start database
+        if: ${{ inputs.needs-db }}
+        # In the background, so pulling the Postgres image overlaps the image build below. After
+        # the Docker restart above, which would stop the container. "Wait for database" runs `up`
+        # again: a no-op once this one has finished, and a retry that shows the error if it failed.
+        run: docker compose -f "$COMPOSE_FILE" up -d db >/dev/null 2>&1 &
+
       - name: Build test image
         # Materialised here rather than pulled whole from a registry: the image
         # has to be available to fork pull requests, which get a read-only token
@@ -150,13 +161,10 @@ jobs:
           # builds from scratch — a cache miss here is slow, never fatal.
           cache-from: type=registry,ref=${{ env.BUILD_CACHE }}
 
-      - name: Start database
-        if: ${{ inputs.needs-db }}
-        run: docker compose -f "$COMPOSE_FILE" up -d db
-
       - name: Wait for database
         if: ${{ inputs.needs-db }}
         run: |
+          docker compose -f "$COMPOSE_FILE" up -d db
           until docker compose -f "$COMPOSE_FILE" exec -T db pg_isready -U postgres; do sleep 1; done
 
       - name: Prepare database
@@ -198,10 +206,19 @@ jobs:
           path: coverage/shards
           merge-multiple: true
 
+      - name: Choose the tests
+        id: tags
+        # Tests tagged in config/test_tags.json run on a pull request only when their rule says
+        # so, and always on a push (docs/testing.md §9). The runner's own Ruby is enough: the
+        # script uses no gems.
+        run: echo "exclude=$(bin/test-tags exclude)" | tee -a "$GITHUB_OUTPUT"
+
       - name: Run check
         env:
           # Forwarded into the container by docker-compose.ci.yml (RUN_COVERAGE).
           RUN_COVERAGE: ${{ inputs.run-coverage }}
+          # The tags this run leaves out; read by the Rails suite and, through the Makefile, Vitest.
+          TEST_EXCLUDE_TAGS: ${{ steps.tags.outputs.exclude }}
         run: |
           mounts=()
 

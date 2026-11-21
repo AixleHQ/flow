@@ -29,8 +29,8 @@ module Sessions
       private
 
       def message(exited)
-        reason = "Session terminated: the agent CLI exited with status #{exited.status} " \
-                 "without calling `finish_session`."
+        how = exited.signal ? "was killed by signal #{exited.signal}" : "exited with status #{exited.status}"
+        reason = "Session terminated: the agent CLI #{how} without calling `finish_session`."
         output = exited.output
         reason += " Its last output: #{output}" if output.present?
         reason.truncate(MAX_MESSAGE_LENGTH)

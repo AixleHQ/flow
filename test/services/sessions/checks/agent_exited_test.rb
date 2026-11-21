@@ -55,6 +55,16 @@ module Sessions
                      @session.reload.error_message
       end
 
+      # tmux gives a process that died of a signal no status, only `pane_dead_signal`.
+      test "a CLI killed by a signal fails the step, naming the signal" do
+        @runtime.set_agent_exit(nil, signal: 9, pane: "working...\n\nPane is dead (signal 9, Sat Nov 21 17:20:55 2026)\n")
+
+        assert_equal :failed, pass
+        assert_equal "Session terminated: the agent CLI was killed by signal 9 without calling `finish_session`. " \
+                     "Its last output: working...",
+                     @session.reload.error_message
+      end
+
       test "leaves a step whose CLI is still running" do
         @runtime.set_agent_exit(nil)
 

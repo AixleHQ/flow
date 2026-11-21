@@ -53,14 +53,17 @@ module Sessions
         # automatic session's CLI is that process (AgentSessionStrategy#launch_agent_in_tmux)
         # and the pane is kept once it exits (`remain-on-exit`), so tmux holds the answer.
         # Only a dead pane is captured, joined (`-J`), so a long line comes back whole.
+        # A process killed by a signal has no status, only `pane_dead_signal`, so the
+        # fields are split on `:` rather than on blanks.
         agent_exit: Part.new(
           name: :agent_exit,
-          script: "{ d=$(tmux display-message -p -t agent '\#{pane_dead} \#{pane_dead_status}' 2>/dev/null) && " \
-                  "echo \"$d\" && { [ \"${d%% *}\" != 1 ] || tmux capture-pane -t agent -p -J -S -#{EXIT_OUTPUT_LINES} 2>/dev/null; }; }",
+          script: "{ d=$(tmux display-message -p -t agent '\#{pane_dead}:\#{pane_dead_status}:\#{pane_dead_signal}' 2>/dev/null) && " \
+                  "echo \"$d\" && { [ \"${d%%:*}\" != 1 ] || tmux capture-pane -t agent -p -J -S -#{EXIT_OUTPUT_LINES} 2>/dev/null; }; }",
           parse: lambda do |text|
             state, *pane = text.split("\n")
-            dead, status = state.to_s.split
-            AgentExit.new(dead: dead == "1", status: status&.to_i, pane: pane.join("\n"))
+            dead, status, signal = state.to_s.split(":", -1)
+            AgentExit.new(dead: dead == "1", status: status.presence&.to_i, signal: signal.presence&.to_i,
+                          pane: pane.join("\n"))
           end
         )
       }.freeze
@@ -78,7 +81,7 @@ module Sessions
       # tmux's own last line on a pane it keeps ("Pane is dead (status 1, <date>)").
       PANE_DEAD_NOTICE = /\APane is dead \(/
 
-      AgentExit = Data.define(:dead, :status, :pane) do
+      AgentExit = Data.define(:dead, :status, :signal, :pane) do
         def dead? = dead
 
         # What the CLI printed last, as one line.

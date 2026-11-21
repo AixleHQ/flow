@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 import reactSwc from '@vitejs/plugin-react-swc';
 import { defineConfig } from 'vitest/config';
@@ -22,10 +22,18 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 // hiding a real defect. A flaky test gets fixed, and a genuinely unlucky run gets re-run by hand.
 const isSlowRunner = !!process.env.CI || existsSync('/.dockerenv');
 
+// Test tags: config/test_tags.json defines each tag and when CI runs it, for this suite and the
+// Rails one (docs/testing.md §9). Vitest refuses a tag the config does not list, so a typo in a
+// test fails instead of silently running everywhere.
+const testTags = Object.entries(
+  JSON.parse(readFileSync(new URL('./config/test_tags.json', import.meta.url), 'utf8')) as Record<string, { description: string }>,
+).map(([name, { description }]) => ({ name, description }));
+
 export default defineConfig({
   plugins: [tsconfigPaths(), reactSwc()],
   test: {
     globals: true,
+    tags: testTags,
     environment: 'jsdom',
     setupFiles: ['./app/frontend/test/setup.ts'],
     css: false, // assert behavior/roles, not pixels

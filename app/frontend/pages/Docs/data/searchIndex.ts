@@ -46,7 +46,7 @@ export const SEARCH_INDEX: SearchResult[] = [
     slug: 'session-queues',
     title: 'Session queues',
     section: 'Using Flow',
-    desc: 'Why a session says Queued, every combination of project limit and installation ceiling, how a reservation differs from a cap, and what clearing a limit does.',
+    desc: 'Why a session says Queued, how workers are shared between projects, reserving workers to prioritise a project and what that costs, and what clearing a reservation does.',
   },
   {
     slug: 'plans-and-limits',

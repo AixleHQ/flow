@@ -33,7 +33,9 @@ var ErrInvalid = errors.New("rails: the checks request was refused as invalid")
 // maxBody bounds what is read of an answer.
 const maxBody = 1 << 20
 
-// Holder is the answer of `holders`. EnvironmentID is nil when no machine holds the
+// Holder is the answer of `holders`. Fields of an answer that the struct does not name
+// are ignored, so a newer platform is not refused by an older relay; a field of the wrong
+// type is an error, not a coercion (typed decoding). EnvironmentID is nil when no machine holds the
 // session now.
 type Holder struct {
 	SessionID     int64          `json:"session_id"`
@@ -78,7 +80,7 @@ func (c *Client) Holders(ctx context.Context, routeToken string) (Holder, error)
 	default:
 		return h, fmt.Errorf("rails: holders answered %d", status)
 	}
-	if err := decodeStrict(body, &h); err != nil {
+	if err := json.Unmarshal(body, &h); err != nil {
 		return h, fmt.Errorf("rails: holders answer: %w", err)
 	}
 	if h.SessionID <= 0 {
@@ -110,7 +112,7 @@ func (c *Client) Checks(ctx context.Context, machines []Machine) ([]bool, error)
 	var out struct {
 		Machines []bool `json:"machines"`
 	}
-	if err := decodeStrict(body, &out); err != nil {
+	if err := json.Unmarshal(body, &out); err != nil {
 		return nil, fmt.Errorf("rails: checks answer: %w", err)
 	}
 	if len(out.Machines) != len(machines) {
@@ -156,11 +158,4 @@ func (c *Client) do(ctx context.Context, endpoint, method, path string, payload 
 		return 0, nil, fmt.Errorf("rails: reading the %s answer: %w", endpoint, err)
 	}
 	return resp.StatusCode, data, nil
-}
-
-// decodeStrict decodes JSON into typed fields: a field of the wrong type is an error,
-// not a coercion. Fields the struct does not name are ignored, so a newer platform is
-// not refused by an older relay.
-func decodeStrict(data []byte, out any) error {
-	return json.Unmarshal(data, out)
 }
