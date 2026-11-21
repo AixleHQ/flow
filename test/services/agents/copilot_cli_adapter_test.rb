@@ -133,12 +133,13 @@ module Agents
       refute_includes command, "-i"
     end
 
-    test "an automatic session ends on -i so the appended prompt becomes its value" do
+    test "an automatic session takes its prompt as the value of -i" do
       command = @adapter.session_command(mode: "non_interactive", model: "gpt-5.3-codex", effort: "high")
 
       assert_includes command, "--model gpt-5.3-codex"
       assert_includes command, "--reasoning-effort high"
-      assert command.end_with?("--no-ask-user -i")
+      assert command.end_with?("--no-ask-user")
+      assert_equal '-i "$(cat /tmp/.aixle-prompt)"', @adapter.prompt_argument('"$(cat /tmp/.aixle-prompt)"')
     end
 
     test "the session env routes telemetry to this session and pins the token's host" do
@@ -215,6 +216,18 @@ module Agents
       assert_equal "Claude Sonnet 5.5", result[:models].second[:display_name]
     end
 
+    test "each model carries the efforts the CLI listed for it" do
+      credential = create(:agent_credential, :copilot_cli, user: @user, company: @company, metadata: {
+        CopilotCliAdapter::MODELS_METADATA_KEY => [ { "id" => "gpt-6-sol", "reasoning_efforts" => %w[none low high] },
+                                                    { "id" => "auto", "reasoning_efforts" => [] }, { "id" => "older" } ]
+      })
+
+      models = @adapter.fetch_available_models_with_source(credential.config_data, credential: credential)[:models]
+
+      assert_equal({ "gpt-6-sol" => %w[none low high], "auto" => [], "older" => nil },
+                   models.to_h { |m| [ m[:model_id], m[:reasoning_effort_levels] ] })
+    end
+
     # Read off a staging account (1.0.108): the ACP model option lists Auto twice.
     test "a model the catalogue lists twice is offered once" do
       credential = create(:agent_credential, :copilot_cli, user: @user, company: @company,
@@ -272,6 +285,57 @@ module Agents
       assert_in_delta 2.1205, stat.total_cents_precise.to_f, 0.0001
       assert_equal [ "claude-haiku-4.5" ], stat.models
       assert_equal "otlp_copilot", stat.source
+    end
+
+    # A `session.usage_record` line of the CLI's transcript, as 1.0.114 writes it: the
+    # first matches the chat span of #real_session_payload.
+    def usage_record(input:, output:, cache_read:, cache_write:, nano_aiu:, model: "claude-haiku-4.5", sequence: 1)
+      { type: "session.usage_record", timestamp: "2026-11-21T14:17:46.392Z", data: { usage: {
+        model: model, inputTokens: input, outputTokens: output, cacheReadTokens: cache_read, cacheWriteTokens: cache_write,
+        accounting: { sourceSessionId: "fc98dfdf", sequence: sequence, usageId: "msg_#{sequence}" },
+        copilotUsage: { totalNanoAiu: nano_aiu }
+      } } }.to_json
+    end
+
+    def transcript
+      [ { type: "assistant.turn_start" }.to_json,
+        usage_record(input: 16_746, output: 55, cache_read: 0, cache_write: 16_736, nano_aiu: 2_120_500_000),
+        "not json",
+        usage_record(input: 16_802, output: 5, cache_read: 16_736, cache_write: 56, nano_aiu: 433_760_000, sequence: 2) ]
+        .join("\n")
+    end
+
+    # Measured on staging: the container stops before the CLI exports its last spans, so
+    # OTLP had 2 of a step's 4 calls, and none of a 10-second step's.
+    test "cleanup counts the calls of the transcript that OTLP did not deliver, once" do
+      @adapter.ingest_usage(real_session_payload(@session.route_token), @session)
+
+      @adapter.collect_usage(@session.reload, { "logs/fc98dfdf.events.jsonl" => transcript, "logs/http.log" => "x" })
+      @adapter.collect_usage(TerminalSession.find(@session.id), { "logs/fc98dfdf.events.jsonl" => transcript })
+
+      stat = @session.reload.usage_statistic
+      assert_equal 2, stat.events_count
+      assert_equal [ 10 + 10, 55 + 5, 16_736, 16_736 + 56 ],
+                   [ stat.input_tokens, stat.output_tokens, stat.cache_read_tokens, stat.cache_write_tokens ]
+      assert_in_delta 2.1205 + 0.43376, stat.total_cents_precise.to_f, 0.0001
+      assert_equal %w[otlp_copilot copilot_transcript], stat.events_data.pluck("source")
+    end
+
+    test "a span that arrives after cleanup counted the transcript is not counted again" do
+      @adapter.collect_usage(@session, { "logs/fc98dfdf.events.jsonl" => transcript })
+
+      assert_equal :accepted, @adapter.ingest_usage(real_session_payload(@session.route_token), @session.reload)
+
+      stat = @session.reload.usage_statistic
+      assert_equal 2, stat.events_count
+      assert_equal 16_736, stat.cache_read_tokens
+    end
+
+    test "without a transcript, cleanup leaves the usage OTLP delivered, and later spans still count" do
+      @adapter.collect_usage(@session, { "logs/http.log" => "x" })
+      @adapter.ingest_usage(real_session_payload(@session.route_token), @session.reload)
+
+      assert_equal 1, @session.reload.usage_statistic.events_count
     end
 
     test "a batch for another session is ignored" do

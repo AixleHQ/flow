@@ -309,16 +309,17 @@ class CompanyMembership < ApplicationRecord
       models = fetch_or_cache_agent_models(cred)
 
       hash[cred.agent_type] = models.map do |m|
-        { model_id: m[:model_id] || m["model_id"], display_name: m[:display_name] || m["display_name"], description: m[:description] || m["description"] }
+        { model_id: m[:model_id] || m["model_id"], display_name: m[:display_name] || m["display_name"], description: m[:description] || m["description"],
+          reasoning_effort_levels: m.key?(:reasoning_effort_levels) ? m[:reasoning_effort_levels] : m["reasoning_effort_levels"] }
       end
     end
   end
 
   # default_model is the one a session launches with when no model is picked,
   # so the New Session form can name it instead of "runtime selects". Each model
-  # carries the reasoning-effort levels its runtime takes for it
-  # (AgentRuntime#reasoning_effort_levels), which the model pickers offer as they
-  # are: the rule lives only on the server. A credential whose runtime is no
+  # carries the reasoning-effort levels it takes: what the vendor's catalogue says,
+  # where it says it, else the registry's rule (AgentRuntime#reasoning_effort_levels).
+  # The model pickers offer them as they are. A credential whose runtime is no
   # longer in the registry gets no levels, the same as ReasoningEffortValidator
   # treats it, instead of failing every page that renders a model picker.
   def agent_models_for_props
@@ -329,7 +330,9 @@ class CompanyMembership < ApplicationRecord
       # Every model picker is a Mantine Select, which throws on a repeated value and takes
       # the whole page down with it; a vendor catalogue is not trusted to be unique.
       models = models.uniq { |m| m[:model_id] }
-      models = models.map { |m| m.merge(reasoning_effort_levels: runtime&.reasoning_effort_levels(m[:model_id]) || []) }
+      models = models.map do |m|
+        m.merge(reasoning_effort_levels: runtime&.reasoning_effort_levels(m[:model_id], offered: m[:reasoning_effort_levels]) || [])
+      end
       { agent_type: agent_type, models: models, default_model: default_models[agent_type] }
     end
   end

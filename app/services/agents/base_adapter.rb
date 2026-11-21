@@ -193,6 +193,16 @@ module Agents
       raise NotImplementedError, "#{self.class} must implement #session_command"
     end
 
+    # How an automatic session's prompt (`prompt`, already a shell word) follows
+    # #session_command: a positional argument unless the CLI wants a flag before it.
+    # Kept apart from #session_command so that nothing appended to the command can come
+    # between the flag and its value.
+    def prompt_argument(prompt) = prompt
+
+    # Whether the CLI, asked for a model the account does not offer, runs its default
+    # model instead of failing (SessionService#preflight_model! checks such a model first).
+    def runs_default_model_for_unknown? = false
+
     # =================================================================
     # Context File (CLI-specific instruction file auto-read at startup)
     # =================================================================

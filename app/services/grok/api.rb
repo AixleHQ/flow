@@ -32,6 +32,7 @@ module Grok
     class UnauthorizedError < HTTPError; end
 
     BILLING_URL = "https://cli-chat-proxy.grok.com/v1/billing"
+    MODELS_URL = "https://cli-chat-proxy.grok.com/v1/models"
 
     # xAI gates this endpoint to the CLI's own client; the header is what the CLI
     # sends and the server checks before it returns credit usage.
@@ -65,6 +66,40 @@ module Grok
 
         assert_ok!(response, op: "billing")
         parse_json(response, op: "billing")
+      rescue Timeout::Error => e
+        raise TimeoutError, e.message
+      rescue ApiError
+        raise
+      rescue StandardError => e
+        raise TransportError, e.message
+      end
+
+      # The models a signed-in (OAuth) account can use, as `grok models` lists them. The
+      # public catalogue (api.x.ai) answers such a token with 403 `spending-limit` unless the
+      # account holds API credits, and the pickers then offered models the CLI does not know.
+      #
+      # @param access_token [String] the OAuth session token
+      # @param user_id [String, nil] the account's user id, when the entry carries one
+      # @return [Array<Hash>] OpenAI-shaped model entries (`id`, `name`, `description`, …)
+      # @raise [UnauthorizedError] when the token is rejected
+      # @raise [ApiError] on any other transport, status or parse failure
+      def models(access_token:, user_id: nil)
+        uri = URI(MODELS_URL)
+        request = Net::HTTP::Get.new(uri)
+        request["Authorization"] = "Bearer #{access_token}"
+        request["X-XAI-Token-Auth"] = GROK_CLI_AUTH_HEADER
+        request["Accept"] = "application/json"
+        request["x-userid"] = user_id if user_id.present?
+
+        response = Net::HTTP.start(
+          uri.hostname, uri.port,
+          use_ssl: true,
+          open_timeout: HTTP_TIMEOUTS[:open],
+          read_timeout: HTTP_TIMEOUTS[:read]
+        ) { |http| http.request(request) }
+
+        assert_ok!(response, op: "models")
+        Array(parse_json(response, op: "models")["data"])
       rescue Timeout::Error => e
         raise TimeoutError, e.message
       rescue ApiError

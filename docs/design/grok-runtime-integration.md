@@ -78,16 +78,26 @@ pre-existing "no expiry known" behaviour.
 
 ## 3. Models
 
-**Decision:** the picker is populated from `GET https://api.x.ai/v1/language-models`,
-authenticated with the credential's API key or session token.
+**Decision:** an API-key login's picker is populated from
+`GET https://api.x.ai/v1/language-models`; a signed-in (OAuth) account's from the CLI's own
+list, `GET https://cli-chat-proxy.grok.com/v1/models` with the session token and
+`X-XAI-Token-Auth: xai-grok-cli` (`Grok::Api.models`), which is what `grok models` prints.
 
-That endpoint is the xAI catalogue and it also carries per-token prices,
-which is what makes cost tracking possible (§5). When it is unreachable — or
-declines a session token, which the public API may — the adapter falls back
-to a deliberately minimal list: `grok-4.5` (what the CLI itself reports as
-its default model), `grok-4.6` (the model behind Grok Build), and
-`grok-code-fast-1`. The live call is the source of truth; the fallback exists
-so the picker is never empty.
+The public endpoint is the xAI catalogue and it also carries per-token prices,
+which is what makes cost tracking possible (§5). It answers a session token with 403
+`personal-team-blocked:spending-limit` unless the account holds API credits, so a
+subscription login used to land on the fallback list and offer models its CLI does not
+know (task #324, measured 2026-11-21: the account knew only `grok-4.7`). The fallback is
+now the CLI's default model alone, `grok-4.7`; the live call is the source of truth, and
+the fallback exists so the picker is never empty.
+
+A model the account does not offer does not stop the CLI: it shows `Couldn't switch model:
+Invalid params: "unknown model id"` and runs the default model. So a chosen model is looked
+up in that list when the session is created (`SessionService#preflight_model!`), and a
+missing one fails the step before any container starts, saying `Grok does not offer the
+model … on this account (it offers …)`. The list also says per model whether it takes a
+reasoning effort and which (`reasoning_efforts`), and the model pickers offer exactly
+those.
 
 ## 4. Session behaviour
 

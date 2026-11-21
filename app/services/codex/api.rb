@@ -58,7 +58,10 @@ module Codex
     # One catalog entry. `upgrade_target` is the slug the CLI migrates this model
     # to, and its presence is what arms the startup model-migration dialog
     # (codex-rs/tui/src/app/startup_prompts.rs).
-    Model = Struct.new(:slug, :display_name, :description, :visibility, :upgrade_target, keyword_init: true) do
+    # `reasoning_levels` are the efforts the model takes (`supported_reasoning_levels`), or
+    # nil when the entry does not say.
+    Model = Struct.new(:slug, :display_name, :description, :visibility, :upgrade_target, :reasoning_levels,
+                       keyword_init: true) do
       def listed?
         visibility == "list"
       end
@@ -134,7 +137,8 @@ module Codex
           display_name: raw["display_name"].presence || raw["slug"],
           description: raw["description"].to_s,
           visibility: raw["visibility"],
-          upgrade_target: raw.dig("upgrade", "model")
+          upgrade_target: raw.dig("upgrade", "model"),
+          reasoning_levels: raw["supported_reasoning_levels"]&.then { |levels| Array(levels).filter_map { |l| l["effort"] if l.is_a?(Hash) } }
         )
       end
 

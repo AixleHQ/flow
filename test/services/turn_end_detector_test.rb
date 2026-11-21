@@ -97,6 +97,31 @@ class TurnEndDetectorTest < ActiveSupport::TestCase
     refute TurnEndDetector.idle?(copilot_pane("turn_ended_80x24"), agent_type: "kiro_cli")
   end
 
+  # Antigravity CLI 1.5.13 TUI, captured on staging (task #324): 120x40 unless named.
+  def antigravity_pane(name) = file_fixture("terminal_panes/antigravity_cli/#{name}.txt").read
+
+  test "an Antigravity turn that ended at the empty input box is a turn end" do
+    assert TurnEndDetector.idle?(antigravity_pane("turn_ended"), agent_type: "antigravity_cli")
+    assert TurnEndDetector.idle?(antigravity_pane("turn_ended_40x20"), agent_type: "antigravity_cli")
+    assert TurnEndDetector.idle?(antigravity_pane("turn_ended_after_typing"), agent_type: "antigravity_cli")
+  end
+
+  # The reply is on screen before the turn ends; only the footer tells.
+  test "a working Antigravity is not at a turn end" do
+    refute TurnEndDetector.idle?(antigravity_pane("working"), agent_type: "antigravity_cli")
+  end
+
+  # agy resumes the turn by itself when the background command ends.
+  test "an Antigravity turn waiting on a background command is not a turn end" do
+    refute TurnEndDetector.idle?(antigravity_pane("background_task"), agent_type: "antigravity_cli")
+  end
+
+  test "a draft in Antigravity's input box is not a turn end" do
+    draft = antigravity_pane("turn_ended_after_typing").sub(/^>$/, "> also check the README")
+
+    refute TurnEndDetector.idle?(draft, agent_type: "antigravity_cli")
+  end
+
   test "runtimes without a measured signature are never at a turn end" do
     refute TurnEndDetector.idle?(pane("turn_ended"), agent_type: "claude_code")
     refute TurnEndDetector.idle?(pane("turn_ended"), agent_type: nil)

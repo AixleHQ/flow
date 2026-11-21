@@ -118,8 +118,7 @@ class ContainerRuntime::RunnerRuntimeContractTest < ActiveSupport::TestCase
     Agents::GrokAdapter.new.collect_usage(@session, artifacts)
 
     stat = @session.reload.usage_statistic
-    assert_equal 1_000, stat.input_tokens
-    assert_equal 200, stat.output_tokens
+    assert_equal [ 600, 400, 200 ], [ stat.input_tokens, stat.cache_read_tokens, stat.output_tokens ]
     assert_equal "mitm", stat.source
   end
 

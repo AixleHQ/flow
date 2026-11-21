@@ -397,7 +397,7 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
 
   # Cursor CLI takes a level only on a model the step names, so the model and the
   # level have to be writable through the same tools.
-  test "a Cursor step's preferred model and reasoning effort are set, changed and cleared together" do
+  test "a step's preferred model and reasoning effort are set, changed and cleared together" do
     [ PersonalTools::CreateWorkflowStep, PersonalTools::UpdateWorkflowStep ].each do |tool|
       model = tool.tool_definition.input_schema.dig("properties", "preferred_model")
       assert_equal %w[string null], model["type"]
@@ -406,17 +406,17 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
 
     created = payload(call_tool("create_workflow_step",
                                 { project_id: @project.id, workflow_id: @workflow.id, name: "Review",
-                                  required_agent_runtime: "cursor_cli", preferred_model: "claude-opus-4-8",
+                                  required_agent_runtime: "claude_code", preferred_model: "claude-opus-5",
                                   reasoning_effort: "high" }))
-    assert_equal({ "preferred_model" => "claude-opus-4-8", "reasoning_effort" => "high" },
+    assert_equal({ "preferred_model" => "claude-opus-5", "reasoning_effort" => "high" },
                  created.slice("preferred_model", "reasoning_effort"))
     step = Step.find(created["id"])
 
     updated = payload(call_tool("update_workflow_step",
                                 { project_id: @project.id, workflow_id: @workflow.id, step_id: step.id,
-                                  preferred_model: "gpt-6-sol", reasoning_effort: "low" }))
+                                  preferred_model: "claude-sonnet-5", reasoning_effort: "low" }))
     assert_equal %w[preferred_model reasoning_effort], updated["updated_fields"].sort
-    assert_equal [ "gpt-6-sol", "low" ], [ step.reload.preferred_model, step.reasoning_effort ]
+    assert_equal [ "claude-sonnet-5", "low" ], [ step.reload.preferred_model, step.reasoning_effort ]
 
     payload(call_tool("update_workflow_step",
                       { project_id: @project.id, workflow_id: @workflow.id, step_id: step.id,

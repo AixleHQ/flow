@@ -235,7 +235,7 @@ class Templates::ValidatorTest < ActiveSupport::TestCase
     assert_empty Templates::Validator.new(complete).errors
   end
 
-  test "a step's reasoning effort must be one its runtime takes for its model" do
+  test "a step's reasoning effort must be one its runtime takes" do
     workflow = package.definition["workflows"].first
     label = "workflow #{workflow['key']} step #{workflow['steps'].first['key']} reasoning_effort"
     errors = lambda do |runtime, model, level|
@@ -246,11 +246,11 @@ class Templates::ValidatorTest < ActiveSupport::TestCase
       end
     end
 
-    assert_equal [ "#{label}: gemini_cli with model gemini-2.5-pro takes no reasoning effort" ],
-                 errors.call("gemini_cli", "gemini-2.5-pro", "low")
-    assert_equal [ "#{label}: xhigh is not available for kiro_cli with model claude-sonnet-4.6 " \
-                   "(choose one of: low, medium, high, max)" ],
-                 errors.call("kiro_cli", "claude-sonnet-4.6", "xhigh")
+    assert_equal [ "#{label}: cursor_cli with model composer-2.5 takes no reasoning effort" ],
+                 errors.call("cursor_cli", "composer-2.5", "low")
+    assert_equal [ "#{label}: turbo is not available for kiro_cli with model claude-sonnet-4.6 " \
+                   "(choose one of: low, medium, high, xhigh, max)" ],
+                 errors.call("kiro_cli", "claude-sonnet-4.6", "turbo")
     assert_empty errors.call("gemini_cli", "gemini-3-pro", "low")
   end
 
@@ -269,12 +269,12 @@ class Templates::ValidatorTest < ActiveSupport::TestCase
 
   test "the installer refuses a step whose runtime and model take no such reasoning effort" do
     invalid = package do |definition|
-      definition["workflows"].first["steps"].first.merge!("required_agent_runtime" => "gemini_cli",
-                                                          "preferred_model" => "gemini-2.5-pro",
+      definition["workflows"].first["steps"].first.merge!("required_agent_runtime" => "antigravity_cli",
+                                                          "preferred_model" => "gemini-3.8-flash-high",
                                                           "reasoning_effort" => "low")
     end
 
     error = assert_raises(Templates::Validator::InvalidPackage) { Templates::Validator.validate!(invalid) }
-    assert_match(/reasoning_effort: gemini_cli with model gemini-2\.5-pro takes no reasoning effort/, error.message)
+    assert_match(/reasoning_effort: antigravity_cli with model gemini-3\.8-flash-high takes no reasoning effort/, error.message)
   end
 end

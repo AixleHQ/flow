@@ -1,0 +1,14 @@
+  Antigravity CLI 1.5.13
+  agent@example.com (Antigravity Starter Quota)
+  Gemini 3.8 Flash (High)
+  /workspace
+────────────────────────────────────────────────────────────
+> Run sleep 30; echo hi in the background.
+● Running (sleep 30; echo hi) (ctrl+o to expand)
+  Running it in the background. Waiting for it to finish...
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+>
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ● [07:58:25] sleep 30; echo hi running
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+? for shortcuts                                                      auto · Gemini 3.8 Flash · high · 1 task(s) · /tasks

@@ -17,6 +17,7 @@ import (
 	"github.com/moby/moby/client"
 
 	"github.com/aixlehq/aixle-runner/internal/protocol"
+	"github.com/aixlehq/aixle-runner/internal/proxy"
 )
 
 // The callback proxy's side of `container.start` and `container.stop`
@@ -50,6 +51,9 @@ const (
 	// SidecarSocketDir is where the session's socket directory is mounted in
 	// the sidecar, read-only.
 	SidecarSocketDir = "/run/aixle-proxy"
+	// SidecarDialDir is where the session's dial directory is mounted in the
+	// sidecar, read-write: the sidecar's `dial.sock` is in it.
+	SidecarDialDir = "/run/aixle-dial"
 	// SidecarUser runs the sidecar: nobody, with no capability.
 	SidecarUser = "65534:65534"
 	// SidecarLogTail is how many lines of a sidecar's log the host runner logs
@@ -74,7 +78,10 @@ type ProxyHost interface {
 	// OpenListener serves the session's relay on 127.0.0.1:port of the machine.
 	// A port that is taken is an error that wraps syscall.EADDRINUSE.
 	OpenListener(sessionID int64, port int) error
-	// Close stops the session's relay.
+	// DialDir is the session's dial directory, created: where the sidecar listens for the
+	// tunnel's streams, mounted read-write into it (proxy.DialViaSidecar).
+	DialDir(sessionID int64) (dir string, err error)
+	// Close stops the session's relay and removes its directories.
 	Close(sessionID int64)
 	// CloseAll stops every relay of the environment.
 	CloseAll()
@@ -155,7 +162,7 @@ func (e *Environment) openListener(sessionID int64, port int) *protocol.Result {
 // the sidecar's id, which the agent container joins
 // (`NetworkMode: container:<id>`). On a refusal nothing is left: no
 // container, no socket.
-func (e *Environment) startSidecar(ctx context.Context, sessionID int64, image string, network container.NetworkMode, port int) (string, *protocol.Result) {
+func (e *Environment) startSidecar(ctx context.Context, sessionID int64, image string, network container.NetworkMode, port int, tunnelPorts []int) (string, *protocol.Result) {
 	fail := func(r protocol.Result) (string, *protocol.Result) {
 		e.Proxy.Close(sessionID)
 		return "", &r
@@ -166,9 +173,25 @@ func (e *Environment) startSidecar(ctx context.Context, sessionID int64, image s
 	}
 	binary := e.Proxy.Binary()
 	name := e.SidecarName(sessionID)
+	entrypoint := []string{SidecarBinary, "--mode", "proxy", "--socket", SidecarSocketDir + "/relay.sock", "--listen", "127.0.0.1:" + strconv.Itoa(port)}
+	mounts := []mount.Mount{
+		{Type: mount.TypeBind, Source: binary, Target: SidecarBinary, ReadOnly: true},
+		{Type: mount.TypeBind, Source: dir, Target: SidecarSocketDir, ReadOnly: true},
+	}
+	// The tunnel's second socket, which runs the other way: the sidecar listens, the host
+	// runner dials. The sidecar takes the session's ports on its command line and
+	// refuses any other (runner-relay.md §3.3).
+	if len(tunnelPorts) > 0 {
+		dialDir, err := e.Proxy.DialDir(sessionID)
+		if err != nil {
+			return fail(protocol.ErrorResult(ClassProxyStartFailed, "creating the tunnel's dial directory failed: "+err.Error()))
+		}
+		entrypoint = append(entrypoint, "--dial-socket", SidecarDialDir+"/"+proxy.DialSocketName, "--dial-ports", joinPorts(tunnelPorts))
+		mounts = append(mounts, mount.Mount{Type: mount.TypeBind, Source: dialDir, Target: SidecarDialDir})
+	}
 	config := &container.Config{
 		Image:      image,
-		Entrypoint: []string{SidecarBinary, "--mode", "proxy", "--socket", SidecarSocketDir + "/relay.sock", "--listen", "127.0.0.1:" + strconv.Itoa(port)},
+		Entrypoint: entrypoint,
 		User:       SidecarUser,
 		WorkingDir: "/",
 		Labels: map[string]string{
@@ -178,11 +201,8 @@ func (e *Environment) startSidecar(ctx context.Context, sessionID int64, image s
 		},
 	}
 	host := &container.HostConfig{
-		NetworkMode: network,
-		Mounts: []mount.Mount{
-			{Type: mount.TypeBind, Source: binary, Target: SidecarBinary, ReadOnly: true},
-			{Type: mount.TypeBind, Source: dir, Target: SidecarSocketDir, ReadOnly: true},
-		},
+		NetworkMode:    network,
+		Mounts:         mounts,
 		RestartPolicy:  container.RestartPolicy{Name: container.RestartPolicyDisabled},
 		CapDrop:        []string{"ALL"},
 		SecurityOpt:    []string{"no-new-privileges"},
@@ -426,6 +446,9 @@ func (e *Environment) Resume(ctx context.Context) error {
 		session, err := strconv.ParseInt(c.Labels[LabelSession], 10, 64)
 		if err != nil || session <= 0 {
 			continue
+		}
+		if c.Labels[LabelRole] == "" && c.Labels[LabelTunnelPorts] != "" {
+			e.restoreTunnel(session, c)
 		}
 		switch {
 		case c.Labels[LabelRole] == RoleProxy:

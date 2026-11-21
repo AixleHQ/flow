@@ -1,0 +1,11 @@
+  Antigravity CLI 1.5.13
+  agent@example.com (Antigravity Starter Quota)
+  Gemini 3.8 Flash (High)
+  /workspace
+────────────────────────────────────────────────────────────
+> Reply with the single word PONG and nothing else.
+  PONG
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+> Auto mode: edits & safe commands auto-approved (shift+tab to cycle)
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+? for shortcuts                                                                           auto · Gemini 3.8 Flash · high

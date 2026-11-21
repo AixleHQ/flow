@@ -157,35 +157,34 @@ class StepTest < ActiveSupport::TestCase
   # A level and its model are kept consistent: on the default model there is nothing to
   # check a level against, so it is refused.
   test "a level on a step left on the default model is refused" do
-    step = build(:step, workflow: @workflow, required_agent_runtime: "cursor_cli", reasoning_effort: "high")
+    step = build(:step, workflow: @workflow, required_agent_runtime: "claude_code", reasoning_effort: "high")
 
     assert_not step.valid?
     assert_includes step.errors[:reasoning_effort], "needs an explicitly chosen model"
   end
 
-  test "a Cursor step takes a level once it names a model" do
-    step = build(:step, workflow: @workflow, required_agent_runtime: "cursor_cli", preferred_model: "claude-opus-4-8",
+  test "a step takes a level once it names a model" do
+    step = build(:step, workflow: @workflow, required_agent_runtime: "claude_code", preferred_model: "claude-opus-5",
                         reasoning_effort: "high")
 
     assert step.valid?, step.errors.full_messages.to_sentence
   end
 
-  test "the level is checked against the step's preferred model where the runtime's levels depend on it" do
-    assert build(:step, workflow: @workflow, required_agent_runtime: "kiro_cli", preferred_model: "claude-opus-5.5",
-                        reasoning_effort: "xhigh").valid?
-
-    step = build(:step, workflow: @workflow, required_agent_runtime: "kiro_cli", preferred_model: "claude-sonnet-4.6",
-                        reasoning_effort: "xhigh")
-    assert_not step.valid?
-    assert_includes step.errors[:reasoning_effort].first, "choose one of: low, medium, high, max"
-  end
-
-  test "a runtime and model with no level at all refuse any" do
-    step = build(:step, workflow: @workflow, required_agent_runtime: "gemini_cli", preferred_model: "gemini-2.5-pro",
+  # Task #324: Cursor CLI refused `composer-2.5[effort=low]` and the step hung.
+  test "a Cursor step takes no level: the effort is part of its model" do
+    step = build(:step, workflow: @workflow, required_agent_runtime: "cursor_cli", preferred_model: "composer-2.5",
                         reasoning_effort: "low")
 
     assert_not step.valid?
-    assert_includes step.errors[:reasoning_effort], "is not available for gemini_cli with model gemini-2.5-pro"
+    assert_includes step.errors[:reasoning_effort], "is not available for cursor_cli with model composer-2.5"
+  end
+
+  # Which levels a model takes comes from the vendor's catalogue for the account that runs
+  # it, which a step does not know: the model pickers offer those, and the step is held to
+  # what its CLI takes at all.
+  test "the level is checked against what the runtime's CLI takes, not against one model" do
+    assert build(:step, workflow: @workflow, required_agent_runtime: "kiro_cli", preferred_model: "claude-sonnet-4.6",
+                        reasoning_effort: "xhigh").valid?
   end
 
   test "a level on a step that leaves its runtime to resolution is refused" do
@@ -216,7 +215,7 @@ class StepTest < ActiveSupport::TestCase
     assert_equal "claude_code", step.reload.required_agent_runtime
 
     assert step.update(required_agent_runtime: "kiro_cli"), step.errors.full_messages.to_sentence
-    assert_not step.update(preferred_model: "claude-sonnet-4.6")
+    assert_not step.update(required_agent_runtime: "cursor_cli")
     assert_equal "xhigh", step.reload.reasoning_effort
   end
 
