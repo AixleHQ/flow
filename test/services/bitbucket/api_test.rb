@@ -114,30 +114,44 @@ module Bitbucket
       assert_requested second
     end
 
-    test "repository permissions are looked up per workspace and matched on the full name" do
+    test "repository permissions are paged per workspace and matched on the full name, with no q filter" do
       acme = stub_request(:get, "#{BITBUCKET_API}/user/workspaces/acme/permissions/repositories")
-             .with(query: { "pagelen" => "100", "q" => 'repository.name="api" OR repository.name="docs" OR repository.name="absent"' })
+             .with(query: { "pagelen" => "100" })
              .to_return(json({ "values" => [
-                               { "permission" => "write", "repository" => { "full_name" => "acme/api" } },
+                               { "permission" => "write", "repository" => { "full_name" => "acme/my-api", "name" => "My API" } },
                                { "permission" => "read", "repository" => { "full_name" => "acme/docs" } },
-                               { "permission" => "admin", "repository" => { "full_name" => "other-ws/api" } }
+                               { "permission" => "admin", "repository" => { "full_name" => "acme/unrelated" } }
                              ] }))
       other = stub_request(:get, "#{BITBUCKET_API}/user/workspaces/other-ws/permissions/repositories")
-              .with(query: { "pagelen" => "100", "q" => 'repository.name="api"' })
+              .with(query: { "pagelen" => "100" })
               .to_return(json({ "values" => [ { "permission" => "admin", "repository" => { "full_name" => "other-ws/api" } } ] }))
 
-      result = @api.repository_permissions(%w[acme/api acme/docs other-ws/api acme/absent])
+      result = @api.repository_permissions(%w[acme/my-api acme/docs other-ws/api acme/absent])
 
-      assert_equal({ "acme/api" => "write", "acme/docs" => "read", "other-ws/api" => "admin", "acme/absent" => nil }, result)
+      assert_equal({ "acme/my-api" => "write", "acme/docs" => "read", "other-ws/api" => "admin", "acme/absent" => nil },
+                   result[:levels])
+      assert_empty result[:unchecked]
       assert_requested acme
       assert_requested other
+    end
+
+    test "a repository missing from a permission list that was cut short (the page limit is reached) is unchecked, not without permission" do
+      stub_request(:get, "#{BITBUCKET_API}/user/workspaces/acme/permissions/repositories")
+        .with(query: hash_including({}))
+        .to_return(json({ "values" => [ { "permission" => "write", "repository" => { "full_name" => "acme/api" } } ],
+                          "next" => "#{BITBUCKET_API}/user/workspaces/acme/permissions/repositories?page=2" }))
+
+      result = @api.repository_permissions(%w[acme/api acme/deep])
+
+      assert_equal "write", result[:levels]["acme/api"]
+      assert_equal %w[acme/deep], result[:unchecked]
     end
 
     test "a workspace the person cannot see counts as no permission, not as a failure" do
       stub_request(:get, "#{BITBUCKET_API}/user/workspaces/acme/permissions/repositories")
         .with(query: hash_including({})).to_return(json({ "error" => { "message" => "Forbidden" } }, status: 403))
 
-      assert_equal({ "acme/api" => nil }, @api.repository_permissions([ "acme/api" ]))
+      assert_equal({ levels: { "acme/api" => nil }, unchecked: [] }, @api.repository_permissions([ "acme/api" ]))
     end
 
     test "a refused token raises NotAuthorized on the first 401, with no retry" do

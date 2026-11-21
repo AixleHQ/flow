@@ -265,9 +265,11 @@ on `FakeBitbucket::Api`:
   `GET /2.0/user/workspaces/{workspace}/permissions/repositories` (documented in Bitbucket's
   OpenAPI spec as "List repository permissions in a workspace for a user", scopes `account` and
   `repository`; it is not the admin-only `GET /2.0/workspaces/{workspace}/permissions/repositories`).
-  `q` is documented on `repository.name`, not `full_name`, so the call may filter by name and
-  the code **matches `full_name` exactly**. Pages are followed. Returns
-  `{ full_name => "admin" | "write" | "read" | nil }`. The cross-workspace form of this endpoint
+  `q` is documented on `repository.name`, the display name, not on `full_name` (the owner plus
+  the slugified name), so the call sends no `q`: it pages the list and **matches `full_name`
+  exactly**. Returns `{ levels: { full_name => "admin" | "write" | "read" | nil }, unchecked: [full_name] }`:
+  a repository missing from a list that was cut short (the paging limit) is `unchecked`, and the
+  tool says it could not check it, which is not "cannot push". The cross-workspace form of this endpoint
   is gone (410 since 2026-04-14), hence per workspace. Only `admin` and `write` cover a
   repository. If the staging check (S4) shows a gap, `GET /2.0/repositories/{workspace}?role=contributor`
   (paginated, exact `full_name` match) is the fallback.
@@ -423,7 +425,7 @@ a spike before the implementation; a result that differs is a follow-up change).
 | S1 | The token endpoint accepts Basic client auth with PKCE and `redirect_uri` in the body, and the authorize URL with PKCE and no `scope` | Adjust `client_auth`, add a `pkce` key |
 | S2 | Does a refresh end the previous access token? What is `expires_in`? | If not: raise the refresh floor, as GitLab's R2 allows |
 | S3 | The refresh response carries a new refresh token; the old one stops working | Already assumed; a different result changes `RefreshLease` expectations |
-| S4 | `q` on the permission endpoint filters by `repository.slug` or `repository.full_name`; `OR` works | Filter by name and match `full_name` in code, or page the list |
+| S4 | `q="repository.full_name=\"…\""` works on the permission endpoint (a later optimization: the code sends no `q` today and pages the list) | Keep paging the list |
 | S5 | A user outside the client's workspace can authorize | Re-think who registers it |
 | S6 | Where the person sees and removes the authorization; whether a refresh token survives deleting our row | Wording of the guide |
 | S7 | Git over HTTPS with `x-token-auth` and the OAuth token pushes, and honours branch restrictions as the user | Adjust `git_username` |

@@ -15,7 +15,7 @@ module FakeBitbucket
     HEAD = "e3c6ad85c1b5"
 
     attr_reader :calls, :pull_request_store, :comment_store, :statuses, :repository_list, :branches_by_repository
-    attr_accessor :user, :workspaces, :merge_mode, :emails, :permissions
+    attr_accessor :user, :workspaces, :merge_mode, :emails, :permissions, :unchecked_permissions
 
     def initialize
       @calls = []
@@ -23,6 +23,7 @@ module FakeBitbucket
       @user = nil
       @emails = []
       @permissions = {}
+      @unchecked_permissions = []
       @workspaces = { "acme" => { uuid: WORKSPACE_UUID, slug: "acme", name: "Acme" } }
       @repository_list = []
       @branches_by_repository = Hash.new { |h, k| h[k] = [] }
@@ -91,7 +92,8 @@ module FakeBitbucket
       record(:repository_permissions, full_names: full_names)
       raise Bitbucket::Error::NotAuthorized, "Token is invalid or not supported for this endpoint" unless @user
 
-      full_names.index_with { |full_name| @permissions[full_name] }
+      { levels: full_names.index_with { |full_name| @permissions[full_name] },
+        unchecked: full_names.select { |full_name| @unchecked_permissions.include?(full_name) } }
     end
 
     def workspace(workspace)

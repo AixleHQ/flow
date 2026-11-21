@@ -29,6 +29,7 @@ module InternalTools
                            "primary email on Bitbucket; then they reconnect the account under " \
                            "Profile → Connected accounts."
       WRITE_LEVELS = %w[admin write].freeze
+      UNCHECKED_REASON = "Bitbucket's permission list for the workspace was too long to read in full"
 
       private
 
@@ -67,10 +68,7 @@ module InternalTools
       # The person's own token, once for all the repositories they can write to.
       def mint_tokens!(user, credential, user_token, repositories, _identity)
         covered, skipped = check_coverage!(user, credential, user_token, repositories)
-        if covered.empty?
-          raise UserTokenContext::Refusal,
-                "#{user.name} cannot push to #{repositories.map(&:full_name).join(', ')} on Bitbucket."
-        end
+        raise UserTokenContext::Refusal, refusal_message(user, skipped) if covered.empty?
 
         expires_at = reported_expiry(credential)
         record_issuance!(user: user, credential: credential, token: user_token,
@@ -83,16 +81,34 @@ module InternalTools
       end
 
       # [covered repositories, skipped entries]: `write` or `admin` covers one. A repository
-      # the person has no permission on (a missing entry) is one they cannot push to.
+      # the person has no permission on (a missing entry) is one they cannot push to; one
+      # Bitbucket's permission list was too long to read in full is one that could not be
+      # checked, which is said as such.
       def check_coverage!(user, credential, user_token, repositories)
-        levels = bitbucket_api(user_token).repository_permissions(repositories.map(&:full_name))
-        covered, skipped = repositories.partition { |repo| WRITE_LEVELS.include?(levels[repo.full_name]) }
-        [ covered, skipped.map { |repo| { repository: repo.full_name, reason: "#{user.name} cannot push to it" } } ]
+        answer = bitbucket_api(user_token).repository_permissions(repositories.map(&:full_name))
+        covered, rest = repositories.partition { |repo| WRITE_LEVELS.include?(answer[:levels][repo.full_name]) }
+        [ covered, rest.map { |repo| skipped_entry(user, repo, answer[:unchecked].include?(repo.full_name)) } ]
       rescue Bitbucket::Error::NotAuthorized
         credential.mark_refresh_error!("Bitbucket no longer accepts this user token")
         raise UserTokenContext::Refusal, reconnect_message(user)
       rescue Bitbucket::Error
         raise UserTokenContext::Refusal, "Bitbucket is unavailable right now. Retry in a moment."
+      end
+
+      def skipped_entry(user, repo, unchecked)
+        reason = unchecked ? UNCHECKED_REASON : "#{user.name} cannot push to it"
+        { repository: repo.full_name, reason: reason }
+      end
+
+      # Why nothing is covered: the repositories the person cannot push to, and those that
+      # could not be checked, each said for what they are.
+      def refusal_message(user, skipped)
+        unchecked, refused = skipped.partition { |entry| entry[:reason] == UNCHECKED_REASON }
+        parts = []
+        parts << "#{user.name} cannot push to #{refused.pluck(:repository).join(', ')} on Bitbucket." if refused.any?
+        parts << "Could not check whether #{user.name} can push to #{unchecked.pluck(:repository).join(', ')}: " \
+                 "#{UNCHECKED_REASON}." if unchecked.any?
+        parts.join(" ")
       end
 
       def bitbucket_api(user_token)

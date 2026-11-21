@@ -137,6 +137,33 @@ class InternalTools::BitbucketUserTokenTest < ActiveSupport::TestCase
     assert_equal 0, UserTokenIssuance.count
   end
 
+  test "a repository whose permission list was cut short is skipped as unchecked, not as one the person cannot push to" do
+    consent!(in_own_tasks: true)
+    @session.repositories << create(:repository, :bitbucket, scope: @project, integration: @integration, full_name: "acme/deep")
+    @fake.permissions = { "acme/api" => "write" }
+    @fake.unchecked_permissions = [ "acme/deep" ]
+
+    payload = JSON.parse(run_tool[:stdout])
+
+    assert_equal [ "acme/api" ], payload["tokens"].sole["repositories"]
+    assert_equal "acme/deep", payload["skipped"].sole["repository"]
+    assert_match(/too long to read in full/, payload["skipped"].sole["reason"])
+    assert_no_match(/cannot push/, payload["skipped"].sole["reason"])
+  end
+
+  test "refuses with a could-not-check error, not a cannot-push one, when nothing could be checked" do
+    consent!(in_own_tasks: true)
+    @fake.permissions = {}
+    @fake.unchecked_permissions = [ "acme/api" ]
+
+    result = run_tool
+
+    assert_equal 1, result[:exit_code]
+    assert_match(%r{Could not check whether Artem can push to acme/api}, result[:stderr])
+    assert_no_match(/cannot push/, result[:stderr])
+    assert_equal 0, UserTokenIssuance.count
+  end
+
   test "covers a repository of an app-mode integration as well" do
     consent!(in_own_tasks: true)
     app_integration = create(:integration, :bitbucket_app, :active, company: @company, project: @project)

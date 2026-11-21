@@ -425,10 +425,8 @@ class Web::OauthController < Web::ApplicationController
     http = SafeHttp.http_for(uri, open_timeout: Oauth::TokenService::TOKEN_TIMEOUT,
                                   read_timeout: Oauth::TokenService::TOKEN_TIMEOUT,
                                   trusted_hosts: Oauth::Providers.trusted_hosts(provider))
-    req = Net::HTTP::Post.new(uri)
+    req = Oauth::TokenService.token_request(uri, body, client, provider)
     req["Accept"] = "application/json"
-    Oauth::TokenService.authenticate_client!(req, body, client, provider)
-    req.set_form_data(body)
     res = http.request(req)
     raise Oauth::TokenExchangeError, "status=#{res.code}" unless res.is_a?(Net::HTTPSuccess)
 
