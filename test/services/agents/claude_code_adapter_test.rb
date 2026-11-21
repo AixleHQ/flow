@@ -732,6 +732,22 @@ module Agents
       assert_nil captured[:req]["authorization"]
     end
 
+    # Task #324: the catalogue says per model which effort levels it takes, and the CLI
+    # lowers or drops any other one silently.
+    test "fetch_available_models_with_source reads each model's effort levels from the catalogue" do
+      supported = ->(*levels) { %w[low medium high xhigh max].to_h { |level| [ level, { "supported" => levels.include?(level) } ] } }
+      stub_models_response([
+        { "id" => "claude-sonnet-4-6", "capabilities" => { "effort" => { "supported" => true, **supported.(*%w[low medium high max]) } } },
+        { "id" => "claude-haiku-4-5-20251001", "capabilities" => { "effort" => { "supported" => false, **supported.() } } },
+        { "id" => "claude-opus-5-5" }
+      ])
+
+      models = @adapter.fetch_available_models_with_source({ "primaryApiKey" => "sk-key" })[:models]
+
+      assert_equal({ "claude-sonnet-4-6" => %w[low medium high max], "claude-haiku-4-5-20251001" => [], "claude-opus-5-5" => nil },
+                   models.to_h { |m| [ m[:model_id], m[:reasoning_effort_levels] ] })
+    end
+
     test "fetch_available_models_with_source uses OAuth bearer when only claudeAiOauth present" do
       captured = stub_models_response([ { "id" => "claude-sonnet-4-6", "display_name" => "Claude Sonnet 4.6" } ])
 

@@ -147,25 +147,20 @@ module Agents
     end
 
     test "session_command passes the reasoning effort as --reasoning-effort" do
-      assert @adapter.session_command(mode: "interactive", model: "grok-4.7", effort: "xhigh")
-                     .end_with?("&& grok --yolo --minimal --model grok-4.7 --reasoning-effort xhigh")
+      assert_equal "grok --yolo --minimal --model grok-4.7 --reasoning-effort xhigh",
+                   @adapter.session_command(mode: "interactive", model: "grok-4.7", effort: "xhigh")
       assert_equal "grok --yolo --minimal", @adapter.session_command(mode: "non_interactive", effort: nil)
     end
 
-    # Task #324: an unknown model id only gets a notice on screen, and the session runs the
-    # default model; the check stops the launch with a message instead.
-    test "a chosen model is looked up in grok's own model list before grok starts" do
-      assert_equal "{ grok models | tr -d '*' | awk '{print $1}' | grep -qxF -- grok-4.7 || " \
-                   "{ echo Grok does not offer the model grok-4.7 on this account.; false; }; } " \
-                   "&& grok --yolo --minimal --model grok-4.7",
-                   @adapter.session_command(mode: "interactive", model: "grok-4.7")
+    test "session_command shell-escapes the requested model" do
+      assert_equal "grok --yolo --minimal --model grok\\ 4.5\\;rm",
+                   @adapter.session_command(mode: "interactive", model: "grok 4.5;rm")
     end
 
-    test "session_command shell-escapes the requested model" do
-      command = @adapter.session_command(mode: "interactive", model: "grok 4.5;rm")
-
-      assert_includes command, "grep -qxF -- grok\\ 4.5\\;rm ||"
-      assert command.end_with?("&& grok --yolo --minimal --model grok\\ 4.5\\;rm"), command
+    # Task #324: an unknown model id only gets a notice on screen, and the session runs the
+    # default model, so SessionService checks the model before launch.
+    test "the model is checked before launch" do
+      assert_predicate @adapter, :runs_default_model_for_unknown?
     end
 
     # == Environment ==
@@ -415,7 +410,9 @@ module Agents
              .with(headers: { "Authorization" => "Bearer grok-session-token", "X-XAI-Token-Auth" => "xai-grok-cli" })
              .to_return(status: 200, body: { object: "list", data: [
                { id: "grok-4.7", name: "Grok 4.7", description: "SpaceXAI's latest frontier model",
-                 supports_reasoning_effort: true }
+                 supports_reasoning_effort: true,
+                 reasoning_efforts: [ { id: "xhigh", value: "xhigh" }, { id: "high", value: "high", default: true } ] },
+               { id: "grok-code-fast-1", supports_reasoning_effort: false }
              ] }.to_json)
 
       result = @adapter.fetch_available_models_with_source(@adapter.extract_credentials(oauth_auth_json))
@@ -423,7 +420,10 @@ module Agents
       assert_requested stub
       assert_not_requested :get, GrokAdapter::MODELS_URL
       assert_equal :api, result[:source]
-      assert_equal [ { model_id: "grok-4.7", display_name: "grok-4.7", description: "SpaceXAI's latest frontier model" } ],
+      assert_equal [ { model_id: "grok-4.7", display_name: "grok-4.7", description: "SpaceXAI's latest frontier model",
+                       reasoning_effort_levels: %w[xhigh high] },
+                     { model_id: "grok-code-fast-1", display_name: "grok-code-fast-1", description: "",
+                       reasoning_effort_levels: [] } ],
                    result[:models]
     end
 

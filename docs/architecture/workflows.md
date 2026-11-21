@@ -784,6 +784,7 @@ pass and hands the snapshot to them (task #211).
   | `scrollback` | `tmux capture-pane -t agent -p -S -1000` | the pane; the current screen, its last 40 nonblank lines, right-trimmed (`Snapshot#screen`, `#screen_digest`, through `Sessions::ScreenDigest`) |
   | `log_mtime` | `stat -c %Y /tmp/terminal_output.log` | when the pane last sent a byte (`Snapshot#last_output_at`, `#quiet_for?`), counted only from a read that also captured the pane |
   | `clients` | `date +%s && tmux list-clients -t agent -F '#{client_readonly} #{client_activity}'` | whether a writable client typed recently, on the container's clock (`Clients#input_within?`) |
+  | `agent_exit` | `tmux display-message -p -t agent '#{pane_dead} #{pane_dead_status}'`, then, for a dead pane only, `tmux capture-pane -t agent -p -J -S -200` | whether the pane's process (an automatic session's CLI) has exited, its status, and its last lines joined (`AgentExit#dead?`, `#status`, `#output`) |
 
   The snapshot's source is replaceable per runtime (`Snapshot.source_for`).
   Today it is always an exec (`Sessions::Snapshot::ExecSource`); with task 8c a
@@ -801,7 +802,7 @@ pass and hands the snapshot to them (task #211).
   |---|---|---|---|
   | `Checks::QuotaError` | live steps older than a minute | `scrollback`, `log_mtime` | fails the session on its recorded error, or on its own provider's quota message on the current screen once the pane has been quiet for a minute (`QuotaErrorDetector`) |
   | `Checks::BlockingPrompt` | the same, `non_interactive` only | `scrollback` | fails the session on a dialog it cannot answer (`InteractivePromptDetector`) |
-  | `Checks::AgentExited` | the same, `ready` only | `scrollback` | fails the session once its agent CLI has exited back to the shell, quoting what the CLI printed (`AgentExitDetector`, below) |
+  | `Checks::AgentExited` | the same, `ready` only | `agent_exit` | fails the session once its agent CLI, the pane's own process, has exited, with its status and what it printed (below) |
   | `Checks::AuthPause` | the same as `QuotaError` | `scrollback`, `log_mtime` | pauses, heals, unpauses or expires a refused login (`Sessions::AuthPause`) |
   | `Checks::TurnEnd` | `ready`, `non_interactive`, not auth-paused | `scrollback`, `clients` | types a reminder after a turn end, fails after the last one (below) |
   | `Checks::NoOutput` | `ready` steps that are not interactive and not auth-paused, from their start | `scrollback`, `log_mtime` | fails a session whose screen (Kiro) or log (other runtimes) has not changed for 30 minutes (below) |
@@ -908,21 +909,21 @@ error ended the turn. Two sweeps cover that state:
   - The prompt is matched on its start (`› ask a question`), because a narrow
     pane wraps the placeholder. The signature is checked against captures at
     30x20, 80x24, 160x45 and 220x50.
-- **A CLI that exited.** The launch is typed into a shell in the `agent` tmux
-  session, so a CLI that refuses its arguments, crashes or quits drops back to
-  that shell, where nothing would ever call `finish_session` (task #324: Cursor
-  CLI refused `composer-2.5[effort=low]` with "Cannot use this model" and the
-  step sat at an idle prompt until a person cancelled the run).
-  `AgentSessionStrategy#launch_agent_in_tmux` appends
-  `AgentExitDetector::LAUNCH_SUFFIX` to the command, which prints
-  `[aixle] agent exited with status <n>` once the CLI returns.
-  `Checks::AgentExited` fails an unattended `ready` step whose pane shows that
-  line followed by nothing but shell prompts, on the first pass after it
-  appears. The message carries the exit status and what the CLI printed between
-  the typed command and the status line, redacted and cut to 500 characters.
-  An agent printing the same words inside its TUI is not taken for an exit,
-  because the TUI's chrome follows them. An interactive step is left alone: its
-  person can start the CLI again.
+- **A CLI that exited.** An automatic session's CLI is the agent pane's own process:
+  `AgentSessionStrategy#launch_agent_in_tmux` writes the command and its prompt
+  argument to `/tmp/.aixle-launch`, sets `remain-on-exit` on the pane and replaces its
+  shell with `bash -ic 'exec bash /tmp/.aixle-launch'` (`respawn-pane -k`), so the CLI
+  gets the environment a typed command would, `~/.bashrc` included, and the pane's pipe
+  to `terminal_output.log` carries on. When the CLI exits, tmux keeps the pane with
+  what it printed and reports `#{pane_dead}` and `#{pane_dead_status}`; the
+  `agent_exit` part reads them, and captures a dead pane joined (`capture-pane -J`) so
+  a long line comes back whole. `Checks::AgentExited` fails an unattended `ready` step
+  on the first pass that finds its pane dead, with the exit status and the CLI's last
+  lines, redacted and cut to 500 characters (task #324: Cursor CLI refused
+  `composer-2.5[effort=low]` with "Cannot use this model" and the step sat until a
+  person cancelled the run). Nothing on the screen is read to decide it. An interactive
+  session's CLI is still typed into the pane's shell, which its person can start it
+  again from, and is left alone.
 - **The silence watchdog.** `Sessions::Checks::NoOutput` runs on every pass of
   `Sessions::Monitor`, last, and reads every unattended `ready` step from its
   start, so a silent session is ended 30 to 31 minutes after it stopped

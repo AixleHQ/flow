@@ -769,6 +769,30 @@ module Agents
       assert_equal "2.2x credits · 1000000 input tokens · Claude Opus 5", models.first[:description]
     end
 
+    # Task #324: the CLI's list carries no effort, the API's request-field schema does.
+    test "fetch_available_models takes each model's effort levels from the API's request schema" do
+      stub_request(:post, "https://management.us-east-1.kiro.dev/")
+        .with(headers: { "X-Amz-Target" => Agents::KiroCliAdapter::LIST_MODELS_TARGET })
+        .to_return(status: 200, body: { "models" => [
+          { "modelId" => "claude-opus-4.6", "additionalModelRequestFieldsSchema" => { "properties" => {
+            "output_config" => { "properties" => { "effort" => { "type" => "string", "enum" => %w[low medium high max] } } }
+          } } },
+          { "modelId" => "grok-4.7", "additionalModelRequestFieldsSchema" => { "properties" => {
+            "reasoning" => { "properties" => { "effort" => { "enum" => %w[low medium high xhigh] } } }
+          } } },
+          { "modelId" => "glm-5" }
+        ] }.to_json, headers: { "Content-Type" => "application/json" })
+      credential = AgentCredential.new(metadata: { "kiro_models" => [
+        { "model_id" => "claude-opus-4.6" }, { "model_id" => "grok-4.7" }, { "model_id" => "glm-5" }, { "model_id" => "new-model" }
+      ] })
+
+      models = @adapter.fetch_available_models(real_state_credentials, credential: credential)
+
+      assert_equal({ "claude-opus-4.6" => %w[low medium high max], "grok-4.7" => %w[low medium high xhigh],
+                     "glm-5" => [], "new-model" => nil },
+                   models.to_h { |m| [ m[:model_id], m[:reasoning_effort_levels] ] })
+    end
+
     # Fallback for a credential captured before the CLI was ever asked. The API answers
     # camelCase and nests the context window, so the same entry arrives in a different
     # shape than the CLI's.
