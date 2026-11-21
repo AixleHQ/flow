@@ -46,12 +46,11 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     assert_equal @machine.id, session.runner_environment_id
     assert_equal "aixle-#{@machine.key}-#{session.id}", session.container_id
     assert_equal "ContainerRuntime::RunnerRuntime", admission.reload.runtime_kind
-    assert_equal %w[container.start status write_file write_file exec], @host_runner.ops
+    assert_equal %w[container.start status write_file exec], @host_runner.ops
     start = @host_runner.operations.first
     assert_equal IMAGE, start[:payload]["image"], "the image as it was given, by tag, which container.start pulls"
     assert_equal [ IMAGE ], @host_runner.machine.images
     assert_equal ContainerStrategies::AgentSessionStrategy::PROMPT_PATH, @host_runner.operations.third[:payload]["path"]
-    assert_equal ContainerStrategies::AgentSessionStrategy::LAUNCH_PATH, @host_runner.operations.fourth[:payload]["path"]
     assert_equal({ "cpus" => 2.0, "memory_bytes" => 4096.megabytes, "pids_limit" => 4096 }, start[:payload]["resources"],
                  "the hosted container's limits")
     assert_equal session.id.to_s, start[:payload]["env"]["SESSION_ID"]
