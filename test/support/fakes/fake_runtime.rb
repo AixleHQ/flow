@@ -150,9 +150,10 @@ module ContainerRuntime
     end
 
     # The agent pane's process as tmux reports it once it has exited: its status and what
-    # the kept pane shows (Sessions::Snapshot::Parts `agent_exit`). nil is a live pane.
-    def set_agent_exit(status, pane: "")
-      @agent_exit = status && { status: status, pane: pane }
+    # the kept pane shows (Sessions::Snapshot::Parts `agent_exit`). A process killed by a
+    # signal has no status, only the signal. Neither is a live pane.
+    def set_agent_exit(status, pane: "", signal: nil)
+      @agent_exit = (status || signal) && { status: status, signal: signal, pane: pane }
       self
     end
 
@@ -529,7 +530,9 @@ module ContainerRuntime
       when :scrollback then [ @terminal_pane.to_s, 0 ]
       when :log_mtime then @terminal_log_mtime ? [ "#{@terminal_log_mtime.to_i}\n", 0 ] : [ "", 1 ]
       when :clients then [ "#{terminal_clients}\n", 0 ]
-      when :agent_exit then [ @agent_exit ? "1 #{@agent_exit[:status]}\n#{@agent_exit[:pane]}" : "0 \n", 0 ]
+      when :agent_exit
+        dead = @agent_exit
+        [ dead ? "1:#{dead[:status]}:#{dead[:signal]}\n#{dead[:pane]}" : "0::\n", 0 ]
       else [ "", 127 ]
       end
     end
