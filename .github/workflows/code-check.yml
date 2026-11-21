@@ -130,6 +130,14 @@ jobs:
         with:
           driver: docker
 
+      - name: Start database
+        if: ${{ inputs.needs-db }}
+        # In the background, so pulling the Postgres image overlaps the image build below. After
+        # the Docker restart above, which would stop the container. "Wait for database" reads the
+        # outcome.
+        run: |
+          nohup bash -c 'docker compose -f "$COMPOSE_FILE" up -d db >"$RUNNER_TEMP/db-start.log" 2>&1; echo $? >"$RUNNER_TEMP/db-start.status"' >/dev/null 2>&1 &
+
       - name: Build test image
         # Materialised here rather than pulled whole from a registry: the image
         # has to be available to fork pull requests, which get a read-only token
@@ -154,13 +162,14 @@ jobs:
           # builds from scratch — a cache miss here is slow, never fatal.
           cache-from: type=registry,ref=${{ env.BUILD_CACHE }}
 
-      - name: Start database
-        if: ${{ inputs.needs-db }}
-        run: docker compose -f "$COMPOSE_FILE" up -d db
-
       - name: Wait for database
         if: ${{ inputs.needs-db }}
         run: |
+          # Started in the background before the image build: wait for that to finish, then for
+          # Postgres to accept connections.
+          until [ -s "$RUNNER_TEMP/db-start.status" ]; do sleep 1; done
+          cat "$RUNNER_TEMP/db-start.log"
+          [ "$(cat "$RUNNER_TEMP/db-start.status")" = 0 ]
           until docker compose -f "$COMPOSE_FILE" exec -T db pg_isready -U postgres; do sleep 1; done
 
       - name: Prepare database
