@@ -1,0 +1,86 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Where CI's time goes: bin/ci-timings [--limit N] [--event EVENT] [--branch BRANCH] [--workflow NAME] [--steps SECONDS]
+#
+# Reads the last N successful runs of a workflow through `gh` and prints, per job, the median,
+# 90th percentile and longest duration, then the wall clock of a whole run (first job start to last
+# job end) and the steps that take longer than --steps seconds at the median (default 20). Run it
+# before and after a CI change, with the same --event, to compare like with like. Needs `gh`
+# signed in for AixleHQ/flow.
+
+require "json"
+require "open3"
+require "optparse"
+require "time"
+
+options = { limit: 30, workflow: "CI", steps: 20, repo: "AixleHQ/flow" }
+OptionParser.new do |parser|
+  parser.banner = "usage: bin/ci-timings [options]"
+  parser.on("--limit N", Integer, "successful runs to read (default 30)") { |value| options[:limit] = value }
+  parser.on("--event EVENT", "only pull_request, push, ... runs") { |value| options[:event] = value }
+  parser.on("--branch BRANCH", "only runs of this branch") { |value| options[:branch] = value }
+  parser.on("--workflow NAME", "workflow name (default CI)") { |value| options[:workflow] = value }
+  parser.on("--steps SECONDS", Integer, "list steps whose median is at least this long (default 20)") { |value| options[:steps] = value }
+  parser.on("--repo OWNER/REPO", "repository (default AixleHQ/flow)") { |value| options[:repo] = value }
+end.parse!
+
+def gh_json(*args)
+  output, status = Open3.capture2("gh", *args)
+  abort "bin/ci-timings: gh #{args.first(3).join(' ')} failed" unless status.success?
+
+  JSON.parse(output)
+end
+
+def percentile(values, fraction)
+  sorted = values.sort
+  sorted[[(sorted.size * fraction).ceil - 1, 0].max]
+end
+
+def median(values)
+  sorted = values.sort
+  middle = sorted.size / 2
+  sorted.size.odd? ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2.0
+end
+
+def seconds(from, to)
+  Time.parse(to) - Time.parse(from)
+end
+
+list = ["run", "list", "-R", options[:repo], "-w", options[:workflow], "--status", "success",
+        "-L", options[:limit].to_s, "--json", "databaseId"]
+list += ["--event", options[:event]] if options[:event]
+list += ["--branch", options[:branch]] if options[:branch]
+run_ids = gh_json(*list).map { |run| run["databaseId"] }
+abort "bin/ci-timings: no successful runs found" if run_ids.empty?
+
+durations = Hash.new { |hash, key| hash[key] = [] }
+step_durations = Hash.new { |hash, key| hash[key] = Hash.new { |inner, step| inner[step] = [] } }
+wall_clocks = []
+
+run_ids.each do |id|
+  jobs = gh_json("api", "repos/#{options[:repo]}/actions/runs/#{id}/jobs?per_page=100&filter=latest")["jobs"]
+  finished = jobs.select { |job| job["conclusion"] == "success" && job["completed_at"] }
+  next if finished.empty?
+
+  wall_clocks << seconds(finished.map { |job| job["started_at"] }.min, finished.map { |job| job["completed_at"] }.max)
+  finished.each do |job|
+    durations[job["name"]] << seconds(job["started_at"], job["completed_at"])
+    job["steps"].each do |step|
+      next unless step["conclusion"] == "success" && step["started_at"] && step["completed_at"]
+
+      step_durations[job["name"]][step["name"]] << seconds(step["started_at"], step["completed_at"])
+    end
+  end
+end
+
+puts format("%d successful runs of %s%s", run_ids.size, options[:workflow], options[:event] ? " (#{options[:event]})" : "")
+puts format("wall clock of a run: median %ds, p90 %ds, longest %ds", median(wall_clocks), percentile(wall_clocks, 0.9), wall_clocks.max)
+puts
+puts format("%-40s %4s %7s %7s %7s", "job", "runs", "median", "p90", "max")
+durations.sort_by { |_name, values| -median(values) }.each do |name, values|
+  puts format("%-40s %4d %6ds %6ds %6ds", name, values.size, median(values), percentile(values, 0.9), values.max)
+  step_durations[name].each do |step, step_values|
+    puts format("    %-36s %4d %6ds", step, step_values.size, median(step_values)) if median(step_values) >= options[:steps]
+  end
+end
