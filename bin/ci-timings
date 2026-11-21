@@ -3,16 +3,22 @@
 
 # Where CI's time goes: bin/ci-timings [--limit N] [--event EVENT] [--branch BRANCH] [--workflow NAME] [--steps SECONDS]
 #
-# Reads the last N successful runs of a workflow through `gh` and prints, per job, the median,
-# 90th percentile and longest duration, then the wall clock of a whole run (first job start to last
-# job end) and the steps that take longer than --steps seconds at the median (default 20). Run it
-# before and after a CI change, with the same --event, to compare like with like. Needs `gh`
-# signed in for AixleHQ/flow.
+# Reads the last N successful runs of a workflow through `gh` and prints the wall clock of a run
+# (from its creation, so the queue before its first job counts) and, per job, the median, 90th
+# percentile and longest duration plus the median queue wait (job created to job started). Steps
+# whose median is at least --steps seconds (default 20) are listed under their job. Run it before
+# and after a CI change, with the same --event, to compare like with like. Needs `gh` signed in for
+# the repository.
+#
+# Why not an existing tool: `gh workflow-stats` (fchimpan/gh-workflow-stats) gives job medians but
+# measures a run from its start, not its creation, and has no queue wait; GitHub's Actions
+# Performance Metrics is a web page with averages only and no API. See lib/ci_timings.rb for the
+# arithmetic, which test/lib/ci_timings_test.rb covers.
 
 require "json"
 require "open3"
 require "optparse"
-require "time"
+require_relative "../lib/ci_timings"
 
 options = { limit: 30, workflow: "CI", steps: 20, repo: "AixleHQ/flow" }
 OptionParser.new do |parser|
@@ -32,55 +38,17 @@ def gh_json(*args)
   JSON.parse(output)
 end
 
-def percentile(values, fraction)
-  sorted = values.sort
-  sorted[[ (sorted.size * fraction).ceil - 1, 0 ].max]
-end
-
-def median(values)
-  sorted = values.sort
-  middle = sorted.size / 2
-  sorted.size.odd? ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2.0
-end
-
-def seconds(from, to)
-  Time.parse(to) - Time.parse(from)
-end
-
 list = [ "run", "list", "-R", options[:repo], "-w", options[:workflow], "--status", "success",
-         "-L", options[:limit].to_s, "--json", "databaseId" ]
+         "-L", options[:limit].to_s, "--json", "databaseId,createdAt" ]
 list += [ "--event", options[:event] ] if options[:event]
 list += [ "--branch", options[:branch] ] if options[:branch]
-run_ids = gh_json(*list).map { |run| run["databaseId"] }
-abort "bin/ci-timings: no successful runs found" if run_ids.empty?
+listed = gh_json(*list)
+abort "bin/ci-timings: no successful runs found" if listed.empty?
 
-durations = Hash.new { |hash, key| hash[key] = [] }
-step_durations = Hash.new { |hash, key| hash[key] = Hash.new { |inner, step| inner[step] = [] } }
-wall_clocks = []
-
-run_ids.each do |id|
-  jobs = gh_json("api", "repos/#{options[:repo]}/actions/runs/#{id}/jobs?per_page=100&filter=latest")["jobs"]
-  finished = jobs.select { |job| job["conclusion"] == "success" && job["completed_at"] }
-  next if finished.empty?
-
-  wall_clocks << seconds(finished.map { |job| job["started_at"] }.min, finished.map { |job| job["completed_at"] }.max)
-  finished.each do |job|
-    durations[job["name"]] << seconds(job["started_at"], job["completed_at"])
-    job["steps"].each do |step|
-      next unless step["conclusion"] == "success" && step["started_at"] && step["completed_at"]
-
-      step_durations[job["name"]][step["name"]] << seconds(step["started_at"], step["completed_at"])
-    end
-  end
+runs = listed.map do |run|
+  jobs = gh_json("api", "repos/#{options[:repo]}/actions/runs/#{run['databaseId']}/jobs?per_page=100&filter=latest")["jobs"]
+  { "created_at" => run["createdAt"], "jobs" => jobs }
 end
 
-puts format("%d successful runs of %s%s", run_ids.size, options[:workflow], options[:event] ? " (#{options[:event]})" : "")
-puts format("wall clock of a run: median %ds, p90 %ds, longest %ds", median(wall_clocks), percentile(wall_clocks, 0.9), wall_clocks.max)
-puts
-puts format("%-40s %4s %7s %7s %7s", "job", "runs", "median", "p90", "max")
-durations.sort_by { |_name, values| -median(values) }.each do |name, values|
-  puts format("%-40s %4d %6ds %6ds %6ds", name, values.size, median(values), percentile(values, 0.9), values.max)
-  step_durations[name].each do |step, step_values|
-    puts format("    %-36s %4d %6ds", step, step_values.size, median(step_values)) if median(step_values) >= options[:steps]
-  end
-end
+puts format("%d successful runs of %s%s", runs.size, options[:workflow], options[:event] ? " (#{options[:event]})" : "")
+puts CiTimings.render(CiTimings.summarize(runs), step_threshold: options[:steps])
