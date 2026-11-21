@@ -65,6 +65,22 @@ class TurnEndDetector
       lines_below_prompt: 0,
       turn_summary: /Session: [\d.,]+ AIC used\z/,
       summary_within: 6
+    },
+    # Antigravity CLI 1.5.13 (TUI, `-i`). The pane ends on a footer that starts with
+    # `? for shortcuts` at rest and `esc to cancel` while a turn runs, at every width (the
+    # model part on its right is dropped below about 60 columns). Above it sit a rule, the
+    # input box line and another rule; the box line is the `> Auto mode: …` placeholder, or
+    # a bare `>` once anything has been typed into it. A turn that left a command running in
+    # the background puts a task panel between the box and the footer and is resumed by agy
+    # itself when the command ends, so an input box anywhere but two lines up is no turn
+    # end. agy prints no per-turn summary; the screen before the `-i` prompt is submitted
+    # looks the same, but lasts under a second, and Sessions::Checks::TurnEnd waits for a
+    # second pass on the same screen.
+    "antigravity_cli" => {
+      prompt: /\A\s*\? for shortcuts\b/,
+      lines_below_prompt: 0,
+      input_line: /\A>(?:\z| Auto mode: )/,
+      input_above: 2
     }
   }.freeze
 
@@ -78,10 +94,17 @@ class TurnEndDetector
     screen = current_screen(text)
     prompt_at = screen.rindex { |line| line.match?(signature[:prompt]) }
     return false if prompt_at.nil? || prompt_at < screen.length - 1 - signature[:lines_below_prompt]
+    return empty_input?(screen, prompt_at, signature) if signature[:input_line]
 
     above = screen[[ prompt_at - signature[:summary_within], 0 ].max...prompt_at]
     above.any? { |line| line.match?(signature[:turn_summary]) }
   end
+
+  def self.empty_input?(screen, prompt_at, signature)
+    at = prompt_at - signature[:input_above]
+    at >= 0 && screen[at].match?(signature[:input_line])
+  end
+  private_class_method :empty_input?
 
   def self.current_screen(text)
     Sessions::ScreenDigest.lines(text, last: TAIL_LINES)

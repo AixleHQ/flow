@@ -17,6 +17,10 @@ module Antigravity
 
     MODELS_URL = "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels"
     CONSUMER_PROJECT = "aicode-consumers"
+    # The endpoint answers 403 PERMISSION_DENIED to the same token and body under any
+    # client name but agy's own (`antigravity…`, measured 2026-11-21), and the model
+    # pickers then fell back to a fixed list the CLI partly no longer knows (task #324).
+    USER_AGENT = "antigravity/cli/#{AgentRuntime.fetch(:antigravity_cli).cli_version}".freeze
 
     class << self
       # The raw `fetchAvailableModels` response body.
@@ -30,6 +34,7 @@ module Antigravity
         request["Authorization"] = "Bearer #{access_token}"
         request["Content-Type"] = "application/json"
         request["Accept-Encoding"] = "gzip"
+        request["User-Agent"] = USER_AGENT
         request.body = { project: CONSUMER_PROJECT }.to_json
 
         response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) do |http|

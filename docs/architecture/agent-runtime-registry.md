@@ -25,7 +25,7 @@ repository's matrix still lacked it after that.
 | `cli_version` | The CLI release the image installs, passed as the `CLI_VERSION` build arg. `null` would mean the image installs whatever the vendor ships that day, so the image tag, not the registry, fixes what a deployment runs; every runtime is pinned today. |
 | `cli_latest` | Where the weekly canary finds the vendor's newest release (`bin/agent-cli-latest` reads it): `{ "npm": "<package>" }`, or `{ "url": "<endpoint>" }` with a body that is the version, or that URL plus `"jq": "<filter>"` for a JSON body (Kiro's manifest) or `"pattern": "<regex>"` whose first group is the version (Cursor's install script, the only place it publishes one). `null` means the canary builds the pin. |
 | `cli_releases` | Where the vendor's release notes are. `{ "github": "<owner/repo>", "tag_prefix": "<prefix before the version>" }`: the canary report quotes them, and they give the newest version when `cli_latest` is `null`; pre-releases and tags that are not `X.Y.Z` are ignored. `{ "url": "<changelog page>" }`: the report links it. |
-| `reasoning_effort` | The reasoning-effort levels the pinned CLI takes, which a step's or a session's `reasoning_effort` is checked against and which the UI offers: `levels` (in order, for any model no rule names), and `models`, a list of `{ "match": "<regex on the model id>", "levels": [...] }` rules where the first match wins and `[]` means that model has none. `AgentRuntime#reasoning_effort_levels(model)` applies the rule, the only place that does, and returns no level for a blank model. See [Reasoning effort](#reasoning-effort). |
+| `reasoning_effort` | The reasoning-effort levels the pinned CLI takes, which a step's or a session's `reasoning_effort` is checked against and which the UI offers: `levels` (in order, for any model no rule names), and `models`, a list of `{ "match": "<regex on the model id>", "levels": [...] }` rules where the first match wins and `[]` means that model has none. `AgentRuntime#reasoning_effort_levels(model)` applies the rule, the only place that does, and returns no level for a blank model. A runtime that takes no level at all carries a `note` instead, saying where its effort is chosen, which the step editor and the new-session form show under the disabled select. See [Reasoning effort](#reasoning-effort). |
 
 ## Who reads it
 
@@ -83,22 +83,25 @@ docs:
 | Runtime | Pin | How the level is set | Levels offered | Depends on the model |
 | --- | --- | --- | --- | --- |
 | Claude Code | 2.1.329 | `claude --effort <level>` | low, medium, high, xhigh, max | Yes: xhigh and max exist on some models only, and the CLI steps an unsupported level down silently. An unknown word is a warning, and the session runs at the default. |
-| Cursor CLI | 2026.11.19-f005e9d | No flag. A parameterized model takes it as a bracket override: `agent --model 'claude-opus-4-8[effort=high]'` | low, medium, high, and only with an explicit model | Yes: the parameters a model takes come from Cursor's backend (`--list-models`, signed in). The common levels are offered. With no model there is nothing to attach the level to, and a model id that already carries `[...]` keeps its own overrides. |
+| Cursor CLI | 2026.11.19-f005e9d | None: the effort is part of the model id (`claude-opus-5-5-low`, `gpt-5.2-high`), and the model list offers every variant | none | Yes, and per model: Cursor's `AvailableModels` (`useModelParameters`) gives each model its own parameters (`effort` on Claude models, `reasoning` with `extra-high` on GPT models, only `fast` on Composer). A bracket override is accepted only as a model's complete variant string (`claude-opus-5-5[context=300k,effort=low,fast=false]`); a partial one (`composer-2.5[effort=low]`, `claude-opus-4-8[effort=low]`) makes the CLI print "Cannot use this model" and exit, checked live 2026-11-21 (task #324). |
 | Codex | 0.171.0 | No flag: the `model_reasoning_effort` config key, passed as `codex -c model_reasoning_effort=<level>` | low…xhigh; up to max on `gpt-6-luna` / `gpt-5.6-luna`; up to ultra on the Sol, Terra, Astra and Daybreak models | Yes: from the model catalog bundled in the binary (`supported_reasoning_levels`). The CLI's enum also has `none` and `minimal`, which no bundled model lists. |
 | Gemini CLI | 0.60.0 | No flag: `modelConfigs.customOverrides` in `~/.gemini/settings.json`, matching the `chat-base-3` alias with `thinkingConfig.thinkingLevel` `LOW` or `HIGH` (written by `GeminiCliAdapter#generate_settings`) | low, high | Yes: Gemini 3 models take a thinking level (HIGH is the default), Gemini 2.5 models take a token budget instead, which this setting does not cover, so `gemini-2.*` offers none. Matching the alias keeps the level off the CLI's internal utility calls. |
-| Antigravity CLI | 1.5.13 | `agy --effort <level>` | low, medium, high | Yes: the CLI's grammar is low…max, but each model has its own variants, and the CLI refuses a level its model lacks (`--effort=… is not supported for model …`). Without a signed-in account the per-model list cannot be read, so only the levels every model offers are offered. |
+| Antigravity CLI | 1.5.13 | None: the effort is part of the model id (`gemini-3.8-flash-low`), and the model list offers every variant | none | Yes, and per model: `fetchAvailableModels` gives a model group its levels (`gemini-3.8-flash`: low, medium, high; the Claude and GPT-OSS models none). `--effort` applies only to a group (`--model gemini-3.8-flash --effort low`, or no `--model`); with a model id, a level the model lacks, or an unknown model, the TUI runs the account's default model and only its log says why, while print mode exits 1. Checked live 2026-11-21 (task #324). |
 | Grok | 1.0.89 | `grok --reasoning-effort <level>` (alias `--effort`), honoured in the TUI as well as headless | low, medium, high, xhigh | Yes: the model catalogue says which models support it, and a model without reasoning effort ignores the flag. |
 | Kiro CLI | 3.5.0 | `kiro-cli chat --effort <level>` | low, medium, high, xhigh, max; claude-sonnet-4.6 has no xhigh; `auto` and the Haiku models have none | Yes, checked live on 2.34.0: an unsupported level prints `failed to set effort` and the session continues at the default. |
 | Copilot CLI | 1.0.114 | `copilot --reasoning-effort <level>` | low, medium, high, xhigh, max; GPT-5.3-Codex and the Grok models stop at xhigh; Gemini and MAI models take low, medium and high; `auto` and Claude Haiku 4.5 have none (some GPT models also take `none`, which is not offered) | Yes: read for every model of the account's catalogue from the CLI's ACP `reasoning_effort` option (`docker/copilot-cli/aixle-copilot-models.mjs`), 2026-11-10. The catalogue is per plan, so a model missing here falls under the default levels. |
 
-Every runtime supports a level in some form. The UI disables the select, with the
-reason, where the chosen runtime and model offer none: Gemini 2.5 models, and Kiro's
-`auto` and Haiku models.
+Every runtime but Cursor CLI and Antigravity CLI takes a level; those two take the effort
+through the model id. The UI disables the select, with the reason, where the chosen
+runtime and model offer none: every Cursor and Antigravity model (with the registry's
+`note`), Gemini 2.5 models, and Kiro's `auto` and Haiku models.
 
 The registry does not keep a full per-model matrix. Where a vendor decides per model
-whether a level is honoured (Claude Code's xhigh and max, Grok's models without reasoning
-effort, Cursor's backend parameters), it lists the levels the CLI accepts, and the CLI may
-lower or ignore a level the model doesn't support. The select says so under the field.
+whether a level is honoured and the CLI lowers or ignores a level the model doesn't
+support (Claude Code's xhigh and max, Grok's models without reasoning effort, Kiro), it
+lists the levels the CLI accepts, and the select says so under the field. Where the CLI
+refuses the launch instead, the registry has to be exact per model, because the CLI exits
+and the step fails (`Sessions::Checks::AgentExited`, in `docs/architecture/workflows.md`).
 
 When a pin is raised, re-check the CLI's levels and update `reasoning_effort` with it:
 `--help` for a flag, a launch with a bogus level for the accepted list, and for Codex the
@@ -108,6 +111,27 @@ bundled catalog's `supported_reasoning_levels`. The template schema
 and model through `AgentRuntime`, so a new level needs no schema edit. A level the new pin no longer takes (for the CLI or for one model) comes with a data
 migration that clears or replaces it on the steps that have it, because a step is validated
 on every save and would otherwise refuse unrelated edits.
+
+### Probing every offered launch
+
+The checks above read the CLI; the probe runs it. `Agents::EffortProbePlan` lists every
+launch the model pickers offer a member for one runtime: each model their credential
+lists, with each level the registry gives it, typed as the adapter types it. Run it after a
+pin is raised and when a vendor changes its models, on staging, where the test company's
+logins are:
+
+```bash
+kubectl exec deploy/web -- bin/rails "agents:effort_plan[<email>,<agent_type>]" > plan.jsonl
+# start an interactive session of that runtime as the same member, then in its pod:
+kubectl cp bin/agent-effort-probe <pod>:/tmp/agent-effort-probe -c main
+kubectl exec -i <pod> -c main -- python3 /tmp/agent-effort-probe < plan.jsonl > results.jsonl
+```
+
+`bin/agent-effort-probe` types each launch into a tmux session of its own, with a one-line
+question as the prompt, and reports `accepted` (the answer came), `exited` (the CLI quit,
+with what it printed), `no_answer` (the screen, for a person to read) or `skipped` (the
+level is not on the command line: Gemini CLI). Every `exited` or `no_answer` row is a
+registry rule to fix. An accepted launch spends one short turn on the member's account.
 
 ## Raising a CLI pin
 

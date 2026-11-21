@@ -807,7 +807,7 @@ module ContainerStrategies
         delivered_command = Shellwords.split(send_keys).fetch(4)
 
         container == container_mock && command[0] == "sh" && command[1] == "-c" &&
-          delivered_command == 'codex --yolo "$(cat /tmp/.aixle-prompt)"'
+          delivered_command == %(codex --yolo "$(cat /tmp/.aixle-prompt)"#{AgentExitDetector::LAUNCH_SUFFIX})
       end
 
       strategy.send(:launch_agent_in_tmux, container_mock)
@@ -816,13 +816,22 @@ module ContainerStrategies
     test "the session's reasoning effort reaches the launch command the way its CLI takes it" do
       @session.update!(mode: "interactive", requested_model: "claude-opus-5", reasoning_effort: "high")
 
-      assert_equal "claude --model claude-opus-5 --effort high", launched_command(build_strategy)
+      assert_equal "claude --model claude-opus-5 --effort high#{AgentExitDetector::LAUNCH_SUFFIX}",
+                   launched_command(build_strategy)
     end
 
     test "a session without a reasoning effort launches exactly as before" do
       @session.update!(mode: "interactive", requested_model: "claude-opus-5", reasoning_effort: nil)
 
-      assert_equal "claude --model claude-opus-5", launched_command(build_strategy)
+      assert_equal "claude --model claude-opus-5#{AgentExitDetector::LAUNCH_SUFFIX}", launched_command(build_strategy)
+    end
+
+    # Task #324: a CLI that refuses its arguments drops back to the shell, and only the
+    # status line tells Sessions::Checks::AgentExited that it did.
+    test "the launch prints the CLI's exit status once it returns" do
+      @session.update!(mode: "interactive", requested_model: nil)
+
+      assert_equal %(claude; echo "[aixle] agent exited with status $?"), launched_command(build_strategy)
     end
 
     test "build_env_vars carries no prompt" do
