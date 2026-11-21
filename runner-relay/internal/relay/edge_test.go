@@ -36,9 +36,18 @@ type fakeRails struct {
 	// checks answers a reconcile pass; nil answers true for every machine.
 	checks     func([]rails.Machine) ([]bool, error)
 	checkCalls [][]rails.Machine
+	// duringHolders, when set, runs inside a holders call, before it answers: a signal
+	// that arrives while the call is out.
+	duringHolders func()
 }
 
 func (f *fakeRails) Holders(_ context.Context, token string) (rails.Holder, error) {
+	f.mu.Lock()
+	during := f.duringHolders
+	f.mu.Unlock()
+	if during != nil {
+		during()
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.holderHits++
@@ -335,6 +344,31 @@ func TestAMissIsResolvedByHoldersOnceAndRemembered(t *testing.T) {
 	}
 	if e.rails.hits() != 1 {
 		t.Fatalf("holders called %d times, want 1", e.rails.hits())
+	}
+}
+
+func TestAHoldersAnswerDoesNotOverwriteASignalThatArrivedDuringTheCall(t *testing.T) {
+	e := newEdgeHarness(t)
+	e.machine(42, 123)
+	env := int64(42)
+	e.rails.holders[tokenA] = rails.Holder{SessionID: 123, EnvironmentID: &env, State: "ready", Ports: bridgePorts}
+	// While the call is out, the platform's signal says machine 42 now holds session 124.
+	e.rails.duringHolders = func() {
+		e.route(42, 124, tokenB)
+	}
+
+	resp, _ := e.get("/t/"+tokenA+"/tty/x", "123")
+	// The old answer is used for this request, and the registry check that follows sees
+	// the machine moved on.
+	if resp.StatusCode != 503 {
+		t.Fatalf("status %d, want 503", resp.StatusCode)
+	}
+	cur, ok := e.server.Registry().Session(42)
+	if !ok || cur.SessionID != 124 || cur.RouteToken != tokenB {
+		t.Fatalf("the registry holds %+v, want session 124 from the signal", cur)
+	}
+	if _, ok := e.server.Registry().ByRouteToken(tokenA); ok {
+		t.Fatal("the stale answer's token was stored")
 	}
 }
 

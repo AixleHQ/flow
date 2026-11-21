@@ -76,10 +76,21 @@ func (e *Environment) tunnelDialer(sessionID int64, hostNetwork bool, sidecar st
 	if e.Tunnel == nil || len(ports) == 0 {
 		return nil
 	}
+	if !hostNetwork && sidecar == "" {
+		return nil
+	}
+	return e.dialerFor(sessionID, hostNetwork)
+}
+
+// dialerFor picks how a session's ports are reached: the host runner's own loopback on
+// the host network, the sidecar's dial socket on the bridge network. It is nil on the
+// bridge network when there is no proxy host or its dial directory is not usable. Both
+// the start of a session and the restore after a restart of the runner choose here.
+func (e *Environment) dialerFor(sessionID int64, hostNetwork bool) tunnel.Dialer {
 	if hostNetwork {
 		return tunnel.LoopbackDialer{}
 	}
-	if sidecar == "" || e.Proxy == nil {
+	if e.Proxy == nil {
 		return nil
 	}
 	dir, err := e.Proxy.DialDir(sessionID)
@@ -182,15 +193,9 @@ func (e *Environment) restoreTunnel(sessionID int64, c container.Summary) {
 	if e.Tunnel == nil || len(ports) != len(TunnelSurfaces) || c.State != container.StateRunning {
 		return
 	}
-	var dialer tunnel.Dialer = tunnel.LoopbackDialer{}
-	if c.HostConfig.NetworkMode != "host" {
-		dir, err := e.Proxy.DialDir(sessionID)
-		if err != nil {
-			e.logger().Warn("the tunnel's dial directory is not usable; the session's terminal stays unreachable",
-				"environment", e.Key, "session", sessionID, "error", err)
-			return
-		}
-		dialer = tunnel.SocketDialer{Socket: filepath.Join(dir, proxy.DialSocketName)}
+	dialer := e.dialerFor(sessionID, c.HostConfig.NetworkMode == "host")
+	if dialer == nil {
+		return
 	}
 	e.Tunnel.Set(tunnel.Grant{SessionID: sessionID, Ports: ports, Dialer: dialer})
 }

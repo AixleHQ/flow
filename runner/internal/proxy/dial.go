@@ -182,7 +182,7 @@ func serveDial(ctx context.Context, conn net.Conn, allowed map[int]bool, logger 
 	}
 	dctx, cancel := context.WithTimeout(ctx, DialTimeout)
 	var d net.Dialer
-	target, err := d.DialContext(dctx, "tcp", net.JoinHostPort("127.0.0.1", line))
+	target, err := d.DialContext(dctx, "tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 	cancel()
 	if err != nil {
 		fmt.Fprintf(conn, "ERR %s\n", oneLine(err))
