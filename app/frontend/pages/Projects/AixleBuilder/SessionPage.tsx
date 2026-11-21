@@ -6,6 +6,7 @@ import {
   IconColumns,
   IconGitBranch,
   IconListDetails,
+  IconPlayerPause,
   IconPlayerStop,
   IconRobot,
   IconSettings,
@@ -15,8 +16,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { BoardColumn, Project, TerminalSession, Workflow } from '@/types/generated';
 
+import { apiMutate } from 'shared/lib/apiFetch';
 import { formatTime, parseDate } from 'shared/lib/formatDate';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
+import { restoreDaysLeft, restoreSession } from 'shared/lib/sessionRestore';
+import { suspendApiV1TerminalSessionPath } from 'shared/routes';
 import { agentLabel, isAgentType } from 'shared/ui/agentRuntimes';
 import { LiveTerminal } from 'shared/ui/sessions';
 import { StatusBadge } from 'shared/ui/StatusBadge';
@@ -104,8 +108,11 @@ const SessionPage = () => {
 
   const isActive = ['not_started', 'queued', 'running', 'ready'].includes(s.state);
   const isFinishing = s.state === 'finishing';
-  const isTerminal = ['finished', 'failed', 'cancelled'].includes(s.state);
+  const isTerminal = ['finished', 'failed', 'cancelled', 'suspended', 'restored'].includes(s.state);
   const [finishRequested, setFinishRequested] = useState(false);
+  const [suspendRequested, setSuspendRequested] = useState(false);
+  const [restoreRequested, setRestoreRequested] = useState(false);
+  const isSuspending = suspendRequested || s.suspending;
   const [tab, setTab] = useState<string | null>('activity');
 
   const basePath = `/company/projects/${project.id}`;
@@ -132,10 +139,27 @@ const SessionPage = () => {
     );
   }, [s.id, basePath]);
 
+  const handleSuspend = useCallback(async () => {
+    setSuspendRequested(true);
+    if (
+      await apiMutate(suspendApiV1TerminalSessionPath(s.id), { method: 'POST' }, 'The session could not be suspended')
+    ) {
+      router.reload({ onFinish: () => setSuspendRequested(false) });
+    } else {
+      setSuspendRequested(false);
+    }
+  }, [s.id]);
+
+  const handleRestore = useCallback(async () => {
+    setRestoreRequested(true);
+    const restored = await restoreSession(s.id, (session) => `${basePath}/aixle_builder/${session.id}`);
+    if (!restored) setRestoreRequested(false);
+  }, [s.id, basePath]);
+
   // ── Render: Terminal panel ─────────────────────
 
   const renderMainPanel = () => {
-    if (finishRequested || isFinishing) return null;
+    if (finishRequested || isFinishing || suspendRequested) return null;
 
     if (!canShowTerminal) {
       return (
@@ -300,6 +324,20 @@ const SessionPage = () => {
         <Text size="lg" fw={500}>
           Session {s.state}
         </Text>
+        {s.state === 'suspended' && (
+          <Text size="sm" c="dimmed" ta="center" maw={460}>
+            Its files and the conversation are kept
+            {restoreDaysLeft(s.restoreExpiresAt) !== null
+              ? ` for ${restoreDaysLeft(s.restoreExpiresAt)} more ${restoreDaysLeft(s.restoreExpiresAt) === 1 ? 'day' : 'days'}`
+              : ''}
+            . Restore continues the build where it stopped.
+          </Text>
+        )}
+        {s.state === 'restored' && s.restoredSessionId && (
+          <Button variant="subtle" onClick={() => router.visit(`${basePath}/aixle_builder/${s.restoredSessionId}`)}>
+            Continued in session #{s.restoredSessionId}
+          </Button>
+        )}
         {s.errorMessage && (
           <Text size="sm" c="var(--app-danger-fg)" ta="center">
             {s.errorMessage}
@@ -309,7 +347,13 @@ const SessionPage = () => {
           <Button variant="outline" onClick={() => router.visit(`${basePath}/aixle_builder`)}>
             Back to Builder
           </Button>
-          <Button onClick={() => router.visit(`${basePath}/aixle_builder`)}>Start New Build</Button>
+          {s.restorable ? (
+            <Button onClick={handleRestore} loading={restoreRequested}>
+              Restore
+            </Button>
+          ) : (
+            <Button onClick={() => router.visit(`${basePath}/aixle_builder`)}>Start New Build</Button>
+          )}
         </Group>
       </Stack>
     </div>
@@ -321,12 +365,12 @@ const SessionPage = () => {
     <>
       <Head title={`Aixle Builder — ${project.name}`} />
       <div className={classes.root}>
-        {((finishRequested && s.state !== 'queued') || isFinishing) && (
+        {((finishRequested && s.state !== 'queued') || isFinishing || suspendRequested) && (
           <div className={classes.finishingOverlay}>
             <Stack align="center" gap="sm">
               <Loader color="yellow" size="lg" />
               <Text fw={600} c="yellow.8">
-                Finishing session…
+                {isSuspending ? 'Saving files and conversation…' : 'Finishing session…'}
               </Text>
             </Stack>
           </div>
@@ -367,6 +411,17 @@ const SessionPage = () => {
             <Badge color={isAgentType(s.agentType) ? undefined : 'gray'} size="sm" variant="light">
               {runtimeLabel}
             </Badge>
+            {s.suspendable && !isFinishing && (
+              <Button
+                size="xs"
+                variant="default"
+                onClick={handleSuspend}
+                loading={suspendRequested}
+                leftSection={<IconPlayerPause size={14} />}
+              >
+                Suspend
+              </Button>
+            )}
             {isActive && (
               <Button
                 size="xs"

@@ -39,7 +39,9 @@ class TerminalSession < ApplicationRecord
 
   GENERIC_ERROR_MESSAGES = [ "Workflow cancelled", "Session admission is closed", LAUNCH_ABANDONED_ERROR, WORKFLOW_ENDED_ERROR ].freeze
 
-  TERMINAL_STATES = %w[finished failed cancelled].freeze
+  # `suspended` and `restored` end the container as the others do: nothing runs and
+  # no slot is held. A suspended session only waits for a person (Sessions::Suspension).
+  TERMINAL_STATES = %w[finished failed cancelled suspended restored].freeze
   # The metadata key that marks a session failed by Runners::ContactLoss.
   CONTACT_LOST_KEY = "contact_lost_at"
   private_constant :CONTACT_LOST_KEY
@@ -140,6 +142,10 @@ class TerminalSession < ApplicationRecord
   has_many :session_logs, dependent: :destroy
   has_many :output_assets, class_name: "Asset", foreign_key: :terminal_session_id
   has_one :step_run, dependent: :nullify
+  has_one :session_checkpoint, dependent: :destroy
+  belongs_to :restored_from_session, class_name: "TerminalSession", optional: true
+  has_one :restored_session, class_name: "TerminalSession", foreign_key: :restored_from_session_id,
+                             inverse_of: :restored_from_session, dependent: :nullify
   before_destroy :retain_unreleased_admission, prepend: true
   has_one :session_admission, dependent: :destroy
 
@@ -251,6 +257,7 @@ class TerminalSession < ApplicationRecord
   # Waiting for its agent's login to be renewed (Sessions::AuthPause).
   scope :auth_paused, -> { where("terminal_sessions.metadata->>'auth_paused_at' IS NOT NULL") }
   scope :completed, -> { where(state: %w[finished]) }
+  scope :suspended, -> { where(state: "suspended") }
   scope :for_user, ->(user_id) { where(user_id: user_id) }
   # Sessions `user` may be shown at all: their own, plus every session in a
   # project they can reach. This is only the REACHABILITY half of the rule —
@@ -465,6 +472,13 @@ class TerminalSession < ApplicationRecord
   # (integration gating) is deliberately NOT applied here: serving surfaces
   # filter with Tool#available?(ctx) so tools/call can distinguish
   # entitled-but-disconnected from not-entitled.
+  # The step this session worked on. A suspended step's earlier sessions are no longer
+  # its current one (StepRun#terminal_session) once it is restored, but each was built
+  # for it and says so in its metadata.
+  def owning_step_run
+    step_run || (StepRun.find_by(id: metadata.to_h["step_run_id"]) if workflow_step?)
+  end
+
   def aixle_builder?
     metadata&.dig("aixle_builder") == true
   end
@@ -529,6 +543,7 @@ class TerminalSession < ApplicationRecord
 
   def on_ready
     self.ready_at = Time.current
+    ActiveRecord.after_all_transactions_commit { Sessions::Suspension.restored!(self) } if restored_from_session_id
   end
 
   def on_queued

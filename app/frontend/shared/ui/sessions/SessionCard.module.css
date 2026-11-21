@@ -114,6 +114,11 @@
   color: var(--app-text-tertiary);
 }
 
+.earlier {
+  color: inherit;
+  text-decoration: underline;
+}
+
 .excerpt {
   font-size: 13px;
   color: var(--app-text-secondary);

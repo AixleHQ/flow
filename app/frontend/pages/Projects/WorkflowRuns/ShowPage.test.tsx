@@ -9,6 +9,7 @@ import { buildSubStepRun } from 'test/factories/subStepRun';
 import { buildWorkflowRun } from 'test/factories/workflowRun';
 import { buildWorkflowRunAsset } from 'test/factories/workflowRunAsset';
 import { FakeWebSocket, installFakeWebSocket } from 'test/fakeWebSocket';
+import { answerFetch } from 'test/fetchStub';
 import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 import type WorkflowRun from 'types/generated/WorkflowRun';
 
@@ -42,6 +43,58 @@ function seed(props: Record<string, unknown> = {}) {
 describe('Projects/WorkflowRuns/ShowPage', () => {
   beforeEach(() => {
     installFakeWebSocket();
+  });
+
+  it('holds a run on a suspended step and lets its owner restore it into the run', async () => {
+    const fetchSpy = answerFetch({ 'POST /api/v1/terminal_sessions/:id/restore': { id: 902, projectId: 7 } });
+    const expires = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000 - 60_000).toISOString();
+    const run = makeRun({
+      state: 'running',
+      stepRuns: [
+        buildStepRun({
+          id: 101,
+          stepId: 1,
+          stepName: 'Draft PRD',
+          stepPosition: 1,
+          state: 'suspended',
+          terminalSessionId: 901,
+          restorable: true,
+          restoreExpiresAt: expires,
+        }),
+        buildStepRun({ id: 102, stepId: 2, stepName: 'Review PRD', stepPosition: 2, state: 'pending' }),
+      ],
+    });
+    renderAuthedPage(<ShowPage />, { props: seed({ run }) });
+
+    expect(screen.getByText(/"Draft PRD" is suspended · 5 days left to restore/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Restore' }));
+
+    await waitFor(() => expect(router.visit).toHaveBeenCalledWith(expect.stringContaining('/workflow_runs/')));
+    fetchSpy.mockRestore();
+  });
+
+  it('links a restored step to the sessions it continues, oldest first', () => {
+    const run = makeRun({
+      stepRuns: [
+        buildStepRun({
+          id: 101,
+          stepId: 1,
+          stepName: 'Draft PRD',
+          stepPosition: 1,
+          state: 'completed',
+          terminalSessionId: 905,
+          sessionIds: [905, 903, 901],
+        }),
+      ],
+    });
+    renderAuthedPage(<ShowPage />, { props: seed({ run }) });
+
+    const earlier = screen.getByText(/restored from/);
+    expect(
+      within(earlier)
+        .getAllByRole('link')
+        .map((link) => link.getAttribute('href')),
+    ).toEqual(['/company/projects/7/sessions/901', '/company/projects/7/sessions/903']);
   });
 
   it('says where the run and each of its sessions runs, with the flag on', () => {

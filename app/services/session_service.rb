@@ -40,7 +40,7 @@ class SessionService
         metadata: metadata.presence,
         **params.slice(:mode, :initial_prompt, :requested_model, :reasoning_effort, :session_config,
                        :tool_ids, :skill_ids, :mcp_server_ids, :input_asset_ids, :repository_ids,
-                       :config_item_ids, :runner_id)
+                       :config_item_ids, :runner_id, :restored_from_session_id)
       )
 
       return session if refuse_runner_pick(session, params)
@@ -78,6 +78,60 @@ class SessionService
       else
         session.finish! if session.may_finish?
       end
+    end
+
+    # Ends an interactive session the way the 23-hour limit does: its files and its
+    # conversation are kept for Restore (Sessions::Suspension). The cleanup activity
+    # reads the request off the session, so the signal is the same one Finish sends.
+    def suspend(session:)
+      unless Sessions::Suspension.supported?(session) && session.container_up? && session.temporal_workflow_id.present?
+        raise TerminalSession::InvalidStateError, "This session cannot be suspended"
+      end
+
+      stop_admission_operations(session)
+      session.change_jsonb!(:metadata) { |doc| doc[Sessions::Suspension::REQUESTED_KEY] = Time.current.utc.iso8601 }
+      session.start_finishing!
+      signal_container_finished(session)
+      session
+    end
+
+    # Starts the session that continues a suspended one. A restore already on its way is
+    # returned instead of a second one; one that failed can be tried again.
+    def restore(session:, user:)
+      raise TerminalSession::InvalidStateError, "This session cannot be restored" unless session.user_id == user.id
+
+      # Before the check below: a step's suspended session stops being its current one
+      # as soon as the restore is under way.
+      pending = TerminalSession.where(restored_from_session_id: session.id).where.not(state: %w[failed cancelled]).first
+      return pending if pending
+      raise TerminalSession::InvalidStateError, "This session cannot be restored" unless Sessions::Suspension.restorable?(session)
+      return restore_step(session) if session.workflow_step?
+
+      create_and_start(user: user, project: session.project, session_type: "agent_session",
+                       agent_type: session.agent_type, configured_agent: session.configured_agent,
+                       params: Sessions::Restore.params_for(session))
+    end
+
+    # A step's new session is built as the step's sessions always are, from the step and
+    # its run, and becomes the step's current one: the run, which reads the step's current
+    # session, moves on when this one ends. The suspended one stays reachable through
+    # `restored_from_session`.
+    def restore_step(origin)
+      step_run = origin.step_run
+      session = ActiveRecord::Base.transaction do
+        step_run.lock!
+        unless step_run.terminal_session_id == origin.id && step_run.suspended?
+          raise TerminalSession::InvalidStateError, "This step has moved on"
+        end
+
+        build_for_workflow_step(step_run: step_run).tap do |built|
+          built.update!(restored_from_session: origin)
+          step_run.update!(state: :running)
+        end
+      end
+      admit_step_session!(step_run, session)
+      launch_session(session)
+      session
     end
 
     # `refresh_tokens:` is set on the one call that precedes an actual launch.

@@ -156,6 +156,15 @@ module Agents
     #
     # Codex has no effort flag: the level is the `model_reasoning_effort` config key,
     # set from argv with `-c` like the trust override, so config.toml is not touched.
+    # Resume, measured 2026-11-20: the rollout files are enough; the SQLite indexes are
+    # rebuilt from them. Codex encrypts its reasoning for one OpenAI organization, so only
+    # the same login can resume.
+    def conversation_paths = %w[.codex/sessions .codex/session_index.jsonl]
+    def conversation_id_command
+      "ls -t $(find .codex/sessions -name 'rollout-*.jsonl*' 2>/dev/null) 2>/dev/null | head -1 | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | tail -1"
+    end
+    def resume_arguments(id) = "resume #{id}"
+
     def session_command(mode:, model: nil, effort: nil, workspace: DEFAULT_WORKSPACE)
       model_flag = model ? " --model #{Shellwords.shellescape(model)}" : ""
       effort_flag = effort.present? ? " -c model_reasoning_effort=#{Shellwords.shellescape(effort)}" : ""

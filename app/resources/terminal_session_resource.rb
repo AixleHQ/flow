@@ -11,7 +11,8 @@ class TerminalSessionResource < ApplicationResource
              :artifacts_reviewed,
              :error_message, :container_id,
              :project_id, :user_id, :route_token, :configured_agent_id,
-             :collected_at, :updated_at, :runner_id
+             :collected_at, :updated_at, :runner_id,
+             :suspended_at, :restore_expires_at, :restored_from_session_id
 
   # Where it runs (DESIGN.md §11): null is hosted, or, with `runner_id` set, a
   # runner outside the record's tenant, which is never serialized. A list
@@ -136,7 +137,7 @@ class TerminalSessionResource < ApplicationResource
   # as an empty state.
   typelize "string | null"
   attribute :terminal_log_url do |session|
-    next nil unless session.concluded?
+    next nil unless session.concluded? || session.suspended? || session.restored?
 
     "/api/v1/terminal_sessions/#{session.id}/terminal_log"
   end
@@ -176,6 +177,57 @@ class TerminalSessionResource < ApplicationResource
 
     preload_base = "#{Settings.traefik.http_base}/t/#{session.route_token}/fs/preload"
     with_ticket("#{preload_base}?#{{ to: vscode_url }.to_query}", session)
+  end
+
+  # == Suspend and restore (Sessions::Suspension) ==
+
+  # The owner may suspend a live interactive session instead of finishing it.
+  typelize :boolean
+  attribute :suspendable do |session|
+    session.container_up? && owned_by_viewer?(session) && Sessions::Suspension.supported?(session)
+  end
+
+  # When the 23-hour limit will suspend it, for the warning shown an hour before.
+  typelize "string | null"
+  attribute :suspends_at do |session|
+    Sessions::Suspension.suspends_at(session)&.iso8601
+  end
+
+  # Finishing because its owner asked to suspend it: the checkpoint is going up.
+  typelize :boolean
+  attribute :suspending do |session|
+    session.finishing? && Sessions::Suspension.requested?(session)
+  end
+
+  # What a restore could not put back, as the restore notice told the agent.
+  typelize "string[]"
+  attribute :restore_notes do |session|
+    next [] unless session.restored_from_session_id && viewable_for?(session)
+
+    Array(session.metadata&.dig(Sessions::Restore::METADATA_KEY, "notes")).map(&:to_s)
+  end
+
+  typelize :boolean
+  attribute :restorable do |session|
+    session.suspended? && owned_by_viewer?(session) && Sessions::Suspension.restorable?(session)
+  end
+
+  # The session that continued this one. Looked up for restored sessions only, so a
+  # list does not pay a query per row.
+  typelize "number | null"
+  attribute :restored_session_id do |session|
+    session.restored? ? session.restored_session&.id : nil
+  end
+
+  typelize "{ bytes: number; workspaceIncluded: boolean; repositories: number; reason: string | null } | null"
+  attribute :checkpoint do |session|
+    next nil unless session.suspended? && viewable_for?(session)
+
+    checkpoint = session.session_checkpoint
+    next nil unless checkpoint
+
+    { bytes: checkpoint.byte_size.to_i, workspace_included: checkpoint.workspace_included?,
+      repositories: checkpoint.repos.size, reason: checkpoint.manifest["reason"] }
   end
 
   typelize :string
