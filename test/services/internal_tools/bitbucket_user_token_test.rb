@@ -164,25 +164,21 @@ class InternalTools::BitbucketUserTokenTest < ActiveSupport::TestCase
     assert_equal 0, UserTokenIssuance.count
   end
 
-  test "the refusal names unchecked repositories as could-not-check whatever the reason says" do
+  test "the refusal names unchecked repositories as could-not-check whatever the skipped entry's reason says" do
     consent!(in_own_tasks: true)
     @session.repositories << create(:repository, :bitbucket, scope: @project, integration: @integration, full_name: "acme/deep")
     @fake.permissions = { "acme/api" => "read" }
     @fake.unchecked_permissions = [ "acme/deep" ]
-    context = InternalTools::Concerns::BitbucketUserTokenContext
-    original = context::UNCHECKED_REASON
-    context.send(:remove_const, :UNCHECKED_REASON)
-    context.const_set(:UNCHECKED_REASON, "reworded reason")
+    InternalTools::BitbucketUserToken.any_instance.stubs(:skipped_entry).returns(
+      { repository: "acme/api", reason: "reworded refusal" }, { repository: "acme/deep", reason: "reworded unchecked" }
+    )
 
     result = run_tool
 
     assert_equal 1, result[:exit_code]
     assert_match(%r{Artem cannot push to acme/api on Bitbucket\.}, result[:stderr])
-    assert_match(%r{Could not check whether Artem can push to acme/deep: reworded reason}, result[:stderr])
-    assert_no_match(%r{cannot push to acme/api, acme/deep|cannot push to acme/deep}, result[:stderr])
-  ensure
-    context.send(:remove_const, :UNCHECKED_REASON)
-    context.const_set(:UNCHECKED_REASON, original)
+    assert_match(%r{Could not check whether Artem can push to acme/deep:}, result[:stderr])
+    assert_no_match(%r{cannot push to [^.]*acme/deep}, result[:stderr])
   end
 
   test "covers a repository of an app-mode integration as well" do
