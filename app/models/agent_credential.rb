@@ -459,7 +459,7 @@ class AgentCredential < ApplicationRecord
   # Whether renewing invalidates the grant it replaces. Only then does a live container's
   # copy go stale under a refresh; a static refresh token can be renewed with holders.
   def rotating_refresh?
-    adapter.credential_lifecycle[:rotation] == :rotating
+    adapter.rotation_for(config_data) == :rotating
   end
 
   # Returns whether this failure is the one that condemned the credential.

@@ -35,7 +35,7 @@ Four mechanisms, each independently correct, none aware of the others:
 | M1 | Launch top-up | `AgentCredential#refresh_if_expiring!` (`app/models/agent_credential.rb:219`) | session launch, `SESSION_REFRESH_THRESHOLD = 60.minutes` |
 | M2 | Proactive sweep | `Activities::AgentCredentials::RefreshExpiringTokensActivity` (`:21`), `*/5` Temporal | `refreshable.refresh_due(15.minutes).without_live_session` |
 | M3 | Cleanup merge-back | `AgentSessionStrategy#persist_refreshed_credentials` (`app/services/container_strategies/agent_session_strategy.rb:425`) | inside `before_cleanup` only |
-| M4 | Launch gate | `SessionService#preflight_agent_credential!` | session launch, refuses a `status: error` row |
+| M4 | Launch gate | `SessionService#preflight_agent_credential!` | session launch, refuses a `status: error` row, or an expired login nothing can repair (no server refresh, or a rotating grant a live holder holds; §7). A Builder ID / IdC Kiro login is not rotating, so a holder does not make it unrepairable |
 
 ### Per-runtime coverage
 
@@ -44,7 +44,7 @@ Four mechanisms, each independently correct, none aware of the others:
 | `claude_code` | `claudeAiOauth` or `platformOauth` (+ `platformProfile`) + `designOauth` + optional `primaryApiKey` | yes, soonest block | **yes** (`platform.claude.com/v1/oauth/token`; `platformOauth` via `api.anthropic.com/v1/oauth/token`; rotates) | us + the CLI in every container | multi-holder rotation |
 | `codex` | `tokens.{access,refresh,id}` | yes (JWT `exp`) | **yes** | us + container | — |
 | `cursor_cli` | `accessToken` + `refreshToken` | yes (JWT `exp`, 60 days) | **yes** — `api2.cursor.sh/oauth/token`, the endpoint the desktop IDE itself uses | us | fixed 2026-09-18; see §Cursor below |
-| `kiro_cli` | SQLite `auth_kv` rows | yes | **yes** — Kiro social endpoint, or AWS SSO OIDC `CreateToken` for Builder ID / IdC | us + container | an IdC login dies at the directory's session cap (8h measured) whatever we do — see §3.2 |
+| `kiro_cli` | SQLite `auth_kv` rows | yes | **yes** — Kiro social endpoint, or AWS SSO OIDC `CreateToken` for Builder ID / IdC | us + container | an IdC login dies at the directory's session cap (8h measured) whatever we do — see §3.2. Rotation is per login family: Builder ID / IdC `static`, social `rotating` (§7) |
 | `antigravity_cli` | `token.{access_token,refresh_token,expiry}` | yes, consumer login only | **yes** — `oauth2.googleapis.com/token` with agy's consumer client (measured 2026-09-24: 3599s, refresh token not rotated), when `Settings.agents.antigravity` holds the client | us + container | Cloud-project login's client unverified: no expiry published, CLI renews it |
 | `grok` | per-scope `{key, refresh_token, expires_at, oidc_issuer}` | yes | **yes** — `auth.x.ai/oauth2/token`, public client = the scope key's client id (`key` is the access token, 6h) | us + container | rotation not measured, declared `:rotating`; pre-OIDC logins without a refresh token are condemned at their expiry |
 | `gemini_cli` | API key (encrypted blob) | no | n/a | n/a | none — static by design |
@@ -528,3 +528,65 @@ deleted container took the work with it.
 - **P2** — replay the 2026-09-05 incident shape against the event log and confirm it
   distinguishes rotation from ageing.
 - **P4** — rebuild all images, diff recorded CLI versions, run the login pass per runtime.
+
+## 7. Kiro launches refused with "login has expired" (task #219)
+
+### 7.1 What happened
+
+On 2026-11-10 at 12:53:18 UTC a launch on credential 131 (`kiro_cli`) was refused with "Your
+Kiro Cli login has expired. Go to profile settings and sign in again." Nobody signed in; a retry
+27 minutes later worked. It happened again on 2026-11-21 at 14:09 UTC.
+
+The cause is the combination of three rules:
+
+1. Every launch deferred the refresh because a live session held the tokens (`refresh_if_expiring!`
+   returns `:held` for a rotating grant). The stored copy aged from 40 minutes of life to 1.
+2. The sweep stood down for the same reason (`a holder is mid-turn`).
+3. The preflight (`AgentCredential#unrecoverably_expired?`) treats "expired and held" as
+   unrepairable and refused. Five seconds later a holder's cleanup wrote a fresh token.
+
+### 7.2 The experiment
+
+On 2026-11-23 (11:35 to 11:43 UTC), two sessions held the same Builder ID login
+(`kirocli:odic:token`, refresh token digest `5de2b6b2b4`). Holder A forced its token to expire
+and refreshed (11:39:14). Holder B, with the refresh token A had already used, refreshed
+(11:41:30). A refreshed again (11:43:03). All three refreshes succeeded and the refresh token
+stayed `5de2b6b2b4` throughout: AWS SSO OIDC `CreateToken` returns a new access token and
+leaves the refresh token as it was. Also measured: `journal_mode` is `delete` (no WAL file), and
+the state database is 77824 bytes, about 30% of the 256 KB cap.
+
+### 7.3 The decision
+
+Rotation is decided per login family, not per runtime.
+
+- A Builder ID / IAM Identity Center login (`kirocli:odic:token`) is `static`.
+- A social login (`kirocli:social:token`, Kiro's own refresh endpoint) stays `rotating`. It was
+  not measured. A login whose family cannot be read also stays `rotating`.
+
+`BaseAdapter#rotation_for(config)` returns the answer for one stored credential (the runtime's
+`credential_lifecycle[:rotation]` by default). `KiroCliAdapter` overrides it, reading the
+`auth_kv` row key, which is used for the refresh family only, never for validity.
+`AgentCredential#rotating_refresh?` calls it, and every holder-related decision goes through that
+method. For a Builder ID login:
+
+- `AgentCredential#refresh_if_expiring!` refreshes at launch with live holders;
+- `AgentCredential#unrecoverably_expired?` no longer refuses a held, expired login (a login with
+  no refresh path is still refused);
+- `RefreshExpiringTokensActivity#refresh_held` refreshes without standing down for a busy holder
+  and delivers the new token to the holders;
+- `BaseAdapter#refresh_for_request!` no longer defers to a holder.
+
+`BaseAdapter#merge_container_credentials` now logs at info, with the credential id, why it kept
+the stored copy: `no_rotatable_keys`, `not_fresher`, `identity_changed` or `implausible_expiry`.
+The merge rules are unchanged.
+
+### 7.4 Still open
+
+- **The social login's rotation.** Until measured, a social credential keeps the old behaviour,
+  including the refusal when it expires while held.
+- **Why the live write-back merges nothing.** In the experiment six posts were answered 204 and no
+  `took a … token rotated in the container` line was logged, for any runtime, in the 25 hours
+  before it, while cleanup did persist. WAL mode and database size are ruled out, and the CLI
+  writes the refreshed token at once. The new merge log line will name the refusal reason.
+- Out of scope: pulling tokens from containers, a wait at launch, watcher or image changes, a
+  refresh broker for Kiro, Grok's missing write-back.

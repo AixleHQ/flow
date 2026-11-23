@@ -860,6 +860,36 @@ module Agents
       assert_equal current, @adapter.merge_container_credentials(current, attacker)
     end
 
+    # The live write-back answers 204 whether or not it took the copy, so each refusal
+    # says why in the log, with the credential it concerned.
+    def assert_merge_refused(reason, current, incoming)
+      Rails.logger.expects(:info).with(regexp_matches(/credential 42: .*kept the stored copy \(#{reason}\)/))
+
+      assert_equal current, @adapter.merge_container_credentials(current, incoming, credential_id: 42)
+    end
+
+    test "a refused merge logs no_rotatable_keys" do
+      assert_merge_refused(:no_rotatable_keys, tokens_for(account: "acct-1", exp: 1.hour.from_now.to_i), { "OPENAI_API_KEY" => "sk" })
+    end
+
+    test "a refused merge logs not_fresher" do
+      current = tokens_for(account: "acct-1", exp: 2.hours.from_now.to_i)
+
+      assert_merge_refused(:not_fresher, current, tokens_for(account: "acct-1", exp: 1.hour.from_now.to_i, access: "old"))
+    end
+
+    test "a refused merge logs identity_changed" do
+      current = tokens_for(account: "acct-1", exp: 1.hour.from_now.to_i)
+
+      assert_merge_refused(:identity_changed, current, tokens_for(account: "acct-2", exp: 2.hours.from_now.to_i, access: "other"))
+    end
+
+    test "a refused merge logs implausible_expiry" do
+      current = tokens_for(account: "acct-1", exp: 1.hour.from_now.to_i)
+
+      assert_merge_refused(:implausible_expiry, current, tokens_for(account: "acct-1", exp: 1000.days.from_now.to_i, access: "far"))
+    end
+
     private
 
     # A hosted session's workflow config: the hosted OTLP endpoint, which the
