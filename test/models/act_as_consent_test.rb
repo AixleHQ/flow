@@ -55,6 +55,14 @@ class ActAsConsentTest < ActiveSupport::TestCase
 
     assert ActAsConsent.allows?(user: @user, project: @project, provider: "gitlab", scope: :own)
     assert_not ActAsConsent.allows?(user: @user, project: @project, provider: "github", scope: :own)
-    assert_not build(:act_as_consent, user: @user, project: @project, provider: "bitbucket").valid?
+    assert_not build(:act_as_consent, user: @user, project: @project, provider: "azure_devops").valid?
+  end
+
+  test "accepts bitbucket as a provider and keeps its switches apart from the others'" do
+    create(:act_as_consent, :own, user: @user, project: @project, provider: "bitbucket")
+
+    assert ActAsConsent.allows?(user: @user, project: @project, provider: "bitbucket", scope: :own)
+    assert_not ActAsConsent.allows?(user: @user, project: @project, provider: "gitlab", scope: :own)
+    assert_not ActAsConsent.allows?(user: @user, project: @project, provider: "bitbucket", scope: :others)
   end
 end

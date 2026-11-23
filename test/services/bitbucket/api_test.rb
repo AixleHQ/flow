@@ -90,7 +90,76 @@ module Bitbucket
                           "display_name" => "Ada Lovelace", "nickname" => "ada" }))
 
       assert_equal({ uuid: "{4a5b6c7d-0000-4000-8000-0000000000aa}", account_id: "557058:ada",
-                     display_name: "Ada Lovelace", nickname: "ada" }, @api.current_user)
+                     display_name: "Ada Lovelace", nickname: "ada", avatar_url: nil }, @api.current_user)
+    end
+
+    test "the current user carries the avatar link when Bitbucket sends one" do
+      stub_request(:get, "#{BITBUCKET_API}/user")
+        .to_return(json({ "uuid" => "{4A5B6C7D-0000-4000-8000-0000000000AA}", "nickname" => "ada",
+                          "links" => { "avatar" => { "href" => "https://secure.gravatar.com/ada.png" } } }))
+
+      assert_equal "https://secure.gravatar.com/ada.png", @api.current_user[:avatar_url]
+    end
+
+    test "the person's addresses come with their primary and confirmed flags, across pages" do
+      first = stub_request(:get, "#{BITBUCKET_API}/user/emails").with(query: { "pagelen" => "100" })
+              .to_return(json({ "values" => [ { "email" => "a@example.com", "is_primary" => false, "is_confirmed" => true } ],
+                                "next" => "#{BITBUCKET_API}/user/emails?page=2" }))
+      second = stub_request(:get, "#{BITBUCKET_API}/user/emails").with(query: { "pagelen" => "100", "page" => "2" })
+               .to_return(json({ "values" => [ { "email" => "b@example.com", "is_primary" => true, "is_confirmed" => false } ] }))
+
+      assert_equal [ { email: "a@example.com", is_primary: false, is_confirmed: true },
+                     { email: "b@example.com", is_primary: true, is_confirmed: false } ], @api.user_emails
+      assert_requested first
+      assert_requested second
+    end
+
+    test "repository permissions are paged per workspace and matched on the full name, with no q filter" do
+      acme = stub_request(:get, "#{BITBUCKET_API}/user/workspaces/acme/permissions/repositories")
+             .with(query: { "pagelen" => "100" })
+             .to_return(json({ "values" => [
+                               { "permission" => "write", "repository" => { "full_name" => "acme/my-api", "name" => "My API" } },
+                               { "permission" => "read", "repository" => { "full_name" => "acme/docs" } },
+                               { "permission" => "admin", "repository" => { "full_name" => "acme/unrelated" } }
+                             ] }))
+      other = stub_request(:get, "#{BITBUCKET_API}/user/workspaces/other-ws/permissions/repositories")
+              .with(query: { "pagelen" => "100" })
+              .to_return(json({ "values" => [ { "permission" => "admin", "repository" => { "full_name" => "other-ws/api" } } ] }))
+
+      result = @api.repository_permissions(%w[acme/my-api acme/docs other-ws/api acme/absent])
+
+      assert_equal({ "acme/my-api" => "write", "acme/docs" => "read", "other-ws/api" => "admin", "acme/absent" => nil },
+                   result[:levels])
+      assert_empty result[:unchecked]
+      assert_requested acme
+      assert_requested other
+    end
+
+    test "a repository missing from a permission list that was cut short (the page limit is reached) is unchecked, not without permission" do
+      stub_request(:get, "#{BITBUCKET_API}/user/workspaces/acme/permissions/repositories")
+        .with(query: hash_including({}))
+        .to_return(json({ "values" => [ { "permission" => "write", "repository" => { "full_name" => "acme/api" } } ],
+                          "next" => "#{BITBUCKET_API}/user/workspaces/acme/permissions/repositories?page=2" }))
+
+      result = @api.repository_permissions(%w[acme/api acme/deep])
+
+      assert_equal "write", result[:levels]["acme/api"]
+      assert_equal %w[acme/deep], result[:unchecked]
+    end
+
+    test "a workspace the person cannot see counts as no permission, not as a failure" do
+      stub_request(:get, "#{BITBUCKET_API}/user/workspaces/acme/permissions/repositories")
+        .with(query: hash_including({})).to_return(json({ "error" => { "message" => "Forbidden" } }, status: 403))
+
+      assert_equal({ levels: { "acme/api" => nil }, unchecked: [] }, @api.repository_permissions([ "acme/api" ]))
+    end
+
+    test "a refused token raises NotAuthorized on the first 401, with no retry" do
+      stub = stub_request(:get, "#{BITBUCKET_API}/user/workspaces/acme/permissions/repositories")
+             .with(query: hash_including({})).to_return(json({ "error" => { "message" => "bad" } }, status: 401))
+
+      assert_raises(Error::NotAuthorized) { @api.repository_permissions([ "acme/api" ]) }
+      assert_requested stub, times: 1
     end
 
     # WebMock folds a repeated parameter into its last value unless told to keep
@@ -220,7 +289,7 @@ module Bitbucket
                                                                 .to_return(json({ "values" => [ COMMENT ] }))
       stub_request(:get, "#{BITBUCKET_API}/user").to_return(json({ "uuid" => "{u}", "display_name" => "Ada" }))
       fake = FakeBitbucket::Api.new
-      fake.user = { uuid: "{u}", account_id: "x", display_name: "Ada", nickname: "ada" }
+      fake.user = { uuid: "{u}", account_id: "x", display_name: "Ada", nickname: "ada", avatar_url: nil }
       fake.create_comment("acme", "api", 7, body: "x")
 
       assert_equal @api.repository(WS, REPO).keys.sort, fake.repository("acme", "api").keys.sort

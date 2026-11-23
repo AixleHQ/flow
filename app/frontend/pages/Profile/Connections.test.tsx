@@ -11,20 +11,27 @@ import ConnectionsPage from './Connections';
 type PageProps = Parameters<typeof ConnectionsPage>[0];
 
 const renderPageWith = ({
-  available = { github: true, gitlab: true },
+  available = { github: true, gitlab: true, bitbucket: true },
   github = buildUserConnection(),
   gitlab = null,
+  bitbucket = null,
   consents = {},
 }: {
   available?: PageProps['available'];
   github?: PageProps['connections']['github'];
   gitlab?: PageProps['connections']['gitlab'];
+  bitbucket?: PageProps['connections']['bitbucket'];
   consents?: Partial<PageProps['consents']>;
 } = {}) => {
   const props: PageProps = {
     available,
-    connections: { github, gitlab },
-    consents: { github: [buildActAsConsent()], gitlab: [buildActAsConsent({ provider: 'gitlab' })], ...consents },
+    connections: { github, gitlab, bitbucket },
+    consents: {
+      github: [buildActAsConsent()],
+      gitlab: [buildActAsConsent({ provider: 'gitlab' })],
+      bitbucket: [buildActAsConsent({ provider: 'bitbucket' })],
+      ...consents,
+    },
   };
   return renderAuthedPage(<ConnectionsPage {...props} />, { props });
 };
@@ -42,14 +49,14 @@ describe('Profile Connected accounts tab', () => {
   });
 
   it('says so when the installation has not configured the GitHub App', () => {
-    renderPageWith({ github: null, available: { github: false, gitlab: true } });
+    renderPageWith({ github: null, available: { github: false, gitlab: true, bitbucket: true } });
 
     expect(screen.queryByRole('button', { name: 'Connect GitHub' })).not.toBeInTheDocument();
     expect(screen.getByText(/has not configured the GitHub App/)).toBeInTheDocument();
   });
 
   it('offers GitLab next to GitHub, and says so when GitLab is not configured', () => {
-    renderPageWith({ github: null, available: { github: true, gitlab: false } });
+    renderPageWith({ github: null, available: { github: true, gitlab: false, bitbucket: true } });
 
     expect(screen.getByRole('button', { name: 'Connect GitHub' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Connect GitLab' })).not.toBeInTheDocument();
@@ -75,6 +82,51 @@ describe('Profile Connected accounts tab', () => {
 
     expect(screen.getAllByText(/can do anything you can on GitLab/)).toHaveLength(1);
     expect(screen.queryByText(/can do anything you can on GitHub/)).not.toBeInTheDocument();
+  });
+
+  it('offers Connect Bitbucket when its OAuth client is configured', () => {
+    renderPageWith({ github: null });
+
+    expect(screen.getByRole('button', { name: 'Connect Bitbucket' })).toBeInTheDocument();
+  });
+
+  it('says so when the installation has not configured the Bitbucket OAuth client', () => {
+    renderPageWith({ github: null, available: { github: true, gitlab: true, bitbucket: false } });
+
+    expect(screen.queryByRole('button', { name: 'Connect Bitbucket' })).not.toBeInTheDocument();
+    expect(screen.getByText(/has not configured Bitbucket/)).toBeInTheDocument();
+  });
+
+  it('shows a connected Bitbucket account with its own switches and the commit-email warning', () => {
+    renderPageWith({
+      github: null,
+      bitbucket: buildUserConnection({ provider: 'bitbucket', login: 'bb-user', name: 'Bee Bucket' }),
+    });
+
+    expect(screen.getByText(/@bb-user/)).toBeInTheDocument();
+    expect(screen.getByText('What agents may do as you on Bitbucket')).toBeInTheDocument();
+    expect(screen.getByText(/can do anything you can on Bitbucket/)).toBeInTheDocument();
+    expect(screen.getByText(/primary confirmed Bitbucket email/)).toBeInTheDocument();
+    expect(screen.getAllByRole('switch')).toHaveLength(2);
+  });
+
+  it('saves a Bitbucket switch against the bitbucket provider', async () => {
+    const fetchSpy = answerFetch({ 'PATCH /profile/connections/bitbucket/act_as_consents/7': {} });
+    renderPageWith({ github: null, bitbucket: buildUserConnection({ provider: 'bitbucket' }) });
+
+    await userEvent.click(screen.getByRole('switch', { name: /Bitbucket: In my tasks — Acme/ }));
+
+    await waitFor(() => expect(router.reload).toHaveBeenCalledWith({ only: ['consents'] }));
+    expect(JSON.parse(String(fetchSpy.mock.calls[0][1]?.body))).toEqual({ inOwnTasks: true });
+  });
+
+  it('says on the disconnect confirmation that Bitbucket keeps the authorization listed', async () => {
+    renderPageWith({ github: null, bitbucket: buildUserConnection({ provider: 'bitbucket' }) });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Disconnect Bitbucket' }));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(within(dialog).getByText(/stays listed in your Atlassian account/)).toBeInTheDocument();
   });
 
   it('names the provider in the controls when both accounts are connected', async () => {

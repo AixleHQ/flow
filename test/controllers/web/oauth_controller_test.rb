@@ -120,7 +120,7 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "authorize rejects an unknown provider" do
-    post oauth_authorize_path("bitbucket"), params: { owner_type: "Company", owner_id: @company.id }
+    post oauth_authorize_path("azure_devops"), params: { owner_type: "Company", owner_id: @company.id }
     assert_redirected_to root_path
     assert_equal "Unknown OAuth provider", flash[:alert]
   end
@@ -882,6 +882,107 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     post impersonate_admin_user_path(@user)
 
     post oauth_authorize_path("gitlab"), params: { owner_type: "User", owner_id: @user.id, return_to: "/profile/connections" }
+
+    assert_redirected_to "/profile/connections"
+    assert_match(/while impersonating/, flash[:alert])
+  end
+
+  # --- Bitbucket: a user's own account (docs/design/bitbucket-user-identity.md §2.3) ---
+
+  BITBUCKET_TOKEN_ENDPOINT = "https://bitbucket.org/site/oauth2/access_token"
+  BITBUCKET_PROFILE = { uuid: "{6c1f0a4e-0000-4000-8000-0000000000b1}", account_id: "712020:abc", display_name: "Bee Bucket",
+                        nickname: "bb-user", links: { avatar: { href: "https://a.test/bb" } } }.freeze
+
+  def stub_bitbucket_oauth!(profile: BITBUCKET_PROFILE, emails: [ { email: "bee@example.com", is_primary: true, is_confirmed: true } ])
+    Settings.bitbucket.oauth.stubs(:client_id).returns("bb-cid")
+    Settings.bitbucket.oauth.stubs(:client_secret).returns("bb-secret")
+    stub_request(:post, BITBUCKET_TOKEN_ENDPOINT).to_return(
+      status: 200, headers: { "Content-Type" => "application/json" },
+      body: { access_token: "bb_live", refresh_token: "bb_refresh", expires_in: 7200, scopes: "account repository" }.to_json
+    )
+    stub_request(:get, "https://api.bitbucket.org/2.0/user")
+      .to_return(status: profile ? 200 : 401, body: profile.to_json, headers: { "Content-Type" => "application/json" })
+    stub_request(:get, %r{\Ahttps://api\.bitbucket\.org/2\.0/user/emails})
+      .to_return(status: 200, body: { values: emails }.to_json, headers: { "Content-Type" => "application/json" })
+  end
+
+  test "connecting Bitbucket authenticates the client with Basic, and stores the credential and the identity" do
+    stub_bitbucket_oauth!
+    state = build_state(owner: @user, provider: "bitbucket", return_to: "/profile/connections")
+
+    assert_difference("OauthCredential.count", 1) do
+      get oauth_callback_path, params: { code: "auth-code-1", state: state }
+    end
+
+    assert_redirected_to "/profile/connections"
+    assert_requested(:post, BITBUCKET_TOKEN_ENDPOINT, headers: { "Authorization" => "Basic #{Base64.strict_encode64('bb-cid:bb-secret')}" }) do |req|
+      req.body.include?("grant_type=authorization_code") && req.body.include?("code_verifier=pkce-verifier-001") &&
+        !req.body.include?("client_secret") && !req.body.include?("client_id")
+    end
+    credential = OauthCredential.find_by!(owner: @user, provider: "bitbucket")
+    assert_equal "bb_live", credential.access_token
+    assert_equal "bb_refresh", credential.refresh_token
+    assert_equal "bb-user", credential.metadata.dig("bitbucket_user", "nickname")
+    assert_equal "bee@example.com", credential.metadata.dig("bitbucket_user", "commit_email")
+    assert_equal "https://a.test/bb", credential.metadata.dig("bitbucket_user", "avatar_url")
+    assert_equal credential, OauthCredential.live_bitbucket_connection_of(@user)
+  end
+
+  test "a failed Bitbucket identity fetch keeps the existing credential and clears its identity" do
+    stub_bitbucket_oauth!(profile: nil)
+    existing = create(:oauth_credential, :bitbucket_user, owner: @user, access_token: "bb_old",
+                                                          oauth_client: Oauth::Providers.client_for("bitbucket"))
+    state = build_state(owner: @user, provider: "bitbucket", return_to: "/profile/connections")
+
+    assert_no_difference("OauthCredential.count") do
+      get oauth_callback_path, params: { code: "auth-code-1", state: state }
+    end
+
+    assert_equal "Failed to complete connection", flash[:alert]
+    assert existing.reload.active?
+    assert_nil existing.metadata["bitbucket_user"]
+  end
+
+  test "a Bitbucket connection cannot belong to a company" do
+    stub_bitbucket_oauth!
+    state = build_state(owner: @company, provider: "bitbucket")
+
+    assert_no_difference("OauthCredential.count") do
+      get oauth_callback_path, params: { code: "auth-code-1", state: state }
+    end
+
+    assert_equal "Not permitted", flash[:alert]
+  end
+
+  test "authorize for Bitbucket redirects with PKCE, the callback and no scope" do
+    stub_bitbucket_oauth!
+
+    post oauth_authorize_path("bitbucket"), params: { owner_type: "User", owner_id: @user.id, return_to: "/profile/connections" }
+
+    assert_match(%r{\Ahttps://bitbucket\.org/site/oauth2/authorize\?}, response.location)
+    query = Rack::Utils.parse_query(URI.parse(response.location).query)
+    assert_equal "bb-cid", query["client_id"]
+    assert_equal "S256", query["code_challenge_method"]
+    assert query["code_challenge"].present?
+    assert_equal "#{Settings.protocol}://#{Settings.domain}/oauth/callback", query["redirect_uri"]
+    assert_not query.key?("scope")
+  end
+
+  test "authorize for Bitbucket without the OAuth client configured says so" do
+    Settings.bitbucket.oauth.stubs(:client_id).returns("")
+
+    post oauth_authorize_path("bitbucket"), params: { owner_type: "User", owner_id: @user.id, return_to: "/profile/connections" }
+
+    assert_redirected_to root_path
+    assert_equal "This provider is not configured", flash[:alert]
+  end
+
+  test "connecting Bitbucket is refused while impersonating" do
+    stub_bitbucket_oauth!
+    sign_in_as(create(:user, :super_admin, password: AuthHelper::TEST_PASSWORD))
+    post impersonate_admin_user_path(@user)
+
+    post oauth_authorize_path("bitbucket"), params: { owner_type: "User", owner_id: @user.id, return_to: "/profile/connections" }
 
     assert_redirected_to "/profile/connections"
     assert_match(/while impersonating/, flash[:alert])

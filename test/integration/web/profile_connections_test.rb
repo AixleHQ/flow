@@ -29,9 +29,12 @@ class Web::ProfileConnectionsTest < ActionDispatch::IntegrationTest
     assert_equal "connected", props[:connections][:github][:status]
     assert_equal "octo-user", props[:connections][:github][:login]
     assert_nil props[:connections][:gitlab]
+    assert_nil props[:connections][:bitbucket]
+    assert_not props[:available][:bitbucket]
     assert_equal [ { provider: "github", projectId: @project.id, inOwnTasks: false, inOthersTasks: false, projectName: "Alpha" } ],
                  props[:consents][:github].map { |row| row.symbolize_keys.slice(:provider, :projectId, :inOwnTasks, :inOthersTasks, :projectName) }
     assert_equal [ "gitlab" ], props[:consents][:gitlab].map { |row| row[:provider] }.uniq
+    assert_equal [ "bitbucket" ], props[:consents][:bitbucket].map { |row| row[:provider] }.uniq
     assert_not_includes props[:connections][:github].to_json, "at-"
   end
 
@@ -125,15 +128,73 @@ class Web::ProfileConnectionsTest < ActionDispatch::IntegrationTest
   end
 
   test "disconnect of an unknown provider answers 404" do
-    delete profile_connection_path("bitbucket")
+    delete profile_connection_path("azure_devops")
 
     assert_response :not_found
   end
 
   test "a consent update for an unknown provider answers 404" do
-    json_patch(@project.id, provider: "bitbucket", in_own_tasks: true)
+    json_patch(@project.id, provider: "azure_devops", in_own_tasks: true)
 
     assert_response :not_found
+  end
+
+  test "a consent update needs at least one switch, and names nothing else" do
+    [ {}, { in_own_task: true }, { in_own_tasks: true, extra: 1 }, { in_own_tasks: true, in_others_task: false } ].each do |body|
+      json_patch(@project.id, provider: "bitbucket", **body)
+
+      assert_response :unprocessable_entity, "#{body.inspect} should be refused"
+    end
+    assert_equal 0, ActAsConsent.count
+  end
+
+  test "strict consent input holds for GitHub and GitLab too" do
+    %w[github gitlab].each do |provider|
+      json_patch(@project.id, provider: provider)
+
+      assert_response :unprocessable_entity, provider
+    end
+    assert_equal 0, ActAsConsent.count
+  end
+
+  test "the Bitbucket card shows a connection and its identity" do
+    Settings.bitbucket.oauth.stubs(:client_id).returns("bb-cid")
+    Settings.bitbucket.oauth.stubs(:client_secret).returns("bb-secret")
+    create(:oauth_credential, :bitbucket_user, owner: @user)
+
+    get profile_connections_path
+
+    props = inertia.props
+    assert props[:available][:bitbucket]
+    assert_equal "connected", props[:connections][:bitbucket][:status]
+    assert_equal "bb-user", props[:connections][:bitbucket][:login]
+    assert_nil props[:connections][:github]
+  end
+
+  test "a Bitbucket consent update stores the switch under the bitbucket provider only" do
+    json_patch(@project.id, provider: "bitbucket", in_others_tasks: true)
+
+    assert_response :success
+    consent = ActAsConsent.find_by!(user: @user, project: @project, provider: "bitbucket")
+    assert consent.in_others_tasks
+    assert_equal "bitbucket", JSON.parse(response.body)["provider"]
+    assert_equal [ "bitbucket" ], ActAsConsent.where(user: @user).pluck(:provider)
+  end
+
+  test "disconnecting Bitbucket removes the credential and its consents without calling Bitbucket" do
+    bitbucket = create(:oauth_credential, :bitbucket_user, owner: @user)
+    github = create(:oauth_credential, :github_user, owner: @user)
+    create(:act_as_consent, :own, user: @user, project: @project, provider: "bitbucket")
+    create(:act_as_consent, :own, user: @user, project: @project, provider: "github")
+
+    delete profile_connection_path("bitbucket")
+
+    assert_redirected_to profile_connections_path
+    assert_equal "Bitbucket disconnected", flash[:notice]
+    assert_not_requested :any, /bitbucket/
+    assert_nil OauthCredential.find_by(id: bitbucket.id)
+    assert OauthCredential.exists?(github.id)
+    assert_equal [ "github" ], ActAsConsent.where(user: @user).pluck(:provider)
   end
 
   test "disconnect revokes the grant, removes the credential and the consents, and keeps issuances" do

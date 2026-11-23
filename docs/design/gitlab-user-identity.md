@@ -412,5 +412,6 @@ contract tests).
   mitigations; the tool's result shape already has `repositories`.
 - **Private-CA trust for the token endpoint** and any other self-managed gap: #218.
 - **Routing the token through the git credential helper** (as for GitHub): later opt-in.
-- **Bitbucket and Azure DevOps providers:** out of scope, as in the GitHub design.
+- **Bitbucket and Azure DevOps providers:** out of scope, as in the GitHub design. Bitbucket
+  is done: see [bitbucket-user-identity.md](./bitbucket-user-identity.md).
 - **Switching the board's workflows to the new tools:** out of scope (task).

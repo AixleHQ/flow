@@ -29,12 +29,14 @@ class OauthCredential < ApplicationRecord
 
   GITHUB_PROVIDER = "github"
   GITLAB_PROVIDER = "gitlab"
+  BITBUCKET_PROVIDER = "bitbucket"
 
   # Where each provider's connection keeps the account's identity in `metadata`, and
   # which of its fields is the login. The provider modules read the key from here.
   IDENTITY_FIELDS = {
     GITHUB_PROVIDER => { metadata_key: "github_user", login: "login" },
-    GITLAB_PROVIDER => { metadata_key: "gitlab_user", login: "username" }
+    GITLAB_PROVIDER => { metadata_key: "gitlab_user", login: "username" },
+    BITBUCKET_PROVIDER => { metadata_key: "bitbucket_user", login: "nickname" }
   }.freeze
 
   # Consecutive refresh failures before the credential is escalated to status:error
@@ -90,6 +92,18 @@ class OauthCredential < ApplicationRecord
   # Whether this is a GitLab credential of a previous GITLAB_ENDPOINT.
   def on_other_gitlab_instance?
     provider == GITLAB_PROVIDER && oauth_client.issuer != Gitlab::Host.web_base
+  end
+
+  # A person's own Bitbucket connection (docs/design/bitbucket-user-identity.md §3).
+  # Bitbucket Cloud is one issuer, so there is no instance filter.
+  scope :bitbucket_connections_of, ->(user) { for_owner(user).where(provider: BITBUCKET_PROVIDER) }
+
+  def self.latest_bitbucket_connection_of(user)
+    bitbucket_connections_of(user).order(updated_at: :desc).first
+  end
+
+  def self.live_bitbucket_connection_of(user)
+    bitbucket_connections_of(user).where.not(status: :revoked).order(updated_at: :desc).first
   end
 
   # The account's identity as its provider reported it ({} when none is stored).

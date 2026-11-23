@@ -186,7 +186,8 @@ project's own merge method; `fast_forward` cannot be asked for.
 By default an agent's commits are authored by the GitLab connection's account, and
 its merge requests and comments are that account's too. To have work in your own
 name, connect your own GitLab account and let agents use it. (GitHub has the same:
-[Acting as yourself](/docs/github#acting-as-yourself).)
+[Acting as yourself](/docs/github#acting-as-yourself); so does
+[Bitbucket](/docs/bitbucket#acting-as-yourself).)
 
 **Connect.** Open **Profile → Connected accounts** and press **Connect GitLab**.
 GitLab asks you to authorize Flow's application; Flow keeps the connection fresh

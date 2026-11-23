@@ -186,6 +186,102 @@ reconciliation sweep checks the gate: every five minutes, once a gate has been
 pending ten minutes. A gate with no result when its TTL runs out (12 hours by
 default) is marked **stale**.
 
+## Acting as yourself
+
+By default an agent's pushes, pull requests and comments are the Bitbucket
+connection's: the app's bot or the token's account. To have work in your own
+name, connect your own Bitbucket account and let agents use it. (GitHub and
+GitLab have the same:
+[GitHub](/docs/github#acting-as-yourself), [GitLab](/docs/gitlab#acting-as-yourself).)
+
+**Connect.** Open **Profile → Connected accounts** and press **Connect
+Bitbucket**. Bitbucket asks you to authorize the operator's OAuth client; Flow
+keeps the connection fresh for you. The button is offered only when the operator
+has registered that client (the
+procedure is `docs/operations/bitbucket-app.md` in the repository); otherwise
+the card says connecting Bitbucket accounts is not configured. Only Bitbucket
+Cloud is supported.
+
+**Disconnect.** It removes the connection and the permissions below, but
+**Bitbucket has no way to revoke the grant from outside**. The authorization stays
+listed in your Atlassian account until you remove it there, and a token already
+handed out works until it expires, at most two hours. Flow no longer holds a
+refresh token afterwards.
+
+**Allow it, per project.** The same tab lists your projects, with two switches
+for each connected account. Both start off.
+
+- **In my tasks:** agents may act as you in sessions you own.
+- **In tasks that aren't mine:** an agent working for someone else in that project
+  may take your token, when it names you.
+
+**Give the agent the tool.** Whoever configures a step, a workflow or a session
+adds the tool from the picker, under *Bitbucket as a user*. Flow never adds them
+on its own.
+
+| Tool | What it does |
+| --- | --- |
+| `bitbucket_user_token` | A token for the person the session runs for, and the identity to commit with |
+| `bitbucket_user_token_for` | The same for another member of the company, given their `user_id` (from `board_list_members` or a task's `assignee_id`) |
+
+Each tool returns the commit identity (`login`, `bitbucket_uuid`, `name` and
+`email`) and a token, with the `host`, the `api_url`, the `git_username`
+(`x-token-auth`) and the repositories it was checked for. Use the token for git
+over HTTPS (username `x-token-auth`) and, in REST calls, as
+`Authorization: Bearer` against `api_url`. The token expires within two hours;
+`expires_at` says when to ask again, and it is earlier than Bitbucket's own
+expiry. If Bitbucket refuses the token with 401, ask for it again. The agent
+should use it only in the command that needs it: it is masked in session logs,
+but it does enter the agent's context.
+
+**The commit address is your real email.** Bitbucket has no noreply address, so
+commits are made with your primary **confirmed** Bitbucket email, and anyone who
+can read the repository's history sees it. An account with no confirmed primary
+address cannot be used: the tool says so. If you do not want that, do not
+connect.
+
+**Your sessions share one token.** You have one Bitbucket token, not one per
+session, so your concurrent sessions are handed the same value. Flow replaces it
+only in the last ten minutes before it expires, because a refresh may end the
+previous token. A token handed out then may have only a few minutes left: the
+agent asks again.
+
+**The token is not limited to the session's repositories.** Bitbucket cannot
+narrow an OAuth token to chosen repositories: its scopes are fixed on the OAuth
+client (account, email, repository read and write, pull request read and write).
+So the token can do whatever you can do on Bitbucket, in every workspace you can
+reach. Allowing it in a project allows your whole Bitbucket account in that
+project's sessions. What bounds it instead: your own switches, your own access
+(it can do nothing you cannot), the two-hour lifetime, and a record and masking
+of every token handed out. Flow also checks, with your token, that you have
+**write** or **admin** access to each of the session's Bitbucket repositories; one
+you cannot push to is listed under `skipped` and left out of `repositories`.
+
+**Your own request quota is spent.** Bitbucket limits REST calls per person
+(1,000 an hour on repository endpoints, more on large paid workspaces), and calls
+made with your token count against yours, together with your own work and your
+other sessions. Agents should prefer git over HTTPS to the REST API.
+
+The tool answers with a plain error when the person has not connected an account,
+has not allowed it in this project, is not a member of the project, the session
+has no user or no Bitbucket repository on an active connection, the account has
+no confirmed primary email, or they cannot push to any of the repositories.
+
+Flow decides none of how the token is used. Your instructions do, for example:
+
+```bash
+# token, email and name come from bitbucket_user_token
+export GIT_AUTHOR_NAME="$NAME" GIT_AUTHOR_EMAIL="$EMAIL" \
+       GIT_COMMITTER_NAME="$NAME" GIT_COMMITTER_EMAIL="$EMAIL"
+git commit -s -m "feat: ..."
+git -c credential.helper= \
+    -c credential.helper='!f() { echo username=x-token-auth; echo "password=$TOKEN"; }; f' \
+    push origin HEAD:feature/x
+curl -sS -H "Authorization: Bearer $TOKEN" -X POST "$API_URL/repositories/$WORKSPACE/$REPO/pullrequests" \
+     -H "Content-Type: application/json" \
+     -d '{"title":"...","source":{"branch":{"name":"feature/x"}}}'
+```
+
 ## Limits
 
 - Bitbucket Cloud only.

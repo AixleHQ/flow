@@ -15,5 +15,12 @@ FactoryBot.define do
       token_endpoint { "#{Gitlab::Host.web_base}/oauth/token" }
       scopes { "api" }
     end
+
+    trait :bitbucket do
+      issuer { Bitbucket::AppConfig::WEB_HOST }
+      authorization_endpoint { "#{Bitbucket::AppConfig::WEB_HOST}/site/oauth2/authorize" }
+      token_endpoint { "#{Bitbucket::AppConfig::WEB_HOST}/site/oauth2/access_token" }
+      scopes { "" }
+    end
   end
 end
