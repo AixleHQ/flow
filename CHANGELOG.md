@@ -26,6 +26,9 @@ governance, community health — carry none.
 - **Triggers & gates**: a run started from a Slack message links back to that message, in
   its thread when the message was a reply: the run page shows the link, and the agent gets
   it, so a card it creates links to the right message.
+- **Sessions & Runs**: when the cluster stops answering while files are copied into an
+  agent's container, the copy gives up within seconds. It used to hold the session at
+  setup for ten minutes and then fail the step with "Unresolved exec".
 
 ## [1.17.0] - 2026-11-23
 

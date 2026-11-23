@@ -199,6 +199,8 @@ module ContainerRuntime
 
       exit_code.to_i.zero?
     rescue StandardError => e
+      raise if Temporalio::Error.canceled?(e)
+
       Rails.logger.warn("[KubernetesRuntime] write_file failed for #{path}: #{e.message}")
       false
     ensure
