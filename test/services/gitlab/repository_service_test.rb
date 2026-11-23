@@ -131,6 +131,39 @@ module Gitlab
       assert_requested endless, times: Gitlab::RepositoryService::MAX_BRANCHES / 100
     end
 
+    test "list_available returns no repositories when GitLab times out" do
+      stub_request(:get, "#{GITLAB_API}/projects").with(query: hash_including({})).to_raise(Net::OpenTimeout)
+
+      assert_empty Gitlab::RepositoryService.new(@integration).list_available
+    end
+
+    test "find_repo returns nil when GitLab times out" do
+      stub_request(:get, %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}\z}).to_timeout
+
+      assert_nil Gitlab::RepositoryService.new(@integration).find_repo("group/app")
+    end
+
+    test "list_branches returns no branches when GitLab times out" do
+      stub_request(:get, BRANCHES).with(query: hash_including({})).to_raise(Net::OpenTimeout)
+
+      assert_empty Gitlab::RepositoryService.new(@integration).list_branches("group/app")
+    end
+
+    test "remove does not raise when GitLab times out" do
+      repository = create(:repository, full_name: "group/app", integration: @integration, scope: @project,
+                                       webhook_secret: "existing-secret", gitlab_hook_id: 42)
+      stub_request(:delete, hook_url(42)).to_raise(Net::OpenTimeout)
+
+      assert_nothing_raised { Gitlab::RepositoryService.new(@integration).remove(repository) }
+    end
+
+    test "configure still raises when GitLab times out" do
+      repository = create(:repository, full_name: "group/app", integration: @integration, scope: @project)
+      stub_request(:post, HOOKS).to_raise(Net::OpenTimeout)
+
+      assert_raises(Net::OpenTimeout) { Gitlab::RepositoryService.new(@integration).configure(repository) }
+    end
+
     test "configure registers a pipeline hook and keeps its id and secret on the repository" do
       repository = create(:repository, full_name: "group/app", integration: @integration, scope: @project)
       stub_request(:post, HOOKS)
