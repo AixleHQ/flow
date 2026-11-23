@@ -673,8 +673,9 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
           >
             <Stack gap={4}>
               <Text size="sm">
-                Its files, repositories and conversation were put back. Running processes and anything outside
-                /workspace were not kept.
+                Its files, repositories and conversation were put back
+                {s.restoreNotes.length > 0 ? ', except what is listed below' : ''}. Running processes and anything
+                outside /workspace were not kept.
               </Text>
               {s.restoreNotes.map((note) => (
                 <Text key={note} size="sm" c="dimmed">

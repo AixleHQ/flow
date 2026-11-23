@@ -51,14 +51,16 @@ module Sessions
 
       take
 
-      script = @runtime.execs.last.last
-      assert_includes script, "repo 7 /workspace/repo/api"
-      assert_includes script, "cd /home/claude"
-      assert_includes script, ".claude/projects"
+      command = @runtime.execs.last
+      assert_equal [ "/bin/bash", "-c", Checkpoint::SCRIPT, "aixle-checkpoint" ], command.first(4)
+      arguments = command.drop(4).join(" ")
+      assert_includes arguments, "--repo 7 /workspace/repo/api"
+      assert_includes arguments, "--workspace /workspace --home /home/claude"
+      assert_includes arguments, "--conversation .claude/projects"
       %w[./repo ./assets ./.mcp.json ./.aixle node_modules .venv].each do |excluded|
-        assert_includes script, "--exclude=#{excluded}"
+        assert_includes arguments, "--exclude #{excluded}"
       end
-      assert_match %r{curl .*-X PUT -T "\$D\.tgz" https://bucket\.test/cache/}, script
+      assert_match %r{--url https://bucket\.test/cache/}, arguments
     end
 
     # Cursor reads its context from /workspace/AGENTS.md, which the new session writes again.
@@ -67,7 +69,7 @@ module Sessions
 
       take(adapter: Agents::CursorCliAdapter.new)
 
-      assert_includes @runtime.execs.last.last, "--exclude=./AGENTS.md"
+      assert_includes @runtime.execs.last.join(" "), "--exclude ./AGENTS.md"
     end
 
     test "an archive that was dropped down to the conversation and git work says so" do

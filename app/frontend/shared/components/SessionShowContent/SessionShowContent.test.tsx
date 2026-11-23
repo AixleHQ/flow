@@ -431,7 +431,20 @@ describe('SessionShowContent', () => {
     );
 
     expect(screen.getByText('Continues session #41')).toBeInTheDocument();
+    expect(screen.getByText(/were put back, except what is listed below\./)).toBeInTheDocument();
     expect(screen.getByText('Unpushed commits of /workspace/repo/api could not be put back.')).toBeInTheDocument();
+  });
+
+  it('says a restore with nothing to report put everything back', () => {
+    renderPage(
+      <SessionShowContent
+        session={makeSession({ restoredFromSessionId: 41, restoreNotes: [] })}
+        cableStream="s"
+        context={ctx}
+      />,
+    );
+
+    expect(screen.getByText(/repositories and conversation were put back\. Running processes/)).toBeInTheDocument();
   });
 
   it('copies the session link and shows a notification', async () => {

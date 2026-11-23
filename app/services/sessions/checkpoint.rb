@@ -1,13 +1,11 @@
 # frozen_string_literal: true
 
-require "shellwords"
-
 module Sessions
-  # Takes a suspended session's checkpoint: one archive, built inside the container and
-  # put straight into storage over Uploads::ContainerTransfer's URL.
+  # Takes a suspended session's checkpoint: one archive, built inside the container by
+  # checkpoint.sh and put straight into storage over Uploads::ContainerTransfer's URL.
   # Design: docs/design/session-suspend-restore.md §4.
   #
-  #   repos/<repository id>/head.bundle    commits on local branches no remote ref has
+  #   repos/<repository id>/head.bundle    commits on local branches and HEAD that no remote ref has
   #   repos/<repository id>/tracked.patch  staged and unstaged changes, `git diff --binary HEAD`
   #   repos/<repository id>/untracked.tar  untracked files that are not ignored
   #   conversation.tar                     the CLI's conversation files, from its home
@@ -16,6 +14,8 @@ module Sessions
   # The archive is not masked: two CLIs keep their conversation in SQLite. It is read
   # only by Sessions::Restore and the expiry sweep.
   class Checkpoint
+    SCRIPT = File.read(File.expand_path("checkpoint.sh", __dir__)).freeze
+    WORKSPACE = "/workspace"
     MAX_BYTES = 2.gigabytes
     SCRIPT_TIMEOUT = 25.minutes.to_i
     UPLOAD_TIMEOUT = 20.minutes.to_i
@@ -39,7 +39,7 @@ module Sessions
       # Signed before the archive is built, so it has to outlive the whole script.
       url = Uploads::ContainerTransfer.put_url(SessionCheckpointUploader, :cache, key, expires_in: SCRIPT_TIMEOUT + 300,
                                                                                     host: @runtime.callback_url(:container_assets, @session))
-      stdout, stderr, code = @runtime.exec(@container, [ "/bin/bash", "-c", script(url) ],
+      stdout, stderr, code = @runtime.exec(@container, [ "/bin/bash", "-c", SCRIPT, "aixle-checkpoint", *arguments(url) ],
                                            stdout: true, stderr: true, timeout: SCRIPT_TIMEOUT + 60)
       lines = Array(stdout).join.lines.map { |line| line.chomp.split("\t", -1) }
       archive = lines.find { |fields| fields.first == "ARCHIVE" }
@@ -59,7 +59,7 @@ module Sessions
     def workspace_excludes
       excludes = PROVISIONED_PATHS.dup
       context = @adapter.context_file_path.to_s
-      excludes << ".#{context.delete_prefix('/workspace')}" if context.start_with?("/workspace/")
+      excludes << ".#{context.delete_prefix(WORKSPACE)}" if context.start_with?("#{WORKSPACE}/")
       excludes + REBUILDABLE_DIRS
     end
 
@@ -104,51 +104,15 @@ module Sessions
       "checkpoint script exited #{code}#{": #{reason}" if reason}#{": #{Array(stderr).join.strip.truncate(300)}" if reason.nil? && stderr.present?}"
     end
 
-    def script(url)
-      <<~BASH
-        set -u
-        D=$(mktemp -d /tmp/.aixle-checkpoint.XXXXXX) || exit 70
-        trap 'rm -rf "$D" "$D.tgz"' EXIT
-        g() { git -c safe.directory='*' "$@"; }
-        flag() { [ -e "$1" ] && echo 1 || echo 0; }
-        repo() {
-          key=$1; path=$2; out="$D/repos/$key"
-          if [ ! -d "$path/.git" ]; then printf 'REPO\\t%s\\tmissing\\n' "$key"; return; fi
-          mkdir -p "$out"; cd "$path" || return
-          branch=$(g symbolic-ref -q --short HEAD || true)
-          head=$(g rev-parse -q --verify HEAD || true)
-          on_remote=false
-          if [ -n "$branch" ] && timeout 30 git -c safe.directory='*' ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then on_remote=true; fi
-          dirty=false; [ -n "$(g status --porcelain 2>/dev/null)" ] && dirty=true
-          g bundle create "$out/head.bundle" --branches --not --remotes >/dev/null 2>&1 || rm -f "$out/head.bundle"
-          g diff --binary HEAD > "$out/tracked.patch" 2>/dev/null; [ -s "$out/tracked.patch" ] || rm -f "$out/tracked.patch"
-          g ls-files -z --others --exclude-standard > "$out/.untracked" 2>/dev/null
-          if [ -s "$out/.untracked" ]; then tar --null -T "$out/.untracked" -cf "$out/untracked.tar" 2>/dev/null || rm -f "$out/untracked.tar"; fi
-          rm -f "$out/.untracked"
-          printf 'REPO\\t%s\\tok\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\n' "$key" "$branch" "$head" "$on_remote" "$dirty" \\
-            "$(flag "$out/head.bundle")" "$(flag "$out/tracked.patch")" "$(flag "$out/untracked.tar")"
-        }
-        mkdir -p "$D/repos"
-        #{repositories.map { |id, path| "repo #{Shellwords.escape(id)} #{Shellwords.escape(path)}" }.join("\n")}
-        if cd #{Shellwords.escape(@adapter.home_dir)}; then
-          printf 'CONVERSATION\\t%s\\n' "$( { #{@adapter.conversation_id_command || 'true'} ; } 2>/dev/null | head -1)"
-          existing=""
-          for p in #{@adapter.conversation_paths.map { |p| Shellwords.escape(p) }.join(' ')}; do [ -e "$p" ] && existing="$existing $p"; done
-          if [ -n "$existing" ]; then tar -cf "$D/conversation.tar" $existing 2>/dev/null; [ $? -le 1 ] || rm -f "$D/conversation.tar"; fi
-        fi
-        tar -C /workspace -cf "$D/workspace.tar" #{workspace_excludes.map { |e| "--exclude=#{Shellwords.escape(e)}" }.join(' ')} . 2>/dev/null
-        [ $? -le 1 ] || rm -f "$D/workspace.tar"
-        pack() { rm -f "$D.tgz"; tar -C "$D" -czf "$D.tgz" "$@"; }
-        items="repos"; [ -f "$D/conversation.tar" ] && items="$items conversation.tar"
-        workspace=0
-        if [ -f "$D/workspace.tar" ] && pack $items workspace.tar && [ "$(stat -c %s "$D.tgz")" -le #{MAX_BYTES} ]; then workspace=1; else pack $items; fi
-        size=$(stat -c %s "$D.tgz")
-        if [ "$size" -gt #{MAX_BYTES} ]; then printf 'TOO_LARGE\\t%s\\n' "$size"; exit 3; fi
-        if ! curl -sS --noproxy '*' --fail --max-time #{UPLOAD_TIMEOUT} -X PUT -T "$D.tgz" #{Shellwords.escape(url)} >/dev/null; then
-          echo UPLOAD_FAILED; exit 4
-        fi
-        printf 'ARCHIVE\\t%s\\t%s\\n' "$size" "$workspace"
-      BASH
+    def arguments(url)
+      [
+        "--url", url, "--max-bytes", MAX_BYTES, "--upload-timeout", UPLOAD_TIMEOUT,
+        "--workspace", WORKSPACE, "--home", @adapter.home_dir,
+        "--conversation-id-command", @adapter.conversation_id_command || "true",
+        *@adapter.conversation_paths.flat_map { |path| [ "--conversation", path ] },
+        *repositories.flat_map { |id, path| [ "--repo", id, path ] },
+        *workspace_excludes.flat_map { |pattern| [ "--exclude", pattern ] }
+      ].map(&:to_s)
     end
   end
 end
