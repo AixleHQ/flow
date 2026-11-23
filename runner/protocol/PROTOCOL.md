@@ -1450,6 +1450,10 @@ A stream's `Read` after the peer's `CLOSE` returns the buffered data and then en
 - `GOAWAY` from the relay: no new stream is opened (a relay's `Open` returns `ErrGoAway`, a runner's `Accept` returns it once
   no `OPEN` is waiting, and an `OPEN` that still arrives is answered `RESET refused`). The open streams go on. The relay closes the
   connection with `1000` when the last stream has ended and everything queued was written, or 30 seconds after the `GOAWAY`.
+- `GOAWAY` followed by a close: with no open stream the relay's `1000` close comes right behind the `GOAWAY`, so a runner can
+  read both before it asks. A runner's `Accept` still returns `ErrGoAway` then, not a closed session: a `GOAWAY` that was
+  received is never hidden by a `1000` close from the relay. A close without a prior `GOAWAY`, a close with another code, a
+  heartbeat timeout and a local `Close` are not drains, and keep their own errors.
 - Control frames that wait for the writer are capped at 4096. Past the cap a `PONG` answering a `PING`, and a `RESET refused` answering an
   `OPEN` that is over the stream cap or after `GOAWAY`, are dropped, not queued: a peer that does not read cannot grow this end's memory.
   The connection is not closed. A dropped refusal leaves the opener to its open timeout.
