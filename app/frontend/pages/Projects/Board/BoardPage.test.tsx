@@ -2724,7 +2724,10 @@ describe('Projects/Board/BoardPage', () => {
   });
 
   it('saves the current filters as a new view preset', async () => {
-    const fetchSpy = answerFetch({ 'POST /api/v1/projects/7/view_presets': {}, 'GET /api/v1/projects/7/tasks': [] });
+    const fetchSpy = answerFetch({
+      'POST /api/v1/projects/7/view_presets': {},
+      'GET /api/v1/projects/7/tasks/by_column': { columns: [] },
+    });
 
     renderAuthedPage(<BoardPage />, { props: populatedProps });
 
