@@ -41,11 +41,34 @@ module PersonalTools
       assert_equal [ finished.id ], ids
     end
 
+    test "the Sessions & Runs statuses split what active lumps together" do
+      waiting = create(:terminal_session, :agent_session, user: @user, project: @project, state: "not_started")
+      queued = create(:terminal_session, :agent_session, user: @user, project: @project, state: "queued")
+      live = %w[running ready finishing].map do |state|
+        create(:terminal_session, :agent_session, user: @user, project: @project, state: state)
+      end
+
+      listed = ->(state) { payload(execute(state: state))["sessions"].map { |s| s["id"] }.sort }
+
+      assert_equal [ waiting.id ], listed.call("pending")
+      assert_equal [ queued.id ], listed.call("queued")
+      assert_equal live.map(&:id).sort, listed.call("running")
+      assert_equal [ waiting, queued, *live ].map(&:id).sort, listed.call("active")
+    end
+
+    test "logins and tool setups are left out, as on the Sessions & Runs list" do
+      work = create(:terminal_session, :agent_session, :running, user: @user, project: @project)
+      create(:terminal_session, :auth_setup, :running, user: @user)
+      create(:terminal_session, :running, session_type: "tool_setup", user: @user, project: @project)
+
+      assert_equal [ work.id ], payload(execute(state: "all"))["sessions"].map { |s| s["id"] }
+    end
+
     test "an unknown state is refused, naming the allowed values" do
       result = execute(state: "wedged")
 
       assert_equal 1, result[:exit_code]
-      assert_match(/active, finished, failed, cancelled, all/, result[:stderr])
+      assert_match(/active, pending, queued, running, finished, failed, cancelled, all/, result[:stderr])
     end
 
     test "an unknown sort column and an unreadable day are refused" do

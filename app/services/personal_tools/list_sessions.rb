@@ -4,12 +4,15 @@ module PersonalTools
   class ListSessions < Base
     STATE_FILTERS = {
       "active" => %w[not_started queued running ready finishing],
+      "pending" => %w[not_started],
+      "queued" => %w[queued],
+      "running" => %w[running ready finishing],
       "finished" => %w[finished],
       "failed" => %w[failed],
       "cancelled" => %w[cancelled],
       "all" => nil
     }.freeze
-    SESSION_TYPES = %w[agent_session workflow_step].freeze
+    SESSION_TYPES = TerminalSession::WORK_SESSION_TYPES
     DIRECTIONS = %w[asc desc].freeze
     TOKEN_COLUMNS = %w[total_tokens input_tokens output_tokens cache_read_tokens cache_write_tokens cost_cents].freeze
 
@@ -30,11 +33,14 @@ module PersonalTools
       read_only
       param :company_id, type: :integer, description: "Only sessions in this company (ids from list_companies)."
       param :project_id, type: :integer, description: "Only sessions in this project."
-      param :state, type: :string, description: "Which sessions to list (default active).",
+      param :state, type: :string,
+                    description: "Which sessions to list (default active). `pending`, `queued`, `running`, " \
+                                 "`finished` (Completed), `failed` and `cancelled` are the Sessions & Runs " \
+                                 "status filter; `active` is the first three together.",
                     enum: STATE_FILTERS.keys
       param :session_type, type: :string,
                            description: "Only this kind: `agent_session` (started by a person) or " \
-                                        "`workflow_step` (a step of a workflow run). Default: every kind.",
+                                        "`workflow_step` (a step of a workflow run). Default: both.",
                            enum: SESSION_TYPES
       param :agent_type, type: :string, description: "Only sessions on this agent runtime, e.g. `claude_code`."
       param :user_id, type: :integer, description: "Only sessions this user owns (a row's `owner_id`)."
@@ -118,7 +124,7 @@ module PersonalTools
       scope = scope.where(project_id: project.id) if project
       scope = scope.where(company_id: params[:company_id]) if params[:company_id].present?
       scope = scope.where(state: STATE_FILTERS.fetch(state)) if STATE_FILTERS.fetch(state)
-      scope = scope.where(session_type: params[:session_type]) if params[:session_type].present?
+      scope = scope.where(session_type: params[:session_type].presence || SESSION_TYPES)
       scope = scope.where(agent_type: params[:agent_type]) if params[:agent_type].present?
       scope = scope.where(user_id: params[:user_id]) if params[:user_id].present?
       if params[:workflow_id].present?
