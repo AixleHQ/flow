@@ -51,10 +51,13 @@ module Gitlab
     end
 
     test "client bounds connecting and reading with the GitLab timeouts" do
-      options = Gitlab::TokenService.new(@integration).client.class.default_options
+      captured = nil
+      ::Gitlab.stub(:client, ->(**opts) { captured = opts }) do
+        Gitlab::TokenService.new(@integration).client
+      end
 
-      assert_equal Gitlab::AppConfig.open_timeout, options[:open_timeout]
-      assert_equal Gitlab::AppConfig.read_timeout, options[:read_timeout]
+      assert_equal Gitlab::AppConfig.open_timeout, captured.dig(:httparty, :open_timeout)
+      assert_equal Gitlab::AppConfig.read_timeout, captured.dig(:httparty, :read_timeout)
     end
 
     test "raises ConfigurationError when personal_access_token is blank" do
