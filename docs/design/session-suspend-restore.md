@@ -79,7 +79,7 @@ If the checkpoint fails (upload refused, archive over the cap, timeout), the ses
 
 ### 4.1 The archive
 
-One `tar.gz` per suspended session (gzip, so the expiry sweep can read it with Ruby's own `Zlib` and `Gem::Package::TarReader`). `Sessions::Checkpoint` writes one bash script that builds it inside the container and uploads it with a PUT to the URL `Uploads::ContainerTransfer` gives (§8), then records the manifest from what the script printed.
+One `tar.gz` per suspended session (gzip, so the expiry sweep can read it with Ruby's own `Zlib` and `Gem::Package::TarReader`). `Sessions::Checkpoint` runs `app/services/sessions/checkpoint.sh` inside the container (`bash -c <script> aixle-checkpoint <options>`, so the values travel as arguments, never spliced into the script). The script builds the archive and uploads it with a PUT to the URL `Uploads::ContainerTransfer` gives (§8); the manifest is recorded from what it printed. `Sessions::Restore` runs `restore.sh` the same way. Neither script is baked into the agent image, so a fix reaches containers that were already running.
 
 ```
 manifest.json
@@ -134,7 +134,7 @@ It then writes:
 2. `git fetch head.bundle 'refs/heads/*:refs/heads/*'`, then `git checkout <branch>` and `git reset --hard <head_sha>`.
 3. `git apply --binary tracked.patch`, then extract `untracked.tar`.
 
-Probed before the code, in the agent image against a real repository (2026-11-20): a bundle fetch works on a blobless clone, with an unpushed commit on the cloned branch and a new local branch both restored. The fetch refuses to update the checked-out branch, so the restore detaches HEAD first. The generated checkpoint and restore scripts were then run end to end in the image: branch, head, unpushed commits, uncommitted and staged changes, untracked files, `outputs/`, other files under `/workspace` and the conversation all came back.
+Probed before the code, in the agent image against a real repository (2026-11-20): a bundle fetch works on a blobless clone, with an unpushed commit on the cloned branch and a new local branch both restored. The fetch refuses to update the checked-out branch, so the restore detaches HEAD first. The generated checkpoint and restore scripts were then run end to end in the image: branch, head, unpushed commits, uncommitted and staged changes, untracked files, `outputs/`, other files under `/workspace` and the conversation all came back. `test/services/sessions/checkpoint_scripts_test.rb` now runs both scripts the same way, with real git, on every CI run.
 
 If the bundle does not apply, it is left at `/workspace/.aixle-restore/<key>.bundle` and the restore notice says so. The work is still there for the agent or the person to recover by hand.
 

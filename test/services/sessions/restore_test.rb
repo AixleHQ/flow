@@ -64,10 +64,10 @@ module Sessions
     test "the script fetches the archive and restores each repository the checkpoint names" do
       restore
 
-      script = @runtime.execs.find { |cmd| cmd.last.to_s.include?("aixle-restore") }.last
-      assert_includes script, "https://bucket.test/store/"
-      assert_includes script, "restore_repo 7 /workspace/repo/api feature/x abc123 false"
-      assert_includes script, "tar -C /home/claude -xf"
+      arguments = @runtime.execs.find { |cmd| cmd[3] == "aixle-restore" }.drop(4).join(" ")
+      assert_match %r{--url https://bucket\.test/store/}, arguments
+      assert_includes arguments, "--repo 7 /workspace/repo/api feature/x abc123 false"
+      assert_includes arguments, "--home /home/claude"
     end
 
     # Each CLI keeps its conversation in an internal format, and an upgrade may not read
