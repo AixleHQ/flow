@@ -13,6 +13,10 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Fixed
+- **Wrappers**: a wrapper with a parameter named like `max`, `min`, `count` or `size` runs
+  again. Every call to it used to hang until it timed out after an hour.
+
 ## [1.17.0] - 2026-11-23
 
 ### Added
