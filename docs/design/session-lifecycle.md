@@ -9,7 +9,7 @@ Status: proposed (task #273). Nothing here is built. The rule it applies is "cha
 - the side effects of an ending (stop the admission's operations, signal or cancel the container workflow, wake the run, set the error message first) are decided again at every call site;
 - the relay's `session_ended` signal (#270) had no single place to live, so it sits in a model `after_save` (`left_ready?`).
 
-The target: every move is an event of the machine, and one service, `Sessions::Lifecycle`, is the only code that fires those events. Nothing a user sees, no outcome and no message changes.
+The target: every move is an event of the machine, and one service, `Sessions::Lifecycle`, is the only code that fires those events. Nothing a user sees, no outcome and no message changes, with one accepted exception: `Lifecycle.cancel` now fires the event for a session that has no admission (§3.2, decision 9).
 
 ## 2. Inventory
 
@@ -73,7 +73,7 @@ Every ending has two kinds of caller, and they must not be mixed:
 | `suspend(session)` | `SessionService.suspend` |
 | `fail(session, error_message:)` | `fail_session`, `fail_on_runner_refusal`, the `SessionLaunchRelay.abandon` write |
 | `fail_if(session, expected_state:, error_message:, &guard)` | `fail_session_if` (compare-and-set, §3.5) |
-| `cancel(session, error_message: nil)` | `SessionService.cancel`, `admit_step_session!`'s `cancel!`, `Mover`'s second `cancel!`, `SessionLaunchRelay`'s cancel plus message |
+| `cancel(session, error_message: nil)` | `SessionService.cancel`, `admit_step_session!`'s `cancel!`, `Mover`'s second `cancel!`, `SessionLaunchRelay`'s cancel plus message. **One behaviour change, see below** |
 
 **From inside the container workflow, or after it is gone.** The state is recorded and nothing is signalled: the workflow is already ending.
 
@@ -88,6 +88,10 @@ Every ending has two kinds of caller, and they must not be mixed:
 | `restored(origin)` | `Suspension.restored!` |
 | `expire_suspension(session)`, `expire_suspended_step(session)` | `SuspensionExpiry#expire!`, `#expire_step!`, `#discard!` |
 | `slot_released(session)` | `session.send(:notify_workflow_execution_if_step_session)` after `SessionAdmissionService.release!` |
+
+**Behaviour change in `cancel`.** Today `SessionService.cancel` leaves the state of a session with no admission unchanged: `SessionAdmissionService.cancel!` returns when there is no admission, and only the Temporal cancel runs, for a workflow that cannot exist. `Lifecycle.cancel` fires `cancel` for such a session. This is accepted, as one rule for every caller, and it replaces `ProjectMove::Mover`'s second `cancel!`, which exists only to cover this case.
+
+The path it changes is the run cancel fan-out (`WorkflowService.cancel_active_step_runs`). It now cancels a step session that was built but not yet admitted. Today that session stays as it is until `admit_step_session!` meets the stopped run, and cancels it after `Stopped`. The outcome stays `cancelled`. What differs is that the event and its callbacks run from the fan-out, before the step run is marked cancelled, and that the later `cancel!` in `admit_step_session!` finds the session already cancelled and does nothing (`Lifecycle.cancel` on an ended session is a no-op, as `may_cancel?` is today). The run's wake-up is skipped there, because the run's stop was requested (§3.6). Nothing else changes for this path.
 
 The one primitive underneath is `Lifecycle.transition!(session, event, error_message: nil, notify: true)`. It sets the error message, fires the event inside one transaction, and runs the effects of §3.6. It is public for exactly one other caller, `SessionAdmissionService` (§3.3). No other code calls an event of `TerminalSession` that changes `state`.
 
@@ -153,7 +157,10 @@ The model's `after_save :signal_relay_session_ended`, `left_ready?`, `signal_rel
 
 ### 3.7 Enforcement
 
-- A source-scan test (`test/services/sessions/lifecycle_ownership_test.rb`) fails when `app/` outside `terminal_session.rb`, the state machine and `sessions/lifecycle.rb` contains `update(!)(…state:`, `state =`, or a state event on a session (`start_finishing!`, `mark_ready!`, `expire_suspension!`, `mark_restored!`, `finish_without_request!`, and `\.(start|enqueue|cancel|fail|finish)!` on a variable named `session`). It is heuristic, and says so in its message; code review still flags a new violation as `[Must]`.
+- **A hard guard on direct writes: AASM's `no_direct_assignment: true`** on the `TerminalSession` machine (AASM 6.0.0 in `Gemfile.lock`). It makes `state=` and `update!(state: …)` raise `AASM::NoDirectAssignmentError`, so a direct write cannot get in, and no request-local state is needed. It is adopted in change 4, once nothing writes `state` directly.
+  - **Cost.** Factories and tests that set `state:` directly need another way to put a session in a state: a factory trait that walks the events, or a small test helper that writes the column with `update_column`/`update_all`. Finding them is part of change 4.
+  - **What it does not catch.** `update_all`, `update_column(s)` and raw SQL skip the setter. The source scan below covers `update_all`/`update_column` on `state` too.
+- **An ownership test** (`test/services/sessions/lifecycle_ownership_test.rb`) only has to find state events fired outside `Sessions::Lifecycle`, since AASM covers direct writes. It fails when `app/` outside `terminal_session.rb`, the state machine and `sessions/lifecycle.rb` contains a state event on a session (`start_finishing!`, `mark_ready!`, `expire_suspension!`, `mark_restored!`, `finish_without_request!`, and `\.(start|enqueue|cancel|fail|finish)!` on a variable named `session`), or `update_all`/`update_column(s)` that sets `state`. It is heuristic, and says so in its message; code review still flags a new violation as `[Must]`.
 - `whiny_persistence: true` stays.
 
 ## 4. Data model changes
@@ -169,23 +176,20 @@ No HTTP, MCP or Temporal change. Internal only:
 
 ## 6. Implementation steps
 
+Delivery is two tasks:
+- **#273** builds changes 1 to 3 in one PR.
+- **#283** builds change 4 (effects into `transition!`, the guards, the docs). It starts after #273's implementation PR merges.
+
 Four changes, in this order. Each leaves the tests green.
 
 1. **Machine and model, additive.** Add the four events and their assignment-only callbacks to `TerminalSessionStateMachine`; add `ending_state`/`ending_error` (moved with their comments and the `GENERIC_ERROR_MESSAGES` rule) and `SessionAdmission#unlaunched?`. `AdmittedPhaseActivity` calls the model's `ending_*`. Tests: the state machine test gets every event, every `from` that must be refused, and the callbacks.
-2. **`Sessions::Lifecycle`, outside family.** Add `transition!` (events fired as today; effects still in the model callbacks) and `enqueue`, `finish`, `suspend`, `fail`, `fail_if`, `cancel`, moving the bodies from `SessionService`. `SessionAdmissionService` calls `transition!` instead of `session.enqueue!`/`fail!`/`cancel!` and drops `conclude!`. Rename the callers (§2.2), including `SessionLaunchRelay`, `ProjectMove::Mover` (one `Lifecycle.cancel`, no second `cancel!`), `WorkflowService`, `PersonalTools::StopSession`, `InternalTools::*`, `CompanyMembership`, `Sessions::*`, `ScanDeadContainersActivity`, `CleanupStaleRunsActivity`. The existing `SessionService` tests move to the Lifecycle test files with their bodies unchanged apart from the module name.
-   - `Runners::Revocation`, `ContactLoss` and `Registration` are renamed in change 4.
+2. **`Sessions::Lifecycle`, outside family.** Add `transition!` (events fired as today; effects still in the model callbacks) and `enqueue`, `finish`, `suspend`, `fail`, `fail_if`, `cancel`, moving the bodies from `SessionService`. `SessionAdmissionService` calls `transition!` instead of `session.enqueue!`/`fail!`/`cancel!` and drops `conclude!`. Rename all the callers (§2.2), including `SessionLaunchRelay`, `ProjectMove::Mover` (one `Lifecycle.cancel`, no second `cancel!`), `WorkflowService`, `PersonalTools::StopSession`, `InternalTools::*`, `CompanyMembership`, `Sessions::*`, `Runners::Revocation`, `Runners::ContactLoss`, `Runners::Registration`, `ScanDeadContainersActivity`, `CleanupStaleRunsActivity`. The existing `SessionService` tests move to the Lifecycle test files with their bodies unchanged apart from the module name, except the cancel case of §3.2.
 3. **Inside family.** Add `start`, `ready`, `record_*`, `finalize`, `suspended`, `restored`, `expire_suspension`, `expire_suspended_step`, `slot_released`. Move `AdmittedPhaseActivity#finalize_session`, `BaseStrategy#after_cleanup`, `AgentBaseStrategy#mark_session_ready`, `CleanupStaleActivity`, `Suspension` and `SuspensionExpiry` onto them. `finalize` uses the table in §3.4.
-4. **Move the effects, and close it.** Move the effects out of the model callbacks into `transition!` (§3.6), delete the `after_save`, `left_ready?`, `complete_finish!` and the notify from the model, move #270's tests, add the ownership test (§3.7). Rename `Runners::Revocation`, `ContactLoss` and `Registration` call sites. Update `docs/architecture/implementation-patterns.md`: the `finalize_session` "Avoid" example becomes a "done" example (`AdmittedPhaseActivity#finalize` through `Sessions::Lifecycle`), and the State Machines section names the service as the owner. Add a `CHANGELOG.md` line only if the project's rule asks for one for internal refactors.
+4. **Move the effects, and close it (task #283).** Move the effects out of the model callbacks into `transition!` (§3.6), delete the `after_save`, `left_ready?`, `complete_finish!` and the notify from the model, move #270's tests. Turn on `no_direct_assignment: true`, fix the factories and tests that set `state:` (§3.7), and add the ownership test. Update `docs/architecture/implementation-patterns.md`: the `finalize_session` "Avoid" example becomes a "done" example (`AdmittedPhaseActivity#finalize` through `Sessions::Lifecycle`), and the State Machines section names the service as the owner. Add a `CHANGELOG.md` line only if the project's rule asks for one for internal refactors.
 
-Changes 1 to 3 do not change who sends which effect, which is why they can ship before change 4 and be reviewed apart from it.
+Changes 1 to 3 do not change who sends which effect, which is why they can be reviewed apart from change 4.
 
-### What waits for #277
-
-#277 (runner sessions on the interactive session page, and the tunnel) is in flight and I could not see its branch. It is expected to change runner-session surfaces: `Runners::*`, `RelayRoute`/`RelaySignals`, the session resource, and possibly `terminal_session.rb`. So:
-- **Can start now:** change 1 (state machine and predicates) and change 2, except for the three `Runners::*` files.
-- **Waits for #277's merge:** change 4 (it rewrites model callbacks and `relay_signals_test.rb`) and the renames in `Runners::Revocation`, `ContactLoss`, `Registration`. Change 3 can start, but is rebased on #277 before it opens for review.
-- **Must hold after the merge:** machine-backed runner sessions (§7) keep working under both: `session_ended` fires from `transition!` for any runner session leaving `ready`, whichever #277 adds that leaves it.
-- If #277 adds a state write or an event call on a session, it goes through `Lifecycle` from the start; reviewers of #277 check that.
+#277 (PR 859) changes only `refuse_runner_pick` in `SessionService`, which is creation-side code and stays there, plus `Runners::Selection`, the session form and docs. It does not touch the files this design renames. If #277 merges first, the implementation rebases on it.
 
 ## 7. Testing approach
 
@@ -196,6 +200,8 @@ Following `test/` mirroring `app/`:
 - **Relay signal:** `session_ended` for each of `finish`, `fail`, `cancel`, `finalize` and `suspended` from `ready`; none from `running`; none for a hosted session; none on a repeated `finalize`.
 - **Admission** (`session_admission_service_test.rb`, `…_concurrency_test.rb`): the same cases with `transition!` in the lock.
 - **Unchanged and must pass:** `CleanupStaleActivity`, `Runners::Revocation`, `ContactLoss`, suspension tests, `SessionLaunchRelay`.
+- **Cancel of an unadmitted session** (§3.2): the run cancel fan-out cancels a step session that was built but not yet admitted. Assert the state is `cancelled`, the callbacks ran once, the run is not woken (its stop was requested), the step run ends `cancelled`, and a following `admit_step_session!` that meets `Stopped` leaves the session as it is. A direct `Lifecycle.cancel` of a session with no admission fires the event, and a second one does nothing.
+- **Hard guard** (§3.7, change 4): `session.update!(state: …)` raises.
 - **Ownership test** (§3.7).
 
 QA on staging, as the task lists: a hosted session finished, stopped before ready, and failed; a workflow step that succeeds and one that fails; a runner session on a simulated machine, finished and revoked. Same state and message as before.
@@ -209,7 +215,8 @@ QA on staging, as the task lists: a hosted session finished, stopped before read
 - **Effects in `transition!` after commit.** `after_all_transactions_commit` runs at once when no transaction is open, so a caller that fires an event outside a transaction still gets its effects, in order.
 - **Heuristic ownership test** can miss a differently named variable. Review is the second guard.
 - **v1 `ContainerWorkflow`** (tool sessions) still runs `BaseStrategy#after_cleanup`. It is routed through `record_failure`/`record_finished` unchanged in behaviour. Whether it can be removed is a separate question.
-- **Hosted sessions** run through the same code and show no change: no outcome, message, or timing differs.
+- **Hosted sessions** run through the same code and show no change in outcome or message. The one difference is the cancel of an unadmitted step session (§3.2).
+- **Hard guard breaks test setup.** Tests and factories that set `state:` fail once `no_direct_assignment` is on (§3.7). They are found and fixed in change 4, not left to CI to discover.
 
 ## 9. Decisions and assumptions
 
@@ -223,11 +230,12 @@ QA on staging, as the task lists: a hosted session finished, stopped before read
 | 6 | The outcome rules move to `TerminalSession#ending_state`/`#ending_error`, unchanged | Model Predicates rule; the task says the rules stay as they are |
 | 7 | `session_ended` and the run's wake-up are effects of `transition!`; the model `after_save` is removed | task scope item 3 |
 | 8 | `AuthConcern`'s `start!` is `UserSession`, not a session of this model | read from `app/controllers/concerns/auth_concern.rb` |
-| 9 | `Lifecycle.cancel` of a session with no admission fires the event only and does not cancel a workflow (none can exist without an admission) | `SessionService.cancel` called Temporal for a workflow that cannot exist |
-| 10 | What #277 changes is assumed from the task comment, not read; §6 lists what waits | Alex's comment on the task |
+| 9 | **Behaviour change, accepted.** `Lifecycle.cancel` of a session with no admission fires `cancel` (today the state is left unchanged) and does not cancel a workflow (none can exist without an admission). One rule for every caller; it replaces `Mover`'s second `cancel!`. It changes the run cancel fan-out, which now cancels a built, unadmitted step session (§3.2) | `SessionService.cancel` left the state alone and called Temporal for a workflow that cannot exist; Alex's decision on the design |
+| 10 | #277's PR was read: it does not touch what this design renames, so nothing waits for it. If it merges first, the implementation rebases | Alex's decision on the design |
+| 11 | Delivery in two tasks: #273 builds changes 1 to 3, #283 builds change 4 after #273's PR merges | Alex's decision on the design |
+| 12 | The hard guard is AASM's `no_direct_assignment: true`, adopted in change 4 | AASM 6.0.0; Alex's decision on the design |
 
 ## 10. Deferred questions
 
 - Removing the v1 `ContainerWorkflow` and `BaseStrategy#after_cleanup`: out of scope; they are routed, not deleted.
 - `StepRun` and the operation models keep writing their own state (task, Out of scope).
-- A hard guard (a `before_update` that rejects a `state` change made outside `Lifecycle`) is not proposed: it needs request-local state, which the Anti-Patterns rule on state in the wrong place rules out. The ownership test and review are the guards.
