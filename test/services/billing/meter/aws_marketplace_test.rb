@@ -25,8 +25,8 @@ class Billing::Meter::AwsMarketplaceTest < ActiveSupport::TestCase
 
     assert_equal 1, @client.records.size
     record = @client.last_record
-    assert_equal "queue_minute", record.dimension
-    assert_equal 120, record.quantity, "7200 queue-seconds is 120 queue-minutes"
+    assert_equal "worker_minute", record.dimension
+    assert_equal 120, record.quantity, "7200 worker-seconds is 120 worker-minutes"
     assert_equal @hour, record.occurred_at
     assert_equal "record-1", result
   end
@@ -34,7 +34,7 @@ class Billing::Meter::AwsMarketplaceTest < ActiveSupport::TestCase
   # The dimension is the one field publication makes permanent, and it has to
   # match the listing character for character.
   test "the dimension is the identifier the listing was published with" do
-    assert_equal "queue_minute", Billing::Meter::AwsMarketplace::DIMENSION
+    assert_equal "worker_minute", Billing::Meter::AwsMarketplace::DIMENSION
   end
 
   # AWS takes an integer. Rounding down gives the minute away rather than

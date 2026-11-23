@@ -28,11 +28,14 @@ class Billing::Meter::AwsMarketplaceSaasTest < ActiveSupport::TestCase
     assert_not_equal Billing::Meter::AwsMarketplace.provider, @adapter.provider
   end
 
-  # The container product's dimension is published and cannot move, and the two
-  # products do not bill for the same thing.
-  test "its dimension is its own" do
-    assert_not_equal Billing::Meter::AwsMarketplace::DIMENSION,
-                     Billing::Meter::AwsMarketplaceSaas::DIMENSION
+  # Both products bill a worker-minute under the same identifier since the
+  # self-hosted product was listed afresh on 13 November 2026, so the dimension
+  # no longer tells them apart: the provider does. The identifier is published
+  # on both listings and cannot move on either.
+  test "its dimension is the listing's identifier, shared with the self-hosted product" do
+    assert_equal "worker_minute", Billing::Meter::AwsMarketplaceSaas::DIMENSION
+    assert_equal Billing::Meter::AwsMarketplace::DIMENSION,
+                 Billing::Meter::AwsMarketplaceSaas::DIMENSION
   end
 
   test "it bills each licence separately, keyed on the licence and not the product" do

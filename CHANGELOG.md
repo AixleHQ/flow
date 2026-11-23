@@ -160,6 +160,11 @@ governance, community health — carry none.
   levels in Codex. A Grok step that stops on its "free Grok Build usage limit" message
   fails with that message instead of waiting for the no-output watchdog. Gemini CLI stays at 0.60.0: 0.70.0 still stops `--yolo` at a prompt
   when the agent edits a build file or runs a workspace script.
+- **Company settings**: a self-hosted installation bought through AWS Marketplace
+  reports its usage under the dimension `worker_minute`, the same word as the SaaS
+  product, instead of `queue_minute`. Operators: from this version an installation meters
+  only against the new self-hosted listing; an installation subscribed to the first listing
+  (dimension `queue_minute`) keeps running and reports no usage once upgraded.
 
 ## [1.16.0] - 2026-11-19
 
