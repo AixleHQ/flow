@@ -536,7 +536,8 @@ module ContainerStrategies
       credential.with_lock do
         current = credential.config_data
         # Read out of the container, so rotations only (BaseAdapter#merge_container_credentials).
-        merged = adapter.merge_container_credentials(current, credential.without_retired_grants(config_data))
+        merged = adapter.merge_container_credentials(current, credential.without_retired_grants(config_data),
+                                                credential_id: credential.id)
         next if merged == current
 
         AgentCredential.from_artifacts(session.user_id, SessionCompany.company_id_for(session), input[:agent_type], merged)
