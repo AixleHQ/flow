@@ -279,6 +279,24 @@ class BoardTaskTest < ActiveSupport::TestCase
     assert_equal [ active.id ], BoardTask.active.first_per_column(1).map(&:id)
   end
 
+  test "first_per_column takes a per-column limit, with the hash default for the other columns" do
+    backlog = 4.times.map { |i| BoardTask.create!(title: "Backlog #{i}", board: @board, board_column: @col1, position: i) }
+    done = 4.times.map { |i| BoardTask.create!(title: "Done #{i}", board: @board, board_column: @col2, position: i) }
+
+    page = BoardTask.first_per_column(Hash.new(1).merge(@col1.id => 3))
+
+    assert_equal (backlog.first(3) + done.first(1)).map(&:id).sort, page.map(&:id).sort
+  end
+
+  test "first_per_column ranks rows by the given order ahead of the board order" do
+    BoardTask.create!(title: "Top", board: @board, board_column: @col1, position: 0)
+    buried = BoardTask.create!(title: "Buried", board: @board, board_column: @col1, position: 5)
+    promote = Arel.sql(BoardTask.sanitize_sql_array([ "(board_tasks.id = ?)::int DESC", buried.id ]))
+
+    assert_equal [ buried.id ], BoardTask.first_per_column(1, order: promote).map(&:id)
+    assert_not_includes BoardTask.first_per_column(1).map(&:id), buried.id
+  end
+
   test "in_board_order breaks a position tie by id so pages cannot overlap" do
     first = BoardTask.create!(title: "First", board: @board, board_column: @col1, position: 0)
     second = BoardTask.create!(title: "Second", board: @board, board_column: @col1, position: 0)

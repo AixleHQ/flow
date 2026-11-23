@@ -85,15 +85,31 @@ class BoardTask < ApplicationRecord
   # The first `limit` tasks of *every* column, in one query — what keeps the board's
   # initial payload bounded on a board with hundreds of tasks per column. Ranking
   # happens in a window function because SQL has no per-group LIMIT.
-  scope :first_per_column, ->(limit) {
+  #
+  # `limit` is an Integer, or a Hash of column id => limit whose `default` covers the
+  # other columns. `order` is a trusted SQL expression ranked ahead of the board order;
+  # a caller that sorts its pages by it must pass it here too, or a row it promotes can
+  # sit past a column's cut and never be returned.
+  scope :first_per_column, ->(limit, order: nil) {
+    window_order = [ order, "board_tasks.position ASC, board_tasks.id ASC" ].compact.join(", ")
     ranked = all.reorder(nil).select(
-      "board_tasks.id, ROW_NUMBER() OVER (" \
-      "PARTITION BY board_tasks.board_column_id ORDER BY board_tasks.position ASC, board_tasks.id ASC" \
+      "board_tasks.id, board_tasks.board_column_id, ROW_NUMBER() OVER (" \
+      "PARTITION BY board_tasks.board_column_id ORDER BY #{window_order}" \
       ") AS column_rank"
     )
 
-    where(id: BoardTask.from(ranked, :ranked).where("ranked.column_rank <= ?", limit).select("ranked.id"))
+    where(id: BoardTask.from(ranked, :ranked).where(column_rank_cut(limit)).select("ranked.id"))
   }
+
+  def self.column_rank_cut(limit)
+    return sanitize_sql_array([ "ranked.column_rank <= ?", Integer(limit) ]) unless limit.is_a?(Hash)
+
+    fallback = Integer(limit.default)
+    return sanitize_sql_array([ "ranked.column_rank <= ?", fallback ]) if limit.empty?
+
+    whens = limit.map { |column_id, n| sanitize_sql_array([ "WHEN ? THEN ?", Integer(column_id), Integer(n) ]) }
+    sanitize_sql_array([ "ranked.column_rank <= CASE ranked.board_column_id #{whens.join(' ')} ELSE ? END", fallback ])
+  end
 
   def archived?
     archived_at.present?

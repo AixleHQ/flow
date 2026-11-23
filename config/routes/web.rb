@@ -306,6 +306,7 @@ namespace :api, defaults: { format: :json } do
           resources :activities, only: %i[index]
           resources :tasks do
             collection do
+              get :by_column
               post :bulk_actions
             end
             member do
