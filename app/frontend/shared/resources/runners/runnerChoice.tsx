@@ -22,8 +22,6 @@ interface RunnerSelectProps {
   value: number | null;
   onChange: (runnerId: number | null) => void;
   disabled?: boolean;
-  /** Interactive sessions cannot run on a runner until the tunnel exists (§8), so those options are off. */
-  interactive?: boolean;
   description?: string;
 }
 
@@ -39,7 +37,6 @@ export function RunnerSelect({
   value,
   onChange,
   disabled,
-  interactive = false,
   description,
 }: RunnerSelectProps) {
   const listed = runners.some((runner) => runner.id === value);
@@ -47,8 +44,8 @@ export function RunnerSelect({
     { value: HOSTED, label: hostedLabel },
     ...runners.map((runner) => ({
       value: String(runner.id),
-      label: interactive ? `${optionLabel(runner)} · can't run interactive sessions yet` : optionLabel(runner),
-      disabled: interactive || (runner.deleted && runner.id !== value),
+      label: optionLabel(runner),
+      disabled: runner.deleted && runner.id !== value,
     })),
     ...(value != null && !listed ? [{ value: String(value), label: `Runner #${value}`, disabled: true }] : []),
   ];

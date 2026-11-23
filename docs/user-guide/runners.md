@@ -12,7 +12,8 @@ do not exist for your company.
 
 This page covers adding machines to a `manual` runner and reading the
 machines list on its page, the reuse policy and Return to service, what you take
-on with a `manual` machine, what it reaches outbound and its known limits. The
+on with a `manual` machine, what it reaches outbound and its known limits, and
+interactive sessions. The
 rest of the manual runner's guide (health) is not written yet.
 
 ---
@@ -281,6 +282,29 @@ nothing while it is offline.
   without waiting, revoke the machine.
 - **A revoked or deleted runner** never hears its machines again, so its session
   fails after the 15 minutes and its slot is released then.
+
+## Interactive sessions
+
+An interactive session can run on a runner, and its page works as a hosted
+session's does: the terminal, the read-only view other people get, the file
+panel, uploads and the IDE. Pick the runner in **Runs on** on the new-session
+form, in either mode.
+
+How it works: the machine opens a connection out to the platform's relay while
+it holds a session, and the browser's requests to the session's terminal, IDE,
+file panel and upload ride that connection. Nothing is opened inbound on the
+machine. The connection exists only while the machine holds a session.
+
+- **The terminal, the IDE and uploads are for the session's owner.** Anyone else
+  who can see the session gets the read-only terminal.
+- **The surfaces start a few seconds after the container does.** The IDE takes
+  the longest. If the page shows an error in that window, reload it.
+- **A machine running a version before the tunnel can't serve them.** Update the
+  runner (self-update does it while the machine is idle); until then the
+  terminal does not open.
+- **The connection ends with the session.** Ending the session, or revoking the
+  machine, closes it. A restart of the relay drops it for a moment and the
+  terminal reconnects by itself.
 
 ## What you take on with a `manual` machine
 
