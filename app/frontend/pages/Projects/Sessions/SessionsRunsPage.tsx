@@ -29,7 +29,7 @@ import {
   parseListSort,
   SortableHeader,
 } from 'shared/ui/list-controls';
-import { AgentLogo, agentLabel, ModeTag, RestoreSessionButton, StatusTag } from 'shared/ui/sessions';
+import { AgentLogo, agentLabel, ModeTag, RestoreSessionButton, sessionStatusTone, StatusTag } from 'shared/ui/sessions';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -509,7 +509,9 @@ function EntryRow({
           <span />
         )}
 
-        <StatusTag state={entry.state}>{stateLabel(entry) || undefined}</StatusTag>
+        <StatusTag state={entry.state} tone={sessionStatusTone(entry.state)}>
+          {stateLabel(entry) || undefined}
+        </StatusTag>
 
         <div className={classes.name}>
           <div className={classes.nameTitle}>{entry.name}</div>
@@ -588,7 +590,9 @@ function EntryRow({
                 onClick={childOpenable ? () => router.visit(childHref) : undefined}
               >
                 <span />
-                <StatusTag state={child.state}>{stateLabel(child) || undefined}</StatusTag>
+                <StatusTag state={child.state} tone={sessionStatusTone(child.state)}>
+                  {stateLabel(child) || undefined}
+                </StatusTag>
                 <div className={classes.name}>
                   <div className={classes.nameTitle}>{child.name}</div>
                 </div>

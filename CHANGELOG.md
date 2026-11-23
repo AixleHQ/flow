@@ -19,6 +19,9 @@ governance, community health — carry none.
   it scrolls, and folds its explanation into a "How to read this dashboard" section.
 
 ### Fixed
+- **Sessions & Runs**: a running session shows the same amber "Running" status in the
+  all-projects list, on its page and in Usage as it does in a project; it used to read green
+  there, like a finished one.
 - **Admin**: deleting a company that has set up SCIM provisioning works again. It used to
   end in an error page and leave the company in place.
 - **Repositories**: adding a GitLab repository no longer ends in an error page when GitLab

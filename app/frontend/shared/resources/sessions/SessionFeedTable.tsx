@@ -9,7 +9,7 @@ import { useCableRowUpdates } from 'shared/lib/hooks/useCableRowUpdates';
 import { costColor, formatCost, formatDuration, formatTokens } from 'shared/lib/sessionFormat';
 import { companySessionPath, rowsCompanySessionsPath, userPath } from 'shared/routes';
 import { type ListSort, SortableHeader } from 'shared/ui/list-controls';
-import { AgentLogo, agentLabel, ModeTag, RestoreSessionButton, StatusTag } from 'shared/ui/sessions';
+import { AgentLogo, agentLabel, ModeTag, RestoreSessionButton, sessionStatusTone, StatusTag } from 'shared/ui/sessions';
 
 import classes from './SessionFeedTable.module.css';
 
@@ -275,7 +275,9 @@ function SessionRow({
       }
     >
       <span className={classes.status}>
-        <StatusTag state={s.state}>{stateLabel(s.state)}</StatusTag>
+        <StatusTag state={s.state} tone={sessionStatusTone(s.state)}>
+          {stateLabel(s.state)}
+        </StatusTag>
         {showsPending && <span className={classes.pending}>{s.pendingArtifactsCount} pending</span>}
       </span>
 

@@ -2,6 +2,7 @@ import { Link } from '@inertiajs/react';
 import type { ReactNode } from 'react';
 
 import { agentLabel } from '../agentRuntimes';
+import type { StatusTone } from '../StatusBadge';
 
 import { AgentLogo } from './AgentLogo';
 import classes from './DetailHeader.module.css';
@@ -32,6 +33,7 @@ interface DetailHeaderProps {
   crumbs: Crumb[];
   title: string;
   state?: string | null;
+  statusTone?: StatusTone;
   statusLabel?: string;
   /** `#1986` or `Run #1443` — printed after the status chip. */
   identifier?: string;
@@ -58,6 +60,7 @@ export function DetailHeader({
   crumbs,
   title,
   state,
+  statusTone,
   statusLabel,
   identifier,
   description,
@@ -102,7 +105,11 @@ export function DetailHeader({
 
       <div className={classes.titleRow}>
         <h1 className={classes.title}>{title}</h1>
-        {state && <StatusTag state={state}>{statusLabel}</StatusTag>}
+        {state && (
+          <StatusTag state={state} tone={statusTone}>
+            {statusLabel}
+          </StatusTag>
+        )}
         {identifier && <span className={classes.idx}>{identifier}</span>}
         <ModeTag mode={mode} />
       </div>
