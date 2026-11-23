@@ -701,7 +701,7 @@ module Agents
     end
 
     # Rotations only. Returns `current` unchanged unless every rule holds.
-    def merge_container_credentials(current, incoming, credential_id: nil)
+    def merge_container_credentials(current, incoming, credential_id:)
       keys = rotatable_credential_keys & current.keys & incoming.keys
       return refuse_merge(:no_rotatable_keys, credential_id, current) if keys.empty?
 

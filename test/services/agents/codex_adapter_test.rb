@@ -847,7 +847,7 @@ module Agents
       current = tokens_for(account: "acct-1", exp: 1.hour.from_now.to_i)
       incoming = tokens_for(account: "acct-1", exp: 9.days.from_now.to_i, access: "new")
 
-      merged = @adapter.merge_container_credentials(current, incoming)
+      merged = @adapter.merge_container_credentials(current, incoming, credential_id: 42)
 
       assert_equal "rt-new", merged.dig("tokens", "refresh_token")
     end
@@ -857,7 +857,7 @@ module Agents
       attacker = tokens_for(account: "acct-evil", exp: 9.days.from_now.to_i, access: "evil")
                    .merge("OPENAI_API_KEY" => "sk-evil")
 
-      assert_equal current, @adapter.merge_container_credentials(current, attacker)
+      assert_equal current, @adapter.merge_container_credentials(current, attacker, credential_id: 42)
     end
 
     # The live write-back answers 204 whether or not it took the copy, so each refusal

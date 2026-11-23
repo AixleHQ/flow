@@ -396,14 +396,14 @@ module Agents
       stored = container_login(access_token: "at-new", expiry: 1.hour.from_now)
       older = container_login(access_token: "at-old", expiry: 30.minutes.from_now)
 
-      assert_equal stored, @adapter.merge_container_credentials(stored, older)
+      assert_equal stored, @adapter.merge_container_credentials(stored, older, credential_id: 42)
     end
 
     test "a token the container renewed replaces the stored one" do
       stored = container_login(access_token: "at-old", expiry: 5.minutes.from_now)
       renewed = container_login(access_token: "at-new", expiry: 1.hour.from_now)
 
-      assert_equal "at-new", @adapter.merge_container_credentials(stored, renewed)["access_token"]
+      assert_equal "at-new", @adapter.merge_container_credentials(stored, renewed, credential_id: 42)["access_token"]
     end
 
     # == Remaining-quota snapshot ==
