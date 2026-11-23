@@ -22,11 +22,39 @@ module Api
               .then { |s| exact_number_search? ? s.reorder(exact_number_first, :position, :id) : s.in_board_order }
             tasks = tasks.limit(params[:limit]) if params[:limit].present?
             tasks = tasks.offset(params[:offset]) if params[:offset].present?
-            tasks = tasks.to_a
-            recent = WorkflowRun.recent_by_task(tasks.map(&:id), limit: BoardTaskResource::RECENT_RUNS)
-            waiting = WorkflowRun.waiting_for_slot_ids(recent.values.flatten.map(&:id))
-            card_params = { waiting_runs: waiting, recent_runs: recent, without_description: params[:view] == "card" }
-            render json: tasks.map { |t| BoardTaskResource.new(t, params: card_params).to_h }
+            render json: card_hashes(tasks.to_a, without_description: params[:view] == "card")
+          end
+
+          # @summary First page of every board column, with each column's total
+          #
+          # What a filtered board loads in one request instead of one `index` call per
+          # column. Takes the `index` filters plus `board_column_ids[]` (default: every
+          # column of the board), `limit` per column (default: BoardTask::PAGE_SIZE) and
+          # `limits[<column_id>]` to override it for one column. Later pages of a column
+          # still come from `index` with an offset. Always the card view.
+          def by_column
+            columns = current_board.board_columns
+            column_ids = Array(params[:board_column_ids]).filter_map { |id| positive_integer(id) }
+            columns = columns.where(id: column_ids) if column_ids.any?
+            columns = columns.to_a
+
+            scope = filtered_tasks.where(board_column_id: columns.map(&:id))
+            totals = scope.reorder(nil).group(:board_column_id).count
+
+            order = exact_number_search? ? exact_number_first : nil
+            tasks = scope
+              .first_per_column(column_limits, order: order)
+              .with_card_counts
+              .includes(:assignee, :assignee_team, :gates)
+              .then { |s| order ? s.reorder(order, :position, :id) : s.in_board_order }
+              .to_a
+            cards = tasks.zip(card_hashes(tasks, without_description: true)).group_by { |task, _| task.board_column_id }
+
+            render json: {
+              columns: columns.map do |column|
+                { boardColumnId: column.id, total: totals.fetch(column.id, 0), tasks: cards.fetch(column.id, []).map(&:last) }
+              end
+            }
           end
 
           def show
@@ -148,6 +176,29 @@ module Api
           end
 
           private
+
+          def card_hashes(tasks, without_description:)
+            recent = WorkflowRun.recent_by_task(tasks.map(&:id), limit: BoardTaskResource::RECENT_RUNS)
+            waiting = WorkflowRun.waiting_for_slot_ids(recent.values.flatten.map(&:id))
+            card_params = { waiting_runs: waiting, recent_runs: recent, without_description: without_description }
+            tasks.map { |t| BoardTaskResource.new(t, params: card_params).to_h }
+          end
+
+          def column_limits
+            default = positive_integer(params[:limit]) || BoardTask::PAGE_SIZE
+            raw = params[:limits]
+            overrides = raw.respond_to?(:to_unsafe_h) ? raw.to_unsafe_h : {}
+            overrides.each_with_object(Hash.new(default)) do |(column_id, limit), limits|
+              column_id = positive_integer(column_id)
+              limit = positive_integer(limit)
+              limits[column_id] = limit if column_id && limit
+            end
+          end
+
+          def positive_integer(value)
+            number = Integer(value.to_s, 10, exception: false)
+            number if number&.positive?
+          end
 
           # Every board filter, applied server-side. The board used to filter its
           # in-memory task array, which only worked while it held every task; a

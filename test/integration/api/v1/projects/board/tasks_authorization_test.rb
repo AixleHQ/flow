@@ -6,7 +6,7 @@ require "test_helper"
 # shared AuthorizationMatrix harness (docs/testing.md §2).
 #
 # Policy (Api::V1::Projects::Board::TasksPolicy):
-#   reads  (index/show/workflow_runs)                     => project_accessible?
+#   reads  (index/by_column/show/workflow_runs)           => project_accessible?
 #   writes (create/update/destroy/move/trigger_workflow)  => project_writable?
 # Inaccessible project (stranger / foreign admin) => 404 (scoped `.find` raises
 # RecordNotFound before the policy). A project has no auto-created board, so the
@@ -25,6 +25,10 @@ class Api::V1::Projects::Board::TasksAuthorizationTest < ActionDispatch::Integra
 
   test "index is a project read" do
     assert_project_read(transport: :api) { get api_v1_project_tasks_path(@project) }
+  end
+
+  test "by_column is a project read" do
+    assert_project_read(transport: :api) { get by_column_api_v1_project_tasks_path(@project) }
   end
 
   test "show is a project read" do

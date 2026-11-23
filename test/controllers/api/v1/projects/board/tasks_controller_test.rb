@@ -340,6 +340,119 @@ module Api
           assert_includes JSON.parse(response.body).map { |t| t["id"] }, @task.id
         end
 
+        def by_column_body
+          JSON.parse(response.body)["columns"].index_by { |c| c["boardColumnId"] }
+        end
+
+        test "by_column returns every column of the board with its total and first page in board order" do
+          todo = 3.times.map { |i| create(:board_task, board: @board, board_column: @col1, position: 10 + i) }
+          done = create(:board_task, board: @board, board_column: @col2)
+
+          get :by_column, params: { project_id: @project.id, limit: 2 }
+
+          assert_response :success
+          assert_equal [ @col1.id, @col2.id ], JSON.parse(response.body)["columns"].map { |c| c["boardColumnId"] }
+          columns = by_column_body
+          assert_equal 4, columns[@col1.id]["total"]
+          assert_equal [ @task.id, todo[0].id ], columns[@col1.id]["tasks"].map { |t| t["id"] }
+          assert_equal 1, columns[@col2.id]["total"]
+          assert_equal [ done.id ], columns[@col2.id]["tasks"].map { |t| t["id"] }
+          assert_nil columns[@col1.id]["tasks"].first["description"], "by_column always answers with the card view"
+        end
+
+        test "by_column board_column_ids narrows the columns and ignores a column of another board" do
+          create(:board_task, board: @board, board_column: @col2)
+          other_board = create(:board, project: create(:project, company: @company, owner: @user))
+          other_column = create(:board_column, board: other_board)
+          create(:board_task, board: other_board, board_column: other_column)
+
+          get :by_column, params: { project_id: @project.id, board_column_ids: [ @col2.id, other_column.id ] }
+
+          assert_response :success
+          assert_equal [ @col2.id ], JSON.parse(response.body)["columns"].map { |c| c["boardColumnId"] }
+
+          get :by_column, params: { project_id: @project.id, board_column_ids: [ other_column.id ] }
+
+          assert_response :success
+          assert_empty JSON.parse(response.body)["columns"]
+        end
+
+        test "by_column limits override the per-column limit for one column" do
+          create_list(:board_task, 3, board: @board, board_column: @col1)
+          create_list(:board_task, 3, board: @board, board_column: @col2)
+
+          get :by_column, params: { project_id: @project.id, limit: 1, limits: { @col1.id.to_s => 3 } }
+
+          assert_response :success
+          columns = by_column_body
+          assert_equal 3, columns[@col1.id]["tasks"].length
+          assert_equal 1, columns[@col2.id]["tasks"].length
+          assert_equal 4, columns[@col1.id]["total"]
+          assert_equal 3, columns[@col2.id]["total"]
+        end
+
+        test "by_column applies the board filters with the same totals index reports per column" do
+          @task.update!(title: "Fix login crash", tags: %w[ui api])
+          create(:board_task, board: @board, board_column: @col1, title: "Login page", tags: %w[ui])
+          create(:board_task, board: @board, board_column: @col2, title: "Login timeout", tags: %w[ui api],
+            archived_at: Time.current)
+          create(:board_task, board: @board, board_column: @col2, title: "Settings", tags: %w[ui api])
+          filters = { q: { g: { "0" => { m: "or", title_i_cont: "login" } } }, tags: %w[ui api], tags_match: "all", archived: "all" }
+
+          get :by_column, params: { project_id: @project.id, **filters }
+          assert_response :success
+          columns = by_column_body
+
+          [ @col1, @col2 ].each do |column|
+            get :index, params: { project_id: @project.id, board_column_id: column.id, **filters }
+            assert_equal response.headers["X-Total-Count"].to_i, columns[column.id]["total"]
+            assert_equal JSON.parse(response.body).map { |t| t["id"] }, columns[column.id]["tasks"].map { |t| t["id"] }
+          end
+          assert_equal 1, columns[@col1.id]["total"]
+          assert_equal 1, columns[@col2.id]["total"]
+        end
+
+        test "by_column puts the exact number match first in its column even past the limit" do
+          by_number = create(:board_task, board: @board, board_column: @col1, title: "Unrelated", position: 99)
+          2.times { |i| create(:board_task, board: @board, board_column: @col1, title: "Bug #{by_number.number} regression", position: i) }
+
+          get :by_column, params: {
+            project_id: @project.id, limit: 1,
+            q: { g: { "0" => { m: "or", title_i_cont: by_number.number.to_s, number_eq: by_number.number } } }
+          }
+
+          assert_response :success
+          assert_equal [ by_number.id ], by_column_body[@col1.id]["tasks"].map { |t| t["id"] }
+        end
+
+        test "by_column returns an empty column with a zero total" do
+          get :by_column, params: { project_id: @project.id }
+
+          assert_response :success
+          assert_equal({ "boardColumnId" => @col2.id, "total" => 0, "tasks" => [] }, by_column_body[@col2.id])
+        end
+
+        test "by_column first page and index later pages cover the column without repeats" do
+          tasks = [ @task ] + 4.times.map { |i| create(:board_task, board: @board, board_column: @col1, position: i) }
+          expected = BoardTask.where(id: tasks.map(&:id)).in_board_order.map(&:id)
+
+          get :by_column, params: { project_id: @project.id, board_column_ids: [ @col1.id ], limit: 2 }
+          first_page = by_column_body[@col1.id]["tasks"].map { |t| t["id"] }
+          get :index, params: { project_id: @project.id, board_column_id: @col1.id, limit: 25, offset: 2, view: "card" }
+          rest = JSON.parse(response.body).map { |t| t["id"] }
+
+          assert_equal expected, first_page + rest
+        end
+
+        test "by_column ignores a malformed q, limit and limits instead of failing" do
+          [ "foo", [ "foo" ] ].each do |q|
+            get :by_column, params: { project_id: @project.id, q: q, limit: "abc", limits: "x" }
+
+            assert_response :success
+            assert_equal [ @task.id ], by_column_body[@col1.id]["tasks"].map { |t| t["id"] }
+          end
+        end
+
         test "workflow_runs returns runs json with what each run cost" do
           run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, board_task: @task)
           session = create(:terminal_session, :agent_session, user: @user, project: @project)

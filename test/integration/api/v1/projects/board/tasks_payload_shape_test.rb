@@ -54,6 +54,20 @@ class Api::V1::Projects::Board::TasksPayloadShapeTest < ActionDispatch::Integrat
     end
   end
 
+  test "a by_column card and an index card describe the same task identically" do
+    freeze_time do
+      get api_v1_project_tasks_path(@project), params: { board_column_id: @column.id, view: "card" }, as: :json
+      assert_response :success
+      from_index = JSON.parse(response.body).sole
+
+      get by_column_api_v1_project_tasks_path(@project), params: { board_column_ids: [ @column.id ] }
+      assert_response :success
+      from_by_column = JSON.parse(response.body)["columns"].sole["tasks"].sole
+
+      assert_equal from_index, from_by_column
+    end
+  end
+
   test "a client that does not ask for the card view still gets the description" do
     @task.update!(description: "Steps to reproduce")
 
