@@ -131,6 +131,24 @@ module Gitlab
       assert_requested endless, times: Gitlab::RepositoryService::MAX_BRANCHES / 100
     end
 
+    test "list_available returns [] when GitLab does not answer in time" do
+      stub_request(:get, "#{GITLAB_API}/projects").with(query: hash_including("membership" => "true")).to_timeout
+
+      assert_equal [], Gitlab::RepositoryService.new(@integration).list_available
+    end
+
+    test "list_branches returns [] when GitLab does not answer in time" do
+      stub_request(:get, BRANCHES).to_timeout
+
+      assert_equal [], Gitlab::RepositoryService.new(@integration).list_branches("group/app")
+    end
+
+    test "find_repo returns nil when GitLab does not answer in time" do
+      stub_request(:get, %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}(?:\z|\?)}).to_timeout
+
+      assert_nil Gitlab::RepositoryService.new(@integration).find_repo("group/app")
+    end
+
     test "configure registers a pipeline hook and keeps its id and secret on the repository" do
       repository = create(:repository, full_name: "group/app", integration: @integration, scope: @project)
       stub_request(:post, HOOKS)

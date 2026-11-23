@@ -21,6 +21,8 @@ governance, community health — carry none.
 ### Fixed
 - **Wrappers**: a wrapper with a parameter named like `max`, `min`, `count` or `size` runs
   again. Every call to it used to hang until it timed out after an hour.
+- **Repositories**: when GitLab cannot be reached, the repository page and the branch picker
+  show an empty GitLab list after about 5 seconds instead of failing with a server error.
 
 ## [1.17.0] - 2026-11-23
 
