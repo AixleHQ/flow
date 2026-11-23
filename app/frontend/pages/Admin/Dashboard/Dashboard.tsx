@@ -268,7 +268,7 @@ export default function Dashboard({
   timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone,
 }: Props) {
   const today = todayOf(now);
-  const [grain, setGrain] = useState<Grain>('month');
+  const [grain, setGrain] = useState<Grain>('week');
   const [chosenPeriod, setChosenPeriod] = useState<string | null>(null);
   const [custom, setCustom] = useState<DayRange>({ start: `${today.slice(0, 7)}-01`, end: today });
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);

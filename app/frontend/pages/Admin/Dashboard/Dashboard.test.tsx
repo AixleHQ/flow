@@ -8,7 +8,7 @@ import { render, screen, userEvent, within } from 'test/renderPage';
 import Dashboard from './Dashboard';
 import type { DashboardData } from './types';
 
-const now = new Date('2026-10-19T12:00:00Z');
+const now = new Date('2026-10-16T12:00:00Z');
 const paths = buildDashboardPaths();
 
 const data: DashboardData = {
@@ -35,7 +35,7 @@ const data: DashboardData = {
       billingClass: 'managed',
     }),
   ],
-  measuredThrough: '2026-10-19T11:00:00Z',
+  measuredThrough: '2026-10-16T11:00:00Z',
   snapshot: { companies: 2, members: 14, projects: 5 },
 };
 
@@ -44,16 +44,18 @@ const tile = (name: string) => within(screen.getByRole('region', { name }));
 const sortBy = (name: string) => within(screen.getByRole('columnheader', { name })).getByRole('button');
 const filter = (name: string) =>
   within(screen.getByRole('group', { name: 'Filters' })).getByRole('button', { name: new RegExp(`^${name}`) });
+const showMonth = () => userEvent.click(screen.getByRole('button', { name: 'Month' }));
 
 describe('Dashboard', () => {
   beforeEach(() => {
     answerFetch({ 'GET /admin/dashboard/waits.json': [] });
   });
 
-  it('opens on the current month, one row per company, with when each was created and its status, type and billing method', () => {
+  it('opens on the current week, one row per company, with when each was created and its status, type and billing method', () => {
     render(<Dashboard paths={paths} data={data} now={now} />);
 
-    expect(screen.getByRole('combobox', { name: 'Period' })).toHaveDisplayValue('October 2026 (current)');
+    expect(screen.getByRole('button', { name: 'Week' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('combobox', { name: 'Period' })).toHaveDisplayValue('Week of Oct 12, 2026 (current)');
     expect(screen.getByText('Oct 14 – Oct 15, 2026 · to date · 2 companies')).toBeInTheDocument();
     const [, , , acmeCreated, acmeStatus, acmeType, acmeMethod] = within(rowOf('Acme')).getAllByRole('cell');
     expect(acmeCreated).toHaveTextContent('Mar 9, 2026');
@@ -146,8 +148,9 @@ describe('Dashboard', () => {
     expect(tile('Companies').getByText('2 paying · 1 trial · 1 canceled · 1 managed')).toBeInTheDocument();
   });
 
-  it('shows what the period used in tiles, and how much of it nobody pays for', () => {
+  it('shows what the period used in tiles, and how much of it nobody pays for', async () => {
     render(<Dashboard paths={paths} data={data} now={now} />);
+    await showMonth();
 
     expect(tile('Busy hours').getByText('96')).toBeInTheDocument();
     expect(tile('Busy hours').getByText('50% not on a paid plan')).toBeInTheDocument();
@@ -168,6 +171,7 @@ describe('Dashboard', () => {
 
   it('averages the workers offered in the period by billing class, for the companies the filters keep', async () => {
     render(<Dashboard paths={paths} data={data} now={now} />);
+    await showMonth();
 
     expect(tile('Average workers').getByText('5')).toBeInTheDocument();
     expect(tile('Average workers').getByText('▲ +1')).toBeInTheDocument();
@@ -190,6 +194,7 @@ describe('Dashboard', () => {
         ),
       );
     render(<Dashboard paths={paths} data={data} now={now} />);
+    await showMonth();
 
     expect(await within(rowOf('Acme')).findByText('10 min')).toBeInTheDocument();
     expect(await within(rowOf('Acme')).findByText('▲ +50%')).toBeInTheDocument();
@@ -205,7 +210,7 @@ describe('Dashboard', () => {
 
     expect(await within(rowOf('Acme')).findByText('10 min')).toBeInTheDocument();
     expect(fetchSpy).toHaveBeenCalledWith(
-      '/dashboard/waits.json?from=2026-10-01&to=2026-10-31',
+      '/dashboard/waits.json?from=2026-10-12&to=2026-10-18',
       expect.objectContaining({ headers: { Accept: 'application/json' } }),
     );
   });
@@ -228,8 +233,9 @@ describe('Dashboard', () => {
     expect(utilization).toHaveTextContent(/^100%/);
   });
 
-  it('compares with the same days of the month before', () => {
+  it('compares with the same days of the month before', async () => {
     render(<Dashboard paths={paths} data={data} now={now} />);
+    await showMonth();
 
     expect(screen.getByText('Change vs Sep 1 – Sep 15, 2026')).toBeInTheDocument();
     expect(within(rowOf('Acme')).getByText('▲ +100%')).toBeInTheDocument();
@@ -237,6 +243,7 @@ describe('Dashboard', () => {
 
   it('steps back to the previous month', async () => {
     render(<Dashboard paths={paths} data={data} now={now} />);
+    await showMonth();
 
     await userEvent.click(screen.getByRole('button', { name: 'Previous period' }));
 
@@ -262,8 +269,8 @@ describe('Dashboard', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Custom' }));
 
     expect(screen.getByLabelText('From')).toHaveValue('2026-10-01');
-    expect(screen.getByLabelText('To')).toHaveValue('2026-10-19');
-    expect(screen.getByText('Oct 1 – Oct 19, 2026 · custom range · 2 companies')).toBeInTheDocument();
+    expect(screen.getByLabelText('To')).toHaveValue('2026-10-16');
+    expect(screen.getByText('Oct 1 – Oct 16, 2026 · custom range · 2 companies')).toBeInTheDocument();
   });
 
   it('filters companies by name, and the tiles with them', async () => {
@@ -341,6 +348,7 @@ describe('Dashboard', () => {
       ],
     };
     render(<Dashboard paths={paths} data={both} now={now} />);
+    await showMonth();
 
     await userEvent.click(filter('Account type'));
     await userEvent.click(screen.getByRole('checkbox', { name: 'Managed by Aixle' }));
