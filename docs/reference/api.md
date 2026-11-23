@@ -46,6 +46,7 @@ caller themselves:
 | `/.well-known/oauth-*`, `POST /mcp-oauth/token`, `/register`, `/revoke` | MCP clients signing a person in to the personal MCP | None: public discovery documents, and token requests proved by PKCE or a refresh token. |
 | `/mcp-oauth/authorize` | A person allowing an MCP client | The signed-in viewer's own session. |
 | `POST /cloud/aws/credentials`, `/agents/credentials`, `/agents/git/credentials`, `/azure/git/credentials` | Helpers inside an agent container | `X-Session-Id` plus a key the app derives for that session; a session that is no longer active is refused. |
+| `PUT`, `GET /agents/storage` | An agent container saving or fetching a suspended session's archive, where the storage cannot sign URLs (development) | A `token` query parameter the app minted for one object and one method, valid for the script's run. Where the storage signs URLs (S3), the endpoint answers 404. |
 
 ## REST surface — by resource
 
@@ -113,6 +114,8 @@ GET    /api/v1/terminal_sessions/:id
 POST   /api/v1/terminal_sessions
 DELETE /api/v1/terminal_sessions/:id
 POST   /api/v1/terminal_sessions/:id/finish
+POST   /api/v1/terminal_sessions/:id/suspend
+POST   /api/v1/terminal_sessions/:id/restore
 ```
 
 ### Board

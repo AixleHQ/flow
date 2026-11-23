@@ -5,6 +5,12 @@ schedules:
     cron: "0 * * * *"
     enabled: true
 
+  # Reminds owners of suspended sessions three days before their restore window
+  # closes, and finishes the ones whose window has closed.
+  - workflow: suspended_session_expiry_workflow
+    cron: "20 * * * *"
+    enabled: true
+
   # Settles WorkflowRun rows still running/paused after their Temporal execution
   # closed or disappeared without writing a final status — they hold pod quota and
   # read as live. Each sweep is one describe per candidate run, so it runs often.

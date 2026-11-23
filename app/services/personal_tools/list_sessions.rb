@@ -12,6 +12,7 @@ module PersonalTools
       "finished" => %w[finished],
       "failed" => %w[failed],
       "cancelled" => %w[cancelled],
+      "suspended" => %w[suspended],
       "all" => nil
     }.freeze
     SESSION_TYPES = TerminalSession::WORK_SESSION_TYPES
@@ -33,7 +34,7 @@ module PersonalTools
       param :project_id, type: :integer, description: "Only sessions in this project."
       param :state, type: :string,
                     description: "Which sessions to list (default active). `pending`, `queued`, `running`, " \
-                                 "`finished` (Completed), `failed` and `cancelled` are the Sessions & Runs " \
+                                 "`finished` (Completed), `failed`, `cancelled` and `suspended` are the Sessions & Runs " \
                                  "status filter; `active` is the first three together.",
                     enum: STATE_FILTERS.keys
       param :session_type, type: :string,

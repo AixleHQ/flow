@@ -1493,6 +1493,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_21_110000) do
     t.index ["terminal_session_id"], name: "index_session_admissions_on_terminal_session_id", unique: true
   end
 
+  create_table "session_checkpoints", force: :cascade do |t|
+    t.bigint "terminal_session_id", null: false
+    t.text "archive_data"
+    t.bigint "byte_size"
+    t.jsonb "manifest", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["terminal_session_id"], name: "index_session_checkpoints_on_terminal_session_id", unique: true
+  end
+
   create_table "session_concurrency_limits", force: :cascade do |t|
     t.bigint "company_id"
     t.datetime "created_at", null: false
@@ -1927,12 +1937,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_21_110000) do
     t.jsonb "version_ids", default: {}, null: false
     t.bigint "runner_id"
     t.bigint "runner_environment_id"
+    t.bigint "restored_from_session_id"
+    t.datetime "suspended_at"
+    t.datetime "restore_expires_at"
     t.index ["company_id"], name: "index_terminal_sessions_on_company_id"
     t.index ["configured_agent_id"], name: "index_terminal_sessions_on_configured_agent_id"
     t.index ["finished_at"], name: "index_terminal_sessions_on_finished_at"
     t.index ["id", "company_id"], name: "index_terminal_sessions_on_id_and_company_id", unique: true
     t.index ["mcp_key"], name: "index_terminal_sessions_on_mcp_key", unique: true
     t.index ["project_id"], name: "index_terminal_sessions_on_project_id"
+    t.index ["restore_expires_at"], name: "index_terminal_sessions_on_restore_expires_at", where: "(restore_expires_at IS NOT NULL)"
+    t.index ["restored_from_session_id"], name: "index_terminal_sessions_on_restored_from_session_id"
     t.index ["route_token"], name: "index_terminal_sessions_on_route_token", unique: true
     t.index ["runner_environment_id"], name: "index_terminal_sessions_on_runner_environment_id"
     t.index ["runner_id"], name: "index_terminal_sessions_on_runner_id"
@@ -2633,6 +2648,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_21_110000) do
   add_foreign_key "scim_configurations", "identity_providers"
   add_foreign_key "session_admissions", "session_admission_pools"
   add_foreign_key "session_admissions", "terminal_sessions"
+  add_foreign_key "session_checkpoints", "terminal_sessions", on_delete: :cascade
   add_foreign_key "session_concurrency_limits", "companies", on_delete: :cascade, validate: false
   add_foreign_key "session_concurrency_limits", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_session_concurrency_limits_project_company", on_delete: :cascade, validate: false
   add_foreign_key "session_concurrency_limits", "projects", on_delete: :cascade, validate: false
@@ -2689,6 +2705,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_21_110000) do
   add_foreign_key "terminal_sessions", "runner_environments", on_delete: :nullify
   add_foreign_key "terminal_sessions", "runners"
   add_foreign_key "terminal_sessions", "runners", column: ["runner_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_terminal_sessions_runner_company"
+  add_foreign_key "terminal_sessions", "terminal_sessions", column: "restored_from_session_id", on_delete: :nullify
   add_foreign_key "terminal_sessions", "users", on_delete: :nullify
   add_foreign_key "tool_files", "tools", on_delete: :cascade
   add_foreign_key "tool_results", "step_runs", on_delete: :nullify

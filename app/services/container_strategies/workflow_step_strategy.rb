@@ -9,7 +9,9 @@ module ContainerStrategies
   # mode (the agent receives its prompt from the step instructions).
   #
   class WorkflowStepStrategy < AgentSessionStrategy
-    def before_cleanup(container_id: nil, **)
+    # A suspended step keeps its outputs in the checkpoint: the session that restores it
+    # leaves them, and the step's downstream steps take them from there.
+    def before_cleanup(container_id: nil, suspend: false, **)
       return {} if container_id.blank?
 
       container = resolve_container(container_id)
@@ -18,6 +20,7 @@ module ContainerStrategies
 
       logs_count, log_contents = collect_logs(container, session, agent_service)
       terminal = collect_terminal_output(container, session)
+      checkpoint = suspend && take_checkpoint(container, session, agent_service.adapter)
       logs_count += terminal.count
       collect_usage(session, agent_service, log_contents)
       persist_refreshed_credentials(container, session, agent_service)
@@ -28,7 +31,7 @@ module ContainerStrategies
         persist_credential_metadata(container, SessionCompany.agent_credentials_for(session).find_by(agent_type: input[:agent_type]), agent_service, :session)
       end
 
-      outputs = collect_workflow_outputs(container_id)
+      outputs = checkpoint ? Collection.none : collect_workflow_outputs(container_id)
       outputs_count = outputs.count
       report_uncollected_whole(session, terminal.uncollected + outputs.uncollected)
 

@@ -204,6 +204,31 @@ module Agents
     def runs_default_model_for_unknown? = false
 
     # =================================================================
+    # Conversation resume (Sessions::Checkpoint, Sessions::Restore)
+    # =================================================================
+
+    # Where the CLI keeps its conversations, relative to #home_dir. A suspended session
+    # saves exactly these and Restore puts them back, so never the login: the new
+    # session writes its own. Empty when the runtime cannot resume.
+    def conversation_paths = []
+
+    # Shell run from #home_dir that prints the id of the newest conversation, or nothing.
+    def conversation_id_command = nil
+
+    # What #session_command needs added to resume conversation `id` (already escaped).
+    def resume_arguments(_id) = nil
+
+    def resumable?
+      conversation_paths.any? && conversation_id_command.present? && resume_arguments("id").present?
+    end
+
+    def resume_command(conversation_id, mode:, model: nil, effort: nil)
+      return nil unless resumable? && conversation_id.present?
+
+      "#{session_command(mode: mode, model: model, effort: effort)} #{resume_arguments(Shellwords.escape(conversation_id))}"
+    end
+
+    # =================================================================
     # Context File (CLI-specific instruction file auto-read at startup)
     # =================================================================
 

@@ -4,7 +4,7 @@ module PersonalTools
   class ListWorkflowRuns < Base
     include SessionListSupport
 
-    STATES = (SessionsRunsFeed::STATUS_FILTERS.keys + %w[all]).freeze
+    STATES = (SessionsRunsFeed::STATUS_FILTERS.reject { |_, f| f[:runs] == [] }.keys + %w[all]).freeze
 
     tool do
       display_name "List Workflow Runs"

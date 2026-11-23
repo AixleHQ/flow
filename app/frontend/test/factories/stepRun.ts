@@ -22,6 +22,10 @@ export const buildStepRun = (overrides: Partial<StepRun> = {}): StepRun => ({
   totalTokens: 0,
   costCents: 0,
   liveViewPrivate: false,
+  suspendable: false,
+  restorable: false,
+  restoreExpiresAt: null,
+  sessionIds: [],
   // optional (?) computed attributes — realistic values, no compile-time guarantee.
   // terminalSessionState/websocketUrl/ideUrl are `string | undefined` (not nullable): omit for "absent".
   stepName: 'Compile Specs',
