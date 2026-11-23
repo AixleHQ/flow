@@ -116,7 +116,7 @@ class InternalTools::PullRequestActingAsTest < ActiveSupport::TestCase
       end
 
       assert_equal [ @colleague.id ], PullRequestOperation.pluck(:acting_user_id).uniq
-      assert_equal 5, PullRequestOperation.count
+      assert_equal 4, PullRequestOperation.count # update is not a ledger write
       assert_equal 5, UserTokenIssuance.count
       assert_equal %w[pull_request_add_comment pull_request_create pull_request_merge pull_request_review
                       pull_request_update], UserTokenIssuance.pluck(:tool_name).sort
