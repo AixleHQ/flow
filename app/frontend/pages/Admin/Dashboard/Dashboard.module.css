@@ -347,8 +347,11 @@
 /* ── Table ───────────────────────────────────────── */
 
 .root .tableWrap {
+  /* Both sticky axes need the table to scroll in its own box: with overflow-x alone the
+     wrapper already captures vertical stickiness, so a header could never stick to the page. */
+  max-height: max(320px, calc(100dvh - 160px));
   margin-top: 12px;
-  overflow-x: auto;
+  overflow: auto;
   border: 1px solid var(--app-border-default);
   border-radius: 8px;
   background: var(--app-bg-paper);
@@ -357,7 +360,9 @@
 .root .table {
   width: 100%;
   margin: 0;
-  border-collapse: collapse;
+  /* Collapsed borders stay behind when a sticky cell moves. */
+  border-collapse: separate;
+  border-spacing: 0;
   font-variant-numeric: tabular-nums;
 }
 
@@ -375,6 +380,9 @@
 }
 
 .root .table thead th {
+  position: sticky;
+  z-index: 2;
+  top: 0;
   border-bottom: 1px solid var(--app-border-default);
   background: var(--app-bg-elevated);
   font-weight: 500;
@@ -409,9 +417,37 @@
   content: ' ▼';
 }
 
-.root .table tbody tr:hover td,
-.root .table tbody tr:hover th {
+.root .table tbody tr:hover td {
   background: var(--app-bg-hover);
+}
+
+/* The hover color is translucent, so the frozen cell lays it over its own opaque base. */
+.root .table tbody tr:hover th {
+  background: linear-gradient(var(--app-bg-hover), var(--app-bg-hover)), var(--app-bg-paper);
+}
+
+.root .table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.root .table tbody th,
+.root .table tfoot th,
+.root .table thead th:first-child {
+  position: sticky;
+  z-index: 1;
+  left: 0;
+  max-width: 14rem;
+  box-shadow: inset -1px 0 var(--app-border-default);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.root .table tbody th {
+  background: var(--app-bg-paper);
+}
+
+.root .table thead th:first-child {
+  z-index: 3;
 }
 
 .root .table tfoot th,
