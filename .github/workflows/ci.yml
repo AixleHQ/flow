@@ -59,7 +59,10 @@ jobs:
     # depends on. GHCR is unmetered for public repositories, and a public
     # package is readable anonymously, so a fork's pull request reads the same
     # cache we do without holding any token.
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
+    #
+    # Also runs on a manual dispatch of develop, to refresh the cache without waiting for a
+    # push (after a change to this job, or when the cache is suspected stale).
+    if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/develop' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -90,7 +93,18 @@ jobs:
           outputs: type=cacheonly
           build-args: |
             APP_VERSION=ci
-          cache-from: type=registry,ref=${{ env.BUILD_CACHE }}
+          # Always a full build, and no cache-from. The check jobs build with Docker's
+          # own builder (code-check.yml: driver docker, containerd image store) and match
+          # the cache on the keys it records. When the base image behind a tag moves
+          # (ruby:4.0.10-alpine got a new digest on 2026-11-22 with no Dockerfile change),
+          # this job's container builder still matched its previous cache by layer content
+          # and re-exported the old records, which carry the old digest. The check jobs
+          # resolve the new digest, match none of them, and have rebuilt every layer since
+          # (0 CACHED in run 45107450943). A build from scratch records the keys of the
+          # base image as it is now, and picks up package updates that a stale `apk add`
+          # layer would otherwise hold back. Nothing waits on this job, so the longer
+          # build costs no wall clock.
+          no-cache: true
           # image-manifest + oci-mediatypes: GHCR rejects the default cache
           # manifest shape and only accepts one written as an OCI image manifest.
           cache-to: type=registry,ref=${{ env.BUILD_CACHE }},mode=max,image-manifest=true,oci-mediatypes=true
