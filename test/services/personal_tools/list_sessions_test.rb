@@ -56,6 +56,13 @@ module PersonalTools
       assert_equal [ waiting, queued, *live ].map(&:id).sort, listed.call("active")
     end
 
+    test "state: suspended lists the sessions waiting to be restored" do
+      suspended = create(:terminal_session, :agent_session, user: @user, project: @project, state: "suspended")
+      create(:terminal_session, :agent_session, user: @user, project: @project, state: "finished")
+
+      assert_equal [ suspended.id ], payload(execute(state: "suspended"))["sessions"].map { |s| s["id"] }
+    end
+
     test "logins and tool setups are left out, as on the Sessions & Runs list" do
       work = create(:terminal_session, :agent_session, :running, user: @user, project: @project)
       create(:terminal_session, :auth_setup, :running, user: @user)
@@ -68,7 +75,7 @@ module PersonalTools
       result = execute(state: "wedged")
 
       assert_equal 1, result[:exit_code]
-      assert_match(/active, pending, queued, running, finished, failed, cancelled, all/, result[:stderr])
+      assert_match(/active, pending, queued, running, finished, failed, cancelled, suspended, all/, result[:stderr])
     end
 
     test "an unknown sort column and an unreadable day are refused" do

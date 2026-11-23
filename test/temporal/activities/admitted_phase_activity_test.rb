@@ -322,6 +322,7 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
   # == suspend (Sessions::Suspension) ==
 
   include CheckpointStorageHelper
+  include ActionMailer::TestHelper
 
   # The strategy is where the checkpoint is taken; here it is a stand-in that records
   # what it was asked and, when asked to suspend, leaves a checkpoint as the real one does.
@@ -358,6 +359,28 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
       assert_equal 30.days.from_now, @session.restore_expires_at
     end
     assert @admission.reload.released_at, "a suspended session holds no slot"
+  ensure
+    restore_checkpoint_storage
+  end
+
+  # On Kubernetes the Pod outlives the first pass, and the workflow repeats cleanup until it is gone.
+  test "a cleanup repeated until the container is gone suspends the session once" do
+    stub_suspendable_cleanup
+    @runtime.stubs(:session_absent?).returns(false, false, true)
+    @session.update!(ready_at: (Sessions::Suspension::TIME_LIMIT - 1.minute).ago)
+
+    assert_enqueued_emails 1 do
+      assert cleanup[:cleanup_pending]
+      suspended_at = @session.reload.suspended_at
+
+      travel 1.minute do
+        cleanup
+      end
+
+      assert_equal "suspended", @session.reload.state
+      assert_equal suspended_at, @session.suspended_at
+    end
+    assert @admission.reload.released_at
   ensure
     restore_checkpoint_storage
   end

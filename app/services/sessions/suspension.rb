@@ -24,16 +24,13 @@ module Sessions
 
     # An interactive workflow step too: its run waits on it by reading the step's current
     # session (WorkflowExecutionWorkflowV2), so a suspended step holds the run until it is
-    # restored, and the restored session completes it. Without storage that signs uploads
-    # the archive has nowhere to go.
+    # restored, and the restored session completes it.
     def supported?(session)
-      return false unless session.mode == "interactive" && session.user_id.present? && storage_signs_uploads?
+      return false unless session.mode == "interactive" && session.user_id.present?
+      # A runner's callback proxy passes no upload to the app, only object storage's own URLs.
+      return false if session.runner_id.present? && !Uploads::ContainerTransfer.signs?(SessionCheckpointUploader.storages[:cache])
 
       session.agent_session? || (session.workflow_step? && session.step_run.present?)
-    end
-
-    def storage_signs_uploads?
-      SessionCheckpointUploader.storages[:cache].respond_to?(:presign)
     end
 
     def requested?(session)
@@ -87,8 +84,11 @@ module Sessions
     end
 
     # Called by the cleanup activity once the checkpoint is stored, in place of the
-    # usual final state.
+    # usual final state. Cleanup is repeated until the container is gone (a Kubernetes Pod
+    # outlives the first pass), so it comes back here for a session already suspended.
     def suspended!(session, now: Time.current)
+      return if session.suspended? || session.restored?
+
       session.update!(state: "suspended", finished_at: session.finished_at || now, container_id: nil,
                       suspended_at: now, restore_expires_at: window_end(session, now))
       session.step_run&.mark_suspended! if session.workflow_step?

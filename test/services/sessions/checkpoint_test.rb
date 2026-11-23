@@ -43,6 +43,7 @@ module Sessions
                        "bundle" => true, "patch" => true, "untracked" => false } ], checkpoint.repos
       assert_equal "archive-bytes", checkpoint.reload.archive.read
       assert_equal :store, checkpoint.archive.storage_key
+      assert_equal 1, SessionCheckpointUploader.storages[:cache].store.size, "the archive is not copied within the cache"
     end
 
     test "the script saves the session's repositories and the CLI's conversation, and leaves the rest out" do

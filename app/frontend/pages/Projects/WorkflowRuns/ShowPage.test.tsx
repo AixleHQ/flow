@@ -73,6 +73,30 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
     fetchSpy.mockRestore();
   });
 
+  it('links a restored step to the sessions it continues, oldest first', () => {
+    const run = makeRun({
+      stepRuns: [
+        buildStepRun({
+          id: 101,
+          stepId: 1,
+          stepName: 'Draft PRD',
+          stepPosition: 1,
+          state: 'completed',
+          terminalSessionId: 905,
+          sessionIds: [905, 903, 901],
+        }),
+      ],
+    });
+    renderAuthedPage(<ShowPage />, { props: seed({ run }) });
+
+    const earlier = screen.getByText(/restored from/);
+    expect(
+      within(earlier)
+        .getAllByRole('link')
+        .map((link) => link.getAttribute('href')),
+    ).toEqual(['/company/projects/7/sessions/901', '/company/projects/7/sessions/903']);
+  });
+
   it('says where the run and each of its sessions runs, with the flag on', () => {
     const run = makeRun({ runnerId: 4, runner: buildRunnerBadge({ id: 4, name: 'Prod VPC' }) });
     renderAuthedPage(<ShowPage />, { props: { ...seed({ run }), features: { externalRunners: true } } });

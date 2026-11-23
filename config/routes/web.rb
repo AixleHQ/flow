@@ -24,6 +24,11 @@ post "/agents/git/credentials", to: "git_credentials#create"
 get "/.well-known/openid-configuration", to: "oidc_issuer#configuration"
 get "/.well-known/jwks.json", to: "oidc_issuer#jwks"
 
+# A session archive an agent container puts or fetches where the storage cannot sign
+# its own URLs (Uploads::ContainerTransfer). Authenticated by the token in the query.
+put "/agents/storage", to: "container_storage#update"
+get "/agents/storage", to: "container_storage#show"
+
 # Credential write-back from agent containers: the in-container watcher posts an auth
 # file here as soon as the CLI rotates it, so a container that dies without cleanup no
 # longer takes the rotation with it. Authenticated by a derived per-session key

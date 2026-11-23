@@ -68,6 +68,12 @@ governance, community health — carry none.
   shown were offered on average over the selected period, which is what they are billed for,
   split into paying, trial and managed, with the change from the period before. A managed
   company without a worker limit counts at the most workers it ran at once.
+- **Sessions & Runs**: an interactive session can be suspended instead of finished, by its owner with **Suspend** or
+  by the 23-hour limit, which used to finish it. Its files, each repository's unpushed commits and uncommitted changes,
+  and the agent's conversation are kept for 30 days, and **Restore** starts a new session that picks up the same
+  conversation. An interactive workflow step can be suspended too: its run waits for it, and **Restore** on the run page
+  continues the same step. A suspended session holds no slot; its owner is emailed when it is suspended and three days
+  before it expires. Operators: a workflow run may now last 40 days instead of 7.
 
 ### Fixed
 - The `flow-web` image runs Ruby 4.0.10, which fixes the seven memory-safety bugs in
