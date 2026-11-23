@@ -98,7 +98,24 @@ module Sessions
       text = Base64.decode64(append.last[/echo (\S+) \| base64/, 1])
       assert_includes text, "This session was restored"
       assert_includes text, "continues session ##{@origin.id}"
+      assert_includes text, "branches and changes were put back, except what is listed below."
       assert_includes text, "Uncommitted changes of /workspace/repo/api could not be applied"
+    end
+
+    test "a checked-out commit that could not be found is named, with where the repository is now" do
+      restore(stdout: "WORKSPACE_OK\nCONVERSATION_OK\nREPO\t7\thead_missing\t\td0dd1f6\n")
+
+      assert_includes @session.reload.metadata.dig("restore", "notes"),
+                      "Commit abc123, checked out in /workspace/repo/api, could not be found, so it and the work " \
+                      "committed on it were not put back. The repository is now at d0dd1f6, with a detached HEAD."
+    end
+
+    test "a restore that put everything back says so without exceptions" do
+      restore
+
+      append = @runtime.execs.find { |cmd| cmd.last.to_s.include?("base64 -d >>") }
+      text = Base64.decode64(append.last[/echo (\S+) \| base64/, 1])
+      assert_includes text, "branches and changes were put back. Processes"
     end
 
     test "an archive that could not be fetched starts a fresh conversation, not a failed session" do

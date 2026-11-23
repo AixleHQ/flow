@@ -5,7 +5,7 @@ module Sessions
   # checkpoint.sh and put straight into storage over Uploads::ContainerTransfer's URL.
   # Design: docs/design/session-suspend-restore.md §4.
   #
-  #   repos/<repository id>/head.bundle    commits on local branches no remote ref has
+  #   repos/<repository id>/head.bundle    commits on local branches and HEAD that no remote ref has
   #   repos/<repository id>/tracked.patch  staged and unstaged changes, `git diff --binary HEAD`
   #   repos/<repository id>/untracked.tar  untracked files that are not ignored
   #   conversation.tar                     the CLI's conversation files, from its home

@@ -22,7 +22,7 @@ module Sessions
       @checkout = path("before/workspace/repo/api")
       git(@dir, "clone", "-q", @origin, @checkout)
       git(@checkout, "symbolic-ref", "HEAD", "refs/heads/main")
-      commit(@checkout, "README.md")
+      @base = commit(@checkout, "README.md")
       git(@checkout, "push", "-q", "origin", "main")
       FileUtils.mkdir_p([ path("before/home"), path("after/workspace"), path("after/home") ])
     end
@@ -78,6 +78,44 @@ module Sessions
       assert_equal head, git(@restored, "rev-parse", "HEAD")
     end
 
+    test "a commit made on a detached HEAD comes back as the detached HEAD" do
+      git(@checkout, "checkout", "-q", "--detach")
+      head = commit(@checkout, "detached.txt")
+
+      saved = checkpoint
+      assert_equal [ "", head ], saved.repo[3, 2]
+
+      restored = restore(saved)
+
+      assert_equal [ "REPO", "7", "ok", "", short(head) ], restored.repo
+      assert_equal head, git(@restored, "rev-parse", "HEAD")
+      assert_equal "detached.txt\n", File.read(File.join(@restored, "detached.txt"))
+    end
+
+    # Checkpoints stay restorable for 30 days, so some were taken before HEAD was bundled.
+    test "a checkpoint whose bundle has no HEAD still restores its branches" do
+      git(@checkout, "checkout", "-q", "-b", "feature")
+      head = commit(@checkout, "feature.txt")
+      saved = checkpoint
+      bundle_branches_only
+
+      restored = restore(saved)
+
+      assert_equal [ "REPO", "7", "ok", "feature", short(head) ], restored.repo
+      assert_equal head, git(@restored, "rev-parse", "HEAD")
+    end
+
+    test "a checked-out commit that is nowhere to be found is reported with where the checkout is now" do
+      git(@checkout, "checkout", "-q", "--detach")
+      commit(@checkout, "lost.txt")
+      saved = checkpoint
+      bundle_branches_only
+
+      restored = restore(saved)
+
+      assert_equal [ "REPO", "7", "head_missing", "", short(@base) ], restored.repo
+    end
+
     private
 
     def checkpoint
@@ -100,6 +138,20 @@ module Sessions
           "--leftovers", path("after/workspace/.aixle-restore"),
           "--repo", key, @restored, branch, head, on_remote)
     end
+
+    # The archive as checkpoint.sh built it before HEAD was bundled: local branches only, so a
+    # commit on a detached HEAD is in no bundle, and git refuses to write an empty one.
+    def bundle_branches_only
+      unpacked = path("unpacked")
+      FileUtils.mkdir_p(unpacked)
+      system("tar", "-C", unpacked, "-xzf", @archive, exception: true)
+      bundle = File.join(unpacked, "repos/7/head.bundle")
+      FileUtils.rm_f(bundle)
+      Open3.capture3("git", "bundle", "create", bundle, "--branches", "--not", "--remotes", chdir: @checkout)
+      system("tar", "-C", unpacked, "-czf", @archive, *Dir.children(unpacked), exception: true)
+    end
+
+    def short(sha) = git(@restored, "rev-parse", "--short", sha)
 
     def run_script(script, *arguments)
       stdout, stderr, status = Open3.capture3("/bin/bash", "-c", script, *arguments.map(&:to_s))

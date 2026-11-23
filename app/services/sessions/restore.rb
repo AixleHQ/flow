@@ -104,21 +104,27 @@ module Sessions
                  "Its files are in #{@adapter.home_dir} as the CLI keeps them (#{@adapter.conversation_paths.join(', ')})."
       end
       notes << "The earlier conversation was not saved." unless conversation
-      lines.select { |fields| fields.first == "REPO" && fields[2] != "ok" }.each do |_tag, id, status|
-        path = checkpoint.repos.find { |repo| repo["repository_id"].to_s == id }&.dig("path") || "repository #{id}"
-        notes << repo_note(path, status, id)
+      lines.select { |fields| fields.first == "REPO" && fields[2] != "ok" }.each do |_tag, id, status, branch, sha|
+        repo = checkpoint.repos.find { |entry| entry["repository_id"].to_s == id }.to_h
+        notes << repo_note(repo["path"] || "repository #{id}", status, id, head: repo["head_sha"], now: [ branch, sha ])
       end
       notes.compact
     end
 
-    def repo_note(path, status, id)
+    def repo_note(path, status, id, head:, now:)
       case status
       when "missing" then "#{path} was not cloned for this session, so its saved work was not put back."
       when "bundle_failed" then "Unpushed commits of #{path} could not be put back; they are in #{LEFTOVERS_DIR}/#{id}.bundle."
       when "patch_failed" then "Uncommitted changes of #{path} could not be applied; they are in #{LEFTOVERS_DIR}/#{id}.patch."
-      when "head_missing" then "The commit #{path} was on could not be found; it is left on its branch."
+      when "head_missing"
+        "Commit #{head.to_s.first(7)}, checked out in #{path}, could not be found, so it and the work committed on it " \
+          "were not put back.#{" The repository is now #{checkout_state(*now)}." if now.last.present?}"
       when "untracked_failed" then "Untracked files of #{path} could not all be put back."
       end
+    end
+
+    def checkout_state(branch, sha)
+      branch.present? ? "on branch #{branch} at #{sha}" : "at #{sha}, with a detached HEAD"
     end
 
     def record!(resume:, notes:, conversation_id: nil)
@@ -135,7 +141,8 @@ module Sessions
       origin = @session.restored_from_session
       text = +"\n\n## This session was restored\n\n"
       text << "It continues session ##{origin&.id}, suspended #{origin&.suspended_at&.utc&.strftime('%Y-%m-%d %H:%M UTC')}. "
-      text << "The files under /workspace and the repositories' branches and changes were put back. "
+      text << "The files under /workspace and the repositories' branches and changes were put back" \
+              "#{', except what is listed below' if notes.any?}. "
       text << "Processes that were running are gone, and anything installed or written outside /workspace "
       text << "(global packages, caches, /tmp) was not kept: install dependencies again before relying on them.\n"
       notes.each { |note| text << "\n- #{note}" }

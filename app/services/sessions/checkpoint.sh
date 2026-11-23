@@ -53,7 +53,8 @@ save_repo() {
   on_remote=false
   if [ -n "$branch" ] && timeout 30 git -c safe.directory='*' ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then on_remote=true; fi
   dirty=false; [ -n "$(g status --porcelain 2>/dev/null)" ] && dirty=true
-  g bundle create "$out/head.bundle" --branches --not --remotes >/dev/null 2>&1 || rm -f "$out/head.bundle"
+  # HEAD besides the branches: a commit made on a detached HEAD is on no branch.
+  g bundle create "$out/head.bundle" --branches HEAD --not --remotes >/dev/null 2>&1 || rm -f "$out/head.bundle"
   g diff --binary HEAD > "$out/tracked.patch" 2>/dev/null; [ -s "$out/tracked.patch" ] || rm -f "$out/tracked.patch"
   g ls-files -z --others --exclude-standard > "$out/.untracked" 2>/dev/null
   if [ -s "$out/.untracked" ]; then tar --null -T "$out/.untracked" -cf "$out/untracked.tar" 2>/dev/null || rm -f "$out/untracked.tar"; fi

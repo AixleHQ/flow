@@ -13,7 +13,8 @@
 #
 # Prints tab-separated lines, read by Sessions::Restore:
 #   WORKSPACE_OK, CONVERSATION_OK
-#   REPO <key> <ok|missing|bundle_failed|head_missing|patch_failed|untracked_failed>
+#   REPO <key> missing
+#   REPO <key> <ok|bundle_failed|head_missing|patch_failed|untracked_failed> <branch now> <short head now>
 #   DOWNLOAD_FAILED (exit 5), UNPACK_FAILED (exit 6)
 set -u
 
@@ -50,8 +51,12 @@ restore_repo() {
   if [ -n "$branch" ] && [ "$on_remote" = true ]; then g fetch -q origin "$branch" >/dev/null 2>&1 || true; fi
   # A fetch into refs/heads/* refuses to update the checked-out branch.
   g checkout -q --detach 2>/dev/null
-  if [ -f "$src/head.bundle" ] && ! g fetch -q "$src/head.bundle" 'refs/heads/*:refs/heads/*' >/dev/null 2>&1; then
-    cp "$src/head.bundle" "$leftovers/$key.bundle"; status=bundle_failed
+  if [ -f "$src/head.bundle" ]; then
+    # Bundles from before HEAD was saved have none, and fetching a missing ref fails the whole fetch.
+    with_head=; g bundle list-heads "$src/head.bundle" HEAD 2>/dev/null | grep -q . && with_head=HEAD
+    if ! g fetch -q "$src/head.bundle" 'refs/heads/*:refs/heads/*' $with_head >/dev/null 2>&1; then
+      cp "$src/head.bundle" "$leftovers/$key.bundle"; status=bundle_failed
+    fi
   fi
   if [ -n "$branch" ]; then
     if g rev-parse -q --verify "refs/heads/$branch" >/dev/null; then g checkout -q -f "$branch"
@@ -64,7 +69,8 @@ restore_repo() {
     cp "$src/tracked.patch" "$leftovers/$key.patch"; [ "$status" = ok ] && status=patch_failed
   fi
   if [ -f "$src/untracked.tar" ] && ! tar -xf "$src/untracked.tar" 2>/dev/null; then [ "$status" = ok ] && status=untracked_failed; fi
-  printf 'REPO\t%s\t%s\n' "$key" "$status"
+  printf 'REPO\t%s\t%s\t%s\t%s\n' "$key" "$status" \
+    "$(g symbolic-ref -q --short HEAD)" "$(g rev-parse -q --verify --short HEAD)"
 }
 
 mkdir -p "$leftovers"
