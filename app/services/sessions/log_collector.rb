@@ -90,18 +90,9 @@ module Sessions
 
       found.each do |path, size|
         name = log_name(path)
-
-        if direct_upload? && (uploaded = upload_from_container(path, size, name))
-          log = persist(name, uploaded, uploaded.size)
-          contents["logs/#{name}"] = LogSource.new(log.file, size: uploaded.size)
-          count += 1
-          next
-        end
-
-        content = read(path, size)
+        content = store_from_container(path, size, name) || store_bounded(path, size, name)
         next if content.nil?
 
-        persist(name, content, content.bytesize)
         contents["logs/#{name}"] = content
         count += 1
       end
@@ -167,6 +158,39 @@ module Sessions
     # parser was already written against `each_line`.
     def direct_upload?
       @container_redacts && cache_storage.respond_to?(:presign)
+    end
+
+    # A log is an artifact of the step, never a reason to fail it: the step's outputs, the
+    # agent's rotated credentials and the session's usage are all collected after the logs,
+    # so a log that raises here takes them down with it.
+    def store_from_container(path, size, name)
+      return nil unless direct_upload?
+
+      if size > SessionLogUploader::MAX_SIZE
+        limit = ActiveSupport::NumberHelper.number_to_human_size(SessionLogUploader::MAX_SIZE)
+        failures << "#{path} — #{size} bytes, over the #{limit} a stored log may hold, kept a bounded tail"
+        return nil
+      end
+
+      uploaded = upload_from_container(path, size, name)
+      return nil if uploaded.nil?
+
+      log = persist(name, uploaded, uploaded.size)
+      LogSource.new(log.file, size: uploaded.size)
+    rescue StandardError => e
+      failures << "#{path} — uploaded, but could not be stored: #{e.class}: #{e.message}, fell back to a bounded read"
+      nil
+    end
+
+    def store_bounded(path, size, name)
+      content = read(path, size)
+      return nil if content.nil?
+
+      persist(name, content, content.bytesize)
+      content
+    rescue StandardError => e
+      failures << "#{path} — could not be stored: #{e.class}: #{e.message}"
+      nil
     end
 
     # FNM_PATHNAME so a `*` stays inside one directory, as it does in the container's
@@ -249,8 +273,6 @@ module Sessions
     def curl_put(source, url)
       "curl -sS --noproxy '*' --fail --max-time #{UPLOAD_TIMEOUT_SECONDS} -X PUT -T #{source} #{Shellwords.escape(url)}"
     end
-
-
 
     # A literal path that produced no file is worth saying out loud — it is a declaration
     # the image no longer honours. A glob matching nothing is ordinary: not every session
