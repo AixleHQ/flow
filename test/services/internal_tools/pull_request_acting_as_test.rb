@@ -126,7 +126,7 @@ class InternalTools::PullRequestActingAsTest < ActiveSupport::TestCase
 
     test "#{host}: the session's own user needs the own-tasks switch" do
       connect!(host)
-      create(:oauth_credential, "#{host}_user".to_sym, owner: @owner, oauth_client: @credential.oauth_client)
+      create(:oauth_credential, :"#{host}_user", owner: @owner, oauth_client: @credential.oauth_client)
       consent!(@owner, in_others_tasks: true)
 
       refused = run_write(:add_comment, user_id: @owner.id)
@@ -159,7 +159,7 @@ class InternalTools::PullRequestActingAsTest < ActiveSupport::TestCase
     test "#{host}: a member who is not on the project is refused" do
       connect!(host)
       outsider = create(:user, :employee, company: @company, name: "Outsider")
-      create(:oauth_credential, "#{host}_user".to_sym, owner: outsider, oauth_client: @credential.oauth_client)
+      create(:oauth_credential, :"#{host}_user", owner: outsider, oauth_client: @credential.oauth_client)
       consent!(outsider, in_others_tasks: true)
 
       result = run_write(:create, user_id: outsider.id)
