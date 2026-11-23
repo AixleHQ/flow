@@ -31,6 +31,11 @@ governance, community health — carry none.
 - **Sessions & Runs**: when the cluster stops answering while files are copied into an
   agent's container, the copy gives up within seconds. It used to hold the session at
   setup for ten minutes and then fail the step with "Unresolved exec".
+- **Sessions & Runs**: a session log over 1 GB no longer fails the step and loses its
+  outputs. The session keeps the end of that log, and its log collection report says why.
+- **Sessions & Runs**: a Kiro session's HTTP log now records only Kiro's own traffic. It
+  used to record every request the agent made to AWS, response bodies included, which
+  could push the log past 1 GB.
 
 ## [1.17.0] - 2026-11-23
 

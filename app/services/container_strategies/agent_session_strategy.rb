@@ -423,6 +423,9 @@ module ContainerStrategies
       end
 
       [ result.count, result.contents ]
+    rescue StandardError => e
+      Rails.logger.error("[AgentSession] session=#{session.id} log collection failed: #{e.class}: #{e.message}")
+      [ 0, {} ]
     end
 
     # → ContainerStrategies::Collection

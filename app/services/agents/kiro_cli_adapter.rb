@@ -837,8 +837,11 @@ module Agents
       }
     end
 
+    # Kiro's own hosts only. Everything the agent does against AWS goes through the same
+    # proxy, so tracking `amazonaws.com` logs the bodies of the `aws` CLI's answers and of
+    # image layers pulled from S3 too, which can pass the 1 GB a stored log may hold.
     def mitm_tracked_domains
-      %w[amazonaws.com kiro.dev]
+      %w[kiro.dev]
     end
 
     def session_log_paths

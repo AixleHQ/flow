@@ -113,6 +113,20 @@ module ContainerStrategies
       assert_operator session.session_logs.reload.count, :>=, 1
     end
 
+    test "before_cleanup still collects the step's outputs when its logs cannot be collected" do
+      stub_container_runtime(agent_type: "claude_code")
+      create(:agent_credential, user: @user, agent_type: "claude_code")
+      session, = create_workflow_step_session
+      Sessions::LogCollector.stubs(:new).raises(ActiveRecord::RecordInvalid.new(SessionLog.new))
+
+      result = nil
+      assert_difference "WorkflowRunAsset.count", 1 do
+        result = build_strategy(session: session).before_cleanup(container_id: "abc123")
+      end
+
+      assert_equal 1, result[:outputs_count]
+    end
+
     # The session that restores the step leaves them; downstream steps take them from there.
     test "a suspended step keeps its outputs in the checkpoint instead of handing them on" do
       runtime = stub_container_runtime(agent_type: "claude_code")

@@ -325,6 +325,52 @@ module Sessions
       assert_no_secret @session.session_logs.find_by(name: "9d000c89.jsonl").file.read
     end
 
+    # The size comes from the container's listing, so a log over the storage limit is one
+    # whose listing says so — nobody writes a gigabyte to the fake.
+    def list_size(path, bytes)
+      @runtime.extend(Module.new do
+        define_method(:exec) do |id, cmd, opts = {}|
+          stdout, stderr, code = super(id, cmd, opts)
+          next [ stdout, stderr, code ] unless cmd.join(" ").include?("for f in")
+
+          [ stdout.map { |out| out.sub(/^#{Regexp.escape(path)}\|\d+$/, "#{path}|#{bytes}") }, stderr, code ]
+        end
+      end)
+    end
+
+    test "keeps a bounded tail of a log over the storage limit instead of uploading it" do
+      @runtime.fs["/var/log/mitm/http.log"] = "the tail of a huge log\n"
+      list_size("/var/log/mitm/http.log", SessionLogUploader::MAX_SIZE + 1)
+
+      result = with_filters { collect(cache_storage_key: presigned_cache) }
+
+      assert_not_includes uploaded_paths, "/var/log/mitm/http.log"
+      assert_equal "the tail of a huge log\n", @session.session_logs.find_by!(name: "http.log").file.read
+      assert_not_nil @session.session_logs.find_by(name: "9d000c89.jsonl"), "the other logs stopped at the large one"
+      assert_includes result.failures.join, "over the 1 GB a stored log may hold"
+      assert_includes @session.session_logs.find_by!(name: LogCollector::REPORT_NAME).file.read, "/var/log/mitm/http.log"
+    end
+
+    # The masked copy is what gets stored, and its size comes from the masker; the
+    # storage refuses one that grew past its limit.
+    test "falls back to the bounded read when an uploaded log cannot be stored" do
+      @runtime.extend(Module.new do
+        define_method(:exec) do |id, cmd, opts = {}|
+          stdout, stderr, code = super(id, cmd, opts)
+          next [ stdout, stderr, code ] unless cmd.join(" ").include?("aixle_redact.py file")
+
+          [ [ "#{SessionLogUploader::MAX_SIZE + 1}\n" ], stderr, code ]
+        end
+      end)
+
+      result = with_filters { collect(cache_storage_key: presigned_cache) }
+
+      assert_includes result.failures.join, "#{CLAUDE_TRANSCRIPT} — uploaded, but could not be stored"
+      assert_includes result.failures.join, "is too large (max is 1 GB)"
+      assert_equal %({"type":"assistant"}\n), @session.session_logs.find_by!(name: "9d000c89.jsonl").file.read
+      assert_not_nil @session.session_logs.find_by(name: "http.log")
+    end
+
     test "falls back to the bounded read when the upload fails, and says so" do
       @runtime.fail_exec("curl", stderr: "curl: (28) timeout", exit_code: 28)
 
