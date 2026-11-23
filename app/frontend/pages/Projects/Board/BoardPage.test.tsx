@@ -1503,6 +1503,29 @@ describe('Projects/Board/BoardPage', () => {
     expect(screen.getByLabelText('Drag Wire up authentication')).toBeInTheDocument();
   });
 
+  it('keeps the chip box of a collapsed column from scrolling horizontally', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        tasks: [
+          makeTask({
+            id: 1,
+            title: 'Wire up authentication',
+            boardColumnId: 100,
+            recentWorkflowRuns: [runOf({ state: 'running' })],
+          }),
+        ],
+      },
+    });
+
+    const toggles = screen.getAllByRole('button', { name: 'Collapse column' });
+    await userEvent.click(toggles[0]);
+    await waitFor(() => expect(screen.queryByText('Wire up authentication')).not.toBeInTheDocument());
+
+    const chipBox = screen.getByLabelText('Drag Wire up authentication').parentElement;
+    expect(chipBox).toHaveStyle({ overflowX: 'hidden', overflowY: 'auto' });
+  });
+
   it('opens the task detail sidebar when a ticket chip in a collapsed column is clicked', async () => {
     renderAuthedPage(<BoardPage />, { props: populatedProps });
 

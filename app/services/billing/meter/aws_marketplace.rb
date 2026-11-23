@@ -12,7 +12,7 @@ module Billing
     # DOWN, never up. The rounding direction is the one thing about it a customer
     # would notice, and charging for a minute that was not given is worse than
     # giving away one that was. In minutes rather than hours, so the most that
-    # can be lost is under a queue_minute an hour.
+    # can be lost is under a worker_minute an hour.
     #
     # ONE ATTEMPT, NOT A RETRY LOOP. AWS counts its once-per-hour budget per
     # caller, so a retry landing on another replica would find an unused budget
@@ -22,10 +22,13 @@ module Billing
     # recorded rather than as an error.
     class AwsMarketplace < Base
       # Must match the dimension's API identifier in the listing character for
-      # character. The listing spells it with an underscore because the portal
-      # accepts letters, digits and underscores and refuses the hyphen this was
-      # written with until 29 September 2026.
-      DIMENSION = "queue_minute"
+      # character; an identifier cannot change once the listing is published.
+      # The same word as the SaaS product's dimension since 13 November 2026,
+      # when the self-hosted product was listed afresh: the first listing was
+      # published with `queue_minute`, a word the product no longer uses, and
+      # that product is being withdrawn rather than renamed. The underscore is
+      # the portal's: it accepts letters, digits and underscores only.
+      DIMENSION = "worker_minute"
 
       def initialize(client: ::Billing::MarketplaceMeteringClient.new)
         super()
