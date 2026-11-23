@@ -402,6 +402,21 @@ describe('Dashboard', () => {
     expect(within(rowOf('Total, all companies')).getByText('58')).toBeInTheDocument();
   });
 
+  it('explains the dashboard in headed sections under the table, and says how fresh the data is', () => {
+    render(<Dashboard paths={paths} data={data} now={now} />);
+
+    expect(screen.getByText('How to read this dashboard')).toBeInTheDocument();
+    for (const section of ['Metrics', 'Company attributes', 'Filters and totals', 'Periods and comparison']) {
+      expect(screen.getByText(section)).toBeInTheDocument();
+    }
+    expect(screen.getByText('The limit (∞ when none was set).')).toBeInTheDocument();
+    expect(screen.getByText(/sessions started within the p95 wait/)).toBeInTheDocument();
+    expect(screen.getByText('People and Projects always count the whole platform.')).toBeInTheDocument();
+    expect(screen.getByText(/^“Not billed” in the Companies and Average workers tiles/)).toBeInTheDocument();
+    expect(screen.getByText('Weeks run Monday to Sunday.')).toBeInTheDocument();
+    expect(screen.getByText(/^Measured through Oct 16, 2026.*11:00 UTC\. Open a company/)).toBeInTheDocument();
+  });
+
   it('shows the platform tiles and says so when no usage has been measured yet', () => {
     render(<Dashboard paths={paths} data={{ ...data, tenants: [], days: [], measuredThrough: null }} now={now} />);
 

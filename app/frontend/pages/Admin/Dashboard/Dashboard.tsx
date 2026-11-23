@@ -429,6 +429,10 @@ export default function Dashboard({
         : { key, direction: key === 'name' ? 'ascending' : 'descending' },
     );
 
+  const measured = data.measuredThrough
+    ? `Measured through ${instant.format(new Date(data.measuredThrough))} UTC.`
+    : '';
+
   const footerCell = (totals: Totals, column: Column) => {
     const field = column.total;
     if (!field) return <td key={column.key} />;
@@ -594,24 +598,68 @@ export default function Dashboard({
         </table>
       </div>
 
+      <details className={classes.legend}>
+        <summary>How to read this dashboard</summary>
+
+        <h3>Metrics</h3>
+        <dl>
+          <dt>Worker hours</dt>
+          <dd>
+            The capacity a company was offered — its worker limit over time, which is what a paying company is billed
+            for. For the time a company has no limit they are its busy hours, so that time shows as fully used.
+          </dd>
+          <dt>Busy hours</dt>
+          <dd>The time its workers actually held a session.</dd>
+          <dt>Utilization</dt>
+          <dd>Busy ÷ worker hours.</dd>
+          <dt>Min / Max workers</dt>
+          <dd>The limit (∞ when none was set).</dd>
+          <dt>Peak workers</dt>
+          <dd>The most held at once.</dd>
+          <dt>Average workers (tiles)</dt>
+          <dd>
+            The workers offered over the period&apos;s measured hours, which is what an invoice charges for, split by
+            each day&apos;s billing class. A company with no limit is offered none, so it counts at its peak workers.
+          </dd>
+          <dt>Wait time / p95 wait</dt>
+          <dd>
+            How long a session queued before a worker took it. 95% of the period&apos;s sessions started within the p95
+            wait.
+          </dd>
+        </dl>
+
+        <h3>Company attributes</h3>
+        <dl>
+          <dt>Account status, type and billing method</dt>
+          <dd>Each company&apos;s as it stands now, whatever the period.</dd>
+          <dt>No billing method (—)</dt>
+          <dd>Nobody invoices the company: it is managed by Aixle, not paying yet, or self-hosted.</dd>
+          <dt>Account created</dt>
+          <dd>The UTC day the company was created.</dd>
+        </dl>
+
+        <h3>Filters and totals</h3>
+        <ul>
+          <li>The search and the filters narrow the table, its total and the tiles to the companies that match.</li>
+          <li>People and Projects always count the whole platform.</li>
+          <li>
+            “Not billed” in the Companies and Average workers tiles counts companies, or their workers, that run free
+            without being managed, which should never happen.
+          </li>
+        </ul>
+
+        <h3>Periods and comparison</h3>
+        <ul>
+          <li>Days are UTC.</li>
+          <li>Weeks run Monday to Sunday.</li>
+          <li>The small figure under each value is the change from the previous period.</li>
+          <li>A period still in progress is compared with the same number of days of the one before.</li>
+        </ul>
+      </details>
+
       <p className={classes.note}>
-        Worker hours are the capacity a company was offered — its worker limit over time, which is what a paying company
-        is billed for; for the time a company has no limit they are its busy hours, so that time shows as fully used.
-        Busy hours are the time its workers actually held a session; utilization is busy ÷ worker hours. Min and max
-        workers are the limit (∞ when none was set); peak workers is the most held at once. Average workers in the tiles
-        is the workers offered over the period&apos;s measured hours, which is what an invoice charges for, split by
-        each day&apos;s billing class; a company with no limit is offered none, so it counts at its peak workers. Wait
-        time is how long a session queued before a worker took it; 95% of the period&apos;s sessions started within the
-        p95 wait. Account status, account type and billing method are each company&apos;s as it stands now, whatever the
-        period; a company with no billing method is one nobody invoices — managed by Aixle, not paying yet, or
-        self-hosted. Account created is the UTC day the company was created. The search and the filters narrow the
-        table, its total and the tiles to the companies that match, all but People and Projects, which always count the
-        whole platform. “Not billed” in the Companies and Average workers tiles counts companies, or their workers, that
-        run free without being managed, which should never happen. Days are UTC and weeks run Monday to Sunday. The
-        small figure under each value is the change from the previous period; a period still in progress is compared
-        with the same number of days of the one before.
-        {data.measuredThrough && ` Measured through ${instant.format(new Date(data.measuredThrough))} UTC.`} Open a
-        company for its queue in detail: wait percentiles, how many were already waiting, its projects and its hours.
+        {measured} Open a company for its queue in detail: wait percentiles, how many were already waiting, its projects
+        and its hours.
       </p>
 
       {opened && (

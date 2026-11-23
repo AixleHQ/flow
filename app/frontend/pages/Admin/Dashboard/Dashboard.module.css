@@ -567,6 +567,60 @@
   color: var(--app-info-fg);
 }
 
+.root .legend {
+  max-width: 900px;
+  margin: 16px 0 0;
+  color: var(--app-text-secondary);
+  font-size: 13px;
+}
+
+.root .legend summary {
+  width: fit-content;
+  color: var(--app-text-primary);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.root .legend summary:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--app-primary);
+  outline-offset: 2px;
+}
+
+.root .legend h3 {
+  margin: 16px 0 6px;
+  color: var(--app-text-primary);
+  font-family: var(--app-font-heading);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.root .legend dl {
+  display: grid;
+  grid-template-columns: minmax(8rem, max-content) minmax(0, 1fr);
+  gap: 4px 16px;
+  margin: 0;
+}
+
+.root .legend dt {
+  margin: 0;
+  color: var(--app-text-primary);
+  font-weight: 500;
+}
+
+.root .legend dd {
+  margin: 0;
+}
+
+.root .legend ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.root .legend li {
+  margin: 2px 0;
+}
+
 .root .note {
   max-width: 900px;
   margin: 12px 0 0;
