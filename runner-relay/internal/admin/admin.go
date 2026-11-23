@@ -1,6 +1,7 @@
 // Package admin is the service's admin server (docs/design/agent-runtimes/runner-relay.md
-// §2.2, §2.4): `/healthz`, `/readyz`, `/metrics` and the drain. It listens on its own
-// port, which the ingress never routes.
+// §2.2, §2.4): `/healthz`, `/readyz` and `/metrics`. It listens on its own
+// port, which the ingress never routes. Nothing on it changes state: a drain comes from
+// SIGTERM (cmd/aixle-runner-relay), not from this port.
 package admin
 
 import (
@@ -16,8 +17,6 @@ import (
 type Service interface {
 	// Ready says whether the service takes connections.
 	Ready(ctx context.Context) error
-	// Drain stops taking connections and sends GOAWAY on the open ones.
-	Drain()
 }
 
 // ReadyTimeout bounds one readiness probe.
@@ -28,7 +27,8 @@ const ReadyTimeout = 2 * time.Second
 //	GET  /healthz  200 while the process serves
 //	GET  /readyz   200 when Redis answers and no drain is under way, else 503
 //	GET  /metrics  Prometheus text
-//	POST /drain    202; GOAWAY on every connection, and no new one is taken
+//
+// Any other route or method is not served.
 func Handler(svc Service, gatherer prometheus.Gatherer) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -48,10 +48,5 @@ func Handler(svc Service, gatherer prometheus.Gatherer) http.Handler {
 		w.Write([]byte("ready\n"))
 	})
 	mux.Handle("GET /metrics", promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{}))
-	mux.HandleFunc("POST /drain", func(w http.ResponseWriter, _ *http.Request) {
-		svc.Drain()
-		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte("draining\n"))
-	})
 	return mux
 }
