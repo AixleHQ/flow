@@ -9,21 +9,23 @@ add, remove, or move a document under `docs/`, update `docs/index.md` in the sam
 
 ## Before pushing a branch or opening/updating a PR
 
-**before push final results to repo - run the full check suite in Docker first, and only push once it is green:**
+Run the cheap checks locally, then let CI run the full suite on the PR.
 
-```bash
-docker compose exec -T web make check_all
-```
+Before a push:
 
-`check_all` mirrors CI in a single pass and never short-circuits — it captures
-each result and prints a summary of all failures:
+- the tests for what you changed — `docker compose exec -T web bin/rails test <files>`,
+  `docker compose exec -T web ./node_modules/.bin/vitest run <files>`
+- the static checks — `docker compose exec -T web make lint_check_all` (rubocop, brakeman,
+  eslint, `tsc`, `fsd` via steiger, the watcher test; no database, all in parallel — CI's
+  lint job)
 
-- **Backend:** `rails test`, `rubocop`, `brakeman`
-- **Frontend:** `eslint`, `typescript` (`tsc`), `fsd` (Feature-Sliced Design check via steiger), `vitest`
+Once the PR is open, CI runs everything: lint, system tests, sharded Rails and Vitest,
+the merged coverage floors and the secret scan. Watch it (`gh pr checks <n> --watch`).
+When a check is red, fix it on the branch and push again. A PR is done when CI is green,
+not when it is opened.
 
-(CI splits this into parallel jobs — lint, system, sharded Rails and Vitest, merged
-coverage; `check_all` covers all of it locally.) Don't push a branch or open/update a PR until `check_all` is green —
-it catches what a partial, hand-picked test run misses.
+`make check_all` still runs the whole CI suite in one local pass. Use it to reproduce a
+CI failure locally, not as a gate before every push.
 
 ## Docker is required
 
@@ -36,7 +38,7 @@ on the host). If the container isn't running: `docker compose up -d`.
 
 - Backend tests: `docker compose exec -T web bin/rails test <files>`
 - Frontend tests: `docker compose exec -T web ./node_modules/.bin/vitest run <files>` (`npx` is not on the container PATH)
-- Full suite before push: `docker compose exec -T web make check_all`
+- The whole CI suite in one local pass, when you need it: `docker compose exec -T web make check_all`
 
 **Never run two backend test invocations at the same time** (including from another
 agent session or a git worktree that shares a Postgres — overlapping runs corrupt
