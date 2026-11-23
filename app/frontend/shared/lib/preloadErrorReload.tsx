@@ -75,12 +75,47 @@ const showLoadFailedPrompt = (): void => {
   });
 };
 
-const reportStuckChunk = (payload: unknown): void => {
+const PROBE_TIMEOUT_MS = 3000;
+
+// Chrome words the failure "Failed to fetch dynamically imported module: <url>";
+// other browsers differ, so an empty result means "unknown", never a control-flow input.
+const parseChunkUrl = (message: string): string => message.match(/https?:\/\/[^\s'")]+/)?.[0] ?? '';
+
+const chunkHost = (chunkUrl: string): 'own' | 'asset_host' | 'unknown' => {
+  if (!chunkUrl) return 'unknown';
+  try {
+    return new URL(chunkUrl).origin === window.location.origin ? 'own' : 'asset_host';
+  } catch {
+    return 'unknown';
+  }
+};
+
+// 404 means the asset is gone; another status or a network error points at transport or cache.
+const probeChunk = async (chunkUrl: string): Promise<string> => {
+  if (!chunkUrl) return 'unknown';
+  try {
+    const response = await fetch(chunkUrl, {
+      method: 'HEAD',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+    });
+    return String(response.status);
+  } catch {
+    return 'unknown';
+  }
+};
+
+const reportStuckChunk = async (payload: unknown, reloadedAt: number): Promise<void> => {
   if (reportedStuck) return;
   reportedStuck = true;
+  const error = payload instanceof Error ? payload.message : String(payload);
+  const chunkUrl = parseChunkUrl(error);
+  const chunkStatus = await probeChunk(chunkUrl);
   Sentry.captureMessage('A page chunk still failed to load after a reload', {
     level: 'warning',
-    extra: { error: payload instanceof Error ? payload.message : String(payload) },
+    fingerprint: ['stuck-page-chunk'],
+    tags: { chunk_host: chunkHost(chunkUrl), reload_age_ms: String(Date.now() - reloadedAt) },
+    extra: { error, chunkUrl, chunkStatus },
   });
 };
 
@@ -93,7 +128,7 @@ const handlePreloadError = (event: Event): void => {
   const reloadedAt = readReloadedAt();
   if (reloadedAt && Date.now() - reloadedAt < RELOAD_GUARD_MS) {
     showLoadFailedPrompt();
-    reportStuckChunk((event as Event & { payload?: unknown }).payload);
+    void reportStuckChunk((event as Event & { payload?: unknown }).payload, reloadedAt);
     return;
   }
 
