@@ -36,6 +36,11 @@ governance, community health — carry none.
   registers a Bitbucket OAuth client with the callback `<PROTOCOL>://<DOMAIN>/oauth/callback`
   and sets `BITBUCKET_OAUTH_CLIENT_ID` and `BITBUCKET_OAUTH_CLIENT_SECRET`.
 
+### Changed
+- **Admin**: the dashboard opens on the current week, shows Utilization, Average wait and
+  p95 wait right after Company, keeps the table's header and Company column in view while
+  it scrolls, and folds its explanation into a "How to read this dashboard" section.
+
 ### Fixed
 - **Wrappers**: a wrapper with a parameter named like `max`, `min`, `count` or `size` runs
   again. Every call to it used to hang until it timed out after an hour.
