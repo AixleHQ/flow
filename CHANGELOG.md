@@ -17,6 +17,7 @@ governance, community health — carry none.
 - **Admin**: the dashboard opens on the current week, shows Utilization, Average wait and
   p95 wait right after Company, keeps the table's header and Company column in view while
   it scrolls, and folds its explanation into a "How to read this dashboard" section.
+- **Tasks**: a filtered board loads all its columns in one request instead of one per column.
 
 ### Fixed
 - **Wrappers**: a wrapper with a parameter named like `max`, `min`, `count` or `size` runs

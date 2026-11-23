@@ -33,13 +33,21 @@ const initialTasks = [task(1, 100, 0), task(2, 100, 1), task(9, 200, 0)];
 const NO_TASKS: BoardTask[] = [];
 
 /**
- * Answers the per-column tasks endpoint from `byColumn`, with the `X-Total-Count` header the
- * column header reads its total from. A fresh Response per call: a body can only be read once,
- * and every column asks separately.
+ * Answers the tasks endpoints from `byColumn`: the per-column `index` with the `X-Total-Count`
+ * header the column header reads its total from, and `by_column` with every column it is asked
+ * for. A fresh Response per call: a body can only be read once.
  */
 const stubTasksResponse = (byColumn: Record<number, BoardTask[]>, totals: Record<number, number> = {}) =>
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
-    const columnId = Number(new URL(String(input), 'http://localhost').searchParams.get('board_column_id'));
+    const url = new URL(String(input), 'http://localhost');
+    if (url.pathname.endsWith('/tasks/by_column')) {
+      const columns = url.searchParams.getAll('board_column_ids[]').map((id) => {
+        const items = byColumn[Number(id)] ?? [];
+        return { boardColumnId: Number(id), total: totals[Number(id)] ?? items.length, tasks: items };
+      });
+      return new Response(JSON.stringify({ columns }), { status: 200 });
+    }
+    const columnId = Number(url.searchParams.get('board_column_id'));
     const items = byColumn[columnId] ?? [];
     return new Response(JSON.stringify(items), {
       status: 200,
@@ -144,8 +152,8 @@ describe('useBoardTaskPages', () => {
     expect(fetchSpy.mock.calls.map(urlOf).filter((url) => url.includes('board_column_id=100'))).toHaveLength(1);
   });
 
-  it('re-queries every column server-side once a filter is on, and reports the filtered totals', async () => {
-    const fetchSpy = stubTasksResponse({ 100: [task(3, 100, 2)], 200: [task(9, 200, 0)] });
+  it('re-queries every column server-side in one request once a filter is on, with the filtered totals', async () => {
+    const fetchSpy = stubTasksResponse({ 100: [task(3, 100, 2)], 200: [task(9, 200, 0)] }, { 100: 3 });
     const { result } = renderPages({ ...NO_FILTERS, search: 'auth' });
 
     // `tasks` is mirrored state: the answer lands in `queryTasks` — which `counts` reads in the
@@ -154,11 +162,84 @@ describe('useBoardTaskPages', () => {
     // The props page is replaced by the server's answer rather than filtered in place.
     await waitFor(() => expect(result.current.tasks.map((t) => t.id)).toEqual([3, 9]));
     expect(result.current.filtered).toBe(true);
-    expect(result.current.counts).toEqual({ 100: 1, 200: 1 });
+    expect(result.current.counts).toEqual({ 100: 3, 200: 1 });
+    expect(result.current.hasMore).toEqual({ 100: true, 200: false });
 
-    const urls = fetchSpy.mock.calls.map(urlOf);
-    expect(urls).toHaveLength(2);
-    for (const url of urls) expect(url).toContain('q%5Bg%5D%5B0%5D%5Btitle_i_cont%5D=auth');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const url = new URL(urlOf(fetchSpy.mock.calls[0]), 'http://localhost');
+    expect(url.pathname).toBe(`/api/v1/projects/${PROJECT_ID}/tasks/by_column`);
+    expect(url.searchParams.get('q[g][0][title_i_cont]')).toBe('auth');
+    expect(url.searchParams.getAll('board_column_ids[]')).toEqual(['100', '200']);
+    // As much as each column already showed, never less than a page.
+    expect(url.searchParams.get('limits[100]')).toBe('2');
+    expect(url.searchParams.get('limits[200]')).toBe('2');
+  });
+
+  it('answers a cable refresh of the filtered board with one more request, not one per column', async () => {
+    const fetchSpy = stubTasksResponse({ 100: [task(3, 100, 2)], 200: [task(9, 200, 0)] });
+    const filters = { ...NO_FILTERS, search: 'auth' };
+    const { result, rerender } = renderHook(
+      ({ tasks }: { tasks: BoardTask[] }) =>
+        useBoardTaskPages<BoardTask>({
+          projectId: PROJECT_ID,
+          enabled: true,
+          columns: [BACKLOG, IN_PROGRESS],
+          initialTasks: tasks,
+          pageSize: PAGE_SIZE,
+          filters,
+          normalize: (t) => t,
+        }),
+      { initialProps: { tasks: initialTasks } },
+    );
+    await waitFor(() => expect(result.current.tasks.map((t) => t.id)).toEqual([3, 9]));
+
+    rerender({ tasks: [...initialTasks] });
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+    for (const call of fetchSpy.mock.calls) expect(urlOf(call)).toContain('/tasks/by_column?');
+  });
+
+  it('keeps the filtered tasks and totals when a refresh of the filtered board fails', async () => {
+    const fetchSpy = stubTasksResponse({ 100: [task(3, 100, 2)], 200: [task(9, 200, 0)] });
+    const filters = { ...NO_FILTERS, search: 'auth' };
+    const { result, rerender } = renderHook(
+      ({ tasks }: { tasks: BoardTask[] }) =>
+        useBoardTaskPages<BoardTask>({
+          projectId: PROJECT_ID,
+          enabled: true,
+          columns: [BACKLOG, IN_PROGRESS],
+          initialTasks: tasks,
+          pageSize: PAGE_SIZE,
+          filters,
+          normalize: (t) => t,
+        }),
+      { initialProps: { tasks: initialTasks } },
+    );
+    await waitFor(() => expect(result.current.tasks.map((t) => t.id)).toEqual([3, 9]));
+
+    fetchSpy.mockResolvedValue(new Response('{}', { status: 500 }));
+    rerender({ tasks: [...initialTasks] });
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+    // Let the failed request settle before reading what it left behind.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(result.current.tasks.map((t) => t.id)).toEqual([3, 9]);
+    expect(result.current.counts).toEqual({ 100: 1, 200: 1 });
+  });
+
+  it('pulls the next filtered page of a column from the paginated index', async () => {
+    const fetchSpy = stubTasksResponse({ 100: [task(3, 100, 2), task(4, 100, 3)], 200: [] }, { 100: 3 });
+    const { result } = renderPages({ ...NO_FILTERS, search: 'auth' });
+    await waitFor(() => expect(result.current.tasks.map((t) => t.id)).toEqual([3, 4]));
+
+    act(() => result.current.loadMore(100));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+    const url = new URL(urlOf(fetchSpy.mock.calls[1]), 'http://localhost');
+    expect(url.pathname).toBe(`/api/v1/projects/${PROJECT_ID}/tasks`);
+    expect(url.searchParams.get('board_column_id')).toBe('100');
+    expect(url.searchParams.get('offset')).toBe('2');
+    expect(url.searchParams.get('q[g][0][title_i_cont]')).toBe('auth');
   });
 
   it('falls back to the props payload when the filters are cleared', async () => {

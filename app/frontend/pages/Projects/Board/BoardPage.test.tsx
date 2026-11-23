@@ -69,12 +69,24 @@ const populatedProps = {
 };
 
 // Columns are paginated, so filtering runs server-side: switching a filter on makes the board
-// re-query one page per column instead of narrowing the array it already holds. This answers that
-// endpoint with the tasks belonging to the requested column, plus the X-Total-Count header the
-// column header reads its total from.
+// re-query the first page of every column (`tasks/by_column`) instead of narrowing the array it
+// already holds, and a scrolled column asks the per-column endpoint for its next page. This answers
+// both with the tasks belonging to the requested columns, plus the X-Total-Count header the
+// per-column endpoint reports its total in.
 const stubColumnTasks = (tasks: BoardTask[]) =>
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
     const url = String(input);
+    if (url.includes('/tasks/by_column?')) {
+      const ids = new URL(url, 'http://localhost').searchParams.getAll('board_column_ids[]').map(Number);
+      const columns = ids.map((id) => {
+        const items = tasks.filter((t) => t.boardColumnId === id);
+        return { boardColumnId: id, total: items.length, tasks: items };
+      });
+      return new Response(JSON.stringify({ columns }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
     if (!url.includes('/tasks?')) return new Response('{}', { status: 200 });
 
     const columnId = Number(new URL(url, 'http://localhost').searchParams.get('board_column_id'));
@@ -1372,10 +1384,10 @@ describe('Projects/Board/BoardPage', () => {
 
     await userEvent.click(screen.getByLabelText('Archived'));
 
-    // Toggling re-queries each column with archived=all and renders what comes back.
+    // Toggling re-queries every column with archived=all and renders what comes back.
     await waitFor(() =>
       expect(fetchSpy).toHaveBeenCalledWith(
-        expect.stringContaining('board_column_id=200&limit=25&offset=0'),
+        expect.stringContaining('board_column_ids%5B%5D=200&limits%5B200%5D=25'),
         expect.anything(),
       ),
     );
