@@ -74,6 +74,11 @@ interface ColumnPage<T> {
   total: number;
 }
 
+/** `GET /api/v1/projects/:id/tasks/by_column`: the first page and total of every column asked for. */
+interface ByColumnResponse<T> {
+  columns: { boardColumnId: number; total: number; tasks: T[] }[];
+}
+
 /** Server-side spelling of the board filters. Empty when nothing is filtered. */
 export function boardFilterParams(filters: BoardTaskFilters): URLSearchParams {
   const params = new URLSearchParams();
@@ -212,6 +217,28 @@ export function useBoardTaskPages<T extends PagedTask>({
     [projectId],
   );
 
+  const fetchColumns = useCallback(
+    async (columnIds: number[], limits: number[]): Promise<ByColumnResponse<T>['columns']> => {
+      const params = boardFilterParams(filtersRef.current);
+      columnIds.forEach((id, i) => {
+        params.append('board_column_ids[]', String(id));
+        params.set(`limits[${id}]`, String(limits[i]));
+      });
+
+      // Spelled by hand because shared/routes.ts (generated) gains byColumnApiV1ProjectTasksPath only
+      // on the next `bin/rails ts:routes`; switch to that helper once it is there.
+      const res = await apiFetch(`${apiV1ProjectTasksPath(projectId)}/by_column?${params.toString()}`);
+      if (!res.ok) throw new Error('Failed to load the board columns');
+
+      const data = (await res.json()) as Partial<ByColumnResponse<T>>;
+      return (data.columns ?? []).map((column) => ({
+        ...column,
+        tasks: column.tasks.map((t) => normalizeRef.current(t)),
+      }));
+    },
+    [projectId],
+  );
+
   // Pages pulled by scrolling, in the unfiltered view. Kept apart from the props page so a cable
   // refresh (which re-sends page one) cannot throw away the pages the user scrolled to.
   const [extraTasks, setExtraTasks] = useState<T[]>([]);
@@ -297,9 +324,9 @@ export function useBoardTaskPages<T extends PagedTask>({
     [enabled, filtered, pageSize, fetchPage],
   );
 
-  // Filtered view: every column is re-queried from the server. Re-runs when the filters change,
-  // when the columns change, and when a cable refresh delivers new props (`baseTasks`) — the
-  // board's signal that something on it moved.
+  // Filtered view: every column is re-queried from the server, all in one request. Re-runs when the
+  // filters change, when the columns change, and when a cable refresh delivers new props
+  // (`baseTasks`) — the board's signal that something on it moved.
   useEffect(() => {
     if (!enabled || !filtered) {
       setQueryTasks(null);
@@ -313,16 +340,21 @@ export function useBoardTaskPages<T extends PagedTask>({
     // single page under the user.
     const limits = targets.map((id) => Math.max(pageSize, loadedRef.current[id] ?? 0));
 
-    Promise.all(targets.map((id, i) => fetchPage(id, limits[i], 0).catch(() => null))).then((pages) => {
-      if (cancelled) return;
-      setQueryTasks(pages.flatMap((page) => page?.items ?? []));
-      setQueryTotals(Object.fromEntries(targets.map((id, i) => [id, pages[i]?.total ?? 0])));
-    });
+    fetchColumns(targets, limits)
+      .then((pages) => {
+        if (cancelled) return;
+        const byId = new Map(pages.map((page) => [page.boardColumnId, page]));
+        setQueryTasks(pages.flatMap((page) => page.tasks));
+        setQueryTotals(Object.fromEntries(targets.map((id) => [id, byId.get(id)?.total ?? 0])));
+      })
+      .catch(() => {
+        /* one request answers for every column, so a failure keeps what the board shows instead of emptying it */
+      });
 
     return () => {
       cancelled = true;
     };
-  }, [enabled, filtered, filterKey, columnIdsKey, baseTasks, pageSize, fetchPage]);
+  }, [enabled, filtered, filterKey, columnIdsKey, baseTasks, pageSize, fetchColumns]);
 
   // Unfiltered view: the props carry page one, so only the scrolled-to pages need re-pulling when
   // a cable refresh lands. Columns the user never scrolled cost nothing.
