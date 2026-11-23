@@ -5,6 +5,7 @@ require Rails.root.join("db/migrate/20261123100001_attach_pull_request_tools_to_
 
 class AttachPullRequestToolsToWorkflowsTest < ActiveSupport::TestCase
   setup do
+    Tools::Reconciler.run!
     @migration = AttachPullRequestToolsToWorkflows.new
     @integration = create(:integration, :gitlab, :active)
     @project = create(:project, company: @integration.company, owner: create(:user, company: @integration.company))

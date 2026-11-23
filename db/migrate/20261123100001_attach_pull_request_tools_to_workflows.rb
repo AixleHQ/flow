@@ -19,9 +19,8 @@ class AttachPullRequestToolsToWorkflows < ActiveRecord::Migration[8.1]
   end
 
   def up
-    # The tools' shadow rows are normally materialized at boot, after migrations;
-    # the ids are needed now.
-    Tools::Reconciler.run!
+    # The tools were injected until now, so their shadow rows exist wherever a
+    # session ever used them; an installation without the rows has nothing to keep.
     tool_ids = select_values(<<~SQL.squish).map(&:to_i)
       SELECT id FROM tools WHERE source = 'code' AND deleted_at IS NULL
         AND name IN (#{PULL_REQUEST_TOOLS.map { |name| connection.quote(name) }.join(', ')})
