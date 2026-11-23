@@ -29,6 +29,8 @@ class Company < ApplicationRecord
   has_many :azure_devops_installations, dependent: :destroy
   # Auth policy rows and this company's own IdP connections die with it.
   has_many :company_auth_policies, dependent: :destroy
+  # Before :identity_providers — the SCIM credential may name one of them.
+  has_one :scim_configuration, dependent: :destroy
   has_many :identity_providers, dependent: :destroy
   has_many :repositories, as: :scope, dependent: :destroy
   # Workflows are owned by projects (company-level workflows were removed).
