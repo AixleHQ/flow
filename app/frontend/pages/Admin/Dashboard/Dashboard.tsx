@@ -10,6 +10,7 @@ import {
   todayOf,
   totalsOf,
   withP95,
+  workersOf,
   type DayRange,
   type DeltaField,
   type Grain,
@@ -197,6 +198,15 @@ export default function Dashboard({
   const filtered = useMemo(() => filterRows(rows, filters), [rows, filters]);
   const totals = useMemo(() => totalsOf(filtered), [filtered]);
   const previousTotals = useMemo(() => totalsOf(filterRows(view.previous, filters)), [view.previous, filters]);
+  const workers = useMemo(
+    () => workersOf(data.days, view.range, new Set(filtered.map((row) => row.tenantId))),
+    [data.days, view.range, filtered],
+  );
+  const previousWorkers = useMemo(() => {
+    if (!view.comparison) return null;
+    const companies = new Set(filterRows(view.previous, filters).map((row) => row.tenantId));
+    return workersOf(data.days, view.comparison, companies);
+  }, [data.days, view.comparison, view.previous, filters]);
 
   const visible = useMemo(() => {
     const direction = sort.direction === 'ascending' ? 1 : -1;
@@ -242,6 +252,8 @@ export default function Dashboard({
       rows={filtered}
       totals={totals}
       previous={previousTotals}
+      workers={workers}
+      previousWorkers={previousWorkers}
     />
   );
 
@@ -515,15 +527,18 @@ export default function Dashboard({
         Worker hours are the capacity a company was offered — its worker limit over time, which is what a paying company
         is billed for; for the time a company has no limit they are its busy hours, so that time shows as fully used.
         Busy hours are the time its workers actually held a session; utilization is busy ÷ worker hours. Min and max
-        workers are the limit (∞ when none was set); peak workers is the most held at once. Wait time is how long a
-        session queued before a worker took it; 95% of the period&apos;s sessions started within the p95 wait. Account
-        status, account type and billing method are each company&apos;s as it stands now, whatever the period; a company
-        with no billing method is one nobody invoices — managed by Aixle, not paying yet, or self-hosted. Account
-        created is the UTC day the company was created. The search and the filters narrow the table, its total and the
-        tiles to the companies that match, all but People and Projects, which always count the whole platform. “Not
-        billed” in the Companies tile counts companies that run free without being managed, which should never happen.
-        Days are UTC and weeks run Monday to Sunday. The small figure under each value is the change from the previous
-        period; a period still in progress is compared with the same number of days of the one before.
+        workers are the limit (∞ when none was set); peak workers is the most held at once. Average workers in the tiles
+        is the workers offered over the period&apos;s measured hours, which is what an invoice charges for, split by
+        each day&apos;s billing class; a company with no limit is offered none, so it counts at its peak workers. Wait
+        time is how long a session queued before a worker took it; 95% of the period&apos;s sessions started within the
+        p95 wait. Account status, account type and billing method are each company&apos;s as it stands now, whatever the
+        period; a company with no billing method is one nobody invoices — managed by Aixle, not paying yet, or
+        self-hosted. Account created is the UTC day the company was created. The search and the filters narrow the
+        table, its total and the tiles to the companies that match, all but People and Projects, which always count the
+        whole platform. “Not billed” in the Companies and Average workers tiles counts companies, or their workers, that
+        run free without being managed, which should never happen. Days are UTC and weeks run Monday to Sunday. The
+        small figure under each value is the change from the previous period; a period still in progress is compared
+        with the same number of days of the one before.
         {data.measuredThrough && ` Measured through ${instant.format(new Date(data.measuredThrough))} UTC.`} Open a
         company for its queue in detail: wait percentiles, how many were already waiting, its projects and its hours.
       </p>

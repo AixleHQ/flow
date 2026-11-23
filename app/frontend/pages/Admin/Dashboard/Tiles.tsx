@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
 
-import { deltaOf, type DeltaField, type TenantSummary, type Totals } from './aggregate';
+import { deltaOf, workerTotal, type ChangeField, type TenantSummary, type Totals, type Workers } from './aggregate';
 import classes from './Dashboard.module.css';
-import { formatCount, formatHours, formatPercent } from './format';
+import { formatAverageWorkers, formatCount, formatHours, formatPercent } from './format';
 import type { AccountStatus, AccountType, BillingMethod, Snapshot } from './types';
 
 interface Account {
@@ -23,12 +23,14 @@ interface Props {
   rows: TenantSummary[];
   totals: Totals | null;
   previous: Totals | null;
+  workers: Workers | null;
+  previousWorkers: Workers | null;
 }
 
 interface TileProps {
   label: string;
   value: string;
-  delta?: { field: DeltaField; current: number; previous: number | null | undefined };
+  delta?: { field: ChangeField; current: number; previous: number | null | undefined };
   children?: ReactNode;
 }
 
@@ -57,6 +59,8 @@ const GROUP_BY_STATUS: Partial<Record<AccountStatus, AccountGroup>> = {
   canceled: 'canceled',
 };
 
+const WORKER_GROUPS = ['paying', 'trial', 'managed'] as const;
+
 // An active customer nobody invoices is not paying, whatever its status says:
 // every company of a self-hosted installation reads that way.
 function groupOf({ accountStatus, accountType, billingMethod }: Account): AccountGroup | null {
@@ -67,7 +71,16 @@ function groupOf({ accountStatus, accountType, billingMethod }: Account): Accoun
 }
 
 /** The platform's size as it stands, then what the selected period used. */
-export default function Tiles({ snapshot, companies, filtered, rows, totals, previous }: Props) {
+export default function Tiles({
+  snapshot,
+  companies,
+  filtered,
+  rows,
+  totals,
+  previous,
+  workers,
+  previousWorkers,
+}: Props) {
   const groups = companies.accounts.map(groupOf);
   const split = ACCOUNT_GROUPS.flatMap((group) => {
     const n = groups.filter((each) => each === group).length;
@@ -76,9 +89,13 @@ export default function Tiles({ snapshot, companies, filtered, rows, totals, pre
   const { unbilled } = companies;
   const freeBusy = rows.filter((row) => row.billingClass !== 'paying').reduce((sum, row) => sum + row.busyHours, 0);
   const sessions = totals ? totals.sessionsSucceeded + totals.sessionsFailed : 0;
+  const averageWorkers = workers ? workerTotal(workers) : null;
+  const workerSplit = workers
+    ? WORKER_GROUPS.flatMap((group) => (workers[group] > 0 ? [`${formatAverageWorkers(workers[group])} ${group}`] : []))
+    : [];
 
   return (
-    <div className={classes.tiles}>
+    <div className={`${classes.tiles} ${classes.summaryTiles}`}>
       <Tile label="Companies" value={formatCount(companies.count)}>
         {split.join(' · ') || (filtered ? 'none match the filters' : 'none measured yet')}
         {unbilled > 0 && <span className={classes.bad}> · {unbilled} not billed</span>}
@@ -88,6 +105,24 @@ export default function Tiles({ snapshot, companies, filtered, rows, totals, pre
       </Tile>
       <Tile label="Projects" value={formatCount(snapshot.projects)}>
         {filtered ? 'active projects, all companies' : 'active projects'}
+      </Tile>
+      <Tile
+        label="Average workers"
+        value={averageWorkers === null ? '—' : formatAverageWorkers(averageWorkers)}
+        delta={
+          averageWorkers === null
+            ? undefined
+            : {
+                field: 'averageWorkers',
+                current: averageWorkers,
+                previous: previousWorkers ? workerTotal(previousWorkers) : null,
+              }
+        }
+      >
+        {workerSplit.join(' · ') || 'no workers offered'}
+        {workers && workers.unbilled > 0 && (
+          <span className={classes.bad}> · {formatAverageWorkers(workers.unbilled)} not billed</span>
+        )}
       </Tile>
       <Tile
         label="Worker hours"

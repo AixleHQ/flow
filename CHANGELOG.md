@@ -28,6 +28,10 @@ governance, community health — carry none.
   (dates, status, agent, owner, workflow, search) and its sort by tokens, cost or duration.
   `list_sessions` also returns the tokens and cost summed over every match, and run rows
   carry each run's tokens and cost. Agent logins and tool setups are no longer listed.
+- **Admin**: the dashboard has an **Average workers** tile: how many workers the companies
+  shown were offered on average over the selected period, which is what they are billed for,
+  split into paying, trial and managed, with the change from the period before. A managed
+  company without a worker limit counts at the most workers it ran at once.
 
 ### Fixed
 - The `flow-web` image runs Ruby 4.0.10, which fixes the seven memory-safety bugs in

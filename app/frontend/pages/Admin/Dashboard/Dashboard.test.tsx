@@ -125,6 +125,22 @@ describe('Dashboard', () => {
     render(<Dashboard paths={paths} data={unbilled} now={now} />);
 
     expect(tile('Companies').getByText(/1 not billed/)).toBeInTheDocument();
+    expect(tile('Average workers').getByText(/1\.3 not billed/)).toBeInTheDocument();
+  });
+
+  it('averages the workers offered in the period by billing class, for the companies the filters keep', async () => {
+    render(<Dashboard paths={paths} data={data} now={now} />);
+
+    expect(tile('Average workers').getByText('5')).toBeInTheDocument();
+    expect(tile('Average workers').getByText('▲ +1')).toBeInTheDocument();
+    expect(tile('Average workers').getByText('2 paying · 3 managed')).toBeInTheDocument();
+
+    await userEvent.click(filter('Account type'));
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Paid Account' }));
+
+    expect(tile('Average workers').getByText('2')).toBeInTheDocument();
+    expect(tile('Average workers').getByText('▼ −2')).toBeInTheDocument();
+    expect(tile('Average workers').getByText('2 paying')).toBeInTheDocument();
   });
 
   it("shows each company's p95 wait for the period, and its change from the period before", async () => {
