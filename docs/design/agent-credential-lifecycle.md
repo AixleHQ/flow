@@ -126,9 +126,9 @@ document exists rather than a smaller fix:
    `active` session holds it. `ready` counts, and interactive `agent_session` / `auth_setup`
    sessions sit in `ready` until the 25-hour reaper.
 2. **The token therefore dies while pinned, silently**: `refresh_error = nil`,
-   `refresh_failure_count = 0`, because nothing ever attempted a refresh. Observed: credential
-   19 (expiry 00:38) pinned 20 hours by `ready` session 16739; credential 99 pinned 20.8 hours
-   by its own `auth_setup` session 16716. **Six `claude_code` credentials have since gone
+   `refresh_failure_count = 0`, because nothing ever attempted a refresh. Observed: one credential
+   pinned about 20 hours by a `ready` session, and another pinned about 21 hours by its own
+   `auth_setup` session. **Six `claude_code` credentials have since gone
    permanently `claudeAiOauth invalid_grant — reconnection required`.**
 3. The next container launches with the dead token. Claude Code prints
    `Login expired · Please run /login` and produces nothing — M4 does not stop this, because
@@ -533,27 +533,27 @@ deleted container took the work with it.
 
 ### 7.1 What happened
 
-On 2026-11-10 at 12:53:18 UTC a launch on credential 131 (`kiro_cli`) was refused with "Your
-Kiro Cli login has expired. Go to profile settings and sign in again." Nobody signed in; a retry
-27 minutes later worked. It happened again on 2026-11-21 at 14:09 UTC.
+A launch on a `kiro_cli` credential was refused with "Your Kiro Cli login has expired. Go to
+profile settings and sign in again." Nobody signed in, and a retry minutes later worked. It
+happened again some days later.
 
 The cause is the combination of three rules:
 
 1. Every launch deferred the refresh because a live session held the tokens (`refresh_if_expiring!`
-   returns `:held` for a rotating grant). The stored copy aged from 40 minutes of life to 1.
+   returns `:held` for a rotating grant). The stored copy aged from about 40 minutes of life to
+   about 1.
 2. The sweep stood down for the same reason (`a holder is mid-turn`).
 3. The preflight (`AgentCredential#unrecoverably_expired?`) treats "expired and held" as
-   unrepairable and refused. Five seconds later a holder's cleanup wrote a fresh token.
+   unrepairable and refused. A few seconds later a holder's cleanup wrote a fresh token.
 
 ### 7.2 The experiment
 
-On 2026-11-23 (11:35 to 11:43 UTC), two sessions held the same Builder ID login
-(`kirocli:odic:token`, refresh token digest `5de2b6b2b4`). Holder A forced its token to expire
-and refreshed (11:39:14). Holder B, with the refresh token A had already used, refreshed
-(11:41:30). A refreshed again (11:43:03). All three refreshes succeeded and the refresh token
-stayed `5de2b6b2b4` throughout: AWS SSO OIDC `CreateToken` returns a new access token and
+Two sessions held the same Builder ID login (`kirocli:odic:token`). The first holder forced its
+token to expire and refreshed. The second holder, with the refresh token the first had already
+used, refreshed. The first refreshed again. All three refreshes succeeded and the refresh token
+digest stayed the same throughout: AWS SSO OIDC `CreateToken` returns a new access token and
 leaves the refresh token as it was. Also measured: `journal_mode` is `delete` (no WAL file), and
-the state database is 77824 bytes, about 30% of the 256 KB cap.
+the state database is about 30% of the 256 KB cap.
 
 ### 7.3 The decision
 
@@ -588,5 +588,9 @@ The merge rules are unchanged.
   `took a … token rotated in the container` line was logged, for any runtime, in the 25 hours
   before it, while cleanup did persist. WAL mode and database size are ruled out, and the CLI
   writes the refreshed token at once. The new merge log line will name the refusal reason.
+- **What would show the `static` answer wrong for a Builder ID login:** a refresh error on one
+  holder after another holder refreshed the same login. The sweep and the launch log refresh
+  errors per credential, so such a line, close to another holder's refresh, is the signal to
+  revisit the decision.
 - Out of scope: pulling tokens from containers, a wait at launch, watcher or image changes, a
   refresh broker for Kiro, Grok's missing write-back.

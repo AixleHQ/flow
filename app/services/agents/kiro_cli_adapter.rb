@@ -294,7 +294,7 @@ module Agents
 
     # Rotation is a property of the login family, not of the runtime. A Builder ID / IAM
     # Identity Center login (`kirocli:odic:token`) refreshes through AWS SSO OIDC
-    # CreateToken, which leaves the refresh token as it was: measured 2026-11-23, one
+    # CreateToken, which leaves the refresh token as it was: measured, one
     # refresh token served three refreshes from two holders. A social login refreshes
     # through Kiro's own endpoint and was not measured, so it, and any login whose
     # family cannot be read, stays :rotating. The row key is used for this refresh

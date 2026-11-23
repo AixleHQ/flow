@@ -1920,7 +1920,7 @@ module Agents
       incoming = CredentialCapture.from_files({ PLATFORM_CREDS_PATH => rotated_file }, adapter: @adapter)
 
       travel_to Time.zone.at(1_790_660_000) do
-        merged = @adapter.merge_container_credentials(current, incoming)
+        merged = @adapter.merge_container_credentials(current, incoming, credential_id: 42)
 
         assert_equal "sk-ant-oat01-rotated", merged.dig("platformOauth", "accessToken")
         assert_equal current["platformProfile"], merged["platformProfile"]
