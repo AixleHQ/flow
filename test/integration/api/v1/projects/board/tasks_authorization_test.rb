@@ -27,6 +27,10 @@ class Api::V1::Projects::Board::TasksAuthorizationTest < ActionDispatch::Integra
     assert_project_read(transport: :api) { get api_v1_project_tasks_path(@project) }
   end
 
+  test "by_column is a project read" do
+    assert_project_read(transport: :api) { get by_column_api_v1_project_tasks_path(@project) }
+  end
+
   test "show is a project read" do
     assert_project_read(transport: :api) { get api_v1_project_task_path(@project, @task) }
   end

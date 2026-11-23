@@ -307,6 +307,7 @@ namespace :api, defaults: { format: :json } do
           resources :tasks do
             collection do
               post :bulk_actions
+              get :by_column
             end
             member do
               patch :move

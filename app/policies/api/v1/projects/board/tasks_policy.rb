@@ -6,6 +6,7 @@ module Api
       module Board
         class TasksPolicy < Web::Company::Projects::Board::TasksPolicy
           def index? = project_accessible?
+          def by_column? = project_accessible?
           def show? = project_accessible?
           def workflow_runs? = project_accessible?
           def create? = project_writable?

@@ -340,6 +340,67 @@ module Api
           assert_includes JSON.parse(response.body).map { |t| t["id"] }, @task.id
         end
 
+        test "by_column answers every board column with its first page and unpaginated total" do
+          create_list(:board_task, 3, board: @board, board_column: @col1)
+          done = create(:board_task, board: @board, board_column: @col2)
+          empty = create(:board_column, board: @board, name: "Empty")
+
+          get :by_column, params: { project_id: @project.id, limit: 2 }
+
+          assert_response :success
+          body = JSON.parse(response.body)
+          assert_equal [ @col1.id, @col2.id, empty.id ].map(&:to_s).sort, body.keys.sort
+          assert_equal 2, body[@col1.id.to_s]["items"].length
+          assert_equal 4, body[@col1.id.to_s]["total"]
+          assert_equal [ done.id ], body[@col2.id.to_s]["items"].map { |t| t["id"] }
+          assert_equal({ "items" => [], "total" => 0 }, body[empty.id.to_s])
+        end
+
+        test "by_column serves each column in board order with its own limit" do
+          first = 3.times.map { |i| create(:board_task, board: @board, board_column: @col2, position: i) }
+          @task.update!(position: 9)
+
+          get :by_column, params: { project_id: @project.id, limits: { @col1.id => 1, @col2.id => 2 } }
+
+          body = JSON.parse(response.body)
+          assert_equal first.first(2).map(&:id), body[@col2.id.to_s]["items"].map { |t| t["id"] }
+          assert_equal 3, body[@col2.id.to_s]["total"]
+          assert_equal [ @task.id ], body[@col1.id.to_s]["items"].map { |t| t["id"] }
+        end
+
+        test "by_column applies the filters index applies and counts only the matches" do
+          match = create(:board_task, board: @board, board_column: @col1, title: "Fix login crash")
+          create(:board_task, board: @board, board_column: @col2, title: "Build settings page")
+
+          get :by_column, params: { project_id: @project.id, q: { title_i_cont: "login" } }
+
+          body = JSON.parse(response.body)
+          assert_equal [ match.id ], body[@col1.id.to_s]["items"].map { |t| t["id"] }
+          assert_equal 1, body[@col1.id.to_s]["total"]
+          assert_equal({ "items" => [], "total" => 0 }, body[@col2.id.to_s])
+        end
+
+        test "by_column promotes the exact number match like index" do
+          by_number = create(:board_task, board: @board, board_column: @col1, title: "Ship the release notes", position: 2)
+          create(:board_task, board: @board, board_column: @col1, title: "Bug #{by_number.number} regression", position: 1)
+
+          get :by_column, params: {
+            project_id: @project.id,
+            q: { g: { "0" => { m: "or", title_i_cont: by_number.number.to_s, number_eq: by_number.number } } }
+          }
+
+          assert_equal by_number.id, JSON.parse(response.body)[@col1.id.to_s]["items"].first["id"]
+        end
+
+        test "by_column restricts to the requested columns and ignores another board's columns" do
+          foreign = create(:board_column, board: create(:board, project: create(:project, company: @company, owner: @user)))
+
+          get :by_column, params: { project_id: @project.id, board_column_ids: [ @col1.id, foreign.id ] }
+
+          assert_response :success
+          assert_equal [ @col1.id.to_s ], JSON.parse(response.body).keys
+        end
+
         test "workflow_runs returns runs json with what each run cost" do
           run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, board_task: @task)
           session = create(:terminal_session, :agent_session, user: @user, project: @project)

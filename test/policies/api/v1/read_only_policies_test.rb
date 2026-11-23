@@ -32,6 +32,7 @@ module Api
       test "Projects::Board::TasksPolicy classification" do
         v = Projects::Board::TasksPolicy.new(project_ctx(@viewer), nil)
         assert v.index?
+        assert v.by_column?
         assert v.show?
         assert v.workflow_runs?
         assert_not v.create?

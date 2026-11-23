@@ -5,6 +5,10 @@ module Api
     module Projects
       module Board
         class TasksController < Board::ApplicationController
+          DEFAULT_COLUMN_LIMIT = 50
+          MAX_COLUMN_LIMIT = 1000
+          MAX_COLUMNS = 100
+
           # @summary List board tasks, filtered and paginated
           #
           # This is the board's per-column pagination endpoint: a column asks for
@@ -22,11 +26,28 @@ module Api
               .then { |s| exact_number_search? ? s.reorder(exact_number_first, :position, :id) : s.in_board_order }
             tasks = tasks.limit(params[:limit]) if params[:limit].present?
             tasks = tasks.offset(params[:offset]) if params[:offset].present?
-            tasks = tasks.to_a
-            recent = WorkflowRun.recent_by_task(tasks.map(&:id), limit: BoardTaskResource::RECENT_RUNS)
-            waiting = WorkflowRun.waiting_for_slot_ids(recent.values.flatten.map(&:id))
-            card_params = { waiting_runs: waiting, recent_runs: recent, without_description: params[:view] == "card" }
-            render json: tasks.map { |t| BoardTaskResource.new(t, params: card_params).to_h }
+            render json: card_json(tasks.to_a)
+          end
+
+          # @summary First page and total of several board columns in one request
+          #
+          # The filtered board re-queries every column at once; one request per column
+          # repeats auth, board lookup and the card queries N times. Takes the same
+          # filters as `index` plus `board_column_ids[]` (default: every column of the
+          # board) and `limits[<column_id>]` (default `limit`, then #{DEFAULT_COLUMN_LIMIT}).
+          # Answers `{ "<column_id>": { items: [...], total: n } }`; ids that are not
+          # columns of this board are ignored. There is no offset: later pages of one
+          # column come from `index`.
+          def by_column
+            column_ids = requested_column_ids
+            scope = filtered_tasks.where(board_column_id: column_ids)
+            totals = scope.reorder(nil).group(:board_column_id).count
+            tasks = first_pages(scope, column_ids)
+            items = tasks.map(&:board_column_id).zip(card_json(tasks)).group_by(&:first)
+
+            render json: column_ids.index_with { |id|
+              { items: (items[id] || []).map(&:last), total: totals[id] || 0 }
+            }
           end
 
           def show
@@ -198,6 +219,47 @@ module Api
 
           def exact_number_first
             Arel.sql(BoardTask.sanitize_sql_array([ "(board_tasks.number = ?)::int DESC", exact_search_number ]))
+          end
+
+          def card_json(tasks)
+            recent = WorkflowRun.recent_by_task(tasks.map(&:id), limit: BoardTaskResource::RECENT_RUNS)
+            waiting = WorkflowRun.waiting_for_slot_ids(recent.values.flatten.map(&:id))
+            card_params = { waiting_runs: waiting, recent_runs: recent, without_description: params[:view] == "card" }
+            tasks.map { |t| BoardTaskResource.new(t, params: card_params).to_h }
+          end
+
+          def requested_column_ids
+            board_ids = current_board.board_columns.pluck(:id)
+            requested = Array(params[:board_column_ids]).reject(&:blank?).map(&:to_i)
+            (requested.presence ? board_ids & requested : board_ids).first(MAX_COLUMNS)
+          end
+
+          def column_limit(column_id)
+            raw = params[:limits]&.to_unsafe_h&.dig(column_id.to_s) || params[:limit]
+            (raw.presence&.to_i || DEFAULT_COLUMN_LIMIT).clamp(1, MAX_COLUMN_LIMIT)
+          end
+
+          # The first `column_limit` tasks of each column, in the order `index` serves them,
+          # picked with one ROW_NUMBER() pass instead of a query per column.
+          def first_pages(scope, column_ids)
+            return [] if column_ids.empty?
+
+            order = exact_number_search? ? "#{exact_number_first}, " : ""
+            ranked = scope.reorder(nil).select(
+              "board_tasks.id, board_tasks.board_column_id, " \
+              "ROW_NUMBER() OVER (PARTITION BY board_tasks.board_column_id ORDER BY #{order}board_tasks.position, board_tasks.id) AS rn"
+            )
+            limit_case = BoardTask.sanitize_sql_array(
+              [ "CASE ranked.board_column_id #{'WHEN ? THEN ? ' * column_ids.size}END",
+                *column_ids.flat_map { |id| [ id, column_limit(id) ] } ]
+            )
+            ids = BoardTask.unscoped.from(ranked, :ranked)
+              .where("ranked.rn <= #{limit_case}")
+              .order("ranked.board_column_id", "ranked.rn")
+              .pluck("ranked.id")
+            rank = ids.each_with_index.to_h
+            current_board.board_tasks.where(id: ids).with_card_counts
+              .includes(:assignee, :assignee_team, :gates).to_a.sort_by { |t| rank[t.id] }
           end
 
           def task_params
