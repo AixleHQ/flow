@@ -76,5 +76,17 @@ module Workflows
       assert_equal %w[pull_image create_container create_container start_container exec cleanup], activity.phases
       assert_equal "exec", result["phase"]
     end
+
+    test "runs a tool whose parameters are named like Hash methods" do
+      stub_activity_ref
+      activity = CapacityPhaseActivity.new
+
+      result = run_workflow(ContainerWorkflowV2,
+        { session_id: 123, admission_id: 456, permit_token: "permit",
+          parameters: { query: "from:me", max: 5 }, manifest: {} },
+        activities: [ activity ], task_queue: TASK_QUEUE)
+
+      assert_equal "exec", result["phase"]
+    end
   end
 end
