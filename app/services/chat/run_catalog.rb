@@ -22,7 +22,7 @@ module Chat
 
       projects = active_projects(integration, user).includes(:company).select { |project| may_start?(user, project) }.index_by(&:id)
       several = projects.values.map(&:company_id).uniq.size > 1
-      Workflow.active.where(scope_type: "Project", scope_id: projects.keys).includes(:steps).order(:name)
+      Workflow.active.not_drafts.where(scope_type: "Project", scope_id: projects.keys).includes(:steps).order(:name)
               .select { |workflow| unattended?(workflow) }
               .first(LIMIT)
               .map { |workflow| Entry.new(project: projects.fetch(workflow.scope_id), workflow: workflow, name_company: several) }
@@ -35,7 +35,7 @@ module Chat
       project = active_projects(integration, user).find_by(id: project_id)
       return nil unless project && may_start?(user, project)
 
-      workflow = Workflow.active.where(scope_type: "Project", scope_id: project.id).includes(:steps).find_by(id: workflow_id)
+      workflow = Workflow.active.not_drafts.where(scope_type: "Project", scope_id: project.id).includes(:steps).find_by(id: workflow_id)
       Entry.new(project: project, workflow: workflow, name_company: false) if workflow && unattended?(workflow)
     end
 

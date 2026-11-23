@@ -466,6 +466,57 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     assert_match(/not found/i, text(denied))
   end
 
+  test "a workflow changes through a draft: edited and test-run by its own id, then applied" do
+    create(:agent_credential, user: @user, company: @company)
+    mock_workflow_execution_start
+    build = create(:step, workflow: @workflow, name: "Build", instructions: "make")
+    args = { project_id: @project.id, workflow_id: @workflow.id }
+
+    opened = payload(call_tool("create_workflow_draft", args))
+    draft_id = opened["draft_workflow_id"]
+    draft_step = opened["draft_steps"].sole
+    assert_equal [ true, build.id ], [ opened["created"], draft_step["live_step_id"] ]
+    assert_equal draft_id, payload(call_tool("create_workflow_draft", args))["draft_workflow_id"]
+    assert_equal draft_id, payload(call_tool("get_workflow", args))["draft_workflow_id"]
+    assert_not_includes payload(call_tool("list_workflows", { project_id: @project.id }))["workflows"].pluck("id"), draft_id
+
+    edited = call_tool("update_workflow_step", { project_id: @project.id, workflow_id: draft_id,
+                                                 step_id: draft_step["id"], instructions: "make -j8" })
+    assert_not error?(edited), text(edited)
+    test_run = payload(call_tool("trigger_workflow", { project_id: @project.id, workflow_id: draft_id }))
+    assert_equal draft_id, WorkflowRun.find(test_run["run_id"]).workflow_id
+    assert_equal "make", build.reload.instructions
+
+    diff = payload(call_tool("get_workflow_draft_diff", args))
+    assert_equal false, diff["live_changed_since_draft"] # rubocop:disable Minitest/RefuteFalse
+    assert_equal [ { "change" => "step_changed", "step" => "Build", "step_id" => build.id,
+                     "fields" => { "instructions" => { "before" => "make", "after" => "make -j8" } } } ], diff["changes"]
+    trigger = call_tool("create_workflow_trigger", { project_id: @project.id, workflow_id: draft_id, kind: "webhook" })
+    assert error?(trigger)
+    assert_match(/is a draft/, text(trigger))
+
+    applied = payload(call_tool("apply_workflow_draft", { project_id: @project.id, workflow_id: draft_id }))
+
+    assert_equal [ @workflow.reload.current_version_number, true, draft_id ],
+                 applied.values_at("current_version_number", "version_created", "closed_draft_workflow_id")
+    assert_equal "make -j8", build.reload.instructions
+    assert_nil payload(call_tool("get_workflow", args))["draft_workflow_id"]
+  end
+
+  test "discard_workflow_draft drops the draft and leaves the live workflow alone" do
+    create(:step, workflow: @workflow, name: "Build", instructions: "make")
+    args = { project_id: @project.id, workflow_id: @workflow.id }
+    draft_id = payload(call_tool("create_workflow_draft", args))["draft_workflow_id"]
+
+    discarded = payload(call_tool("discard_workflow_draft", args))
+
+    assert_equal draft_id, discarded["discarded_draft_workflow_id"]
+    assert Workflow.find(draft_id).archived?
+    missing = call_tool("get_workflow_draft_diff", args)
+    assert error?(missing)
+    assert_match(/has no open draft/, text(missing))
+  end
+
   test "trigger_workflow starts a run and list/get_workflow_run report it" do
     run_obj = @workflow.runs.create!(project: @project, user: @user, state: "pending")
     WorkflowService.stubs(:start).returns(run_obj)

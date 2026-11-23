@@ -14,9 +14,13 @@ module Versions
     def for(version)
       return {} unless version.versionable_type == "Workflow"
 
+      for_snapshots(snapshots(version), workflow: version.versionable)
+    end
+
+    def for_snapshots(snapshots, workflow:)
       ids = Hash.new { |h, k| h[k] = Set.new }
-      snapshots(version).each { |snapshot| collect(snapshot, ids) }
-      ids.to_h { |model, set| [ model, names(model, set.to_a, workflow: version.versionable) ] }
+      snapshots.each { |snapshot| collect(snapshot, ids) }
+      ids.to_h { |model, set| [ model, names(model, set.to_a, workflow: workflow) ] }
     end
 
     def snapshots(version)

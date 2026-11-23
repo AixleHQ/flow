@@ -50,6 +50,12 @@ governance, community health — carry none.
 ## [1.17.0] - 2026-11-23
 
 ### Added
+- **Workflows**: change a workflow that is in use through a draft. **Edit in draft** (or
+  **Save as draft** when a Save would go live) opens a copy that you edit and test-run while
+  triggers and board columns keep running the live version; **Apply** makes it live as one
+  new version, **Discard draft** drops it. The personal MCP has the same flow:
+  `create_workflow_draft`, `get_workflow_draft_diff`, `apply_workflow_draft`,
+  `discard_workflow_draft`.
 - **Tasks**: a workflow agent can put the card it moves at a chosen place in the column
   (`position`, 0 = top) instead of always at the bottom.
 - **Docs**: the Tools page explains how agents list archived tasks with

@@ -39,6 +39,12 @@ class WorkflowRunResource < ApplicationResource
     run.workflow&.name
   end
 
+  # A run of a workflow's draft (docs/design/workflow-drafts.md): it has the live workflow's name.
+  typelize :boolean
+  attribute :draft_test do |run|
+    run.workflow&.draft? || false
+  end
+
   # The run header's description line — what this workflow does, which is a
   # property of the workflow, not of this particular execution.
   typelize :string?

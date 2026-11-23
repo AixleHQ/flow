@@ -6,6 +6,7 @@ module Web
       class WorkflowsPolicy < Web::Company::ApplicationPolicy
         def index? = project_accessible?
         def builder? = project_accessible?
+        def draft? = project_accessible?
         def show? = project_accessible?
         def create? = project_writable?
         def update? = project_writable?

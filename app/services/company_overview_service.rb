@@ -37,10 +37,10 @@ class CompanyOverviewService
 
   def workflows_scope
     if project
-      Workflow.for_project(project)
+      Workflow.for_project(project).not_drafts
     else
       # All workflows across the company's projects (company-level workflows were removed).
-      company.workflows.active
+      company.workflows.active.not_drafts
     end
   end
 

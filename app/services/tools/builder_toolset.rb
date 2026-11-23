@@ -25,7 +25,7 @@ module Tools
       "workflow_step" => "Step", "sub_step" => "SubStep", "workflow_trigger" => "Trigger",
       "board_column" => "BoardColumn", "board_task" => "BoardTask", "board_comment" => "BoardTask",
       "workflow_steps" => "Step", "sub_steps" => "SubStep", "board_columns" => "BoardColumn",
-      "workflow" => "Workflow", "agent" => "Agent", "skill" => "Skill", "mcp_server" => "MCPServer",
+      "workflow" => "Workflow", "workflow_draft" => "Workflow", "agent" => "Agent", "skill" => "Skill", "mcp_server" => "MCPServer",
       "repository" => "Repository", "connector" => "MCPServer", "board" => "Board",
       "step_run" => "WorkflowRun", "workflow_run" => "WorkflowRun"
     }.freeze

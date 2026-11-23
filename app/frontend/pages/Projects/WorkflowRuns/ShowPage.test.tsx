@@ -239,6 +239,12 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
     );
   });
 
+  it('says when the run is a test run of a workflow draft', () => {
+    renderAuthedPage(<ShowPage />, { props: seed({ run: makeRun({ draftTest: true }) }) });
+
+    expect(screen.getByText('the draft — a test run')).toBeInTheDocument();
+  });
+
   it('renders one session card per step run', () => {
     renderAuthedPage(<ShowPage />, { props: seed() });
 

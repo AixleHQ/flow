@@ -14,6 +14,8 @@ class Step < ApplicationRecord
 
   belongs_to :workflow
   belongs_to :agent, optional: true
+  # On a draft's step: the step of the original workflow it was copied from.
+  belongs_to :origin_step, class_name: "Step", optional: true
 
   has_many :step_runs, dependent: :destroy
   has_many :sub_steps, -> { order(:position) }, dependent: :destroy

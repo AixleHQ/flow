@@ -25,7 +25,7 @@ class Web::Company::Projects::WorkflowRunsController < Web::Company::Projects::A
   end
 
   def create
-    workflow = Workflow.visible_for_project(current_project).find(workflow_run_params[:workflow_id])
+    workflow = Workflow.editable_for_project(current_project).find(workflow_run_params[:workflow_id])
 
     run = WorkflowService.start(
       workflow: workflow,
