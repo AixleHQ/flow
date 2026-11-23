@@ -42,7 +42,7 @@ class TemporalInputTest < ActiveSupport::TestCase
     original = Hashie.logger
     io = StringIO.new
     Hashie.logger = Logger.new(io)
-    [yield, io.string]
+    [ yield, io.string ]
   ensure
     Hashie.logger = original
   end
