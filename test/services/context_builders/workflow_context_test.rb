@@ -43,6 +43,17 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
 
     assert_includes section.content, "started by a Slack message from <@U1>"
     assert_includes section.content, "> deploy staging"
+    assert_not_includes section.content, "Link to this message"
+  end
+
+  test "the triggering message links back to itself when its messenger gave a link" do
+    url = "https://slack.com/archives/C1/p34?thread_ts=3.1&cid=C1"
+    @workflow_run.update!(shared_context: { "chat" => { "provider" => "slack", "text" => "deploy staging", "url" => url } })
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: @step_run)
+
+    section = ContextBuilders::WorkflowContext.new(session).build.find { |s| s.tag == "trigger-message" }
+
+    assert_includes section.content, "Link to this message: #{url}"
   end
 
   # -- AC #3: workflow-context section --
