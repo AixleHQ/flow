@@ -124,10 +124,8 @@ governance, community health — carry none.
   showed no usage.
 
 ### Changed
-<<<<<<< HEAD
 - **Profile**: the consent switches on **Connected accounts** now refuse a request that names
   no switch, an unknown field, or a value that is not true or false, for every provider.
-=======
 - **Docs**: *Session queues* describes workers as the company's own number,
   set on Settings → General, instead of an installation ceiling, and gains a
   *Prioritising projects* section: how reserving workers keeps the projects that
@@ -140,7 +138,6 @@ governance, community health — carry none.
 - **Sessions & Runs**: automatic Antigravity CLI steps run in its terminal UI, like
   interactive ones, so the live terminal shows the conversation and a turn that ends
   without `finish_session` gets the usual reminder.
->>>>>>> origin/develop
 - **Sign-in & onboarding**: onboarding asks which area of the company you work in —
   Engineering, Product Management, Design, QA, Marketing, Operations, Finance / Accounting,
   Executive Leadership or Other — instead of a software-delivery role. Earlier answers move to
