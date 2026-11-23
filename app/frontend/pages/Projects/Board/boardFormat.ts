@@ -1,14 +1,14 @@
 // Value formatters shared by BoardPage and the task drawer's run components. They live
 // here so a component pulled out of BoardPage does not have to import the page back.
 
+import { formatCompactCount } from 'shared/lib/formatCompactCount';
+
 export function formatCostCents(cents: number): string {
   return cents >= 100 ? `$${(cents / 100).toFixed(2)}` : `${cents}¢`;
 }
 
 export function formatTokens(tokens: number): string {
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
-  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}K`;
-  return `${tokens}`;
+  return formatCompactCount(tokens, { thousandsSuffix: 'K' });
 }
 
 export function formatDuration(seconds: number): string {

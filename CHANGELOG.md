@@ -19,6 +19,8 @@ governance, community health — carry none.
   it scrolls, and folds its explanation into a "How to read this dashboard" section.
 
 ### Fixed
+- **Analytics**: token counts of a billion or more read as `1.1B` instead of `1069.7M`, here and
+  wherever else tokens are counted (Usage, Sessions & Runs, task cards).
 - **Admin**: deleting a company that has set up SCIM provisioning works again. It used to
   end in an error page and leave the company in place.
 - **Repositories**: adding a GitLab repository no longer ends in an error page when GitLab
