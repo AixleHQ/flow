@@ -92,7 +92,8 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
 
     if params[:search].present?
       like = "%#{params[:search].to_s.gsub(/[\\%_]/) { |c| "\\#{c}" }}%"
-      scope = scope.where("terminal_sessions.initial_prompt ILIKE ?", like).merge(search_visible_scope)
+      # The prompt may be one the row cannot reveal; matching it would leak the match.
+      scope = scope.where("terminal_sessions.initial_prompt ILIKE ?", like).visible_to(current_user)
     end
 
     scope
@@ -106,17 +107,6 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
     when "solo" then company_sessions_scope.agent_sessions
     else company_sessions_scope.work_sessions
     end
-  end
-
-  # Search matches on `initial_prompt`, a field the row itself may not be allowed
-  # to reveal (TerminalSession#visible_to?). Without this a private session whose
-  # hidden prompt matched someone's term would still surface, leaking the match.
-  # Same shape as SessionsRunsFeed#viewer_visible_scope, company-wide. A left
-  # join: the sessions of a deleted user stay findable where they are team work.
-  def search_visible_scope
-    own = TerminalSession.left_joins(:user).where(terminal_sessions: { user_id: current_user.id })
-    own.or(TerminalSession.left_joins(:user).not_ended.where(users: { share_active_sessions: true }))
-       .or(TerminalSession.left_joins(:user).ended.where(users: { share_completed_sessions: true }))
   end
 
   # Distinct users who own a session in this company's list — the User filter's
