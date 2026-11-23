@@ -13,7 +13,17 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Integrations**: the `pull_request_*` tools can act as a person. Pass `user_id` to `pull_request_create`,
+  `_update`, `_add_comment`, `_review` or `_merge` and the pull request, comment, review or merge is that
+  member's own, under the same conditions as `github_user_token_for` (a connected account and the consent for
+  the project). Without it the tools act as the connection, as before.
+
 ### Changed
+- **Workflows**: the `pull_request_*` tools are a tool group, **Pull requests**, that a workflow or a step can
+  add or remove. Existing workflows keep them through a migration; sessions no longer get them just because
+  they hold a GitHub, GitLab or Bitbucket repository, and the session context no longer tells agents to use
+  them.
 - **Admin**: the dashboard opens on the current week, shows Utilization, Average wait and
   p95 wait right after Company, keeps the table's header and Company column in view while
   it scrolls, and folds its explanation into a "How to read this dashboard" section.
