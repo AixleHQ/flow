@@ -89,6 +89,19 @@ module Workflows
       assert_equal "exec", result["phase"]
     end
 
+    test "runs a tool whose parameters are named like Hash methods" do
+      EchoPhaseActivity.phases = []
+
+      result = run_workflow(
+        ContainerWorkflow,
+        { tool_id: 138, tool_result_id: 1, parameters: { query: "from:me", max: 5 }, manifest: {} },
+        activities: [ EchoPhaseActivity.new ], task_queue: TASK_QUEUE
+      )
+
+      assert_equal "exec", result["phase"]
+      assert_equal %w[pull_image create_container start_container exec cleanup], EchoPhaseActivity.phases
+    end
+
     test "preserves secret-safe activity diagnostics in the final workflow error" do
       workflow = ContainerWorkflow.new
       cause = Temporalio::Error::ApplicationError.new(
