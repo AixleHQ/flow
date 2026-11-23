@@ -1385,10 +1385,7 @@ describe('Projects/Board/BoardPage', () => {
 
     // Toggling re-queries each column with archived=all and renders what comes back.
     await waitFor(() =>
-      expect(fetchSpy).toHaveBeenCalledWith(
-        expect.stringContaining('/tasks/by_column?'),
-        expect.anything(),
-      ),
+      expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('/tasks/by_column?'), expect.anything()),
     );
     const card = (await screen.findByText('Old finished task')).closest('[class*="Paper-root"]') as HTMLElement;
     expect(within(card).getByText('Archived')).toBeInTheDocument();
@@ -2746,7 +2743,10 @@ describe('Projects/Board/BoardPage', () => {
   });
 
   it('saves the current filters as a new view preset', async () => {
-    const fetchSpy = answerFetch({ 'POST /api/v1/projects/7/view_presets': {}, 'GET /api/v1/projects/7/tasks': [] });
+    const fetchSpy = answerFetch({
+      'POST /api/v1/projects/7/view_presets': {},
+      'GET /api/v1/projects/7/tasks/by_column': {},
+    });
 
     renderAuthedPage(<BoardPage />, { props: populatedProps });
 
