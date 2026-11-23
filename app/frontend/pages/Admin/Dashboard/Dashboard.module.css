@@ -436,10 +436,11 @@
   position: sticky;
   z-index: 1;
   left: 0;
+  min-width: 10rem;
   max-width: 14rem;
   box-shadow: inset -1px 0 var(--app-border-default);
   white-space: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .root .table tbody th {
@@ -471,6 +472,7 @@
   font: inherit;
   font-weight: 500;
   text-align: left;
+  white-space: normal;
   cursor: pointer;
 }
 
