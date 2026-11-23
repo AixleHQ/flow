@@ -144,12 +144,6 @@ module Agents
       model ? "#{command} --model #{Shellwords.shellescape(model)}" : command
     end
 
-    # Resume, measured 2026-11-20: the chat store is keyed by a hash of /workspace, the
-    # same in every container.
-    def conversation_paths = %w[.cursor/chats]
-    def conversation_id_command = "ls -td .cursor/chats/*/*/ 2>/dev/null | head -1 | xargs -r basename"
-    def resume_arguments(id) = "--resume=#{id}"
-
     # Context file: /workspace/AGENTS.md (auto-read by Cursor at startup, no git required)
     def context_file_path
       "/workspace/AGENTS.md"

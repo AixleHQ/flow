@@ -91,7 +91,7 @@ module PersonalTools
     end
 
     test "an unknown state or sort, and an unreadable day, are refused" do
-      assert_match(/queued, running, completed, failed, cancelled, suspended, pending, all/, execute(state: "done")[:stderr])
+      assert_match(/queued, running, completed, failed, cancelled, pending, all/, execute(state: "done")[:stderr])
       assert_match(/created_at, cost_cents/, execute(sort: "name")[:stderr])
       assert_match(/YYYY-MM-DD/, execute(created_until: "yesterday")[:stderr])
     end
