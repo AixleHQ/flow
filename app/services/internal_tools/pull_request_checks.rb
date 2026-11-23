@@ -12,8 +12,6 @@ module InternalTools
                   "pipeline}}. On GitLab `pipeline` is the merge request's head pipeline {id, status, url}; its " \
                   "id is the pipeline_id a gitlab_pipeline_completed gate takes. Elsewhere it is null."
       tags :pull_requests
-      inject_when :pull_request_repositories_attached
-      user_attachable false
       requires_integration :pull_requests
       unavailable_message Concerns::PullRequestContext::UNAVAILABLE
       read_only

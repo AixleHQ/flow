@@ -101,7 +101,7 @@ module PullRequests
         else raise invalid("verdict must be approve, unapprove or request_changes")
         end
         add_comment(repository, iid, body: body) if body.present?
-        Review.new(reviewer: integration.settings.to_h["gitlab_username"].presence || integration.name,
+        Review.new(reviewer: acting&.login || integration.settings.to_h["gitlab_username"].presence || integration.name,
                    verdict: verdict.to_s, submitted_at: Time.current)
       end
 
@@ -150,7 +150,7 @@ module PullRequests
       private
 
       def client
-        @client ||= ::Gitlab::TokenService.new(integration).client
+        @client ||= acting ? ::Gitlab::UserTokenService.new.client(acting.token) : ::Gitlab::TokenService.new(integration).client
       end
 
       def project_path(repository) = repository.full_name

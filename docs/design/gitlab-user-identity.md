@@ -221,6 +221,12 @@ unavailable_message "Connecting GitLab accounts is not configured on this instal
 tasks; `_for`: in my tasks when the named user is `session_user`, otherwise in tasks that
 aren't mine; same resolution of `user_id` among the company's members).
 
+**Pull-request write tools.** `pull_request_create`, `pull_request_update`,
+`pull_request_add_comment`, `pull_request_review` and `pull_request_merge` take an optional
+`user_id` and, with it, act as that member through `GitlabUserTokenContext`, with the same
+checks, consent rule and messages as `gitlab_user_token_for`. The merge request is then the
+member's, and the token never reaches the agent (`bitbucket-integration.md` §4.12).
+
 **Shared code.** `GithubUserTokenContext` holds the nine steps (§4.3 of the GitHub
 design) with GitHub's calls inline. Copying it would leave two sets of messages to keep
 equal, so the steps move to `InternalTools::Concerns::UserTokenContext`, which calls a

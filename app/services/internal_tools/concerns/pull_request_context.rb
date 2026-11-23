@@ -21,6 +21,11 @@ module InternalTools
                             "instead of writing twice; an identical retry in this session is recognised without one."
       UNAVAILABLE = "No GitHub, GitLab or Bitbucket connection in this project. Connect one under Project Settings → " \
                     "Integrations and attach its repository."
+      USER_PARAM = "Optional. Id of the company member to make this as, from board_list_members or a task's " \
+                   "assignee_id, so the pull request, comment, review or merge is theirs and not the connection's. " \
+                   "Works as github_user_token_for does: the person connected their account on this host and allowed " \
+                   "it in this project (the switch for their own tasks when they are the person this session runs " \
+                   "for, otherwise the one for tasks that aren't theirs). Without it the connection acts."
       LIMIT_PARAM = "Page size, 1–100."
       CURSOR_PARAM = "`next_cursor` from the previous page."
 
@@ -34,12 +39,29 @@ module InternalTools
         error({ error: "conflict", message: e.message }.to_json)
       end
 
-      # [repository, provider] for this call.
-      def resolve_target!(ref: params[:pull_request])
+      # [repository, provider] for this call. A write tool passes `as_user: true`, which makes
+      # the provider act as the member `user_id` names, when the call names one.
+      def resolve_target!(ref: params[:pull_request], as_user: false)
         repository = resolve_repository!(ref)
         integration = repository.integration
         verify_connection!(integration)
-        [ repository, PullRequests::Provider.for(integration) ]
+        acting = acting_for!(repository) if as_user
+        [ repository, PullRequests::Provider.for(integration, acting: acting) ]
+      end
+
+      # The person to act as, with their token for this call, or nil to act as the connection.
+      def acting_for!(repository)
+        return if params[:user_id].nil?
+
+        if session_user.nil? || project.nil?
+          raise PullRequests::Error.new(session_user.nil? ? Concerns::UserTokenContext::NO_USER : Concerns::UserTokenContext::NO_PROJECT,
+                                        code: "permission_denied")
+        end
+
+        user = project.company.users.find_by(id: params[:user_id])
+        raise PullRequests::Error.new("No member with id #{params[:user_id]} in this company.", code: "validation_failed") if user.nil?
+
+        PullRequestActor.acting_as(user, session: session, repository: repository, tool_name: self.class.tool_definition.name)
       end
 
       def resolve_repository!(ref)
@@ -103,11 +125,16 @@ module InternalTools
       # Claims the ledger row before the provider call, so a retry is recognised.
       # A failed claim may be retried — the provider refused it, nothing was
       # written — but an unknown one may not: it may have landed.
-      def with_write(repository, operation, payload, number: nil)
+      #
+      # Who the write is made as is part of the request: a retry with the same key cannot
+      # change it, and the ledger says it.
+      def with_write(repository, provider, operation, payload, number: nil)
+        payload = payload.merge(acting_user_id: provider.acting.user_id) if provider.acting
         key = params[:operation_key].presence || automatic_key(operation, payload)
         record, state = PullRequestOperation.claim!(integration: repository.integration, repository: repository, key: key,
                                                     operation: operation, payload: payload,
-                                                    pull_request_number: number&.to_s, **run_attribution)
+                                                    pull_request_number: number&.to_s,
+                                                    acting_user_id: provider.acting&.user_id, **run_attribution)
         return replayed(record) if state == :replayed && !record.failed?
 
         record.retry! if record.failed?
