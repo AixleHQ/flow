@@ -67,8 +67,8 @@ module InternalTools
 
       # The person's own token, once for all the repositories they can write to.
       def mint_tokens!(user, credential, user_token, repositories, _identity)
-        covered, skipped = check_coverage!(user, credential, user_token, repositories)
-        raise UserTokenContext::Refusal, refusal_message(user, skipped) if covered.empty?
+        covered, skipped, unchecked = check_coverage!(user, credential, user_token, repositories)
+        raise UserTokenContext::Refusal, refusal_message(user, skipped, unchecked) if covered.empty?
 
         expires_at = reported_expiry(credential)
         record_issuance!(user: user, credential: credential, token: user_token,
@@ -80,14 +80,16 @@ module InternalTools
         [ [ token ], skipped ]
       end
 
-      # [covered repositories, skipped entries]: `write` or `admin` covers one. A repository
-      # the person has no permission on (a missing entry) is one they cannot push to; one
-      # Bitbucket's permission list was too long to read in full is one that could not be
-      # checked, which is said as such.
+      # [covered repositories, skipped entries, names of the unchecked ones]: `write` or
+      # `admin` covers one. A repository the person has no permission on (a missing entry) is
+      # one they cannot push to; one Bitbucket's permission list was too long to read in full
+      # is one that could not be checked, which is said as such. That is decided here, once,
+      # and carried as the names, so the refusal never reads it back from the reason text.
       def check_coverage!(user, credential, user_token, repositories)
         answer = bitbucket_api(user_token).repository_permissions(repositories.map(&:full_name))
         covered, rest = repositories.partition { |repo| WRITE_LEVELS.include?(answer[:levels][repo.full_name]) }
-        [ covered, rest.map { |repo| skipped_entry(user, repo, answer[:unchecked].include?(repo.full_name)) } ]
+        unchecked = rest.map(&:full_name) & answer[:unchecked]
+        [ covered, rest.map { |repo| skipped_entry(user, repo, unchecked.include?(repo.full_name)) }, unchecked ]
       rescue Bitbucket::Error::NotAuthorized
         credential.mark_refresh_error!("Bitbucket no longer accepts this user token")
         raise UserTokenContext::Refusal, reconnect_message(user)
@@ -102,11 +104,11 @@ module InternalTools
 
       # Why nothing is covered: the repositories the person cannot push to, and those that
       # could not be checked, each said for what they are.
-      def refusal_message(user, skipped)
-        unchecked, refused = skipped.partition { |entry| entry[:reason] == UNCHECKED_REASON }
+      def refusal_message(user, skipped, unchecked)
+        refused = skipped.pluck(:repository) - unchecked
         parts = []
-        parts << "#{user.name} cannot push to #{refused.pluck(:repository).join(', ')} on Bitbucket." if refused.any?
-        parts << "Could not check whether #{user.name} can push to #{unchecked.pluck(:repository).join(', ')}: " \
+        parts << "#{user.name} cannot push to #{refused.join(', ')} on Bitbucket." if refused.any?
+        parts << "Could not check whether #{user.name} can push to #{unchecked.join(', ')}: " \
                  "#{UNCHECKED_REASON}." if unchecked.any?
         parts.join(" ")
       end
