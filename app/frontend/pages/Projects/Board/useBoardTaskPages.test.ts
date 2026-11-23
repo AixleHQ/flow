@@ -39,7 +39,15 @@ const NO_TASKS: BoardTask[] = [];
  */
 const stubTasksResponse = (byColumn: Record<number, BoardTask[]>, totals: Record<number, number> = {}) =>
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
-    const columnId = Number(new URL(String(input), 'http://localhost').searchParams.get('board_column_id'));
+    const url = new URL(String(input), 'http://localhost');
+    if (url.pathname.endsWith('/by_column')) {
+      const ids = url.searchParams.getAll('board_column_ids[]').map(Number);
+      const body = Object.fromEntries(
+        ids.map((id) => [id, { items: byColumn[id] ?? [], total: totals[id] ?? (byColumn[id] ?? []).length }]),
+      );
+      return new Response(JSON.stringify(body), { status: 200 });
+    }
+    const columnId = Number(url.searchParams.get('board_column_id'));
     const items = byColumn[columnId] ?? [];
     return new Response(JSON.stringify(items), {
       status: 200,
@@ -156,9 +164,52 @@ describe('useBoardTaskPages', () => {
     expect(result.current.filtered).toBe(true);
     expect(result.current.counts).toEqual({ 100: 1, 200: 1 });
 
+    // One request for every column, each with the limit it needs.
     const urls = fetchSpy.mock.calls.map(urlOf);
-    expect(urls).toHaveLength(2);
-    for (const url of urls) expect(url).toContain('q%5Bg%5D%5B0%5D%5Btitle_i_cont%5D=auth');
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toContain(`/api/v1/projects/${PROJECT_ID}/tasks/by_column?`);
+    expect(urls[0]).toContain('q%5Bg%5D%5B0%5D%5Btitle_i_cont%5D=auth');
+    expect(urls[0]).toContain('board_column_ids%5B%5D=100&board_column_ids%5B%5D=200');
+    expect(urls[0]).toContain('limits%5B100%5D=2&limits%5B200%5D=2');
+  });
+
+  it('keeps loading one column at a time when scrolling a filtered board', async () => {
+    const fetchSpy = stubTasksResponse({ 100: [task(3, 100, 2)] }, { 100: 3 });
+    const { result } = renderPages({ ...NO_FILTERS, search: 'auth' });
+    await waitFor(() => expect(result.current.counts).toEqual({ 100: 3, 200: 0 }));
+    await waitFor(() => expect(result.current.tasks).toHaveLength(1));
+    fetchSpy.mockClear();
+
+    act(() => result.current.loadMore(100));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+    expect(urlOf(fetchSpy.mock.calls[0])).toContain('board_column_id=100');
+    expect(urlOf(fetchSpy.mock.calls[0])).not.toContain('by_column');
+  });
+
+  it('keeps the previous results when the batch request fails', async () => {
+    const fetchSpy = stubTasksResponse({ 100: [task(3, 100, 2)] });
+    const { result, rerender } = renderHook(
+      ({ tasks }: { tasks: BoardTask[] }) =>
+        useBoardTaskPages<BoardTask>({
+          projectId: PROJECT_ID,
+          enabled: true,
+          columns: [BACKLOG, IN_PROGRESS],
+          initialTasks: tasks,
+          pageSize: PAGE_SIZE,
+          filters: { ...NO_FILTERS, search: 'auth' },
+          normalize: (t) => t,
+        }),
+      { initialProps: { tasks: initialTasks } },
+    );
+    await waitFor(() => expect(result.current.tasks.map((t) => t.id)).toEqual([3]));
+
+    fetchSpy.mockImplementation(async () => new Response('{}', { status: 500 }));
+    rerender({ tasks: [...initialTasks] });
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+    expect(result.current.tasks.map((t) => t.id)).toEqual([3]);
+    expect(result.current.counts).toEqual({ 100: 1, 200: 0 });
   });
 
   it('falls back to the props payload when the filters are cleared', async () => {

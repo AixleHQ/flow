@@ -19,6 +19,8 @@ governance, community health — carry none.
   it scrolls, and folds its explanation into a "How to read this dashboard" section.
 
 ### Fixed
+- **Tasks**: filtering or searching the board now loads all columns in one request instead of
+  one per column, and a failed reload keeps the cards on screen instead of emptying the columns.
 - **Tasks**: a collapsed board column no longer flickers a horizontal scrollbar while a card
   in it has an active run.
 - **Wrappers**: a wrapper with a parameter named like `max`, `min`, `count` or `size` runs

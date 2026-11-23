@@ -212,6 +212,27 @@ export function useBoardTaskPages<T extends PagedTask>({
     [projectId],
   );
 
+  const fetchColumns = useCallback(
+    async (columnIds: number[], limits: number[]): Promise<Record<number, ColumnPage<T>>> => {
+      const params = boardFilterParams(filtersRef.current);
+      for (const id of columnIds) params.append('board_column_ids[]', String(id));
+      columnIds.forEach((id, i) => params.set(`limits[${id}]`, String(limits[i])));
+      params.set('view', 'card');
+
+      const res = await apiFetch(`${apiV1ProjectTasksPath(projectId)}/by_column?${params.toString()}`);
+      if (!res.ok) throw new Error('Failed to load tasks for the board columns');
+
+      const data = (await res.json()) as Record<string, { items?: T[]; total?: number }>;
+      return Object.fromEntries(
+        columnIds.map((id) => [
+          id,
+          { items: (data[id]?.items ?? []).map((t) => normalizeRef.current(t)), total: data[id]?.total ?? 0 },
+        ]),
+      );
+    },
+    [projectId],
+  );
+
   // Pages pulled by scrolling, in the unfiltered view. Kept apart from the props page so a cable
   // refresh (which re-sends page one) cannot throw away the pages the user scrolled to.
   const [extraTasks, setExtraTasks] = useState<T[]>([]);
@@ -313,16 +334,22 @@ export function useBoardTaskPages<T extends PagedTask>({
     // single page under the user.
     const limits = targets.map((id) => Math.max(pageSize, loadedRef.current[id] ?? 0));
 
-    Promise.all(targets.map((id, i) => fetchPage(id, limits[i], 0).catch(() => null))).then((pages) => {
-      if (cancelled) return;
-      setQueryTasks(pages.flatMap((page) => page?.items ?? []));
-      setQueryTotals(Object.fromEntries(targets.map((id, i) => [id, pages[i]?.total ?? 0])));
-    });
+    if (targets.length > 0) {
+      fetchColumns(targets, limits)
+        .then((pages) => {
+          if (cancelled) return;
+          setQueryTasks(targets.flatMap((id) => pages[id].items));
+          setQueryTotals(Object.fromEntries(targets.map((id) => [id, pages[id].total])));
+        })
+        .catch(() => {
+          /* keep what the board already shows rather than blanking every column */
+        });
+    }
 
     return () => {
       cancelled = true;
     };
-  }, [enabled, filtered, filterKey, columnIdsKey, baseTasks, pageSize, fetchPage]);
+  }, [enabled, filtered, filterKey, columnIdsKey, baseTasks, pageSize, fetchColumns]);
 
   // Unfiltered view: the props carry page one, so only the scrolled-to pages need re-pulling when
   // a cable refresh lands. Columns the user never scrolled cost nothing.

@@ -158,6 +158,17 @@ The response carries the **unpaginated** match count in the
 `X-Total-Count` header, which is how a column header shows its real total
 while holding a single page.
 
+`GET .../board/tasks/by_column` returns the first page and total of several
+columns in one request — what the filtered board uses instead of one `GET`
+per column. It takes the same filters as above plus `board_column_ids[]`
+(default: every column of the board; ids from other boards are ignored) and
+`limits[<column_id>]` (default `limit`, then 50; at most 1000). There is no
+`offset`; later pages of one column come from the endpoint above.
+
+```json
+{ "12": { "items": [ /* board tasks, in column order */ ], "total": 37 }, "13": { "items": [], "total": 0 } }
+```
+
 A task's assignee is a person (`assignee_id`) or a project team
 (`assignee_team_id`), never both: `POST` and `PATCH` take either, and so does
 the board's bulk assign and a view preset's filters.

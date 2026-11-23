@@ -69,13 +69,24 @@ const populatedProps = {
 };
 
 // Columns are paginated, so filtering runs server-side: switching a filter on makes the board
-// re-query one page per column instead of narrowing the array it already holds. This answers that
-// endpoint with the tasks belonging to the requested column, plus the X-Total-Count header the
-// column header reads its total from.
+// re-query every column in one batched request instead of narrowing the array it already holds.
+// This answers that endpoint with the tasks and total of each requested column, and the per-column
+// endpoint (used when scrolling) with the X-Total-Count header the column header reads.
 const stubColumnTasks = (tasks: BoardTask[]) =>
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
     const url = String(input);
-    if (!url.includes('/tasks?')) return new Response('{}', { status: 200 });
+    if (!url.includes('/tasks')) return new Response('{}', { status: 200 });
+
+    const parsed = new URL(url, 'http://localhost');
+    if (parsed.pathname.endsWith('/by_column')) {
+      const body = Object.fromEntries(
+        parsed.searchParams.getAll('board_column_ids[]').map((id) => {
+          const items = tasks.filter((t) => t.boardColumnId === Number(id));
+          return [id, { items, total: items.length }];
+        }),
+      );
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
 
     const columnId = Number(new URL(url, 'http://localhost').searchParams.get('board_column_id'));
     const items = tasks.filter((t) => t.boardColumnId === columnId);
@@ -1375,7 +1386,7 @@ describe('Projects/Board/BoardPage', () => {
     // Toggling re-queries each column with archived=all and renders what comes back.
     await waitFor(() =>
       expect(fetchSpy).toHaveBeenCalledWith(
-        expect.stringContaining('board_column_id=200&limit=25&offset=0'),
+        expect.stringContaining('/tasks/by_column?'),
         expect.anything(),
       ),
     );
