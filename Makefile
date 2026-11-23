@@ -98,6 +98,12 @@ ifneq ($(strip $(FE_TOTAL_SHARDS)),1)
   endif
 endif
 
+# Tags to leave out of this run, space-separated (config/test_tags.json; CI sets it on a pull
+# request with bin/test-tags). The Rails suite reads the variable itself; Vitest takes one filter
+# per tag, and several filters combine with AND.
+TEST_EXCLUDE_TAGS ?=
+FE_TEST_CMD += $(foreach tag,$(TEST_EXCLUDE_TAGS),--tags-filter='!$(tag)')
+
 # Two concurrent `rails test` invocations are mutually destructive: parallel test
 # workers drop/recreate the shared aixle_test_N databases, so overlapping runs
 # corrupt each other's schemas (observed 2026-07-03: pg_class duplicate-key storms).

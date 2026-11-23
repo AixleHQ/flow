@@ -129,7 +129,7 @@ services:
       # The runner-relay service shares this container's network namespace (below), so its
       # ports are published here.
       - '${BIND_ADDRESS:-127.0.0.1}:${RUNNER_RELAY_PORT:-4004}:${RUNNER_RELAY_PORT:-4004}'  # runner-relay: the runners' tunnel
-      - '${BIND_ADDRESS:-127.0.0.1}:${RUNNER_RELAY_ADMIN_PORT:-4005}:${RUNNER_RELAY_ADMIN_PORT:-4005}'  # runner-relay: /healthz /readyz /metrics /drain
+      - '${BIND_ADDRESS:-127.0.0.1}:${RUNNER_RELAY_ADMIN_PORT:-4005}:${RUNNER_RELAY_ADMIN_PORT:-4005}'  # runner-relay: /healthz /readyz /metrics
     depends_on:
       db:
         condition: service_healthy
@@ -228,6 +228,8 @@ services:
       - ./docker/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
     environment:
       PORT: ${PORT:-4000}
+      # The runner relay's port, for the dynamic file's `/t/` route to it.
+      RUNNER_RELAY_PORT: ${RUNNER_RELAY_PORT:-4004}
     networks: [ default, agents ]
     attach: false
 
@@ -273,7 +275,9 @@ services:
   # does, so the runner reaches it on 127.0.0.1, the only address aixle-runner accepts plain ws on
   # (AIXLE_RUNNER_TUNNEL_URL above); redis and web resolve from there as they do for web.
   # Built from the repository root: runner-relay/go.mod replaces the runner module with ../runner.
-  # No browser path yet, so Traefik does not route to it.
+  # The browser's `/t/…` reaches it through Traefik (docker/traefik/dynamic.yml, behind
+  # `terminal-auth`), on web's address in the `default` network, so it listens on every address
+  # of the namespace; the runner reaches it on 127.0.0.1.
   runner-relay:
     profiles: [ runners ]
     build:
@@ -282,7 +286,7 @@ services:
     image: ${RUNNER_RELAY_IMAGE:-runner-relay}
     network_mode: "service:web"
     environment:
-      RUNNER_RELAY_LISTEN: 127.0.0.1:${RUNNER_RELAY_PORT:-4004}
+      RUNNER_RELAY_LISTEN: 0.0.0.0:${RUNNER_RELAY_PORT:-4004}
       RUNNER_RELAY_ADMIN_LISTEN: 127.0.0.1:${RUNNER_RELAY_ADMIN_PORT:-4005}
       RUNNER_RELAY_REDIS_URL: redis://redis:6379/1
       RUNNER_RELAY_REDIS_CHANNEL_PREFIX: aixle_development_

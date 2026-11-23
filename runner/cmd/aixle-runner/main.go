@@ -11,6 +11,8 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/aixlehq/aixle-runner/internal/cli"
@@ -27,7 +29,7 @@ const usage = `Usage:
   aixle-runner unregister [--state-dir <dir>]
   aixle-runner service install | uninstall | start | stop
   aixle-runner --mode host [--state-dir <dir>]
-  aixle-runner --mode proxy --socket <path> --listen <address>
+  aixle-runner --mode proxy --socket <path> --listen <address> [--dial-socket <path> --dial-ports <p,p,…>]
   aixle-runner version
 
 --mode proxy is the callback proxy's sidecar, which the host runner starts next
@@ -175,13 +177,15 @@ func hostMode(ctx context.Context, args []string, stderr io.Writer) error {
 	mode := fs.String("mode", "", "the runner's mode: host, or proxy for the callback proxy's sidecar")
 	socket := fs.String("socket", "", "proxy mode: the host runner's relay socket")
 	listen := fs.String("listen", "", "proxy mode: the address the agent calls")
+	dialSocket := fs.String("dial-socket", "", "proxy mode: the socket the host runner dials the tunnel's ports through")
+	dialPorts := fs.String("dial-ports", "", "proxy mode: the ports the dial socket may reach, comma separated")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
 	logger := slog.New(slog.NewTextHandler(stderr, nil))
 	switch *mode {
 	case "host":
-		if *socket != "" || *listen != "" {
+		if *socket != "" || *listen != "" || *dialSocket != "" || *dialPorts != "" {
 			return errUsage
 		}
 		return cli.RunHost(ctx, cli.HostOptions{StateDir: *stateDir, Logger: logger,
@@ -191,7 +195,28 @@ func hostMode(ctx context.Context, args []string, stderr io.Writer) error {
 		if *socket == "" || *listen == "" {
 			return errUsage
 		}
-		return proxy.RunSidecar(ctx, proxy.SidecarOptions{Socket: *socket, Listen: *listen, Logger: logger})
+		ports, err := parsePorts(*dialPorts)
+		if err != nil || (*dialSocket == "") != (len(ports) == 0) {
+			return errUsage
+		}
+		return proxy.RunSidecar(ctx, proxy.SidecarOptions{Socket: *socket, Listen: *listen, Logger: logger,
+			DialSocket: *dialSocket, DialPorts: ports})
 	}
 	return errUsage
+}
+
+// parsePorts reads --dial-ports: ports from 1 to 65535, comma separated, or none.
+func parsePorts(list string) ([]int, error) {
+	if list == "" {
+		return nil, nil
+	}
+	var ports []int
+	for _, field := range strings.Split(list, ",") {
+		port, err := strconv.Atoi(field)
+		if err != nil || port < 1 || port > 65535 {
+			return nil, fmt.Errorf("%q is not a port", field)
+		}
+		ports = append(ports, port)
+	}
+	return ports, nil
 }

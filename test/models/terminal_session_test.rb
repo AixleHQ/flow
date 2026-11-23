@@ -363,6 +363,26 @@ class TerminalSessionTest < ActiveSupport::TestCase
     assert session.reload.visible_to?(other)
   end
 
+  test "the visible_to scope agrees with visible_to? for every state, kind and preference" do
+    owner = create(:user, company: @company)
+    other = create(:user, company: @company)
+    states = %w[not_started queued running ready finishing finished failed cancelled]
+    sessions = states.product(%w[agent_session workflow_step auth_setup]).map do |state, kind|
+      create(:terminal_session, state: state, session_type: kind, user: owner,
+                                project: kind == "auth_setup" ? nil : @project)
+    end
+
+    [ true, false ].product([ true, false ]).each do |active, completed|
+      owner.update!(share_active_sessions: active, share_completed_sessions: completed)
+      [ owner, other ].each do |viewer|
+        expected = sessions.map(&:reload).select { |s| s.visible_to?(viewer) }.map(&:id)
+
+        assert_equal expected.sort, TerminalSession.where(id: sessions).visible_to(viewer).ids.sort,
+                     "viewer=#{viewer == owner ? 'owner' : 'other'} active=#{active} completed=#{completed}"
+      end
+    end
+  end
+
   test "auth_setup sessions stay owner-only even with both preferences on" do
     owner = create(:user, company: @company, share_active_sessions: true, share_completed_sessions: true)
     other = create(:user, company: @company)
@@ -534,14 +554,14 @@ class TerminalSessionTest < ActiveSupport::TestCase
 
   # --- reasoning_effort ---
 
-  test "a standalone session's reasoning effort must be one its runtime takes for its model" do
+  test "a standalone session's reasoning effort must be one its runtime takes" do
     assert build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "codex",
                                     requested_model: "gpt-6-sol", reasoning_effort: "ultra").valid?
 
-    session = build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "codex",
-                                       requested_model: "gpt-5.5", reasoning_effort: "ultra")
+    session = build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "gemini_cli",
+                                       requested_model: "gemini-3-pro", reasoning_effort: "ultra")
     assert_not session.valid?
-    assert_includes session.errors[:reasoning_effort].first, "ultra is not available for codex with model gpt-5.5"
+    assert_includes session.errors[:reasoning_effort].first, "ultra is not available for gemini_cli with model gemini-3-pro"
   end
 
   test "a word that is no reasoning-effort level is rejected with one message" do
@@ -556,9 +576,9 @@ class TerminalSessionTest < ActiveSupport::TestCase
   # session_type is caller-controlled on the public create API, so it grants no exemption.
   test "a workflow step's session is held to the same rule" do
     session = build(:terminal_session, user: @user, project: @project, session_type: "workflow_step",
-                                       agent_type: "gemini_cli", requested_model: "gemini-2.5-pro", reasoning_effort: "low")
+                                       agent_type: "antigravity_cli", requested_model: "gemini-3.8-flash-high", reasoning_effort: "low")
     assert_not session.valid?
-    assert_includes session.errors[:reasoning_effort], "is not available for gemini_cli with model gemini-2.5-pro"
+    assert_includes session.errors[:reasoning_effort], "is not available for antigravity_cli with model gemini-3.8-flash-high"
 
     session = build(:terminal_session, user: @user, project: @project, session_type: "workflow_step",
                                        agent_type: "gemini_cli", reasoning_effort: "low")
@@ -582,11 +602,19 @@ class TerminalSessionTest < ActiveSupport::TestCase
     end
   end
 
-  test "a Cursor session with a chosen model takes a level" do
-    session = build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "cursor_cli",
-                                       requested_model: "claude-opus-4-8", reasoning_effort: "high")
+  test "a session with a chosen model takes a level" do
+    session = build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "kiro_cli",
+                                       requested_model: "claude-opus-5.5", reasoning_effort: "high")
 
     assert session.valid?, session.errors.full_messages.to_sentence
+  end
+
+  test "a Cursor session takes no level, whatever its model" do
+    session = build(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "cursor_cli",
+                                       requested_model: "claude-opus-5-5-high", reasoning_effort: "low")
+
+    assert_not session.valid?
+    assert_includes session.errors[:reasoning_effort], "is not available for cursor_cli with model claude-opus-5-5-high"
   end
 
   test "ended? and ended_state? are true for finished, failed and cancelled only" do

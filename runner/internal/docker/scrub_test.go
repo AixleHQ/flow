@@ -126,9 +126,7 @@ func TestARemovalOfTheScrubHelperThatBlocksReturnsWithinItsTimeout(t *testing.T)
 	h := newEnvironment(t)
 	h.start(h.env, nil)
 	h.env.RemoveTimeout = 200 * time.Millisecond
-	h.engine.mu.Lock()
-	h.engine.removeBlocksRole = "scrub"
-	h.engine.mu.Unlock()
+	recorded := h.engine.blockRemovalOf("scrub")
 
 	started := time.Now()
 	r := h.runEnv(h.env.Scrub, scrubPayload())
@@ -138,10 +136,8 @@ func TestARemovalOfTheScrubHelperThatBlocksReturnsWithinItsTimeout(t *testing.T)
 	if r.Status != protocol.StatusError || r.Error.Class != ClassScrubFailed || !strings.Contains(r.Error.Message, "left") {
 		t.Fatalf("%#v %v", r, r.Error)
 	}
-	h.engine.mu.Lock()
-	defer h.engine.mu.Unlock()
-	if h.engine.removeBlocked < 150*time.Millisecond {
-		t.Fatalf("the removal was held %s: it did not run for its own timeout", h.engine.removeBlocked)
+	if held := h.engine.heldRemoval(t, recorded); held < 150*time.Millisecond {
+		t.Fatalf("the removal was held %s: it did not run for its own timeout", held)
 	}
 }
 
@@ -153,8 +149,8 @@ func TestTheScrubHelperIsRemovedUnderAFreshContextWhenTheOpEnds(t *testing.T) {
 	h.env.RemoveTimeout = 200 * time.Millisecond
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	recorded := h.engine.blockRemovalOf("scrub")
 	h.engine.mu.Lock()
-	h.engine.removeBlocksRole = "scrub"
 	h.engine.onRemoveBlocked = cancel
 	h.engine.mu.Unlock()
 
@@ -166,11 +162,9 @@ func TestTheScrubHelperIsRemovedUnderAFreshContextWhenTheOpEnds(t *testing.T) {
 	if r.Status != protocol.StatusError {
 		t.Fatalf("%#v", r)
 	}
-	h.engine.mu.Lock()
-	defer h.engine.mu.Unlock()
 	// Cancelled when the removal arrived, it was still held for its own bound.
-	if h.engine.removeBlocked < 150*time.Millisecond {
-		t.Fatalf("the removal was held %s: it ended with the op's context", h.engine.removeBlocked)
+	if held := h.engine.heldRemoval(t, recorded); held < 150*time.Millisecond {
+		t.Fatalf("the removal was held %s: it ended with the op's context", held)
 	}
 }
 

@@ -253,6 +253,7 @@ export function BoardColumn({
                 alignItems: 'center',
                 gap: 6,
                 width: '100%',
+                overflowX: 'hidden',
                 overflowY: 'auto',
                 paddingTop: 2,
               }}

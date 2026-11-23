@@ -1,13 +1,14 @@
 # Session queues
 
-Only so many agent sessions can run at once: each of your workspace's
+Only so many agent sessions can run at once: each of your company's
 **workers** runs one. When more are asked for than there are free workers, Flow
 **queues** them rather than failing them: a queued session keeps its place,
 starts by itself when a worker frees, and never loses the work that was asked of
 it.
 
-This page is the whole picture — every combination of settings, and what each
-one does.
+This page covers how the workers are shared between your projects, how to make
+sure the projects that matter most never wait, and what a waiting session is
+waiting for.
 
 ## What is queued, and what is not
 
@@ -15,99 +16,97 @@ one does.
 inside a project wait in that project's queue.
 
 **Agent logins** have no project, so they queue per person instead: two at a
-time, outside any company's limit. Signing in to two runtimes at once starts
+time, outside the company's workers. Signing in to two runtimes at once starts
 both immediately.
 
 **Not queued:** tool executions. Running a tool on its own is not a session and
-takes no slot.
+takes no worker.
 
 ## The two numbers
 
 | | set by | what it means |
 |---|---|---|
-| **Project limit** | company admin, in the project's settings | how many sessions this project may run at once |
-| **Installation ceiling** | whoever runs the deployment | how many sessions the whole installation may run at once |
+| **Workers** | an administrator, on **Settings → General** | how many sessions all of the company's projects may run at once |
+| **Reserved workers** | an administrator, in the project's **Settings** | how many of those workers belong to this one project |
 
-Either can be absent. All four combinations are supported, and they behave
-differently enough to be worth stating one by one.
+### Projects with no reservation
 
-### No ceiling, no project limit
+They share every worker no project has reserved. A worker that frees up goes to
+the session that has waited longest, whichever of these projects it belongs to.
 
-Every project may run the installation default — **4** unless the deployment
-changed it. Projects do not affect each other, and nothing bounds the total
-except the cluster itself.
+Each of them runs at most **4** sessions at once, however many workers the
+company has (the deployment can change that default). A company whose work all
+sits in one project should reserve workers for it, or the rest can never be
+used.
 
-This is the out-of-the-box shape.
+### A project with reserved workers
 
-### No ceiling, project limit set
+Its reserved workers are its own. It can always run that many sessions, because
+nothing else may occupy them, even while the project sits idle.
 
-The project may run its own number instead of the default. Still nothing bounds
-the total: with no shared ceiling there is no shared capacity, so a project
-limit here is simply that project's own cap.
+The number is also the project's maximum. A project with 3 reserved runs 3 at
+most, even when the shared workers are free.
 
-### Ceiling set, no project limit
+**Clearing the field** gives the reservation back: the project returns to the
+shared workers, up to 4 at a time.
 
-The project draws on the **shared pool** — the ceiling less every reservation —
-and may run at most the default at once. Projects without limits compete for the
-shared pool first-come, first-served.
+## Prioritising projects
 
-### Ceiling set, project limit set
+Flow does not rank projects against each other, and a session cannot jump the
+queue. You set priority through capacity instead: reserve workers for the
+projects that must never wait, and let the rest share what is left.
 
-The project limit becomes a **reservation**. The project can always reach its
-number, because nothing else is allowed to occupy it — not even while the
-project sits idle. It is capacity you can count on, not a cap you might not get
-to use.
-
-## Reservations and the shared pool
-
-An installation with a ceiling of 10, where three projects have reserved 1, 2
-and 3:
+Ten workers across eight projects, two of which must never wait:
 
 ```
-ceiling                    10
-  reserved   Alpha  1      ← Alpha can always run 1
-             Beta   2      ← Beta can always run 2
-             Gamma  3      ← Gamma can always run 3
-  shared            4      ← every other project competes for these
+workers                     10
+  reserved   SDLC         4   ← SDLC can always run 4
+             Support      2   ← Support can always run 2
+  shared                  4   ← the other six projects share these
 ```
 
-Every project without a limit of its own shares those 4, each still bounded by
-the default. Alpha, Beta and Gamma never compete for them, and nobody can borrow
-a reservation that is sitting idle.
+SDLC and Support never wait behind Marketing, and a busy week in Marketing never
+slows them down. Marketing, Operations, Accounting and the other projects take
+turns on the shared 4, longest-waiting session first.
 
-**Clearing a project's limit** hands its reservation back to the shared pool.
-That is how you move a project off a reservation and onto the shared queue:
-empty the field and save.
+What this costs you:
+
+- **A reserved worker sits idle when its project does.** Nobody else may borrow
+  it, and you pay for it either way.
+- **A reserved project cannot burst.** In the example, SDLC runs 4 at most, even
+  when nobody is using the shared 4.
+- **The shared workers are first come, first served.** None of the projects
+  sharing them goes ahead of another.
+
+A board task's **priority** does not change where its session sits in the
+queue.
 
 ## The budget rule
 
-Reservations are drawn from the ceiling, so they may never add up to more than
-it. Saving a limit that does not fit is refused, and the message says what is
-left:
+Reservations come out of the company's workers, so together they can never
+exceed it. Saving a number that does not fit is refused, and the message says
+what is left:
 
 > 5 exceeds the company's 10 workers. 7 of 10 is already reserved by other
 > projects, so this project can be set to at most 3.
 
-The project's settings also show how much of the ceiling is unreserved, and
-which of **your company's** projects hold the rest. Reservations held by other
-companies in the same installation are summed into a single line rather than
-named.
+A project's settings and the company's settings both show how many workers are
+unreserved, and which projects hold the rest.
 
-The same rule is enforced from the other side: the deployment cannot lower the
-ceiling below what is already reserved.
-
-Only *explicit* limits reserve. A project on the default reserves nothing —
-otherwise sixteen projects at the default of 4 would need a ceiling of 64 before
-the first limit could be saved at all.
+A project that has no reservation of its own takes none of the budget.
+Otherwise eight projects on the default of 4 would need 32 workers before the
+first reservation could be saved.
 
 ## Who can change what
 
-- **A company admin** sets or clears a project's limit in **project settings**.
-- **A platform admin** can do the same for any project in the admin area.
-- **The installation ceiling** is a deployment setting, not something changeable
-  from the UI.
+- **The number of workers:** an administrator, on **Settings → General**. The
+  free trial runs one worker, and the number can be changed once a card is
+  added.
+- **A project's reserved workers:** an administrator, in that project's
+  settings. Not during the free trial.
+- **A platform admin** can change either in the admin area.
 
-Everyone else sees the project's limit but cannot change it.
+Everyone else sees both numbers but cannot change them.
 
 ## What a waiting session looks like
 
@@ -115,9 +114,10 @@ A session that is not running yet tells you which of these it is waiting for:
 
 | Shown | Meaning |
 |---|---|
-| **Waiting for a free session slot** | Every worker the project may use is busy, or the shared pool's are. Someone else's session has to finish first. |
-| **Waiting for cluster capacity** | A slot was granted, but the cluster has nowhere to put the container yet. |
-| **Starting session…** | The slot is granted and the container is coming up. |
+| **Waiting for a free session slot** | Every worker the project may use is busy. Another session has to finish first. |
+| **Waiting for cluster capacity** | A worker was granted, but the cluster has nowhere to put the container yet. |
+| **Waiting for a free machine** | The project runs on its own [runner](/docs/runners), and every machine of it is busy. |
+| **Starting session…** | A worker is granted and the container is coming up. |
 
 Sessions start in the order they were asked for, across all of a company's
 projects: a worker that frees up goes to the session that has waited longest,
@@ -126,24 +126,25 @@ gives its place to the next one immediately.
 
 ## Things worth knowing
 
-- **Lowering a limit never stops a running session.** It only stops new ones
-  from starting until usage falls below the new number.
-- **Raising a limit takes effect at once.** Whatever was waiting starts
+- **Lowering a number never stops a running session.** It only stops new ones
+  from starting until usage falls below it.
+- **Raising a number takes effect at once.** Whatever was waiting starts
   immediately; there is nothing to restart and nothing to wait for.
-- **Queue time is not run time.** A session that waited an hour for a slot does
-  not lose an hour of its own execution budget.
+- **Queue time is not run time.** A session that waited an hour for a worker
+  does not lose an hour of its own execution budget.
 - **A queued step does not make its run look stuck.** A run whose step is
-  waiting for a slot reports itself as queued rather than running, and is never
-  reaped for being slow.
+  waiting for a worker reports itself as queued rather than running, and is
+  never reaped for being slow.
 
 ## For operators
 
-Capacity is a company's limit, held in the database and set on the company's own
-page in the admin. A project's limit is a reservation drawn from it; projects
-without one share what the reservations leave. A company with no limit of its own
-is unbounded, and nothing is metered for it. Where we host, an internal
-organisation is left unbilled by ticking **Managed by Aixle** on the company,
-which also takes the limit out of its own admins' hands.
+A company's workers are its limit, held in the database. Its administrators set
+it on **Settings → General**, and a platform admin on the company's page in the
+admin. A company with no limit of its own is unbounded: each project still runs
+at most the default, a project's reserved number is only its own cap, and
+nothing is metered. Where we host, a paying company cannot be left without a
+limit; an internal organisation is left unbilled by ticking **Managed by
+Aixle**, which also takes the limit out of its own admins' hands.
 
 There is no deployment-wide ceiling. `SESSION_CONCURRENCY_LIMIT` used to be one
 and nothing reads it any more: a single number for the whole installation could

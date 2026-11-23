@@ -13,6 +13,19 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Changed
+- **Admin**: the dashboard opens on the current week, shows Utilization, Average wait and
+  p95 wait right after Company, keeps the table's header and Company column in view while
+  it scrolls, and folds its explanation into a "How to read this dashboard" section.
+
+### Fixed
+- **Tasks**: a collapsed board column no longer flickers a horizontal scrollbar while a card
+  in it has an active run.
+- **Wrappers**: a wrapper with a parameter named like `max`, `min`, `count` or `size` runs
+  again. Every call to it used to hang until it timed out after an hour.
+
+## [1.17.0] - 2026-11-23
+
 ### Added
 - **Integrations**: agents can act as you on Bitbucket, as they can on GitHub and GitLab.
   Connect your Bitbucket account under **Profile → Connected accounts**, allow it per
@@ -30,8 +43,47 @@ governance, community health — carry none.
   with the drawer's tabs and the properties beside the description. **Open as page** in the
   task drawer goes there, and the drawer's new **Copy link** button copies that address.
   The page opens archived tasks too.
+- **Sessions & Runs**: agents using personal access can page through every session and
+  workflow run they can see with `list_sessions` and `list_workflow_runs` (`offset`, `total`,
+  `has_more`), no longer stopping at the latest 100. Both take the Sessions & Runs filters
+  (dates, status, agent, owner, workflow, search) and its sort by tokens, cost or duration.
+  `list_sessions` also returns the tokens and cost summed over every match, and run rows
+  carry each run's tokens and cost. Agent logins and tool setups are no longer listed.
+- **Admin**: the dashboard has an **Average workers** tile: how many workers the companies
+  shown were offered on average over the selected period, which is what they are billed for,
+  split into paying, trial and managed, with the change from the period before. A managed
+  company without a worker limit counts at the most workers it ran at once.
 
 ### Fixed
+- The `flow-web` image runs Ruby 4.0.10, which fixes the seven memory-safety bugs in
+  Ruby's strings and regular expressions announced on 2026-11-18 (among them
+  GHSA-34m4-m9fh-gqp5). One of them lets anyone who can reach the server run code on it
+  without signing in. Self-hosted installations: upgrade to this release.
+- The `flow-web` image runs Puma 8.1.2, which fixes seven advisories in Puma 8.0.2 (among
+  them GHSA-m5xw-3hrw-qcmf). Puma now answers `400` to a request without a `Host` header or
+  with an unescaped `{`, `}`, `` ` `` or `\` in its path.
+- **Sessions & Runs**: an automatic step whose agent CLI exits — because it refused its
+  model or a flag, crashed, quit, or was killed — now fails within a minute or two with the
+  CLI's own message, such as `Cannot use this model: …`, or the signal that killed it. It
+  used to sit at an idle shell until someone cancelled the run, or fail after 30 minutes
+  saying it may be blocked on a prompt.
+- **Workflows**: a Grok account signed in with grok.com sees its own models in the model
+  pickers. The picker used to fall back to a fixed list the account could not use, and the
+  step then ran Grok's default model instead. A Grok or Antigravity step whose model the
+  account does not offer now fails before it starts, naming the models it does offer.
+- **Workflows**: the reasoning-effort select offers the levels the vendor says each model
+  takes, read from the account's own model catalogue (Claude Code, Codex, Copilot CLI,
+  Grok, Kiro CLI, Gemini CLI), instead of one list per runtime that the CLI then lowered or
+  ignored on some models.
+- **Sessions & Runs**: Antigravity CLI usage is priced right. Its input tokens never included
+  the cached ones, but were priced as if they did, which undercounted the cost of sessions
+  that read from the cache.
+- **Sessions & Runs**: Grok sessions record their tokens and cost. Since Grok CLI 1.0.89
+  downloads a binary archive through the logged proxy, reading the log failed and no
+  session got any usage; the cost is now the one xAI reports for each response.
+- **Sessions & Runs**: Copilot CLI sessions count every model call. The CLI's telemetry for
+  a session's last calls was lost when its container stopped (a short step recorded none);
+  the calls are now read from the CLI's own transcript at the end of the session.
 - **Triggers & gates**: a column trigger in auto mode is refused for a workflow with a step
   that has auto-run off, and the error names the steps — such a trigger never started
   anything. When a column trigger cannot start its run, the card gets a comment saying why
@@ -52,10 +104,43 @@ governance, community health — carry none.
 - **Tasks**: the tooltip of a task in a collapsed column wraps within a bounded width and shows
   the status on its own line, so a long title stays on screen. The time in `Running — …` and
   `Waiting — …` counts up while the tooltip is open.
+- Runners: a machine whose Docker daemon is down now checks in and shows **Failed**
+  with the reason, instead of showing Offline while its service restarts in a loop.
+  The runner no longer exits when Docker is unreachable: it waits for Docker with
+  a growing delay, and reports the machine again once Docker answers. Press
+  **Return to service** on the machine to bring it back to idle.
+- Runners: a session waiting for a machine of its runner keeps waiting while the machine is
+  offline, and starts when it is back, instead of failing after about 90 seconds. It fails with
+  the "has no machine online" message once no machine has been heard for 15 minutes. A new
+  launch with no machine online still fails at once.
+- Runners: on a `manual` machine under the `reuse` policy, a session fetches a
+  repository checkout the scrub kept and puts it on the repository's source
+  branch at the remote's current tip, instead of failing to clone into the
+  existing directory and working on a stale checkout. A path that holds
+  another repository or a broken clone is cloned again. A kept checkout keeps
+  only its objects and refs: its config and hooks are rebuilt, never reused.
+- Runners: runner sessions record their tokens and cost. Claude Code, Gemini CLI, Codex,
+  Kiro CLI, Copilot CLI and Grok sessions on a machine got no telemetry endpoint, so they
+  showed no usage.
 
 ### Changed
+<<<<<<< HEAD
 - **Profile**: the consent switches on **Connected accounts** now refuse a request that names
   no switch, an unknown field, or a value that is not true or false, for every provider.
+=======
+- **Docs**: *Session queues* describes workers as the company's own number,
+  set on Settings → General, instead of an installation ceiling, and gains a
+  *Prioritising projects* section: how reserving workers keeps the projects that
+  matter most from waiting, and what a reservation costs.
+- **Workflows**: Cursor CLI and Antigravity CLI no longer offer a separate reasoning effort.
+  Both take the effort as part of the model, so pick the model's Low, Medium, High (or Max)
+  variant. A level on top of it made Cursor CLI refuse the model and exit, and made
+  Antigravity CLI quietly run its default model instead. Steps on these runtimes that had a
+  level lose it.
+- **Sessions & Runs**: automatic Antigravity CLI steps run in its terminal UI, like
+  interactive ones, so the live terminal shows the conversation and a turn that ends
+  without `finish_session` gets the usual reminder.
+>>>>>>> origin/develop
 - **Sign-in & onboarding**: onboarding asks which area of the company you work in —
   Engineering, Product Management, Design, QA, Marketing, Operations, Finance / Accounting,
   Executive Leadership or Other — instead of a software-delivery role. Earlier answers move to
@@ -90,18 +175,11 @@ governance, community health — carry none.
   levels in Codex. A Grok step that stops on its "free Grok Build usage limit" message
   fails with that message instead of waiting for the no-output watchdog. Gemini CLI stays at 0.60.0: 0.70.0 still stops `--yolo` at a prompt
   when the agent edits a build file or runs a workspace script.
-
-### Fixed
-
-- Runners: a machine whose Docker daemon is down now checks in and shows **Failed**
-  with the reason, instead of showing Offline while its service restarts in a loop.
-  The runner no longer exits when Docker is unreachable: it waits for Docker with
-  a growing delay, and reports the machine again once Docker answers. Press
-  **Return to service** on the machine to bring it back to idle.
-- Runners: a session waiting for a machine of its runner keeps waiting while the machine is
-  offline, and starts when it is back, instead of failing after about 90 seconds. It fails with
-  the "has no machine online" message once no machine has been heard for 15 minutes. A new
-  launch with no machine online still fails at once.
+- **Company settings**: a self-hosted installation bought through AWS Marketplace
+  reports its usage under the dimension `worker_minute`, the same word as the SaaS
+  product, instead of `queue_minute`. Operators: from this version an installation meters
+  only against the new self-hosted listing; an installation subscribed to the first listing
+  (dimension `queue_minute`) keeps running and reports no usage once upgraded.
 
 ## [1.16.0] - 2026-11-19
 
@@ -255,14 +333,6 @@ governance, community health — carry none.
   for a slot released seconds before the check and still being handed on, or an
   error for an agent login that expired while a step waited for its slot; the
   step already tells its owner to sign in again.
-
-### Fixed
-- Runners: on a `manual` machine under the `reuse` policy, a session fetches a
-  repository checkout the scrub kept and puts it on the repository's source
-  branch at the remote's current tip, instead of failing to clone into the
-  existing directory and working on a stale checkout. A path that holds
-  another repository or a broken clone is cloned again. A kept checkout keeps
-  only its objects and refs: its config and hooks are rebuilt, never reused.
 
 ## [1.15.0] - 2026-11-14
 
@@ -1690,7 +1760,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.16.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.17.0...develop
+[1.17.0]: https://github.com/AixleHQ/flow/compare/v1.16.0...v1.17.0
 [1.16.0]: https://github.com/AixleHQ/flow/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/AixleHQ/flow/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/AixleHQ/flow/compare/v1.13.1...v1.14.0

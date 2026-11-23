@@ -1,0 +1,38 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# The test tags a CI run leaves out: bin/test-tags exclude [--event EVENT] [--base REF]
+#
+# Prints them space-separated, for the TEST_EXCLUDE_TAGS variable that the Rails suite and the
+# Vitest run read (docker-compose.ci.yml forwards it). Only a pull_request event leaves tags out;
+# a push, a manual run or any other event runs every test. The pull request's changed files are
+# `git diff --name-only <base> HEAD`, where --base defaults to HEAD^1: the first parent of the
+# merge commit actions/checkout builds for a pull request (fetch-depth 2). When the diff fails the
+# list is empty, so a run that cannot tell what changed runs everything.
+#
+# Rules and tags: config/test_tags.json. Docs: docs/testing.md §9.
+
+require "open3"
+require "optparse"
+require_relative "../lib/test_tags"
+
+options = { event: ENV.fetch("GITHUB_EVENT_NAME", ""), base: "HEAD^1" }
+OptionParser.new do |parser|
+  parser.banner = "usage: bin/test-tags exclude [options]"
+  parser.on("--event EVENT", "the GitHub event (default $GITHUB_EVENT_NAME)") { |value| options[:event] = value }
+  parser.on("--base REF", "the ref a pull request is diffed against (default HEAD^1)") { |value| options[:base] = value }
+end.parse!
+
+abort "usage: bin/test-tags exclude [--event EVENT] [--base REF]" unless ARGV == [ "exclude" ]
+
+excluded = []
+begin
+  if options[:event] == "pull_request"
+    out, status = Open3.capture2("git", "diff", "--name-only", options[:base], "HEAD", err: File::NULL)
+    excluded = TestTags.load.excluded_for_pull_request(status.success? ? out.split("\n") : nil)
+  end
+rescue TestTags::Error => e
+  abort "bin/test-tags: #{e.message}"
+end
+
+puts excluded.join(" ")

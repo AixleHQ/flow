@@ -19,6 +19,7 @@ import (
 	"github.com/aixlehq/aixle-runner/internal/protocol"
 	"github.com/aixlehq/aixle-runner/internal/proxy"
 	"github.com/aixlehq/aixle-runner/internal/tokens"
+	"github.com/aixlehq/aixle-runner/internal/tunnel"
 	"github.com/aixlehq/aixle-runner/internal/update"
 	"github.com/aixlehq/aixle-runner/internal/version"
 )
@@ -166,6 +167,17 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 		return host.ErrUpdated
 	}
 
+	// The interactive tunnel (PROTOCOL.md §8): the platform turns it on in the check-in's
+	// config, and the runner then connects to the relay while the machine holds a session.
+	// What it serves is what this runner's own `container.start` set up, so the environment
+	// gets the table before any session's container is started or resumed.
+	var manager tunnelRunner
+	serving := &tunnel.Serving{}
+	if m := tunnelManager(answer, client, source, env, serving, opts.TunnelURL, opts.Logger); m != nil {
+		manager = m
+		env.Tunnel = serving
+	}
+
 	// A Resume that cannot list the environment's containers has served no
 	// running session's proxy again, and nothing would call it later, so the
 	// host runner does not poll until it has. It waits for Docker with a
@@ -201,12 +213,6 @@ func RunHost(ctx context.Context, opts HostOptions) error {
 		Handlers: handlers,
 		Updater:  updater,
 		Logger:   opts.Logger,
-	}
-	// The interactive tunnel (PROTOCOL.md §8): the platform turns it on in the check-in's
-	// config, and the runner then connects to the relay while the machine holds a session.
-	var manager tunnelRunner
-	if m := tunnelManager(answer, client, source, env, opts.TunnelURL, opts.Logger); m != nil {
-		manager = m
 	}
 	return runWithTunnel(ctx, loop.Run, manager, opts.Logger)
 }

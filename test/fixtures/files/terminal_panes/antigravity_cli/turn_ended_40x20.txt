@@ -1,0 +1,8 @@
+─────────────────────────────────────
+> Reply with the single word PONG and
+  nothing else.
+  PONG
+────────────────────────────────────────
+> Auto mode: edits & safe commands a...
+────────────────────────────────────────
+? for shortcuts

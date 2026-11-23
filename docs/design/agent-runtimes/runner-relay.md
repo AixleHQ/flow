@@ -149,7 +149,9 @@ and are taken as stated. The chart must have, before phase 4 is validated on sta
 
 - `/healthz`: the process serves. `/readyz`: the Redis subscription of §8.1 is live and the last
   reconcile pass (§8.3) is not older than three intervals. It does not depend on Rails being up:
-  a Rails outage must not take down the terminals already open.
+  a Rails outage must not take down the terminals already open. The admin port serves only these two
+  and `/metrics`, all `GET`: nothing on it changes state. A drain comes from SIGTERM (`server.Drain()`, then
+  30 s); a manual drain is a restart (`kubectl rollout restart deployment/runner-relay`).
 - **Metrics** (Prometheus): `runner_relay_machines_connected`, `runner_relay_streams_open{surface}`,
   `runner_relay_bytes_total{direction}`, `runner_relay_frames_total{type}`, `runner_relay_stream_resets_total{code}`,
   `runner_relay_tunnel_connects_total{result}` (ok, bad_ticket, replayed, version),
@@ -238,7 +240,9 @@ implementation per way of reaching a session's ports, so `kubernetes` adds its o
   agent's network namespace. The sidecar gets a second Unix socket, **`dial.sock`**, in a directory of
   the host runner's state directory that is bind-mounted read-write into the sidecar and read by the
   host runner. For each stream the host runner connects to it, writes one line with the port, and the
-  sidecar dials `127.0.0.1:<port>` and pipes the two. The sidecar takes the allowed ports on its command
+  sidecar dials `127.0.0.1:<port>` and pipes the two. The sidecar answers the line first, `OK` or `ERR <reason>`, so
+  that a port that does not answer is `RESET dial_failed` and not a stream that opens and breaks
+  (`PROTOCOL.md` §8.12). The sidecar takes the allowed ports on its command
   line at start (from `container.start`'s payload) and refuses any other. This keeps rootless Docker
   working, where a container's IP is not reachable from the machine (`DESIGN.md` §6.9.5); the existing socket
   runs the other way (sidecar to host runner), so a second one is needed. It needs no credential in
@@ -373,7 +377,7 @@ There is **no per-IP limit** on new tunnel connections (Alex, 2026-11-19). After
   answer the latter.
 - `GOAWAY` tells the runner to finish its open streams (the relay accepts no new `OPEN` on this
   connection) and reconnect; the relay closes the connection when the last stream ends or after 30 s.
-  The relay sends it on shutdown, on `replaced`, and when a drain is requested from the admin port.
+  The relay sends it on shutdown (SIGTERM) and on `replaced`.
 - WebSocket close codes: 1000 normal, 1002 protocol, 1009 too large, 1013 try again, 4000 `replaced`,
   4001 `revoked` (the machine no longer holds a session, or is revoked), 4002 `ticket`.
 
@@ -384,8 +388,8 @@ There is **no per-IP limit** on new tunnel connections (Alex, 2026-11-19). After
 | The browser's connection ends | The relay sends `RESET cancelled` and frees the stream; the runner closes the dialed TCP connection at once. A graceful browser close first sends `CLOSE` |
 | The dialed TCP connection ends (ttyd exits, the container stops) | The runner sends `CLOSE`, or `RESET internal` on an error; the relay closes or aborts the browser side |
 | The runner stops the session container (`container.stop`) | The runner resets every stream with `session_changed` before it stops |
-| The machine's connection is lost, or `GOAWAY` finishes | All streams are lost on both sides. The relay answers the browser: an HTTP request in flight `502`, a WebSocket close 1012. Nothing resumes |
-| `revoked` or `session_changed` from a signal (§8) | The relay sends `RESET` with that code for each affected stream and closes the browser's side (HTTP: connection closed; WebSocket: close 1008 for `revoked`, 1012 for a session change) |
+| The machine's connection is lost, or `GOAWAY` finishes | All streams are lost on both sides. The relay answers an HTTP request in flight with `502`; a WebSocket connection is closed. Nothing resumes |
+| `revoked` or `session_changed` from a signal (§8) | The relay sends `RESET` with that code for each affected stream and closes the browser's side (HTTP: connection closed; WebSocket: connection closed). The relay does not send the close codes 1008 or 1012: `httputil.ReverseProxy` hijacks the upgraded connection, so the browser sees the connection end (1006), and the frontend does not tell close codes apart. The streams on the tunnel are reset with the right code |
 
 ### 5.6 Why no stream resumption
 
@@ -703,10 +707,28 @@ touched: it feeds the monitor and the MCP tool, not the browser.
 The one new behaviour is **readiness**. Hosted sessions wait for their ports before `ready`
 (`DockerRuntime#wait_for_ports`); a runner session is `ready` when its container runs (`DESIGN.md` §6.9.4), possibly before
 ttyd listens. A dial that fails in that window is `RESET dial_failed` and the browser gets `502`; ttyd's
-own client and the page's frame retry. 16e measures how long the window is on the local adapter, and if it is
-visible, `container.start` waits for the five ports (the runner checks them with the same dial) before it
-answers, which keeps the platform's `ready` honest and costs a few seconds of session start. **Open choice,
-left to 16e with its measurement.**
+own client and the page's frame retry.
+
+**Measured and decided in 16e (2026-11-21).** The window is visible. On a Linux machine with Docker 25
+(a Coder workspace, 4 cores), with the stock `flow-kiro-cli` image started with `docker start`, five runs
+(a script that polls each port from the host about every 0.3 s; it is attached to task #271) gave the time until each port accepted a
+connection, in seconds after `docker start` was issued:
+
+| Surface (port) | Runs | Time to first accept |
+| --- | --- | --- |
+| `upload` (4041), `fs` (4040) | 5 | 1.5 to 1.7 |
+| `ide` (8443) | 5 | 2.6 to 3.1 |
+| `tty` (7681), `view` (7682) | 5 | 3.5 to 3.7 |
+
+The terminal, the surface a person opens first, is the last to listen, about 3.6 s after the start. The platform marks
+a runner session `ready` when `container.start`'s result is posted, which is within the poll of the result, well under
+that, so a page that opens on `ready` would meet a `502` from `tty` more often than not. **So `container.start` waits.**
+After the container starts, and before it answers, the runner dials each of the five ports with the dial the tunnel's
+streams use (the sidecar's `dial.sock`, or the machine's `127.0.0.1` with `network: host`) until all answer, for at most 30 s
+(`DockerRuntime::PORT_READY_TIMEOUT`), and only then serves them. A session whose ports do not answer in time, or
+whose container stops meanwhile, is `container_start_failed`, and the container, the sidecar and the relay are removed.
+The wait costs a session about 3.5 s of start time, which is when its terminal could first be opened anyway. It runs
+only when the tunnel is on for the machine and the payload names the ports; with the tunnel off nothing changes.
 
 ## 10. The takeover: the ops long-poll and the callback proxy
 
@@ -922,7 +944,7 @@ design) and 16b to 16g. The takeover rows 24 to 26 follow in the same table.
 | **16c** | **The service skeleton and the runner's connection.** `runner-relay/` module, config, `/healthz` `/readyz` `/metrics`, the Dockerfile, a Go CI job (`runner-relay (Go)`, in the required `Checks`), the `images.yml` entry (a patch for Alex); the `Settings.runners.relay` keys; `Runners::TunnelTicket` and `POST /runner/v1/tunnel-ticket` with `PROTOCOL.md` §5.11 and fixtures; the ticket verifier and `jti` replay guard; `GET /runner/v1/tunnel` upgrade, `HELLO`, heartbeat, `replaced`, `GOAWAY`; the runner's `tunnel` manager (ticket, connect, reconnect with backoff); Compose and `Procfile.dev`. A machine connects while it holds a session; no browser path yet | 16b |
 | **16d** | **The platform's half.** `Runners::Tunnel.ports(session)` and `tunnel` in `container.start`'s payload (with the schema and the fixture change) and the `network: host` port variables; the `runner_relay` publishers (`machine_session`, `session_ended`, `machine_revoked`); the internal `holders` and `checks` endpoints and the relay's internal token. The relay does not consume them yet | 16c |
 | **16e** | **The browser path.** The relay's edge handler (routing by token and surface, the stream `Transport`, path rules, header cross-check), signal subscription, the reconcile pass, revocation; the runner's `Dialer`s (the sidecar's `dial.sock` and the `network: host` dial) and the port check at start (`ports_in_use`); the readiness measurement of §9. End to end on the `local` adapter in Compose. `external_runners` stays on the test company only | 16d |
-| **16f** | **`aixle-infra`.** The Deployment, Service, Secret and ConfigMap, the two ingress routes of §2.3 (on `TRAEFIK_ENTRYPOINT`; `/t/` on `route_domain_host`, the tunnel on the gateway's hosts; explicit priorities), the NetworkPolicy ingress rules, the scrape and the alerts. A separate repository's task, which can start once 16c's image exists | 16c |
+| **16f** | **`aixle-infra`.** The Deployment, Service, Secret and ConfigMap, the two ingress routes of §2.3 (on `TRAEFIK_ENTRYPOINT`; `/t/` on `route_domain_host`, the tunnel on the gateway's hosts; explicit priorities), the NetworkPolicy ingress rules, the scrape and the alerts. A separate repository's task, which can start once 16c's image exists. Requirements from 16e: the relay's edge listener trusts `X-Session-Id` as proof that `ws_auth` ran, so it must be reachable only through the ingress and `terminal-auth` (for example by a NetworkPolicy), and the admin port is never published; `RUNNER_RELAY_RAILS_URL` and `RUNNER_RELAY_INTERNAL_TOKEN` are required; `RUNNER_RELAY_TICKET_KEY` has the same value as the platform's `RUNNERS_RELAY_TICKET_KEY` | 16c |
 | **16g** | **Parity and the first customers.** Lift `interactive_terminal` (`Runners::Selection`, the capability table, the form's disabled runners and the builder); the session page; the user guide text; the staging validation of the interactive path on a real machine (QA); then `external_runners` can go to the first named companies (`DESIGN.md` §12.2, phase 4). `PROTOCOL.md` is checked against what was built | 16e, 16f |
 | **24** | **The ops long-poll moves into the relay** (§10.2): `X-Aixle-Runner-Wake` on the empty `wait=0` answer, the relay's `/runner/v1/ops` handler with the subscription, the per-machine subscription kept between polls, the replace rule, the trusted `X-Forwarded-For`, the ingress route; the gateway keeps answering the path until the ingress moves. **Decides first whether commands go over the runner's persistent WebSocket instead (§10.2.1); variant (a), a wake frame and one short `wait=0` read, is preferred (Alex, 2026-11-19), and the decision is made when this row is cut** | 16g |
 | **25** | **The callback proxy moves into the relay** (§10.3): `POST /runner/v1/proxy-authorizations`, the relay's streaming forward, the ingress route; `ProxiesController` keeps its forward for the rollout and loses it in 26 | 24 |

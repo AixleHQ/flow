@@ -131,6 +131,10 @@ module Agents
       parts.join(" ")
     end
 
+    # An unknown model id gets "Couldn't switch model: unknown model id" on screen, and the
+    # session runs the default model (1.0.89).
+    def runs_default_model_for_unknown? = true
+
     # Context file: a home-level rule file. `$GROK_HOME/rules/*.md` is the root the CLI
     # documents as "always scanned; applies to all projects" — every session, every
     # directory, git repo or not — which keeps /workspace clean, unlike AGENTS.md, which
@@ -322,14 +326,10 @@ module Agents
     # The xAI model catalogue, which also carries per-token prices (see #price_sheet).
     MODELS_URL = "https://api.x.ai/v1/language-models"
 
-    # Used only when the catalogue is unreachable or the credential is a session token
-    # the public API declines. Deliberately minimal: `grok-4.5` is what the CLI itself
-    # reports as its default model, and the other two are the current coding models in
-    # the published catalogue. The live call is the source of truth.
+    # Used only when no catalogue answers. Deliberately minimal: the CLI's default model
+    # (`grok models`, 1.0.89). The live call is the source of truth.
     FALLBACK_MODELS = [
-      { model_id: "grok-4.5", display_name: "grok-4.5", description: "Grok 4.5 — the Grok CLI default model" },
-      { model_id: "grok-4.6", display_name: "grok-4.6", description: "Grok 4.6 — the model behind Grok Build" },
-      { model_id: "grok-code-fast-1", display_name: "grok-code-fast-1", description: "Fast, low-cost coding model" }
+      { model_id: "grok-4.7", display_name: "grok-4.7", description: "Grok 4.7 — the Grok CLI default model" }
     ].freeze
 
     MODEL_DESCRIPTION_LIMIT = 120
@@ -349,7 +349,8 @@ module Agents
         {
           model_id: model_id,
           display_name: model_id,
-          description: model_description(model).truncate(MODEL_DESCRIPTION_LIMIT)
+          description: (model["description"].presence || model_description(model)).to_s.truncate(MODEL_DESCRIPTION_LIMIT),
+          reasoning_effort_levels: catalogue_effort_levels(model)
         }
       end
 
@@ -451,6 +452,12 @@ module Agents
 
     # The OAuth session token, distinct from an API key: only a signed-in session
     # has a billing view to read.
+    def api_key(credentials)
+      return nil unless credentials.is_a?(Hash)
+
+      credentials["api_key"].presence || auth_scopes(credentials["auth"]).dig(API_KEY_SCOPE, TOKEN_FIELD)
+    end
+
     def oauth_session_token(credentials)
       return nil unless credentials.is_a?(Hash)
 
@@ -543,7 +550,22 @@ module Agents
       parts.join(" · ")
     end
 
+    # The CLI proxy's list says per model whether it takes an effort and which
+    # (`reasoning_efforts`); the public catalogue says neither, so nil.
+    def catalogue_effort_levels(model)
+      return nil unless model.key?("supports_reasoning_effort")
+      return [] unless model["supports_reasoning_effort"]
+
+      Array(model["reasoning_efforts"]).filter_map { |level| level.is_a?(Hash) ? (level["value"] || level["id"]) : level }
+    end
+
+    # A signed-in account reads the CLI's own list; an API key, the public catalogue.
     def fetch_model_catalog(credentials)
+      session = oauth_session_token(credentials)
+      if session.present? && api_key(credentials).blank?
+        return Grok::Api.models(access_token: session, user_id: grok_user_id(credentials)).presence
+      end
+
       token = bearer_token(credentials)
       return nil if token.blank?
 
@@ -616,20 +638,23 @@ module Agents
       end
       return nil if counts[:input_tokens].nil? && counts[:output_tokens].nil?
 
-      output_tokens = counts[:output_tokens].to_i
+      cached = counts[:cache_read_tokens].to_i
+      ticks = text[/"cost_in_usd_ticks"\s*:\s*(\d+)/, 1]
       # Reasoning tokens are billed as completion tokens but the API also reports them
-      # inside completion_tokens, so they are recorded, not added.
+      # inside completion_tokens, so they are recorded, not added. The input count
+      # includes the cached tokens; the platform counts them apart.
       {
         "model" => text[/"model"\s*:\s*"([^"]+)"/, 1],
         "timestamp" => timestamp,
         "tokenUsage" => {
-          "inputTokens" => counts[:input_tokens].to_i,
-          "outputTokens" => output_tokens,
-          "cacheReadTokens" => counts[:cache_read_tokens].to_i,
+          "inputTokens" => [ counts[:input_tokens].to_i - cached, 0 ].max,
+          "outputTokens" => counts[:output_tokens].to_i,
+          "cacheReadTokens" => cached,
           "cacheWriteTokens" => 0,
           "reasoningTokens" => counts[:reasoning_tokens].to_i,
-          "totalCents" => 0.0
+          "totalCents" => ticks ? (ticks.to_i / TICKS_PER_CENT).round(6) : 0.0
         },
+        "costReported" => ticks.present?,
         "source" => "mitm"
       }
     end
@@ -638,7 +663,10 @@ module Agents
       body = entry["body"].to_s
       return "" if body.blank?
 
-      entry["body_encoding"] == "base64" ? Base64.decode64(body).force_encoding("UTF-8") : body
+      # A base64 body is binary as often as not: 1.0.89 downloads a 5 MB
+      # `/v1/bundle/archive` through the proxy, and its invalid bytes, matched as they
+      # were, raised and lost every session's usage.
+      entry["body_encoding"] == "base64" ? Base64.decode64(body).force_encoding("UTF-8").scrub : body
     rescue ArgumentError
       ""
     end
@@ -651,18 +679,27 @@ module Agents
     # / 1e8. Uncached input, cached input and output are priced separately.
     PRICE_SCALE = 100_000_000.0
 
+    # xAI reports what each response cost (`usage.cost_in_usd_ticks`, 10^10 ticks to the
+    # dollar, https://docs.x.ai/docs/api-reference). The price sheet only stands in for a
+    # response without it, and a signed-in account cannot read the sheet at all (the
+    # public catalogue answers its token with 403).
+    TICKS_PER_CENT = 100_000_000.0
+
     def apply_costs!(events, terminal_session)
+      return if events.all? { |event| event["costReported"] }
+
       prices = price_sheet(terminal_session)
       return if prices.blank?
 
       events.each do |event|
+        next if event["costReported"]
+
         price = prices[event["model"]]
         next if price.blank?
 
         usage = event["tokenUsage"]
         cached = usage["cacheReadTokens"].to_i
-        uncached_input = [ usage["inputTokens"].to_i - cached, 0 ].max
-        cents = ((uncached_input * price[:prompt]) + (cached * price[:cached]) + (usage["outputTokens"].to_i * price[:completion])) / PRICE_SCALE
+        cents = ((usage["inputTokens"].to_i * price[:prompt]) + (cached * price[:cached]) + (usage["outputTokens"].to_i * price[:completion])) / PRICE_SCALE
         usage["totalCents"] = cents.round(6)
       end
     end

@@ -1,6 +1,6 @@
 import { Select, type SelectProps } from '@mantine/core';
 
-import { agentLabel, reasoningEffortLabel } from 'shared/ui/agentRuntimes';
+import { AGENT_RUNTIMES, agentLabel, isAgentType, reasoningEffortLabel } from 'shared/ui/agentRuntimes';
 
 interface ReasoningEffortSelectProps extends Omit<SelectProps, 'data' | 'value' | 'onChange' | 'error'> {
   /** The runtime the session runs on, for the messages; null offers none. */
@@ -30,7 +30,8 @@ function unavailableReason(
   if (!model) return 'Choose a model to set a reasoning effort.';
   if (!levels) return `${agentLabel(runtime)} doesn't list ${model}, so its reasoning-effort levels are unknown.`;
   if (levels.length > 0) return null;
-  return `${agentLabel(runtime)} has no reasoning-effort setting for ${model}.`;
+  const note = isAgentType(runtime) ? AGENT_RUNTIMES[runtime].reasoningEffortNote : undefined;
+  return note ?? `${agentLabel(runtime)} has no reasoning-effort setting for ${model}.`;
 }
 
 function unsupportedLevel(value: string, runtime: string | null | undefined, model: string, levels: string[]): string {

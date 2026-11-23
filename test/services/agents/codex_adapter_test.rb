@@ -462,6 +462,19 @@ module Agents
     # collect_usage — OTLP metrics extraction
     # =========================================================================
 
+    # A protobuf export is binary: matched with its invalid bytes as they were, it raised
+    # and lost the session's usage.
+    test "collect_usage reads the batches around a binary body" do
+      session = create_terminal_session(agent_type: "codex")
+      binary = { "direction" => "request", "host" => "ab.chatgpt.com", "path" => "/otlp/v1/metrics",
+                 "body_encoding" => "base64", "body" => Base64.strict_encode64("\x0A\xFF\xFE\x00".b) }.to_json
+      mitm_log = "#{binary}\n" + build_otlp_mitm_log(token_data: { "input" => 1000, "output" => 200 }, model: "gpt-5.1-codex-mini")
+
+      @adapter.collect_usage(session, { "logs/http.log" => mitm_log })
+
+      assert_equal 1000, session.reload.usage_statistic.input_tokens
+    end
+
     test "collect_usage extracts tokens from OTLP metrics in MITM log" do
       session = create_terminal_session(agent_type: "codex")
       mitm_log = build_otlp_mitm_log(

@@ -263,7 +263,8 @@ module Agents
           {
             model_id: model.slug,
             display_name: model.display_name,
-            description: model.description.truncate(MODEL_DESCRIPTION_LIMIT)
+            description: model.description.truncate(MODEL_DESCRIPTION_LIMIT),
+            reasoning_effort_levels: model.reasoning_levels
           }
         end
     rescue StandardError => e
@@ -676,13 +677,16 @@ module Agents
       events
     end
 
-    # Decode MITM log body: base64 → text, or pass through if already text.
+    # Decode MITM log body: base64 → text, or pass through if already text. A base64
+    # body is binary as often as not (an archive the CLI downloads), so its invalid bytes
+    # are replaced: matched against a pattern as they are, they raise, and the whole
+    # session's usage is lost with them.
     def decode_body(entry)
       body = entry["body"].to_s
       return "" if body.blank?
 
       if entry["body_encoding"] == "base64"
-        Base64.decode64(body).force_encoding("UTF-8")
+        Base64.decode64(body).force_encoding("UTF-8").scrub
       else
         body
       end

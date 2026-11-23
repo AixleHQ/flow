@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 
 import {
   comparisonRange,
@@ -10,6 +10,7 @@ import {
   todayOf,
   totalsOf,
   withP95,
+  workersOf,
   type DayRange,
   type DeltaField,
   type Grain,
@@ -38,29 +39,6 @@ const UNBILLED: BillingClass[] = ['unlimited', 'no_customer'];
 
 type SortKey = 'name' | 'createdAt' | 'accountStatus' | 'accountType' | 'billingMethod' | DeltaField;
 type Direction = 'ascending' | 'descending';
-
-interface Column {
-  key: SortKey;
-  label: string;
-}
-
-const COLUMNS: Column[] = [
-  { key: 'name', label: 'Company' },
-  { key: 'createdAt', label: 'Account created' },
-  { key: 'accountStatus', label: 'Account status' },
-  { key: 'accountType', label: 'Account type' },
-  { key: 'billingMethod', label: 'Billing method' },
-  { key: 'workerHours', label: 'Worker hours' },
-  { key: 'busyHours', label: 'Busy hours' },
-  { key: 'minWorkers', label: 'Min workers' },
-  { key: 'maxWorkers', label: 'Max workers' },
-  { key: 'peakWorkers', label: 'Peak workers' },
-  { key: 'utilization', label: 'Utilization' },
-  { key: 'avgWaitSeconds', label: 'Average wait' },
-  { key: 'p95WaitSeconds', label: 'p95 wait' },
-  { key: 'sessionsSucceeded', label: 'Successful sessions' },
-  { key: 'sessionsFailed', label: 'Failed sessions' },
-];
 
 const GRAINS: { grain: Grain; label: string }[] = [
   { grain: 'day', label: 'Day' },
@@ -116,6 +94,166 @@ function sortValue(row: TenantSummary, key: SortKey): number | string {
   return row[key] ?? -Infinity;
 }
 
+interface CellContext {
+  previous: TenantSummary | undefined;
+  p95Loading: boolean;
+}
+
+interface Column {
+  key: SortKey;
+  label: string;
+  cell: (row: TenantSummary, context: CellContext) => ReactNode;
+  numeric?: boolean;
+  total?: keyof Totals;
+}
+
+const deltaCell = (field: DeltaField, value: number | null, previous: number | null | undefined) => {
+  const change = deltaOf(field, value, previous ?? null);
+  const tone = change && change.tone !== 'neutral' ? classes[change.tone] : '';
+  return <span className={`${classes.delta} ${tone}`}>{change?.text ?? '—'}</span>;
+};
+
+const COLUMNS: Column[] = [
+  { key: 'name', label: 'Company', cell: (row) => row.name },
+  {
+    key: 'utilization',
+    label: 'Utilization',
+    numeric: true,
+    cell: (row, { previous }) => (
+      <>
+        <span className={classes.utilization}>
+          <span className={classes.bar} aria-hidden="true">
+            <span className={classes.fill} style={{ width: `${Math.min(100, (row.utilization ?? 0) * 100)}%` }} />
+          </span>
+          {formatPercent(row.utilization)}
+        </span>
+        {deltaCell('utilization', row.utilization, previous?.utilization)}
+      </>
+    ),
+  },
+  {
+    key: 'avgWaitSeconds',
+    label: 'Average wait',
+    numeric: true,
+    cell: (row, { previous }) => (
+      <>
+        {formatWait(row.avgWaitSeconds)}
+        {deltaCell('avgWaitSeconds', row.avgWaitSeconds, previous?.avgWaitSeconds)}
+      </>
+    ),
+  },
+  {
+    key: 'p95WaitSeconds',
+    label: 'p95 wait',
+    numeric: true,
+    cell: (row, { previous, p95Loading }) => (
+      <>
+        {p95Loading ? '…' : formatWait(row.p95WaitSeconds)}
+        {deltaCell('p95WaitSeconds', row.p95WaitSeconds, previous?.p95WaitSeconds)}
+      </>
+    ),
+  },
+  {
+    key: 'createdAt',
+    label: 'Account created',
+    cell: (row) => (row.createdAt ? longDay.format(new Date(row.createdAt)) : '—'),
+  },
+  {
+    key: 'accountStatus',
+    label: 'Account status',
+    cell: (row) => {
+      const status = accountStatusOf(row);
+      if (!status) return '—';
+      return <span className={`${classes.badge} ${classes[status.tone]}`}>{status.label}</span>;
+    },
+  },
+  { key: 'accountType', label: 'Account type', cell: (row) => accountTypeOf(row) },
+  { key: 'billingMethod', label: 'Billing method', cell: (row) => billingMethodOf(row) },
+  {
+    key: 'workerHours',
+    label: 'Worker hours',
+    numeric: true,
+    total: 'workerHours',
+    cell: (row, { previous }) => (
+      <>
+        {formatHours(row.workerHours)}
+        {deltaCell('workerHours', row.workerHours, previous?.workerHours)}
+      </>
+    ),
+  },
+  {
+    key: 'busyHours',
+    label: 'Busy hours',
+    numeric: true,
+    total: 'busyHours',
+    cell: (row, { previous }) => (
+      <>
+        {formatHours(row.busyHours)}
+        {deltaCell('busyHours', row.busyHours, previous?.busyHours)}
+      </>
+    ),
+  },
+  {
+    key: 'minWorkers',
+    label: 'Min workers',
+    numeric: true,
+    cell: (row, { previous }) => (
+      <>
+        {formatWorkers(row.minWorkers)}
+        {deltaCell('minWorkers', row.minWorkers, previous?.minWorkers)}
+      </>
+    ),
+  },
+  {
+    key: 'maxWorkers',
+    label: 'Max workers',
+    numeric: true,
+    cell: (row, { previous }) => (
+      <>
+        {formatWorkers(row.maxWorkers)}
+        {deltaCell('maxWorkers', row.maxWorkers, previous?.maxWorkers)}
+      </>
+    ),
+  },
+  {
+    key: 'peakWorkers',
+    label: 'Peak workers',
+    numeric: true,
+    cell: (row, { previous }) => (
+      <>
+        {formatWorkers(row.peakWorkers)}
+        {deltaCell('peakWorkers', row.peakWorkers, previous?.peakWorkers)}
+      </>
+    ),
+  },
+  {
+    key: 'sessionsSucceeded',
+    label: 'Successful sessions',
+    numeric: true,
+    total: 'sessionsSucceeded',
+    cell: (row, { previous }) => (
+      <>
+        {formatCount(row.sessionsSucceeded)}
+        {deltaCell('sessionsSucceeded', row.sessionsSucceeded, previous?.sessionsSucceeded)}
+      </>
+    ),
+  },
+  {
+    key: 'sessionsFailed',
+    label: 'Failed sessions',
+    numeric: true,
+    total: 'sessionsFailed',
+    cell: (row, { previous }) => (
+      <>
+        {formatCount(row.sessionsFailed)}
+        {deltaCell('sessionsFailed', row.sessionsFailed, previous?.sessionsFailed)}
+      </>
+    ),
+  },
+];
+
+const [COMPANY_COLUMN, ...VALUE_COLUMNS] = COLUMNS;
+
 interface Props {
   data: DashboardData;
   paths: DashboardPaths;
@@ -130,7 +268,7 @@ export default function Dashboard({
   timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone,
 }: Props) {
   const today = todayOf(now);
-  const [grain, setGrain] = useState<Grain>('month');
+  const [grain, setGrain] = useState<Grain>('week');
   const [chosenPeriod, setChosenPeriod] = useState<string | null>(null);
   const [custom, setCustom] = useState<DayRange>({ start: `${today.slice(0, 7)}-01`, end: today });
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
@@ -197,6 +335,15 @@ export default function Dashboard({
   const filtered = useMemo(() => filterRows(rows, filters), [rows, filters]);
   const totals = useMemo(() => totalsOf(filtered), [filtered]);
   const previousTotals = useMemo(() => totalsOf(filterRows(view.previous, filters)), [view.previous, filters]);
+  const workers = useMemo(
+    () => workersOf(data.days, view.range, new Set(filtered.map((row) => row.tenantId))),
+    [data.days, view.range, filtered],
+  );
+  const previousWorkers = useMemo(() => {
+    if (!view.comparison) return null;
+    const companies = new Set(filterRows(view.previous, filters).map((row) => row.tenantId));
+    return workersOf(data.days, view.comparison, companies);
+  }, [data.days, view.comparison, view.previous, filters]);
 
   const visible = useMemo(() => {
     const direction = sort.direction === 'ascending' ? 1 : -1;
@@ -242,6 +389,8 @@ export default function Dashboard({
       rows={filtered}
       totals={totals}
       previous={previousTotals}
+      workers={workers}
+      previousWorkers={previousWorkers}
     />
   );
 
@@ -280,18 +429,20 @@ export default function Dashboard({
         : { key, direction: key === 'name' ? 'ascending' : 'descending' },
     );
 
-  const delta = (field: DeltaField, value: number | null, previous: number | null | undefined) => {
-    const change = deltaOf(field, value, previous ?? null);
-    const tone = change && change.tone !== 'neutral' ? classes[change.tone] : '';
-    return <span className={`${classes.delta} ${tone}`}>{change?.text ?? '—'}</span>;
-  };
+  const measured = data.measuredThrough
+    ? `Measured through ${instant.format(new Date(data.measuredThrough))} UTC.`
+    : '';
 
-  const totalCell = (totals: Totals, field: keyof Totals) => (
-    <td className={classes.number}>
-      {field === 'workerHours' || field === 'busyHours' ? formatHours(totals[field]) : formatCount(totals[field])}
-      {delta(field, totals[field], previousTotals?.[field])}
-    </td>
-  );
+  const footerCell = (totals: Totals, column: Column) => {
+    const field = column.total;
+    if (!field) return <td key={column.key} />;
+    return (
+      <td key={column.key} className={classes.number}>
+        {field === 'workerHours' || field === 'busyHours' ? formatHours(totals[field]) : formatCount(totals[field])}
+        {deltaCell(field, totals[field], previousTotals?.[field])}
+      </td>
+    );
+  };
 
   return (
     <div className={classes.root}>
@@ -415,73 +566,22 @@ export default function Dashboard({
               </tr>
             ) : (
               visible.map((row) => {
-                const previous = previousByTenant.get(row.tenantId);
-                const status = accountStatusOf(row);
+                const context = {
+                  previous: previousByTenant.get(row.tenantId),
+                  p95Loading: currentP95.status === 'loading',
+                };
                 return (
                   <tr key={row.tenantId}>
                     <th scope="row" className={classes.tenant}>
                       <button type="button" className={classes.tenantButton} onClick={() => setOpened(row)}>
-                        {row.name}
+                        {COMPANY_COLUMN.cell(row, context)}
                       </button>
                     </th>
-                    <td>{row.createdAt ? longDay.format(new Date(row.createdAt)) : '—'}</td>
-                    <td>
-                      {status ? (
-                        <span className={`${classes.badge} ${classes[status.tone]}`}>{status.label}</span>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td>{accountTypeOf(row)}</td>
-                    <td>{billingMethodOf(row)}</td>
-                    <td className={classes.number}>
-                      {formatHours(row.workerHours)}
-                      {delta('workerHours', row.workerHours, previous?.workerHours)}
-                    </td>
-                    <td className={classes.number}>
-                      {formatHours(row.busyHours)}
-                      {delta('busyHours', row.busyHours, previous?.busyHours)}
-                    </td>
-                    <td className={classes.number}>
-                      {formatWorkers(row.minWorkers)}
-                      {delta('minWorkers', row.minWorkers, previous?.minWorkers)}
-                    </td>
-                    <td className={classes.number}>
-                      {formatWorkers(row.maxWorkers)}
-                      {delta('maxWorkers', row.maxWorkers, previous?.maxWorkers)}
-                    </td>
-                    <td className={classes.number}>
-                      {formatWorkers(row.peakWorkers)}
-                      {delta('peakWorkers', row.peakWorkers, previous?.peakWorkers)}
-                    </td>
-                    <td className={classes.number}>
-                      <span className={classes.utilization}>
-                        <span className={classes.bar} aria-hidden="true">
-                          <span
-                            className={classes.fill}
-                            style={{ width: `${Math.min(100, (row.utilization ?? 0) * 100)}%` }}
-                          />
-                        </span>
-                        {formatPercent(row.utilization)}
-                      </span>
-                      {delta('utilization', row.utilization, previous?.utilization)}
-                    </td>
-                    <td className={classes.number}>
-                      {formatWait(row.avgWaitSeconds)}
-                      {delta('avgWaitSeconds', row.avgWaitSeconds, previous?.avgWaitSeconds)}
-                    </td>
-                    <td className={classes.number}>
-                      {currentP95.status === 'loading' ? '…' : formatWait(row.p95WaitSeconds)}
-                      {delta('p95WaitSeconds', row.p95WaitSeconds, previous?.p95WaitSeconds)}
-                    </td>
-                    <td className={classes.number}>
-                      {formatCount(row.sessionsSucceeded)}
-                      {delta('sessionsSucceeded', row.sessionsSucceeded, previous?.sessionsSucceeded)}
-                    </td>
-                    <td className={classes.number}>
-                      {formatCount(row.sessionsFailed)}
-                      {delta('sessionsFailed', row.sessionsFailed, previous?.sessionsFailed)}
-                    </td>
+                    {VALUE_COLUMNS.map((column) => (
+                      <td key={column.key} className={column.numeric ? classes.number : undefined}>
+                        {column.cell(row, context)}
+                      </td>
+                    ))}
                   </tr>
                 );
               })
@@ -491,41 +591,75 @@ export default function Dashboard({
             <tfoot>
               <tr>
                 <th scope="row">{filtering ? 'Total, companies shown' : 'Total, all companies'}</th>
-                <td />
-                <td />
-                <td />
-                <td />
-                {totalCell(totals, 'workerHours')}
-                {totalCell(totals, 'busyHours')}
-                <td />
-                <td />
-                <td />
-                <td />
-                <td />
-                <td />
-                {totalCell(totals, 'sessionsSucceeded')}
-                {totalCell(totals, 'sessionsFailed')}
+                {VALUE_COLUMNS.map((column) => footerCell(totals, column))}
               </tr>
             </tfoot>
           )}
         </table>
       </div>
 
+      <details className={classes.legend}>
+        <summary>How to read this dashboard</summary>
+
+        <h3>Metrics</h3>
+        <dl>
+          <dt>Worker hours</dt>
+          <dd>
+            The capacity a company was offered — its worker limit over time, which is what a paying company is billed
+            for. For the time a company has no limit they are its busy hours, so that time shows as fully used.
+          </dd>
+          <dt>Busy hours</dt>
+          <dd>The time its workers actually held a session.</dd>
+          <dt>Utilization</dt>
+          <dd>Busy ÷ worker hours.</dd>
+          <dt>Min / Max workers</dt>
+          <dd>The limit (∞ when none was set).</dd>
+          <dt>Peak workers</dt>
+          <dd>The most held at once.</dd>
+          <dt>Average workers (tiles)</dt>
+          <dd>
+            The workers offered over the period&apos;s measured hours, which is what an invoice charges for, split by
+            each day&apos;s billing class. A company with no limit is offered none, so it counts at its peak workers.
+          </dd>
+          <dt>Wait time / p95 wait</dt>
+          <dd>
+            How long a session queued before a worker took it. 95% of the period&apos;s sessions started within the p95
+            wait.
+          </dd>
+        </dl>
+
+        <h3>Company attributes</h3>
+        <dl>
+          <dt>Account status, type and billing method</dt>
+          <dd>Each company&apos;s as it stands now, whatever the period.</dd>
+          <dt>No billing method (—)</dt>
+          <dd>Nobody invoices the company: it is managed by Aixle, not paying yet, or self-hosted.</dd>
+          <dt>Account created</dt>
+          <dd>The UTC day the company was created.</dd>
+        </dl>
+
+        <h3>Filters and totals</h3>
+        <ul>
+          <li>The search and the filters narrow the table, its total and the tiles to the companies that match.</li>
+          <li>People and Projects always count the whole platform.</li>
+          <li>
+            “Not billed” in the Companies and Average workers tiles counts companies, or their workers, that run free
+            without being managed, which should never happen.
+          </li>
+        </ul>
+
+        <h3>Periods and comparison</h3>
+        <ul>
+          <li>Days are UTC.</li>
+          <li>Weeks run Monday to Sunday.</li>
+          <li>The small figure under each value is the change from the previous period.</li>
+          <li>A period still in progress is compared with the same number of days of the one before.</li>
+        </ul>
+      </details>
+
       <p className={classes.note}>
-        Worker hours are the capacity a company was offered — its worker limit over time, which is what a paying company
-        is billed for; for the time a company has no limit they are its busy hours, so that time shows as fully used.
-        Busy hours are the time its workers actually held a session; utilization is busy ÷ worker hours. Min and max
-        workers are the limit (∞ when none was set); peak workers is the most held at once. Wait time is how long a
-        session queued before a worker took it; 95% of the period&apos;s sessions started within the p95 wait. Account
-        status, account type and billing method are each company&apos;s as it stands now, whatever the period; a company
-        with no billing method is one nobody invoices — managed by Aixle, not paying yet, or self-hosted. Account
-        created is the UTC day the company was created. The search and the filters narrow the table, its total and the
-        tiles to the companies that match, all but People and Projects, which always count the whole platform. “Not
-        billed” in the Companies tile counts companies that run free without being managed, which should never happen.
-        Days are UTC and weeks run Monday to Sunday. The small figure under each value is the change from the previous
-        period; a period still in progress is compared with the same number of days of the one before.
-        {data.measuredThrough && ` Measured through ${instant.format(new Date(data.measuredThrough))} UTC.`} Open a
-        company for its queue in detail: wait percentiles, how many were already waiting, its projects and its hours.
+        {measured} Open a company for its queue in detail: wait percentiles, how many were already waiting, its projects
+        and its hours.
       </p>
 
       {opened && (

@@ -278,6 +278,24 @@
   margin: 16px 0 4px;
 }
 
+/* Seven tiles: one row where each gets the 170px its longest label needs beside
+   the admin sidebar, otherwise 4 + 3 or pairs, never six and a stray one. */
+.root .summaryTiles {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 1040px) {
+  .root .summaryTiles {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1600px) {
+  .root .summaryTiles {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+}
+
 .root .tile {
   padding: 14px 16px;
   border: 1px solid var(--app-border-default);
@@ -329,8 +347,11 @@
 /* ── Table ───────────────────────────────────────── */
 
 .root .tableWrap {
+  /* Both sticky axes need the table to scroll in its own box: with overflow-x alone the
+     wrapper already captures vertical stickiness, so a header could never stick to the page. */
+  max-height: max(320px, calc(100dvh - 160px));
   margin-top: 12px;
-  overflow-x: auto;
+  overflow: auto;
   border: 1px solid var(--app-border-default);
   border-radius: 8px;
   background: var(--app-bg-paper);
@@ -339,7 +360,9 @@
 .root .table {
   width: 100%;
   margin: 0;
-  border-collapse: collapse;
+  /* Collapsed borders stay behind when a sticky cell moves. */
+  border-collapse: separate;
+  border-spacing: 0;
   font-variant-numeric: tabular-nums;
 }
 
@@ -357,6 +380,9 @@
 }
 
 .root .table thead th {
+  position: sticky;
+  z-index: 2;
+  top: 0;
   border-bottom: 1px solid var(--app-border-default);
   background: var(--app-bg-elevated);
   font-weight: 500;
@@ -391,9 +417,38 @@
   content: ' ▼';
 }
 
-.root .table tbody tr:hover td,
-.root .table tbody tr:hover th {
+.root .table tbody tr:hover td {
   background: var(--app-bg-hover);
+}
+
+/* The hover color is translucent, so the frozen cell lays it over its own opaque base. */
+.root .table tbody tr:hover th {
+  background: linear-gradient(var(--app-bg-hover), var(--app-bg-hover)), var(--app-bg-paper);
+}
+
+.root .table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.root .table tbody th,
+.root .table tfoot th,
+.root .table thead th:first-child {
+  position: sticky;
+  z-index: 1;
+  left: 0;
+  min-width: 10rem;
+  max-width: 14rem;
+  box-shadow: inset -1px 0 var(--app-border-default);
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.root .table tbody th {
+  background: var(--app-bg-paper);
+}
+
+.root .table thead th:first-child {
+  z-index: 3;
 }
 
 .root .table tfoot th,
@@ -417,6 +472,7 @@
   font: inherit;
   font-weight: 500;
   text-align: left;
+  white-space: normal;
   cursor: pointer;
 }
 
@@ -511,6 +567,60 @@
   border-color: var(--app-info-border);
   background: var(--app-info-bg);
   color: var(--app-info-fg);
+}
+
+.root .legend {
+  max-width: 900px;
+  margin: 16px 0 0;
+  color: var(--app-text-secondary);
+  font-size: 13px;
+}
+
+.root .legend summary {
+  width: fit-content;
+  color: var(--app-text-primary);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.root .legend summary:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--app-primary);
+  outline-offset: 2px;
+}
+
+.root .legend h3 {
+  margin: 16px 0 6px;
+  color: var(--app-text-primary);
+  font-family: var(--app-font-heading);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.root .legend dl {
+  display: grid;
+  grid-template-columns: minmax(8rem, max-content) minmax(0, 1fr);
+  gap: 4px 16px;
+  margin: 0;
+}
+
+.root .legend dt {
+  margin: 0;
+  color: var(--app-text-primary);
+  font-weight: 500;
+}
+
+.root .legend dd {
+  margin: 0;
+}
+
+.root .legend ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.root .legend li {
+  margin: 2px 0;
 }
 
 .root .note {

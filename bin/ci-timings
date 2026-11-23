@@ -1,0 +1,60 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Where CI's time goes: bin/ci-timings [--limit N] [--event EVENT] [--branch BRANCH] [--workflow NAME] [--steps SECONDS]
+#
+# Reads the last N finished runs of a workflow through `gh`. Every successful attempt of a run is
+# its own sample, so a re-run adds one. It prints the wall clock of an attempt (from its start,
+# `run_started_at`, to the last job end of that attempt; the first attempt starts at the run's
+# creation, so the queue before its first job counts) and, per job, the median, 90th
+# percentile and longest duration plus the median queue wait (job created to job started). Steps
+# whose median is at least --steps seconds (default 20) are listed under their job. Run it before
+# and after a CI change, with the same --event, to compare like with like. Needs `gh` signed in for
+# the repository.
+#
+# Why not an existing tool: `gh workflow-stats` (fchimpan/gh-workflow-stats) gives job medians but
+# measures a run from its start, not its creation, and has no queue wait; GitHub's Actions
+# Performance Metrics is a web page with averages only and no API. See lib/ci_timings.rb for the
+# arithmetic, which test/lib/ci_timings_test.rb covers.
+
+require "json"
+require "open3"
+require "optparse"
+require_relative "../lib/ci_timings"
+
+options = { limit: 30, workflow: "CI", steps: 20, repo: "AixleHQ/flow" }
+OptionParser.new do |parser|
+  parser.banner = "usage: bin/ci-timings [options]"
+  parser.on("--limit N", Integer, "finished runs to read (default 30)") { |value| options[:limit] = value }
+  parser.on("--event EVENT", "only pull_request, push, ... runs") { |value| options[:event] = value }
+  parser.on("--branch BRANCH", "only runs of this branch") { |value| options[:branch] = value }
+  parser.on("--workflow NAME", "workflow name (default CI)") { |value| options[:workflow] = value }
+  parser.on("--steps SECONDS", Integer, "list steps whose median is at least this long (default 20)") { |value| options[:steps] = value }
+  parser.on("--repo OWNER/REPO", "repository (default AixleHQ/flow)") { |value| options[:repo] = value }
+end.parse!
+
+def gh_json(*args)
+  output, status = Open3.capture2("gh", *args)
+  abort "bin/ci-timings: gh #{args.first(3).join(' ')} failed" unless status.success?
+
+  JSON.parse(output)
+end
+
+list = [ "run", "list", "-R", options[:repo], "-w", options[:workflow], "--status", "completed",
+         "-L", options[:limit].to_s, "--json", "databaseId,attempt" ]
+list += [ "--event", options[:event] ] if options[:event]
+list += [ "--branch", options[:branch] ] if options[:branch]
+listed = gh_json(*list)
+abort "bin/ci-timings: no finished runs found" if listed.empty?
+
+samples = listed.flat_map do |run|
+  (1..run["attempt"]).map do |number|
+    path = "repos/#{options[:repo]}/actions/runs/#{run['databaseId']}/attempts/#{number}"
+    attempt = gh_json("api", path)
+    CiTimings.sample(attempt) { gh_json("api", "#{path}/jobs?per_page=100")["jobs"] }
+  end
+end.compact
+abort "bin/ci-timings: no successful run attempts among #{listed.size} runs" if samples.empty?
+
+puts format("%d successful attempts of %d finished runs of %s%s", samples.size, listed.size, options[:workflow], options[:event] ? " (#{options[:event]})" : "")
+puts CiTimings.render(CiTimings.summarize(samples), step_threshold: options[:steps])

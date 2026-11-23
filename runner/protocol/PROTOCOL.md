@@ -948,6 +948,8 @@ Results:
 | A workspace or cache volume with the environment's name exists without its label | `error` | | `volume_not_owned`; the message names the volume. No container is created. |
 | The daemon refused to mount the host runner's binary or socket into the sidecar because it does not see this machine's files ("bind source path does not exist"): a remote `DOCKER_HOST`, or a daemon that runs elsewhere | `error` | | `docker_files_not_visible`; the message names the paths and the cause. Nothing is left. |
 | With `network: host`, the session's `proxy_port` is in use on the machine | `error` | | `proxy_port_in_use`. Nothing is created. |
+| With `network: host` and the tunnel on, one of the session's five `tunnel.ports` is in use on the machine | `error` | | `ports_in_use`; the message names the ports. Checked before the pull, so nothing is created. |
+| With the tunnel on, the five `tunnel.ports` did not all answer within 30 seconds, or the container stopped meanwhile | `error` | | `container_start_failed`; the message names the ports that did not answer. The container, the sidecar and the relay are removed (§8.12). |
 | The relay or the sidecar could not be started for another reason | `error` | | `proxy_start_failed`, with the cause. Nothing is left. |
 | The daemon refused to create or start the container | `error` | | `container_start_failed`, with the daemon's words. The proxy sidecar is removed with it. A container that was created but did not start is removed, under the removal's own timeout of 30 seconds, not the op's. A removal that fails or times out is logged and named in the message, and the answer stays `container_start_failed`: the session's cleanup sends `env.reset`, which removes what is left. |
 | The payload is not the one above | `error` | | `invalid_payload` |
@@ -955,6 +957,19 @@ Results:
 ```json
 { "status": "ok", "data": { "container_id": "4f1c…", "name": "aixle-aixle-r7-1f2e3d4c-123" } }
 ```
+
+**The tunnel's ports** (§8.12). With the tunnel on for this machine (the check-in's `config.tunnel`, §5.9) and `tunnel`
+in the payload, the runner:
+
+- checks the five ports with `network: host`, before it pulls or creates anything, by binding each on the machine's
+  interfaces: one that cannot be bound is `ports_in_use`;
+- on the bridge network, starts the sidecar with a second socket and the five ports (§8.12);
+- labels the agent container `aixle.com/tunnel-ports` with the five ports, so that a restarted runner serves them again;
+- waits for the five ports to answer, with the dial the tunnel's streams use, for up to 30 seconds (a hosted session waits
+  for its ports the same way), and only then answers `ok`, so the platform's `ready` means the terminal can open;
+- serves exactly these five ports for exactly this session from then on, until `container.stop` or `env.reset`.
+
+With the tunnel off the field is ignored and nothing about the container changes.
 
 #### `container.stop`
 
@@ -1435,6 +1450,10 @@ A stream's `Read` after the peer's `CLOSE` returns the buffered data and then en
 - `GOAWAY` from the relay: no new stream is opened (a relay's `Open` returns `ErrGoAway`, a runner's `Accept` returns it once
   no `OPEN` is waiting, and an `OPEN` that still arrives is answered `RESET refused`). The open streams go on. The relay closes the
   connection with `1000` when the last stream has ended and everything queued was written, or 30 seconds after the `GOAWAY`.
+- `GOAWAY` followed by a close: with no open stream the relay's `1000` close comes right behind the `GOAWAY`, so a runner can
+  read both before it asks. A runner's `Accept` still returns `ErrGoAway` then, not a closed session: a `GOAWAY` that was
+  received is never hidden by a `1000` close from the relay. A close without a prior `GOAWAY`, a close with another code, a
+  heartbeat timeout and a local `Close` are not drains, and keep their own errors.
 - Control frames that wait for the writer are capped at 4096. Past the cap a `PONG` answering a `PING`, and a `RESET refused` answering an
   `OPEN` that is over the stream cap or after `GOAWAY`, are dropped, not queued: a peer that does not read cannot grow this end's memory.
   The connection is not closed. A dropped refusal leaves the opener to its open timeout.
@@ -1453,8 +1472,9 @@ Close codes of the WebSocket:
 | 4002 | `ticket`: the ticket was refused |
 
 The package defines all of them; it sends `1000`, `1002` and `1009`. The others belong to the service that accepts
-the connection. The relay sends `4000` and `1001` today (§8.11); `4001` comes with the signals that revoke a machine, and `4002`
-is reserved for a ticket the relay can only judge after the upgrade. A runner that receives any close code reconnects as §8.11 says.
+the connection. The relay sends `4000` and `1001` (§8.11), and `4001` in two cases: on the `machine_revoked` signal, and
+when a reconcile pass finds that the platform no longer confirms the machine (a `false` from `checks`). `4002` is reserved
+for a ticket the relay can only judge after the upgrade. A runner that receives any close code reconnects as §8.11 says.
 
 ### 8.9 Evolution inside version 1
 
@@ -1520,6 +1540,41 @@ replaces a working one. A runner that sees `4000` is not told to stay away: it b
   speak the same protocol: the tunnel stays off until the runner is updated and restarted. Nothing else of the runner stops.
 - The tunnel is not a liveness signal. Losing it changes nothing about the machine, its session or the grace period; a
   session with a down tunnel has no terminal, and has not failed (§5.10 is the liveness).
+
+### 8.12 Reaching the ports: what the runner serves for an `OPEN`
+
+The runner serves exactly the five ports of the session its own `container.start` created (§6.2), and nothing else. The
+relay's `HELLO` and `OPEN` are not believed about which session the machine holds: the grant comes from the op the
+platform sent.
+
+- **An `OPEN` for another session, or for a port that is not one of the five, is `RESET refused`.** So is every `OPEN`
+  while no session is granted (before `container.start` finished, after `container.stop`, after `env.reset`).
+- **A port that does not answer** within 8 seconds is `RESET dial_failed`. The relay turns that into a `502` for the
+  browser; ttyd's own client and the page's frame retry.
+- **A grant that is taken away** (`container.stop`, `env.scrub`, `env.reset`, or a new session's `container.start`) resets
+  every open stream of that session with `session_changed`, before the container goes (§8.7).
+- **After a restart of the runner** the grant is read back from the agent container's `aixle.com/tunnel-ports` label, so a
+  running session's terminal comes back with the runner.
+
+**How the runner reaches the ports.** One way per kind of session network:
+
+- **`network: host`.** The runner dials `127.0.0.1:<port>` itself. The five ports are the machine's own, chosen by the platform
+  (`tunnel.ports`), and checked free before the container starts (`ports_in_use`).
+- **The bridge network.** Through the session's proxy sidecar, which owns the session's network namespace. The sidecar listens on a
+  second Unix socket, `dial.sock`, in a directory of the runner's state directory (`<state>/tunnel/<session>`, mode 0777 below
+  the 0700 state directory) that is mounted read-write into the sidecar at `/run/aixle-dial`. The sidecar's command line
+  carries `--dial-socket /run/aixle-dial/dial.sock --dial-ports <p,p,p,p,p>`, from `container.start`'s `tunnel.ports`, and
+  the sidecar refuses any other port. The directory is not mounted into the agent container. For each stream the runner
+  connects to the socket and the two speak one short exchange before the bytes flow:
+
+  ```text
+  runner  → sidecar   "<port>\n"
+  sidecar → runner    "OK\n"             the sidecar dialed 127.0.0.1:<port>; bytes follow, both ways
+                      "ERR <reason>\n"   the port is not one of the five, or it did not answer; the sidecar closes
+  ```
+
+  Each line is at most 256 bytes. This keeps rootless Docker working, where a container's address is not reachable from the
+  machine, and puts no credential in the sidecar.
 
 ## 9. Not in protocol 1 yet
 

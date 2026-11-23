@@ -3,8 +3,9 @@
 // keeps one WebSocket to the platform's runner-relay while the machine holds a
 // session. The frames and the multiplexer are runner/protocol/tunnel's.
 //
-// In this version the connection carries no stream: the relay's OPEN is refused
-// (`refused`) until the dialers that reach a session's ports exist.
+// The relay's OPEN is answered from Serving: the session its own `container.start`
+// created and that session's five ports, reached through a Dialer; anything else is
+// `RESET refused` (serve.go).
 package tunnel
 
 import (
@@ -51,8 +52,11 @@ type Manager struct {
 	Tokens    *tokens.Source
 	Connector Connector
 	// Holds says whether the machine holds a session now (docker.Environment.HoldsSession).
-	Holds  func(ctx context.Context) (bool, error)
-	Logger *slog.Logger
+	Holds func(ctx context.Context) (bool, error)
+	// Serving is what the runner serves: the session its container.start created and
+	// its ports. Nil serves nothing, and every OPEN is refused.
+	Serving *Serving
+	Logger  *slog.Logger
 	// Backoff spaces the retries after a failure: 1 s growing to 30 s (§3.2). Nil is that.
 	Backoff *backoff.Backoff
 
@@ -235,7 +239,7 @@ const (
 // machine's session is gone.
 func (m *Manager) serve(ctx context.Context, session *wire.Session) outcome {
 	goaway := make(chan struct{})
-	go m.refuseStreams(ctx, session, goaway)
+	go m.serveStreams(ctx, session, goaway)
 
 	tick := time.NewTicker(m.PollEvery)
 	defer tick.Stop()
@@ -272,21 +276,6 @@ func relayClosedNormally(err error) bool {
 
 // closeGoingAway is the WebSocket close code of a server that is shutting down.
 const closeGoingAway = 1001
-
-// refuseStreams answers every OPEN with RESET refused: no port is served yet. It
-// closes goaway when the relay's GOAWAY has been received and no OPEN is left.
-func (m *Manager) refuseStreams(ctx context.Context, session *wire.Session, goaway chan<- struct{}) {
-	for {
-		in, err := session.Accept(ctx)
-		if err != nil {
-			if errors.Is(err, wire.ErrGoAway) {
-				close(goaway)
-			}
-			return
-		}
-		in.Reject(wire.ResetRefused, "no port is served by this runner yet")
-	}
-}
 
 // drain leaves a connection that got GOAWAY to finish, and closes it if it has not.
 func drain(session *wire.Session) {

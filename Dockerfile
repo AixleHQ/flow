@@ -6,7 +6,7 @@
 # The development stage is last so that a build naming no target keeps producing
 # the image it always did.
 
-FROM ruby:4.0.9-alpine AS base
+FROM ruby:4.0.10-alpine AS base
 
 # Runtime libraries of the gems' native extensions (pg → libpq, ruby-vips → vips,
 # psych → yaml) and the tools the app itself runs.
@@ -164,17 +164,10 @@ ARG ASSET_HOST
 ENV ASSET_HOST=${ASSET_HOST}
 ENV VITE_RUBY_ASSET_HOST=${ASSET_HOST}
 
-RUN RAILS_SECRET_KEY_BASE=secret \
-    CREDENTIALS_SECRET_KEY=build_placeholder_32bytes_000000 \
-    CONFIG_ITEMS_SECRET_KEY=build_placeholder_32bytes_000000 \
-    INTEGRATIONS_SECRET_KEY=build_placeholder_32bytes_000000 \
-    OAUTH_SECRET_KEY=build_placeholder_32bytes_000000 \
-    AWS_S3_BUCKET=build-placeholder \
-    RAILS_ENV=production \
-    AWS_EC2_METADATA_DISABLED=true \
-    ASSET_HOST="${ASSET_HOST}" \
-    VITE_RUBY_ASSET_HOST="${ASSET_HOST}" \
-    rails assets:precompile
+# No `assets:precompile` here, unlike the production stage. Compose bind-mounts the source over
+# /app, so a precompiled copy never reaches a development container, and CI's test suites use the
+# test-mode Vite build that `make` runs first (VITE_RUBY_MODE=test, public/vite-test), not the
+# production one. Building it cost every CI job 8 to 17 s for output nothing read.
 
 # Back to root for the entrypoint: bin/run-as-app fixes ownership on the
 # bundle_cache and app_home volumes, which are root-owned on first mount, before
