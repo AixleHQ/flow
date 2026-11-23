@@ -594,6 +594,152 @@ class SessionServiceTest < ActiveSupport::TestCase
     assert_not_nil session.finished_at
   end
 
+  # == suspend and restore (Sessions::Suspension) ==
+
+  include CheckpointStorageHelper
+
+  def interactive_session(**attrs)
+    create(:terminal_session, :running, :agent_session, user: @user, project: @project, mode: "interactive",
+                                                        state: "ready", temporal_workflow_id: "wf-1", **attrs)
+  end
+
+  test "suspend records the request and ends the container the way finish does" do
+    use_checkpoint_storage
+    session = interactive_session
+
+    TemporalService.expects(:send_signal).with(session.workflow_id, :container_finished, nil).once
+
+    SessionService.suspend(session: session)
+
+    session.reload
+    assert_equal "finishing", session.state
+    assert Sessions::Suspension.requested?(session)
+  ensure
+    restore_checkpoint_storage
+  end
+
+  test "suspend refuses a session that cannot be suspended" do
+    use_checkpoint_storage
+    step = create(:terminal_session, :running, user: @user, project: @project, session_type: "workflow_step",
+                                               temporal_workflow_id: "wf-2")
+
+    assert_raises(TerminalSession::InvalidStateError) { SessionService.suspend(session: step) }
+    refute Sessions::Suspension.requested?(step.reload)
+  ensure
+    restore_checkpoint_storage
+  end
+
+  test "restore starts a session that continues the suspended one with its configuration" do
+    use_checkpoint_storage
+    mock_temporal_start
+    create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
+    skill = create(:skill, scope: @project)
+    origin = interactive_session(skill_ids: [ skill.id ])
+    Sessions::Suspension.suspended!(origin)
+    create_checkpoint(origin)
+
+    restored = SessionService.restore(session: origin, user: @user)
+
+    assert restored.persisted?
+    assert_equal origin.id, restored.restored_from_session_id
+    assert_equal [ skill.id ], restored.skill_ids
+    assert_equal "interactive", restored.mode
+    assert_equal restored, SessionService.restore(session: origin, user: @user), "a restore on its way is not started twice"
+  ensure
+    restore_checkpoint_storage
+  end
+
+  test "only the owner can restore a suspended session" do
+    use_checkpoint_storage
+    origin = interactive_session
+    Sessions::Suspension.suspended!(origin)
+    create_checkpoint(origin)
+    stranger = create(:user, :with_company)
+
+    assert_raises(TerminalSession::InvalidStateError) { SessionService.restore(session: origin, user: stranger) }
+  ensure
+    restore_checkpoint_storage
+  end
+
+  # == suspended workflow steps ==
+
+  def suspended_step(run_state: "running")
+    workflow = create(:workflow, scope: @project)
+    run = create(:workflow_run, workflow: workflow, project: @project, user: @user, state: run_state)
+    step_run = create(:step_run, workflow_run: run, step: create(:step, workflow: workflow), state: "running")
+    origin = create(:terminal_session, :running, user: @user, project: @project, session_type: "workflow_step",
+                                                 mode: "interactive", state: "ready", temporal_workflow_id: "wf-step",
+                                                 metadata: { "step_run_id" => step_run.id })
+    step_run.update!(terminal_session: origin)
+    Sessions::Suspension.suspended!(origin)
+    create_checkpoint(origin)
+    [ origin.reload, step_run.reload ]
+  end
+
+  test "suspending a workflow step marks the step suspended for its run to wait on" do
+    use_checkpoint_storage
+    origin, step_run = suspended_step
+
+    assert_equal "suspended", step_run.state
+    assert origin.suspended?
+    assert Sessions::Suspension.restorable?(origin)
+  ensure
+    restore_checkpoint_storage
+  end
+
+  # The run reads the step's current session, so the restored one has to become it.
+  test "restoring a step builds its next session on the same step run, which the run then waits on" do
+    use_checkpoint_storage
+    mock_temporal_start
+    create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
+    origin, step_run = suspended_step
+
+    restored = SessionService.restore(session: origin, user: @user)
+
+    step_run.reload
+    assert_equal "workflow_step", restored.session_type
+    assert_equal origin.id, restored.restored_from_session_id
+    assert_equal restored.id, step_run.terminal_session_id
+    assert_equal "running", step_run.state
+    assert_equal [ restored.id, origin.id ], step_run.session_history.map(&:id)
+    assert_equal step_run, origin.reload.owning_step_run, "the earlier session still knows its step"
+    assert_equal restored, SessionService.restore(session: origin, user: @user), "a restore on its way is not started twice"
+  ensure
+    restore_checkpoint_storage
+  end
+
+  test "a step its run no longer waits on cannot be restored" do
+    use_checkpoint_storage
+    origin, step_run = suspended_step
+    step_run.mark_skipped!("Skipped by user")
+
+    refute Sessions::Suspension.restorable?(origin.reload)
+    assert_raises(TerminalSession::InvalidStateError) { SessionService.restore(session: origin, user: @user) }
+  ensure
+    restore_checkpoint_storage
+  end
+
+  # A run lasts TemporalWorkflowRegistry::RUN_TIMEOUT from its start; a step it waits on
+  # cannot be restored after the run has given up.
+  test "a step's restore window ends before its run does" do
+    use_checkpoint_storage
+    travel_to(Time.current) do
+      workflow = create(:workflow, scope: @project)
+      run = create(:workflow_run, workflow: workflow, project: @project, user: @user, state: "running",
+                                  created_at: 35.days.ago)
+      step_run = create(:step_run, workflow_run: run, step: create(:step, workflow: workflow), state: "running")
+      origin = create(:terminal_session, :running, user: @user, project: @project, session_type: "workflow_step",
+                                                   mode: "interactive", state: "ready")
+      step_run.update!(terminal_session: origin)
+
+      Sessions::Suspension.suspended!(origin)
+
+      assert_equal run.created_at + TemporalWorkflowRegistry::RUN_TIMEOUT.seconds - 12.hours, origin.reload.restore_expires_at
+    end
+  ensure
+    restore_checkpoint_storage
+  end
+
   # == cancel ==
 
   test "cancel stops the admission and cancels its container workflow" do

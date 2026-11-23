@@ -122,6 +122,12 @@ module Agents
       { "version" => 1, "hooks" => hooks }
     end
 
+    # Resume, measured 2026-11-20: the chat store is keyed by a hash of /workspace, the
+    # same in every container.
+    def conversation_paths = %w[.cursor/chats]
+    def conversation_id_command = "ls -td .cursor/chats/*/*/ 2>/dev/null | head -1 | xargs -r basename"
+    def resume_arguments(id) = "--resume=#{id}"
+
     # Session command: agent --force (interactive), agent --force -p (non-interactive)
     # --force: auto-approve all tools unless explicitly denied (yolo mode)
     # --disable-auto-update (hidden): every chat otherwise starts a background download of

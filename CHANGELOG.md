@@ -19,10 +19,18 @@ governance, community health — carry none.
   it scrolls, and folds its explanation into a "How to read this dashboard" section.
 
 ### Fixed
+- **Repositories**: adding a GitLab repository no longer ends in an error page when GitLab
+  does not answer; the picker comes up empty after at most a few seconds instead of hanging.
 - **Tasks**: a collapsed board column no longer flickers a horizontal scrollbar while a card
   in it has an active run.
 - **Wrappers**: a wrapper with a parameter named like `max`, `min`, `count` or `size` runs
   again. Every call to it used to hang until it timed out after an hour.
+- **Triggers & gates**: a run started from a Slack message links back to that message, in
+  its thread when the message was a reply: the run page shows the link, and the agent gets
+  it, so a card it creates links to the right message.
+- **Sessions & Runs**: when the cluster stops answering while files are copied into an
+  agent's container, the copy gives up within seconds. It used to hold the session at
+  setup for ten minutes and then fail the step with "Unresolved exec".
 
 ## [1.17.0] - 2026-11-23
 
@@ -53,6 +61,12 @@ governance, community health — carry none.
   shown were offered on average over the selected period, which is what they are billed for,
   split into paying, trial and managed, with the change from the period before. A managed
   company without a worker limit counts at the most workers it ran at once.
+- **Sessions & Runs**: an interactive session can be suspended instead of finished, by its owner with **Suspend** or
+  by the 23-hour limit, which used to finish it. Its files, each repository's unpushed commits and uncommitted changes,
+  and the agent's conversation are kept for 30 days, and **Restore** starts a new session that picks up the same
+  conversation. An interactive workflow step can be suspended too: its run waits for it, and **Restore** on the run page
+  continues the same step. A suspended session holds no slot; its owner is emailed when it is suspended and three days
+  before it expires. Operators: a workflow run may now last 40 days instead of 7.
 
 ### Fixed
 - The `flow-web` image runs Ruby 4.0.10, which fixes the seven memory-safety bugs in

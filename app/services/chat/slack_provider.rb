@@ -52,9 +52,22 @@ module Chat
           "ts" => event["ts"],
           "thread_ts" => thread_ts,
           "files" => normalize_files(event["files"]),
-          "integration_id" => integration_id
+          "integration_id" => integration_id,
+          "url" => message_url(event["channel"], event["ts"], event["thread_ts"])
         }.compact
       }
+    end
+
+    # slack.com resolves the workspace from the channel, so the link needs neither
+    # the workspace domain nor a chat.getPermalink call. A reply without its
+    # thread_ts opens the channel instead of the thread.
+    def message_url(channel, ts, thread_ts = nil)
+      return nil if channel.blank? || ts.blank?
+
+      url = "https://slack.com/archives/#{channel}/p#{ts.delete('.')}"
+      return url if thread_ts.blank? || thread_ts == ts
+
+      "#{url}?#{URI.encode_www_form(thread_ts: thread_ts, cid: channel)}"
     end
 
     def help_request?(event)
@@ -75,7 +88,7 @@ module Chat
 
     def run_context(event)
       data = event.data.to_h
-      { "chat" => data.slice("provider", "integration_id", "conversation", "thread_id", "message_id", "actor")
+      { "chat" => data.slice("provider", "integration_id", "conversation", "thread_id", "message_id", "actor", "url")
                       .merge("workspace_id" => data.dig("workspace", "id"), "text" => data["raw_text"] || data["text"])
                       .compact_blank }
     end

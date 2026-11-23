@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { answerFetch } from 'test/fetchStub';
 import { act, renderAuthedPage, screen, userEvent, waitFor } from 'test/renderPage';
 
 import SessionsRunsPage, { type ListEntry, type SessionsRunsPageProps } from './SessionsRunsPage';
@@ -97,6 +98,24 @@ function renderWith(props: SessionsRunsPageProps) {
 }
 
 describe('Projects/Sessions/SessionsRunsPage', () => {
+  it('offers Restore on a suspended session its viewer may restore, and opens the new session', async () => {
+    const expires = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000 - 60_000).toISOString();
+    const fetchSpy = answerFetch({ 'POST /api/v1/terminal_sessions/:id/restore': { id: 2100, projectId: 7 } });
+    renderWith(
+      seed({
+        entries: [
+          buildSessionEntry({ state: 'suspended', restorable: true, restoreExpiresAt: expires } as Partial<ListEntry>),
+        ],
+        total: 1,
+      }),
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Restore session #2009' }));
+
+    await waitFor(() => expect(router.visit).toHaveBeenCalledWith('/company/projects/7/sessions/2100'));
+    fetchSpy.mockRestore();
+  });
+
   it('lists standalone sessions and workflow runs in one table', () => {
     renderWith(seed());
 

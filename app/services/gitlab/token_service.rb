@@ -19,7 +19,8 @@ module Gitlab
     def client
       ::Gitlab.client(
         endpoint: gitlab_endpoint,
-        private_token: personal_access_token
+        private_token: personal_access_token,
+        httparty: { open_timeout: AppConfig.open_timeout, read_timeout: AppConfig.read_timeout }
       )
     end
 

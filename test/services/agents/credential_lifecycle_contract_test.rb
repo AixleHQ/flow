@@ -34,6 +34,17 @@ module Agents
       end
     end
 
+    test "the per-credential rotation answer is a declared value, and defaults to the runtime's" do
+      adapters.each do |agent_type, adapter|
+        assert_includes ROTATION_VALUES, adapter.rotation_for({}), "#{agent_type} rotation_for"
+        next if adapter.method(:rotation_for).owner == BaseAdapter.instance_method(:rotation_for).owner
+
+        # A runtime that decides per credential may only ever narrow :rotating to :static.
+        assert_equal :rotating, adapter.credential_lifecycle[:rotation],
+                     "#{agent_type} overrides rotation_for, so its declaration is the conservative default"
+      end
+    end
+
     test "a server-side refresh requires a readable expiry, or the sweep can never select it" do
       adapters.each do |agent_type, adapter|
         next unless adapter.credential_lifecycle[:refresh] == :server

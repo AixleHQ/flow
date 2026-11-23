@@ -204,6 +204,31 @@ module Agents
     def runs_default_model_for_unknown? = false
 
     # =================================================================
+    # Conversation resume (Sessions::Checkpoint, Sessions::Restore)
+    # =================================================================
+
+    # Where the CLI keeps its conversations, relative to #home_dir. A suspended session
+    # saves exactly these and Restore puts them back, so never the login: the new
+    # session writes its own. Empty when the runtime cannot resume.
+    def conversation_paths = []
+
+    # Shell run from #home_dir that prints the id of the newest conversation, or nothing.
+    def conversation_id_command = nil
+
+    # What #session_command needs added to resume conversation `id` (already escaped).
+    def resume_arguments(_id) = nil
+
+    def resumable?
+      conversation_paths.any? && conversation_id_command.present? && resume_arguments("id").present?
+    end
+
+    def resume_command(conversation_id, mode:, model: nil, effort: nil)
+      return nil unless resumable? && conversation_id.present?
+
+      "#{session_command(mode: mode, model: model, effort: effort)} #{resume_arguments(Shellwords.escape(conversation_id))}"
+    end
+
+    # =================================================================
     # Context File (CLI-specific instruction file auto-read at startup)
     # =================================================================
 
@@ -540,6 +565,17 @@ module Agents
       { expiry: :none, refresh: :none, rotation: :static, nominal_ttl: nil }.freeze
     end
 
+    # Whether a refresh invalidates the grant it replaced, for THIS stored credential.
+    # Defaults to the runtime's declaration (#credential_lifecycle); a runtime whose
+    # login families differ overrides it (KiroCliAdapter). Everything that decides
+    # whether a live holder blocks a refresh asks here, through
+    # AgentCredential#rotating_refresh?.
+    # @param config [Hash] the credential's stored config_data
+    # @return [Symbol] :rotating or :static
+    def rotation_for(_config = nil)
+      credential_lifecycle[:rotation]
+    end
+
     # Expiry (epoch ms) of the login the CLI cannot run without, or nil when this agent
     # has none that expires. Distinct from #token_expires_at, which reports the SOONEST
     # expiry across every stored block so the refresh sweep fires early: an agent that
@@ -690,19 +726,28 @@ module Agents
     end
 
     # Rotations only. Returns `current` unchanged unless every rule holds.
-    def merge_container_credentials(current, incoming)
+    def merge_container_credentials(current, incoming, credential_id:)
       keys = rotatable_credential_keys & current.keys & incoming.keys
-      return current if keys.empty?
+      return refuse_merge(:no_rotatable_keys, credential_id, current) if keys.empty?
 
       # Judged as the credential the rotation would produce, not as the bare rotated keys:
       # an adapter's expiry can depend on a key the container may not replace (Antigravity
       # reads `auth_method`), and with no expiry to compare an older token would win.
       candidate = merge_refreshed_credentials(current, current.merge(incoming.slice(*keys)))
       rotated = current.merge(candidate.slice(*keys))
-      return current if rotated == current
-      return current unless same_credential_identity?(current, rotated) && plausible_expiry?(rotated)
+      return refuse_merge(:not_fresher, credential_id, current) if rotated == current
+      return refuse_merge(:identity_changed, credential_id, current) unless same_credential_identity?(current, rotated)
+      return refuse_merge(:implausible_expiry, credential_id, current) unless plausible_expiry?(rotated)
 
       rotated
+    end
+
+    # Why a container's copy was not taken. The live write-back answers 204 either way,
+    # so without this line a refused post and an accepted one look the same in the logs.
+    def refuse_merge(reason, credential_id, current)
+      Rails.logger.info("[#{self.class.name.demodulize}] credential #{credential_id.inspect}: " \
+                        "merge_container_credentials kept the stored copy (#{reason})")
+      current
     end
 
     # Far enough past the runtime's nominal lifetime to be forged: a far-future expiry

@@ -154,6 +154,36 @@ module Api
         end
       end
 
+      # ---- suspend / restore (POST member) : == !read_only?, then the owner's own sessions ----
+
+      test "suspend and restore: viewer is forbidden (read-only)" do
+        sign_in_as(@viewer)
+        post suspend_api_v1_terminal_session_path(@viewer_session), headers: json_headers
+        assert_response :forbidden
+        post restore_api_v1_terminal_session_path(@viewer_session), headers: json_headers
+        assert_response :forbidden
+      end
+
+      # The default factory session is a login, which can be neither: a 400 proves the
+      # policy let the owner through.
+      test "suspend and restore: the owner clears authorization on an own session" do
+        sign_in_as(@owner)
+        post suspend_api_v1_terminal_session_path(@owner_session), headers: json_headers
+        assert_response :bad_request
+        post restore_api_v1_terminal_session_path(@owner_finished), headers: json_headers
+        assert_response :bad_request
+      end
+
+      test "suspend and restore: non-owners are scoped out of another user's session" do
+        @non_owners.each do |role, actor|
+          sign_in_as(actor)
+          post suspend_api_v1_terminal_session_path(@owner_session), headers: json_headers
+          assert_response :not_found, "expected #{role} to be scoped out of suspending another user's session"
+          post restore_api_v1_terminal_session_path(@owner_finished), headers: json_headers
+          assert_response :not_found, "expected #{role} to be scoped out of restoring another user's session"
+        end
+      end
+
       # ---- reset (POST member) : reset? == !read_only? ----
 
       test "reset: viewer is forbidden (read-only)" do

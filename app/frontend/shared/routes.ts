@@ -102,6 +102,11 @@ export function agentsGitCredentialsPath(options?: object): string {
   return "/" + "agents" + "/" + "git" + "/" + "credentials" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /agents/storage(.:format) */
+export function agentsStoragePath(options?: object): string {
+  return "/" + "agents" + "/" + "storage" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /agents/credentials(.:format) */
 export function agentsCredentialsPath(options?: object): string {
   return "/" + "agents" + "/" + "credentials" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -400,6 +405,16 @@ export function apiV1InternalUsageStatisticsPath(options?: object): string {
 /** /api/v1/terminal_sessions/:id/finish(.:format) */
 export function finishApiV1TerminalSessionPath(id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "terminal_sessions" + "/" + id + "/" + "finish" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /api/v1/terminal_sessions/:id/suspend(.:format) */
+export function suspendApiV1TerminalSessionPath(id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "terminal_sessions" + "/" + id + "/" + "suspend" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /api/v1/terminal_sessions/:id/restore(.:format) */
+export function restoreApiV1TerminalSessionPath(id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "terminal_sessions" + "/" + id + "/" + "restore" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /api/v1/terminal_sessions/:id/reset(.:format) */

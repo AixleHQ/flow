@@ -212,6 +212,7 @@ module Agents
     SOCIAL_REFRESH_URL = "https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken"
     OIDC_HOST_TEMPLATE = "https://oidc.%<region>s.amazonaws.com/token"
     SOCIAL_KEY_MARKER = ":social:"
+    ODIC_KEY_MARKER = ":odic:"
     REGISTRATION_KEY_MARKER = "device-registration"
 
     # The CLI stores its token snake_case (measured on a live credential) but answers
@@ -289,6 +290,18 @@ module Agents
     # was the one shipped runtime whose token simply died an hour after login.
     def credential_lifecycle
       { expiry: :token, refresh: :server, rotation: :rotating, nominal_ttl: 1.hour }.freeze
+    end
+
+    # Rotation is a property of the login family, not of the runtime. A Builder ID / IAM
+    # Identity Center login (`kirocli:odic:token`) refreshes through AWS SSO OIDC
+    # CreateToken, which leaves the refresh token as it was: measured, one
+    # refresh token served three refreshes from two holders. A social login refreshes
+    # through Kiro's own endpoint and was not measured, so it, and any login whose
+    # family cannot be read, stays :rotating. The row key is used for this refresh
+    # family decision only, never for validity (see the note at SOCIAL_REFRESH_URL).
+    def rotation_for(config = nil)
+      key = auth_rows(decoded_state(config))[:key].to_s
+      key.include?(ODIC_KEY_MARKER) ? :static : credential_lifecycle[:rotation]
     end
 
     def auth_watch_path
@@ -454,6 +467,12 @@ module Agents
     # `--effort` (2.6 and later) takes low|medium|high|xhigh|max. Which of them a model
     # has is the model's: on 2.34.0 claude-sonnet-4.6 has no xhigh, and `auto` and the
     # Haiku models none. A level the model does not take is a warning, not an error.
+    # Resume: the history loads in a new container (measured 2026-11-20; the account
+    # was out of quota, so recall itself was not shown).
+    def conversation_paths = %w[.kiro/sessions .kiro/session-index]
+    def conversation_id_command = "ls -td .kiro/sessions/*/sess_*/ 2>/dev/null | head -1 | xargs -r basename"
+    def resume_arguments(id) = "--resume-id #{id}"
+
     def session_command(mode:, model: nil, effort: nil)
       flags = [ "--trust-all-tools", "--trust-workspace" ]
       flags << "--model #{Shellwords.shellescape(model)}" if model.present?

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildRunnerBadge } from 'test/factories/runner';
 import { FakeWebSocket, installFakeWebSocket } from 'test/fakeWebSocket';
+import { answerFetch } from 'test/fetchStub';
 import { act, renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 import type TerminalSession from 'types/generated/TerminalSession';
 
@@ -68,6 +69,16 @@ function makeSession(overrides: Partial<TerminalSession> = {}): TerminalSession 
     projectName: null,
     pendingArtifactsCount: 0,
     sessionLogsCount: 0,
+    suspendedAt: null,
+    restoreExpiresAt: null,
+    restoredFromSessionId: null,
+    suspendable: false,
+    suspendsAt: null,
+    suspending: false,
+    restorable: false,
+    restoredSessionId: null,
+    checkpoint: null,
+    restoreNotes: [],
     cloudConnectRequested: false,
     authNotice: null,
     ...overrides,
@@ -318,6 +329,122 @@ describe('SessionShowContent', () => {
     await waitFor(() => expect(router.reload).toHaveBeenCalled());
 
     fetchSpy.mockRestore();
+  });
+
+  it('offers Suspend to the owner of a live interactive session and POSTs to suspend', async () => {
+    const fetchSpy = answerFetch({ 'POST /api/v1/terminal_sessions/:id/suspend': {} });
+
+    renderPage(
+      <SessionShowContent
+        session={makeSession({ id: 41, suspendable: true, ownedByViewer: true })}
+        cableStream="signed-stream"
+        context={ctx}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Suspend' }));
+
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/v1/terminal_sessions/41/suspend',
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    );
+    await waitFor(() => expect(router.reload).toHaveBeenCalled());
+    fetchSpy.mockRestore();
+  });
+
+  it('does not offer Suspend where the server says the session cannot be suspended', () => {
+    renderPage(<SessionShowContent session={makeSession({ suspendable: false })} cableStream="s" context={ctx} />);
+
+    expect(screen.queryByRole('button', { name: 'Suspend' })).not.toBeInTheDocument();
+  });
+
+  it('warns in the last hour before the 23-hour limit suspends the session', () => {
+    const soon = new Date(Date.now() + 20 * 60 * 1000).toISOString();
+
+    renderPage(<SessionShowContent session={makeSession({ suspendsAt: soon })} cableStream="s" context={ctx} />);
+
+    expect(screen.getByText('This session will be suspended soon')).toBeInTheDocument();
+  });
+
+  it('says nothing about the limit while it is hours away', () => {
+    const later = new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString();
+
+    renderPage(<SessionShowContent session={makeSession({ suspendsAt: later })} cableStream="s" context={ctx} />);
+
+    expect(screen.queryByText('This session will be suspended soon')).not.toBeInTheDocument();
+  });
+
+  it('shows what a suspended session kept and restores it into a new session', async () => {
+    const fetchSpy = answerFetch({ 'POST /api/v1/terminal_sessions/:id/restore': { id: 77, projectId: 3 } });
+    const expires = new Date(Date.now() + 12 * 24 * 60 * 60 * 1000 - 60_000).toISOString();
+
+    renderPage(
+      <SessionShowContent
+        session={makeSession({
+          id: 41,
+          state: 'suspended',
+          restorable: true,
+          restoreExpiresAt: expires,
+          checkpoint: { bytes: 5 * 1024 * 1024, workspaceIncluded: true, repositories: 1, reason: 'time_limit' },
+        })}
+        cableStream="s"
+        context={ctx}
+      />,
+    );
+
+    expect(screen.getByText('Suspended · 12 days left to restore')).toBeInTheDocument();
+    expect(screen.getByText(/reached its 23-hour limit\. Saved 5\.0 MB/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Restore' }));
+
+    await waitFor(() => expect(router.visit).toHaveBeenCalledWith('/company/projects/3/sessions/77'));
+    fetchSpy.mockRestore();
+  });
+
+  it('points a restored session at the session that continued it', () => {
+    renderPage(
+      <SessionShowContent
+        session={makeSession({ state: 'restored', projectId: 3, restoredSessionId: 77 })}
+        cableStream="s"
+        context={ctx}
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: 'Continued in session #77' })).toHaveAttribute(
+      'href',
+      '/company/projects/3/sessions/77',
+    );
+  });
+
+  it('tells the person what a restore could not put back', () => {
+    renderPage(
+      <SessionShowContent
+        session={makeSession({
+          restoredFromSessionId: 41,
+          restoreNotes: ['Unpushed commits of /workspace/repo/api could not be put back.'],
+        })}
+        cableStream="s"
+        context={ctx}
+      />,
+    );
+
+    expect(screen.getByText('Continues session #41')).toBeInTheDocument();
+    expect(screen.getByText(/were put back, except what is listed below\./)).toBeInTheDocument();
+    expect(screen.getByText('Unpushed commits of /workspace/repo/api could not be put back.')).toBeInTheDocument();
+  });
+
+  it('says a restore with nothing to report put everything back', () => {
+    renderPage(
+      <SessionShowContent
+        session={makeSession({ restoredFromSessionId: 41, restoreNotes: [] })}
+        cableStream="s"
+        context={ctx}
+      />,
+    );
+
+    expect(screen.getByText(/repositories and conversation were put back\. Running processes/)).toBeInTheDocument();
   });
 
   it('copies the session link and shows a notification', async () => {

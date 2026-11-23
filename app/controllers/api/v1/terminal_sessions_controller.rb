@@ -86,6 +86,32 @@ module Api
         render json: { error: e.message }, status: :bad_request
       end
 
+      # @summary Suspend an interactive session, keeping its files and conversation for Restore
+      def suspend
+        session = current_user.terminal_sessions.find(params[:id])
+        SessionService.suspend(session: session)
+        render json: TerminalSessionResource.new(session.reload, params: { viewer: current_user }).to_h
+      rescue TerminalSession::InvalidStateError => e
+        render json: { error: e.message }, status: :bad_request
+      end
+
+      # @summary Start a session that continues a suspended one
+      def restore
+        session = current_user.terminal_sessions.find(params[:id])
+        restored = SessionService.restore(session: session, user: current_user)
+        unless restored.persisted?
+          return render json: { errors: restored.errors.full_messages }, status: :unprocessable_entity
+        end
+
+        render json: TerminalSessionResource.new(restored, params: { viewer: current_user }).to_h, status: :created
+      rescue TerminalSession::InvalidStateError => e
+        render json: { error: e.message }, status: :bad_request
+      rescue Oauth::PreflightError, CloudAuth::PreflightError => e
+        render json: { error: e.message, reauth_required: e.connections }, status: :unprocessable_entity
+      rescue SessionService::UnsafeMcpUrlError, AgentCredential::PreflightError, SessionAdmissionService::Stopped => e
+        render json: { error: e.message }, status: :unprocessable_entity
+      end
+
       # @summary Throw away an authentication session so a fresh one can start
       def reset
         session = current_user.terminal_sessions.auth_sessions.find(params[:id])
@@ -101,7 +127,7 @@ module Api
       # @summary Stream a finished session's captured terminal log (raw ANSI bytes)
       def terminal_log
         session = find_readable_session(params[:id])
-        return head :not_found unless session.concluded?
+        return head :not_found unless session.concluded? || session.suspended? || session.restored?
 
         log = session.session_logs.find_by(name: "terminal_output.log")
         return head :not_found unless log&.file

@@ -17,6 +17,8 @@ module TerminalSessionStateMachine
       state :finishing
       state :finished
       state :failed
+      state :suspended
+      state :restored
 
       event :start do
         transitions from: %i[not_started queued], to: :running, after: :on_started
@@ -44,6 +46,16 @@ module TerminalSessionStateMachine
 
       event :fail do
         transitions from: %i[not_started queued running ready finishing], to: :failed, after: :on_failed
+      end
+
+      # Sessions::Suspension. The cleanup activity writes `suspended` itself, as it
+      # writes every final state; these are the moves that happen after it.
+      event :mark_restored do
+        transitions from: :suspended, to: :restored
+      end
+
+      event :expire_suspension do
+        transitions from: :suspended, to: :finished
       end
     end
   end

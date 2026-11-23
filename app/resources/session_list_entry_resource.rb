@@ -38,6 +38,17 @@ class SessionListEntryResource < ApplicationResource
     viewable_for?(session)
   end
 
+  # A suspended session its viewer can restore from the list (Sessions::Suspension).
+  typelize :boolean
+  attribute :restorable do |session|
+    session.suspended? && session.user_id == params[:viewer]&.id && Sessions::Suspension.restorable?(session)
+  end
+
+  typelize "string | null"
+  attribute :restore_expires_at do |session|
+    session.suspended? ? session.restore_expires_at : nil
+  end
+
   MAX_NAME_LENGTH = 80
 
   def self.display_name(session, viewable = true)

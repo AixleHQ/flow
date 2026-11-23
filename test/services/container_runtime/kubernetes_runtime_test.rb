@@ -213,6 +213,16 @@ module ContainerRuntime
       end
     end
 
+    test "write_file lets the activity's cancellation through instead of moving on to the next file" do
+      cancelled = ->(_url, **_options, &_block) { raise Temporalio::Error::CanceledError, "Activity canceled" }
+
+      with_exec_server(->(_command, _stdin) { [ "", "", 0 ] }) do
+        ExecWebsocket.stub(:connect, cancelled) do
+          assert_raises(Temporalio::Error::CanceledError) { @runtime.write_file(exec_handle, "/tmp/file.txt", "hello") }
+        end
+      end
+    end
+
     test "read_file returns nil when path blank" do
       assert_nil @runtime.read_file("id", "")
       assert_nil @runtime.read_file("id", nil)

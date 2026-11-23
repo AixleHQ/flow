@@ -25,7 +25,9 @@ import {
   IconEye,
   IconMaximize,
   IconMinimize,
+  IconPlayerPause,
   IconPlus,
+  IconRestore,
   IconSquareCheck,
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -40,8 +42,14 @@ import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { ideThemeUrl, ideUrlWithScheme } from 'shared/lib/ideTheme';
 import { isWaitingForSlot, launchWaitMessage } from 'shared/lib/launchStatus';
 import { costColor, formatCost, formatDuration, formatTokens, shortModelName } from 'shared/lib/sessionFormat';
+import { restoreDaysLeft, restoreSession } from 'shared/lib/sessionRestore';
 import { useRunsOnMeta } from 'shared/resources/runners/useRunsOnMeta';
-import { finishApiV1TerminalSessionPath } from 'shared/routes';
+import {
+  companyProjectSessionPath,
+  companySessionPath,
+  finishApiV1TerminalSessionPath,
+  suspendApiV1TerminalSessionPath,
+} from 'shared/routes';
 import { ContainerFrame } from 'shared/ui/ContainerFrame';
 import {
   agentLabel,
@@ -92,7 +100,18 @@ const SESSION_STATE_LABELS: Record<string, string> = {
   finishing: 'Finishing',
   finished: 'Finished',
   failed: 'Failed',
+  suspended: 'Suspended',
+  restored: 'Restored',
 };
+
+/** How long before the 23-hour limit the live session warns that it will be suspended. */
+const SUSPEND_WARNING_MS = 60 * 60 * 1000;
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
 
 /** First line of the prompt — the session's own one-line description. */
 function sessionTitle(s: TerminalSession, workflowContext?: SessionWorkflowContext | null): string {
@@ -104,7 +123,7 @@ function sessionTitle(s: TerminalSession, workflowContext?: SessionWorkflowConte
 
 export function SessionShowContent({ session: s, cableStream, context: ctx, workflowContext = null }: Props) {
   const { canExecute } = useProjectPermissions();
-  const isTerminal = ['finished', 'failed', 'cancelled'].includes(s.state);
+  const isTerminal = ['finished', 'failed', 'cancelled', 'suspended', 'restored'].includes(s.state);
   const isQueued = s.state === 'queued';
   const waitingForSlot = isWaitingForSlot(s.launchPhase);
   const isFinishing = s.state === 'finishing';
@@ -113,6 +132,8 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
 
   const [ideLoaded, setIdeLoaded] = useState(false);
   const [finishRequested, setFinishRequested] = useState(false);
+  const [suspendRequested, setSuspendRequested] = useState(false);
+  const [restoreRequested, setRestoreRequested] = useState(false);
   const [editorCollapsed, setEditorCollapsed] = useState(false);
   const [maximized, setMaximized] = useState(false);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -182,6 +203,23 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
       setFinishRequested(false);
     }
   }, [s.id, exitMaximized]);
+
+  const handleSuspend = useCallback(async () => {
+    exitMaximized();
+    setSuspendRequested(true);
+    if (
+      await apiMutate(suspendApiV1TerminalSessionPath(s.id), { method: 'POST' }, 'The session could not be suspended')
+    ) {
+      router.reload({ onFinish: () => setSuspendRequested(false) });
+    } else {
+      setSuspendRequested(false);
+    }
+  }, [s.id, exitMaximized]);
+
+  const handleRestore = useCallback(async () => {
+    setRestoreRequested(true);
+    if (!(await restoreSession(s.id))) setRestoreRequested(false);
+  }, [s.id]);
 
   const handleCopyLink = useCallback(() => {
     clipboard.copy(window.location.href);
@@ -263,6 +301,11 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
   // Finish is owner-only at the API (`current_user.terminal_sessions`), so
   // offering it to a viewer would only produce a failed request.
   const canFinish = canExecute && isOwner && !isTerminal && !isFinishing;
+  const canSuspend = canExecute && s.suspendable && !isFinishing && !finishRequested;
+  const isSuspending = suspendRequested || s.suspending;
+  const suspendsAt = s.suspendsAt ? new Date(s.suspendsAt).getTime() : null;
+  const suspendWarning = isReady && suspendsAt !== null && now >= suspendsAt - SUSPEND_WARNING_MS;
+  const daysLeft = restoreDaysLeft(s.restoreExpiresAt);
   const finishLabel = isQueued ? (workflowContext ? 'Cancel workflow' : 'Cancel session') : 'Finish session';
 
   // Portalled popovers and notifications render under a fullscreen element, so
@@ -313,9 +356,26 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
             </Tooltip>
           )}
           {renderCopyLinkButton()}
+          {canSuspend && (
+            <Tooltip label="Stop the container and keep its files and conversation for 30 days">
+              <Button
+                variant="default"
+                leftSection={<IconPlayerPause size={15} />}
+                onClick={handleSuspend}
+                loading={suspendRequested}
+              >
+                Suspend
+              </Button>
+            </Tooltip>
+          )}
           {canFinish && (
             <Button leftSection={<IconSquareCheck size={15} />} onClick={handleFinish} loading={finishRequested}>
               {finishLabel}
+            </Button>
+          )}
+          {s.restorable && canExecute && (
+            <Button leftSection={<IconRestore size={15} />} onClick={handleRestore} loading={restoreRequested}>
+              Restore
             </Button>
           )}
           {canExecute && isTerminal && ctx.newSessionPath && (
@@ -348,7 +408,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
   );
 
   const renderWorkspace = () => {
-    if (finishRequested || isFinishing) return null;
+    if (finishRequested || isFinishing || suspendRequested) return null;
 
     if (!isReady || !canShowTerminal) {
       return (
@@ -446,6 +506,17 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
   const frameActions = (
     <>
       {maximized && renderCopyLinkButton(false)}
+      {maximized && canSuspend && (
+        <Button
+          size="compact-sm"
+          variant="default"
+          leftSection={<IconPlayerPause size={14} />}
+          onClick={handleSuspend}
+          loading={suspendRequested}
+        >
+          Suspend
+        </Button>
+      )}
       {maximized && canFinish && (
         <Button
           size="compact-sm"
@@ -482,7 +553,11 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
           ? 'Session cancelled'
           : s.state === 'failed'
             ? 'Session failed · workspace is read-only'
-            : `Session finished · ${duration} · ${formatCost(s.costCents)} · read-only`
+            : s.state === 'suspended'
+              ? `Session suspended · ${duration} · ${formatCost(s.costCents)} · read-only`
+              : s.state === 'restored'
+                ? 'Session restored · read-only'
+                : `Session finished · ${duration} · ${formatCost(s.costCents)} · read-only`
       }
     >
       {s.terminalLogUrl ? (
@@ -510,11 +585,11 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
 
   return (
     <div className={classes.root}>
-      {((finishRequested && !isQueued) || isFinishing) && (
+      {((finishRequested && !isQueued) || isFinishing || suspendRequested) && (
         <div className={classes.finishingOverlay}>
           <Stack align="center" gap="sm">
             <Loader size="lg" />
-            <Text fw={600}>Finishing session…</Text>
+            <Text fw={600}>{isSuspending ? 'Saving files and conversation…' : 'Finishing session…'}</Text>
           </Stack>
         </div>
       )}
@@ -522,6 +597,95 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
       {header}
 
       <div className={isTerminal ? classes.body : `${classes.body} ${classes.bodyLive}`}>
+        {suspendWarning && (
+          <Alert
+            color="yellow"
+            variant="light"
+            icon={<IconPlayerPause size={16} />}
+            title="This session will be suspended soon"
+          >
+            <Text size="sm">
+              At {new Date(suspendsAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} it reaches the
+              23-hour limit. Its files, its repositories&rsquo; changes and the conversation are kept for 30 days, and
+              Restore continues from there. Running processes are not kept.
+            </Text>
+          </Alert>
+        )}
+
+        {s.state === 'suspended' && (
+          <Alert
+            color="yellow"
+            variant="light"
+            icon={<IconPlayerPause size={16} />}
+            title={
+              daysLeft === null
+                ? 'Suspended'
+                : `Suspended · ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left to restore`
+            }
+          >
+            <Stack gap={6}>
+              <Text size="sm">
+                {s.checkpoint?.reason === 'user'
+                  ? 'You suspended this session.'
+                  : 'This session reached its 23-hour limit.'}{' '}
+                {s.checkpoint
+                  ? `Saved ${formatBytes(s.checkpoint.bytes)}: the conversation${
+                      s.checkpoint.repositories > 0
+                        ? `, ${s.checkpoint.repositories} ${s.checkpoint.repositories === 1 ? 'repository' : 'repositories'} with unpushed work`
+                        : ''
+                    }${s.checkpoint.workspaceIncluded ? ' and the files under /workspace' : ''}.`
+                  : ''}
+                {s.checkpoint &&
+                  !s.checkpoint.workspaceIncluded &&
+                  ' The other files under /workspace were too large to keep.'}
+              </Text>
+              {s.restoreExpiresAt && (
+                <Text size="xs" c="dimmed">
+                  Restore before {new Date(s.restoreExpiresAt).toLocaleDateString()}. After that the saved files are
+                  deleted, and anything in outputs becomes an asset of this session.
+                </Text>
+              )}
+            </Stack>
+          </Alert>
+        )}
+
+        {s.state === 'restored' && s.restoredSessionId && (
+          <Alert color="gray" variant="light" icon={<IconRestore size={16} />} title="Restored">
+            <Anchor
+              size="sm"
+              href={
+                s.projectId
+                  ? companyProjectSessionPath(s.projectId, s.restoredSessionId)
+                  : companySessionPath(s.restoredSessionId)
+              }
+            >
+              Continued in session #{s.restoredSessionId}
+            </Anchor>
+          </Alert>
+        )}
+
+        {s.restoredFromSessionId && (
+          <Alert
+            color="gray"
+            variant="light"
+            icon={<IconRestore size={16} />}
+            title={`Continues session #${s.restoredFromSessionId}`}
+          >
+            <Stack gap={4}>
+              <Text size="sm">
+                Its files, repositories and conversation were put back
+                {s.restoreNotes.length > 0 ? ', except what is listed below' : ''}. Running processes and anything
+                outside /workspace were not kept.
+              </Text>
+              {s.restoreNotes.map((note) => (
+                <Text key={note} size="sm" c="dimmed">
+                  {note}
+                </Text>
+              ))}
+            </Stack>
+          </Alert>
+        )}
+
         {s.authNotice?.state === 'expired' && (
           <Alert
             color="yellow"
