@@ -8,7 +8,7 @@ import { render, screen, userEvent, within } from 'test/renderPage';
 import Dashboard from './Dashboard';
 import type { DashboardData } from './types';
 
-const now = new Date('2026-10-19T12:00:00Z');
+const now = new Date('2026-10-16T12:00:00Z');
 const paths = buildDashboardPaths();
 
 const data: DashboardData = {
@@ -35,7 +35,7 @@ const data: DashboardData = {
       billingClass: 'managed',
     }),
   ],
-  measuredThrough: '2026-10-19T11:00:00Z',
+  measuredThrough: '2026-10-16T11:00:00Z',
   snapshot: { companies: 2, members: 14, projects: 5 },
 };
 
@@ -44,26 +44,66 @@ const tile = (name: string) => within(screen.getByRole('region', { name }));
 const sortBy = (name: string) => within(screen.getByRole('columnheader', { name })).getByRole('button');
 const filter = (name: string) =>
   within(screen.getByRole('group', { name: 'Filters' })).getByRole('button', { name: new RegExp(`^${name}`) });
+const showMonth = () => userEvent.click(screen.getByRole('button', { name: 'Month' }));
 
 describe('Dashboard', () => {
   beforeEach(() => {
     answerFetch({ 'GET /admin/dashboard/waits.json': [] });
   });
 
-  it('opens on the current month, one row per company, with when each was created and its status, type and billing method', () => {
+  it('opens on the current week, one row per company, with when each was created and its status, type and billing method', () => {
     render(<Dashboard paths={paths} data={data} now={now} />);
 
-    expect(screen.getByRole('combobox', { name: 'Period' })).toHaveDisplayValue('October 2026 (current)');
+    expect(screen.getByRole('button', { name: 'Week' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('combobox', { name: 'Period' })).toHaveDisplayValue('Week of Oct 12, 2026 (current)');
     expect(screen.getByText('Oct 14 – Oct 15, 2026 · to date · 2 companies')).toBeInTheDocument();
-    const [acmeCreated, acmeStatus, acmeType, acmeMethod] = within(rowOf('Acme')).getAllByRole('cell');
+    const [, , , acmeCreated, acmeStatus, acmeType, acmeMethod] = within(rowOf('Acme')).getAllByRole('cell');
     expect(acmeCreated).toHaveTextContent('Mar 9, 2026');
     expect(acmeStatus).toHaveTextContent('Active Customer');
     expect(acmeType).toHaveTextContent('Paid Account');
     expect(acmeMethod).toHaveTextContent('SaaS – Stripe');
-    const [, , globexType, globexMethod] = within(rowOf('Globex')).getAllByRole('cell');
+    const [, , , , , globexType, globexMethod] = within(rowOf('Globex')).getAllByRole('cell');
     expect(globexType).toHaveTextContent('Managed by Aixle');
     expect(globexMethod).toHaveTextContent('—');
     expect(screen.getByRole('button', { name: 'Acme' })).toBeInTheDocument();
+  });
+
+  it('leads with utilization and the waits, keeping the other columns in their order', () => {
+    render(<Dashboard paths={paths} data={data} now={now} />);
+
+    expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
+      'Company',
+      'Utilization',
+      'Average wait',
+      'p95 wait',
+      'Account created',
+      'Account status',
+      'Account type',
+      'Billing method',
+      'Worker hours',
+      'Busy hours',
+      'Min workers',
+      'Max workers',
+      'Peak workers',
+      'Successful sessions',
+      'Failed sessions',
+    ]);
+  });
+
+  it('puts every company and total cell under its own header', () => {
+    render(<Dashboard paths={paths} data={data} now={now} />);
+    const headers = screen.getAllByRole('columnheader').map((header) => header.textContent ?? '');
+    const under = (row: string, header: string) => within(rowOf(row)).getAllByRole('cell')[headers.indexOf(header) - 1];
+
+    expect(under('Acme', 'Utilization')).toHaveTextContent(/^50%/);
+    expect(under('Acme', 'Account created')).toHaveTextContent('Mar 9, 2026');
+    expect(under('Acme', 'Successful sessions')).toHaveTextContent(/^20/);
+    expect(under('Total, all companies', 'Utilization')).toBeEmptyDOMElement();
+    expect(under('Total, all companies', 'Worker hours')).toHaveTextContent(/^144/);
+    expect(under('Total, all companies', 'Busy hours')).toHaveTextContent(/^96/);
+    expect(under('Total, all companies', 'Peak workers')).toBeEmptyDOMElement();
+    expect(under('Total, all companies', 'Successful sessions')).toHaveTextContent(/^58/);
+    expect(under('Total, all companies', 'Failed sessions')).toHaveTextContent(/^4/);
   });
 
   it('sorts by account status', async () => {
@@ -108,8 +148,9 @@ describe('Dashboard', () => {
     expect(tile('Companies').getByText('2 paying · 1 trial · 1 canceled · 1 managed')).toBeInTheDocument();
   });
 
-  it('shows what the period used in tiles, and how much of it nobody pays for', () => {
+  it('shows what the period used in tiles, and how much of it nobody pays for', async () => {
     render(<Dashboard paths={paths} data={data} now={now} />);
+    await showMonth();
 
     expect(tile('Busy hours').getByText('96')).toBeInTheDocument();
     expect(tile('Busy hours').getByText('50% not on a paid plan')).toBeInTheDocument();
@@ -130,6 +171,7 @@ describe('Dashboard', () => {
 
   it('averages the workers offered in the period by billing class, for the companies the filters keep', async () => {
     render(<Dashboard paths={paths} data={data} now={now} />);
+    await showMonth();
 
     expect(tile('Average workers').getByText('5')).toBeInTheDocument();
     expect(tile('Average workers').getByText('▲ +1')).toBeInTheDocument();
@@ -152,6 +194,7 @@ describe('Dashboard', () => {
         ),
       );
     render(<Dashboard paths={paths} data={data} now={now} />);
+    await showMonth();
 
     expect(await within(rowOf('Acme')).findByText('10 min')).toBeInTheDocument();
     expect(await within(rowOf('Acme')).findByText('▲ +50%')).toBeInTheDocument();
@@ -167,7 +210,7 @@ describe('Dashboard', () => {
 
     expect(await within(rowOf('Acme')).findByText('10 min')).toBeInTheDocument();
     expect(fetchSpy).toHaveBeenCalledWith(
-      '/dashboard/waits.json?from=2026-10-01&to=2026-10-31',
+      '/dashboard/waits.json?from=2026-10-12&to=2026-10-18',
       expect.objectContaining({ headers: { Accept: 'application/json' } }),
     );
   });
@@ -184,14 +227,15 @@ describe('Dashboard', () => {
 
     const globex = within(rowOf('Globex'));
     expect(globex.getAllByText('∞')).toHaveLength(2);
-    const [, , , , workerHours, busyHours, , , , utilization] = globex.getAllByRole('cell');
+    const [utilization, , , , , , , workerHours, busyHours] = globex.getAllByRole('cell');
     expect(workerHours).toHaveTextContent(/^48/);
     expect(busyHours).toHaveTextContent(/^48/);
     expect(utilization).toHaveTextContent(/^100%/);
   });
 
-  it('compares with the same days of the month before', () => {
+  it('compares with the same days of the month before', async () => {
     render(<Dashboard paths={paths} data={data} now={now} />);
+    await showMonth();
 
     expect(screen.getByText('Change vs Sep 1 – Sep 15, 2026')).toBeInTheDocument();
     expect(within(rowOf('Acme')).getByText('▲ +100%')).toBeInTheDocument();
@@ -199,6 +243,7 @@ describe('Dashboard', () => {
 
   it('steps back to the previous month', async () => {
     render(<Dashboard paths={paths} data={data} now={now} />);
+    await showMonth();
 
     await userEvent.click(screen.getByRole('button', { name: 'Previous period' }));
 
@@ -224,8 +269,8 @@ describe('Dashboard', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Custom' }));
 
     expect(screen.getByLabelText('From')).toHaveValue('2026-10-01');
-    expect(screen.getByLabelText('To')).toHaveValue('2026-10-19');
-    expect(screen.getByText('Oct 1 – Oct 19, 2026 · custom range · 2 companies')).toBeInTheDocument();
+    expect(screen.getByLabelText('To')).toHaveValue('2026-10-16');
+    expect(screen.getByText('Oct 1 – Oct 16, 2026 · custom range · 2 companies')).toBeInTheDocument();
   });
 
   it('filters companies by name, and the tiles with them', async () => {
@@ -303,6 +348,7 @@ describe('Dashboard', () => {
       ],
     };
     render(<Dashboard paths={paths} data={both} now={now} />);
+    await showMonth();
 
     await userEvent.click(filter('Account type'));
     await userEvent.click(screen.getByRole('checkbox', { name: 'Managed by Aixle' }));
@@ -354,6 +400,21 @@ describe('Dashboard', () => {
     render(<Dashboard paths={paths} data={data} now={now} />);
 
     expect(within(rowOf('Total, all companies')).getByText('58')).toBeInTheDocument();
+  });
+
+  it('explains the dashboard in headed sections under the table, and says how fresh the data is', () => {
+    render(<Dashboard paths={paths} data={data} now={now} />);
+
+    expect(screen.getByText('How to read this dashboard')).toBeInTheDocument();
+    for (const section of ['Metrics', 'Company attributes', 'Filters and totals', 'Periods and comparison']) {
+      expect(screen.getByText(section)).toBeInTheDocument();
+    }
+    expect(screen.getByText('The limit (∞ when none was set).')).toBeInTheDocument();
+    expect(screen.getByText(/sessions started within the p95 wait/)).toBeInTheDocument();
+    expect(screen.getByText('People and Projects always count the whole platform.')).toBeInTheDocument();
+    expect(screen.getByText(/^“Not billed” in the Companies and Average workers tiles/)).toBeInTheDocument();
+    expect(screen.getByText('Weeks run Monday to Sunday.')).toBeInTheDocument();
+    expect(screen.getByText(/^Measured through Oct 16, 2026.*11:00 UTC\. Open a company/)).toBeInTheDocument();
   });
 
   it('shows the platform tiles and says so when no usage has been measured yet', () => {
