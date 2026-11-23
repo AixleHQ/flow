@@ -137,6 +137,39 @@ module ContainerRuntime
       assert client.closed?
     end
 
+    test "a TLS handshake the server never answers gives up at the connect timeout" do
+      @server = FakeKubernetesExecServer.new(tls: true, stall: :handshake).start
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+      assert_raises(ExecWebsocket::ConnectTimeout) do
+        ExecWebsocket.connect(@server.exec_url(command: [ "true" ]), connect_timeout: 0.5)
+      end
+      assert_operator Process.clock_gettime(Process::CLOCK_MONOTONIC) - started, :<, 5
+    end
+
+    test "closing does not wait for a stdin write the server stopped reading" do
+      @server = FakeKubernetesExecServer.new(stall: :stdin).start
+      opened = Queue.new
+      client = ExecWebsocket.connect(@server.exec_url(command: [ "cat" ], stdin: true),
+                                     headers: { "Sec-WebSocket-Protocol" => "v5.channel.k8s.io" }) do |ws|
+        ws.on(:open) { opened << true }
+      end
+      assert opened.pop(timeout: 5), "the upgrade never arrived"
+
+      chunk = [ 0 ].pack("C") + Random.bytes(1024 * 1024)
+      writer = Thread.new { client.send(chunk) until client.closed? }
+      stuck = 50.times.any? do
+        sleep 0.1
+        writer.status == "sleep"
+      end
+      assert stuck, "the writer never blocked on the stalled server"
+
+      closer = Thread.new { client.close }
+      assert closer.join(5), "close waited for the stuck writer"
+      assert writer.join(5), "the stuck write did not end when the socket closed"
+      assert client.closed?
+    end
+
     private
 
     def run_exec(command:, stdin: nil, protocol: "v4.channel.k8s.io", until_event: :close)

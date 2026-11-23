@@ -50,6 +50,11 @@ module Gitlab
       assert_requested :get, "#{GITLAB_API}/user", headers: { "PRIVATE-TOKEN" => @token }
     end
 
+    test "client bounds connecting and reading with the GitLab timeouts" do
+      assert_equal({ open_timeout: Gitlab::AppConfig.open_timeout, read_timeout: Gitlab::AppConfig.read_timeout },
+                   Gitlab::TokenService.new(@integration).client.httparty)
+    end
+
     test "raises ConfigurationError when personal_access_token is blank" do
       @integration.credentials_data = {}
       @integration.save!

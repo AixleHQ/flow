@@ -4,14 +4,15 @@ require "base64"
 require "shellwords"
 
 module Sessions
-  # Puts a suspended session's checkpoint back into the session that continues it, after
-  # the usual provisioning and before the CLI starts. Design:
+  # Puts a suspended session's checkpoint back into the session that continues it, with
+  # restore.sh, after the usual provisioning and before the CLI starts. Design:
   # docs/design/session-suspend-restore.md §5.
   #
   # Nothing here fails the session: whatever cannot be put back is left in
   # /workspace/.aixle-restore and named in the restore notice, and a conversation that
   # cannot be resumed starts fresh.
   class Restore
+    SCRIPT = File.read(File.expand_path("restore.sh", __dir__)).freeze
     METADATA_KEY = "restore"
     LEFTOVERS_DIR = "/workspace/.aixle-restore"
     SCRIPT_TIMEOUT = 25.minutes.to_i
@@ -62,7 +63,7 @@ module Sessions
                                                                    host: @runtime.callback_url(:container_assets, @session))
       return record!(resume: false, notes: [ "The saved files could not be fetched, so nothing was restored." ]) if url.blank?
 
-      stdout, stderr, code = @runtime.exec(@container, [ "/bin/bash", "-c", script(url, checkpoint) ],
+      stdout, stderr, code = @runtime.exec(@container, [ "/bin/bash", "-c", SCRIPT, "aixle-restore", *arguments(url, checkpoint) ],
                                            stdout: true, stderr: true, timeout: SCRIPT_TIMEOUT + 60)
       lines = Array(stdout).join.lines.map { |line| line.chomp.split("\t", -1) }
       unless code.to_i.zero?
@@ -103,21 +104,27 @@ module Sessions
                  "Its files are in #{@adapter.home_dir} as the CLI keeps them (#{@adapter.conversation_paths.join(', ')})."
       end
       notes << "The earlier conversation was not saved." unless conversation
-      lines.select { |fields| fields.first == "REPO" && fields[2] != "ok" }.each do |_tag, id, status|
-        path = checkpoint.repos.find { |repo| repo["repository_id"].to_s == id }&.dig("path") || "repository #{id}"
-        notes << repo_note(path, status, id)
+      lines.select { |fields| fields.first == "REPO" && fields[2] != "ok" }.each do |_tag, id, status, branch, sha|
+        repo = checkpoint.repos.find { |entry| entry["repository_id"].to_s == id }.to_h
+        notes << repo_note(repo["path"] || "repository #{id}", status, id, head: repo["head_sha"], now: [ branch, sha ])
       end
       notes.compact
     end
 
-    def repo_note(path, status, id)
+    def repo_note(path, status, id, head:, now:)
       case status
       when "missing" then "#{path} was not cloned for this session, so its saved work was not put back."
       when "bundle_failed" then "Unpushed commits of #{path} could not be put back; they are in #{LEFTOVERS_DIR}/#{id}.bundle."
       when "patch_failed" then "Uncommitted changes of #{path} could not be applied; they are in #{LEFTOVERS_DIR}/#{id}.patch."
-      when "head_missing" then "The commit #{path} was on could not be found; it is left on its branch."
+      when "head_missing"
+        "Commit #{head.to_s.first(7)}, checked out in #{path}, could not be found, so it and the work committed on it " \
+          "were not put back.#{" The repository is now #{checkout_state(*now)}." if now.last.present?}"
       when "untracked_failed" then "Untracked files of #{path} could not all be put back."
       end
+    end
+
+    def checkout_state(branch, sha)
+      branch.present? ? "on branch #{branch} at #{sha}" : "at #{sha}, with a detached HEAD"
     end
 
     def record!(resume:, notes:, conversation_id: nil)
@@ -134,7 +141,8 @@ module Sessions
       origin = @session.restored_from_session
       text = +"\n\n## This session was restored\n\n"
       text << "It continues session ##{origin&.id}, suspended #{origin&.suspended_at&.utc&.strftime('%Y-%m-%d %H:%M UTC')}. "
-      text << "The files under /workspace and the repositories' branches and changes were put back. "
+      text << "The files under /workspace and the repositories' branches and changes were put back" \
+              "#{', except what is listed below' if notes.any?}. "
       text << "Processes that were running are gone, and anything installed or written outside /workspace "
       text << "(global packages, caches, /tmp) was not kept: install dependencies again before relying on them.\n"
       notes.each { |note| text << "\n- #{note}" }
@@ -144,52 +152,14 @@ module Sessions
       Rails.logger.warn("[Restore] session=#{@session.id} could not write the restore notice: #{e.message}")
     end
 
-    def repo_lines(checkpoint)
-      checkpoint.repos.map do |repo|
-        args = [ repo["repository_id"], repo["path"], repo["branch"], repo["head_sha"], repo["on_remote"] ]
-        "restore_repo #{args.map { |value| Shellwords.escape(value.to_s) }.join(' ')}"
-      end.join("\n")
-    end
-
-    def script(url, checkpoint)
-      <<~BASH
-        set -u
-        D=$(mktemp -d /tmp/.aixle-restore.XXXXXX) || exit 70
-        trap 'rm -rf "$D"' EXIT
-        g() { git -c safe.directory='*' "$@"; }
-        if ! curl -sS --noproxy '*' --fail --max-time #{DOWNLOAD_TIMEOUT} -o "$D/archive.tgz" #{Shellwords.escape(url)}; then
-          echo DOWNLOAD_FAILED; exit 5
-        fi
-        tar -C "$D" -xzf "$D/archive.tgz" || { echo UNPACK_FAILED; exit 6; }
-        if [ -f "$D/workspace.tar" ]; then tar -C /workspace -xf "$D/workspace.tar" 2>/dev/null; echo WORKSPACE_OK; fi
-        if [ -f "$D/conversation.tar" ] && tar -C #{Shellwords.escape(@adapter.home_dir)} -xf "$D/conversation.tar" 2>/dev/null; then echo CONVERSATION_OK; fi
-        mkdir -p #{LEFTOVERS_DIR}
-        restore_repo() {
-          key=$1; path=$2; branch=$3; head=$4; on_remote=$5; src="$D/repos/$key"; status=ok
-          if [ ! -d "$path/.git" ]; then printf 'REPO\\t%s\\tmissing\\n' "$key"; return; fi
-          cd "$path" || return
-          if [ -n "$branch" ] && [ "$on_remote" = true ]; then g fetch -q origin "$branch" >/dev/null 2>&1 || true; fi
-          g checkout -q --detach 2>/dev/null
-          if [ -f "$src/head.bundle" ] && ! g fetch -q "$src/head.bundle" 'refs/heads/*:refs/heads/*' >/dev/null 2>&1; then
-            cp "$src/head.bundle" "#{LEFTOVERS_DIR}/$key.bundle"; status=bundle_failed
-          fi
-          if [ -n "$branch" ]; then
-            if g rev-parse -q --verify "refs/heads/$branch" >/dev/null; then g checkout -q -f "$branch"
-            elif g rev-parse -q --verify "refs/remotes/origin/$branch" >/dev/null; then g checkout -q -f -B "$branch" "origin/$branch"; fi
-          fi
-          if [ -n "$head" ]; then
-            if g cat-file -e "$head^{commit}" 2>/dev/null; then g reset -q --hard "$head"; elif [ "$status" = ok ]; then status=head_missing; fi
-          fi
-          if [ -f "$src/tracked.patch" ] && ! g apply --binary "$src/tracked.patch" 2>/dev/null; then
-            cp "$src/tracked.patch" "#{LEFTOVERS_DIR}/$key.patch"; [ "$status" = ok ] && status=patch_failed
-          fi
-          if [ -f "$src/untracked.tar" ] && ! tar -xf "$src/untracked.tar" 2>/dev/null; then [ "$status" = ok ] && status=untracked_failed; fi
-          printf 'REPO\\t%s\\t%s\\n' "$key" "$status"
-        }
-        #{repo_lines(checkpoint)}
-        rmdir #{LEFTOVERS_DIR} 2>/dev/null || true
-        exit 0
-      BASH
+    def arguments(url, checkpoint)
+      [
+        "--url", url, "--download-timeout", DOWNLOAD_TIMEOUT,
+        "--workspace", Checkpoint::WORKSPACE, "--home", @adapter.home_dir, "--leftovers", LEFTOVERS_DIR,
+        *checkpoint.repos.flat_map do |repo|
+          [ "--repo", repo["repository_id"], repo["path"], repo["branch"], repo["head_sha"], repo["on_remote"] ]
+        end
+      ].map(&:to_s)
     end
   end
 end

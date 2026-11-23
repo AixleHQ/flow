@@ -18,15 +18,20 @@ module ContainerRuntime
     READ_CHUNK_BYTES = 64 * 1024
     HEADER_END = "\r\n\r\n"
     READER_JOIN_SECONDS = 1
+    # The caller's exec timeout starts only once #connect returns, so a connect
+    # that stalls has no deadline but this one.
+    CONNECT_TIMEOUT_SECONDS = 10
+
+    class ConnectTimeout < StandardError; end
 
     # Without this the websocket gem's parsers swallow a refused upgrade or a
     # malformed frame into a symbol on the parser instead of raising it.
     ::WebSocket.should_raise = true
 
-    def self.connect(url, headers: {})
+    def self.connect(url, headers: {}, connect_timeout: CONNECT_TIMEOUT_SECONDS)
       client = new
       yield client if block_given?
-      client.connect(url, headers: headers)
+      client.connect(url, headers: headers, connect_timeout: connect_timeout)
       client
     end
 
@@ -44,10 +49,10 @@ module ContainerRuntime
       @listeners[event] << block
     end
 
-    def connect(url, headers: {})
+    def connect(url, headers: {}, connect_timeout: CONNECT_TIMEOUT_SECONDS)
       uri = URI.parse(url)
       @handshake = ::WebSocket::Handshake::Client.new(url: url, headers: headers)
-      @socket = open_socket(uri)
+      @socket = open_socket(uri, connect_timeout)
       @socket.write(@handshake.to_s)
       @reader = Thread.new { read_loop }
     rescue StandardError
@@ -74,7 +79,7 @@ module ContainerRuntime
         @closed = true
       end
 
-      write_frame("", :close) if @upgraded
+      send_close_frame if @upgraded
       @socket&.close
       emit(:close)
       stop_reader
@@ -82,8 +87,9 @@ module ContainerRuntime
 
     private
 
-    def open_socket(uri)
-      tcp = TCPSocket.new(uri.host, uri.port)
+    def open_socket(uri, timeout)
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+      tcp = TCPSocket.new(uri.host, uri.port, connect_timeout: timeout)
       return tcp unless %w[https wss].include?(uri.scheme)
 
       context = OpenSSL::SSL::SSLContext.new
@@ -91,8 +97,39 @@ module ContainerRuntime
       tls = OpenSSL::SSL::SSLSocket.new(tcp, context)
       tls.sync_close = true
       tls.hostname = uri.host
-      tls.connect
+      handshake_tls(tls, deadline)
       tls
+    rescue StandardError
+      (tls || tcp)&.close
+      raise
+    end
+
+    def handshake_tls(tls, deadline)
+      tls.connect_nonblock
+    rescue IO::WaitReadable, IO::WaitWritable => e
+      remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      ready = remaining.positive? &&
+              (e.is_a?(IO::WaitReadable) ? tls.to_io.wait_readable(remaining) : tls.to_io.wait_writable(remaining))
+      raise ConnectTimeout, "the TLS handshake with #{tls.hostname} did not finish in time" unless ready
+
+      retry
+    end
+
+    # A stdin writer stuck on a peer that stopped reading holds the write lock
+    # for as long as the peer stalls, and a close that waited for it would stall
+    # with it. The close frame is skipped then, and closing the socket ends the
+    # stuck write with an IOError.
+    def send_close_frame
+      return unless @write_lock.try_lock
+
+      begin
+        frame = ::WebSocket::Frame::Outgoing::Client.new(version: @handshake.version, data: "", type: :close)
+        @socket.write_nonblock(frame.to_s, exception: false)
+      rescue IOError, SystemCallError, OpenSSL::SSL::SSLError
+        nil
+      ensure
+        @write_lock.unlock
+      end
     end
 
     def read_loop
@@ -146,7 +183,7 @@ module ContainerRuntime
       frame = ::WebSocket::Frame::Outgoing::Client.new(version: @handshake.version, data: data, type: type)
       @write_lock.synchronize { @socket.write(frame.to_s) }
     rescue IOError, SystemCallError, OpenSSL::SSL::SSLError
-      close unless type == :close
+      close
     end
 
     def fail_with(error)

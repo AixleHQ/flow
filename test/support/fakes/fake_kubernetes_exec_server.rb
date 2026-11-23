@@ -39,13 +39,19 @@ class FakeKubernetesExecServer
   # ending:   :close_frame as the API server does; :eof_after_status drops the
   #           TCP connection after the Status without a close frame;
   #           :eof_before_status drops it right after the output
-  def initialize(tls: false, refuse: nil, coalesce: false, drip: false, ping: false, ending: :close_frame, &pod)
+  # stall:    :handshake accepts the TCP connection and never answers it;
+  #           :stdin answers the upgrade and then never reads. Both hold the
+  #           connection until #stop.
+  def initialize(tls: false, refuse: nil, coalesce: false, drip: false, ping: false, ending: :close_frame, stall: nil,
+                 &pod)
     @tls = tls
     @refuse = refuse
     @coalesce = coalesce
     @drip = drip
     @ping = ping
     @ending = ending
+    @stall = stall
+    @release = Queue.new
     @pod = pod || ->(_command, _stdin) { [ "", "", 0 ] }
     @execs = []
     @errors = []
@@ -77,6 +83,7 @@ class FakeKubernetesExecServer
   end
 
   def stop
+    @release.close
     @acceptor&.kill
     @listener&.close
   end
@@ -97,10 +104,16 @@ class FakeKubernetesExecServer
   def accept_loop
     loop do
       client = @listener.accept
-      Thread.new(client) { |socket| serve(wrap(socket)) }
+      Thread.new(client) { |socket| @stall == :handshake ? hold(socket) : serve(wrap(socket)) }
     end
   rescue IOError, SystemCallError
     nil # the listener was closed
+  end
+
+  def hold(socket)
+    @release.pop(timeout: 30)
+  ensure
+    socket.close unless socket.closed?
   end
 
   def wrap(socket)
@@ -129,6 +142,8 @@ class FakeKubernetesExecServer
       socket.write(upgrade)
       upgrade = nil
     end
+
+    return hold(socket) if @stall == :stdin
 
     if @ping
       socket.write(frame(:ping, "are you there"))

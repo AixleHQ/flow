@@ -10,6 +10,8 @@ module Gitlab
     # Pipelines resolve CI gates; merge-request and note events start
     # pull-request triggers (docs/design/pull-request-triggers.md §7.2).
     HOOK_EVENTS = { pipeline_events: true, merge_requests_events: true, note_events: true }.freeze
+    # An unreachable GitLab raises network errors the gem does not wrap in ::Gitlab::Error.
+    UNREACHABLE = [ ::Gitlab::Error::Error, *Gitlab::TokenService::NETWORK_ERRORS ].freeze
 
     def initialize(integration)
       @integration = integration
@@ -19,7 +21,7 @@ module Gitlab
       client = token_service.client
       projects = client.projects(membership: true, per_page: 100).paginate_with_limit(MAX_PROJECTS)
       projects.map { |proj| map_project(proj) }
-    rescue ::Gitlab::Error::Error => e
+    rescue *UNREACHABLE => e
       Rails.logger.warn("[Gitlab::RepositoryService] Failed to list repos: #{e.message}")
       []
     end
@@ -28,7 +30,7 @@ module Gitlab
       client = token_service.client
       proj = client.project(full_name)
       map_project(proj)
-    rescue ::Gitlab::Error::Error => e
+    rescue *UNREACHABLE => e
       Rails.logger.warn("[Gitlab::RepositoryService] Failed to find repo #{full_name}: #{e.message}")
       nil
     end
@@ -36,7 +38,7 @@ module Gitlab
     def list_branches(full_name)
       client = token_service.client
       client.branches(full_name, per_page: 100).paginate_with_limit(MAX_BRANCHES).map(&:name)
-    rescue ::Gitlab::Error::Error => e
+    rescue *UNREACHABLE => e
       Rails.logger.warn("[Gitlab::RepositoryService] Failed to list branches for #{full_name}: #{e.message}")
       []
     end
@@ -76,7 +78,7 @@ module Gitlab
       client = token_service.client
       hook_ids = repository.gitlab_hook_id ? [ repository.gitlab_hook_id ] : unclaimed_hook_ids(client, repository)
       hook_ids.each { |hook_id| delete_hook(client, repository.full_name, hook_id) }
-    rescue ::Gitlab::Error::Error => e
+    rescue *UNREACHABLE => e
       Rails.logger.warn("[Gitlab::RepositoryService] Failed to remove webhook for #{repository.full_name}: #{e.message}")
     end
 

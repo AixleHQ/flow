@@ -27,14 +27,6 @@ governance, community health — carry none.
   continues the same step. A suspended session holds no slot; its owner is emailed when it is suspended and three days
   before it expires. Needs S3-compatible storage; without it sessions finish as before. Operators: a workflow run may now
   last 40 days instead of 7.
-- **Integrations**: agents can act as you on Bitbucket, as they can on GitHub and GitLab.
-  Connect your Bitbucket account under **Profile → Connected accounts**, allow it per
-  project, and give a step the `bitbucket_user_token` or `bitbucket_user_token_for` tool.
-  Like GitLab's, the token is not limited to the session's repositories (Bitbucket cannot do
-  that), and the user guide says what bounds it instead. Commits use your primary confirmed
-  Bitbucket email, and disconnecting cannot revoke the grant at Bitbucket. The operator
-  registers a Bitbucket OAuth client with the callback `<PROTOCOL>://<DOMAIN>/oauth/callback`
-  and sets `BITBUCKET_OAUTH_CLIENT_ID` and `BITBUCKET_OAUTH_CLIENT_SECRET`.
 
 ### Changed
 - **Admin**: the dashboard opens on the current week, shows Utilization, Average wait and
@@ -42,6 +34,10 @@ governance, community health — carry none.
   it scrolls, and folds its explanation into a "How to read this dashboard" section.
 
 ### Fixed
+- **Admin**: deleting a company that has set up SCIM provisioning works again. It used to
+  end in an error page and leave the company in place.
+- **Repositories**: adding a GitLab repository no longer ends in an error page when GitLab
+  does not answer; the picker comes up empty after at most a few seconds instead of hanging.
 - **Tasks**: a collapsed board column no longer flickers a horizontal scrollbar while a card
   in it has an active run.
 - **Wrappers**: a wrapper with a parameter named like `max`, `min`, `count` or `size` runs
@@ -49,6 +45,14 @@ governance, community health — carry none.
 - **Triggers & gates**: a run started from a Slack message links back to that message, in
   its thread when the message was a reply: the run page shows the link, and the agent gets
   it, so a card it creates links to the right message.
+- **Sessions & Runs**: when the cluster stops answering while files are copied into an
+  agent's container, the copy gives up within seconds. It used to hold the session at
+  setup for ten minutes and then fail the step with "Unresolved exec".
+- **Sessions & Runs**: a session log over 1 GB no longer fails the step and loses its
+  outputs. The session keeps the end of that log, and its log collection report says why.
+- **Sessions & Runs**: a Kiro session's HTTP log now records only Kiro's own traffic. It
+  used to record every request the agent made to AWS, response bodies included, which
+  could push the log past 1 GB.
 
 ## [1.17.0] - 2026-11-23
 
@@ -59,6 +63,14 @@ governance, community health — carry none.
   new version, **Discard draft** drops it. The personal MCP has the same flow:
   `create_workflow_draft`, `get_workflow_draft_diff`, `apply_workflow_draft`,
   `discard_workflow_draft`.
+- **Integrations**: agents can act as you on Bitbucket, as they can on GitHub and GitLab.
+  Connect your Bitbucket account under **Profile → Connected accounts**, allow it per
+  project, and give a step the `bitbucket_user_token` or `bitbucket_user_token_for` tool.
+  Like GitLab's, the token is not limited to the session's repositories (Bitbucket cannot do
+  that), and the user guide says what bounds it instead. Commits use your primary confirmed
+  Bitbucket email, and disconnecting cannot revoke the grant at Bitbucket. The operator
+  registers a Bitbucket OAuth client with the callback `<PROTOCOL>://<DOMAIN>/oauth/callback`
+  and sets `BITBUCKET_OAUTH_CLIENT_ID` and `BITBUCKET_OAUTH_CLIENT_SECRET`.
 - **Tasks**: a workflow agent can put the card it moves at a chosen place in the column
   (`position`, 0 = top) instead of always at the bottom.
 - **Docs**: the Tools page explains how agents list archived tasks with
@@ -154,6 +166,8 @@ governance, community health — carry none.
   showed no usage.
 
 ### Changed
+- **Profile**: the consent switches on **Connected accounts** now refuse a request that names
+  no switch, an unknown field, or a value that is not true or false, for every provider.
 - **Docs**: *Session queues* describes workers as the company's own number,
   set on Settings → General, instead of an installation ceiling, and gains a
   *Prioritising projects* section: how reserving workers keeps the projects that

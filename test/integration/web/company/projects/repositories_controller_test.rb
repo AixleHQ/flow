@@ -122,6 +122,19 @@ class Web::Company::Projects::RepositoriesControllerTest < ActionDispatch::Integ
                  response.parsed_body.dig("props", "availableRepos")
   end
 
+  test "the GitLab picker is empty, not an error, when GitLab does not answer" do
+    Settings.stubs(:gitlab).returns(OpenStruct.new(endpoint: "https://gitlab.com/api/v4"))
+    integration = create(:integration, :gitlab, :active, company: @company, project: @project)
+    stub_request(:get, "https://gitlab.com/api/v4/projects").with(query: hash_including({})).to_raise(Net::OpenTimeout)
+
+    get company_project_repositories_path(@project, integration_id: integration.id),
+        headers: { "X-Inertia" => "true", "X-Inertia-Partial-Component" => "Projects/Repositories/RepositoriesPage",
+                   "X-Inertia-Partial-Data" => "availableRepos" }
+
+    assert_response :success
+    assert_empty response.parsed_body.dig("props", "availableRepos")
+  end
+
   test "create attaches a verified public repository without an integration" do
     fake = FakePublicRepositoryService.new
     PublicRepositoryService.stubs(:new).returns(fake)
