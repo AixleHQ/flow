@@ -84,8 +84,11 @@ module Sessions
     end
 
     # Called by the cleanup activity once the checkpoint is stored, in place of the
-    # usual final state.
+    # usual final state. Cleanup is repeated until the container is gone (a Kubernetes Pod
+    # outlives the first pass), so it comes back here for a session already suspended.
     def suspended!(session, now: Time.current)
+      return if session.suspended? || session.restored?
+
       session.update!(state: "suspended", finished_at: session.finished_at || now, container_id: nil,
                       suspended_at: now, restore_expires_at: window_end(session, now))
       session.step_run&.mark_suspended! if session.workflow_step?
