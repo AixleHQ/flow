@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 
 import {
   comparisonRange,
@@ -39,29 +39,6 @@ const UNBILLED: BillingClass[] = ['unlimited', 'no_customer'];
 
 type SortKey = 'name' | 'createdAt' | 'accountStatus' | 'accountType' | 'billingMethod' | DeltaField;
 type Direction = 'ascending' | 'descending';
-
-interface Column {
-  key: SortKey;
-  label: string;
-}
-
-const COLUMNS: Column[] = [
-  { key: 'name', label: 'Company' },
-  { key: 'createdAt', label: 'Account created' },
-  { key: 'accountStatus', label: 'Account status' },
-  { key: 'accountType', label: 'Account type' },
-  { key: 'billingMethod', label: 'Billing method' },
-  { key: 'workerHours', label: 'Worker hours' },
-  { key: 'busyHours', label: 'Busy hours' },
-  { key: 'minWorkers', label: 'Min workers' },
-  { key: 'maxWorkers', label: 'Max workers' },
-  { key: 'peakWorkers', label: 'Peak workers' },
-  { key: 'utilization', label: 'Utilization' },
-  { key: 'avgWaitSeconds', label: 'Average wait' },
-  { key: 'p95WaitSeconds', label: 'p95 wait' },
-  { key: 'sessionsSucceeded', label: 'Successful sessions' },
-  { key: 'sessionsFailed', label: 'Failed sessions' },
-];
 
 const GRAINS: { grain: Grain; label: string }[] = [
   { grain: 'day', label: 'Day' },
@@ -116,6 +93,166 @@ function sortValue(row: TenantSummary, key: SortKey): number | string {
   // Missing values sort below every real one.
   return row[key] ?? -Infinity;
 }
+
+interface CellContext {
+  previous: TenantSummary | undefined;
+  p95Loading: boolean;
+}
+
+interface Column {
+  key: SortKey;
+  label: string;
+  cell: (row: TenantSummary, context: CellContext) => ReactNode;
+  numeric?: boolean;
+  total?: keyof Totals;
+}
+
+const deltaCell = (field: DeltaField, value: number | null, previous: number | null | undefined) => {
+  const change = deltaOf(field, value, previous ?? null);
+  const tone = change && change.tone !== 'neutral' ? classes[change.tone] : '';
+  return <span className={`${classes.delta} ${tone}`}>{change?.text ?? '—'}</span>;
+};
+
+const COLUMNS: Column[] = [
+  { key: 'name', label: 'Company', cell: (row) => row.name },
+  {
+    key: 'utilization',
+    label: 'Utilization',
+    numeric: true,
+    cell: (row, { previous }) => (
+      <>
+        <span className={classes.utilization}>
+          <span className={classes.bar} aria-hidden="true">
+            <span className={classes.fill} style={{ width: `${Math.min(100, (row.utilization ?? 0) * 100)}%` }} />
+          </span>
+          {formatPercent(row.utilization)}
+        </span>
+        {deltaCell('utilization', row.utilization, previous?.utilization)}
+      </>
+    ),
+  },
+  {
+    key: 'avgWaitSeconds',
+    label: 'Average wait',
+    numeric: true,
+    cell: (row, { previous }) => (
+      <>
+        {formatWait(row.avgWaitSeconds)}
+        {deltaCell('avgWaitSeconds', row.avgWaitSeconds, previous?.avgWaitSeconds)}
+      </>
+    ),
+  },
+  {
+    key: 'p95WaitSeconds',
+    label: 'p95 wait',
+    numeric: true,
+    cell: (row, { previous, p95Loading }) => (
+      <>
+        {p95Loading ? '…' : formatWait(row.p95WaitSeconds)}
+        {deltaCell('p95WaitSeconds', row.p95WaitSeconds, previous?.p95WaitSeconds)}
+      </>
+    ),
+  },
+  {
+    key: 'createdAt',
+    label: 'Account created',
+    cell: (row) => (row.createdAt ? longDay.format(new Date(row.createdAt)) : '—'),
+  },
+  {
+    key: 'accountStatus',
+    label: 'Account status',
+    cell: (row) => {
+      const status = accountStatusOf(row);
+      if (!status) return '—';
+      return <span className={`${classes.badge} ${classes[status.tone]}`}>{status.label}</span>;
+    },
+  },
+  { key: 'accountType', label: 'Account type', cell: (row) => accountTypeOf(row) },
+  { key: 'billingMethod', label: 'Billing method', cell: (row) => billingMethodOf(row) },
+  {
+    key: 'workerHours',
+    label: 'Worker hours',
+    numeric: true,
+    total: 'workerHours',
+    cell: (row, { previous }) => (
+      <>
+        {formatHours(row.workerHours)}
+        {deltaCell('workerHours', row.workerHours, previous?.workerHours)}
+      </>
+    ),
+  },
+  {
+    key: 'busyHours',
+    label: 'Busy hours',
+    numeric: true,
+    total: 'busyHours',
+    cell: (row, { previous }) => (
+      <>
+        {formatHours(row.busyHours)}
+        {deltaCell('busyHours', row.busyHours, previous?.busyHours)}
+      </>
+    ),
+  },
+  {
+    key: 'minWorkers',
+    label: 'Min workers',
+    numeric: true,
+    cell: (row, { previous }) => (
+      <>
+        {formatWorkers(row.minWorkers)}
+        {deltaCell('minWorkers', row.minWorkers, previous?.minWorkers)}
+      </>
+    ),
+  },
+  {
+    key: 'maxWorkers',
+    label: 'Max workers',
+    numeric: true,
+    cell: (row, { previous }) => (
+      <>
+        {formatWorkers(row.maxWorkers)}
+        {deltaCell('maxWorkers', row.maxWorkers, previous?.maxWorkers)}
+      </>
+    ),
+  },
+  {
+    key: 'peakWorkers',
+    label: 'Peak workers',
+    numeric: true,
+    cell: (row, { previous }) => (
+      <>
+        {formatWorkers(row.peakWorkers)}
+        {deltaCell('peakWorkers', row.peakWorkers, previous?.peakWorkers)}
+      </>
+    ),
+  },
+  {
+    key: 'sessionsSucceeded',
+    label: 'Successful sessions',
+    numeric: true,
+    total: 'sessionsSucceeded',
+    cell: (row, { previous }) => (
+      <>
+        {formatCount(row.sessionsSucceeded)}
+        {deltaCell('sessionsSucceeded', row.sessionsSucceeded, previous?.sessionsSucceeded)}
+      </>
+    ),
+  },
+  {
+    key: 'sessionsFailed',
+    label: 'Failed sessions',
+    numeric: true,
+    total: 'sessionsFailed',
+    cell: (row, { previous }) => (
+      <>
+        {formatCount(row.sessionsFailed)}
+        {deltaCell('sessionsFailed', row.sessionsFailed, previous?.sessionsFailed)}
+      </>
+    ),
+  },
+];
+
+const [COMPANY_COLUMN, ...VALUE_COLUMNS] = COLUMNS;
 
 interface Props {
   data: DashboardData;
@@ -292,18 +429,16 @@ export default function Dashboard({
         : { key, direction: key === 'name' ? 'ascending' : 'descending' },
     );
 
-  const delta = (field: DeltaField, value: number | null, previous: number | null | undefined) => {
-    const change = deltaOf(field, value, previous ?? null);
-    const tone = change && change.tone !== 'neutral' ? classes[change.tone] : '';
-    return <span className={`${classes.delta} ${tone}`}>{change?.text ?? '—'}</span>;
+  const footerCell = (totals: Totals, column: Column) => {
+    const field = column.total;
+    if (!field) return <td key={column.key} />;
+    return (
+      <td key={column.key} className={classes.number}>
+        {field === 'workerHours' || field === 'busyHours' ? formatHours(totals[field]) : formatCount(totals[field])}
+        {deltaCell(field, totals[field], previousTotals?.[field])}
+      </td>
+    );
   };
-
-  const totalCell = (totals: Totals, field: keyof Totals) => (
-    <td className={classes.number}>
-      {field === 'workerHours' || field === 'busyHours' ? formatHours(totals[field]) : formatCount(totals[field])}
-      {delta(field, totals[field], previousTotals?.[field])}
-    </td>
-  );
 
   return (
     <div className={classes.root}>
@@ -427,73 +562,22 @@ export default function Dashboard({
               </tr>
             ) : (
               visible.map((row) => {
-                const previous = previousByTenant.get(row.tenantId);
-                const status = accountStatusOf(row);
+                const context = {
+                  previous: previousByTenant.get(row.tenantId),
+                  p95Loading: currentP95.status === 'loading',
+                };
                 return (
                   <tr key={row.tenantId}>
                     <th scope="row" className={classes.tenant}>
                       <button type="button" className={classes.tenantButton} onClick={() => setOpened(row)}>
-                        {row.name}
+                        {COMPANY_COLUMN.cell(row, context)}
                       </button>
                     </th>
-                    <td>{row.createdAt ? longDay.format(new Date(row.createdAt)) : '—'}</td>
-                    <td>
-                      {status ? (
-                        <span className={`${classes.badge} ${classes[status.tone]}`}>{status.label}</span>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td>{accountTypeOf(row)}</td>
-                    <td>{billingMethodOf(row)}</td>
-                    <td className={classes.number}>
-                      {formatHours(row.workerHours)}
-                      {delta('workerHours', row.workerHours, previous?.workerHours)}
-                    </td>
-                    <td className={classes.number}>
-                      {formatHours(row.busyHours)}
-                      {delta('busyHours', row.busyHours, previous?.busyHours)}
-                    </td>
-                    <td className={classes.number}>
-                      {formatWorkers(row.minWorkers)}
-                      {delta('minWorkers', row.minWorkers, previous?.minWorkers)}
-                    </td>
-                    <td className={classes.number}>
-                      {formatWorkers(row.maxWorkers)}
-                      {delta('maxWorkers', row.maxWorkers, previous?.maxWorkers)}
-                    </td>
-                    <td className={classes.number}>
-                      {formatWorkers(row.peakWorkers)}
-                      {delta('peakWorkers', row.peakWorkers, previous?.peakWorkers)}
-                    </td>
-                    <td className={classes.number}>
-                      <span className={classes.utilization}>
-                        <span className={classes.bar} aria-hidden="true">
-                          <span
-                            className={classes.fill}
-                            style={{ width: `${Math.min(100, (row.utilization ?? 0) * 100)}%` }}
-                          />
-                        </span>
-                        {formatPercent(row.utilization)}
-                      </span>
-                      {delta('utilization', row.utilization, previous?.utilization)}
-                    </td>
-                    <td className={classes.number}>
-                      {formatWait(row.avgWaitSeconds)}
-                      {delta('avgWaitSeconds', row.avgWaitSeconds, previous?.avgWaitSeconds)}
-                    </td>
-                    <td className={classes.number}>
-                      {currentP95.status === 'loading' ? '…' : formatWait(row.p95WaitSeconds)}
-                      {delta('p95WaitSeconds', row.p95WaitSeconds, previous?.p95WaitSeconds)}
-                    </td>
-                    <td className={classes.number}>
-                      {formatCount(row.sessionsSucceeded)}
-                      {delta('sessionsSucceeded', row.sessionsSucceeded, previous?.sessionsSucceeded)}
-                    </td>
-                    <td className={classes.number}>
-                      {formatCount(row.sessionsFailed)}
-                      {delta('sessionsFailed', row.sessionsFailed, previous?.sessionsFailed)}
-                    </td>
+                    {VALUE_COLUMNS.map((column) => (
+                      <td key={column.key} className={column.numeric ? classes.number : undefined}>
+                        {column.cell(row, context)}
+                      </td>
+                    ))}
                   </tr>
                 );
               })
@@ -503,20 +587,7 @@ export default function Dashboard({
             <tfoot>
               <tr>
                 <th scope="row">{filtering ? 'Total, companies shown' : 'Total, all companies'}</th>
-                <td />
-                <td />
-                <td />
-                <td />
-                {totalCell(totals, 'workerHours')}
-                {totalCell(totals, 'busyHours')}
-                <td />
-                <td />
-                <td />
-                <td />
-                <td />
-                <td />
-                {totalCell(totals, 'sessionsSucceeded')}
-                {totalCell(totals, 'sessionsFailed')}
+                {VALUE_COLUMNS.map((column) => footerCell(totals, column))}
               </tr>
             </tfoot>
           )}

@@ -55,15 +55,53 @@ describe('Dashboard', () => {
 
     expect(screen.getByRole('combobox', { name: 'Period' })).toHaveDisplayValue('October 2026 (current)');
     expect(screen.getByText('Oct 14 – Oct 15, 2026 · to date · 2 companies')).toBeInTheDocument();
-    const [acmeCreated, acmeStatus, acmeType, acmeMethod] = within(rowOf('Acme')).getAllByRole('cell');
+    const [, , , acmeCreated, acmeStatus, acmeType, acmeMethod] = within(rowOf('Acme')).getAllByRole('cell');
     expect(acmeCreated).toHaveTextContent('Mar 9, 2026');
     expect(acmeStatus).toHaveTextContent('Active Customer');
     expect(acmeType).toHaveTextContent('Paid Account');
     expect(acmeMethod).toHaveTextContent('SaaS – Stripe');
-    const [, , globexType, globexMethod] = within(rowOf('Globex')).getAllByRole('cell');
+    const [, , , , , globexType, globexMethod] = within(rowOf('Globex')).getAllByRole('cell');
     expect(globexType).toHaveTextContent('Managed by Aixle');
     expect(globexMethod).toHaveTextContent('—');
     expect(screen.getByRole('button', { name: 'Acme' })).toBeInTheDocument();
+  });
+
+  it('leads with utilization and the waits, keeping the other columns in their order', () => {
+    render(<Dashboard paths={paths} data={data} now={now} />);
+
+    expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
+      'Company',
+      'Utilization',
+      'Average wait',
+      'p95 wait',
+      'Account created',
+      'Account status',
+      'Account type',
+      'Billing method',
+      'Worker hours',
+      'Busy hours',
+      'Min workers',
+      'Max workers',
+      'Peak workers',
+      'Successful sessions',
+      'Failed sessions',
+    ]);
+  });
+
+  it('puts every company and total cell under its own header', () => {
+    render(<Dashboard paths={paths} data={data} now={now} />);
+    const headers = screen.getAllByRole('columnheader').map((header) => header.textContent ?? '');
+    const under = (row: string, header: string) => within(rowOf(row)).getAllByRole('cell')[headers.indexOf(header) - 1];
+
+    expect(under('Acme', 'Utilization')).toHaveTextContent(/^50%/);
+    expect(under('Acme', 'Account created')).toHaveTextContent('Mar 9, 2026');
+    expect(under('Acme', 'Successful sessions')).toHaveTextContent(/^20/);
+    expect(under('Total, all companies', 'Utilization')).toBeEmptyDOMElement();
+    expect(under('Total, all companies', 'Worker hours')).toHaveTextContent(/^144/);
+    expect(under('Total, all companies', 'Busy hours')).toHaveTextContent(/^96/);
+    expect(under('Total, all companies', 'Peak workers')).toBeEmptyDOMElement();
+    expect(under('Total, all companies', 'Successful sessions')).toHaveTextContent(/^58/);
+    expect(under('Total, all companies', 'Failed sessions')).toHaveTextContent(/^4/);
   });
 
   it('sorts by account status', async () => {
@@ -184,7 +222,7 @@ describe('Dashboard', () => {
 
     const globex = within(rowOf('Globex'));
     expect(globex.getAllByText('∞')).toHaveLength(2);
-    const [, , , , workerHours, busyHours, , , , utilization] = globex.getAllByRole('cell');
+    const [utilization, , , , , , , workerHours, busyHours] = globex.getAllByRole('cell');
     expect(workerHours).toHaveTextContent(/^48/);
     expect(busyHours).toHaveTextContent(/^48/);
     expect(utilization).toHaveTextContent(/^100%/);
