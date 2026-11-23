@@ -61,10 +61,18 @@ class SessionsRunsFeed
 
   # Returns a Page whose `entries` are already hydrated and ordered.
   def page(page: 1, limit: 20)
-    pagy = Pagy::Offset.new(count: spine(sorted: false).count(:all), page: page, limit: limit)
-    rows = spine(sorted: true).offset(pagy.offset).limit(pagy.limit)
+    pagy = Pagy::Offset.new(count: count, page: page, limit: limit)
 
-    Page.new(pagy: pagy, entries: hydrate(rows))
+    Page.new(pagy: pagy, entries: entries(offset: pagy.offset, limit: pagy.limit))
+  end
+
+  def count
+    spine(sorted: false).count(:all)
+  end
+
+  # Hydrated and ordered, like a Page's entries, for a caller that pages by offset.
+  def entries(offset:, limit:)
+    hydrate(spine(sorted: true).offset(offset).limit(limit))
   end
 
   # Distinct users who own something in this project's feed — the User filter's

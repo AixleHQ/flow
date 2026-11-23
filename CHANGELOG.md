@@ -22,11 +22,12 @@ governance, community health — carry none.
   with the drawer's tabs and the properties beside the description. **Open as page** in the
   task drawer goes there, and the drawer's new **Copy link** button copies that address.
   The page opens archived tasks too.
-- **Sessions & Runs**: agents using personal access can page through every session they can
-  see with `list_sessions` (`offset`, `total`, `has_more`) instead of stopping at the latest
-  100, filter and sort it as the Sessions & Runs list does (dates, status, kind, agent, owner,
-  workflow, prompt text; by tokens, cost or duration), and read the tokens and cost summed
-  over every match.
+- **Sessions & Runs**: agents using personal access can page through every session and
+  workflow run they can see with `list_sessions` and `list_workflow_runs` (`offset`, `total`,
+  `has_more`), no longer stopping at the latest 100. Both take the Sessions & Runs filters
+  (dates, status, agent, owner, workflow, search) and its sort by tokens, cost or duration.
+  `list_sessions` also returns the tokens and cost summed over every match, and run rows
+  carry each run's tokens and cost. Agent logins and tool setups are no longer listed.
 
 ### Fixed
 - The `flow-web` image runs Ruby 4.0.10, which fixes the seven memory-safety bugs in

@@ -2,6 +2,8 @@
 
 module PersonalTools
   class ListSessions < Base
+    include SessionListSupport
+
     STATE_FILTERS = {
       "active" => %w[not_started queued running ready finishing],
       "pending" => %w[not_started],
@@ -13,11 +15,7 @@ module PersonalTools
       "all" => nil
     }.freeze
     SESSION_TYPES = TerminalSession::WORK_SESSION_TYPES
-    DIRECTIONS = %w[asc desc].freeze
     TOKEN_COLUMNS = %w[total_tokens input_tokens output_tokens cache_read_tokens cache_write_tokens cost_cents].freeze
-
-    DEFAULT_LIMIT = 25
-    MAX_LIMIT = 100
 
     tool do
       display_name "List Sessions"
@@ -46,22 +44,13 @@ module PersonalTools
       param :user_id, type: :integer, description: "Only sessions this user owns (a row's `owner_id`)."
       param :workflow_id, type: :integer, description: "Only the step sessions of this workflow's runs."
       param :search, type: :string, description: "Words from the prompt the session was started with."
-      param :created_from, type: :string,
-                           description: "Only sessions created on or after this day, YYYY-MM-DD (UTC)."
-      param :created_until, type: :string,
-                            description: "Only sessions created on or before this day, YYYY-MM-DD (UTC)."
-      param :sort, type: :string, description: "Sort column (default created_at). Rows with no value sort last.",
-                   enum: SessionListSort::FIELDS
-      param :direction, type: :string, description: "Sort direction (default desc).", enum: DIRECTIONS
-      param :limit, type: :integer, description: "Rows per page (default 25, cap 100)."
-      param :offset, type: :integer,
-                     description: "Rows to skip before the page starts (default 0). Page on with " \
-                                  "offset + limit while `has_more` is true."
+      SessionListSupport.declare_params(self, "sessions")
     end
 
     def execute
       state = (params[:state].presence || "active").to_s
-      refusal = invalid_param(state)
+      refusal = list_param_refusal(state: [ state, STATE_FILTERS.keys ],
+                                   session_type: [ params[:session_type], SESSION_TYPES ])
       return error(refusal) if refusal
       if params[:company_id].present? && membership_company_ids.exclude?(params[:company_id].to_i)
         raise NotFoundError, "Company #{params[:company_id]} not found"
@@ -69,53 +58,23 @@ module PersonalTools
 
       project = params[:project_id].present? ? find_project! : nil
       sessions = filtered(project, state)
-      sort = SessionListSort.new("#{params[:sort].presence || SessionListSort::DEFAULT_FIELD} #{params[:direction]}")
-      limit = requested_limit
-      offset = requested_offset
+      sort = requested_sort
       total, *sums = sessions.pick(Arel.sql("COUNT(*)"),
                                    *TOKEN_COLUMNS.map { |c| Arel.sql("COALESCE(SUM(terminal_sessions.#{c}), 0)") })
       page = sessions.includes(:user, :session_admission)
                      .order(sort.order(sort.column(TerminalSession)), created_at: :desc, id: :desc)
-                     .limit(limit).offset(offset).to_a
+                     .limit(requested_limit).offset(requested_offset).to_a
 
       success(
         state: state,
         project_id: project&.id,
-        sort: sort.to_s,
-        total: total,
-        limit: limit,
-        offset: offset,
-        has_more: offset + page.size < total,
+        **page_fields(total: total, rows: page, sort: sort),
         totals: TOKEN_COLUMNS.zip(sums.map(&:to_i)).to_h,
         sessions: page.map { |session| row(session) }
       )
     end
 
     private
-
-    def invalid_param(state)
-      enums = { state: [ state, STATE_FILTERS.keys ], session_type: [ params[:session_type], SESSION_TYPES ],
-                sort: [ params[:sort], SessionListSort::FIELDS ], direction: [ params[:direction], DIRECTIONS ] }
-      enums.each do |name, (value, allowed)|
-        next if value.blank? || allowed.include?(value.to_s)
-
-        return "Unknown #{name} '#{value}' — use one of: #{allowed.join(', ')}"
-      end
-      %i[created_from created_until].each do |name|
-        next if params[name].blank? || TerminalSession.parse_filter_date(params[name])
-
-        return "#{name} must be a day as YYYY-MM-DD, got '#{params[name]}'"
-      end
-      nil
-    end
-
-    def requested_limit
-      params[:limit].present? ? params[:limit].to_i.clamp(1, MAX_LIMIT) : DEFAULT_LIMIT
-    end
-
-    def requested_offset
-      [ params[:offset].to_i, 0 ].max
-    end
 
     def filtered(project, state)
       scope = readable_sessions.visible_to(user)

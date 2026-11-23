@@ -127,13 +127,16 @@ When a run misbehaves, `get_step_run` returns that step's error, retry
 history and container-session diagnostics — the same detail the run page
 shows.
 
-`list_sessions` filters, sorts and pages like the **Sessions & Runs** list:
-by company, project, status, kind (agent session or workflow step), agent,
-owner, workflow, prompt text and creation dates, sorted by date, cost,
-tokens or duration. It returns one page at a time (`limit`, `offset`, with
-`total` and `has_more`), and `totals` sums tokens and cost over every
-matching session — so "which sessions spent our tokens last week" is
-`state: "all"` with `created_from` / `created_until` and `sort: "total_tokens"`.
+`list_sessions` and `list_workflow_runs` filter, sort and page like the
+**Sessions & Runs** list. Sessions filter by company, project, status, kind
+(agent session or workflow step), agent, owner, workflow, prompt text and
+creation dates; runs by workflow, status, who started them, agent, workflow
+name and creation dates. Both sort by date, cost, tokens or duration and return
+one page at a time (`limit`, `offset`, with `total` and `has_more`). A run's row
+carries its tokens and cost, summed over its steps, and `list_sessions` adds
+`totals` over every matching session. To find which sessions spent the most
+tokens last week, pass `state: "all"`, `created_from` / `created_until` and
+`sort: "total_tokens"`.
 
 Teams are covered too: `list_project_teams`, `create_project_team`,
 `update_project_team` and `delete_project_team` manage a project's teams;
