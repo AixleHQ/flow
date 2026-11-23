@@ -56,8 +56,13 @@ module ContextBuilders
 
         > #{trigger_message.to_s.gsub("\n", "\n> ")}
 
-        #{reply_hint}
+        #{[ message_link, reply_hint ].compact.join("\n\n")}
       MD
+    end
+
+    def message_link
+      url = chat_origin["url"]
+      "Link to this message: #{url}" if url.present?
     end
 
     # What the tool descriptions cannot say: which rich format this thread takes.

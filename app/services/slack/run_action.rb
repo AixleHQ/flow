@@ -79,7 +79,8 @@ module Slack
           "channel" => context["channel"], "team" => team, "user" => user_id,
           "thread_id" => thread_ts, "thread_ts" => thread_ts, "message_id" => context["message_ts"] || thread_ts,
           "ts" => context["message_ts"] || thread_ts, "actor" => { "id" => user_id, "aixle_user_id" => user.id },
-          "text" => text
+          "text" => text,
+          "url" => Chat::SlackProvider.message_url(context["channel"], context["message_ts"] || thread_ts, thread_ts)
         }
       )
     rescue Chat::RunStarter::Refused

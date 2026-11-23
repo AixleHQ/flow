@@ -131,7 +131,7 @@ module Webhooks
             "chat" => has_entries("provider" => "slack", "conversation" => { "id" => "C1", "type" => "channel" },
                                   "message_id" => "111.222", "thread_id" => "111.222", "workspace_id" => "T1",
                                   "integration_id" => integration.id, "text" => "run report",
-                                  "actor" => { "id" => "U1" })
+                                  "actor" => { "id" => "U1" }, "url" => "https://slack.com/archives/C1/p111222")
           )
         )
       ).once.returns(build(:workflow_run))
@@ -156,7 +156,8 @@ module Webhooks
         has_entries(shared_context: has_entries(
           "chat" => has_entries("provider" => "slack", "conversation" => { "id" => "C1", "type" => "channel" },
                                 "thread_id" => "3.1", "message_id" => "3.4", "actor" => { "id" => "U1" },
-                                "workspace_id" => "T1", "text" => "<@B> go")
+                                "workspace_id" => "T1", "text" => "<@B> go",
+                                "url" => "https://slack.com/archives/C1/p34?thread_ts=3.1&cid=C1")
         ))
       ).once.returns(build(:workflow_run))
 
