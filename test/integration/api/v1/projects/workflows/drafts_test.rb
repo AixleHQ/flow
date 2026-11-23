@@ -70,6 +70,22 @@ class Api::V1::Projects::Workflows::DraftsTest < ActionDispatch::IntegrationTest
     assert_nil @workflow.reload.open_draft
   end
 
+  test "the history marks the version a draft was applied as" do
+    draft = open_draft
+    put api_v1_project_workflow_aggregate_path(@project, draft),
+        params: { base_version: draft.current_version_number,
+                  aggregate: { name: "Release", steps: [ { id: draft.steps.sole.id, name: "Compile" } ] } }, as: :json
+    post apply_api_v1_project_workflow_draft_path(@project, @workflow), as: :json
+    applied = response.parsed_body["currentVersionNumber"]
+
+    get api_v1_project_entity_versions_path(@project, versionable_type: "Workflow", versionable_id: @workflow.id)
+
+    marks = response.parsed_body["versions"].to_h { |version| [ version["number"], version["appliedFromDraft"] ] }
+    assert marks.delete(applied)
+    assert marks.any?
+    assert_not marks.values.any?
+  end
+
   test "discard closes the draft and leaves the live workflow untouched" do
     draft = open_draft
 

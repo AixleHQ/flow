@@ -1374,6 +1374,7 @@ describe('Projects/Workflows/BuilderPage', () => {
       restoredFromNumber: null,
       baseline: false,
       duplicatedFromId: null,
+      appliedFromDraft: false,
       disabledTriggerIds: [],
     });
     answerFetch({

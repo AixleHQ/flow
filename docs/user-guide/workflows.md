@@ -197,11 +197,14 @@ workflow runs the new version from then on. To try a change first, work in a
 - **Test run** starts the draft like any run. It is a real run — its agents push,
   comment and message with your credentials — except that a card it moves into
   a column does not start that column's workflow. Choose the custom mode in the
-  run drawer to start each step yourself.
+  run drawer to start each step yourself. The run page says it ran the draft and
+  gives the draft's own version numbers (`draft v2`), which are not the live
+  workflow's.
 - **What will change** compares the draft with the live workflow.
 - **Apply** makes the draft the live workflow, as one new version, and closes
-  the draft. If someone saved the live workflow after the draft was made, Apply
-  says so first: **Apply anyway** replaces their change too.
+  the draft. The version history marks that version **Applied from draft**. If
+  someone saved the live workflow after the draft was made, Apply says so first:
+  **Apply anyway** replaces their change too.
 - **Discard draft** closes it and leaves the live workflow as it was.
 
 A workflow has at most one draft, shared by everyone who can edit the workflow.
