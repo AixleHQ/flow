@@ -13,6 +13,8 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-11-23
+
 ### Added
 - **Tasks**: a workflow agent can put the card it moves at a chosen place in the column
   (`position`, 0 = top) instead of always at the bottom.
@@ -38,10 +40,14 @@ governance, community health — carry none.
   Ruby's strings and regular expressions announced on 2026-11-18 (among them
   GHSA-34m4-m9fh-gqp5). One of them lets anyone who can reach the server run code on it
   without signing in. Self-hosted installations: upgrade to this release.
+- The `flow-web` image runs Puma 8.1.2, which fixes seven advisories in Puma 8.0.2 (among
+  them GHSA-m5xw-3hrw-qcmf). Puma now answers `400` to a request without a `Host` header or
+  with an unescaped `{`, `}`, `` ` `` or `\` in its path.
 - **Sessions & Runs**: an automatic step whose agent CLI exits — because it refused its
-  model or a flag, crashed, or quit — now fails within a minute or two with the CLI's own
-  message, such as `Cannot use this model: …`. It used to sit at an idle shell until someone
-  cancelled the run, or fail after 30 minutes saying it may be blocked on a prompt.
+  model or a flag, crashed, quit, or was killed — now fails within a minute or two with the
+  CLI's own message, such as `Cannot use this model: …`, or the signal that killed it. It
+  used to sit at an idle shell until someone cancelled the run, or fail after 30 minutes
+  saying it may be blocked on a prompt.
 - **Workflows**: a Grok account signed in with grok.com sees its own models in the model
   pickers. The picker used to fall back to a fixed list the account could not use, and the
   step then ran Grok's default model instead. A Grok or Antigravity step whose model the
@@ -79,9 +85,26 @@ governance, community health — carry none.
 - **Tasks**: the tooltip of a task in a collapsed column wraps within a bounded width and shows
   the status on its own line, so a long title stays on screen. The time in `Running — …` and
   `Waiting — …` counts up while the tooltip is open.
+- Runners: a machine whose Docker daemon is down now checks in and shows **Failed**
+  with the reason, instead of showing Offline while its service restarts in a loop.
+  The runner no longer exits when Docker is unreachable: it waits for Docker with
+  a growing delay, and reports the machine again once Docker answers. Press
+  **Return to service** on the machine to bring it back to idle.
+- Runners: a session waiting for a machine of its runner keeps waiting while the machine is
+  offline, and starts when it is back, instead of failing after about 90 seconds. It fails with
+  the "has no machine online" message once no machine has been heard for 15 minutes. A new
+  launch with no machine online still fails at once.
+- Runners: on a `manual` machine under the `reuse` policy, a session fetches a
+  repository checkout the scrub kept and puts it on the repository's source
+  branch at the remote's current tip, instead of failing to clone into the
+  existing directory and working on a stale checkout. A path that holds
+  another repository or a broken clone is cloned again. A kept checkout keeps
+  only its objects and refs: its config and hooks are rebuilt, never reused.
+- Runners: runner sessions record their tokens and cost. Claude Code, Gemini CLI, Codex,
+  Kiro CLI, Copilot CLI and Grok sessions on a machine got no telemetry endpoint, so they
+  showed no usage.
 
 ### Changed
-
 - **Docs**: *Session queues* describes workers as the company's own number,
   set on Settings → General, instead of an installation ceiling, and gains a
   *Prioritising projects* section: how reserving workers keeps the projects that
@@ -128,18 +151,6 @@ governance, community health — carry none.
   levels in Codex. A Grok step that stops on its "free Grok Build usage limit" message
   fails with that message instead of waiting for the no-output watchdog. Gemini CLI stays at 0.60.0: 0.70.0 still stops `--yolo` at a prompt
   when the agent edits a build file or runs a workspace script.
-
-### Fixed
-
-- Runners: a machine whose Docker daemon is down now checks in and shows **Failed**
-  with the reason, instead of showing Offline while its service restarts in a loop.
-  The runner no longer exits when Docker is unreachable: it waits for Docker with
-  a growing delay, and reports the machine again once Docker answers. Press
-  **Return to service** on the machine to bring it back to idle.
-- Runners: a session waiting for a machine of its runner keeps waiting while the machine is
-  offline, and starts when it is back, instead of failing after about 90 seconds. It fails with
-  the "has no machine online" message once no machine has been heard for 15 minutes. A new
-  launch with no machine online still fails at once.
 
 ## [1.16.0] - 2026-11-19
 
@@ -293,14 +304,6 @@ governance, community health — carry none.
   for a slot released seconds before the check and still being handed on, or an
   error for an agent login that expired while a step waited for its slot; the
   step already tells its owner to sign in again.
-
-### Fixed
-- Runners: on a `manual` machine under the `reuse` policy, a session fetches a
-  repository checkout the scrub kept and puts it on the repository's source
-  branch at the remote's current tip, instead of failing to clone into the
-  existing directory and working on a stale checkout. A path that holds
-  another repository or a broken clone is cloned again. A kept checkout keeps
-  only its objects and refs: its config and hooks are rebuilt, never reused.
 
 ## [1.15.0] - 2026-11-14
 
@@ -1728,7 +1731,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.16.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.17.0...develop
+[1.17.0]: https://github.com/AixleHQ/flow/compare/v1.16.0...v1.17.0
 [1.16.0]: https://github.com/AixleHQ/flow/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/AixleHQ/flow/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/AixleHQ/flow/compare/v1.13.1...v1.14.0
