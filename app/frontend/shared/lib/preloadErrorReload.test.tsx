@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { notifications } from '@mantine/notifications';
+import * as Sentry from '@sentry/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { act, renderPage, screen, userEvent } from 'test/renderPage';
@@ -12,8 +13,8 @@ const RELOAD_AT_KEY = 'vitePreloadReloadedAt';
 
 // Dispatch synchronously updates the global Mantine notifications store, which
 // re-renders the mounted <Notifications>; wrap it in act() to keep React happy.
-const dispatchPreloadError = () => {
-  const event = new Event('vite:preloadError', { cancelable: true });
+const dispatchPreloadError = (payload?: Error) => {
+  const event = Object.assign(new Event('vite:preloadError', { cancelable: true }), { payload });
   act(() => {
     window.dispatchEvent(event);
   });
@@ -136,5 +137,80 @@ describe('registerPreloadErrorReload', () => {
 
     expect(reloadSpy).toHaveBeenCalledTimes(1);
     secondCleanup();
+  });
+});
+
+describe('reporting a chunk that still fails after a reload', () => {
+  let unregister: () => void;
+  let sent: Sentry.ErrorEvent[];
+
+  beforeEach(() => {
+    window.sessionStorage.clear();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...window.location, reload: vi.fn(), assign: vi.fn() },
+    });
+    sent = [];
+    Sentry.init({
+      dsn: 'https://public@o1.ingest.sentry.io/1',
+      defaultIntegrations: false,
+      sendClientReports: false,
+      beforeSend: (event) => {
+        sent.push(event);
+        return null;
+      },
+    });
+    window.sessionStorage.setItem(RELOAD_AT_KEY, String(Date.now()));
+    unregister = registerPreloadErrorReload();
+  });
+
+  afterEach(async () => {
+    unregister?.();
+    await Sentry.getClient()?.close();
+  });
+
+  it('reports the path of the failed chunk, without host, query or fragment', () => {
+    dispatchPreloadError(
+      new Error('Failed to fetch dynamically imported module: https://static.example.com/vite/assets/X-abc.js?v=1#x'),
+    );
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0].message).toBe('A page chunk still failed to load after a reload');
+    expect(sent[0].level).toBe('warning');
+    expect(sent[0].tags).toEqual({ chunk_kind: 'js' });
+    expect(sent[0].extra).toEqual({
+      error: 'Failed to fetch dynamically imported module: https://static.example.com/vite/assets/X-abc.js?v=1#x',
+      failedChunk: '/vite/assets/X-abc.js',
+      online: true,
+      visibilityState: 'visible',
+    });
+  });
+
+  it('marks a stylesheet that failed to preload as css', () => {
+    dispatchPreloadError(new Error('Unable to preload CSS for /vite/assets/BoardPage-def.css'));
+
+    expect(sent[0].tags).toEqual({ chunk_kind: 'css' });
+    expect(sent[0].extra?.failedChunk).toBe('/vite/assets/BoardPage-def.css');
+  });
+
+  it('still reports an error whose message names no asset', () => {
+    dispatchPreloadError(new Error('Importing a module script failed.'));
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0].tags).toBeUndefined();
+    expect(sent[0].extra).toEqual({
+      error: 'Importing a module script failed.',
+      online: true,
+      visibilityState: 'visible',
+    });
+  });
+
+  it('reports only once per page load', () => {
+    dispatchPreloadError(new Error('Failed to fetch dynamically imported module: /vite/assets/X-abc.js'));
+    dispatchPreloadError(new Error('Failed to fetch dynamically imported module: /vite/assets/Y-abc.js'));
+    dispatchPreloadError(new Error('Failed to fetch dynamically imported module: /vite/assets/Z-abc.js'));
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0].extra?.failedChunk).toBe('/vite/assets/X-abc.js');
   });
 });

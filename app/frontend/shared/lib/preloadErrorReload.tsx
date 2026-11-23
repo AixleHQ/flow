@@ -75,12 +75,37 @@ const showLoadFailedPrompt = (): void => {
   });
 };
 
+const ASSET_URL = /(?:https?:\/\/|\/)[^\s'"]+/;
+const ASSET_EXTENSION = /\.(?:m?js|css)$/;
+
+// Sentry's server-side scrubbing shows `extra.error` as [Filtered] (PALAD-AI-FRONTEND-1E),
+// so the failing file goes out again on its own, as a bare asset path: only a path that
+// ends in a script or stylesheet extension, never a host, query or fragment.
+const failedChunkPath = (message: string): string | null => {
+  const match = ASSET_URL.exec(message);
+  if (!match) return null;
+  try {
+    const { pathname } = new URL(match[0], window.location.origin);
+    return ASSET_EXTENSION.test(pathname) ? pathname : null;
+  } catch {
+    return null;
+  }
+};
+
 const reportStuckChunk = (payload: unknown): void => {
   if (reportedStuck) return;
   reportedStuck = true;
+  const message = payload instanceof Error ? payload.message : String(payload);
+  const failedChunk = failedChunkPath(message);
   Sentry.captureMessage('A page chunk still failed to load after a reload', {
     level: 'warning',
-    extra: { error: payload instanceof Error ? payload.message : String(payload) },
+    tags: failedChunk ? { chunk_kind: failedChunk.endsWith('.css') ? 'css' : 'js' } : undefined,
+    extra: {
+      error: message,
+      ...(failedChunk && { failedChunk }),
+      online: navigator.onLine,
+      visibilityState: document.visibilityState,
+    },
   });
 };
 
