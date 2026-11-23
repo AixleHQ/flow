@@ -49,11 +49,14 @@ paths = [
 ]
 
 [[allowlists]]
-description = "Admin dashboard table columns: a sort key named after its field (`key: 'p95WaitSeconds'`), not a credential"
+description = "Admin dashboard table columns: a sort key named after its field (`key: 'p95WaitSeconds'`, inline or on its own line of a column), not a credential"
 condition = "AND"
 paths = ['''^app/frontend/pages/Admin/Dashboard/Dashboard\.tsx$''']
 regexTarget = "line"
-regexes = ['''^\s*\{ key: '[A-Za-z0-9]+', label: '[^']+' \},$''']
+regexes = [
+  '''^\s*\{ key: '[A-Za-z0-9]+', label: '[^']+'(?:, cell: .*)? \},$''',
+  '''^\s*key: '[A-Za-z0-9]+',$''',
+]
 
 [[allowlists]]
 description = "Runner protocol spec: the example environment `key` of a register response (`aixle-r<runner id>-<hex>`), an identifier, not a credential. The spec was first committed as runner-protocol/PROTOCOL.md, and the scan reads every commit of a pull request, so both paths match"

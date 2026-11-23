@@ -149,7 +149,9 @@ and are taken as stated. The chart must have, before phase 4 is validated on sta
 
 - `/healthz`: the process serves. `/readyz`: the Redis subscription of §8.1 is live and the last
   reconcile pass (§8.3) is not older than three intervals. It does not depend on Rails being up:
-  a Rails outage must not take down the terminals already open.
+  a Rails outage must not take down the terminals already open. The admin port serves only these two
+  and `/metrics`, all `GET`: nothing on it changes state. A drain comes from SIGTERM (`server.Drain()`, then
+  30 s); a manual drain is a restart (`kubectl rollout restart deployment/runner-relay`).
 - **Metrics** (Prometheus): `runner_relay_machines_connected`, `runner_relay_streams_open{surface}`,
   `runner_relay_bytes_total{direction}`, `runner_relay_frames_total{type}`, `runner_relay_stream_resets_total{code}`,
   `runner_relay_tunnel_connects_total{result}` (ok, bad_ticket, replayed, version),
@@ -375,7 +377,7 @@ There is **no per-IP limit** on new tunnel connections (Alex, 2026-11-19). After
   answer the latter.
 - `GOAWAY` tells the runner to finish its open streams (the relay accepts no new `OPEN` on this
   connection) and reconnect; the relay closes the connection when the last stream ends or after 30 s.
-  The relay sends it on shutdown, on `replaced`, and when a drain is requested from the admin port.
+  The relay sends it on shutdown (SIGTERM) and on `replaced`.
 - WebSocket close codes: 1000 normal, 1002 protocol, 1009 too large, 1013 try again, 4000 `replaced`,
   4001 `revoked` (the machine no longer holds a session, or is revoked), 4002 `ticket`.
 

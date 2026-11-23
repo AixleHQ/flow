@@ -28,6 +28,7 @@ async function openAcme(
     [`GET ${paths.base}/waits.json`]: [],
   });
   render(<Dashboard paths={paths} data={data} now={now} timeZone="America/New_York" />);
+  await userEvent.click(screen.getByRole('button', { name: 'Month' }));
   await userEvent.click(screen.getByRole('button', { name: 'Acme' }));
   const dialog = within(screen.getByRole('dialog', { name: 'Acme' }));
   return { dialog, fetchSpy };

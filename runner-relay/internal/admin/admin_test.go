@@ -12,12 +12,10 @@ import (
 )
 
 type fake struct {
-	ready   error
-	drained int
+	ready error
 }
 
 func (f *fake) Ready(context.Context) error { return f.ready }
-func (f *fake) Drain()                      { f.drained++ }
 
 func call(h http.Handler, method, path string) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
@@ -59,13 +57,19 @@ func TestMetricsServesPrometheusText(t *testing.T) {
 	}
 }
 
-func TestDrainIsAPostAndCallsTheService(t *testing.T) {
-	svc := &fake{}
-	h := Handler(svc, prometheus.NewRegistry())
-	if rec := call(h, "GET", "/drain"); rec.Code != http.StatusMethodNotAllowed || svc.drained != 0 {
-		t.Fatalf("GET /drain = %d, drained %d", rec.Code, svc.drained)
+func TestAdminServesOnlyTheThreeGetRoutes(t *testing.T) {
+	h := Handler(&fake{}, prometheus.NewRegistry())
+	for _, path := range []string{"/healthz", "/readyz", "/metrics"} {
+		if rec := call(h, "GET", path); rec.Code != http.StatusOK {
+			t.Fatalf("GET %s = %d", path, rec.Code)
+		}
+		if rec := call(h, "POST", path); rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("POST %s = %d, want 405", path, rec.Code)
+		}
 	}
-	if rec := call(h, "POST", "/drain"); rec.Code != http.StatusAccepted || svc.drained != 1 {
-		t.Fatalf("POST /drain = %d, drained %d", rec.Code, svc.drained)
+	for _, method := range []string{"GET", "POST", "PUT", "DELETE"} {
+		if rec := call(h, method, "/drain"); rec.Code != http.StatusNotFound {
+			t.Fatalf("%s /drain = %d, want 404", method, rec.Code)
+		}
 	}
 }
