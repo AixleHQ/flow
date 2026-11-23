@@ -23,6 +23,9 @@ governance, community health — carry none.
   in it has an active run.
 - **Wrappers**: a wrapper with a parameter named like `max`, `min`, `count` or `size` runs
   again. Every call to it used to hang until it timed out after an hour.
+- **Triggers & gates**: a run started from a Slack message links back to that message, in
+  its thread when the message was a reply: the run page shows the link, and the agent gets
+  it, so a card it creates links to the right message.
 
 ## [1.17.0] - 2026-11-23
 

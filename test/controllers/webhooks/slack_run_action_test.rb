@@ -77,7 +77,8 @@ class Webhooks::SlackRunActionTest < ActionDispatch::IntegrationTest
     WorkflowService.expects(:enqueue).with(has_entries(
       user: @user, shared_context: has_entries("chat" => has_entries(
         "provider" => "slack", "thread_id" => "1700000000.000100",
-        "text" => "Customer Acme asks for the Q3 digest\n\nNotes: for the board"
+        "text" => "Customer Acme asks for the Q3 digest\n\nNotes: for the board",
+        "url" => "https://slack.com/archives/C1/p1700000000000100"
       ))
     )).once.returns(run)
     WorkflowService.stubs(:dispatch_or_leave_to_relay)
