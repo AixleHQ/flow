@@ -8,7 +8,7 @@ class Web::Company::Projects::TriggersController < Web::Company::Projects::Appli
   def index
     render inertia: "Projects/Triggers/TriggersPage", props: {
       project: project_props,
-      workflows: current_project.workflows.active.order(:name).map { |w| { id: w.id, name: w.name } },
+      workflows: current_project.workflows.active.not_drafts.order(:name).map { |w| { id: w.id, name: w.name } },
       board_columns: current_project.board&.board_columns&.includes(column_workflow_binding: :workflow)&.order(:position)&.map { |c|
         { id: c.id, name: c.name, bound_workflow_name: c.column_workflow_binding&.workflow&.name }
       } || [],

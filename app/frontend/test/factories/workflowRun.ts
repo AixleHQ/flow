@@ -31,6 +31,7 @@ export const buildWorkflowRun = (overrides: Partial<WorkflowRun> = {}): Workflow
   // optional (?) computed attributes — realistic values, no compile-time guarantee.
   // failedAccountName is `string | undefined` (not nullable): omit for "absent".
   workflowName: 'Nebula Pipeline',
+  draftTest: false,
   userName: 'Dana Operator',
   agentType: 'codex',
   ...overrides,

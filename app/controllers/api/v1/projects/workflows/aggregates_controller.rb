@@ -19,6 +19,10 @@ module Api
               sub_steps: %i[id name instructions required] }
           ].freeze
 
+          def self.permitted(params)
+            params.require(:aggregate).permit(:name, :description, :runner_id, config: {}, steps: STEP_FIELDS).to_h
+          end
+
           def update
             workflow = current_workflow
             payload = aggregate_params
@@ -49,7 +53,7 @@ module Api
           private
 
           def aggregate_params
-            params.require(:aggregate).permit(:name, :description, :runner_id, config: {}, steps: STEP_FIELDS).to_h
+            self.class.permitted(params)
           end
         end
       end

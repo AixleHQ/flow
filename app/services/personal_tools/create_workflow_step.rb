@@ -89,7 +89,7 @@ module PersonalTools
     def execute
       project = find_project!
       authorize!(project, :update?, policy: Web::Company::Projects::WorkflowsPolicy, project: project)
-      workflow = Workflow.visible_for_project(project).find_by(id: params[:workflow_id])
+      workflow = Workflow.editable_for_project(project).find_by(id: params[:workflow_id])
       return error("Workflow not found in this project") unless workflow
 
       position = params[:position] || (workflow.steps.maximum(:position).to_i + 1)

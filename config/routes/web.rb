@@ -283,6 +283,10 @@ namespace :api, defaults: { format: :json } do
             resource :aggregate, only: %i[update] do
               post :check
             end
+            resource :draft, only: %i[create destroy] do
+              get :changes
+              post :apply
+            end
           end
         end
 
@@ -679,6 +683,7 @@ scope module: :web, defaults: { format: :html } do
         resources :workflows, only: %i[index create update destroy] do
           member do
             get :builder
+            get :draft
             post :publish
             post :unpublish
             post :duplicate

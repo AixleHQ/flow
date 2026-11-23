@@ -7,7 +7,8 @@ module PersonalTools
       description "Return a workflow's full definition: base resources, steps, sub-steps, agents, " \
                   "dependencies. Step and sub-step instructions come back complete — use " \
                   "get_workflow_step for one step's remaining wiring (retries, failure and skip " \
-                  "policy, preferred model, asset specs)."
+                  "policy, preferred model, asset specs). draft_workflow_id names the workflow's open " \
+                  "draft; on a draft, draft_of_workflow_id names the live workflow."
       audience :user
       tags :workflows
       read_only
@@ -18,12 +19,13 @@ module PersonalTools
     def execute
       project = find_project!
       authorize!(project, :show?, policy: Web::Company::Projects::WorkflowsPolicy, project: project)
-      workflow = Workflow.visible_for_project(project).find_by(id: params[:workflow_id])
+      workflow = Workflow.editable_for_project(project).find_by(id: params[:workflow_id])
       return error("Workflow not found in this project") unless workflow
 
       steps = workflow.steps.not_deleted.includes(:agent, :resource_links).order(:position).map { |step| step_view(step) }
       success(id: workflow.id, name: workflow.name, description: workflow.description,
               published_at: workflow.published_at, current_version_number: workflow.current_version_number,
+              draft_workflow_id: workflow.open_draft&.id, draft_of_workflow_id: workflow.draft_of_id,
               base_tool_ids: workflow.base_tool_ids, base_skill_ids: workflow.base_skill_ids,
               base_mcp_server_ids: workflow.base_mcp_server_ids,
               base_repository_ids: workflow.base_repository_ids,
