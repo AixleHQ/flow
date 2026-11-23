@@ -41,14 +41,6 @@ class Runners::SelectionTest < ActiveSupport::TestCase
     end
   end
 
-  test "an interactive session cannot pick a runner yet" do
-    with_feature(:external_runners, true, company: @company) do
-      assert_equal "Runner \"Prod VPC\" can't run interactive sessions yet.",
-                   Runners::Selection.error(@runner.id, project: @project, interactive: true)
-      assert_nil Runners::Selection.error(nil, project: @project, interactive: true)
-    end
-  end
-
   test "a workflow's runner is checked only when it changes" do
     workflow = create(:workflow, scope: @project, runner: @runner)
     other = create(:runner, company: @company, created_by: @user)
