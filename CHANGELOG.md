@@ -22,6 +22,10 @@ governance, community health — carry none.
   with the drawer's tabs and the properties beside the description. **Open as page** in the
   task drawer goes there, and the drawer's new **Copy link** button copies that address.
   The page opens archived tasks too.
+- **Admin**: the dashboard has an **Average workers** tile: how many workers the companies
+  shown were offered on average over the selected period, which is what they are billed for,
+  split into paying, trial and managed, with the change from the period before. A managed
+  company without a worker limit counts at the most workers it ran at once.
 
 ### Fixed
 - The `flow-web` image runs Ruby 4.0.10, which fixes the seven memory-safety bugs in

@@ -10,6 +10,8 @@ export const formatCount = (value: number) => whole.format(value);
 
 export const formatWorkers = (value: number) => (Number.isFinite(value) ? whole.format(value) : '∞');
 
+export const formatAverageWorkers = (value: number) => (value > 0 && value < 0.05 ? '<0.1' : tenths.format(value));
+
 export const formatPercent = (ratio: number | null) => (ratio === null ? '—' : `${Math.round(ratio * 100)}%`);
 
 export function formatWait(seconds: number | null): string {

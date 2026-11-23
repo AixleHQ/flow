@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildTenant, buildUsageDay } from 'test/factories/adminDashboard';
 
-import { comparisonRange, deltaOf, mondayOf, periodsFor, rangeOf, summarize, withP95 } from './aggregate';
+import { comparisonRange, deltaOf, mondayOf, periodsFor, rangeOf, summarize, withP95, workersOf } from './aggregate';
 
 const tenants = [buildTenant()];
 
@@ -154,6 +154,51 @@ describe('summarize', () => {
   });
 });
 
+describe('workersOf', () => {
+  const twoDays = { start: '2026-10-13', end: '2026-10-14' };
+
+  it("averages the workers offered over the period's hours, split by each day's billing class", () => {
+    const days = [
+      buildUsageDay({ day: '2026-10-13', offeredSeconds: 1 * 24 * 3600, billingClass: 'trial' }),
+      buildUsageDay({ day: '2026-10-14', offeredSeconds: 3 * 24 * 3600, billingClass: 'paying' }),
+      buildUsageDay({ companyId: 2, day: '2026-10-13', offeredSeconds: 2 * 24 * 3600, billingClass: 'managed' }),
+      buildUsageDay({ companyId: 2, day: '2026-10-14', offeredSeconds: 2 * 24 * 3600, billingClass: 'managed' }),
+    ];
+
+    expect(workersOf(days, twoDays, new Set([1, 2]))).toEqual({ paying: 1.5, trial: 0.5, managed: 2, unbilled: 0 });
+  });
+
+  it('counts a company offered nothing for want of a limit at the most workers it held at once', () => {
+    const unlimited = { offeredSeconds: 0, unlimitedSeconds: 24 * 3600, limitMin: null, limitMax: null };
+    const days = [
+      buildUsageDay({ ...unlimited, day: '2026-10-13', peakWorkers: 5, billingClass: 'managed' }),
+      buildUsageDay({ ...unlimited, day: '2026-10-14', peakWorkers: 3, billingClass: 'managed' }),
+      buildUsageDay({ ...unlimited, companyId: 2, peakWorkers: 2, billingClass: 'unlimited' }),
+    ];
+
+    expect(workersOf(days, twoDays, new Set([1, 2]))).toEqual({ paying: 0, trial: 0, managed: 5, unbilled: 2 });
+  });
+
+  it("counts only the companies asked for, over every company's hours", () => {
+    const days = [
+      buildUsageDay({ day: '2026-10-13' }),
+      buildUsageDay({ companyId: 2, day: '2026-10-14', billingClass: 'trial' }),
+    ];
+
+    expect(workersOf(days, twoDays, new Set([1]))).toEqual({ paying: 2, trial: 0, managed: 0, unbilled: 0 });
+  });
+
+  it('averages a day still under way over the hours measured so far', () => {
+    const days = [buildUsageDay({ hours: 6, offeredSeconds: 4 * 6 * 3600 })];
+
+    expect(workersOf(days, twoDays, new Set([1]))?.paying).toBe(4);
+  });
+
+  it('has nothing to say about a period with no measured hours', () => {
+    expect(workersOf([buildUsageDay({ day: '2026-10-20' })], twoDays, new Set([1]))).toBeNull();
+  });
+});
+
 describe('deltaOf', () => {
   it('reports utilization in points and marks a rise as better', () => {
     expect(deltaOf('utilization', 0.62, 0.5)).toEqual({ text: '▲ +12 pts', tone: 'good' });
@@ -171,6 +216,11 @@ describe('deltaOf', () => {
   it('counts workers rather than taking a percentage', () => {
     expect(deltaOf('peakWorkers', 5, 3)).toEqual({ text: '▲ +2', tone: 'neutral' });
     expect(deltaOf('maxWorkers', 3, 3)).toEqual({ text: 'no change', tone: 'neutral' });
+  });
+
+  it('counts average workers to a tenth', () => {
+    expect(deltaOf('averageWorkers', 12.34, 10)).toEqual({ text: '▲ +2.3', tone: 'neutral' });
+    expect(deltaOf('averageWorkers', 10.02, 10)).toEqual({ text: 'no change', tone: 'neutral' });
   });
 
   it('calls growth from nothing new, and has nothing to say without a figure on both sides', () => {
