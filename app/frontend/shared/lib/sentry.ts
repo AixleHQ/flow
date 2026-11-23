@@ -113,6 +113,8 @@ const replayUrlScrubbing = (): SentryIntegration => ({
 const isPageNotFound = (event: Sentry.ErrorEvent): boolean =>
   event.exception?.values?.some((exception) => exception.value?.startsWith('Page not found: ')) ?? false;
 
+const isEmbeddedDocument = (event: Sentry.ErrorEvent): boolean => event.request?.url?.startsWith('about:') ?? false;
+
 export const initSentry = (settings: SharedSettings): void => {
   const { env, appVersion, domain, sentryFrontendDsn, sentryTracesSampleRate } = settings;
   // A browser Sentry DSN is public by design (write-only ingest for one project),
@@ -164,7 +166,12 @@ export const initSentry = (settings: SharedSettings): void => {
     },
     // A chunk that failed to load makes the page resolver report the page as missing;
     // the chunk failure itself is handled (and reported when it persists) on its own.
-    beforeSend: (event) => (chunkLoadFailed() && isPageNotFound(event) ? null : scrubEvent(event)),
+    // A page rendered by someone else inside a srcdoc iframe has `about:srcdoc` for its
+    // location, and Inertia cannot resolve a relative link against it (#331).
+    beforeSend: (event) => {
+      if (isEmbeddedDocument(event)) return null;
+      return chunkLoadFailed() && isPageNotFound(event) ? null : scrubEvent(event);
+    },
     beforeSendSpan: scrubSpan,
   });
 };

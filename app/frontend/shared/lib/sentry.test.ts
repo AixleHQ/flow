@@ -126,6 +126,23 @@ describe('initSentry', () => {
     expect(Sentry.getClient()?.getIntegrationByName('Replay')).toBeDefined();
   });
 
+  it('drops the errors of a page rendered inside a srcdoc iframe', async () => {
+    const sent: string[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
+      sent.push(String(init?.body));
+      return new Response('{}');
+    });
+    initSentry(settings);
+
+    Sentry.captureEvent({ message: 'embedded', request: { url: 'about:srcdoc' } });
+    Sentry.captureException(new Error('kept'));
+    await Sentry.flush(2000);
+
+    const envelopes = sent.join('\n');
+    expect(envelopes).toContain('kept');
+    expect(envelopes).not.toContain('embedded');
+  });
+
   describe('a chunk that fails to load', () => {
     let unregister: () => void;
 
