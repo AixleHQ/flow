@@ -585,16 +585,17 @@ class AgentCredentialTest < ActiveSupport::TestCase
     end
   end
 
-  def kiro_credential(key:, expires_at:)
-    cred = create(:agent_credential, user: @user, agent_type: "kiro_cli",
+  def kiro_credential(key:, expires_at:, user: @user)
+    cred = create(:agent_credential, user: user, agent_type: "kiro_cli",
                                      config_data: { "state_b64" => Base64.strict_encode64(kiro_state_blob(key: key, expires_at: expires_at)) })
-    create(:terminal_session, user: @user, company_id: cred.company_id, agent_type: "kiro_cli", state: "running")
+    create(:terminal_session, user: user, company_id: cred.company_id, agent_type: "kiro_cli", state: "running")
     cred
   end
 
   test "a Builder ID login's refresh does not rotate, a social login's does" do
     odic = kiro_credential(key: "kirocli:odic:token", expires_at: 1.minute.ago)
-    social = kiro_credential(key: "kirocli:social:token", expires_at: 1.minute.ago)
+    social = kiro_credential(key: "kirocli:social:token", expires_at: 1.minute.ago,
+                             user: create(:user, company: @company))
 
     assert_not odic.rotating_refresh?
     assert social.rotating_refresh?
