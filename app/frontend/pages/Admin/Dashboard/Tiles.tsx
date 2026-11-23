@@ -95,7 +95,7 @@ export default function Tiles({
     : [];
 
   return (
-    <div className={classes.tiles}>
+    <div className={`${classes.tiles} ${classes.summaryTiles}`}>
       <Tile label="Companies" value={formatCount(companies.count)}>
         {split.join(' · ') || (filtered ? 'none match the filters' : 'none measured yet')}
         {unbilled > 0 && <span className={classes.bad}> · {unbilled} not billed</span>}

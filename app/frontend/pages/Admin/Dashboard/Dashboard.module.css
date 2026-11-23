@@ -278,6 +278,24 @@
   margin: 16px 0 4px;
 }
 
+/* Seven tiles: one row where each gets the 170px its longest label needs beside
+   the admin sidebar, otherwise 4 + 3 or pairs, never six and a stray one. */
+.root .summaryTiles {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 1040px) {
+  .root .summaryTiles {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1600px) {
+  .root .summaryTiles {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+}
+
 .root .tile {
   padding: 14px 16px;
   border: 1px solid var(--app-border-default);
