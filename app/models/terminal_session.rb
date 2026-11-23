@@ -266,15 +266,22 @@ class TerminalSession < ApplicationRecord
   scope :for_user, ->(user_id) { where(user_id: user_id) }
   # Sessions `user` may be shown at all: their own, plus every session in a
   # project they can reach. This is only the REACHABILITY half of the rule —
-  # `visible_to?` still has to be applied per row, because whether a session is
-  # shared depends on its type and lifecycle phase rather than on anything SQL
-  # can select. Callers that skip the second half leak other people's shells.
+  # the sharing half (`visible_to`, or `visible_to?` per row) still has to be
+  # applied. Callers that skip the second half leak other people's shells.
   scope :readable_by, ->(user) {
     # "Their own" still means their own in a company they belong to: a member
     # removed from a company loses its sessions with it.
     member_company_ids = user.company_memberships.active.select(:company_id)
     where(user_id: user.id, company_id: member_company_ids)
       .or(where(project_id: Project.for_user(user).select(:id)))
+  }
+  # `visible_to?` as SQL, so a list can count and page the sessions a viewer may
+  # see instead of filtering a window of rows in Ruby. The two must agree.
+  scope :visible_to, ->(viewer) {
+    shared = where.not(session_type: "auth_setup")
+    where(user_id: viewer.id)
+      .or(shared.not_ended.where(user_id: User.where(share_active_sessions: true).select(:id)))
+      .or(shared.ended.where(user_id: User.where(share_completed_sessions: true).select(:id)))
   }
   scope :with_cached_resource_counts, -> {
     select(
@@ -388,6 +395,8 @@ class TerminalSession < ApplicationRecord
   #     trigger it.
   #   - auth_setup — the owner's credential login, never anyone else's business,
   #     so it is owner-only regardless of preferences.
+  #
+  # The `visible_to` scope states the same rule in SQL; change both together.
   def visible_to?(viewer)
     return false if viewer.nil?
     return true if user_id == viewer.id

@@ -164,6 +164,61 @@ export function withP95(rows: TenantSummary[], p95: Map<number, number> | undefi
   return rows.map((row) => ({ ...row, p95WaitSeconds: p95.get(row.tenantId) ?? null }));
 }
 
+export interface Workers {
+  paying: number;
+  trial: number;
+  managed: number;
+  /** Workers of companies that run free without being managed, which should never happen. */
+  unbilled: number;
+}
+
+const WORKER_GROUP: Partial<Record<BillingClass, keyof Workers>> = {
+  paying: 'paying',
+  trial: 'trial',
+  managed: 'managed',
+  no_customer: 'unbilled',
+  unlimited: 'unbilled',
+};
+
+export const workerTotal = (workers: Workers) => workers.paying + workers.trial + workers.managed + workers.unbilled;
+
+/**
+ * The workers the given companies were offered on average over the range's
+ * measured hours — what an invoice charges for — split by each day's billing
+ * class. A company without a limit is offered nothing to average, so it counts
+ * at the most workers it held at once.
+ */
+export function workersOf(days: UsageDay[], range: DayRange, companies: Set<number>): Workers | null {
+  const hoursByDay = new Map<string, number>();
+  const byCompany = new Map<number, UsageDay[]>();
+  for (const row of days) {
+    if (row.day < range.start || row.day > range.end) continue;
+    hoursByDay.set(row.day, Math.max(hoursByDay.get(row.day) ?? 0, row.hours));
+    if (!companies.has(row.companyId)) continue;
+    const rows = byCompany.get(row.companyId) ?? [];
+    rows.push(row);
+    byCompany.set(row.companyId, rows);
+  }
+  const periodSeconds = Array.from(hoursByDay.values()).reduce((total, hours) => total + hours, 0) * 3600;
+  if (!periodSeconds) return null;
+
+  const workers: Workers = { paying: 0, trial: 0, managed: 0, unbilled: 0 };
+  for (const rows of byCompany.values()) {
+    const offered = rows.reduce((total, row) => total + row.offeredSeconds, 0);
+    if (offered === 0 && rows.some((row) => row.unlimitedSeconds > 0)) {
+      const latest = rows.reduce((last, row) => (row.day > last.day ? row : last));
+      const group = WORKER_GROUP[latest.billingClass];
+      if (group) workers[group] += Math.max(...rows.map((row) => row.peakWorkers));
+      continue;
+    }
+    for (const row of rows) {
+      const group = WORKER_GROUP[row.billingClass];
+      if (group) workers[group] += row.offeredSeconds / periodSeconds;
+    }
+  }
+  return workers;
+}
+
 export function totalsOf(rows: TenantSummary[]): Totals | null {
   if (!rows.length) return null;
   const sum = (pick: (row: TenantSummary) => number) => rows.reduce((total, row) => total + pick(row), 0);
@@ -187,6 +242,9 @@ export type DeltaField =
   | 'sessionsSucceeded'
   | 'sessionsFailed';
 
+/** A figure that changes from one period to the next: a table column, or the tiles' average workers. */
+export type ChangeField = DeltaField | 'averageWorkers';
+
 export interface Delta {
   text: string;
   tone: 'good' | 'bad' | 'neutral';
@@ -194,7 +252,7 @@ export interface Delta {
 
 // Which way is better. Hours and limits have no better direction: more of
 // either is neither good nor bad on its own.
-const BETTER: Partial<Record<DeltaField, 1 | -1>> = {
+const BETTER: Partial<Record<ChangeField, 1 | -1>> = {
   utilization: 1,
   avgWaitSeconds: -1,
   p95WaitSeconds: -1,
@@ -202,13 +260,13 @@ const BETTER: Partial<Record<DeltaField, 1 | -1>> = {
   sessionsFailed: -1,
 };
 
-const WORKER_FIELDS: DeltaField[] = ['minWorkers', 'maxWorkers', 'peakWorkers'];
+const WORKER_FIELDS: ChangeField[] = ['minWorkers', 'maxWorkers', 'peakWorkers', 'averageWorkers'];
 
 const signed = (value: number, unit: string) =>
   value > 0 ? `▲ +${value}${unit}` : value < 0 ? `▼ −${Math.abs(value)}${unit}` : `0${unit}`;
 
 /** The change from the previous period: points for utilization, a count for workers, a percentage otherwise. */
-export function deltaOf(field: DeltaField, current: number | null, previous: number | null): Delta | null {
+export function deltaOf(field: ChangeField, current: number | null, previous: number | null): Delta | null {
   if (current === null || previous === null || !Number.isFinite(current) || !Number.isFinite(previous)) return null;
 
   let change: number;
@@ -217,7 +275,7 @@ export function deltaOf(field: DeltaField, current: number | null, previous: num
     change = Math.round((current - previous) * 100);
     text = signed(change, ' pts');
   } else if (WORKER_FIELDS.includes(field)) {
-    change = current - previous;
+    change = Math.round((current - previous) * 10) / 10;
     text = change === 0 ? 'no change' : signed(change, '');
   } else if (previous === 0) {
     return { text: current === 0 ? '0%' : 'new', tone: 'neutral' };

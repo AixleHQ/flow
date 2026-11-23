@@ -23,8 +23,9 @@ app-owned boundaries, and let linters — not reviewers — hold the line.**
 - The backend suite runs in parallel: `parallelize(workers: :number_of_processors)` in
   `test/test_helper.rb` forks one worker per core, each with its own database
   (`aixle_test-0`, `aixle_test-1`, …). Runs below Rails' threshold (50 cases) — a single
-  file, the system suite — stay serial; `PARALLEL_WORKERS=1` forces a serial run. Run the
-  whole gate before every push (`make check_all`, see CLAUDE.md).
+  file, the system suite — stay serial; `PARALLEL_WORKERS=1` forces a serial run. CI runs
+  the whole gate on every pull request; before a push, run the tests you touched and
+  `make lint_check_all` (see CLAUDE.md).
 - **One suite run at a time.** Sessions and git worktrees that share a Postgres share
   `aixle_test` and the per-worker databases; overlapping runs corrupt each other. `make`
   targets are flock-serialized; direct `bin/rails test` is not — check nothing else is running.
@@ -139,7 +140,7 @@ and never swap constants at runtime.
 - [ ] Assertions state outcomes, not call sequences (R5, §6)
 - [ ] New external service ⇒ adapter + fake + contract test (R3/R4), not inline `stub_request`
 - [ ] FE tests query by role/label and use the typed factories (R8, §5)
-- [ ] `docker compose exec -T web make check_all` is green — including the coverage floors
+- [ ] CI is green on the PR — including the coverage floors
 - [ ] Shrunk a frozen allowlist while you were in the area? Even better.
 
 ## 9. Test tags: running a test only when it matters

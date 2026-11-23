@@ -363,6 +363,26 @@ class TerminalSessionTest < ActiveSupport::TestCase
     assert session.reload.visible_to?(other)
   end
 
+  test "the visible_to scope agrees with visible_to? for every state, kind and preference" do
+    owner = create(:user, company: @company)
+    other = create(:user, company: @company)
+    states = %w[not_started queued running ready finishing finished failed cancelled]
+    sessions = states.product(%w[agent_session workflow_step auth_setup]).map do |state, kind|
+      create(:terminal_session, state: state, session_type: kind, user: owner,
+                                project: kind == "auth_setup" ? nil : @project)
+    end
+
+    [ true, false ].product([ true, false ]).each do |active, completed|
+      owner.update!(share_active_sessions: active, share_completed_sessions: completed)
+      [ owner, other ].each do |viewer|
+        expected = sessions.map(&:reload).select { |s| s.visible_to?(viewer) }.map(&:id)
+
+        assert_equal expected.sort, TerminalSession.where(id: sessions).visible_to(viewer).ids.sort,
+                     "viewer=#{viewer == owner ? 'owner' : 'other'} active=#{active} completed=#{completed}"
+      end
+    end
+  end
+
   test "auth_setup sessions stay owner-only even with both preferences on" do
     owner = create(:user, company: @company, share_active_sessions: true, share_completed_sessions: true)
     other = create(:user, company: @company)
