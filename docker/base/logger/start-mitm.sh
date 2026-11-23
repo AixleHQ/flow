@@ -16,7 +16,9 @@
 # Environment variables (optional):
 #   MITM_PROXY_PORT   - proxy port (default: 8888)
 #   MITM_LOG_PATH     - log file path (default: /var/log/mitm/http.log)
-#   MITM_LOG_MAX_BODY - max body size to log (default: 16000)
+#   MITM_TRACKED_DOMAINS - hosts to log, suffix match (unset: all; empty: none)
+#   MITM_LOG_BODIES   - entries that keep their bodies (unset: all; see mitm_logger.py)
+#   MITM_LOG_MAX_BODY - max body size to log (default: 0, unlimited)
 #   MITM_DISABLED     - set to "true" to skip starting mitm proxy
 # =============================================================================
 

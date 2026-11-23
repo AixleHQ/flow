@@ -17,6 +17,13 @@ governance, community health — carry none.
 - **Admin**: the dashboard opens on the current week, shows Utilization, Average wait and
   p95 wait right after Company, keeps the table's header and Company column in view while
   it scrolls, and folds its explanation into a "How to read this dashboard" section.
+- **Sessions & Runs**: a session's HTTP log records each call's method, address, status,
+  headers and size, and keeps a request or response body only where Flow reads the
+  session's usage from it. Before, most of the log was the conversation the agent re-sent
+  to the model on every turn.
+- **Sessions & Runs**: the HTTP log of an Antigravity, Gemini or Copilot session records only
+  the agent's own model and sign-in traffic. Gemini's used to record everything the agent
+  downloaded or called, and a Copilot session now keeps this log at all.
 
 ### Fixed
 - **Admin**: deleting a company that has set up SCIM provisioning works again. It used to
