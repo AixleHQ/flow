@@ -455,7 +455,7 @@ const WorkflowRunShowPage = () => {
           agentType={run.agentType}
           userName={runOwnerLabel(run.teamName, run.userName)}
           mode={run.mode}
-          extraMeta={[...chatOriginMeta(run.chatOrigin), ...runsOnMeta]}
+          extraMeta={[...draftTestMeta(run.draftTest), ...chatOriginMeta(run.chatOrigin), ...runsOnMeta]}
           stats={stats}
           formatTokenValue={formatTokens}
           actions={
@@ -738,6 +738,10 @@ export default WorkflowRunShowPage;
 
 // Where a chat-started run's request came from: the messenger, the conversation,
 // who asked, and a link back to their message when the messenger has one.
+function draftTestMeta(draftTest: boolean) {
+  return draftTest ? [{ label: 'Runs', value: 'the draft — a test run' }] : [];
+}
+
 function chatOriginMeta(origin: WorkflowRun['chatOrigin']) {
   if (!origin) return [];
   const where = [origin.provider, origin.conversation, origin.sender].filter(Boolean).join(' · ');

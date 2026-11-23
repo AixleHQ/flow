@@ -92,6 +92,7 @@ Unknown config keys are rejected.
 | `required_agent_runtime` | pin to one runtime (see §5) |
 | `bmad_enabled` | install the BMAD Method in the step's container |
 | `input_asset_specs`, `output_asset_specs` | `[{name, description}]` — what the step expects and produces |
+| `origin_step_id` | on a draft's step only: the live step it was copied from (system-maintained) |
 
 Every id on a step or a workflow's config must belong to the workflow's project
 (platform tools, internal MCP servers and company assets excepted); the save is
@@ -99,6 +100,16 @@ rejected otherwise. On an update, an id list **replaces** the stored one.
 
 **SubStep**: `name`, `instructions`, `position`, `required` — a checklist inside
 one session, ticked off by the agent with `mark_sub_step`.
+
+**Draft**: a hidden copy of a workflow, for changing one that is already in use.
+`create_workflow_draft` opens it (one per workflow) and returns its id; it is edited
+with the usual workflow, step and sub-step tools and test-run with `trigger_workflow`,
+by that id, while triggers and board columns keep running the live workflow. A draft
+takes no triggers, and a card its test run moves does not start the column's
+workflow. `apply_workflow_draft` writes it onto the live workflow as one new version
+(refused when the live workflow changed after the draft was made, unless
+`overwrite`); `discard_workflow_draft` drops it; `get_workflow_draft_diff` shows the
+difference.
 
 **WorkflowRun** mode: `interactive`, `non_interactive`, `mixed`. Each step gets a
 StepRun and a TerminalSession; files the step writes to `/workspace/outputs/`

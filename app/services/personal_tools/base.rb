@@ -188,7 +188,7 @@ module PersonalTools
     # A workflow scoped to the project — never a global Workflow.find, so a
     # user can't reach another project's workflow by id.
     def find_workflow!(project, id = params[:workflow_id])
-      workflow = Workflow.visible_for_project(project).find_by(id: id)
+      workflow = Workflow.editable_for_project(project).find_by(id: id)
       raise NotFoundError, "Workflow #{id} not found in this project" unless workflow
 
       workflow

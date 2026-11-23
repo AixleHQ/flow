@@ -386,10 +386,19 @@ module Tools
              Track it with `list_workflow_runs` / `get_workflow_run`; read a single
              step run's error, retries and session diagnostics with `get_step_run`;
              read what it produced with `read_asset`; stop a run with `cancel_workflow_run`.
+          10. Change a workflow that is already in use through a draft, so its triggers
+             and board columns keep running the live version meanwhile:
+             `create_workflow_draft` returns a `draft_workflow_id`. Edit the draft with
+             the usual workflow, step and sub-step tools and test-run it with
+             `trigger_workflow`, all by that id. `get_workflow_draft_diff` shows what
+             applying it would change; `apply_workflow_draft` makes it live as one new
+             version, and `discard_workflow_draft` drops it. A draft takes no triggers,
+             and a card its test run moves does not start the column's workflow.
 
           Rules:
           - Ask the user before destructive actions (`delete_workflow`,
-            `delete_workflow_step`, `delete_sub_step`, `delete_workflow_trigger`).
+            `delete_workflow_step`, `delete_sub_step`, `delete_workflow_trigger`,
+            `discard_workflow_draft`) and before `apply_workflow_draft`.
           - Read a step (`get_workflow`, or `get_workflow_step` for its full
             wiring) before editing it, or you will overwrite text you never saw.
             The same applies to every id list (`tool_ids`, `skill_ids`,
