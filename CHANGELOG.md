@@ -22,6 +22,11 @@ governance, community health — carry none.
   with the drawer's tabs and the properties beside the description. **Open as page** in the
   task drawer goes there, and the drawer's new **Copy link** button copies that address.
   The page opens archived tasks too.
+- **Sessions & Runs**: agents using personal access can page through every session they can
+  see with `list_sessions` (`offset`, `total`, `has_more`) instead of stopping at the latest
+  100, filter and sort it as the Sessions & Runs list does (dates, status, kind, agent, owner,
+  workflow, prompt text; by tokens, cost or duration), and read the tokens and cost summed
+  over every match.
 
 ### Fixed
 - The `flow-web` image runs Ruby 4.0.10, which fixes the seven memory-safety bugs in

@@ -2,66 +2,133 @@
 
 module PersonalTools
   class ListSessions < Base
-    tool do
-      display_name "List Sessions"
-      description "List agent sessions you can see — your own, plus sessions in projects you can " \
-                  "reach whose owner shares them. Newest first, active ones by default. Pair with " \
-                  "get_session_log to find out what one of them is actually doing."
-      audience :user
-      tags :sessions
-      read_only
-      param :project_id, type: :integer, description: "Only sessions in this project."
-      param :state, type: :string, description: "Which sessions to list (default active).",
-                    enum: %w[active finished failed all]
-      param :limit, type: :integer, description: "Max rows (default 25, cap 100)."
-    end
-
     STATE_FILTERS = {
       "active" => %w[not_started queued running ready finishing],
       "finished" => %w[finished],
-      "failed" => %w[failed]
+      "failed" => %w[failed],
+      "cancelled" => %w[cancelled],
+      "all" => nil
     }.freeze
+    SESSION_TYPES = %w[agent_session workflow_step].freeze
+    DIRECTIONS = %w[asc desc].freeze
+    TOKEN_COLUMNS = %w[total_tokens input_tokens output_tokens cache_read_tokens cache_write_tokens cost_cents].freeze
 
     DEFAULT_LIMIT = 25
     MAX_LIMIT = 100
 
-    # `visible_to?` cannot be expressed in SQL (it depends on the owner's
-    # preferences per lifecycle phase), so rows are filtered in Ruby. Read a
-    # bounded candidate window rather than the whole table, and say so when the
-    # window is what ended the listing.
-    MAX_CANDIDATES = 500
+    tool do
+      display_name "List Sessions"
+      description "List agent sessions you can see — your own, plus sessions in projects you can " \
+                  "reach whose owner shares them — one page at a time, with the filters and sort " \
+                  "of the Sessions & Runs list. Active sessions, newest first, unless you ask " \
+                  "otherwise: for a period's sessions pass state `all` with created_from / " \
+                  "created_until. The response carries `total`, `has_more` and `totals` — tokens " \
+                  "and cost summed over every matching session, not just this page. Pair with " \
+                  "get_session_log to find out what one of them is actually doing."
+      audience :user
+      tags :sessions
+      read_only
+      param :company_id, type: :integer, description: "Only sessions in this company (ids from list_companies)."
+      param :project_id, type: :integer, description: "Only sessions in this project."
+      param :state, type: :string, description: "Which sessions to list (default active).",
+                    enum: STATE_FILTERS.keys
+      param :session_type, type: :string,
+                           description: "Only this kind: `agent_session` (started by a person) or " \
+                                        "`workflow_step` (a step of a workflow run). Default: every kind.",
+                           enum: SESSION_TYPES
+      param :agent_type, type: :string, description: "Only sessions on this agent runtime, e.g. `claude_code`."
+      param :user_id, type: :integer, description: "Only sessions this user owns (a row's `owner_id`)."
+      param :workflow_id, type: :integer, description: "Only the step sessions of this workflow's runs."
+      param :search, type: :string, description: "Words from the prompt the session was started with."
+      param :created_from, type: :string,
+                           description: "Only sessions created on or after this day, YYYY-MM-DD (UTC)."
+      param :created_until, type: :string,
+                            description: "Only sessions created on or before this day, YYYY-MM-DD (UTC)."
+      param :sort, type: :string, description: "Sort column (default created_at). Rows with no value sort last.",
+                   enum: SessionListSort::FIELDS
+      param :direction, type: :string, description: "Sort direction (default desc).", enum: DIRECTIONS
+      param :limit, type: :integer, description: "Rows per page (default 25, cap 100)."
+      param :offset, type: :integer,
+                     description: "Rows to skip before the page starts (default 0). Page on with " \
+                                  "offset + limit while `has_more` is true."
+    end
 
     def execute
-      project = params[:project_id].present? ? find_project! : nil
       state = (params[:state].presence || "active").to_s
-      unless state == "all" || STATE_FILTERS.key?(state)
-        return error("Unknown state '#{state}' — use one of: active, finished, failed, all")
+      refusal = invalid_param(state)
+      return error(refusal) if refusal
+      if params[:company_id].present? && membership_company_ids.exclude?(params[:company_id].to_i)
+        raise NotFoundError, "Company #{params[:company_id]} not found"
       end
 
+      project = params[:project_id].present? ? find_project! : nil
+      sessions = filtered(project, state)
+      sort = SessionListSort.new("#{params[:sort].presence || SessionListSort::DEFAULT_FIELD} #{params[:direction]}")
       limit = requested_limit
-      candidates = scope(project, state).limit(MAX_CANDIDATES).to_a
-      visible = candidates.select { |session| session.visible_to?(user) }
+      offset = requested_offset
+      total, *sums = sessions.pick(Arel.sql("COUNT(*)"),
+                                   *TOKEN_COLUMNS.map { |c| Arel.sql("COALESCE(SUM(terminal_sessions.#{c}), 0)") })
+      page = sessions.includes(:user, :session_admission)
+                     .order(sort.order(sort.column(TerminalSession)), created_at: :desc, id: :desc)
+                     .limit(limit).offset(offset).to_a
 
       success(
         state: state,
         project_id: project&.id,
-        count: visible.first(limit).size,
-        candidates_capped: candidates.size == MAX_CANDIDATES,
-        sessions: visible.first(limit).map { |session| row(session) }
+        sort: sort.to_s,
+        total: total,
+        limit: limit,
+        offset: offset,
+        has_more: offset + page.size < total,
+        totals: TOKEN_COLUMNS.zip(sums.map(&:to_i)).to_h,
+        sessions: page.map { |session| row(session) }
       )
     end
 
     private
 
-    def requested_limit
-      requested = params[:limit].present? ? params[:limit].to_i : DEFAULT_LIMIT
-      requested.clamp(1, MAX_LIMIT)
+    def invalid_param(state)
+      enums = { state: [ state, STATE_FILTERS.keys ], session_type: [ params[:session_type], SESSION_TYPES ],
+                sort: [ params[:sort], SessionListSort::FIELDS ], direction: [ params[:direction], DIRECTIONS ] }
+      enums.each do |name, (value, allowed)|
+        next if value.blank? || allowed.include?(value.to_s)
+
+        return "Unknown #{name} '#{value}' — use one of: #{allowed.join(', ')}"
+      end
+      %i[created_from created_until].each do |name|
+        next if params[name].blank? || TerminalSession.parse_filter_date(params[name])
+
+        return "#{name} must be a day as YYYY-MM-DD, got '#{params[name]}'"
+      end
+      nil
     end
 
-    def scope(project, state)
-      scope = readable_sessions.includes(:user, :session_admission).order(created_at: :desc)
+    def requested_limit
+      params[:limit].present? ? params[:limit].to_i.clamp(1, MAX_LIMIT) : DEFAULT_LIMIT
+    end
+
+    def requested_offset
+      [ params[:offset].to_i, 0 ].max
+    end
+
+    def filtered(project, state)
+      scope = readable_sessions.visible_to(user)
+                               .created_from(params[:created_from])
+                               .created_until(params[:created_until])
       scope = scope.where(project_id: project.id) if project
-      scope = scope.where(state: STATE_FILTERS.fetch(state)) unless state == "all"
+      scope = scope.where(company_id: params[:company_id]) if params[:company_id].present?
+      scope = scope.where(state: STATE_FILTERS.fetch(state)) if STATE_FILTERS.fetch(state)
+      scope = scope.where(session_type: params[:session_type]) if params[:session_type].present?
+      scope = scope.where(agent_type: params[:agent_type]) if params[:agent_type].present?
+      scope = scope.where(user_id: params[:user_id]) if params[:user_id].present?
+      if params[:workflow_id].present?
+        steps = StepRun.joins(:workflow_run).where(workflow_runs: { workflow_id: params[:workflow_id] })
+        scope = scope.where(id: steps.select(:terminal_session_id))
+      end
+      if params[:search].present?
+        like = "%#{params[:search].to_s.gsub(/[\\%_]/) { |c| "\\#{c}" }}%"
+        scope = scope.where("terminal_sessions.initial_prompt ILIKE ?", like)
+      end
       scope
     end
 
@@ -76,8 +143,10 @@ module PersonalTools
         wait_reason: session.session_admission&.wait_reason,
         session_type: session.session_type,
         agent_type: session.agent_type,
+        models: session.models,
         mode: session.mode,
         mine: session.user_id == user.id,
+        owner_id: session.user_id,
         owner: session.user&.email,
         project_id: session.project_id,
         workflow_run_id: metadata["workflow_run_id"],
@@ -88,8 +157,7 @@ module PersonalTools
         ready_at: session.ready_at,
         finished_at: session.finished_at,
         error_message: session.error_message,
-        total_tokens: session.total_tokens,
-        cost_cents: session.cost_cents
+        **TOKEN_COLUMNS.to_h { |column| [ column.to_sym, session[column] ] }
       }
     end
   end

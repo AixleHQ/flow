@@ -144,22 +144,11 @@ class SessionsRunsFeed
       scope = states.empty? ? scope.none : scope.where(state: states)
     end
     if filters[:search].present?
+      # The prompt may be one the row cannot reveal; matching it would leak the match.
       scope = scope.where("terminal_sessions.initial_prompt ILIKE :q", q: "%#{sanitize_like(filters[:search])}%")
-                   .merge(viewer_visible_scope)
+                   .visible_to(viewer)
     end
     scope
-  end
-
-  # Search matches on `initial_prompt` — a field the row itself may not be
-  # allowed to reveal (see TerminalSession#visible_to?). Without this, a
-  # private session whose hidden prompt matches someone else's search term
-  # would still surface in their results, leaking that the prompt matched.
-  def viewer_visible_scope
-    TerminalSession.left_joins(:user).where(user_id: viewer.id).or(
-      TerminalSession.left_joins(:user).not_ended.where(users: { share_active_sessions: true })
-    ).or(
-      TerminalSession.left_joins(:user).ended.where(users: { share_completed_sessions: true })
-    )
   end
 
   def filtered_runs
