@@ -569,6 +569,68 @@ class AgentCredentialTest < ActiveSupport::TestCase
     assert_equal :refreshed, result[:status]
   end
 
+  # --- Kiro: rotation is decided per login family ---
+
+  def kiro_state_blob(key:, expires_at:)
+    Tempfile.create([ "kiro-state", ".sqlite3" ]) do |file|
+      db = SQLite3::Database.new(file.path)
+      db.execute("CREATE TABLE auth_kv (key TEXT PRIMARY KEY, value TEXT)")
+      db.execute("INSERT INTO auth_kv VALUES (?, ?)",
+                 [ key, { "access_token" => "at-old", "refresh_token" => "rt-old",
+                          "expires_at" => expires_at.utc.iso8601 }.to_json ])
+      db.execute("INSERT INTO auth_kv VALUES ('kirocli:odic:device-registration', ?)",
+                 [ { "client_id" => "cid", "client_secret" => "csecret", "region" => "us-west-2" }.to_json ])
+      db.close
+      File.binread(file.path)
+    end
+  end
+
+  def kiro_credential(key:, expires_at:, user: @user)
+    cred = create(:agent_credential, user: user, agent_type: "kiro_cli",
+                                     config_data: { "state_b64" => Base64.strict_encode64(kiro_state_blob(key: key, expires_at: expires_at)) })
+    create(:terminal_session, user: user, company_id: cred.company_id, agent_type: "kiro_cli", state: "running")
+    cred
+  end
+
+  test "a Builder ID login's refresh does not rotate, a social login's does" do
+    odic = kiro_credential(key: "kirocli:odic:token", expires_at: 1.minute.ago)
+    social = kiro_credential(key: "kirocli:social:token", expires_at: 1.minute.ago,
+                             user: create(:user, company: @company))
+
+    assert_not odic.rotating_refresh?
+    assert social.rotating_refresh?
+  end
+
+  test "an expired Builder ID login held by a live session is not refused" do
+    cred = kiro_credential(key: "kirocli:odic:token", expires_at: 1.minute.ago)
+
+    assert cred.base_login_expired?
+    assert_not cred.unrecoverably_expired?
+  end
+
+  test "an expired social login held by a live session is still refused" do
+    cred = kiro_credential(key: "kirocli:social:token", expires_at: 1.minute.ago)
+
+    assert cred.unrecoverably_expired?
+  end
+
+  test "a launch refreshes an expiring Builder ID login although a live session holds it" do
+    cred = kiro_credential(key: "kirocli:odic:token", expires_at: 1.minute.from_now)
+    refresh = stub_request(:post, "https://oidc.us-west-2.amazonaws.com/token").to_return(
+      status: 200, headers: { "Content-Type" => "application/json" },
+      body: { accessToken: "at-new", expiresIn: 3600 }.to_json
+    )
+
+    assert_equal :refreshed, cred.refresh_if_expiring![:status]
+    assert_requested refresh
+  end
+
+  test "a launch still defers an expiring social login to the live holder" do
+    cred = kiro_credential(key: "kirocli:social:token", expires_at: 1.minute.from_now)
+
+    assert_equal :held, cred.refresh_if_expiring!
+  end
+
   # --- signed_in_at: a person signing in, not a token refresh ---
 
   test "a new authorization records when the user signed in; a refresh does not move it" do

@@ -168,6 +168,38 @@ module Activities
         [ credential, session, parked, refresh ]
       end
 
+      # The same busy holder, a Builder ID login: its refresh token does not rotate, so the
+      # sweep refreshes without standing down.
+      test "a busy holder does not stop the refresh of a Builder ID login" do
+        blob = Tempfile.create([ "kiro-state", ".sqlite3" ]) do |file|
+          db = SQLite3::Database.new(file.path)
+          db.execute("CREATE TABLE auth_kv (key TEXT PRIMARY KEY, value TEXT)")
+          db.execute("INSERT INTO auth_kv VALUES ('kirocli:odic:token', ?)",
+                     [ { "access_token" => "at-old", "refresh_token" => "rt-old",
+                         "expires_at" => 5.minutes.from_now.utc.iso8601 }.to_json ])
+          db.execute("INSERT INTO auth_kv VALUES ('kirocli:odic:device-registration', ?)",
+                     [ { "client_id" => "cid", "client_secret" => "csecret", "region" => "us-west-2" }.to_json ])
+          db.close
+          File.binread(file.path)
+        end
+        credential = AgentCredential.from_artifacts(@user.id, @company.id, "kiro_cli",
+                                                    { "state_b64" => Base64.strict_encode64(blob) })
+        create(:terminal_session, user: @user, company_id: @company.id, agent_type: "kiro_cli",
+                                  state: "ready", container_id: "ctr-1")
+        @runtime.fs[KIRO_STATE_PATH] = blob
+        @runtime.set_terminal_pane(file_fixture("terminal_panes/kiro_cli/working.txt").read, last_output_at: 5.seconds.ago)
+        stub_request(:post, "https://oidc.us-west-2.amazonaws.com/token").to_return(
+          status: 200, headers: { "Content-Type" => "application/json" },
+          body: { accessToken: "at-new", expiresIn: 3600 }.to_json
+        )
+
+        result = run_activity(RefreshExpiringTokensActivity)
+
+        assert_equal 0, result[:skipped_busy]
+        assert_equal 1, result[:refreshed]
+        assert_equal "at-new", kiro_access_token(Base64.strict_decode64(credential.reload.config_data["state_b64"]))
+      end
+
       test "a holder that started a turn after the last pass blocks the rotation" do
         credential, session, _parked, refresh = kiro_holder_parked_on_the_last_pass
         last_output_at = 5.seconds.ago
