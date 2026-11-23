@@ -34,6 +34,6 @@ USER app
 WORKDIR /app
 COPY --from=build /bin/aixle-runner-relay /app/aixle-runner-relay
 # The runners' tunnel (routed by the ingress), and the admin port: /healthz, /readyz,
-# /metrics and /drain, which the ingress never routes.
+# and /metrics, which the ingress never routes.
 EXPOSE 8080 9090
 ENTRYPOINT ["/app/aixle-runner-relay"]
