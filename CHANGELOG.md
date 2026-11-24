@@ -13,6 +13,8 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-11-24
+
 ### Added
 - **Workflows**: change a workflow that is in use through a draft. **Edit in draft** (or
   **Save as draft** when a Save would go live) opens a copy that you edit and test-run while
@@ -20,8 +22,31 @@ governance, community health — carry none.
   new version, **Discard draft** drops it. The personal MCP has the same flow:
   `create_workflow_draft`, `get_workflow_draft_diff`, `apply_workflow_draft`,
   `discard_workflow_draft`.
+- **Sessions & Runs**: an interactive session can be suspended instead of finished, by its
+  owner with **Suspend** or by the 23-hour limit, which used to finish it. Its files, each
+  repository's unpushed commits and uncommitted changes, and the agent's conversation are
+  kept for 30 days, and **Restore** starts a new session that picks up the same
+  conversation. An interactive workflow step can be suspended too: its run waits for it, and
+  **Restore** on the run page continues the same step. A suspended session holds no slot;
+  its owner is emailed when it is suspended and three days before it expires. Operators: a
+  workflow run may now last 40 days instead of 7.
+- **Integrations**: agents can act as you on Bitbucket, as they can on GitHub and GitLab.
+  Connect your Bitbucket account under **Profile → Connected accounts**, allow it per
+  project, and give a step the `bitbucket_user_token` or `bitbucket_user_token_for` tool.
+  Like GitLab's, the token is not limited to the session's repositories (Bitbucket cannot do
+  that), and the user guide says what bounds it instead. Commits use your primary confirmed
+  Bitbucket email, and disconnecting cannot revoke the grant at Bitbucket. The operator
+  registers a Bitbucket OAuth client with the callback `<PROTOCOL>://<DOMAIN>/oauth/callback`
+  and sets `BITBUCKET_OAUTH_CLIENT_ID` and `BITBUCKET_OAUTH_CLIENT_SECRET`.
 
 ### Changed
+- **Company settings**: a self-hosted installation bought through AWS Marketplace
+  reports its usage under the dimension `worker_minute`, the same word as the SaaS
+  product, instead of `queue_minute`. Operators: from this version an installation meters
+  only against the new self-hosted listing; an installation subscribed to the first listing
+  (dimension `queue_minute`) keeps running and reports no usage once upgraded.
+- **Profile**: the consent switches on **Connected accounts** now refuse a request that names
+  no switch, an unknown field, or a value that is not true or false, for every provider.
 - **Companies & projects**: every page of a company carries it in its address,
   `/company/<company>/…`, so a link to a project, a workflow or any company page opens in
   the right company, and two tabs can stay on two companies. Links from before keep
@@ -54,8 +79,6 @@ governance, community health — carry none.
 - **Analytics**: token counts of a billion or more read as `1.1B` instead of `1069.7M`, and
   every page writes token counts the same way (`12.5k`, `2.0M`): Usage, Sessions & Runs, the
   project overview and task cards.
-- **Aixle Builder**: restoring a suspended build, and the "Continued in session" link on a
-  restored one, open the build's session. They used to lead to a page that does not exist.
 - **Admin**: deleting a company that has set up SCIM provisioning works again. It used to
   end in an error page and leave the company in place.
 - **Repositories**: adding a GitLab repository no longer ends in an error page when GitLab
@@ -75,6 +98,9 @@ governance, community health — carry none.
 - **Sessions & Runs**: a Kiro session's HTTP log now records only Kiro's own traffic. It
   used to record every request the agent made to AWS, response bodies included, which
   could push the log past 1 GB.
+- **Profile**: a Kiro login made with AWS Builder ID or IAM Identity Center no longer
+  refuses a launch with "Your Kiro Cli login has expired" while another session uses the
+  same login. A retry a few minutes later used to work, with nobody signing in again.
 - **Connectors**: the daily check that warns when a catalog connector changes the tools it
   offers checks every connector again. A connector deleted and then installed again under
   the same name used to stop the check, so the connectors after it were not checked.
@@ -82,14 +108,6 @@ governance, community health — carry none.
 ## [1.17.0] - 2026-11-23
 
 ### Added
-- **Integrations**: agents can act as you on Bitbucket, as they can on GitHub and GitLab.
-  Connect your Bitbucket account under **Profile → Connected accounts**, allow it per
-  project, and give a step the `bitbucket_user_token` or `bitbucket_user_token_for` tool.
-  Like GitLab's, the token is not limited to the session's repositories (Bitbucket cannot do
-  that), and the user guide says what bounds it instead. Commits use your primary confirmed
-  Bitbucket email, and disconnecting cannot revoke the grant at Bitbucket. The operator
-  registers a Bitbucket OAuth client with the callback `<PROTOCOL>://<DOMAIN>/oauth/callback`
-  and sets `BITBUCKET_OAUTH_CLIENT_ID` and `BITBUCKET_OAUTH_CLIENT_SECRET`.
 - **Tasks**: a workflow agent can put the card it moves at a chosen place in the column
   (`position`, 0 = top) instead of always at the bottom.
 - **Docs**: the Tools page explains how agents list archived tasks with
@@ -108,12 +126,6 @@ governance, community health — carry none.
   shown were offered on average over the selected period, which is what they are billed for,
   split into paying, trial and managed, with the change from the period before. A managed
   company without a worker limit counts at the most workers it ran at once.
-- **Sessions & Runs**: an interactive session can be suspended instead of finished, by its owner with **Suspend** or
-  by the 23-hour limit, which used to finish it. Its files, each repository's unpushed commits and uncommitted changes,
-  and the agent's conversation are kept for 30 days, and **Restore** starts a new session that picks up the same
-  conversation. An interactive workflow step can be suspended too: its run waits for it, and **Restore** on the run page
-  continues the same step. A suspended session holds no slot; its owner is emailed when it is suspended and three days
-  before it expires. Operators: a workflow run may now last 40 days instead of 7.
 
 ### Fixed
 - The `flow-web` image runs Ruby 4.0.10, which fixes the seven memory-safety bugs in
@@ -185,8 +197,6 @@ governance, community health — carry none.
   showed no usage.
 
 ### Changed
-- **Profile**: the consent switches on **Connected accounts** now refuse a request that names
-  no switch, an unknown field, or a value that is not true or false, for every provider.
 - **Docs**: *Session queues* describes workers as the company's own number,
   set on Settings → General, instead of an installation ceiling, and gains a
   *Prioritising projects* section: how reserving workers keeps the projects that
@@ -233,11 +243,6 @@ governance, community health — carry none.
   levels in Codex. A Grok step that stops on its "free Grok Build usage limit" message
   fails with that message instead of waiting for the no-output watchdog. Gemini CLI stays at 0.60.0: 0.70.0 still stops `--yolo` at a prompt
   when the agent edits a build file or runs a workspace script.
-- **Company settings**: a self-hosted installation bought through AWS Marketplace
-  reports its usage under the dimension `worker_minute`, the same word as the SaaS
-  product, instead of `queue_minute`. Operators: from this version an installation meters
-  only against the new self-hosted listing; an installation subscribed to the first listing
-  (dimension `queue_minute`) keeps running and reports no usage once upgraded.
 
 ## [1.16.0] - 2026-11-19
 
@@ -1818,7 +1823,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.17.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.18.0...develop
+[1.18.0]: https://github.com/AixleHQ/flow/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/AixleHQ/flow/compare/v1.16.0...v1.17.0
 [1.16.0]: https://github.com/AixleHQ/flow/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/AixleHQ/flow/compare/v1.14.0...v1.15.0
