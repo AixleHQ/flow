@@ -285,6 +285,25 @@ module CloudAuth
       assert_raises(ExpiredError) { @flow.poll(handle: started.handle) }
     end
 
+    test "the cache holds the in-flight state only encrypted" do
+      started = start_flow
+      @flow.poll(handle: started.handle)
+
+      sealed = Rails.cache.read("#{AwsDeviceFlow::CACHE_NAMESPACE}:#{started.handle}")
+
+      assert_kind_of String, sealed
+      %w[fake-client-secret fake-access-token fake-refresh-token].each do |secret|
+        assert_not_includes sealed, secret
+      end
+    end
+
+    test "state that does not decrypt reads as an expired flow" do
+      started = start_flow
+      Rails.cache.write("#{AwsDeviceFlow::CACHE_NAMESPACE}:#{started.handle}", { "user_id" => @user.id })
+
+      assert_raises(ExpiredError) { @flow.poll(handle: started.handle) }
+    end
+
     test "cancel drops the in-flight authorization" do
       started = start_flow
       @flow.cancel(handle: started.handle)

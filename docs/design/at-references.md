@@ -156,8 +156,8 @@ unsaved payload. It returns issues:
 | `ref_not_attached` | error | a token names a resource the session will not receive | `attach_asset` / `attach_mcp_server` / `attach_tool` / `attach_skill` / `attach_config_item` |
 | `output_not_upstream` | error | an output token names a session that does not run before this one | `add_dependency` |
 | `output_undeclared` | error | an output token names a spec the session no longer declares | — |
-| `spec_name_invalid` | error | blank, absolute, or contains `..` | — |
-| `name_pattern_invalid` | error | `name_pattern` is not a valid regex | — |
+| `spec_name_invalid` | error for a required spec, warning for an optional one; warning when blank | blank (the spec is ignored), absolute, or contains `..` | — |
+| `name_pattern_invalid` | error for a required spec, warning for an optional one | `name_pattern` is not a valid regex | — |
 | `input_unsatisfied` | warning (error at run start) | a required input that no upstream output, attached asset or run input can satisfy | — |
 | `output_collision` | warning | two upstream sessions declare the same output | — |
 | `step_not_upstream` | warning | a session token names a session that does not run before this one | `add_dependency` |

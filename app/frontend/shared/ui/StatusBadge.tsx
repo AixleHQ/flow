@@ -90,6 +90,15 @@ export function statusTone(state: string | null | undefined): StatusTone {
   return STATE_TONES[state] ?? 'neutral';
 }
 
+/**
+ * A session in `ready` is the one users see as "Running" — the agent is working.
+ * `ready` stays `success` in the shared map because runners and integrations use
+ * it to mean healthy, so session surfaces resolve through this instead.
+ */
+export function sessionStatusTone(state: string | null | undefined): StatusTone {
+  return state === 'ready' ? 'running' : statusTone(state);
+}
+
 /** `in_progress` → `In progress`. Only used when no explicit label is given. */
 export function statusLabel(state: string): string {
   const words = state.replace(/_/g, ' ').trim();

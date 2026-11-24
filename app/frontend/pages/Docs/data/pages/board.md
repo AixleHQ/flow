@@ -31,10 +31,14 @@ Slack and webhooks (and the full model), see
 When a card enters a bound column in auto mode and:
 
 - there is **no pending Gate** on the card, **and**
-- there is **no active WorkflowRun** on the card,
+- the same card did not set off this binding within the last `cooldown_seconds`,
 
 a new non-interactive `WorkflowRun` starts. The agent reads the card
 title, description, comments, and attached assets as context.
+
+A run already active on the card does not hold the new one back: a card that
+enters a bound column while an earlier run of it is still going starts a second
+run, and the earlier one keeps running.
 
 Nobody is at the terminal when a column starts a run on its own, so a column in
 `auto` mode takes only a workflow whose every step has auto-run on. Saving one
@@ -45,7 +49,7 @@ not start.
 
 ## Presets
 
-When creating a project, pick one of three column presets:
+The first time you open a new project's board, pick one of three column presets:
 
 | Preset          | Columns                                                                                                |
 | --------------- | ------------------------------------------------------------------------------------------------------ |
@@ -84,8 +88,8 @@ The task's attachments are available through `board_get_task_assets` (they are
 not mounted in the container).
 
 This is the **BoardContext** builder — one of the layers in the agent
-context stack. See the Agents page (How context is built) for the full
-stack.
+context stack. See [How context is built](/docs/agents#how-context-is-built)
+for the full stack.
 
 ## Task IDs
 
@@ -93,7 +97,7 @@ Every task has a numeric id that is stable for its lifetime. It appears next to
 the task title on the card, in collapsed-column chips (hover to see), and in the
 detail drawer header. Clicking `#42` copies the number to the clipboard.
 
-Every task also has a page of its own at `/company/projects/<project>/tasks/42`.
+Every task also has a page of its own at `/company/<company>/projects/<project>/tasks/42`.
 **Open as page** (↗ in the drawer header) goes there, and **Copy link** copies
 that address — the one to share or to keep in release notes. The page has the
 drawer's tabs, with the properties beside the description, and still opens once

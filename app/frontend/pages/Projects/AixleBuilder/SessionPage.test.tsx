@@ -4,6 +4,7 @@ import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
 import { FakeWebSocket, installFakeWebSocket } from 'test/fakeWebSocket';
+import { answerFetch } from 'test/fetchStub';
 import { renderAuthedPage, screen, userEvent, waitFor } from 'test/renderPage';
 
 import SessionPage from './SessionPage';
@@ -403,5 +404,34 @@ describe('Projects/AixleBuilder/SessionPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /Back/ }));
 
     expect(router.visit).toHaveBeenCalledWith('/company/projects/7/aixle_builder');
+  });
+
+  const builderProps = (session: Record<string, unknown>) => ({
+    props: {
+      project,
+      session: { ...baseSession, ...session },
+      cableStream: 'signed-stream',
+      builderActivities: [],
+      workflows: [],
+      boardColumns: [],
+    },
+  });
+
+  it('restores a suspended build into the Builder session that continues it', async () => {
+    const fetchSpy = answerFetch({ 'POST /api/v1/terminal_sessions/:id/restore': { id: 43, projectId: 7 } });
+    renderAuthedPage(<SessionPage />, builderProps({ state: 'suspended', restorable: true }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Restore' }));
+
+    await waitFor(() => expect(router.visit).toHaveBeenCalledWith('/company/projects/7/aixle_builder/43/session'));
+    fetchSpy.mockRestore();
+  });
+
+  it('opens the Builder session that continued a restored one', async () => {
+    renderAuthedPage(<SessionPage />, builderProps({ state: 'restored', restoredSessionId: 43 }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Continued in session #43' }));
+
+    expect(router.visit).toHaveBeenCalledWith('/company/projects/7/aixle_builder/43/session');
   });
 });

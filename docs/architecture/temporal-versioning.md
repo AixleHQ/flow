@@ -14,10 +14,11 @@ point, the workflow task fails with a nondeterminism error (`[TMPRL1100]`). The
 server retries that task forever, so the execution is stuck until code that
 replays it is deployed.
 
-Our executions stay open for a long time. A workflow run
-(`WorkflowExecutionWorkflow`) can stay open for 24 hours, and an admitted run
-(`WorkflowExecutionWorkflowV2`) for 7 days (`TemporalWorkflowRegistry`). Every
-deploy therefore replays histories recorded by older code.
+Our executions stay open for a long time. Every workflow run starts as
+`WorkflowExecutionWorkflowV2` and can stay open for 40 days
+(`TemporalWorkflowRegistry::RUN_TIMEOUT`), long enough for a suspended step to
+wait out its 30-day restore window. Every deploy therefore replays histories
+recorded by older code.
 
 `WorkflowExecutionWorkflowV2` inherits its step loop from
 `WorkflowExecutionWorkflow`, and `ContainerWorkflowV2` inherits its phases from
@@ -71,8 +72,7 @@ Rules:
 - Retire a patch in two deploys:
   1. Once no execution started without the patch can still be open, replace
      `patched(id)` with `Temporalio::Workflow.deprecate_patch(id)` and delete
-     the old branch. That is 24 hours after the deploy for a patch only
-     `WorkflowExecutionWorkflow` runs, and 7 days for one V2 inherits, plus a
+     the old branch. That is 40 days after the deploy (`RUN_TIMEOUT`), plus a
      margin.
   2. Once no execution started before step 1 can still be open, delete the
      `deprecate_patch` call.

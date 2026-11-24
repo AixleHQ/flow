@@ -4,6 +4,7 @@ class SubStep < ApplicationRecord
   include DecodesHtmlEntities
 
   belongs_to :step
+  belongs_to :origin_sub_step, class_name: "SubStep", optional: true
   has_many :sub_step_runs
 
   decodes_html_entities :name

@@ -21,6 +21,7 @@ const version = (overrides: Partial<EntityVersion>): EntityVersion => ({
   restoredFromNumber: null,
   baseline: false,
   duplicatedFromId: null,
+  appliedFromDraft: false,
   disabledTriggerIds: [],
   ...overrides,
 });
@@ -70,6 +71,24 @@ describe('VersionHistoryDrawer', () => {
     expect(await screen.findByText('Initial state')).toBeInTheDocument();
     expect(screen.getByText('Ada by Aixle Builder')).toBeInTheDocument();
     expect(screen.getByText('current')).toBeInTheDocument();
+  });
+
+  it('marks the version a workflow draft was applied as', async () => {
+    answerFetch({
+      [`GET ${listPath}`]: {
+        versions: [
+          version({ id: 12, number: 2, versionableType: 'Workflow', appliedFromDraft: true }),
+          version({ id: 11, number: 1, versionableType: 'Workflow' }),
+        ],
+        nextBefore: null,
+        currentVersionNumber: 2,
+      },
+    });
+
+    renderDrawer({ versionableType: 'Workflow' });
+
+    expect(await screen.findByRole('button', { name: /v2 Applied from draft/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /v1 Saved/ })).toBeInTheDocument();
   });
 
   it('shows what a version changed, and switches to comparing it with the current one', async () => {

@@ -306,7 +306,16 @@ module Agents
     # (1.0.108). It is the only full record of a Copilot session, because the TUI always
     # draws on the alternate screen and the terminal log keeps just its last frame.
     def session_log_paths
-      super + [ "#{copilot_dir}/session-state/*/events.jsonl" ]
+      super + [ "#{copilot_dir}/session-state/*/events.jsonl", MITM_LOG_PATH ]
+    end
+
+    # The model API of each seat type. Not `githubcopilot.com` whole, which adds the CLI's
+    # telemetry and experiments, and not `api.github.com`: the CLI only checks the plan and
+    # its own releases there, and the agent's `gh` calls to the customer's repositories go
+    # to the same host.
+    def mitm_tracked_domains
+      %w[api.githubcopilot.com api.individual.githubcopilot.com api.business.githubcopilot.com
+         api.enterprise.githubcopilot.com]
     end
 
     # Every transcript is named events.jsonl inside a directory named after the CLI's

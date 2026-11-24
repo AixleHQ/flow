@@ -31,8 +31,8 @@ module InternalTools
         mrkdwn is NOT Markdown: *bold*, _italic_, ~strike~, `code`, ```block```, > quote,
         <https://url|label>, <@U123>, <#C123>. [label](url) does NOT render in an mrkdwn text
         object — use a markdown block if you want Markdown syntax.
-        Interactive blocks (actions/input, buttons, selects) are rejected: this deployment runs no
-        Slack interactivity endpoint, so a click would go nowhere.
+        Interactive blocks (actions/input, buttons, selects) are rejected: the Slack interactivity
+        endpoint serves only the Run workflow shortcut and its form, so a click would go nowhere.
         Keep `text` set alongside blocks — it is the notification and fallback line.
       GUIDE
 
@@ -127,7 +127,7 @@ module InternalTools
         interactive = blocks.select { |b| INTERACTIVE_BLOCK_TYPES.include?(b[:type].to_s) }
         if interactive.any?
           return [ nil, error("Block type `#{interactive.first[:type]}` needs a Slack interactivity " \
-                              "endpoint this deployment does not run — its clicks would go nowhere. " \
+                              "handler, and the endpoint serves only the Run workflow shortcut — its clicks would go nowhere. " \
                               "Post the options as text and ask for a reply instead.") ]
         end
 

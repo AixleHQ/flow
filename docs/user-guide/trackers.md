@@ -24,7 +24,7 @@ Open **Trackers** in the project's sidebar, under **Resources**. Each row shows:
 | Column | Shows |
 | --- | --- |
 | **Tracker** | The external project's name, a **Primary** and a **Read-only** badge where they apply, and the handle underneath |
-| **Connection** | The connection it goes through, and the provider: **Azure Boards**, **Jira**, **GitHub Projects**, **Linear** or **YouTrack** |
+| **Connection** | The connection it goes through, and the provider: **Azure Boards**, **Jira**, **GitHub Projects**, **GitLab**, **Linear** or **YouTrack** |
 | **Triggers** | The tracker triggers that listen to it — those set to any tracker appear on every row — each with its workflow, what it waits for and whether it is off. The workflow name opens its **Triggers** tab |
 | **Status** | **Active**, **Connection inactive** or **Detached** |
 
@@ -34,9 +34,10 @@ Viewers see the list but no actions.
 
 You normally do not add trackers by hand. Connecting Azure DevOps, Jira,
 Linear or YouTrack — or picking projects with **GitHub Projects** on a GitHub
-connection — creates one tracker for each external project the connection
-covers, and the project's first tracker becomes its primary. A Jira, Linear,
-YouTrack or GitHub connection whose projects (Linear: teams) change gets trackers for the new
+connection, or with **Issue boards** on a GitLab connection — creates one
+tracker for each external project the connection covers, and the project's
+first tracker becomes its primary. A Jira, Linear, YouTrack, GitHub or GitLab
+connection whose projects (Linear: teams) change gets trackers for the new
 ones, and the trackers of those it no longer covers are detached.
 
 To get a tracker for another external project, add the project to its
@@ -84,8 +85,8 @@ A tracker is **usable** when it is not detached and its connection is active.
   **Integrations** page (Test connection, or connect again). Until then agents
   cannot reach the tracker, its events start nothing, and
   **Connect a board column** is not offered.
-- **Detached** — detached by hand, or by a Jira, Linear, YouTrack or GitHub connection
-  that no longer covers the project.
+- **Detached** — detached by hand, or by a Jira, Linear, YouTrack, GitHub or
+  GitLab connection that no longer covers the project.
 
 ### Detach and attach again
 
@@ -184,12 +185,15 @@ A mention is recognised only once Flow knows its own account in the tracker:
   **This Atlassian account is kept for Aixle**;
 - **GitHub Projects** — always: the connection writes as the app, and people
   mention it as `@<app-slug>`;
+- **GitLab** — a **Sign in with GitLab** connection, which writes as its
+  service account; people mention it as `@<service account username>`. A
+  token connection acts as a person, so it never recognises a mention;
 - **Linear** — an API-key connection marked
   **This Linear account is kept for Aixle**, or Aixle's Linear app. Linear's
   mention picker does not offer the app, but a comment that types its username
   (`@<app username>`, as its profile in Linear shows it) counts.
-- **YouTrack** — a connection marked **This YouTrack account is kept for
-  Aixle**; people mention it as `@<login>`.
+- **YouTrack** — always: the connection writes as the Aixle Flow app's
+  service user, and people mention it as `@aixle-flow`.
 
 A mention inside code — in backticks, a code block, or Jira's `{code}` and
 `{{…}}` — does not count, as it notifies nobody in the tracker either. That is
@@ -329,6 +333,10 @@ delivery works:
 - **GitHub Projects** — the GitHub App's own webhook, once the app has the
   Projects and Issues permissions and their events. See
   [GitHub Projects as a tracker](/docs/github#github-projects-as-a-tracker).
+- **GitLab** — a webhook for issue and comment events, which Flow adds to each
+  project you pick under **Issue boards**. Adding it needs the **Maintainer**
+  role in that project. See
+  [GitLab issues as a tracker](/docs/gitlab#gitlab-issues-as-a-tracker).
 - **Linear** — the webhook of Aixle's Linear app, or for an API-key connection
   one webhook per team, which only a workspace admin's key can register. See
   [The webhooks](/docs/linear#the-webhooks).
@@ -372,7 +380,7 @@ them without attaching anything.
 | --- | --- |
 | `tracker_list` | Lists the project's trackers: handle, provider, primary, access, whether each is usable, and which one started this run |
 | `tracker_describe` | A tracker's statuses with a portable category (todo, in_progress, done, canceled), its issue types and the extra fields that can be set |
-| `tracker_search_issues` | Searches issues by text, status, type, assignee, labels or ids, paginated; Jira also takes JQL in `native_query`, and GitHub Projects its project filter syntax |
+| `tracker_search_issues` | Searches issues by text, status, type, assignee, labels or ids, paginated; Jira also takes JQL in `native_query`, GitHub Projects its project filter syntax, and YouTrack its query language |
 | `tracker_get_issue` | Reads one issue in full, by id, key or URL |
 | `tracker_list_comments` | Lists an issue's comments, paginated |
 | `tracker_list_users` | Finds people an issue can be assigned to; not every tracker can list users |
@@ -390,7 +398,9 @@ What a status or an assignee is differs by provider. On Azure Boards,
 `tracker_transition_issue` takes a state and the card moves to the column that
 state maps to, and assignees are emails or display names. On Jira it takes a
 column, a workflow status or a transition name. On GitHub Projects it takes a
-Status option and assignees are GitHub logins; on Linear it takes a workflow
+Status option and assignees are GitHub logins; on GitLab it takes a column —
+**Open**, one of the board's label lists or **Closed** — and assignees are
+GitLab usernames of the project's members; on Linear it takes a workflow
 state, and assignees are names, usernames or emails of the team's members; on
 YouTrack it takes a value of the project's State field, and assignees are
 logins, names or emails of the people its Assignee field offers. The provider
@@ -404,8 +414,8 @@ Every tool takes an optional `tracker`. The tracker is chosen in this order:
 2. The tracker that started the run. If it is no longer usable, the call fails
    rather than going to another tracker.
 3. For tools that take an issue, the one tracker the issue's reference belongs
-   to: a Jira, Linear or YouTrack key such as `APP-12`, a GitHub `owner/repo#12`, or the
-   issue's URL. A GitHub reference names only the organization, so it decides
+   to: a Jira, Linear or YouTrack key such as `APP-12`, a GitHub `owner/repo#12`,
+   a GitLab `group/project#12`, or the issue's URL. A GitHub reference names only the organization, so it decides
    only when the project has one tracker on that organization.
 4. The primary tracker; when no usable tracker is primary, the only usable one.
 5. Otherwise the call fails and names the handles to choose from.
@@ -418,7 +428,9 @@ and the error names the primary tracker when that is a different one.
 In the tracker, a change is made by whoever the connection acts as — see
 [What the connection runs as](/docs/azure-devops#what-the-connection-runs-as)
 for Azure DevOps, and the tables at the top of [Jira](/docs/jira) and
-[Linear](/docs/linear); on [YouTrack](/docs/youtrack) the Aixle Flow app's service user. On GitHub Projects it is the app, as `<app-slug>[bot]`. In Flow, every
+[Linear](/docs/linear); on [YouTrack](/docs/youtrack) the Aixle Flow app's service user. On GitHub Projects it is the app, as `<app-slug>[bot]`. On
+[GitLab](/docs/gitlab#gitlab-issues-as-a-tracker) it is the service account of
+a Sign in with GitLab connection, or whoever a pasted token belongs to. In Flow, every
 write is recorded before it is sent, with the session, run and workflow that
 made it. That record is how "Changes made by Aixle" knows which run caused an
 event, and it makes retries safe:
@@ -436,7 +448,7 @@ Agents in a tracker run can read the files on the issue that started it, and
 can put files onto issues.
 
 - **What counts as a file.** Files attached to the issue, and images or files
-  embedded in its description and comments. On Linear and GitHub, files exist
+  embedded in its description and comments. On Linear, GitHub and GitLab, files exist
   only as embedded links, so those are what Flow finds.
 - **Getting files in.** By default, files stay in the tracker until an agent
   needs one: it lists them with `tracker_list_attachments` and fetches them
@@ -459,7 +471,8 @@ can put files onto issues.
 - **What is never copied.** Files over 50 MB; past 20 files or 200 MB in one
   go (the rest stay available to `tracker_download_attachments`); and files the
   tracker shows to only some people — a YouTrack attachment limited to groups,
-  or a Jira file that only restricted comments show. A copy on the card is
+  a Jira file that only restricted comments show, or a GitLab file on a
+  confidential issue or in an internal note. A copy on the card is
   visible to everyone in the project, so a narrower file stays in the tracker.
 - **Putting files on issues.** `tracker_attach_files` sends up to 10 files of
   up to 50 MB. With `comment`, it posts a comment that shows them. The same
@@ -506,6 +519,8 @@ unavailable, and ask for them.
 - [GitHub](/docs/github#github-projects-as-a-tracker) — organization projects
   on the GitHub App connection, the permissions the app needs, and the Status
   field as the board's columns.
+- [GitLab](/docs/gitlab#gitlab-issues-as-a-tracker) — the projects picked under
+  **Issue boards**, the webhook on each, and a board's label lists as columns.
 - [Linear](/docs/linear) — Aixle's Linear app or an API key, the per-team
   webhooks, and workflow states as statuses.
 - [YouTrack](/docs/youtrack) — the Aixle Flow app from JetBrains Marketplace

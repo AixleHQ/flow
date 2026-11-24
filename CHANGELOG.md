@@ -13,12 +13,59 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Workflows**: change a workflow that is in use through a draft. **Edit in draft** (or
+  **Save as draft** when a Save would go live) opens a copy that you edit and test-run while
+  triggers and board columns keep running the live version; **Apply** makes it live as one
+  new version, **Discard draft** drops it. The personal MCP has the same flow:
+  `create_workflow_draft`, `get_workflow_draft_diff`, `apply_workflow_draft`,
+  `discard_workflow_draft`.
+- Runners: an interactive session can run on a runner. The new-session form no longer
+  disables runners in interactive mode, and the session page has the terminal, the read-only
+  view, the file panel, uploads and the IDE, as for a hosted session. A machine needs
+  `aixle-runner` 0.5.0 or later for this; on an older one the session starts and its terminal
+  does not open. The platform now recommends 0.5.0 and pins the `linux-amd64` and
+  `linux-arm64` binaries of
+  [runner-v0.5.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.5.0) by their
+  SHA-256. No minimum runner version: older runners keep working.
+
 ### Changed
+- **Companies & projects**: every page of a company carries it in its address,
+  `/company/<company>/…`, so a link to a project, a workflow or any company page opens in
+  the right company, and two tabs can stay on two companies. Links from before keep
+  working and open in the project's company, or in the one you used last. A company's short
+  name in the address comes from its email domain (`acme.com` → `acme`).
 - **Admin**: the dashboard opens on the current week, shows Utilization, Average wait and
   p95 wait right after Company, keeps the table's header and Company column in view while
   it scrolls, and folds its explanation into a "How to read this dashboard" section.
+- **Sessions & Runs**: a session's HTTP log records each call's method, address, status,
+  headers and size, and keeps a request or response body only where Flow reads the
+  session's usage from it. Before, most of the log was the conversation the agent re-sent
+  to the model on every turn.
+- **Sessions & Runs**: the HTTP log of an Antigravity, Gemini or Copilot session records only
+  the agent's own model and sign-in traffic. Gemini's used to record everything the agent
+  downloaded or called, and a Copilot session now keeps this log at all.
 
 ### Fixed
+- **Docs**: the in-app documentation matches the product: a quick start whose first run
+  starts, the Stripe key's Invoices permission, immediate cancellation, the hosted AWS
+  Marketplace listing, project-only resources, gates, GitLab trackers, and the pages that
+  had drifted from their repository copies (drafts, passwords, runner status, usage limits).
+- **Profile**: connecting Amazon Bedrock through IAM Identity Center keeps the sign-in in
+  progress (the client registration and the tokens) encrypted in the cache. A connect left
+  open across the upgrade has to be started again.
+- **Sign-in & onboarding**: `AUTH_ENABLED_KINDS` now narrows the sign-in methods an
+  installation offers. It was ignored, so every configured method was offered. If you set it,
+  check the value before upgrading: a method it leaves out stops being offered.
+- **Sessions & Runs**: a running session shows an amber "Running" status in the all-projects
+  and project lists, on its page and in Usage. It used to read green, like a finished one.
+- **Analytics**: token counts of a billion or more read as `1.1B` instead of `1069.7M`, and
+  every page writes token counts the same way (`12.5k`, `2.0M`): Usage, Sessions & Runs, the
+  project overview and task cards.
+- **Aixle Builder**: restoring a suspended build, and the "Continued in session" link on a
+  restored one, open the build's session. They used to lead to a page that does not exist.
+- **Admin**: deleting a company that has set up SCIM provisioning works again. It used to
+  end in an error page and leave the company in place.
 - **Repositories**: adding a GitLab repository no longer ends in an error page when GitLab
   does not answer; the picker comes up empty after at most a few seconds instead of hanging.
 - **Tasks**: a collapsed board column no longer flickers a horizontal scrollbar while a card
@@ -36,6 +83,9 @@ governance, community health — carry none.
 - **Sessions & Runs**: a Kiro session's HTTP log now records only Kiro's own traffic. It
   used to record every request the agent made to AWS, response bodies included, which
   could push the log past 1 GB.
+- **Connectors**: the daily check that warns when a catalog connector changes the tools it
+  offers checks every connector again. A connector deleted and then installed again under
+  the same name used to stop the check, so the connectors after it were not checked.
 
 ## [1.17.0] - 2026-11-23
 

@@ -866,11 +866,34 @@ module Agents
     # Usage Collection (called once at session cleanup)
     # =================================================================
 
-    # Domains tracked by MITM proxy for usage logging.
-    # Empty = log all traffic (default for agents without usage tracking).
+    MITM_LOG_PATH = "/var/log/mitm/http.log"
+
+    # The hosts whose traffic the container's proxy logs, matched as a suffix
+    # (`kiro.dev` covers `runtime.us-east-1.kiro.dev`). Empty logs nothing. Everything
+    # the agent itself does over HTTP goes through the same proxy, so a parent domain
+    # also logs the agent's own work on that vendor's cloud.
     # @return [Array<String>]
     def mitm_tracked_domains
       []
+    end
+
+    # The logged entries that keep their bodies, as `request:<host><path prefix>` or
+    # `response:<host><path prefix>`. Every other entry keeps its method, URL, status,
+    # headers and size, without the body. A body belongs here only when #collect_usage
+    # parses it: a model call re-sends the whole conversation on every turn.
+    # @return [Array<String>]
+    def mitm_logged_bodies
+      []
+    end
+
+    # What the proxy in the container logs (docker/base/logger/mitm_logger.py).
+    # MITM_LOG_BODIES is never empty: an image reads its absence as "keep every body".
+    def mitm_env
+      {
+        "MITM_LOG_PATH" => MITM_LOG_PATH,
+        "MITM_TRACKED_DOMAINS" => mitm_tracked_domains.join(","),
+        "MITM_LOG_BODIES" => mitm_logged_bodies.join(",").presence || "none"
+      }
     end
 
     # Log files inside container to collect as artifacts after session ends.

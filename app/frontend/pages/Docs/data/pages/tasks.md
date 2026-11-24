@@ -39,11 +39,14 @@ Open a card and the detail drawer has tabs:
 - **Details** — description, assignee, tags, the column it sits in (moving it
   from the **Column** select is the same as dragging it), and a *Latest run*
   tile.
-- **Runs** — every workflow run this card has triggered, newest first, with
+- **Runs** — shown once the card has runs, or sits in a column that starts a
+  workflow. Every workflow run this card has triggered, newest first, with
   who it ran as — *Planner → Anna* when a team handed it to Anna. Click one to
   jump into the session.
 - **Comments** — the conversation. Agents comment here too, so you can filter
   by author type to read only what people wrote, or only what agents produced.
+- **Assets** — files attached to the card, with **Upload new** to add one.
+- **Activity** — what people and agents did on this card, newest first.
 - **Analytics** — what this single card has cost: run time, tokens, spend.
 
 **Open as page** (↗ in the drawer header) opens the card as a page of its own,

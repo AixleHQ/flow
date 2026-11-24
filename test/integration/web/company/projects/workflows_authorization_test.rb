@@ -39,6 +39,11 @@ class Web::Company::Projects::WorkflowsAuthorizationTest < ActionDispatch::Integ
     assert_project_read { get builder_company_project_workflow_path(@project, @workflow) }
   end
 
+  test "a draft is a project read" do
+    WorkflowDrafts.open!(@workflow, actor: Versions::Actor.system)
+    assert_project_read { get draft_company_project_workflow_path(@project, @workflow) }
+  end
+
   test "create is a project write" do
     assert_project_write do
       post company_project_workflows_path(@project),

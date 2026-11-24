@@ -76,6 +76,7 @@ import {
   apiV1ProjectColumnsPath,
   apiV1ProjectColumnPath,
   reorderApiV1ProjectColumnsPath,
+  companyProjectBoardPath,
 } from 'shared/routes';
 import { PageHeader } from 'shared/ui/PageHeader';
 
@@ -255,7 +256,7 @@ const BoardPage = () => {
     setLocalTasks((prev) => prev.map((t) => (t.id === nextTask.id ? nextTask : t)));
   }, [selectedTaskProp, setLocalTasks]);
 
-  const boardUrl = `/company/projects/${project.id}/board`;
+  const boardUrl = companyProjectBoardPath(project.id);
 
   // Agents change cards in quick bursts, one request per change, and every open board reloads on
   // each: a burst is folded into one reload, and a steady stream still reloads every few seconds.

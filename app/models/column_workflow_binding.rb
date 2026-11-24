@@ -44,6 +44,7 @@ class ColumnWorkflowBinding < ApplicationRecord
 
   def workflow_accessible_from_project
     return unless workflow && board_column
+    return errors.add(:workflow, "is a draft: columns start the live workflow") if workflow.draft?
 
     project = board_column.board&.project
     return unless project

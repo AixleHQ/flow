@@ -21,7 +21,7 @@ class MarketplaceProposalMailer < ApplicationMailer
     @asked_by = license.proposed_by_email
     @aws_account_id = license.customer_aws_account_id
     @card_billed = @company.stripe_subscription_id.present?
-    @url = company_settings_billing_url
+    @url = company_settings_billing_url(company_slug: @company.slug)
 
     mail(to: admin.email, subject: "A request to bill #{@company.name} through AWS Marketplace")
   end

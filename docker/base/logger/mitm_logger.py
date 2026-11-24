@@ -2,9 +2,16 @@
 Mitmproxy addon that logs outbound requests AND responses to a file.
 Binary bodies (e.g. protobuf) are base64-encoded for safe JSON storage.
 
-Supports domain filtering via MITM_TRACKED_DOMAINS env var (comma-separated).
-When set, only requests to listed domains are logged.
-When empty, all traffic is logged.
+What is logged is the platform's call, made per agent (Agents::BaseAdapter#mitm_env):
+  * MITM_TRACKED_DOMAINS (comma-separated, suffix match): only traffic to these hosts is
+    logged. Set but empty logs nothing; unset logs everything, for a container started
+    by hand.
+  * MITM_LOG_BODIES (comma-separated `request:<host><path prefix>` or
+    `response:<host><path prefix>`, or `none`): the entries that keep their bodies.
+    Every other entry keeps its method, URL, status, headers and size. Unset keeps
+    every body, for a platform that predates the setting. A model call re-sends the
+    whole conversation on every turn, so its bodies are most of a log that nobody
+    reads, and they are the customer's code.
 
 Credentials are never written. Two rules, both unconditional:
   * credential-bearing headers (Authorization, Cookie, x-api-key, …) are replaced
@@ -30,7 +37,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from mitmproxy import http  # type: ignore
 from mitmproxy.net import encoding  # type: ignore
@@ -42,16 +49,45 @@ import aixle_redact  # noqa: E402
 LOG_PATH = Path(os.environ.get("MITM_LOG_PATH", "/var/log/mitm/http.log"))
 MAX_BODY = int(os.environ.get("MITM_LOG_MAX_BODY", "0"))  # 0 = unlimited
 
-# Domain filter: only log traffic to these domains (empty = log all)
-_raw_domains = os.environ.get("MITM_TRACKED_DOMAINS", "").strip()
-TRACKED_DOMAINS: Set[str] = set(d.strip() for d in _raw_domains.split(",") if d.strip())
+_raw_domains = os.environ.get("MITM_TRACKED_DOMAINS")
+LOG_ALL_HOSTS = _raw_domains is None
+TRACKED_DOMAINS: Set[str] = set(d.strip().lower() for d in (_raw_domains or "").split(",") if d.strip())
+
+
+def _host_matches(host: str, domain: str) -> bool:
+    host = (host or "").lower()
+    return host == domain or host.endswith("." + domain)
 
 
 def _should_log(host: str) -> bool:
-    """Check if traffic to this host should be logged (suffix match)."""
-    if not TRACKED_DOMAINS:
+    if LOG_ALL_HOSTS:
         return True
-    return any(host == d or host.endswith("." + d) for d in TRACKED_DOMAINS)
+    return any(_host_matches(host, d) for d in TRACKED_DOMAINS)
+
+
+def _parse_body_rules(raw: Optional[str]) -> Optional[List[Tuple[str, str, str]]]:
+    if raw is None:
+        return None
+    rules = []
+    for item in raw.split(","):
+        direction, sep, target = item.strip().partition(":")
+        if not sep or direction not in ("request", "response") or not target:
+            continue
+        host, slash, path = target.partition("/")
+        rules.append((direction, host.lower(), "/" + path if slash else "/"))
+    return rules
+
+
+BODY_RULES = _parse_body_rules(os.environ.get("MITM_LOG_BODIES"))
+
+
+def _keeps_body(direction: str, host: str, path: str) -> bool:
+    if BODY_RULES is None:
+        return True
+    path = (path or "").split("?", 1)[0]
+    return any(
+        d == direction and _host_matches(host, h) and path.startswith(p) for d, h, p in BODY_RULES
+    )
 
 
 # Headers whose value IS a credential. Matched case-insensitively, exactly — a prefix
@@ -161,11 +197,12 @@ def _encode_body(raw: Optional[bytes], content_type: str, content_encoding: str 
 def _serialize_request(flow: http.HTTPFlow) -> Dict[str, Any]:
     req = flow.request
     ct = req.headers.get("content-type", "")
-    body_info = (
-        _blank_body("auth endpoint")
-        if _is_auth_endpoint(req.host, req.path)
-        else _encode_body(req.raw_content, ct, req.headers.get("content-encoding", ""))
-    )
+    if _is_auth_endpoint(req.host, req.path):
+        body_info = _blank_body("auth endpoint")
+    elif not _keeps_body("request", req.host, req.path):
+        body_info = _blank_body("not logged")
+    else:
+        body_info = _encode_body(req.raw_content, ct, req.headers.get("content-encoding", ""))
 
     return {
         "ts": datetime.datetime.utcnow().isoformat() + "Z",
@@ -189,12 +226,15 @@ def _serialize_response(flow: http.HTTPFlow) -> Optional[Dict[str, Any]]:
 
     req = flow.request
     ct = resp.headers.get("content-type", "")
-    body_info = (
-        _blank_body("auth endpoint")
-        if _is_auth_endpoint(req.host, req.path)
-        else _encode_body(resp.raw_content, ct, resp.headers.get("content-encoding", ""))
-    )
+    if _is_auth_endpoint(req.host, req.path):
+        body_info = _blank_body("auth endpoint")
+    elif not _keeps_body("response", req.host, req.path):
+        body_info = _blank_body("not logged")
+    else:
+        body_info = _encode_body(resp.raw_content, ct, resp.headers.get("content-encoding", ""))
 
+    # A streamed response has no raw_content; #responseheaders counted what went through.
+    streamed = flow.metadata.get("_body_size")
     return {
         "ts": datetime.datetime.utcnow().isoformat() + "Z",
         "direction": "response",
@@ -203,7 +243,7 @@ def _serialize_response(flow: http.HTTPFlow) -> Optional[Dict[str, Any]]:
         "path": req.path,
         "url": req.url,
         "headers": _redact_headers(dict(resp.headers)),
-        "content_length": len(resp.raw_content or b""),
+        "content_length": streamed[0] if streamed else len(resp.raw_content or b""),
         **body_info,
     }
 
@@ -264,10 +304,18 @@ def responseheaders(flow: http.HTTPFlow) -> None:
         flow.response.stream = True
         return
 
-    # An auth endpoint's body is dropped anyway — don't accumulate a token in memory
-    # on the way to discarding it.
-    if _is_auth_endpoint(flow.request.host, flow.request.path):
-        flow.response.stream = True
+    # A body that is dropped anyway is counted, not held: an auth endpoint's would put a
+    # token in memory, and an image layer or a model stream would hold its whole size.
+    req = flow.request
+    if _is_auth_endpoint(req.host, req.path) or not _keeps_body("response", req.host, req.path):
+        size = [0]
+
+        def _count(data: bytes) -> bytes:
+            size[0] += len(data)
+            return data
+
+        flow.response.stream = _count
+        flow.metadata["_body_size"] = size
         return
 
     buf = bytearray()
@@ -288,7 +336,7 @@ def response(flow: http.HTTPFlow) -> None:
     if buf is not None:
         ct = flow.response.headers.get("content-type", "")
         body_info = _encode_body(bytes(buf), ct, flow.response.headers.get("content-encoding", ""))
-        entry = _serialize_response_with_body(flow, body_info)
+        entry = _serialize_response_with_body(flow, {**body_info, "content_length": len(buf)})
     else:
         entry = _serialize_response(flow)
 

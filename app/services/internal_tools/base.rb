@@ -31,6 +31,10 @@ module InternalTools
       step_run&.workflow_run
     end
 
+    def draft_test_run?
+      workflow_run&.workflow&.draft? || false
+    end
+
     # The session's one current user (design github-user-identity §2.4): set when
     # the session is created, never computed again. Tools that record who acted
     # read it here rather than deriving it from the card or the run.

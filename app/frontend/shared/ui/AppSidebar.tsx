@@ -45,6 +45,7 @@ import { getInitials } from 'shared/lib/getInitials';
 import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
 import { confirmLeave } from 'shared/lib/unsaved-changes/guards';
 import {
+  companyAnalyticsPath,
   companyAssetsPath,
   companyMembersPath,
   companySettingsPath,
@@ -182,14 +183,14 @@ const buildProjectNavGroups = (projectId: string, { externalRunners }: { externa
 
 // ─── Company-level nav ────────────────────────────────────────────────────────
 
-const companyNavGroups: NavGroup[] = [
+const buildCompanyNavGroups = (): NavGroup[] => [
   {
     items: [{ label: 'Projects', icon: <IconLayoutGrid size={18} />, path: companyProjectsPath() }],
   },
   {
     label: 'Monitoring',
     items: [
-      { label: 'Analytics', icon: <IconChartBar size={18} />, path: '/company/analytics', adminOnly: true }, // TODO: use companyAnalyticsPath() when route helper is available
+      { label: 'Analytics', icon: <IconChartBar size={18} />, path: companyAnalyticsPath(), adminOnly: true },
       {
         label: 'Sessions & Runs',
         icon: <IconTerminal2 size={18} />,
@@ -742,7 +743,9 @@ function SidebarContent({
 
   const externalRunners = useFeatureFlag('externalRunners');
   const navGroups =
-    context === 'project' && projectId ? buildProjectNavGroups(projectId, { externalRunners }) : companyNavGroups;
+    context === 'project' && projectId
+      ? buildProjectNavGroups(projectId, { externalRunners })
+      : buildCompanyNavGroups();
 
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => readCollapsedGroups());
   const toggleGroup = useCallback((label: string) => {

@@ -290,7 +290,9 @@ curl -sS -H "Authorization: Bearer $TOKEN" -X POST "$API_URL/repositories/$WORKS
 - Pull request triggers ([Pull request events](/docs/triggers-and-gates#pull-request-events))
   need the app: an approval, a request for changes or a comment starts them,
   and a token connection sends no events. Pushes do not start workflows.
-- Coder workspaces cannot clone Bitbucket repositories yet.
+- Coder workspaces clone Bitbucket repositories with the connection's
+  credential: a token connection hands over its own token, which reaches
+  everything the token reaches ([Coder](/docs/coder#limits)).
 - A repository renamed in Bitbucket while a session is running keeps its old
   address in that session's checkout, and its fetches and pushes stop
   authenticating. The next session clones it under the new name.

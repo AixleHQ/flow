@@ -1127,7 +1127,7 @@ describe('Projects/Board/BoardPage', () => {
 
     expect(screen.getByText('Total Cost')).toBeInTheDocument();
     expect(screen.getByText('$2.50')).toBeInTheDocument();
-    expect(screen.getByText('12.5K')).toBeInTheDocument();
+    expect(screen.getByText('12.5k')).toBeInTheDocument();
     expect(screen.getByText('1m 35s')).toBeInTheDocument();
   });
 

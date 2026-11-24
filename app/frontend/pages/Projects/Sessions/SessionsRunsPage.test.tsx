@@ -178,7 +178,7 @@ describe('Projects/Sessions/SessionsRunsPage', () => {
       }),
     );
 
-    expect(screen.getByRole('link', { name: 'Artem Petrov' })).toHaveAttribute('href', '/user/3');
+    expect(screen.getByRole('link', { name: 'Artem Petrov' })).toHaveAttribute('href', '/company/user/3');
     expect(screen.getByText('Deleted user')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Deleted user' })).not.toBeInTheDocument();
   });
@@ -189,7 +189,7 @@ describe('Projects/Sessions/SessionsRunsPage', () => {
     );
 
     expect(screen.getByText(/^Planner →/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Anna Lee' })).toHaveAttribute('href', '/user/3');
+    expect(screen.getByRole('link', { name: 'Anna Lee' })).toHaveAttribute('href', '/company/user/3');
   });
 
   it('navigates with the chosen type when a type tab is clicked', async () => {

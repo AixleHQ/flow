@@ -46,7 +46,7 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
              .in_board_order.then { |tasks| serialize_board_tasks(tasks) }
       },
       tasks_page_size: BoardTask::PAGE_SIZE,
-      workflows: -> { current_project.workflows.order(:name).map { |w| BoardWorkflowResource.new(w).to_h } },
+      workflows: -> { current_project.workflows.not_drafts.order(:name).map { |w| BoardWorkflowResource.new(w).to_h } },
       view_presets: -> {
         board.board_view_presets.visible_to(current_user).order(:name)
              .map { |p| BoardViewPresetResource.new(p).to_h }

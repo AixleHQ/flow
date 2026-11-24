@@ -11,12 +11,32 @@ class Web::Company::TemplateInstallsControllerTest < ActionDispatch::Integration
   end
 
   test "a guest who presses Install signs in and lands back on the version they saw" do
-    get new_company_template_install_path(namespace: "acme", slug: "dev-team-sdlc", version: 3)
+    get install_template_path("acme", "dev-team-sdlc", version: 3)
     assert_redirected_to login_path
 
     post login_path, params: { email: @user.email, password: AuthHelper::TEST_PASSWORD }
 
-    assert_redirected_to new_company_template_install_path(namespace: "acme", slug: "dev-team-sdlc", version: 3)
+    assert_redirected_to new_company_template_install_path(company_slug: @company.slug, namespace: "acme",
+                                                           slug: "dev-team-sdlc", version: 3)
+  end
+
+  test "a guest who opens a company's install page signs in and lands back on it" do
+    get new_company_template_install_path(company_slug: @company.slug, namespace: "acme", slug: "dev-team-sdlc", version: 3)
+    assert_redirected_to login_path
+
+    post login_path, params: { email: @user.email, password: AuthHelper::TEST_PASSWORD }
+
+    assert_redirected_to new_company_template_install_path(company_slug: @company.slug, namespace: "acme",
+                                                           slug: "dev-team-sdlc", version: 3)
+  end
+
+  test "a signed-in visitor of the catalog installs into the company they were last on" do
+    sign_in_as(@user)
+
+    get install_template_path("acme", "dev-team-sdlc", version: 3)
+
+    assert_redirected_to new_company_template_install_path(company_slug: @company.slug, namespace: "acme",
+                                                           slug: "dev-team-sdlc", version: 3)
   end
 
   test "the install page renders the plan for a new project" do

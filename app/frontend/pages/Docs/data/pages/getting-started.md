@@ -5,7 +5,9 @@ From an invitation to your first running workflow.
 ## Sign in
 
 Accept the invitation you were emailed, or sign in if an account already exists
-for you. Flow supports email sign-in and Google.
+for you. Flow takes a password, an emailed sign-in link, a passkey, Google,
+Microsoft, or your company's own single sign-on — whichever your installation
+and your workspace allow. See [Signing in & SSO](/docs/signing-in).
 
 ## Onboarding
 
@@ -34,13 +36,15 @@ Nothing can run on your behalf until you connect at least one agent.
 
 ## Your profile
 
-Everything personal lives in **Profile**, on three tabs.
+Everything personal lives in **Profile**, on five tabs.
 
 | Tab | What is there |
 | --- | --- |
 | **Account** | Your display name, your connected agent credentials, default models, the companies you belong to, and the [teams](/docs/project-teams) you are in — with **Leave**, and a switch that keeps you out of teams altogether |
 | **Usage** | Your own sessions, tokens and spend — plus any usage window that applies to you, with the time left on it |
 | **MCP** | Personal access: generate a token so an agent you run *outside* Flow (your own Claude Code, for example) can reach your Aixle projects |
+| **Security** | Your sign-in methods, passkeys, authentication codes, and the devices you are signed in on |
+| **Connected accounts** | Your own GitHub, GitLab and Bitbucket accounts, so agents can push and open pull requests as you — with a per-project switch for your tasks and for other people's |
 
 Credentials expire the way the underlying product's do. Reconnect from the same
 place — the Account tab — and runs pick the new credential up.

@@ -16,7 +16,7 @@ class Web::StepUpsController < Web::ApplicationController
 
   def new
     company = target_company
-    return redirect_to(company_projects_path) if company.nil? || company_auth_policy_satisfied?(company)
+    return redirect_to(app_home_path) if company.nil? || company_auth_policy_satisfied?(company)
 
     render inertia: "Auth/StepUpPage", props: {
       company_name: company.branded_name,
@@ -27,7 +27,7 @@ class Web::StepUpsController < Web::ApplicationController
 
   def create
     company = target_company
-    return redirect_to(company_projects_path) if company.nil?
+    return redirect_to(app_home_path) if company.nil?
 
     provider = IdentityProvider.deployment!(requested_kind)
     unless allowed_provider_ids(company).include?(provider.id)
@@ -38,7 +38,7 @@ class Web::StepUpsController < Web::ApplicationController
     return redirect_to step_up_path(error: "invalid_credentials") if assertion.nil?
 
     prove_additional_method(provider)
-    redirect_to company_projects_path
+    redirect_to app_home_path
   end
 
   private

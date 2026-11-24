@@ -63,6 +63,57 @@ class Web::Company::Projects::WorkflowsControllerTest < ActionDispatch::Integrat
     end
   end
 
+  test "builder of a live workflow names its open draft and what starts it" do
+    wf = create(:workflow, scope: @project, name: "Release")
+    create(:step, workflow: wf, allow_non_interactive: true)
+    column = create(:board_column, board: create(:board, project: @project))
+    ColumnWorkflowBinding.create!(board_column: column, workflow: wf, trigger_mode: :auto, cooldown_seconds: 0)
+    create(:trigger_binding, project: @project, workflow: wf, enabled: false)
+    draft = WorkflowDrafts.open!(wf, actor: Versions::Actor.ui(@user))
+
+    get builder_company_project_workflow_path(@project, wf)
+
+    assert_inertia_props(activeTriggerCount: 1, draftOf: nil)
+    assert_equal [ draft.id, @user.name ], inertia.props[:draft].values_at("id", "updatedBy")
+  end
+
+  test "the draft page opens the draft in the builder, and the draft's own id leads there" do
+    wf = create(:workflow, scope: @project, name: "Release")
+    create(:step, workflow: wf, name: "Build")
+    draft = WorkflowDrafts.open!(wf, actor: Versions::Actor.ui(@user))
+
+    get draft_company_project_workflow_path(@project, wf)
+
+    assert_inertia_page "Projects/Workflows/BuilderPage"
+    assert_inertia_props(draft: nil, activeTriggerCount: 0, readOnly: false)
+    assert_equal draft.id, inertia.props[:workflow]["id"]
+    assert_equal [ wf.id, "Release", 1, 1 ],
+                 inertia.props[:draftOf].values_at("id", "name", "currentVersionNumber", "baseVersionNumber")
+    assert_equal [ "Build" ], inertia.props[:steps].pluck("name")
+
+    get builder_company_project_workflow_path(@project, draft)
+    assert_redirected_to draft_company_project_workflow_path(@project, wf)
+  end
+
+  test "the draft page of a workflow without a draft goes back to its builder" do
+    wf = create(:workflow, scope: @project)
+
+    get draft_company_project_workflow_path(@project, wf)
+
+    assert_redirected_to builder_company_project_workflow_path(@project, wf)
+  end
+
+  test "drafts stay out of the workflow list and its archive" do
+    wf = create(:workflow, scope: @project, name: "Release")
+    WorkflowDrafts.discard!(WorkflowDrafts.open!(wf, actor: Versions::Actor.ui(@user)), actor: Versions::Actor.ui(@user))
+    WorkflowDrafts.open!(wf, actor: Versions::Actor.ui(@user))
+
+    get company_project_workflows_path(@project)
+
+    assert_equal [ wf.id ], inertia.props[:workflows].pluck("id")
+    assert_empty inertia.props[:archivedWorkflows]
+  end
+
   test "builder is read-only for a project viewer" do
     viewer = create(:user, :viewer, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD,
                                                            email: "client-#{SecureRandom.hex(3)}@external.com")

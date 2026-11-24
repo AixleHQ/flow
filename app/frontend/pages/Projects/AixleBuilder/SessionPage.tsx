@@ -20,7 +20,12 @@ import { apiMutate } from 'shared/lib/apiFetch';
 import { formatTime, parseDate } from 'shared/lib/formatDate';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { restoreDaysLeft, restoreSession } from 'shared/lib/sessionRestore';
-import { suspendApiV1TerminalSessionPath } from 'shared/routes';
+import {
+  companyProjectAixleBuilderFinishPath,
+  companyProjectAixleBuilderPath,
+  companyProjectAixleBuilderSessionPath,
+  suspendApiV1TerminalSessionPath,
+} from 'shared/routes';
 import { agentLabel, isAgentType } from 'shared/ui/agentRuntimes';
 import { LiveTerminal } from 'shared/ui/sessions';
 import { StatusBadge } from 'shared/ui/StatusBadge';
@@ -109,13 +114,12 @@ const SessionPage = () => {
   const isActive = ['not_started', 'queued', 'running', 'ready'].includes(s.state);
   const isFinishing = s.state === 'finishing';
   const isTerminal = ['finished', 'failed', 'cancelled', 'suspended', 'restored'].includes(s.state);
+  const continuedIn = s.restoredSessionId;
   const [finishRequested, setFinishRequested] = useState(false);
   const [suspendRequested, setSuspendRequested] = useState(false);
   const [restoreRequested, setRestoreRequested] = useState(false);
   const isSuspending = suspendRequested || s.suspending;
   const [tab, setTab] = useState<string | null>('activity');
-
-  const basePath = `/company/projects/${project.id}`;
 
   useInertiaCableStream(cableStream, {
     only: ['session', 'builder_activities', 'workflows', 'board_columns'],
@@ -130,14 +134,14 @@ const SessionPage = () => {
   const handleFinish = useCallback(() => {
     setFinishRequested(true);
     router.post(
-      `${basePath}/aixle_builder/${s.id}/finish`,
+      companyProjectAixleBuilderFinishPath(project.id, s.id),
       {},
       {
         preserveScroll: true,
         onFinish: () => setFinishRequested(false),
       },
     );
-  }, [s.id, basePath]);
+  }, [s.id, project.id]);
 
   const handleSuspend = useCallback(async () => {
     setSuspendRequested(true);
@@ -152,9 +156,11 @@ const SessionPage = () => {
 
   const handleRestore = useCallback(async () => {
     setRestoreRequested(true);
-    const restored = await restoreSession(s.id, (session) => `${basePath}/aixle_builder/${session.id}`);
+    const restored = await restoreSession(s.id, (session) =>
+      companyProjectAixleBuilderSessionPath(project.id, session.id),
+    );
     if (!restored) setRestoreRequested(false);
-  }, [s.id, basePath]);
+  }, [s.id, project.id]);
 
   // ── Render: Terminal panel ─────────────────────
 
@@ -333,9 +339,12 @@ const SessionPage = () => {
             . Restore continues the build where it stopped.
           </Text>
         )}
-        {s.state === 'restored' && s.restoredSessionId && (
-          <Button variant="subtle" onClick={() => router.visit(`${basePath}/aixle_builder/${s.restoredSessionId}`)}>
-            Continued in session #{s.restoredSessionId}
+        {s.state === 'restored' && continuedIn && (
+          <Button
+            variant="subtle"
+            onClick={() => router.visit(companyProjectAixleBuilderSessionPath(project.id, continuedIn))}
+          >
+            Continued in session #{continuedIn}
           </Button>
         )}
         {s.errorMessage && (
@@ -344,7 +353,7 @@ const SessionPage = () => {
           </Text>
         )}
         <Group gap="sm">
-          <Button variant="outline" onClick={() => router.visit(`${basePath}/aixle_builder`)}>
+          <Button variant="outline" onClick={() => router.visit(companyProjectAixleBuilderPath(project.id))}>
             Back to Builder
           </Button>
           {s.restorable ? (
@@ -352,7 +361,7 @@ const SessionPage = () => {
               Restore
             </Button>
           ) : (
-            <Button onClick={() => router.visit(`${basePath}/aixle_builder`)}>Start New Build</Button>
+            <Button onClick={() => router.visit(companyProjectAixleBuilderPath(project.id))}>Start New Build</Button>
           )}
         </Group>
       </Stack>
@@ -383,7 +392,7 @@ const SessionPage = () => {
               variant="subtle"
               size="xs"
               leftSection={<IconChevronLeft size={14} />}
-              onClick={() => router.visit(`${basePath}/aixle_builder`)}
+              onClick={() => router.visit(companyProjectAixleBuilderPath(project.id))}
             >
               Back
             </Button>

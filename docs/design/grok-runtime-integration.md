@@ -64,17 +64,21 @@ user signed in with an API key) and the entry holds the bearer token under
   the user authenticated. `#conflicting_env_keys` drops `XAI_API_KEY`
   whenever the credential is *not* an API-key login.
 
-**Not added to `REFRESHABLE_AGENT_TYPES`.** Grok session tokens do expire,
-and the CLI refreshes them itself in the container — but xAI publishes no
-token endpoint or client id for `auth.x.ai`, so a server-side `#refresh!`
-would be reverse-engineered guesswork against an undocumented endpoint.
-Instead, rotation is picked up the way it already is for every runtime:
-`AgentSessionStrategy#persist_refreshed_credentials` re-reads `auth.json` at
-cleanup and stores the rotated blob. `#token_expires_at` reads an
+**Refreshed server-side.** An OIDC login against `auth.x.ai` stores its entry
+under the scope key `https://auth.x.ai::<client id>`: `key` is the access token
+(6 hours), with a `refresh_token` beside it. The adapter declares
+`refresh: :server, rotation: :rotating, nominal_ttl: 6.hours`
+(`#credential_lifecycle`), so the sweep selects it, and `#refresh_entry` posts
+`grant_type=refresh_token` to `https://auth.x.ai/oauth2/token` as the CLI's
+public client — the client id taken from the scope key, no secret. Only
+entries issued by `auth.x.ai` are refreshed; a login without a refresh token
+(an API key, or a pre-OIDC login) is not. Rotation is not measured, so it is
+declared `:rotating`, the safe reading. The CLI can still rotate a token inside
+the container, and `AgentSessionStrategy#persist_refreshed_credentials`
+re-reads `auth.json` at cleanup and stores it. `#token_expires_at` reads an
 `expires_at` from the scope entries when one is present (tolerating ISO8601,
 epoch seconds, or epoch milliseconds) so `AgentCredential#expires_at` is
-populated; when it is absent the value is `nil`, which is exactly the
-pre-existing "no expiry known" behaviour.
+populated; when it is absent the value is `nil`.
 
 ## 3. Models
 
@@ -161,20 +165,24 @@ those.
 ## 5. Usage and cost — why not OpenTelemetry
 
 **Decision:** usage is parsed from the session's MITM log at cleanup
-(`#collect_usage`), not ingested from OTLP in real time.
+(`#collect_usage`), not from OTLP.
 
 Grok CLI *can* export OTLP metrics and events, and its
-`grok_code.token.usage` metric carries exactly the breakdown Aixle wants.
-It still cannot be used, for a specific reason: the external OTEL stream
-builds its resource from a **fixed, audited attribute set**, ignores
-`OTEL_RESOURCE_ATTRIBUTES` outright, and drops any record carrying an
-out-of-schema attribute key at export. `terminal_session_token` — the only
-thing `UsageStatisticsService` correlates on — therefore cannot reach the
-collector by any supported configuration. Routing per session by URL or
-header would mean changing the shared collector and ingest endpoint, which
-is out of scope for adding a runtime.
+`grok_code.token.usage` metric carries exactly the breakdown Aixle wants. Its
+external OTEL stream builds its resource from a **fixed, audited attribute
+set**, ignores `OTEL_RESOURCE_ATTRIBUTES` outright, and drops any record
+carrying an out-of-schema attribute key at export, so the session cannot be
+named in a resource attribute. For a session with full telemetry (a project
+exported to Insights, `TerminalSession#full_telemetry?`), the adapter turns
+the export on (`GROK_EXTERNAL_OTEL=1`, logs and metrics, every content
+switch) and names the session in `OTEL_EXPORTER_OTLP_HEADERS` instead
+(`X-Aixle-Session-Token`, `X-Aixle-Session-Key`); otlp-ingest stamps those
+headers onto the resource as `terminal_session_token` / `terminal_session_key`
+(`stampSession` in `docker/otlp-ingest/main.go`). That stream feeds Insights
+(`docs/design/agent-telemetry.md`); Flow's own usage and cost still come from
+the MITM log.
 
-What works instead: Grok's model traffic goes over HTTPS to a host whose
+What works for usage: Grok's model traffic goes over HTTPS to a host whose
 responses are OpenAI-shaped, so the MITM log captures completions whose
 bodies carry a `usage` object. **Which** host depends on how the user signed
 in, and both have to be tracked:
@@ -234,5 +242,4 @@ phrasings were added, so no existing provider's detection changes.
   unmapped. `AGENT_BRAND_COLORS.grok` is a neutral slate: xAI's mark is
   monochrome, so there is no chromatic brand value to carry, and a literal
   `#000` swatch would vanish on a dark surface.
-- **No server-side token refresh** — see §2.
-- **No real-time OTLP ingest** — see §5.
+- **No OTLP-based usage** — usage and cost come from the MITM log; see §5.

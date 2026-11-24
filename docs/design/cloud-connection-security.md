@@ -20,8 +20,9 @@ The platform uses a connection for three things:
 - the developer's agent sessions invoke Bedrock models (Claude Code runs in the session's
   container);
 - when the developer opens a page with a model picker, the platform lists the account's
-  inference profiles (`bedrock:ListInferenceProfiles`, cached for a day) so the picker
-  offers only what the account has; a permission set without that action leaves the
+  inference profiles (`bedrock:ListInferenceProfiles`, cached for up to a day and read
+  again after each token refresh) so the picker offers only what the account has; a
+  permission set without that action leaves the
   picker on a static list;
 - when the developer runs the connection health check, the platform makes one
   `bedrock:InvokeModel` call capped at a single output token and shows AWS's own error
@@ -43,9 +44,21 @@ models are reachable.
 ## 2. Where prompts go
 
 **Prompts and completions travel from the developer's session container directly to
-Bedrock.** They do not pass through Aixle's application servers. What crosses our
-infrastructure is the credential exchange described below, plus the usual platform
-metadata (token counts, session identifiers).
+Bedrock.** The model calls do not pass through Aixle's application servers. The credential
+exchange described below crosses our infrastructure, and so does a record of each session,
+which contains the conversation:
+
+- the session's terminal recording, which people who can open the session in your project
+  can watch;
+- the agent's own transcript (Claude Code's conversation files), with secrets masked. Only
+  Aixle's platform operators can open it, and we open it only to help you with a problem
+  you raise;
+- for a session suspended to be resumed later, a copy of the agent's conversation files as
+  the CLI wrote them, kept until the session is restored or for 30 days.
+
+Usage metadata (token counts, session identifiers) reaches us for every session. When a
+project exports to Aixle Insights, the agent's telemetry, prompts, responses and tool output
+included, passes through our collector on its way to your company's Insights organization.
 
 Bedrock's own invocation logging is off by default and, if you enable it, writes to
 **your** account. We never enable it.
@@ -67,7 +80,9 @@ When the developer picks this, the page opens a connect step. The developer ente
 Identity Center start URL and region, signs in to **your** Identity Center through the
 OAuth 2.0 device authorization grant, and approves in their own browser. They then choose
 one of the account and role pairs their permission sets grant; only pairs this
-authorization actually listed are accepted, and nothing is stored before that choice.
+authorization actually listed are accepted, and no credential is stored before that choice.
+Until then the flow's client registration and tokens are held encrypted in our cache, for
+15 minutes at most.
 Nothing is created in your account; the developer gets exactly the permission set you
 already assigned them.
 
@@ -141,7 +156,7 @@ Revocation: delete or rotate the key.
 | Identity Center registration + tokens (3a) | yes, encrypted | nothing | no |
 | Bedrock API key or long-term access keys (3b) | yes, encrypted | nothing | yes, in Claude Code's settings for the session |
 | Short-lived AWS role credentials (3a) | no | n/a | yes, ≤1 hour, never written to disk by us |
-| Prompts and completions | no | only if you enable Bedrock invocation logging | in the session, as the agent's own working state |
+| Prompts and completions | yes, as the session's record (§2): the terminal recording, and the agent's transcript, which only Aixle operators open, to help you | only if you enable Bedrock invocation logging | in the session, as the agent's own working state |
 
 A connection also belongs to the one company it was made in. A developer who works for
 several companies on our platform connects each separately, and a session can only vend the

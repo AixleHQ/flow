@@ -14,6 +14,7 @@ import {
 import type { JiraProps } from 'shared/resources/integrations/JiraConnectModal';
 import type { LinearProps } from 'shared/resources/integrations/LinearConnectModal';
 import type { YoutrackProps } from 'shared/resources/integrations/YoutrackConnectModal';
+import { companyProjectIntegrationsPath } from 'shared/routes';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -55,7 +56,7 @@ const IntegrationsPage = () => {
       <Head title={`Integrations — ${project.name}`} />
       <IntegrationsContent
         integrations={integrations}
-        basePath={`/company/projects/${project.id}/integrations`}
+        basePath={companyProjectIntegrationsPath(project.id)}
         title="Integrations"
         projectId={project.id}
         azureDevops={azureDevops}
