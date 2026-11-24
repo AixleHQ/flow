@@ -99,6 +99,7 @@ module Oauth
     # == fresh: a GitLab grant of a previous GITLAB_ENDPOINT ==
 
     test "does not refresh a GitLab grant issued by another instance, and does not mark it" do
+      Settings.gitlab.stubs(:oauth_client_id).returns("lab-cid")
       old_host = create(:oauth_client, :gitlab, issuer: "https://old.gitlab.example.com", token_endpoint: TOKEN_ENDPOINT)
       cred = create(:oauth_credential, :gitlab_user, owner: @user, oauth_client: old_host,
                                                      expires_at: 1.minute.from_now)
@@ -109,6 +110,23 @@ module Oauth
       assert_not_requested :post, TOKEN_ENDPOINT
       assert_equal 0, cred.reload.refresh_failure_count
       assert_predicate cred, :active?
+    end
+
+    test "does not refresh a credential of a retired client id, and does not mark it" do
+      Settings.github.stubs(:client_id).returns("Iv1.client")
+      Settings.bitbucket.oauth.stubs(:client_id).returns("bb-cid")
+      {
+        "github" => create(:oauth_client, client_id: "Iv1.retired", token_endpoint: TOKEN_ENDPOINT),
+        "bitbucket" => create(:oauth_client, :bitbucket, client_id: "bb-retired", token_endpoint: TOKEN_ENDPOINT)
+      }.each do |provider, client|
+        cred = create(:oauth_credential, :"#{provider}_user", owner: @user, oauth_client: client, expires_at: 1.minute.from_now)
+
+        assert_raises(Oauth::ReauthRequired) { Oauth::TokenService.fresh(cred) }
+        assert_equal 0, cred.reload.refresh_failure_count
+        assert_predicate cred, :active?
+      end
+
+      assert_not_requested :post, TOKEN_ENDPOINT
     end
 
     # == fresh: reauth-required paths ==

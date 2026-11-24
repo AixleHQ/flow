@@ -16,6 +16,14 @@ class OauthCredentialTest < ActiveSupport::TestCase
     )
   end
 
+  # The OAuth client each provider is configured with now (what the factories' own
+  # connections are made with).
+  def configure_clients!
+    Settings.github.stubs(:client_id).returns("Iv1.client")
+    Settings.gitlab.stubs(:oauth_client_id).returns("lab-cid")
+    Settings.bitbucket.oauth.stubs(:client_id).returns("bb-cid")
+  end
+
   def build_credential(**overrides)
     OauthCredential.new({ owner: @company, oauth_client: @client, provider: "sentry" }.merge(overrides))
   end
@@ -349,6 +357,8 @@ class OauthCredentialTest < ActiveSupport::TestCase
 
   # --- a person's GitHub connection ---
 
+  setup { configure_clients! }
+
   test "github_connections_of finds only that person's GitHub credentials" do
     mine = create(:oauth_credential, :github_user, owner: @user)
     create(:oauth_credential, :github_user, owner: create(:user, company: @company))
@@ -387,9 +397,65 @@ class OauthCredentialTest < ActiveSupport::TestCase
 
     assert_includes OauthCredential.refresh_due, current
     assert_not_includes OauthCredential.refresh_due, old
-    assert_equal [ old ], OauthCredential.on_other_gitlab_instance.to_a
-    assert_predicate old, :on_other_gitlab_instance?
-    assert_not_predicate current, :on_other_gitlab_instance?
+    assert_equal [ old ], OauthCredential.on_other_client.to_a
+    assert_predicate old, :on_other_client?
+    assert_not_predicate current, :on_other_client?
+  end
+
+  # --- only the current client's credentials count, for every provider ---
+
+  OTHER_CLIENT = {
+    "github" => ->(user) { create(:oauth_credential, :github_user, owner: user, oauth_client: create(:oauth_client, client_id: "Iv1.retired")) },
+    "gitlab" => ->(user) { create(:oauth_credential, :gitlab_user, owner: user, oauth_client: create(:oauth_client, :gitlab, client_id: "lab-retired")) },
+    "bitbucket" => ->(user) { create(:oauth_credential, :bitbucket_user, owner: user, oauth_client: create(:oauth_client, :bitbucket, client_id: "bb-retired")) }
+  }.freeze
+
+  OauthCredential::CLIENT_BOUND_PROVIDERS.each do |provider|
+    test "after the #{provider} client id changes, the old credential is not listed, vended or refreshed, and is still deleted on disconnect" do
+      current = create(:oauth_credential, :"#{provider}_user", owner: @user, expires_at: 5.minutes.from_now)
+      old = instance_exec(@user, &OTHER_CLIENT.fetch(provider))
+      old.update!(expires_at: 5.minutes.from_now, updated_at: 1.minute.from_now)
+
+      assert_equal [ current ], OauthCredential.public_send(:"#{provider}_connections_of", @user).to_a
+      assert_equal current, OauthCredential.public_send(:"latest_#{provider}_connection_of", @user)
+      assert_equal current, OauthCredential.public_send(:"live_#{provider}_connection_of", @user)
+      assert_equal [ current ], OauthCredential.refresh_due.where(owner: @user).to_a
+      assert_equal [ old ], OauthCredential.on_other_client.to_a
+      assert_predicate old, :on_other_client?
+      assert_not_predicate current, :on_other_client?
+      assert_equal [ current, old ].map(&:id).sort, OauthCredential.all_connections_of(@user, provider).ids.sort
+    end
+
+    test "with no #{provider} client configured, none of its credentials counts" do
+      credential = create(:oauth_credential, :"#{provider}_user", owner: @user)
+      case provider
+      when "github" then Settings.github.stubs(:client_id).returns("")
+      when "gitlab" then Settings.gitlab.stubs(:oauth_client_id).returns("")
+      else Settings.bitbucket.oauth.stubs(:client_id).returns("")
+      end
+
+      assert_nil OauthCredential.public_send(:"live_#{provider}_connection_of", @user)
+      assert_predicate credential, :on_other_client?
+    end
+  end
+
+  test "credentials of other providers are never on another client" do
+    sentry = create(:oauth_credential, owner: @user, provider: "sentry", expires_at: 5.minutes.from_now)
+
+    assert_not_predicate sentry, :on_other_client?
+    assert_empty OauthCredential.on_other_client
+    assert_includes OauthCredential.refresh_due, sentry
+  end
+
+  test "a successful connect stores the token with the identity in one save" do
+    identity = { "github_user" => { "id" => 1, "login" => "octo" } }
+
+    credential = OauthCredential.upsert_from_token!(
+      owner: @user, oauth_client: create(:oauth_client, :github_current), provider: "github",
+      token_response: { "access_token" => "at" }, identity: identity
+    )
+
+    assert_equal "octo", credential.reload.account_login
   end
 
   test "the account identity, login, name and avatar come from the provider's own metadata key" do

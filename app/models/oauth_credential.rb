@@ -31,6 +31,11 @@ class OauthCredential < ApplicationRecord
   GITLAB_PROVIDER = "gitlab"
   BITBUCKET_PROVIDER = "bitbucket"
 
+  # Providers whose credential is a person's own account, made against the one OAuth
+  # client the deployment is configured with. Only that current client's credentials
+  # count (see .on_other_client).
+  CLIENT_BOUND_PROVIDERS = [ GITHUB_PROVIDER, GITLAB_PROVIDER, BITBUCKET_PROVIDER ].freeze
+
   # Where each provider's connection keeps the account's identity in `metadata`, and
   # which of its fields is the login. The provider modules read the key from here.
   IDENTITY_FIELDS = {
@@ -49,7 +54,7 @@ class OauthCredential < ApplicationRecord
   scope :for_mcp_server, ->(server) { where(mcp_server_id: server.id) }
   # A person's own GitHub connection (their user-to-server grant). A person has at most
   # one live one; a reconnect updates it, a revoked one stays until they disconnect.
-  scope :github_connections_of, ->(user) { for_owner(user).where(provider: GITHUB_PROVIDER) }
+  scope :github_connections_of, ->(user) { for_owner(user).where(provider: GITHUB_PROVIDER).on_current_client }
   # GitHub says an account's login can change but its numeric id cannot, so the webhook
   # for a revoked authorization finds credentials by the id stored in `metadata`.
   scope :for_github_user, ->(github_id) {
@@ -67,19 +72,40 @@ class OauthCredential < ApplicationRecord
   end
 
   # A person's own GitLab connection (docs/design/gitlab-user-identity.md §3). Only rows
-  # made against the instance this deployment points at count: after GITLAB_ENDPOINT
-  # changes, a credential on the old host is invisible (and lapses).
-  scope :gitlab_connections_of, ->(user) {
-    for_owner(user).where(provider: GITLAB_PROVIDER)
-                   .where(oauth_client_id: OauthClient.where(issuer: Gitlab::Host.web_base).select(:id))
+  # made with the current client count: after GITLAB_ENDPOINT or the client id changes,
+  # a credential of the old one is invisible (and lapses).
+  scope :gitlab_connections_of, ->(user) { for_owner(user).where(provider: GITLAB_PROVIDER).on_current_client }
+
+  # Credentials of a person's own account that were made with a client other than the one
+  # the deployment is configured with now: the issuer or the client id changed (a new
+  # GITLAB_ENDPOINT is a change of issuer). They are never refreshed, vended, shown or
+  # revoked: they lapse (GitLab design D6). Credentials of other providers are never
+  # "other". A provider with no client configured has no current client, so all of its
+  # credentials are other.
+  scope :on_other_client, -> {
+    others = CLIENT_BOUND_PROVIDERS.map do |provider|
+      relation = unscoped.where(provider: provider)
+      current = Oauth::Providers.current_client_ref(provider)
+      next relation unless current
+
+      relation.where.not(oauth_client_id: OauthClient.where(issuer: current[:issuer], client_id: current[:client_id]).select(:id))
+    end
+    where(id: others.reduce(:or).select(:id))
   }
 
-  # GitLab credentials issued by an instance other than the one GITLAB_ENDPOINT names
-  # now. They are never refreshed, revoked or shown: they lapse (design D6).
-  scope :on_other_gitlab_instance, -> {
-    where(provider: GITLAB_PROVIDER)
-      .where.not(oauth_client_id: OauthClient.where(issuer: Gitlab::Host.web_base).select(:id))
-  }
+  scope :on_current_client, -> { where.not(id: on_other_client.select(:id)) }
+
+  # Whether this is a credential made with a client other than the current one.
+  def on_other_client?
+    return false unless CLIENT_BOUND_PROVIDERS.include?(provider)
+
+    current = Oauth::Providers.current_client_ref(provider)
+    current.nil? || oauth_client.issuer != current[:issuer] || oauth_client.client_id != current[:client_id]
+  end
+
+  # Everything of a person's own account for a provider, other clients' credentials
+  # included: what disconnecting deletes.
+  scope :all_connections_of, ->(user, provider) { for_owner(user).where(provider: provider) }
 
   def self.latest_gitlab_connection_of(user)
     gitlab_connections_of(user).order(updated_at: :desc).first
@@ -89,14 +115,8 @@ class OauthCredential < ApplicationRecord
     gitlab_connections_of(user).where.not(status: :revoked).order(updated_at: :desc).first
   end
 
-  # Whether this is a GitLab credential of a previous GITLAB_ENDPOINT.
-  def on_other_gitlab_instance?
-    provider == GITLAB_PROVIDER && oauth_client.issuer != Gitlab::Host.web_base
-  end
-
   # A person's own Bitbucket connection (docs/design/bitbucket-user-identity.md §3).
-  # Bitbucket Cloud is one issuer, so there is no instance filter.
-  scope :bitbucket_connections_of, ->(user) { for_owner(user).where(provider: BITBUCKET_PROVIDER) }
+  scope :bitbucket_connections_of, ->(user) { for_owner(user).where(provider: BITBUCKET_PROVIDER).on_current_client }
 
   def self.latest_bitbucket_connection_of(user)
     bitbucket_connections_of(user).order(updated_at: :desc).first
@@ -139,7 +159,7 @@ class OauthCredential < ApplicationRecord
   # them forever.
   scope :refresh_due, ->(within = 15.minutes) {
     with_status(:active).where(expires_at: ..within.from_now).with_authenticatable_owner
-                        .where.not(id: on_other_gitlab_instance.select(:id))
+                        .on_current_client
   }
   # A suspended or deleted account's grants are left to lapse rather than kept
   # alive; restoring the account brings them back to the sweep.
@@ -196,14 +216,17 @@ class OauthCredential < ApplicationRecord
   #
   # `resource` is the MCP server URL the authorization was requested for (RFC
   # 8707); the credential is only ever handed to that origin (#bound_to?).
+  #
+  # `identity` is the account's identity metadata ({ "github_user" => {...} }) a provider
+  # fetched with the new token before this call; it is stored in the same save as the token.
   def self.upsert_from_token!(owner:, oauth_client:, provider:, token_response:, mcp_server: nil, resource: nil,
-                              connected_by: nil)
+                              connected_by: nil, identity: nil)
     cred = find_or_initialize_by(
       owner: owner, oauth_client: oauth_client, provider: provider, mcp_server_id: mcp_server&.id
     )
     cred.resource = resource.presence || mcp_server&.url
     cred.connected_by = connected_by if connected_by
-    cred.apply_token_response!(token_response)
+    cred.apply_token_response!(token_response, identity: identity)
     cred
   end
 
@@ -233,13 +256,13 @@ class OauthCredential < ApplicationRecord
   # Persist a token/refresh response (from exchange OR refresh). Never wipes an
   # existing refresh_token when the response omits one (rotation: providers may
   # return only a new access token). Sets status: :active, clears refresh_error.
-  def apply_token_response!(resp)
+  def apply_token_response!(resp, identity: nil)
     self.access_token  = resp["access_token"]
     self.refresh_token = resp["refresh_token"] if resp["refresh_token"].present?
     self.token_type    = resp["token_type"].presence || "Bearer"
     self.scopes        = resp["scope"] if resp.key?("scope")
     self.expires_at    = resp["expires_in"].present? ? Time.current + resp["expires_in"].to_i.seconds : nil
-    self.metadata      = (metadata || {}).merge(resp.slice(*SAFE_METADATA_KEYS))
+    self.metadata      = (metadata || {}).merge(resp.slice(*SAFE_METADATA_KEYS)).merge(identity.to_h)
     self.status        = :active
     self.refresh_error = nil
     self.refresh_failure_count = 0        # success resets the consecutive-failure streak
