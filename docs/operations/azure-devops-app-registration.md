@@ -233,7 +233,7 @@ The distinction that matters: is it the **credential** (yours to fix) or the
 | Connect → *"is not backed by a Microsoft Entra directory"* | The organization is on a personal Microsoft account | Personal-access-token mode; a service principal cannot be used there at all |
 | Connect → *"cannot list its projects"* | The token administers the organization but has no project scope | Add **Project and team (read)**; it is behind *Show all scopes* |
 | Subscriptions exist and report *enabled*, but no event ever arrives | A `publisherInputs` FILTER matched nothing. Azure does not reject an unrecognized filter value — it accepts the subscription, reports it healthy and silently never fires | Compare against `_apis/hooks/publishers/tfs/eventtypes`, which lists each input's accepted values. Flow sends only `projectId` for this reason |
-| CI gates only ever close ~10 minutes late | The Service Hooks were never provisioned — most likely `AZURE_DEVOPS_WEBHOOK_BASE_URL` was unset at connect time | Set it, then **Test connection**, which is the retry path |
+| CI gates only ever close ~10 minutes late | The Service Hooks were never provisioned — most likely the webhook host (`<protocol>://<domain>`, or `AZURE_DEVOPS_WEBHOOK_BASE_URL` when set) was one Azure cannot reach at connect time: loopback, a private address, or a `.local`/`.internal` name | Set `AZURE_DEVOPS_WEBHOOK_BASE_URL` to a host Azure can reach, then **Test connection**, which is the retry path |
 
 ## Rotation
 
@@ -249,9 +249,11 @@ Project connections keep their ids and their repository attachments throughout.
 ## Service Hooks (optional)
 
 Only needed for CI gates and event-driven triggers, and the **only** part of this
-integration that needs a publicly reachable host — Azure posts inbound. Set
-`AZURE_DEVOPS_WEBHOOK_BASE_URL` to a host Azure can reach; subscriptions are then
-created automatically when a connection is made, and a failure to create them
+integration that needs a publicly reachable host — Azure posts inbound, to the
+deployment's own `<protocol>://<domain>`. Set `AZURE_DEVOPS_WEBHOOK_BASE_URL` only
+when Azure cannot reach that domain (a tunnel in development). With a reachable
+host, subscriptions are created automatically when a connection is made; a
+loopback, private or `.local`/`.internal` host gets none. A failure to create them
 never fails the connection, because everything on demand works without them.
 
 Worth knowing: a subscription Azure has put **on probation** exists and delivers

@@ -84,9 +84,11 @@ class SessionsRunsFeed
     User.where(id: ids.compact).order(:name).map { |u| { id: u.id, name: u.name.presence || u.email } }
   end
 
-  # Workflows this project has run — the Workflow filter's options.
+  # Workflows this project has run — the Workflow filter's options. A draft's test
+  # runs count for the workflow it is a draft of, which then lists them too.
   def workflow_options
-    Workflow.where(id: WorkflowRun.where(project: project).select(:workflow_id))
+    ran = Workflow.where(id: WorkflowRun.where(project: project).select(:workflow_id))
+    Workflow.where(id: ran.select(Arel.sql("COALESCE(workflows.draft_of_id, workflows.id)")))
             .order(:name).map { |w| { id: w.id, name: w.name } }
   end
 
@@ -162,7 +164,9 @@ class SessionsRunsFeed
 
   def filtered_runs
     scope = WorkflowRun.where(project: project).ransack(conditions).result
-    scope = scope.where(workflow_id: filters[:workflow_id]) if filters[:workflow_id].present?
+    if filters[:workflow_id].present?
+      scope = scope.where(workflow_id: Workflow.with_drafts_of(filters[:workflow_id]).select(:id))
+    end
     scope = scope.where(user_id: filters[:user_id]) if filters[:user_id].present?
     states = status_states(:runs)
     if states == QUEUED_STEP

@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import { SessionNewForm } from 'shared/components/SessionNewForm';
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
+import { companyProjectSessionPath, companyProjectSessionsPath } from 'shared/routes';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
 import { useCreateOptions } from './useCreateOptions';
@@ -41,8 +42,8 @@ export function NewSessionDrawer({ projectId, opened, onClose }: Props) {
           configItems={options.configItems}
           runners={options.runners}
           costHint={options.costHint}
-          onCreatedPath={(sessionId, id) => `/company/projects/${id}/sessions/${sessionId}`}
-          fallbackPath={`/company/projects/${projectId}/sessions`}
+          onCreatedPath={(sessionId, id) => companyProjectSessionPath(id, sessionId)}
+          fallbackPath={companyProjectSessionsPath(projectId)}
         />
       ) : (
         <Center h={200}>

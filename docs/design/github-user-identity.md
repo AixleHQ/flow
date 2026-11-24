@@ -1,6 +1,18 @@
 # Agents act as the user on GitHub
 
-**Task:** #214 · **Status:** proposal, revised after review · **Date:** 2026-11-11
+**Task:** #214 · **Status:** Built 2026-11-12 (#710) · **Date:** 2026-11-11
+
+**Where the build departs from the proposal:**
+
+- The registry entry (§4.1) has no `settings_key:` and no string `after_connect:`. It
+  takes `oauth_app: -> { app_from_settings(:github) }`, `owner_types: %w[User]` and
+  `after_connect: ->(credential) { Github::UserConnection.record_identity!(credential) }`
+  (`app/services/oauth/providers.rb`).
+- A failed identity lookup after connecting (§4.1) does not destroy the new credential:
+  a reconnect would lose a working connection. `record_identity!` clears the stored
+  identity and raises, the callback shows "Failed to complete connection", and
+  `identity_for` fetches the identity again on next use.
+- The page is `pages/Profile/Connections.tsx`, not `ConnectionsPage.tsx` (step 6).
 
 **Revision 3 (2026-11-11).** Alex's second review rejected D13: `TerminalSession`
 gets no `attr_readonly :user_id`, and nothing else enforces "set once". The design
@@ -424,8 +436,9 @@ below run in order, and the first failure answers with an `error(...)`:
    error: "<name>'s GitHub connection needs to be renewed under Profile → Connected
    accounts."
 7. **Mint the tokens.** Call `Github::UserTokenService#scoped_token` once per owner
-   group. A 404 marks the credential `error` through `mark_refresh_error!`, which
-   sends the existing email, and gives the reconnect error. A 422 gives "GitHub refused
+   group. A 404 counts as one refresh failure (`mark_refresh_error!`; the third
+   consecutive failure marks the credential `error` and sends the existing email) and
+   gives the reconnect error. A 422 gives "GitHub refused
    access to <owner>/<repos> for <login>: the user or the App has no access there."
 8. **Record and arm.** Write one `UserTokenIssuance` row per token, then
    `Sessions::SecretRegistry.publish!(session)`. If arming fails, the tool refuses,

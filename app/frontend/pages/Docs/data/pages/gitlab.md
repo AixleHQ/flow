@@ -321,8 +321,11 @@ warning. Gates still resolve, but later, through the reconciliation sweep:
   once. A gate that has no result when its TTL runs out (12 hours by default)
   is marked stale too.
 
-Nothing in GitLab starts a workflow. The hook carries only pipeline events, and
-Flow uses them only for gates. There is no GitLab trigger.
+Pipeline events only resolve gates. Workflows start from the hook's merge
+request reviews and comments, through
+[pull request triggers](/docs/triggers-and-gates#pull-request-events), and from
+issue events in a tracked project (see
+[GitLab issues as a tracker](#gitlab-issues-as-a-tracker)).
 
 ## Replacing the token
 
@@ -444,9 +447,7 @@ because each request carries a key for that session. See
 - A repository attached before Flow kept track of each hook can leave its
   hook in GitLab when it is removed: Flow cannot tell that hook apart while
   another such repository attaches the same GitLab project.
-- There is no GitLab CLI and there are no GitLab triggers. GitLab issues
-  cannot be used as a tracker: [Trackers](/docs/trackers) supports Jira, Azure
-  Boards, GitHub Projects, Linear and YouTrack.
+- There is no GitLab CLI.
 
 ## When something goes wrong
 

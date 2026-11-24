@@ -1,6 +1,6 @@
 # Bitbucket Cloud integration and provider-neutral pull-request tools — technical design
 
-**Status:** Proposed.  
+**Status:** Built 2026-10-17 (#504). Where the build departs: `bitbucket_installations` (§6.1) has no `installer_account_id` and no `unbound` status; an unbound installation is one whose `company_id` is NULL, and the row records the Forge environment it came from.  
 **Date:** 2026-10-15  
 **Code baseline:** `affd849c`  
 **Audience:** Backend, frontend and runtime engineers implementing the integration; whoever registers and operates the Forge app.  
@@ -83,7 +83,7 @@ Implemented for **GitLab, Bitbucket and GitHub** (the GitHub adapter was added o
 
 ### 4.3 Port
 
-`PullRequests::Provider.for(integration)`, with a `PullRequests::PROVIDERS` hash of class-name strings (`"gitlab"`, `"bitbucket"`), mirroring `Trackers::PROVIDERS`. Every method takes the Aixle `Repository` and checks that what it fetched belongs to that repository (Azure's `verify_pr_scope!`).
+`PullRequests::Provider.for(integration)`, with a `PullRequests::PROVIDERS` hash of class-name strings (`"github"`, `"gitlab"`, `"bitbucket"`), mirroring `Trackers::PROVIDERS`. Every method takes the Aixle `Repository` and checks that what it fetched belongs to that repository (Azure's `verify_pr_scope!`).
 
 | Method | Returns |
 |---|---|
@@ -370,12 +370,12 @@ Modelled on `azure_devops_installations` (db/schema.rb:149-172), with one differ
 | Column | Notes |
 |---|---|
 | `forge_installation_id` | Unique. Changes on reinstall |
+| `forge_environment_id` | The Forge environment the install came from. One live (not `uninstalled`) row per `(forge_environment_id, workspace_uuid)` |
 | `workspace_uuid` | Immutable after create. Survives reinstall and rename |
 | `workspace_slug`, `workspace_name` | Display only; refreshed from events |
 | `company_id` | Null while unbound |
 | `bound_by_id`, `bound_at` | Who confirmed the pairing |
-| `installer_account_id` | From the install event |
-| `status` | `unbound | active | error | uninstalled` |
+| `status` | `active | error | uninstalled` |
 | `error_code` | `access_revoked`, `uninstalled`, … |
 | `encrypted_access_token`, `token_expires_at` (indexed) | `Encryptable` under `integrations_key`; an unreadable entry is a cache miss, as in the Azure model |
 | `last_invocation_at`, `app_version` | Health and support |
@@ -401,7 +401,7 @@ As `youtrack_pairings`: `installation_id`, `account_id`, `workspace_uuid`, `secr
 
 ### 6.5 `pull_request_operations`
 
-`integration_id`, `repository_id`, `operation_key` (unique with `integration_id`), `operation`, `request_digest`, `state`, `result` (jsonb), `pull_request_number`, `terminal_session_id`, `workflow_run_id`, `workflow_id`, `user_id`, timestamps. Shared by GitLab and Bitbucket.
+`integration_id`, `repository_id`, `operation_key` (unique with `integration_id`), `operation`, `request_digest`, `state`, `result` (jsonb), `pull_request_number`, `terminal_session_id`, `workflow_run_id`, `workflow_id`, `user_id`, timestamps. Shared by GitHub, GitLab and Bitbucket.
 
 ### 6.6 `gates`
 

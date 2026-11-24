@@ -120,9 +120,9 @@ The **Assets** tab of a run lists the files the agents produced, with download
 and **promote** controls — promoting lifts a file out of the run and into the
 project's [Assets](/docs/assets), where the rest of the team can find it.
 
-Back in the list, a run with unreviewed output offers **Review outputs**: tick
-what to keep and **Save selected**, or **Dismiss all** if the run produced
-nothing worth keeping.
+A finished session with files waiting for review shows an **Outputs** panel on
+its page, with **Review outputs**: tick what to keep and **Save selected**, or
+**Dismiss all** if the session produced nothing worth keeping.
 
 Every run keeps its status, log, artifacts, tokens, and cost — including the
 runs that failed. That record is what [Analytics](/docs/analytics) counts.

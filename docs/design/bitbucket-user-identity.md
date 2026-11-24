@@ -274,10 +274,11 @@ on `FakeBitbucket::Api`:
   repository. If the staging check (S4) shows a gap, `GET /2.0/repositories/{workspace}?role=contributor`
   (paginated, exact `full_name` match) is the fallback.
 
-Errors map to `InvalidToken` (401), `Forbidden` (403, 404 and other refusals), `Unavailable`
-(5xx, network, and a 429 that outlasted the client's own retries: the message says to retry in a
-moment), from `Bitbucket::Error`. A user credential has no refresher, so `Bitbucket::Client`
-raises on the first 401 and makes no retry. Nothing carries a token or a response body.
+Errors are `Bitbucket::Client`'s own `Bitbucket::Error` subclasses: `NotAuthorized` (401),
+`PermissionDenied` (403), `NotFound` (404), `RateLimited` (a 429 that outlasted the client's own
+retries), and a plain `Bitbucket::Error` for a 5xx or a network failure. A user credential has no
+refresher, so `Bitbucket::Client` raises on the first 401 and makes no retry. Nothing carries a
+token or a response body.
 
 ### 4.2 Tools
 
@@ -298,11 +299,13 @@ the provider part, as `GitlabUserTokenContext` does:
 - **Repositories:** `session.repositories` whose integration is Bitbucket and active. Both
   integration modes (Forge app, token) qualify; the integration's own credential is never
   used. None: "This session has no Bitbucket repositories on an active Bitbucket connection."
-- **Coverage:** `repository_access` once per call. `write` or `admin` covers; anything else
+- **Coverage:** `repository_permissions` once per call. `write` or `admin` covers; anything else
   goes into `skipped` ("<name> cannot push to it"). None covered: refuse, naming them. On a 401 the tool
   calls `credential.mark_refresh_error!` (status `error` only at the third consecutive failure,
   with the reconnect email on that edge, as for GitLab) and refuses with the reconnect message,
-  as `GitlabUserTokenContext` does. The tool never writes the status itself.
+  as `GitlabUserTokenContext` does. The tool never writes the status itself. Every other
+  `Bitbucket::Error`, a 403 or 404 included, refuses with "Bitbucket is unavailable right now.
+  Retry in a moment."
 - **Identity:** usable only with `id`, `nickname` and `commit_email`. Without a confirmed
   email the tool refuses with a Bitbucket-specific message (it overrides `no_identity_message`):
   the person needs a confirmed email address on Bitbucket, which commits are made with.

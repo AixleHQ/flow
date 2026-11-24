@@ -29,6 +29,6 @@ class TeamMailerTest < ActionMailer::TestCase
     email = TeamMailer.member_opted_out(@owner, @member, [ @team ])
     assert_equal [ @owner.email ], email.to
     assert_match(%r{Anna turned on "Don't let anyone add me to a team".*Planner}m, email.text_part.decoded)
-    assert_match(%r{/company/projects/#{@project.id}/teams}, email.text_part.decoded)
+    assert_match(%r{/company/#{@project.company.slug}/projects/#{@project.id}/teams}, email.text_part.decoded)
   end
 end

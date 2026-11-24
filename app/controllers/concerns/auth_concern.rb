@@ -163,14 +163,48 @@ module AuthConcern
   end
 
   # The membership the current request operates under. Resolution order:
-  # 1. session[:current_company_id] — but NEVER trusted directly: it must match
+  # 1. the company the path names (/company/<slug>/…) — and only that one: a
+  #    company the user is not an active member of resolves to nothing.
+  # 2. session[:current_company_id] — but NEVER trusted directly: it must match
   #    one of the user's *active* memberships (revocation invalidates it).
-  # 2. Fallback: the user's first active membership (oldest accepted first);
+  # 3. Fallback: the user's first active membership (oldest accepted first);
   #    the session is updated so the "last used" company persists.
   # Super admins have no memberships — this returns nil for them (they live in
   # the /admin namespace, which is guarded by `authenticate_admin!` instead).
   def current_membership
     @current_membership ||= resolve_current_membership
+  end
+
+  def company_slug_in_path
+    request.path_parameters[:company_slug].presence
+  end
+
+  # A path naming a company the person cannot enter is not found — not the
+  # same page in whichever company they were on. Someone left with no company
+  # at all is signed out as before (require_active_membership!).
+  def company_in_path_out_of_reach?
+    signed_in? && company_slug_in_path.present? && current_membership.nil? && current_user.active_memberships.any?
+  end
+
+  # A URL helper fills :company_slug itself: inside /company/<slug> with that
+  # slug, so a page's links stay in its company; elsewhere — a sign-in, an
+  # OAuth callback, /profile — with the company the request resolved, the one an
+  # unscoped link would have opened. `path_params` (not recall) so positional
+  # arguments skip the slug — company_project_path(project) — and a route
+  # without the segment never gets it as a query parameter.
+  def url_options
+    options = super
+    slug = company_slug_in_path || (signed_in? && current_membership && current_company.slug)
+    return options unless slug
+
+    options.merge(path_params: { company_slug: slug }.merge(options.fetch(:path_params, {})))
+  end
+
+  # Where the app opens after a sign-in or a detour (step-up, legal, onboarding).
+  # Someone in no company — a super admin — has no company page to open, and
+  # the root sends them on to theirs.
+  def app_home_path
+    current_company ? company_projects_path : root_path
   end
 
   def current_company
@@ -294,25 +328,33 @@ module AuthConcern
     # (instead of a fresh `.active.find_by`) keeps the whole request — policies,
     # project permissions, current-user props — on ONE membership query.
     memberships = current_user.active_memberships
-
-    # Resolution order, each candidate re-validated against ACTIVE memberships
-    # (a revoked company must never resolve, whatever the session says):
-    #   1. this session's switcher choice
-    #   2. users.last_company_id — the same choice from a PREVIOUS session, so
-    #      it survives logout and cookie expiry instead of snapping back to the
-    #      oldest membership
-    #   3. the oldest accepted membership
-    membership = find_membership(memberships, session[:current_company_id])
-    membership ||= find_membership(memberships, current_user.last_company_id)
-    membership ||= default_membership(memberships)
+    membership = company_slug_in_path ? membership_named_in_path : last_used_membership(memberships)
     return nil unless membership
 
     # Persist the resolved company so a fallback (first login, revoked
-    # membership) becomes the "last used" company on subsequent requests.
+    # membership) — or the company a tab is on — becomes the "last used" one
+    # that the next unscoped link or sign-in opens.
     session[:current_company_id] = membership.company_id if session[:current_company_id] != membership.company_id
     remember_last_company(membership)
 
     membership
+  end
+
+  def membership_named_in_path
+    current_user.active_memberships_with_company.find { |m| m.company.slug == company_slug_in_path }
+  end
+
+  # Each candidate re-validated against ACTIVE memberships (a revoked company
+  # must never resolve, whatever the session says):
+  #   1. this session's last company
+  #   2. users.last_company_id — the same choice from a PREVIOUS session, so
+  #      it survives logout and cookie expiry instead of snapping back to the
+  #      oldest membership
+  #   3. the oldest accepted membership
+  def last_used_membership(memberships)
+    find_membership(memberships, session[:current_company_id]) ||
+      find_membership(memberships, current_user.last_company_id) ||
+      default_membership(memberships)
   end
 
   def find_membership(memberships, company_id)

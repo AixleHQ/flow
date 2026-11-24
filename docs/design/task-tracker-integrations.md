@@ -150,7 +150,7 @@ tracker_deliveries
   id
   tracker_subscription_id   FK, NOT NULL
   dedup_key                 varchar NOT NULL
-  notification              jsonb NOT NULL           -- IDs and change hints only; never text
+  notifications             jsonb NOT NULL DEFAULT [] -- IDs and change hints only; never text
   status                    varchar NOT NULL         -- received | processed | skipped | failed
   detail                    jsonb NOT NULL DEFAULT {}
   timestamps
@@ -174,12 +174,13 @@ trigger_bindings
   + aixle_changes        varchar NOT NULL DEFAULT 'ignore'   -- ignore | other_workflows | always (§6.6)
 
 tracker_operations          -- every tracker write: idempotency (§7.4) + causality (§6.6)
-  integration_id, operation, operation_key, request_digest, state, target_kind, target_id,
-  result, terminal_session_id, user_id,
+  project_tracker_id   FK project_trackers ON DELETE CASCADE, NOT NULL
+  operation, operation_key, request_digest, state, result, error_code,
+  terminal_session_id, user_id,
   workflow_run_id, workflow_id, chain jsonb,         -- who made the write
   issue_id, change jsonb, result_ref                 -- what it changed (field/to, created comment/issue id)
-  UNIQUE (integration_id, operation, operation_key)
-  INDEX  (integration_id, issue_id, created_at)
+  UNIQUE (project_tracker_id, operation_key)
+  INDEX  (project_tracker_id, issue_id, created_at)
 ```
 
 Notes:
@@ -402,7 +403,7 @@ the notification as it is.
 |---|---|---|
 | `tracker.issue.created` | `issue_created` | always |
 | `tracker.issue.status_changed` | `issue_updated` with the status field in `changes` | hint confirmed |
-| `tracker.issue.assigned` | `issue_updated` with the assignee in `changes` | hint confirmed; one event per added assignee |
+| `tracker.issue.assigned` | `issue_updated` with the assignee in `changes` | hint confirmed; one event per update, for the first assignee change in it (a second person added in the same update raises none) |
 | `tracker.comment.created` | `comment_created` | always; `comment.mentions_me` computed from the fetched body |
 
 Event `data`, which trigger filters match against. This is a documented contract, the same for
@@ -1100,7 +1101,7 @@ for.
    a link that named the Aixle to talk to would let anyone collect a service-user token.
 
    **Aixle's side:**
-   - `POST /company/projects/:project_id/integrations/youtrack_connect` (signed in, `manage_integrations?`)
+   - `POST /company/:company_slug/projects/:project_id/integrations/youtrack_connect` (signed in, `manage_integrations?`)
      takes the instance URL and returns where to send the browser; the pairing is bound to the
      project and the user from the start.
    - `POST /integrations/youtrack/pairings` (public, CORS, rate-limited) starts an unbound

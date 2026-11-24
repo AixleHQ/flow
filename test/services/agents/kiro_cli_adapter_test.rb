@@ -505,12 +505,8 @@ module Agents
       assert_equal URI.parse(Settings.mcp.server_url).then { |u| "#{u.host}:#{u.port}" }, env["MCP_FORWARD_TARGET"]
     end
 
-    test "default_env_vars has the proxy log Kiro's own traffic, not the agent's AWS calls" do
-      session = build(:terminal_session, agent_type: "kiro_cli", route_token: "tok-1")
-
-      env = @adapter.default_env_vars(session, callbacks: hosted_callbacks)
-
-      assert_equal "kiro.dev", env["MITM_TRACKED_DOMAINS"]
+    test "the proxy logs Kiro's own traffic, not the agent's AWS calls" do
+      assert_equal "kiro.dev", @adapter.mitm_env["MITM_TRACKED_DOMAINS"]
     end
 
     test "mcp config merges into the shared IDE/CLI document rather than replacing it" do

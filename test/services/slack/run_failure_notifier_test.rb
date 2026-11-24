@@ -51,7 +51,7 @@ module Slack
 
       assert Slack::RunFailureNotifier.call(run)
       assert_includes fake_slack.last_posted_message[:text],
-                      "#{Settings.protocol}://#{Settings.domain}/company/projects/#{@project.id}/workflow_runs/#{run.id}"
+                      "#{Settings.protocol}://#{Settings.domain}/company/#{@project.company.slug}/projects/#{@project.id}/workflow_runs/#{run.id}"
     end
 
     test "says the account ran out of credits when that is why the run failed" do

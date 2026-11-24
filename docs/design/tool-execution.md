@@ -39,7 +39,7 @@ end
 
 | Mode | What it means | Examples |
 |------|---------------|---------|
-| `app` | Executes in Rails process, synchronous, no container | list_sub_steps, mark_sub_step, write_step_note, read_tool_result |
+| `app` | Executes in Rails process, synchronous, no container | list_sub_steps, mark_sub_step, finish_session, read_tool_result |
 | `container` | Runs in Docker via Temporal workflow, async, produces ToolResult | custom tools (user-defined Docker images); DSL-defined internal container tools |
 
 ### 1.2 Routing
@@ -611,13 +611,14 @@ module InternalTools
       tr = ToolResult.find_by(execution_id: params[:tool_result_id])
       return error("Tool result not found") unless tr
 
-      success(ToolResultSerializer.new(tr).to_json)
+      success(ToolResultResource.new(tr, params: { url_host: asset_host }).to_json)
     end
   end
 end
 ```
 
-Agent receives serialized metadata with presigned download URLs:
+`asset_host` is where the agent's container downloads from: `ContainerRuntime.callback_url(:container_assets, session)`
+(§4, `url_host`). Agent receives serialized metadata with presigned download URLs:
 
 ```json
 {
@@ -714,7 +715,7 @@ Custom tools are sandboxed: no host filesystem access, no docker socket, resourc
 
 `InternalToolExecutor` routes `app`-mode tools to Ruby handler classes.
 
-`InternalTools::Base` is the base class for app-mode handlers (list_sub_steps, mark_sub_step, write_step_note, read_tool_result).
+`InternalTools::Base` is the base class for app-mode handlers (list_sub_steps, mark_sub_step, finish_session, read_tool_result).
 
 > **Historical note:** the migration to this framework is complete. The
 > pre-framework classes (`ToolExecutionStrategy`, `CodeClimateStrategy`,
@@ -730,17 +731,22 @@ Custom tools are sandboxed: no host filesystem access, no docker socket, resourc
 No code changes. User creates Tool record via UI:
 - `docker_image`, `command`, `tool_files` — standard fields
 - `execution_mode: :container` (default)
-- `kind: :custom`
+- `source: "db"`, scoped to a project
 
 ### New internal app tool
 
-1. Create handler class in `app/services/internal_tools/my_tool.rb`
-2. Add seed with `execution_mode: :app, kind: :internal`
+Create an `InternalTools::Base` subclass, e.g. `app/services/internal_tools/my_tool.rb`, with a
+`tool do … end` block (display name, description, tags, input schema, `inject_when`, `user_attachable`)
+and an `execute` method. Nothing is seeded by hand: `Tools::Registry` collects the `tool` blocks, and
+`Tools::Reconciler` projects each into a `source: "code"`, `execution_mode: "app"` row on deploy
+(`platform_tools:seed`) and at boot.
 
 ### New internal container tool
 
 1. Add `define :my_tool` block in `InternalToolStrategy`
-2. Add seed with `execution_mode: :container, kind: :internal`
+2. Nothing creates its `tools` row: `Tools::Reconciler` writes app-mode rows only, and no internal container
+   tool is registered today. A container-mode row with the definition's name is routed to it by
+   `Tool#build_strategy`.
 
 ```ruby
 # Example: adding Semgrep (15 lines)
@@ -784,7 +790,7 @@ All heavy data (stdout, stderr, files) goes to ToolResult → Shrine → S3. Tem
 ## 11. Migration Status
 
 This framework is fully implemented: the `execution_mode` column, `tool_results`
-table, `ToolResult` model + uploader + serializer, the `ToolStrategy` /
+table, `ToolResult` model + uploader + `ToolResultResource`, the `ToolStrategy` /
 `CustomToolStrategy` / `InternalToolStrategy` hierarchy, `InternalTools::ReadToolResult`,
 and the `Tool#execute` routing are all in place. The pre-framework strategy
 classes have been removed (see §8).

@@ -52,7 +52,8 @@ class PersonalMCPTemplatesTest < ActionDispatch::IntegrationTest
     result = payload(body)
     project = Project.find(result["project_id"])
     assert_equal @user, project.owner
-    assert_match %r{/company/projects/#{project.id}/template_installs/#{result['template_install_id']}\z}, result["checklist_url"]
+    assert_match %r{/company/#{project.company.slug}/projects/#{project.id}/template_installs/#{result['template_install_id']}\z},
+                 result["checklist_url"]
     assert_not_includes text(body), "tok-secret-value"
   end
 

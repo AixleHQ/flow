@@ -32,7 +32,7 @@ Versions are not listed here — read them from `.ruby-version`, `Gemfile.lock`,
 - **Forms:** @mantine/form + Zod via `zod4Resolver` (mantine-form-zod-resolver); Inertia useForm for simple cases
 - **Real-time:** `inertia_cable` gem over Action Cable; the frontend subscribes with its own `useInertiaCableStream` hook on `@rails/actioncable`
 - **DnD:** @dnd-kit/core + @dnd-kit/sortable
-- **Auth:** email + password (has_secure_password, no Devise) + OmniAuth (Google) + invitations; Pundit
+- **Auth:** email + password (has_secure_password, no Devise), OmniAuth (Google, Microsoft), per-company OIDC (openid_connect), passkeys (webauthn), magic links, TOTP step-up (rotp), invitations, SCIM provisioning (scimitar); Pundit
 - **Storage:** Shrine + AWS S3 + Uppy (frontend uploads)
 - **Container (Docker):** docker-api
 - **Container (K8s):** kubeclient + websocket (pod exec through `ContainerRuntime::ExecWebsocket`)
@@ -76,26 +76,27 @@ Frontend sends camelCase → Rails receives snake_case → Alba responds in came
 
 ```
 ApplicationController (AuthConcern, allow_browser, underscore_params)
-├── Web::ApplicationController (wrap_parameters false, inertia_share: flash, settings, current_user, projects)
+├── Web::ApplicationController (wrap_parameters false, inertia_share: flash, settings, features, current_user, projects, trial, marketplace)
 │   ├── Web::Company::ApplicationController (Pundit, AuthorizationConcern, layout "inertia", require_auth,
 │   │   │                                    require_active_membership!, dynamic_authorize!, deny_read_only_mutation!,
 │   │   │                                    inertia_share: permissions)
 │   │   └── Web::Company::Projects::ApplicationController (current_project, inertia_share: project, projectPermissions)
 │   │       └── Feature controllers (boards, workflows, sessions, etc.)
-│   ├── Web::SessionsController (login/logout, Google OAuth callback)
+│   ├── Web::SessionsController (login/logout, OmniAuth callback: Google, Microsoft)
 │   ├── Web::InvitationsController (accept, decline, sign up)
 │   ├── Web::ProfileController
 │   └── Web::OnboardingController
 └── Api::V1::ApplicationController (JSON, Pundit, PaginationConcern, CSRF-protected, authenticate_user!, dynamic_authorize!)
-    ├── Api::V1::Internal::ApplicationController (no user session, no Pundit: ws_auth, usage_statistics)
+    ├── Api::V1::Internal::ApplicationController (no user session, no Pundit: ws_auth, usage_statistics, runner_relay)
     └── Api::V1::AssetsController (presign, upload)
 
 Administrate::ApplicationController
 └── Admin::ApplicationController (authenticate_admin!)
 
 ActionController::API (no browser session; each authenticates its own caller)
-├── MCPController (/mcp — a session key or a personal MCP token)
-├── Webhooks:: (GitHub, GitLab, Azure DevOps, Slack, generic ingress — signature/secret verification)
+├── MCPController (/mcp — a session key, a personal MCP token or an MCP OAuth access token)
+├── MCPAuth:: (/mcp-oauth/token, /register, /revoke and /.well-known/oauth-* metadata)
+├── Webhooks:: (GitHub, GitLab, Bitbucket Forge, Azure DevOps, Slack, Teams, Stripe, trackers, generic ingress — signature/secret verification)
 └── Container callbacks: CloudCredentials, GitCredentials, AzureGitCredentials, AgentCredentialSync (per-session derived keys)
 ```
 
@@ -118,7 +119,7 @@ render inertia: "Page", props: { session: { id: session.id } }
 
 ### Shared Props (Auto-Injected)
 
-`Web::ApplicationController` injects `flash` and `settings`, plus `current_user` and `projects` when signed in, via `inertia_share`.
+`Web::ApplicationController` injects `flash`, `settings` and `features`, plus `current_user`, `projects`, `trial` and `marketplace` when signed in, via `inertia_share`.
 `Web::Company::ApplicationController` adds `permissions`; `Web::Company::Projects::ApplicationController` adds `project` and `projectPermissions`.
 
 Frontend reads these via `usePage().props` or typed `SharedProps`.
@@ -131,19 +132,19 @@ Temporal Workflow → PhaseActivity → ContainerService → Strategy → Runtim
 
 **Key classes:**
 - `ContainerService` — phase runner, calls `before_X`, `X`, `after_X` hooks
-- `ContainerRuntime.build` — factory, returns Docker or Kubernetes runtime based on Settings
+- `ContainerRuntime.build` — factory, returns Docker or Kubernetes runtime based on Settings; `ContainerRuntime.for_session` returns `RunnerRuntime` for a session on an external runner and `build`'s runtime for every other session
 - `BaseStrategy` → `AgentBaseStrategy` → `AgentAuthStrategy` / `AgentSessionStrategy`
 - `BaseStrategy` → `ToolStrategy` → `CustomToolStrategy` / `InternalToolStrategy`
-- `BaseRuntime` → `DockerRuntime` / `KubernetesRuntime`
+- `BaseRuntime` → `DockerRuntime` / `KubernetesRuntime` / `RunnerRuntime`
 - `BaseAdapter` → `ClaudeCodeAdapter` / `CursorCliAdapter` / `CodexAdapter` / `GeminiCliAdapter` / `AntigravityCliAdapter` / `GrokAdapter` / `KiroCliAdapter` / `CopilotCliAdapter`
 
 **Phases:** `pull_image → create_container → start_container → exec → cleanup`
 
 ### Multi-tenancy & Scoping
 
-Polymorphic `scope` (Company or Project) used by: Agent, Tool, Workflow, MCPServer, Skill, Asset, ConfigItem, Repository.
+Polymorphic `scope` used by: Agent, Tool, Workflow, MCPServer, Skill, Asset, ConfigItem, Repository. Each row belongs to one project, with three exceptions: Workflow can also be `System` (the platform's own), Asset (and Folder) can be company-wide, and platform code tools and internal MCP servers are platform-owned.
 
-Pattern: `visible_for_project(project)` → unions code/platform + company-scoped + project-scoped rows. No name-level override; System-scoped and non-attachable meta/Builder rows are excluded via `user_attachable`. (`visible_for_company` is the company-level analogue.)
+Pattern: `visible_for_project(project)` → the project's own rows, plus platform code tools, internal MCP servers or the company's assets. No name-level override; non-attachable meta/Builder tools are excluded via `user_attachable`. (`visible_for_company` exists only on Asset, the company's assets, and Tool, the platform code tools for project-less sessions.)
 
 **Referencing another tenant's row by id.** `visible_for_project` / `visible_for_company` decide what a picker offers. Whether an id may be *stored* is a different question, answered by `TenantScope` (`app/services/tenant_scope.rb`, see its header): ownership only, no enabled/attachable filtering, and platform-owned rows (code tools, internal MCP servers) belong to every tenant.
 
@@ -151,7 +152,7 @@ Pattern: `visible_for_project(project)` → unions code/platform + company-scope
   - Options: `project:` / `company:` name the record's methods that return its tenant (default: `project`, and that project's company); `lenient: true` lets an id of a deleted row through, for references that outlive their row; `error_on:` names the attribute that gets the error.
   - Validate only when the value can change. For a column (a foreign key or an id array), use `if: -> { new_record? || will_save_change_to_x? }`. An association collection (`has_and_belongs_to_many`) has no `will_save_change_to_<name>?` method, so validate it where the ids arrive instead, e.g. `on: :create` (`TerminalSession`).
   - Examples: `Repository#integration_id` (`project: :scope_project, error_on: :integration`), `WorkflowRun#input_asset_ids` and `#repository_ids` (with the change guard), `TriggerBinding#subject_column_id` (`error_on: :subject_column`), and the `TerminalSession` associations (`tools`, `skills`, `mcp_servers`, `repositories`, `input_assets`, `config_items`; `company: :company`, `on: :create`).
-- **Reading an id back:** an id read from a JSON column, a stored id list or a tool argument is resolved through the tenant, `TenantScope.owned(X, project:).find_by(id: id)` / `.where(id: ids)`, never `X.find(id)` / `X.find_by(id:)`. A foreign id is then simply not found. Examples: `SessionContextService` (`session_context_service.rb:445`), `TriggerEngine` (`:342`), `WorkflowStepStrategy` (`:161`), `Chat::SlackProvider` / `Chat::TeamsProvider`, `InternalTools::GetConfigItem`, `AzureDevopsContext`, `TerminalSession` (`:310`). The `Tenant/ScopedToolLookup` cop (`.rubocop/cops/tenant/scoped_tool_lookup.rb`) enforces this in `app/services/internal_tools` and `app/services/personal_tools` only; elsewhere the rule holds without a cop.
+- **Reading an id back:** an id read from a JSON column, a stored id list or a tool argument is resolved through the tenant, `TenantScope.owned(X, project:).find_by(id: id)` / `.where(id: ids)`, never `X.find(id)` / `X.find_by(id:)`. A foreign id is then simply not found. Examples: `SessionContextService#tenant_owned`, `TriggerEngine#owned_asset_ids`, `WorkflowStepStrategy#inject_workflow_run_assets`, `Chat::SlackProvider` / `Chat::TeamsProvider`, `InternalTools::GetConfigItem`, `AzureDevopsContext`, `TerminalSession#available_tools`. The `Tenant/ScopedToolLookup` cop (`.rubocop/cops/tenant/scoped_tool_lookup.rb`) enforces this in `app/services/internal_tools` and `app/services/personal_tools` only; elsewhere the rule holds without a cop.
 - **Which rows a tenant owns** is defined in one place, `TenantScope.owned`. A new model that can be referenced by id gets its rule there (the `case` raises `no tenant rule for …` otherwise), not in a model scope of its own.
 - **Database keys:** the database holds the company boundary too. Polymorphically scoped tables carry real `project_id` / `company_id` columns, kept in step with `scope_type` / `scope_id` by the `TenantColumns` concern, with foreign keys to projects and companies, a composite key `(project_id, company_id)` → `projects (id, company_id)` and a check that the columns agree with the scope pair (`AddTenantColumnsToScopedResources`). That migration also ties `repositories (integration_id, company_id)` to `integrations (id, company_id)`. A table that carries `company_id` directly gets the same composite keys for its project and its company-owned references (`CreateRunners`). A new scoped table follows the same pattern.
 
@@ -166,20 +167,23 @@ Pattern: `visible_for_project(project)` → unions code/platform + company-scope
 ### TerminalSession State Machine
 
 ```
-enqueue          not_started → queued                      (admission queue)
-start            not_started | queued → running
-mark_ready       not_started | running → ready
-start_finishing  not_started | running | ready → finishing
-finish           finishing → finished
-fail             not_started | queued | running | ready | finishing → failed
-cancel           not_started | queued | running | ready | finishing → cancelled
+enqueue           not_started → queued                      (admission queue)
+start             not_started | queued → running
+mark_ready        not_started | running → ready
+start_finishing   not_started | running | ready → finishing
+finish            finishing → finished
+fail              not_started | queued | running | ready | finishing → failed
+cancel            not_started | queued | running | ready | finishing → cancelled
+mark_restored     suspended → restored                      (Sessions::Suspension)
+expire_suspension suspended → finished
 ```
 
 Source of truth: `app/state_machines/terminal_session_state_machine.rb`.
 
 State changes go through these events, with one exception: `Activities::Container::AdmittedPhaseActivity#finalize_session`
 settles the final state from what the runtime reported, which can mean a transition the machine does not
-offer (a finished session relabelled failed when its output collection failed). Transition callbacks only
+offer (a finished session relabelled failed when its output collection failed). It also writes `suspended`,
+through `Sessions::Suspension.suspended!`; `mark_restored` and `expire_suspension` are the moves after it. Transition callbacks only
 assign attributes (they persist with the state); anything that leaves the process, such as waking the
 parent workflow run, waits for the commit (`ActiveRecord.after_all_transactions_commit`).
 
@@ -267,7 +271,7 @@ layouts/AuthLayout.tsx           # the signed-in shell
 shared/
   ui/                            # app chrome and small primitives (AppSidebar, PageShell, PageHeader, …)
   components/                    # components several pages use (AssetPicker, SessionNewForm, …)
-  resources/<resource>/          # resource-centric UI shared by company and project pages (agents/, tools/, …)
+  resources/<resource>/          # resource-centric UI (agents/, tools/, …), shared where company and project pages show the same resource (assets/, runners/)
   lib/, lib/hooks/               # utilities and hooks (apiFetch, formatDate, useInertiaCableStream, …)
   theme/, analytics/             # Mantine theme; chart helpers
 types/generated/                 # Typelizer output — regenerate, never edit
@@ -359,11 +363,12 @@ app/
           workflows_controller.rb       # Workflow CRUD
           sessions_controller.rb        # Terminal sessions
     api/v1/                             # JSON API
-      internal/                         # ws_auth, usage_statistics
+      internal/                         # ws_auth, usage_statistics, runner_relay
     admin/                              # Administrate panel
-    webhooks/                           # GitHub, GitLab, Azure DevOps, Slack, generic ingress
+    webhooks/                           # GitHub, GitLab, Bitbucket Forge, Azure DevOps, Slack, Teams, Stripe, trackers, generic ingress
     concerns/                           # auth, authorization, pagination
-    mcp_controller.rb                   # /mcp — session keys and personal MCP tokens
+    mcp_auth/                           # MCP OAuth authorization server (/mcp-oauth/*, /.well-known/oauth-*)
+    mcp_controller.rb                   # /mcp — session keys, personal MCP tokens, MCP OAuth access tokens
   models/                               # ActiveRecord models
   resources/                            # Alba resources (ApplicationResource subclasses)
     application_resource.rb             # Base: Alba::Resource + Typelizer::DSL + transform_keys :lower_camel
@@ -371,7 +376,7 @@ app/
   services/
     agents/                             # Agent adapters (per-agent logic)
     container_strategies/               # Strategy pattern (auth, session, tool)
-    container_runtime/                  # Runtime implementations (docker, k8s)
+    container_runtime/                  # Runtime implementations (docker, k8s, runner)
     container_runtime.rb                # Runtime factory
     container_service.rb                # Phase runner
     agent_credentials_service.rb        # Agent credential facade
@@ -445,18 +450,19 @@ docs/                                   # Architecture & design docs (see docs/i
 | Term | Meaning | DB column | Examples |
 |------|---------|-----------|----------|
 | **Agent Runtime** | Which AI agent CLI to use | `workflow_runs.agent_runtime`, `terminal_sessions.agent_type` | `claude_code`, `cursor_cli`, `codex`, `gemini_cli`, `antigravity_cli`, `grok`, `kiro_cli`, `copilot_cli` |
-| **Container Runtime** | Infrastructure that runs containers | `ContainerRuntime.build` (code-level) | Docker (local development), Kubernetes (production) |
+| **Container Runtime** | Infrastructure that runs containers | `ContainerRuntime.for_session` (code-level) | Docker (local development), Kubernetes (production), an external runner (`RunnerRuntime`) |
 | **Internal Tool** | Platform tool defined in code (`Tools::Registry`), runs in-process | `tools.source = 'code'`, `execution_mode = 'app'` | `list_sub_steps`, `chat_post_message`, `board_*`, `coder_*` |
 | **Workflow Tool** | Internal tool needing workflow context, auto-injected via code-only `inject_when` rules | `Tools::Registry` `inject_when` (no DB column) | `list_sub_steps`, `mark_sub_step`, `finish_session`, `fail_session` |
 | **Builder Tool** | Personal MCP tools served inside an Aixle Builder session, pinned to its project and run as its user | `Tools::BuilderToolset` (no rows) | `create_workflow`, `create_workflow_trigger`, `validate_workflow` |
-| **Custom Tool** | User-created tool in Docker container | `tools.source = 'db'`, `execution_mode = 'container'` | Company- or project-scoped |
+| **Custom Tool** | User-created tool in Docker container | `tools.source = 'db'`, `execution_mode = 'container'` | Project-scoped |
 | **Alba Resource** | Serializer for Inertia props + JSON | `app/resources/` | `BoardTaskResource`, `ProjectResource` |
 | **Inertia Cable** | Real-time prop refresh via ActionCable | `broadcasts_to` / `broadcast_refresh_to` | Board live updates |
 | **Shared Props** | Auto-injected Inertia props | `inertia_share` | `current_user`, `projects`, `flash`, `settings`, `permissions`, `project` |
 
 ### Tool visibility rules
-- **Auto-injected internal tools** are pulled in by code-only `inject_when` rules in `Tools::Registry` (e.g. workflow-step sessions get `list_sub_steps`/`mark_sub_step`/`finish_session`/`fail_session`)
-- **Other internal tools** (e.g. `chat_post_message`) appear only when explicitly added to `session.tools`; integration-gated ones are hidden until the integration is connected (`requires_integration`)
+- **Auto-injected internal tools** are pulled in by code-only `inject_when` rules in `Tools::Registry` (e.g. workflow-step sessions get `list_sub_steps`/`mark_sub_step`/`finish_session`/`fail_session`, and `chat_post_message` once Slack or Teams is connected)
+- **Other internal tools** (e.g. `session_list`, `session_log`, `github_user_token`) appear only when explicitly added to `session.tools`
+- **Integration-gated tools** (`requires_integration`), injected or attached, are hidden until the integration is connected
 - **Custom tools** come from `session.tools`; fallback to project-level tools if none explicitly selected
 - **Picker visibility** is `Tool.visible_for_project` / `visible_for_company` — non-attachable tools (`user_attachable: false`) are excluded
 - **Builder sessions** additionally get `Tools::BuilderToolset`: the personal MCP tools that take a `project_id`, served by the session's own MCP endpoint with `project_id` filled in and every lookup pinned to the session's project

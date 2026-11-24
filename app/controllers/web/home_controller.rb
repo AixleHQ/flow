@@ -16,7 +16,7 @@ class Web::HomeController < Web::ApplicationController
   def show
     # A Marketplace buyer already owns the product, so there is nothing for the
     # landing page to sell them.
-    return redirect_to(signed_in? ? company_projects_path : login_path) if Deployment.aws_marketplace?
+    return redirect_to(signed_in? && current_company ? company_projects_path : login_path) if Deployment.aws_marketplace?
 
     if request.path == "/"
       render html: "", layout: "web/landing"

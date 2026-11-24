@@ -212,7 +212,7 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
     # The administrator answers from their own browser; the buyer keeps theirs.
     admin = open_session
     admin.post login_path, params: { user: { email: @admin.email, password: AuthHelper::TEST_PASSWORD } }
-    admin.delete company_marketplace_license_proposal_path
+    admin.delete company_marketplace_license_proposal_path(company_slug: @company.slug)
     assert_equal "declined", license.reload.proposal_state
     perform_enqueued_jobs
     ActionMailer::Base.deliveries.clear
@@ -238,7 +238,7 @@ class Web::MarketplaceProposalTest < ActionDispatch::IntegrationTest
     admin = open_session
     admin.post login_path, params: { user: { email: @admin.email, password: AuthHelper::TEST_PASSWORD } }
     travel 1.minute
-    admin.delete company_marketplace_license_proposal_path
+    admin.delete company_marketplace_license_proposal_path(company_slug: @company.slug)
     assert_equal "declined", license.reload.proposal_state
     perform_enqueued_jobs
     ActionMailer::Base.deliveries.clear

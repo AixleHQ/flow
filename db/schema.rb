@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_23_100001) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_24_112933) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1800,8 +1800,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_23_100001) do
     t.string "skip_policy", default: "never", null: false
     t.datetime "updated_at", null: false
     t.bigint "workflow_id", null: false
+    t.bigint "origin_step_id"
     t.index ["agent_id"], name: "index_steps_on_agent_id"
     t.index ["deleted_at"], name: "index_steps_on_deleted_at"
+    t.index ["origin_step_id"], name: "index_steps_on_origin_step_id", where: "(origin_step_id IS NOT NULL)"
     t.index ["workflow_id", "position"], name: "index_steps_on_workflow_id_and_position", unique: true
     t.index ["workflow_id"], name: "index_steps_on_workflow_id"
   end
@@ -1829,7 +1831,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_23_100001) do
     t.boolean "required", default: true, null: false
     t.bigint "step_id", null: false
     t.datetime "updated_at", null: false
+    t.bigint "origin_sub_step_id"
     t.index ["deleted_at"], name: "index_sub_steps_on_deleted_at"
+    t.index ["origin_sub_step_id"], name: "index_sub_steps_on_origin_sub_step_id", where: "(origin_sub_step_id IS NOT NULL)"
     t.index ["step_id", "position"], name: "index_sub_steps_on_step_id_and_position"
     t.index ["step_id"], name: "index_sub_steps_on_step_id"
   end
@@ -2440,13 +2444,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_23_100001) do
     t.string "scope_type", null: false
     t.datetime "updated_at", null: false
     t.bigint "runner_id"
+    t.bigint "draft_of_id"
+    t.integer "draft_base_version"
     t.index ["company_id"], name: "index_workflows_on_company_id"
     t.index ["deleted_at"], name: "index_workflows_on_deleted_at"
+    t.index ["draft_of_id"], name: "index_workflows_on_draft_of_id", where: "(draft_of_id IS NOT NULL)"
+    t.index ["draft_of_id"], name: "index_workflows_on_open_draft", unique: true, where: "((draft_of_id IS NOT NULL) AND (deleted_at IS NULL))"
     t.index ["project_id"], name: "index_workflows_on_project_id"
     t.index ["published_at"], name: "index_workflows_on_published_at", where: "(published_at IS NOT NULL)"
     t.index ["published_by_id"], name: "index_workflows_on_published_by_id"
     t.index ["runner_id"], name: "index_workflows_on_runner_id"
-    t.index ["scope_type", "scope_id", "name"], name: "index_workflows_on_scope_and_name_unique", unique: true, where: "(deleted_at IS NULL)"
+    t.index ["scope_type", "scope_id", "name"], name: "index_workflows_on_scope_and_name_unique", unique: true, where: "((deleted_at IS NULL) AND (draft_of_id IS NULL))"
     t.index ["scope_type", "scope_id"], name: "index_workflows_on_scope_type_and_scope_id"
     t.index ["scope_type"], name: "index_workflows_on_system_scope", where: "((scope_type)::text = 'System'::text)"
   end
@@ -2687,10 +2695,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_23_100001) do
   add_foreign_key "step_runs", "terminal_sessions"
   add_foreign_key "step_runs", "workflow_runs", on_delete: :cascade
   add_foreign_key "steps", "agents", on_delete: :nullify
+  add_foreign_key "steps", "steps", column: "origin_step_id", on_delete: :nullify
   add_foreign_key "steps", "workflows", on_delete: :cascade
   add_foreign_key "sub_step_runs", "step_runs", on_delete: :cascade
   add_foreign_key "sub_step_runs", "sub_steps"
   add_foreign_key "sub_steps", "steps"
+  add_foreign_key "sub_steps", "sub_steps", column: "origin_sub_step_id", on_delete: :nullify
   add_foreign_key "task_assets", "board_tasks", on_delete: :cascade
   add_foreign_key "task_assets", "terminal_sessions", column: "shared_in_session_id", on_delete: :nullify
   add_foreign_key "task_assets", "users", column: "author_id", on_delete: :nullify
@@ -2780,6 +2790,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_23_100001) do
   add_foreign_key "workflows", "runners"
   add_foreign_key "workflows", "runners", column: ["runner_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_workflows_runner_company"
   add_foreign_key "workflows", "users", column: "published_by_id", on_delete: :nullify
+  add_foreign_key "workflows", "workflows", column: "draft_of_id", on_delete: :cascade
   add_foreign_key "youtrack_pairings", "companies", on_delete: :cascade
   add_foreign_key "youtrack_pairings", "integrations", on_delete: :nullify
   add_foreign_key "youtrack_pairings", "projects", on_delete: :cascade

@@ -1,28 +1,25 @@
 # Aixle Flow User Guide — Outline
 
-> The outline of the end-user product guide:
-> the skeleton a writer expands into full chapters. It follows the product
-> sidebar, uses the names a person sees on screen, and stays at product level:
-> no architecture, no APIs, no configuration, no file paths.
+> The outline of the end-user product guide: the chapters it contains and what
+> each one covers. It follows the product sidebar, uses the names a person sees
+> on screen, and stays at product level — no architecture, no APIs, no
+> configuration, no file paths.
 
-**Audience.** People who will run work in Aixle Flow: engineering leads,
-developers, and operators. Assume they know Git and task boards. Do not assume
-they know how agents, containers, or orchestration work.
+**Who it is for.** People who run work in Aixle Flow: engineering leads,
+developers, and operators. It assumes you know Git and task boards, and assumes
+nothing about agents, containers or orchestration.
 
-**Rules for the writer.**
+**How it is organised.**
 
-- Every section answers four questions: *what this is · when to use it ·
-  what the person does · what they see afterwards.*
-- Use the names from the product UI, not internal engineering names
-  (see [Terminology notes](#terminology-notes) at the end).
-- The existing documentation — the in-app portal at `/docs`, mirrored in the
-  repository as [`docs/user-guide/`](../user-guide/) — is written for people
-  installing and operating Flow: it is too technical for this guide. Do not
-  reuse its structure or copy; link to it only where a reader needs the
-  operator-level detail.
-- Every area named in
-  [changelog-product-areas.md](./changelog-product-areas.md) has a chapter
-  here. If a release adds an area, add the chapter in the same change.
+- Every chapter answers the same four questions: *what this is · when to use it ·
+  what you do · what you see afterwards.*
+- It uses the names that appear in the product, not engineering ones — see
+  [Terminology notes](#terminology-notes) at the end for the pairs that differ.
+- Installing and operating Flow is covered separately, in the
+  [User Guide overview](../user-guide/index.md) and the pages under it. This guide
+  links there where operator-level detail is needed rather than repeating it.
+- There is one chapter per product area, so the guide and the
+  [changelog product areas](./changelog-product-areas.md) stay in step.
 
 ---
 
@@ -221,9 +218,10 @@ sessions can also run on their own). They share a single list.
 
 - **What it is.** **Repositories** are the Git repos agents work in and push
   to. **Trackers** are the task trackers the project works with (GitHub
-  Projects, Azure Boards, Jira, Linear, YouTrack). **Integrations** are the
-  accounts Flow connects to on the team's behalf: GitHub, GitLab, Azure DevOps,
-  Jira, Linear, YouTrack, Slack, Microsoft Teams, and Coder.
+  Projects, GitLab issues, Azure Boards, Jira, Linear, YouTrack).
+  **Integrations** are the accounts Flow connects to on the team's behalf:
+  GitHub, GitLab, Bitbucket, Azure DevOps, Jira, Linear, YouTrack, Slack,
+  Microsoft Teams, and Coder.
 - **When to use it.** Any workflow that should read code, open pull requests,
   or touch tickets.
 - **What you do.** Connect the integration, link the repositories the project

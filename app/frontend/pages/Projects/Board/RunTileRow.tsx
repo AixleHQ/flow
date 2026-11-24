@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 
 import { RunsOnBadge } from 'shared/resources/runners/runnerChoice';
+import { companyProjectSessionPath, companyProjectWorkflowRunPath } from 'shared/routes';
 
 import { NeutralStatusChip } from './NeutralStatusChip';
 import { runSessionId } from './taskRuns';
@@ -31,7 +32,7 @@ export function RunTileRow({
       <NeutralStatusChip state={run.state} />
       <Text
         component="a"
-        href={`/company/projects/${projectId}/workflow_runs/${run.id}`}
+        href={companyProjectWorkflowRunPath(projectId, run.id)}
         target="_blank"
         rel="noopener"
         size="xs"
@@ -59,7 +60,7 @@ export function RunTileRow({
             size="xs"
             aria-label={`Open session #${sessionId}`}
             style={{ flexShrink: 0 }}
-            onClick={() => router.visit(`/company/projects/${projectId}/sessions/${sessionId}`)}
+            onClick={() => router.visit(companyProjectSessionPath(projectId, sessionId))}
           >
             <IconTerminal2 size={13} />
           </ActionIcon>

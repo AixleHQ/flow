@@ -382,16 +382,19 @@ module Agents
       { status: :error, detail: "#{e.class}: #{e.message}", permanent: false }
     end
 
-    # Default environment variables for Codex CLI runtime.
-    # MITM_TRACKED_DOMAINS limits logging to chatgpt.com (Codex API host).
+    # auth.openai.com is the token endpoint the CLI refreshes against; chatgpt.com alone
+    # showed inference and nothing about the login's lifecycle.
+    def mitm_tracked_domains
+      %w[chatgpt.com auth.openai.com]
+    end
+
+    # What #collect_usage parses: the CLI's own metrics, then the legacy response stream.
+    def mitm_logged_bodies
+      %W[request:ab.chatgpt.com/otlp/v1/metrics response:chatgpt.com#{CODEX_RESPONSES_PATH}]
+    end
+
     def default_env_vars(session, callbacks:)
-      {
-        "MITM_LOG_PATH" => "/var/log/mitm/http.log",
-        # auth.openai.com is the token endpoint the CLI refreshes against; chatgpt.com
-        # alone showed inference and nothing about the login's lifecycle.
-        "MITM_TRACKED_DOMAINS" => "chatgpt.com,auth.openai.com",
-        "OTEL_RESOURCE_ATTRIBUTES" => UsageStatistics::SessionKey.resource_attributes(session)
-      }
+      { "OTEL_RESOURCE_ATTRIBUTES" => UsageStatistics::SessionKey.resource_attributes(session) }
     end
 
     # Log files to collect from container after session ends.

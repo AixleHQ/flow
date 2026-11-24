@@ -355,10 +355,9 @@ A body that is not JSON is not passed on.
 
 ### Scope: per project
 
-Triggers are **project-scoped**. Every `WorkflowRun` belongs to a project (even
-a company-shared workflow runs *within* a project), so a webhook endpoint
-belongs to a project and its triggers start runs there. There is no
-"company-wide start" — that would still have to pick a project. Each project
+Triggers are **project-scoped**. Every `WorkflowRun` belongs to a project, so a
+webhook endpoint belongs to a project and its triggers start runs there. There
+is no "company-wide start" — that would still have to pick a project. Each project
 gets its own endpoints and trigger URLs, which is exactly the granularity a CLI
 wants: `aixle flow run <workflow> --project <id>`.
 

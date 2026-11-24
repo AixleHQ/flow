@@ -10,7 +10,7 @@ run side by side — they fight. The second one either fails to bind a port, or
 worse, silently resolves `db`, `redis` and `web` to the *first* stack's
 containers, so a branch appears to pass against the wrong database.
 
-Everything that makes a stack global is now a variable with the old value as its
+Everything that makes a stack global is a variable with the old value as its
 default. Set them and the worktree gets its own network, its own Postgres, its
 own agent containers; leave them unset and nothing changes.
 
@@ -35,6 +35,9 @@ own agent containers; leave them unset and nothing changes.
    PORT=4010
    VITE_RUBY_PORT=4011
    MCP_PORT=4012
+   RUNNER_GATEWAY_PORT=4013
+   RUNNER_RELAY_PORT=4014
+   RUNNER_RELAY_ADMIN_PORT=4015
    TEMPORAL_HOST_PORT=7333
    TEMPORAL_UI_HOST_PORT=8180
    OTLP_HOST_PORT=4418
@@ -63,6 +66,7 @@ own agent containers; leave them unset and nothing changes.
 | `DOCKER_AGENT_NETWORK` | `app_agents` | Agent containers join the other stack's agent network (`Settings.docker.agent_network`) and reach its `web` |
 | `WEB_IMAGE` | `web` | A build in the worktree overwrites the image the main stack runs |
 | `PORT`, `VITE_RUBY_PORT`, `MCP_PORT` | `4000`–`4002` | Port bind conflict |
+| `RUNNER_GATEWAY_PORT`, `RUNNER_RELAY_PORT`, `RUNNER_RELAY_ADMIN_PORT` | `4003`–`4005` | Port bind conflict (`web` publishes all three, with or without the `runners` profile) |
 | `TEMPORAL_HOST_PORT`, `TEMPORAL_UI_HOST_PORT` | `7233`, `8080` | Port bind conflict (in-network traffic still uses `temporal:7233`) |
 | `OTLP_HOST_PORT` | `4318` | Port bind conflict |
 | `HTTP_HOST_PORT`, `HTTPS_HOST_PORT`, `TRAEFIK_DASHBOARD_HOST_PORT` | `80`, `443`, `8090` | Port bind conflict |

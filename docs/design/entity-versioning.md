@@ -22,7 +22,7 @@ The request came from the CTO after the team worked on Insignia and on internal 
 
 | # | Decision |
 |---|---|
-| D1 | **The live row is the current version.** There is no draft/publish split. Saving updates the model and appends a full snapshot to its history. |
+| D1 | **The live row is the current version.** There is no draft/publish split. Saving updates the model and appends a full snapshot to its history. (Workflows later gained opt-in drafts that keep this rule: a draft is a separate row, see [workflow-drafts.md](./workflow-drafts.md).) |
 | D2 | **Only an explicit Save creates a version.** Builder autosave goes away. The UI shows an "unsaved changes" notice as soon as local state differs from the backend. |
 | D3 | **Revert applies the snapshot to the model and records a new version** (`restored_from` vN). History is append-only and never rewritten. One exception: a project move to another company removes `runner_id` from its workflows' snapshots, because a runner stays with its company (agent-runtimes DESIGN.md §3.4). |
 | D4 | **Runtime is unchanged.** It keeps reading live rows, so it always runs the latest version. Runs and sessions only record the versions they launched with. |
@@ -399,6 +399,14 @@ The implementation follows this RFC with these differences and specifics:
   and `WorkflowStepSync`, the one writer behind both a workflow revert and the
   builder's Save. Models include `Versioned`; agents, skills and MCP servers
   also `Archivable`.
+- **Write-path names differ from §4.2, §5.1 and §6.1.** The entry point is
+  `Versions.save!(record, actor:, base_version: nil, metadata: {})`. `actor` is a
+  `Versions::Actor` value (`user`, `source`, `session`) built by `Actor.ui`,
+  `Actor.api`, `Actor.system` or `Actor.mcp(user, session:)`, which gives source
+  `builder` when a session is passed and `mcp` otherwise. One class per type,
+  `Versions::Snapshots::<Type>`, both dumps and restores; `Versions::Snapshot`
+  picks it. There is no `Versions::Restore`: a revert calls
+  `Versions::Snapshot.restore!(record, snapshot)`.
 - **Baseline is lazy.** An entity that predates version history gets a
   `created` version with `metadata.baseline = true` (source `system`) from its
   state just before its first change — or at its first launch, when a run

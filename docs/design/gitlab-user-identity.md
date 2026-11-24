@@ -81,14 +81,14 @@ What the registry cannot do today, and the change:
 
 | Today | For GitLab | Change |
 |---|---|---|
-| Endpoints and issuer are constants | They derive from `GITLAB_ENDPOINT` (`Gitlab::Host.web_base`) | An entry may name a resolver: `endpoints: "Gitlab::UserConnection"`, whose `.endpoints` returns `{ issuer:, authorization_endpoint:, token_endpoint: }`. `Providers.config` merges it, as `after_connect` is looked up today |
-| Client id and secret read as `Settings.<key>.client_id` / `.client_secret` | `Settings.gitlab.oauth_client_id` / `oauth_client_secret` | Optional `client_id_key` and `client_secret_key` on the entry; default to the current names |
+| Endpoints and issuer are constants | They derive from `GITLAB_ENDPOINT` (`Gitlab::Host.web_base`) | An entry may carry an `endpoints:` callable, here `-> { Gitlab::UserConnection.endpoints }`, which returns `{ issuer:, authorization_endpoint:, token_endpoint: }` (and the revocation endpoint). `Providers.config` merges it |
+| Client id and secret read as `Settings.<key>.client_id` / `.client_secret` | `Settings.gitlab.oauth_client_id` / `oauth_client_secret` | Every entry has an `oauth_app:` callable returning `{ client_id:, client_secret: }`; GitLab's reads `Gitlab::AppConfig.oauth_client_id` / `oauth_client_secret` |
 | `Oauth::Providers.client_for` finds or creates the `OauthClient` by `(issuer, client_id)` | Same | No change. The issuer is `Host.web_base`, so a different `GITLAB_ENDPOINT` yields a different client (see below) |
-| The token endpoint must clear the SSRF guard (`UrlSafetyValidator`, `SafeHttp`), refusing private hosts | A self-managed GitLab is often on a private network (`Gitlab::AppConfig` already says so) | The two engine call sites (`Web::OauthController#exchange_code!`, `Oauth::TokenService.perform_refresh!`) pass the registry's operator host as trusted: `trusted_hosts_override:` / `trusted_hosts:`. The host is the operator's own `GITLAB_ENDPOINT`, as trusted as `Gitlab::Rest` already treats it. A literal private IP address stays refused by `SafeHttp`: the instance needs a host name |
+| The token endpoint must clear the SSRF guard (`UrlSafetyValidator`, `SafeHttp`), refusing private hosts | A self-managed GitLab is often on a private network (`Gitlab::AppConfig` already says so) | The entry sets `trust_endpoint_host: true`, and `Providers.trusted_hosts` returns its token endpoint's host. The two engine call sites (`Web::OauthController#exchange_code!`, `Oauth::TokenService.perform_refresh!`) pass that host as trusted: `trusted_hosts_override:` / `trusted_hosts:`. The host is the operator's own `GITLAB_ENDPOINT`, as trusted as `Gitlab::Rest` already treats it. A literal private IP address stays refused by `SafeHttp`: the instance needs a host name |
 | `refuse_github_connect?` refuses connecting while impersonating | Same rule | Generalised to every provider in `UserConnections::PROVIDERS` |
 
-`after_connect: "Gitlab::UserConnection"` calls `record_identity!` (`GET /user` with the
-new token) and stores `metadata["gitlab_user"] = { id, username, name, avatar_url,
+The entry's `after_connect:` callable runs `Gitlab::UserConnection.record_identity!` (`GET /user`
+with the new token), which stores `metadata["gitlab_user"] = { id, username, name, avatar_url,
 commit_email, fetched_at }`. As for GitHub, a failed lookup raises
 `Oauth::TokenExchangeError` ("Failed to complete connection") and the stored identity is
 cleared, not the credential.
@@ -230,8 +230,10 @@ member's, and the token never reaches the agent (`bitbucket-integration.md` §4.
 **Shared code.** `GithubUserTokenContext` holds the nine steps (§4.3 of the GitHub
 design) with GitHub's calls inline. Copying it would leave two sets of messages to keep
 equal, so the steps move to `InternalTools::Concerns::UserTokenContext`, which calls a
-small per-provider part: `provider_label`, `connection_for`, `collect_repositories`,
-`fresh_user_token!`, `mint_tokens!` and `result`. `GithubUserTokenContext` and the new
+small per-provider part: `provider_label`, `provider_name`, `live_connection_of`,
+`identity_of`, `identity_usable?`, `collect_repositories`, `no_repositories_message`,
+`token_skew`, `mint_tokens!` and `result` (`connection_for!` and `fresh_user_token!` are
+shared). `GithubUserTokenContext` and the new
 `GitlabUserTokenContext` supply them. With the label `GitHub`, every message stays
 byte-identical, so the GitHub tests do not change (a rename of constants only).
 
@@ -243,8 +245,9 @@ GitLab's provider part:
 - **Coverage check:** `project_access` per repository with the user's token. Access
   level 30 (Developer) or more covers the repository. Less, or nil, puts it in `skipped`
   with the reason "<name> cannot push to it". If nothing is covered, the tool refuses
-  naming the repositories. A 401 marks the credential `error` (`mark_refresh_error!`,
-  which sends the existing email) and answers with the reconnect message.
+  naming the repositories. A 401 counts as one refresh failure (`mark_refresh_error!`)
+  and answers with the reconnect message; the third consecutive failure marks the
+  credential `error` and sends the existing email.
 - **Token:** §2.3. One entry, not one per owner.
 - **Issuance:** one `UserTokenIssuance` row, then `SecretRegistry.publish!`; refuse if it
   fails, as for GitHub.
@@ -293,8 +296,8 @@ icon (`IconBrandGitlab`); the projects table renders once per connected provider
 ## 5. Implementation steps
 
 1. **Engine changes** (backend; GitHub behaviour unchanged).
-   - `Oauth::Providers`: the `gitlab` entry, `endpoints:` resolver, `client_id_key` /
-     `client_secret_key`, and a trusted-host helper.
+   - `Oauth::Providers`: the `gitlab` entry with `endpoints:`, `oauth_app:` and
+     `after_connect:` callables, the `trust_endpoint_host:` flag, and `trusted_hosts`.
    - Pass the trusted host in `Web::OauthController#exchange_code!` and
      `Oauth::TokenService.perform_refresh!`; generalise `refuse_github_connect?`.
 2. **Connection.** `Gitlab::UserConnection`, `Gitlab::UserTokenService` and its fake,

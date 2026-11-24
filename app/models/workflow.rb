@@ -9,6 +9,12 @@ class Workflow < ApplicationRecord
   include RunnerReference
   include ResourceLists
   belongs_to :published_by, class_name: "User", optional: true
+  # A draft (docs/design/workflow-drafts.md): a hidden copy that is edited and test-run, then
+  # applied onto the workflow it is a draft of. Closed drafts stay, archived, with their runs.
+  belongs_to :draft_of, class_name: "Workflow", optional: true, inverse_of: :drafts
+  has_many :drafts, class_name: "Workflow", foreign_key: :draft_of_id, inverse_of: :draft_of, dependent: :destroy
+  has_one :open_draft, -> { where(deleted_at: nil) }, class_name: "Workflow", foreign_key: :draft_of_id,
+                                                      inverse_of: false
 
   has_many :steps, dependent: :destroy
   has_many :runs, class_name: "WorkflowRun", dependent: :destroy
@@ -29,26 +35,36 @@ class Workflow < ApplicationRecord
   decodes_html_entities :name
 
   validates :name, presence: true
-  validates :name, uniqueness: { scope: %i[scope_type scope_id], conditions: -> { where(deleted_at: nil) },
-                                 message: "already exists in this scope" }
+  validates :name, uniqueness: { scope: %i[scope_type scope_id], conditions: -> { where(deleted_at: nil, draft_of_id: nil) },
+                                 message: "already exists in this scope" }, unless: :draft?
   validates :scope_type, presence: true, inclusion: { in: %w[Project System] }
   validates :scope, presence: true, unless: -> { scope_type == "System" }
   validate :config_keys_whitelist
   validate :base_config_item_ids_belong_to_project
   validate :base_resource_ids_belong_to_project
+  validate :draft_stays_a_draft, if: :draft?
 
   scope :active, -> { where(deleted_at: nil) }
+  scope :not_drafts, -> { where(draft_of_id: nil) }
+  # The workflow and every draft it has had, open or closed: where a draft's test
+  # runs are listed under the workflow they tried out.
+  scope :with_drafts_of, ->(id) { where(id: id).or(where(draft_of_id: id)) }
   scope :published, -> { where.not(published_at: nil) }
   scope :published_in_company, ->(company) { active.published.belonging_to_company(company) }
   scope :system, -> { where(scope_type: "System") }
   scope :for_project, ->(project) { where(scope_type: "Project", scope_id: project.id) }
 
+  # What a person or an agent picks from, binds a trigger to or publishes: drafts are left out.
   scope :visible_for_project, ->(project) {
+    editable_for_project(project).not_drafts
+  }
+  # The workflows that can be opened, edited and run by id, drafts included.
+  scope :editable_for_project, ->(project) {
     active.where(scope_type: "Project", scope_id: project.id)
   }
   # Every workflow this company can see: the workflows of all its projects.
   scope :belonging_to_company, ->(company) {
-    active.where(scope_type: "Project", scope_id: company.project_ids)
+    active.not_drafts.where(scope_type: "Project", scope_id: company.project_ids)
   }
 
   # The steps a caller should render, preload-safe. `steps.not_deleted` builds a fresh
@@ -119,12 +135,17 @@ class Workflow < ApplicationRecord
 
     transaction do
       trigger_bindings.where(enabled: true).find_each { |binding| binding.update!(enabled: false) }
+      drafts.where(deleted_at: nil).update_all(deleted_at: Time.current, updated_at: Time.current)
       update!(deleted_at: Time.current)
     end
   end
 
   def deleted?
     deleted_at.present?
+  end
+
+  def draft?
+    draft_of_id.present?
   end
 
   alias archived? deleted?
@@ -214,6 +235,12 @@ class Workflow < ApplicationRecord
   end
 
   private
+
+  def draft_stays_a_draft
+    errors.add(:base, "A draft cannot be published") if published_at.present?
+    errors.add(:draft_of, "is a draft itself") if draft_of&.draft?
+    errors.add(:draft_of, "belongs to another project") if draft_of && [ draft_of.scope_type, draft_of.scope_id ] != [ scope_type, scope_id ]
+  end
 
   def config_keys_whitelist
     return if config.blank?

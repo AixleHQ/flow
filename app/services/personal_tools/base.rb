@@ -188,10 +188,15 @@ module PersonalTools
     # A workflow scoped to the project — never a global Workflow.find, so a
     # user can't reach another project's workflow by id.
     def find_workflow!(project, id = params[:workflow_id])
-      workflow = Workflow.visible_for_project(project).find_by(id: id)
+      workflow = Workflow.editable_for_project(project).find_by(id: id)
       raise NotFoundError, "Workflow #{id} not found in this project" unless workflow
 
       workflow
+    end
+
+    # A draft carries the live workflow's name, so a run of it says so itself.
+    def draft_fields(run)
+      { draft_test: run.workflow&.draft? || false, draft_of_workflow_id: run.workflow&.draft_of_id }
     end
 
     def find_step!(workflow, id = params[:step_id])

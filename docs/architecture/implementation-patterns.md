@@ -34,7 +34,7 @@
 | TS constants | UPPER_SNAKE_CASE | `API_BASE_URL` |
 
 ### Field Naming
-- **State columns:** `state` (not `status`) — AASM convention
+- **State columns:** an AASM machine keeps its state in `state` (or `<name>_state`, as `onboarding_state` and `subscription_state`), not `status`. The one exception is `Runner`, whose machine runs on `runners.status` (with `status_reason`). The `enumerize` columns named `status` (`Integration`, `Gate`, `ProjectTracker`, …) are not state machines
 - **Enums:** via `enumerize` gem, never `ActiveRecord::Enum`
 - **Encrypted:** `encrypted_config_data` (column), `config_data` (accessor)
 
@@ -71,11 +71,11 @@ API tree (no `Api::V1::Company::ApplicationController` layer):
 ```ruby
 ApplicationController                    # AuthConcern, allow_browser, underscore_params
   Api::V1::ApplicationController         # JSON API, pagination, rescue_from, dynamic_authorize!
-    Api::V1::Company::AssetsController   # inherits directly; uses AuthConcern's session company
+    Api::V1::Company::AssetsController   # inherits directly; uses the company its path names
     Api::V1::Projects::ApplicationController  # current_project
 ```
 
-`dynamic_authorize!` is a `before_action` in `Api::V1::ApplicationController` (applies to the whole api/v1 tree). Company controllers inherit directly from it and use AuthConcern's `current_company` — the session company, validated against active memberships on every request. The SPA calls the API on the same cookie session as the page, so never re-resolve the company (for example to the first membership): a multi-company user would write into a company other than the one on screen. `current_project` lives in `Api::V1::Projects::ApplicationController`.
+`dynamic_authorize!` is a `before_action` in `Api::V1::ApplicationController` (applies to the whole api/v1 tree). Company controllers inherit directly from it and use AuthConcern's `current_company` — the company the path names (`/api/v1/company/:company_slug/…`), validated against active memberships on every request; a slug the user cannot enter is answered 404 (`refuse_company_out_of_reach`). The SPA's generated route helpers fill the slug from the tab's own URL (`shared/lib/currentCompanySlug.ts`), so never re-resolve the company (for example to the session's last company or the first membership): a multi-company user would write into a company other than the one on screen. `current_project` lives in `Api::V1::Projects::ApplicationController`.
 
 The **Web** namespace has its own base-controller chain:
 
@@ -121,7 +121,7 @@ What the controllers return — no envelope around the resource:
 - **Services:** `app/services/` — all business logic
 - **API clients:** the library for that API (`octokit`, `gitlab`), used from the provider's service in `app/services/<provider>/`; our own client under `app/services/<provider>/` only when no library we use covers the API
 - **Strategies:** `app/services/container_strategies/` — Strategy pattern for container types
-- **Runtimes:** `app/services/container_runtime/` — Runtime abstraction for Docker/K8s
+- **Runtimes:** `app/services/container_runtime/` — Runtime abstraction for Docker, Kubernetes and external runners (`RunnerRuntime`)
 - **Adapters:** `app/services/agents/` — per-agent credential/config logic
 - **Concerns:** `app/controllers/concerns/`, `app/models/concerns/`
 - **State machines:** `app/state_machines/` — AASM definitions
@@ -152,8 +152,11 @@ What the controllers return — no envelope around the resource:
   - **User:** `state` (active/pending/suspended/archived)
   - **CompanyMembership:** `state` (invited/active/suspended/revoked), `onboarding_state` (step1→step2→completed)
   - **Company:** `state` (active/suspended/archived)
-  - **TerminalSession:** `state` (not_started/queued/running/ready/finishing/finished/failed/cancelled)
+  - **TerminalSession:** `state` (not_started/queued/running/ready/finishing/finished/failed/cancelled/suspended/restored)
   - **WorkflowRun:** `state` (pending/running/paused/completed/failed/cancelled)
+  - **Runner:** `status` (pending/connected/degraded/unreachable/disabled/revoked)
+  - **RunnerEnvironment:** `state` (registered/resetting/failed/gone)
+  - **MarketplaceLicense:** `subscription_state` (pending/active/ending/ended)
 - **A state changes only through its events.** Other code does not write `state` with `update` or `state =`; a move the machine lacks is added to the machine (see Anti-Patterns → change a record's state, or another column whose change has an owner, past that owner)
 
 ### Model Predicates
@@ -175,10 +178,10 @@ What a model's state, type or columns mean is decided in the model. Other code a
 
 ### Polymorphic Scoping
 - Agent, Tool, Workflow, MCPServer, Skill, Asset, ConfigItem, Repository
-- `scope_type` + `scope_id` → Company or Project
-- `visible_for_project(project)` → union of Company-scoped + Project-scoped rows (System-scoped excluded; no name override)
-- `visible_for_company(company)` → Company-scoped rows
-- `for_project(project)` / `for_company(company)` → a single scope only
+- `scope_type` + `scope_id` → `Project` for all of them, with three exceptions: Workflow can be `System` (the platform's own), Asset (and Folder) can be `Company`, and platform code tools and internal MCP servers are platform-owned
+- `visible_for_project(project)` → the project's own rows, plus platform code tools, internal MCP servers or the company's assets (no name override)
+- `visible_for_company(company)` → Asset (the company's assets) and Tool (platform code tools, for project-less sessions) only
+- `for_project(project)` / `for_company(company)` → a single scope only (`for_company` on Asset and Folder)
 - These scopes decide what a **picker** offers. Whether an id may be **referenced** is decided by `TenantScope` — a different question (see Tenant References)
 
 ### Tenant References
@@ -191,7 +194,7 @@ What a model's state, type or columns mean is decided in the model. Other code a
   - `error_on:` → the attribute that gets the error
   - Validate only when the value can change. For a column (a foreign key or an id array), use the `if:` above. For an association collection (`has_and_belongs_to_many`), which has no `will_save_change_to_<name>?` method, validate where the ids arrive instead, e.g. `on: :create` (`TerminalSession`)
 - **Examples:** `Repository#integration_id` (`project: :scope_project, error_on: :integration`), `WorkflowRun#input_asset_ids` / `#repository_ids` (with the change guard), `TriggerBinding#subject_column_id` (`error_on: :subject_column`), the `TerminalSession` associations (`company: :company, on: :create`)
-- **Reading an id back:** an id read from a JSON column, a stored id list or a tool argument is resolved through the tenant, `TenantScope.owned(X, project:).find_by(id: id)` / `.where(id: ids)`, never `X.find(id)` / `X.find_by(id:)`, so a foreign id is not found. Examples: `SessionContextService` (`:445`), `TriggerEngine` (`:342`), `WorkflowStepStrategy` (`:161`), `Chat::SlackProvider` / `Chat::TeamsProvider`, `InternalTools::GetConfigItem`, `AzureDevopsContext`, `TerminalSession` (`:310`). The `Tenant/ScopedToolLookup` cop enforces it in `app/services/internal_tools` and `app/services/personal_tools` only
+- **Reading an id back:** an id read from a JSON column, a stored id list or a tool argument is resolved through the tenant, `TenantScope.owned(X, project:).find_by(id: id)` / `.where(id: ids)`, never `X.find(id)` / `X.find_by(id:)`, so a foreign id is not found. Examples: `SessionContextService#tenant_owned`, `TriggerEngine#owned_asset_ids`, `WorkflowStepStrategy#inject_workflow_run_assets`, `Chat::SlackProvider` / `Chat::TeamsProvider`, `InternalTools::GetConfigItem`, `AzureDevopsContext`, `TerminalSession#available_tools`. The `Tenant/ScopedToolLookup` cop enforces it in `app/services/internal_tools` and `app/services/personal_tools` only
 - **Ownership** is defined in one place: `TenantScope.owned` (`app/services/tenant_scope.rb`). Ownership only, no enabled/attachable filtering; platform-owned rows (code tools, internal MCP servers) belong to every tenant. A new model that can be referenced gets its rule there (otherwise `owned` raises `no tenant rule for …`), not in a model scope of its own
 - **Database keys:** polymorphically scoped tables carry real `project_id` / `company_id` columns, kept in step with the scope pair by `TenantColumns`, with foreign keys, a composite key `(project_id, company_id)` → `projects (id, company_id)` and a check against the scope pair (`AddTenantColumnsToScopedResources`, which also ties `repositories (integration_id, company_id)` to `integrations (id, company_id)`). A table that carries `company_id` directly gets the same composite keys (`CreateRunners`). The company boundary holds in the database itself; a new scoped table follows the same pattern
 
@@ -257,6 +260,7 @@ What a model's state, type or columns mean is decided in the model. Other code a
 - **Never** resolve a stored or user-supplied id across every company (`X.find(id)`, `X.find_by(id:)`) → use `TenantScope.owned(X, project:).find_by(id:)`
 - **Never** do IO, call a service or reach a higher layer from a model validation → a validation may read the model's own associations, query for uniqueness and call pure data and rule code (e.g. `Runners::ConfigSchema`); a check that needs an external call belongs in a service or a health check (DESIGN.md §5.1 of agent-runtimes)
 - **Never** skip `# frozen_string_literal: true`
+- **Never** write a migration file by hand or make up its version (`20261123100000`) → generate it with `bin/rails generate migration <Name>` in the `web` container, which stamps the current UTC time to the second. Where the generator can't run, name the file with the full current UTC timestamp (`date -u +%Y%m%d%H%M%S`), never a rounded one. Made-up versions collide across branches: each branch's CI passes, and the merge fails `db:migrate` with `ActiveRecord::DuplicateMigrationVersionError`.
 - **Never** create `before_action :set_resource` → find inline
 - **Never** stub Mocha `.returns` with a block for dynamic fake objects → use `Object.new` + `define_singleton_method`
 - **Never** use global loading states → track loading per request (local state around `apiFetch`)

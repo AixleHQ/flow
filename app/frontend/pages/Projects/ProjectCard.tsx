@@ -4,6 +4,7 @@ import { IconArrowRight, IconClock, IconSettings, IconStar, IconStarFilled } fro
 
 import type { Project } from '@/types/generated';
 
+import { companyProjectSettingsPath } from 'shared/routes';
 import { Identicon, StatusBadge } from 'shared/ui';
 
 import classes from './ProjectCard.module.css';
@@ -141,7 +142,7 @@ export const ProjectCard = ({ project, onClick, onToggleFavorite }: ProjectCardP
           size="sm"
           onClick={(e) => {
             e.stopPropagation();
-            router.visit(`/company/projects/${project.id}/settings`);
+            router.visit(companyProjectSettingsPath(project.id));
           }}
         >
           Settings

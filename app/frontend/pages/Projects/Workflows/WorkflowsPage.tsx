@@ -28,7 +28,12 @@ import { ArchiveSwitch, type ArchiveView } from 'shared/components/versions/Arch
 import { HistoryButton } from 'shared/components/versions/HistoryButton';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
-import { builderCompanyProjectWorkflowPath } from 'shared/routes';
+import {
+  builderCompanyProjectWorkflowPath,
+  companyProjectWorkflowRunsPath,
+  companyProjectWorkflowsPath,
+  companyWorkflowCatalogIndexPath,
+} from 'shared/routes';
 import { PageHeader } from 'shared/ui/PageHeader';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -74,7 +79,7 @@ const WorkflowsPage = () => {
   const { canExecute } = useProjectPermissions();
   const assets = rawAssets ?? [];
   const repositories = rawRepositories ?? [];
-  const basePath = `/company/projects/${project.id}/workflows`;
+  const basePath = companyProjectWorkflowsPath(project.id);
 
   // An archived workflow's builder links back here with ?view=archived.
   const [view, setView] = useState<ArchiveView>(() =>
@@ -279,11 +284,11 @@ const WorkflowsPage = () => {
           <button
             type="button"
             className="wf-btn"
-            onClick={() => router.visit(`/company/projects/${project.id}/workflow_runs`)}
+            onClick={() => router.visit(companyProjectWorkflowRunsPath(project.id))}
           >
             <IconHistory size={13} /> Run History
           </button>
-          <button type="button" className="wf-btn" onClick={() => router.visit('/company/workflow_catalog')}>
+          <button type="button" className="wf-btn" onClick={() => router.visit(companyWorkflowCatalogIndexPath())}>
             Catalog
           </button>
           {canExecute && (
@@ -421,7 +426,7 @@ const WorkflowsPage = () => {
                     <button
                       type="button"
                       className="wf-btn"
-                      onClick={() => router.visit(`/company/projects/${project.id}/workflows/${wf.id}/builder`)}
+                      onClick={() => router.visit(builderCompanyProjectWorkflowPath(project.id, wf.id))}
                     >
                       <IconArrowUpRight size={12} /> Configure
                     </button>

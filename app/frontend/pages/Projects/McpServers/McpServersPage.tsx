@@ -3,6 +3,7 @@ import { Head, usePage } from '@inertiajs/react';
 import type { Connector, MCPServer, Project } from '@/types/generated';
 
 import { McpServersContent } from 'shared/resources/mcp-servers/McpServersContent';
+import { companyProjectConnectorsPath, companyProjectMCPServersPath } from 'shared/routes';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -30,12 +31,12 @@ const McpServersPage = () => {
         archivedMcpServers={archivedServers}
         projectId={project.id}
         configItemNames={configItemNames}
-        basePath={`/company/projects/${project.id}/mcp_servers`}
+        basePath={companyProjectMCPServersPath(project.id)}
         title="Connectors"
         subtitle="MCP servers this project can use — installed from the public catalog or added by hand."
         connectors={connectors}
         connectorQuery={connectorQuery}
-        connectorsPath={`/company/projects/${project.id}/connectors`}
+        connectorsPath={companyProjectConnectorsPath(project.id)}
         catalogSyncedAt={catalogSyncedAt}
       />
     </>

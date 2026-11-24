@@ -42,7 +42,8 @@ class Integrations::YoutrackPairingsTest < ActionDispatch::IntegrationTest
     project = response.parsed_body["projects"].sole
     assert_equal [ APP, subscription.secret, "State", "Assignee" ], project.values_at("id", "secret", "status_field", "assignee_field")
     assert_match %r{/webhooks/trackers/#{subscription.endpoint_token}\z}, project["events_url"]
-    assert_equal "#{Settings.protocol || 'https'}://#{Settings.domain}/company/projects/#{@project.id}/trackers", response.parsed_body["return_url"]
+    assert_equal "#{Settings.protocol || 'https'}://#{Settings.domain}/company/#{@project.company.slug}/projects/#{@project.id}/trackers",
+                 response.parsed_body["return_url"]
     assert_equal [ "perm:minted", @user ], [ integration.credentials_data["permanent_token"], integration.connected_by ]
     assert_equal [ "completed", integration ], [ pairing.reload.state, pairing.integration ]
 

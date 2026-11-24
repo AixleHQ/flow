@@ -154,6 +154,7 @@ module ContainerStrategies
       env_vars.merge!(GitCredentials::SessionGitSetup.container_env(session, url: callbacks[:git_credentials]))
       env_vars.merge!(GitCredentials::SessionGitSetup.identity_env)
 
+      env_vars.merge!(agent_service.adapter.mitm_env)
       env_vars.merge!(agent_service.adapter.default_env_vars(session, callbacks: callbacks))
       env_vars.merge!(agent_service.adapter.env_vars_from_metadata(session.metadata)) if session.metadata.present?
       super + env_vars.compact.map { |k, v| "#{k}=#{v}" }

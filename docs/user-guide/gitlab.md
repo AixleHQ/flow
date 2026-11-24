@@ -281,9 +281,11 @@ workflow step calls `board_create_gate` with:
 - `gate_type`: `gitlab_pipeline_completed`
 - `repo_full_name`: the repository as Flow lists it, for example
   `group/subgroup/app`. It must be attached to the task's project.
-- `pipeline_id`: the GitLab pipeline id, `CI_PIPELINE_ID` inside the
-  pipeline or the number at the end of its `/-/pipelines/<id>` URL. The
-  per-project `iid` does not work.
+- `pipeline_id`: the GitLab pipeline id. For a merge request, an agent reads
+  it from `pull_request_checks` as `pipeline.id`, the merge request's head
+  pipeline. Inside the pipeline it is `CI_PIPELINE_ID`, and in a browser the
+  number at the end of the `/-/pipelines/<id>` URL. The per-project `iid`
+  does not work.
 
 ### The pipeline hook
 
@@ -319,8 +321,11 @@ warning. Gates still resolve, but later, through the reconciliation sweep:
   once. A gate that has no result when its TTL runs out (12 hours by default)
   is marked stale too.
 
-Nothing in GitLab starts a workflow. The hook carries only pipeline events, and
-Flow uses them only for gates. There is no GitLab trigger.
+Pipeline events only resolve gates. Workflows start from the hook's merge
+request reviews and comments, through
+[pull request triggers](/docs/triggers-and-gates#pull-request-events), and from
+issue events in a tracked project (see
+[GitLab issues as a tracker](#gitlab-issues-as-a-tracker)).
 
 ## Replacing the token
 
@@ -442,9 +447,7 @@ because each request carries a key for that session. See
 - A repository attached before Flow kept track of each hook can leave its
   hook in GitLab when it is removed: Flow cannot tell that hook apart while
   another such repository attaches the same GitLab project.
-- There is no GitLab CLI and there are no GitLab triggers. GitLab issues
-  cannot be used as a tracker: [Trackers](/docs/trackers) supports Jira, Azure
-  Boards, GitHub Projects, Linear and YouTrack.
+- There is no GitLab CLI.
 
 ## When something goes wrong
 

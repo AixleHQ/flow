@@ -29,6 +29,8 @@ class Company < ApplicationRecord
   has_many :azure_devops_installations, dependent: :destroy
   # Auth policy rows and this company's own IdP connections die with it.
   has_many :company_auth_policies, dependent: :destroy
+  # Before :identity_providers — the SCIM credential may name one of them.
+  has_one :scim_configuration, dependent: :destroy
   has_many :identity_providers, dependent: :destroy
   has_many :repositories, as: :scope, dependent: :destroy
   # Workflows are owned by projects (company-level workflows were removed).
@@ -129,10 +131,23 @@ class Company < ApplicationRecord
     support.com blog.com status.com localhost.com
   ].freeze
 
+  # The words that follow /company/ in a path that names no company: the
+  # switcher, leaving a company, GitHub's setup callback, and every section an
+  # unscoped link from before the slug was in the path still names
+  # (Web::UnscopedCompanyPathsController). A company slugged like one could not
+  # be told apart from them.
+  RESERVED_SLUGS = %w[
+    analytics assets auth_policies billing_cancellation billing_checkout
+    billing_invoice_payment domain_verification feedback folders identity_providers
+    integrations marketplace_license_proposal members memberships projects
+    scim_configuration sessions settings switch template_installs user workflow_catalog
+  ].freeze
+
   # Validations
   validates :name, presence: true, uniqueness: true
   validates :slug, presence: true, uniqueness: true,
-                   format: { with: /\A[a-z0-9-]+\z/, message: "only allows lowercase letters, numbers, and hyphens" }
+                   format: { with: /\A[a-z0-9-]+\z/, message: "only allows lowercase letters, numbers, and hyphens" },
+                   exclusion: { in: RESERVED_SLUGS, message: "is reserved" }
   validates :billing_state, inclusion: { in: BILLING_STATES }
   validates :billing_block_reason, inclusion: { in: BILLING_BLOCK_REASONS }, allow_nil: true
   validates :billing_provider, inclusion: { in: BILLING_PROVIDERS }
@@ -256,6 +271,17 @@ class Company < ApplicationRecord
   def self.find_by_email_domain(email)
     domain = email.split("@").last # e.g., "acme.com", "aixle.com"
     active.find_by(email_domain: domain)
+  end
+
+  # The registrable label of a domain, without its public suffix: acme.com,
+  # acme.co.uk and mail.acme.io all give "acme".
+  def self.slug_base(domain)
+    label = begin
+      PublicSuffix.parse(domain.to_s).sld
+    rescue PublicSuffix::Error
+      domain.to_s.split(".").first
+    end
+    label.to_s.parameterize
   end
 
 
@@ -452,12 +478,11 @@ class Company < ApplicationRecord
   def generate_slug
     return if slug.present?
 
-    base_slug = name.to_s.parameterize
+    base_slug = Company.slug_base(email_domain).presence || name.to_s.parameterize
     self.slug = base_slug
 
-    # Ensure uniqueness
     counter = 1
-    while Company.exists?(slug: slug)
+    while RESERVED_SLUGS.include?(slug) || Company.exists?(slug: slug)
       self.slug = "#{base_slug}-#{counter}"
       counter += 1
     end

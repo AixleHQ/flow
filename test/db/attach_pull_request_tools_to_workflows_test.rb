@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
-require Rails.root.join("db/migrate/20261123100001_attach_pull_request_tools_to_workflows")
+require Rails.root.join("db/migrate/20261124112933_attach_pull_request_tools_to_workflows")
 
 class AttachPullRequestToolsToWorkflowsTest < ActiveSupport::TestCase
   setup do

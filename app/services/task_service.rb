@@ -78,7 +78,10 @@ class TaskService
       task
     end
 
-    def move(task:, to_column:, position: nil, actor:, actor_type: :human)
+    # `start_column_workflow: false` moves the card without starting the auto
+    # workflow of the column it enters: a draft's test run must not set live
+    # workflows going (docs/design/workflow-drafts.md).
+    def move(task:, to_column:, position: nil, actor:, actor_type: :human, start_column_workflow: true)
       from_column = task.board_column
       column_changed = from_column.id != to_column.id
 
@@ -104,7 +107,9 @@ class TaskService
 
         # Record the auto-trigger event atomically with the move; it is dispatched
         # inline below (and recovered by the relay if this process then dies).
-        pending_event = record_pending_auto_trigger(task: task, column: to_column, actor: actor) if column_changed
+        if column_changed && start_column_workflow
+          pending_event = record_pending_auto_trigger(task: task, column: to_column, actor: actor)
+        end
       end
 
       if column_changed

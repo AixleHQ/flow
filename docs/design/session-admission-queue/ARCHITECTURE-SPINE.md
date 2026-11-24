@@ -18,7 +18,9 @@ companions:
 
 # Session admission architecture contract
 
-This is the recommended design contract, not a claim that every proposed behavior is implemented. Decisions A1-A5 and their rationale are in the [technical design](TECH-DESIGN.md). A1 selects an installation-wide pool for AWS Marketplace. Implementation adjustments in [ROLLOUT.md](ROLLOUT.md) take precedence for the current version.
+**Status:** Built 2026-09-05 (#201). Where the build departs from this contract as first written: the budget is the company's, not the installation's (#297), so `SESSION_CONCURRENCY_LIMIT` is read by nothing; admission is always on and cannot be paused (#325); a session without a project queues in a per-user pool (#325); and a pinned reservation is released once absence has been proven for a confirmation window (#286). AD-1, AD-5 and AD-10 below say so. Operations are in [ROLLOUT.md](ROLLOUT.md).
+
+Decisions A1-A5 and their rationale are in the [technical design](TECH-DESIGN.md). A1, an installation-wide pool for AWS Marketplace, was replaced by the per-company budget.
 
 ## Design paradigm
 
@@ -39,11 +41,11 @@ flowchart LR
 
 ## Invariants and rules
 
-### AD-1: One applicable pool, one ceiling over all of them
+### AD-1: One applicable pool, one company budget over a company's pools
 
 - **Binds:** policy resolver, enqueue and administration.
-- **Prevents:** inconsistent combinations of installation and project limits across launch paths.
-- **Rule:** a session belongs to exactly one pool, its project's. A session with no project is not admitted at all and launches without a reservation — in practice that is an agent login. A positive `SESSION_CONCURRENCY_LIMIT` is a ceiling over every pool at once rather than a pool of its own, and an explicit project limit is a **reservation** drawn from it: the project can always reach that number, because nothing else may occupy it. Every project without one shares the remainder — the ceiling less the sum of all reservations — bounded individually by the scope default. A reservation is validated against the ceiling when it is saved. The ceiling itself is deployment configuration read live, so it can be lowered underneath the reservations and nothing can refuse that — the drain therefore clamps every pool, reserved ones included, to the ceiling. In the validated state that clamp never bites; in an over-committed one the ceiling wins and the reservations compete, which `QueueHealthCheck` reports. **Superseded the original rule**, under which the ENV selected installation-wide pooling *instead of* per-project pools, so a ceiling and per-project fairness could never apply at once. Zero or invalid values prevent activation. Marketplace licensing is a separate integration. DB policy and revision are authoritative; deployment sync writes them, not individual worker boots. The proposed protocol uses policy SHARE for admission and UPDATE for mutations; the implementation conservatively uses UPDATE for all short admission transactions. Refresh derived pool limits before issuing grants.
+- **Prevents:** inconsistent combinations of company and project limits across launch paths.
+- **Rule:** a session belongs to exactly one pool: its project's (`project:<id>`), or, for a session with no project — in practice an agent login — its user's (`user:<id>`), two at a time (`SessionAdmissionService::AUTH_POOL_LIMIT`), which draws on no company's limit. A company's limit (a `SessionConcurrencyLimit` row with scope `Company`; none means unbounded) is a ceiling over that company's project pools at once rather than a pool of its own, and an explicit project limit is a **reservation** drawn from it: the project can always reach that number, because nothing else may occupy it. Every project of the company without one shares the remainder — the company limit less its reservations and the occupancy of its unreserved projects — bounded individually by the scope default (`SESSION_PROJECT_CONCURRENCY_DEFAULT`). A reservation is validated against its company's limit when it is saved. A company limit may be lowered beneath its reservations, so that a downgrade is never blocked; the drain then clamps every pool of the company, reserved ones included, to the company's headroom, the reservations compete, and `QueueHealthCheck` reports the over-commitment. There is no installation ceiling: `SESSION_CONCURRENCY_LIMIT` is read by nothing (#297). Admission is always on and has no pause (#325). **Superseded twice:** first the original rule, under which the ENV selected installation-wide pooling *instead of* per-project pools; then the installation ceiling over project pools (#278), which could not express an installation running several organisations. DB policy and revision are authoritative; every limit change bumps the revision and drains. The proposed protocol uses policy SHARE for admission and UPDATE for mutations; the implementation conservatively uses UPDATE for all short admission transactions. Refresh derived pool limits before issuing grants.
 
 ### AD-2: Capacity unit and ownership
 
@@ -67,7 +69,7 @@ flowchart LR
 
 - **Binds:** runtime create/start/exec, cancellation, cleanup and reconciliation.
 - **Prevents:** a late Pod appearing after its slot was reassigned.
-- **Rule:** persist a runtime-operation envelope before side effects. Cover Pod/Docker creation and startup as well as session routing resources and readiness repairs. Verify stable identity and ownership when adopting resources; use UID preconditions on deletion. Stop markers prevent new attempts but cannot revoke an already sent RPC. Unresolved operations that could still materialize a workload — creation and startup — block release until completion or quiescence is established. An unresolved operation that can only act inside a container whose absence is already confirmed (exec) is recorded and reported, but retains no slot: it has nothing left to bring into existence, so holding capacity for it only leaks the slot. A DB token is not Kubernetes fencing. GET 404, timeout and a closed Temporal execution do not prove that a late create is impossible. Unresolvable uncertainty requires operator evidence and retains the slot.
+- **Rule:** persist a runtime-operation envelope before side effects. Cover Pod/Docker creation and startup as well as session routing resources and readiness repairs. Verify stable identity and ownership when adopting resources; use UID preconditions on deletion. Stop markers prevent new attempts but cannot revoke an already sent RPC. Unresolved operations that could still materialize a workload — creation and startup — block release until completion or quiescence is established. An unresolved operation that can only act inside a container whose absence is already confirmed (exec) is recorded and reported, but retains no slot: it has nothing left to bring into existence, so holding capacity for it only leaks the slot. A DB token is not Kubernetes fencing. GET 404, timeout and a closed Temporal execution do not prove that a late create is impossible. Unresolvable uncertainty retains the slot. Since #286 the reconciler releases it once absence has been proven on every pass for `SESSION_PINNED_RELEASE_CONFIRMATION_MINUTES` (default 5), marking the operations `abandoned`; with `SESSION_PINNED_RELEASE_ENABLED=false` it requires operator evidence.
 
 ### AD-6: Confirmed release
 
@@ -97,7 +99,7 @@ flowchart LR
 
 - **Binds:** application deployment, aixle-infra, quota migration and operators.
 - **Prevents:** legacy workers bypassing admission or old quotas remaining an accidental business limit.
-- **Rule:** deploy compatible states/APIs and v2 workflows, stop legacy producers/workers, drain executions and resources, then activate. Derive fallback limits from effective CPU/memory/Pod quotas, not max_pods alone. Disable old quota creation before audited deletion. Preserve per-Pod limits and namespace isolation. Retire quota RBAC only after cleanup. Mode changes and rollback require pause/drain. Version or drain parent histories too.
+- **Rule:** deploy compatible states/APIs and v2 workflows, stop legacy producers/workers, drain executions and resources, then activate. Derive fallback limits from effective CPU/memory/Pod quotas, not max_pods alone. Disable old quota creation before audited deletion. Preserve per-Pod limits and namespace isolation. Retire quota RBAC only after cleanup. Mode changes and rollback require pause/drain. Version or drain parent histories too. This gate was the one-time cutover to admission; since #325 admission is always on, so there is no pause and no mode to change.
 
 ## Stack
 
@@ -115,7 +117,7 @@ Versions were checked in source; live cluster versions were not measured.
 | Concern | Convention |
 |---|---|
 | Permit ownership | One admission per session; unreleased admissions prevent deletion |
-| Policy precedence | DB revision, positive cap and a separate pause control |
+| Policy precedence | DB revision; the company's limit over its project pools; no pause |
 | Runtime identity | Stable kind/name/namespace and verified ownership; UID preconditions for deletion |
 | Launch recovery | pending/claimed/acknowledged/closed; repeated delivery does not repeat execution |
 | Waiting UI | concurrency_limit, dispatch_pending, namespace_quota, cluster_capacity |
@@ -123,8 +125,8 @@ Versions were checked in source; live cluster versions were not measured.
 
 ## Deferred
 
-- Multi-company pools within one shared SaaS deployment.
+- Multi-company pools within one shared SaaS deployment. No longer deferred: built in #297 (AD-1).
 - Exact existing-scope overrides until deployment inventory is reviewed; proposed new-installation defaults are 2.
 - Priority, weighted CPU/RAM scheduling, inter-company fairness and standalone-tool limits.
 - Queue TTL and an expanded operational dashboard.
-- A ceiling for sessions launched outside a project: they are exempt from admission entirely, so the installation ceiling does not bound agent logins.
+- A ceiling for sessions launched outside a project. No longer deferred: they queue per user, two at a time (#325, AD-1).

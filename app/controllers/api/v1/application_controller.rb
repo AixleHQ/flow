@@ -14,6 +14,7 @@ module Api
       # every call. Machine endpoints opt out in Api::V1::Internal.
       protect_from_forgery with: :exception
       before_action :authenticate_user!
+      before_action :refuse_company_out_of_reach
       # The web tree's company sign-in gate, answered for the company this
       # request acts in rather than the one the browser happens to be on.
       before_action :enforce_company_auth_policy
@@ -67,6 +68,10 @@ module Api
         else
           current_user.active_memberships.none? || current_user.active_memberships.all?(&:viewer?)
         end
+      end
+
+      def refuse_company_out_of_reach
+        record_not_found if company_in_path_out_of_reach?
       end
 
       def backstop_company

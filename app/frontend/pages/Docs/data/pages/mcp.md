@@ -11,57 +11,71 @@ MCP servers come in two kinds:
 | Kind       | Scope            | Example                                          |
 | ---------- | ---------------- | ------------------------------------------------ |
 | `internal` | none (platform)  | `aixle-tools` — always connected.                |
-| `custom`   | Company / Project | Context7, Tavily, Playwright, any HTTP/stdio MCP. |
+| `custom`   | Project          | Context7, Tavily, Playwright, any HTTP/stdio MCP. |
 
 ### `aixle-tools` (internal, always on)
 
 Every session container is given the internal `aixle-tools` server. It
-is reached over `streamable-http` at the `MCP_SERVER_URL` env variable
-and authenticated with a per-session `X-Session-Key` header. It exposes:
+is reached over `streamable-http` at `Settings.mcp.server_url` (the
+`MCP_SERVER_URL` env variable) and authenticated with a per-session
+`X-Session-Key` header. It exposes:
 
 - **Board tools** (`board_*`) — read and mutate the board: get/list/create/
-  update/move tasks, comments, assets, tags, and Gates.
+  update/move tasks, comments, assets, tags, and gates.
 - **Progress tools** (`list_sub_steps`, `mark_sub_step`) — auto-injected
   only in workflow-step sessions.
 - **Session lifecycle** (`finish_session`, `fail_session`) — how an agent
   signals it is done or has failed.
 
 These are modelled as platform `Tool` records, not user config — see
-the Tools page.
+[Tools](/docs/tools).
 
 ### Custom servers
 
-Add custom MCP servers under **Company → MCP Servers** or **Project →
-MCP Servers**. They resolve additively into a session alongside the
-internal server (see resource resolution on the Tools page).
+Add custom MCP servers under **Project → Connectors**, by hand or from the
+public connector catalog. They resolve additively into a session alongside
+the internal server (see [resource resolution](/docs/tools#resource-resolution)).
 
 ## Personal MCP (connect your own agent)
 
-You can point your own agent (Claude, Claude Code, Codex, Cursor, …) at Aixle
-directly — no session, no container. Clients register the server under the
-name `flow`, so its tools appear as `mcp__flow__list_projects` and so on.
+You can point your own agent (Claude, Claude Code, Codex, Cursor, any MCP
+client) at Aixle directly — no session, no container. It acts as your own
+Aixle account, so the agent can list projects, build workflows, run them and
+work the board for you. Clients register the server under the name `flow`,
+so its tools appear as `mcp__flow__list_projects` and so on.
+
+There are two ways to connect: sign in (OAuth), or a personal token. Both
+start from the server URL on **Profile → MCP**:
+`https://<your-aixle-host>/mcp`, or the address an operator sets in
+`MCP_PUBLIC_SERVER_URL`.
 
 ### Sign in
 
-A client that supports MCP sign-in needs only the server URL from
-**Profile → MCP**. It sends you to Aixle to allow access — the consent screen
-names the app, the companies it will reach and where your browser goes next —
-and keeps its own tokens from then on.
+A client that supports MCP sign-in needs only the server URL. It sends you to
+Aixle to allow access — you sign in if needed, and the consent screen names
+the app, the companies it will reach and where your browser goes next — and
+keeps its own tokens from then on.
 
-- **Claude, Claude Desktop, Cowork:** add the URL as a custom connector. On a
-  Team or Enterprise plan an owner adds it once for the organization, and each
-  member connects with their own Aixle account.
+- **Claude, Claude Desktop, Cowork:** add the URL as a custom connector
+  (**Customize → Connectors → Add custom connector**). On a Team or Enterprise
+  plan an owner adds it once for the organization (**Organization settings →
+  Connectors**), and each member connects with their own Aixle account.
+  Claude's servers must be able to reach your Aixle host.
 - **Claude Code:** `claude mcp add flow --transport http https://<your-aixle-host>/mcp`,
   then `/mcp` to sign in.
+- ChatGPT, VS Code and other clients that sign in work the same way.
 
 An app reaches the companies whose sign-in policy the browser session you
-allowed it from satisfies. **Connected apps** on the same tab lists every app
-and disconnects each one on its own.
+allowed it from satisfies — connect from a session signed in with your
+company's SSO to reach a company that requires it. **Connected apps** on the
+same tab lists every app and disconnects each one on its own. How the
+authorization server works:
+`docs/design/mcp-oauth-server.md`.
 
 ### Personal token
 
 For clients that cannot sign in, **Create token** on **Profile → MCP** gives
-you a personal token:
+you an `amcp_` token and, alongside it, the ways to install the server:
 
 ```
 claude mcp add flow --transport http https://<your-aixle-host>/mcp \
@@ -78,35 +92,42 @@ codex mcp add flow --url https://<your-aixle-host>/mcp --bearer-token-env-var FL
 Keep the `export` in your shell profile — Codex reads the variable every
 time it starts the server.
 
-The same tab has an **Add to Cursor** button (a one-click install
-deeplink) and a **Copy JSON** action for any other client's `mcp.json`.
-All of these carry the token, so they are only offered while it is on screen
-— it is stored as a digest and shown exactly once.
+The same tab has an **Add to Cursor** button — a
+`cursor://anysphere.cursor-deeplink/mcp/install` link carrying the URL and
+the bearer header — and a **Copy JSON** action for any other client's
+`mcp.json`. All of these carry the token, so they are only offered while it
+is on screen — it is stored as a digest and shown exactly once.
+
+Regenerating the token revokes the old one at once. **Disable all MCP
+access** ends the token and every connected app.
+
+### What the server covers
 
 This server is **session-less** and grants **exactly your own access
 level** — every action runs through the same permission checks as the UI,
-so you can only do in a project what you could do by hand. It exposes the
-things you do in the app: list your companies and projects, manage board
-tasks, columns and gates, build and run workflows (steps, sub-steps,
-triggers, runs), manage agents, custom tools, skills, MCP servers, config
-items and repositories, and update project settings.
+across every company you are an active member of, so you can only do in a
+project what you could do by hand. There is no "current project": tools take
+an explicit `project_id`. It exposes the things you do in the app: list your
+companies and projects, manage board tasks, columns and gates, build and run
+workflows (steps, sub-steps, triggers, runs), manage agents, custom tools,
+skills, MCP servers, config items and repositories, and update project
+settings.
 
-The **Tools** card on the same tab picks which of those the server offers.
-Unchecking what you never use keeps its schemas out of the agent's
-context, and the `tool_catalog` prompt then describes exactly the
-remaining set. Leaving everything checked means "all tools", so ones added
-in a later release arrive switched on. This is not a permission boundary —
-the token and every connected app always run as you. **Disable all MCP
-access** ends the token and every connected app at once.
+The server also documents itself, so a client does not have to guess:
 
-The server also documents itself, so a client does not have to guess. Its
-`instructions` — in your agent's context from the moment it connects —
-explain the entity model and the rules that keep it from doing damage.
-Four prompts go deeper on demand: `setup_project` (a project from nothing
-to a running workflow), `build_workflow`, `author_step`, and
-`tool_catalog` (every tool grouped by area, generated from the live
-registry). The full platform reference is served as the resource
-`aixle://reference/system`.
+| Surface | Name | What it carries |
+| --- | --- | --- |
+| `instructions` | — | Returned on `initialize`, so it is in the client's context from the start: the entity model, the rules that prevent damage (read before write, id lists are replaced wholesale, confirm destructive calls), and where the rest lives. |
+| prompt | `setup_project` | A project from nothing to a running workflow: company, integrations, repositories, config items, tools/skills/MCP servers, agents, board, workflow, trigger. |
+| prompt | `build_workflow` | Workflow concepts and the order to call the workflow tools. |
+| prompt | `author_step` | How to write a step an agent can actually run. |
+| prompt | `publish_template` | How to turn a working project or workflow into a template for the public catalog and open the pull request. |
+| prompt | `tool_catalog` | Every tool the server serves, grouped by area — generated from the live registry, so it cannot drift. |
+| resource | `aixle://reference/system` | `references/aixle-system-reference.md`: the full platform reference. |
+
+Implementation: `Tools::PersonalMCPRequestHandler` wires the server,
+`Tools::PersonalMCPGuides` holds the text, and the tools are the
+registry's `audience :user` definitions (`app/services/personal_tools/`).
 
 Starting from an empty project works end to end: a new project has no
 board until `setup_board` creates one from a preset (`simple_kanban`,
@@ -121,11 +142,11 @@ text — notes, a log, JSON — goes straight into `attach_task_asset`'s
 `content`.
 
 A workflow built this way can be wired up end to end: `create_workflow_trigger`
-attaches a board column, a Slack message, a cron schedule or an inbound
-webhook, so the workflow launches on its own rather than only on a button.
-When a run misbehaves, `get_step_run` returns that step's error, retry
-history and container-session diagnostics — the same detail the run page
-shows.
+attaches a board column, a Slack or Teams message, a cron schedule, an
+inbound webhook, a tracker event or a pull request event, so the workflow
+launches on its own rather than only on a button. When a run misbehaves,
+`get_step_run` returns that step's error, retry history and
+container-session diagnostics — the same detail the run page shows.
 
 `list_sessions` and `list_workflow_runs` filter, sort and page like the
 **Sessions & Runs** list. Sessions filter by company, project, status, kind
@@ -144,8 +165,18 @@ Teams are covered too: `list_project_teams`, `create_project_team`,
 `create_workflow_trigger` and `update_workflow_trigger` take `run_as_team_id`,
 so a trigger built over MCP can run as a team from the start.
 
-The token is shown once — regenerate or disable it any time from your
-profile. Regenerating immediately invalidates the old token.
+### Choosing which tools it serves
+
+The **Tools** card on **Profile → MCP** lists every tool the server can
+offer, grouped the way the `tool_catalog` prompt groups them. Unchecking the
+ones you never use keeps their schemas out of your agent's context, and the
+`tool_catalog` prompt then describes exactly the remaining set. It is not a
+permission boundary — the token and every connected app always run as you,
+with your access level — just a smaller surface.
+
+Leaving everything checked is stored as "all tools", so tools added in a
+later release arrive switched on. A client picks up a change on its next
+connection.
 
 ## Transports
 
@@ -176,13 +207,15 @@ one place, and rotating it needs no edit to the server.
   which keys are set, never their values.
 - A referenced Config Item is attached to every session the server is attached
   to. Its value reaches the container only inside that server's config, each
-  delivery is recorded in the item's access log, and the value is redacted
-  from the session's logs like any other session secret.
+  delivery is recorded in the item's access log (`config_item_accesses`,
+  channel `mcp_config`), and the value is redacted from the session's logs like
+  any other session secret.
 - Values belong to the address they were entered for. Changing a server's
   origin (`http`/`sse`) or its command line (`stdio`) clears every stored
   header and env value and disconnects its OAuth connections — enter them
   again in the same save or afterwards. A new path on the same origin, or
-  switching between `http` and `sse`, keeps them.
+  switching between `http` and `sse`, keeps them. An OAuth credential is only
+  ever sent to the origin it was issued for.
 
 If an agent can't reach a server, the usual cause is a missing Config Item, a
 server whose address changed and was never given its credentials back, or the
@@ -214,6 +247,6 @@ hostnames that resolve to them).
 
 ## See also
 
-- **Tools** — what the tools themselves are and how they execute.
-- **Integrations** — Git hosts, OAuth sign-in, webhooks.
-- **Runtimes** — which runtimes speak MCP.
+- [Tools](/docs/tools) — what the tools themselves are and how they execute.
+- [Integrations](/docs/integrations) — Git hosts, OAuth sign-in, webhooks.
+- [Runtimes](/docs/runtimes) — which runtimes speak MCP.
