@@ -78,9 +78,10 @@ class Web::Company::Projects::IntegrationsAuthorizationTest < ActionDispatch::In
   %i[inspect connect script].each do |action|
     test "azure_devops_federated_#{action} is a project write" do
       with_azure_devops_enabled(federation: federation_settings)
-      path = public_send(:"azure_devops_federated_#{action}_company_project_integrations_path", @project)
 
+      # Built inside the block: the company slug the helper needs is only known once a role is signed in.
       assert_project_write(allowed: :unprocessable_content) do
+        path = public_send(:"azure_devops_federated_#{action}_company_project_integrations_path", @project)
         post path, params: { organization: "not a valid name!", client_id: SecureRandom.uuid, project_ids: [ SecureRandom.uuid ] },
                    as: :json
       end
