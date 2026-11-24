@@ -403,7 +403,7 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
   test "queued session finish cancels without sending runtime commands" do
     admission = enqueue
     TemporalService.expects(:cancel_workflow).never
-    SessionService.finish(session: admission.terminal_session)
+    Sessions::Lifecycle.finish(admission.terminal_session)
     assert_equal "cancelled", admission.terminal_session.reload.state
     assert admission.reload.released_at
   end
@@ -417,7 +417,7 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     session = admission.terminal_session
     TemporalService.expects(:cancel_workflow).with(session.workflow_id).once
 
-    SessionService.fail_session(session: session, error_message: "No output for 30 minutes")
+    Sessions::Lifecycle.fail(session, error_message: "No output for 30 minutes")
 
     assert_equal "failed", session.reload.state
     assert_equal "No output for 30 minutes", session.error_message
@@ -429,7 +429,7 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     admission = enqueue
     TemporalService.expects(:cancel_workflow).never
 
-    SessionService.fail_session(session: admission.terminal_session, error_message: "Stale session")
+    Sessions::Lifecycle.fail(admission.terminal_session, error_message: "Stale session")
 
     assert_equal "failed", admission.terminal_session.reload.state
     assert admission.reload.released_at

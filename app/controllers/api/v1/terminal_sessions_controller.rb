@@ -80,7 +80,7 @@ module Api
       # @summary Finish an active terminal session
       def finish
         session = current_user.terminal_sessions.find(params[:id])
-        SessionService.finish(session: session)
+        Sessions::Lifecycle.finish(session)
         render json: TerminalSessionResource.new(session, params: { viewer: current_user }).to_h
       rescue TerminalSession::InvalidStateError => e
         render json: { error: e.message }, status: :bad_request
@@ -89,7 +89,7 @@ module Api
       # @summary Suspend an interactive session, keeping its files and conversation for Restore
       def suspend
         session = current_user.terminal_sessions.find(params[:id])
-        SessionService.suspend(session: session)
+        Sessions::Lifecycle.suspend(session)
         render json: TerminalSessionResource.new(session.reload, params: { viewer: current_user }).to_h
       rescue TerminalSession::InvalidStateError => e
         render json: { error: e.message }, status: :bad_request
@@ -115,7 +115,7 @@ module Api
       # @summary Throw away an authentication session so a fresh one can start
       def reset
         session = current_user.terminal_sessions.auth_sessions.find(params[:id])
-        SessionService.reset_auth(session: session)
+        Sessions::Lifecycle.reset_auth(session)
         render json: TerminalSessionResource.new(session.reload, params: { viewer: current_user }).to_h
       end
 

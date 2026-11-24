@@ -64,14 +64,11 @@ class SessionLaunchRelay
         admission.reload.lock!
         if admission.claim_token == claim
           admission.update!(launch_state: "pending", claimed_at: nil)
-          SessionAdmissionService.cancel!(session)
           # The refusal has to reach the session too. Only the admission carried
           # it, and nothing on the board reads that — a step refused at the gate
           # showed up as a bare "cancelled" with an empty error, so the run's
           # owner had no way to learn that a connection needed reconnecting.
-          session.reload.update!(
-            error_message: TerminalSession.preferred_error_message(session.error_message, e.message)
-          )
+          Sessions::Lifecycle.cancel(session, error_message: e.message)
         end
       end
     end
@@ -85,7 +82,7 @@ class SessionLaunchRelay
   # lease is past and no execution exists).
   def self.abandon(admission, session)
     reason = "Could not start after #{MAX_LAUNCH_ATTEMPTS} attempts: #{admission.last_error.presence || 'no error recorded'}"
-    SessionService.fail_session(session: session, error_message: reason)
+    Sessions::Lifecycle.fail(session, error_message: reason)
     Rails.logger.error("[SessionLaunchRelay] Admission #{admission.id} abandoned: #{reason}")
   end
 end

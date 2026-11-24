@@ -145,4 +145,105 @@ class TerminalSessionStateMachineTest < ActiveSupport::TestCase
 
     assert_not_nil session.finishing_at
   end
+
+  # == events Sessions::Lifecycle.finalize and the suspension moves use ==
+
+  test "finish_without_request ends a session that was never asked to finish" do
+    %w[not_started queued running ready].each do |from|
+      session = create(:terminal_session, user: @user, state: from, container_id: "ctr-1")
+      assert session.may_finish_without_request?, "from #{from}"
+
+      session.finish_without_request!
+
+      assert_equal "finished", session.reload.state
+      assert_not_nil session.finished_at
+      assert_nil session.container_id
+    end
+  end
+
+  test "finish_without_request is refused once a session is finishing or over" do
+    %w[finishing finished failed cancelled suspended].each do |from|
+      assert_not create(:terminal_session, user: @user, state: from).may_finish_without_request?, "from #{from}"
+    end
+  end
+
+  test "finish_without_request keeps the time the session ended when it is already set" do
+    ended = 2.hours.ago.change(usec: 0)
+    session = create(:terminal_session, user: @user, state: "ready", finished_at: ended)
+
+    session.finish_without_request!
+
+    assert_equal ended, session.reload.finished_at
+  end
+
+  test "fail_after_finish moves only a finished session to failed" do
+    session = create(:terminal_session, user: @user, state: "finished", container_id: "ctr-1")
+
+    session.fail_after_finish!
+
+    assert_equal "failed", session.reload.state
+    assert_nil session.container_id
+    %w[not_started queued running ready finishing failed cancelled suspended].each do |from|
+      assert_not create(:terminal_session, user: @user, state: from).may_fail_after_finish?, "from #{from}"
+    end
+  end
+
+  test "mark_suspended takes a session that ran, and clears its container" do
+    %w[running ready finishing].each do |from|
+      session = create(:terminal_session, user: @user, state: from, container_id: "ctr-1")
+
+      session.mark_suspended!
+
+      assert_equal "suspended", session.reload.state
+      assert_nil session.container_id
+      assert_not_nil session.finished_at
+    end
+    %w[not_started queued finished failed cancelled suspended].each do |from|
+      assert_not create(:terminal_session, user: @user, state: from).may_mark_suspended?, "from #{from}"
+    end
+  end
+
+  test "expire_suspended_step moves only a suspended session to failed" do
+    session = create(:terminal_session, user: @user, state: "suspended")
+
+    session.expire_suspended_step!
+
+    assert_equal "failed", session.reload.state
+    %w[not_started queued running ready finishing finished failed cancelled restored].each do |from|
+      assert_not create(:terminal_session, user: @user, state: from).may_expire_suspended_step?, "from #{from}"
+    end
+  end
+
+  # The reason the moves above are events of their own: failing or finishing a
+  # suspended session through the usual events has to stay refused.
+  test "a suspended session can be neither failed nor finished through the usual events" do
+    session = create(:terminal_session, user: @user, state: "suspended")
+
+    assert_not session.may_fail?
+    assert_not session.may_finish?
+    assert_not session.may_cancel?
+  end
+
+  # == ending rules ==
+
+  test "ending_error drops the queue's own error after a requested finish, and keeps a real one" do
+    generic = TerminalSession::GENERIC_ERROR_MESSAGES.first
+    finishing = build(:terminal_session, user: @user, finishing_at: Time.current)
+    plain = build(:terminal_session, user: @user)
+
+    assert_nil finishing.ending_error(generic)
+    assert_equal "Agent image could not be pulled", finishing.ending_error("Agent image could not be pulled")
+    assert_equal generic, plain.ending_error(generic)
+    assert_nil plain.ending_error(nil)
+  end
+
+  test "ending_state: a stop before the session was usable is a cancellation, anything else finishes" do
+    assert_equal "cancelled", build(:terminal_session, user: @user, state: "cancelled").ending_state(nil)
+    assert_equal "failed", build(:terminal_session, user: @user, state: "running").ending_state("boom")
+    assert_equal "failed", build(:terminal_session, user: @user, state: "failed").ending_state(nil)
+    assert_equal "cancelled", build(:terminal_session, user: @user, finishing_at: Time.current).ending_state(nil)
+    assert_equal "finished", build(:terminal_session, user: @user, finishing_at: Time.current,
+                                                      ready_at: 1.minute.ago).ending_state(nil)
+    assert_equal "finished", build(:terminal_session, user: @user).ending_state(nil)
+  end
 end

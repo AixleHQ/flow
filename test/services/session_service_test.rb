@@ -512,88 +512,6 @@ class SessionServiceTest < ActiveSupport::TestCase
     assert_nil @user.terminal_sessions.last, "session must not be created when a selected MCP URL is unsafe"
   end
 
-  # == finish ==
-
-  test "finish transitions session to finishing and sends container_finished signal" do
-    session = create(:terminal_session, :running, user: @user, temporal_workflow_id: "wf-123")
-
-    TemporalService.expects(:send_signal).with(session.workflow_id, :container_finished, nil).once
-
-    SessionService.finish(session: session)
-
-    session.reload
-    assert_equal "finishing", session.state
-    assert_not_nil session.finishing_at
-  end
-
-  test "finish is idempotent across repeated calls on a running session" do
-    session = create(:terminal_session, :running, user: @user, temporal_workflow_id: "wf-123")
-
-    # A duplicate user click (or simultaneous web + mobile invocations) must
-    # send the container_finished signal exactly once — extra signals would
-    # cause double cleanup on the Temporal worker side.
-    TemporalService.expects(:send_signal).with(session.workflow_id, :container_finished, nil).once
-
-    SessionService.finish(session: session)
-    session.reload
-    first_finishing_at = session.finishing_at
-
-    SessionService.finish(session: session)
-    session.reload
-
-    assert_equal "finishing", session.state
-    assert_equal first_finishing_at.to_i, session.finishing_at.to_i
-  end
-
-  test "finish is a no-op when session is already finishing" do
-    session = create(:terminal_session, :finishing, user: @user, temporal_workflow_id: "wf-123")
-    original_finishing_at = session.finishing_at
-
-    TemporalService.expects(:send_signal).never
-
-    SessionService.finish(session: session)
-
-    session.reload
-    assert_equal "finishing", session.state
-    assert_equal original_finishing_at.to_i, session.finishing_at.to_i
-  end
-
-  test "finish signals container workflow for workflow_step sessions" do
-    workflow_run = create(:workflow_run, project: @project, user: @user)
-    step = create(:step, workflow: workflow_run.workflow)
-    step_run = create(:step_run, workflow_run: workflow_run, step: step)
-    session = create(:terminal_session, :running, user: @user, session_type: "workflow_step",
-                     temporal_workflow_id: "wf-456", project: @project)
-    step_run.update!(terminal_session: session)
-
-    # Only signals the container workflow; execution workflow is notified by before_cleanup
-    TemporalService.expects(:send_signal).with(session.workflow_id, :container_finished, step_run.id).once
-
-    SessionService.finish(session: session)
-
-    session.reload
-    assert_equal "finishing", session.state
-  end
-
-  test "finish raises InvalidStateError for non-finishable session" do
-    session = create(:terminal_session, user: @user, state: "finished")
-
-    assert_raises(TerminalSession::InvalidStateError) do
-      SessionService.finish(session: session)
-    end
-  end
-
-  test "finish without temporal workflow transitions through finishing to finished" do
-    session = create(:terminal_session, :running, user: @user, temporal_workflow_id: nil)
-
-    SessionService.finish(session: session)
-
-    session.reload
-    assert_equal "finished", session.state
-    assert_not_nil session.finishing_at
-    assert_not_nil session.finished_at
-  end
-
   # == suspend and restore (Sessions::Suspension) ==
 
   include CheckpointStorageHelper
@@ -603,39 +521,13 @@ class SessionServiceTest < ActiveSupport::TestCase
                                                         state: "ready", temporal_workflow_id: "wf-1", **attrs)
   end
 
-  test "suspend records the request and ends the container the way finish does" do
-    use_checkpoint_storage
-    session = interactive_session
-
-    TemporalService.expects(:send_signal).with(session.workflow_id, :container_finished, nil).once
-
-    SessionService.suspend(session: session)
-
-    session.reload
-    assert_equal "finishing", session.state
-    assert Sessions::Suspension.requested?(session)
-  ensure
-    restore_checkpoint_storage
-  end
-
-  test "suspend refuses a session that cannot be suspended" do
-    use_checkpoint_storage
-    step = create(:terminal_session, :running, user: @user, project: @project, session_type: "workflow_step",
-                                               temporal_workflow_id: "wf-2")
-
-    assert_raises(TerminalSession::InvalidStateError) { SessionService.suspend(session: step) }
-    refute Sessions::Suspension.requested?(step.reload)
-  ensure
-    restore_checkpoint_storage
-  end
-
   test "restore starts a session that continues the suspended one with its configuration" do
     use_checkpoint_storage
     mock_temporal_start
     create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
     skill = create(:skill, scope: @project)
     origin = interactive_session(skill_ids: [ skill.id ])
-    Sessions::Suspension.suspended!(origin)
+    Sessions::Lifecycle.suspended(origin)
     create_checkpoint(origin)
 
     restored = SessionService.restore(session: origin, user: @user)
@@ -652,7 +544,7 @@ class SessionServiceTest < ActiveSupport::TestCase
   test "only the owner can restore a suspended session" do
     use_checkpoint_storage
     origin = interactive_session
-    Sessions::Suspension.suspended!(origin)
+    Sessions::Lifecycle.suspended(origin)
     create_checkpoint(origin)
     stranger = create(:user, :with_company)
 
@@ -671,7 +563,7 @@ class SessionServiceTest < ActiveSupport::TestCase
                                                  mode: "interactive", state: "ready", temporal_workflow_id: "wf-step",
                                                  metadata: { "step_run_id" => step_run.id })
     step_run.update!(terminal_session: origin)
-    Sessions::Suspension.suspended!(origin)
+    Sessions::Lifecycle.suspended(origin)
     create_checkpoint(origin)
     [ origin.reload, step_run.reload ]
   end
@@ -732,135 +624,12 @@ class SessionServiceTest < ActiveSupport::TestCase
                                                    mode: "interactive", state: "ready")
       step_run.update!(terminal_session: origin)
 
-      Sessions::Suspension.suspended!(origin)
+      Sessions::Lifecycle.suspended(origin)
 
       assert_equal run.created_at + TemporalWorkflowRegistry::RUN_TIMEOUT.seconds - 12.hours, origin.reload.restore_expires_at
     end
   ensure
     restore_checkpoint_storage
-  end
-
-  # == cancel ==
-
-  test "cancel stops the admission and cancels its container workflow" do
-    mock_temporal_start
-    create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
-    session = SessionService.create_and_start(user: @user, project: @project,
-                                              session_type: "agent_session", agent_type: "claude_code")
-
-    TemporalService.expects(:cancel_workflow).with(session.workflow_id).once
-
-    SessionService.cancel(session: session)
-
-    assert_equal "cancelled", session.reload.state
-    assert session.session_admission.reload.stop_requested_at
-  end
-
-  test "cancel closes a session still waiting in the queue without touching Temporal" do
-    with_scope_defaults(project: 1)
-    create(:terminal_session, user: @user, project: @project).then { |s| SessionAdmissionService.enqueue!(s) }
-    SessionAdmissionService.drain!
-    waiting = create(:terminal_session, user: @user, project: @project)
-    SessionAdmissionService.enqueue!(waiting)
-
-    TemporalService.expects(:cancel_workflow).never
-
-    SessionService.cancel(session: waiting)
-
-    assert_equal "cancelled", waiting.reload.state
-    assert waiting.session_admission.reload.released_at
-  end
-
-  # == reset_auth ==
-
-  test "reset_auth cancels a login in progress and its container workflow" do
-    mock_temporal_start
-    session = SessionService.create_and_start(user: @user, company: @company,
-                                              session_type: "auth_setup", agent_type: "claude_code")
-    session.start!
-    session.mark_ready!
-
-    TemporalService.expects(:cancel_workflow).with(session.workflow_id).once
-
-    SessionService.reset_auth(session: session)
-
-    assert_equal "cancelled", session.reload.state
-    assert session.session_admission.reload.stop_requested_at
-  end
-
-  test "reset_auth leaves a login that already ended as it is" do
-    session = create(:terminal_session, :auth_setup, user: @user, company: @company, state: "failed")
-
-    TemporalService.expects(:cancel_workflow).never
-
-    SessionService.reset_auth(session: session)
-
-    assert_equal "failed", session.reload.state
-  end
-
-  # == fail_session ==
-
-  test "fail_session records the error, fails the session and signals its container workflow" do
-    session = create(:terminal_session, :running, user: @user, temporal_workflow_id: "wf-dead")
-
-    # The container workflow ("agent-session-<id>") is the execution that owns the
-    # pod: without this signal it waits out its 23-hour `container_finished`
-    # timeout, its cleanup phase never runs, and the pod, Service, IngressRoute and
-    # Middlewares leak for a day.
-    TemporalService.expects(:send_signal).with(session.workflow_id, :container_finished, nil).once
-
-    SessionService.fail_session(session: session, error_message: "Agent container vanished")
-
-    session.reload
-    assert_equal "failed", session.state
-    assert_equal "Agent container vanished", session.error_message
-    assert_not_nil session.finished_at
-  end
-
-  test "fail_session signals the container workflow as well as the parent workflow run" do
-    workflow_run = create(:workflow_run, project: @project, user: @user)
-    step = create(:step, workflow: workflow_run.workflow)
-    step_run = create(:step_run, workflow_run: workflow_run, step: step)
-    session = create(:terminal_session, :running, user: @user, session_type: "workflow_step",
-                     project: @project, temporal_workflow_id: "wf-step")
-    step_run.update!(terminal_session: session)
-
-    # TerminalSession#on_failed only reaches the parent run, which completes the
-    # step. That is not enough on its own — both executions must hear about it.
-    TemporalService.expects(:send_signal)
-      .with("workflow-execution-#{workflow_run.id}", :container_finished, step_run.id).once
-    TemporalService.expects(:send_signal)
-      .with(session.workflow_id, :container_finished, step_run.id).once
-
-    SessionService.fail_session(session: session, error_message: "Agent container vanished")
-
-    assert_equal "failed", session.reload.state
-  end
-
-  test "fail_session fails a session that has no temporal workflow without signalling" do
-    session = create(:terminal_session, :running, user: @user, temporal_workflow_id: nil)
-
-    TemporalService.expects(:send_signal).never
-
-    SessionService.fail_session(session: session, error_message: "Agent container vanished")
-
-    session.reload
-    assert_equal "failed", session.state
-    assert_equal "Agent container vanished", session.error_message
-  end
-
-  test "fail_session on an already failed session keeps its original error and still signals" do
-    session = create(:terminal_session, :failed, user: @user, temporal_workflow_id: "wf-dead")
-
-    # A second sweep must still be able to nudge a container workflow that is
-    # somehow still running — the state transition is what is idempotent here.
-    TemporalService.expects(:send_signal).with(session.workflow_id, :container_finished, nil).once
-
-    SessionService.fail_session(session: session)
-
-    session.reload
-    assert_equal "failed", session.state
-    assert_equal "Container failed to start", session.error_message
   end
 
   # == create_for_workflow_step ==

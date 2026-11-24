@@ -62,11 +62,11 @@ class AccessRevocationTest < ActionDispatch::IntegrationTest
     session = create(:terminal_session, :agent_session, :started, user: @user, project: @project, company: @company)
     session_rpc(session)
     assert_response :success
-    SessionService.stubs(:fail_session)
+    Sessions::Lifecycle.stubs(:fail)
 
     colleague_admin = create(:user, :admin, company: @company)
     assert colleague_admin
-    SessionService.expects(:fail_session).with(has_entry(session: session)).once
+    Sessions::Lifecycle.expects(:fail).with(session, anything).once
     @user.company_memberships.find_by(company: @company).update!(state: "revoked")
 
     session_rpc(session)

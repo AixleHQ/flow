@@ -117,16 +117,17 @@ module ContainerStrategies
       session.reload
 
       if error
-        session.update(error_message: TerminalSession.preferred_error_message(session.error_message, error))
-        session.fail! if session.may_fail?
+        Sessions::Lifecycle.record_failure(
+          session, error_message: TerminalSession.preferred_error_message(session.error_message, error)
+        )
       else
-        # `complete_finish!` is idempotent: when the user initiated finalization,
-        # `SessionService.finish` has already transitioned the session into
-        # `finishing`, so only the `finish!` step fires here. For Temporal-driven
+        # `record_finished` is idempotent: when the user initiated finalization,
+        # `Sessions::Lifecycle.finish` has already transitioned the session into
+        # `finishing`, so only the `finish` step fires here. For Temporal-driven
         # paths without a user action (workflow self-completion, signal timeout)
         # the `finishing` window is short — the user-visible finalization flow
-        # uses `SessionService.finish` to enter `finishing` earlier.
-        session.complete_finish!
+        # uses `Sessions::Lifecycle.finish` to enter `finishing` earlier.
+        Sessions::Lifecycle.record_finished(session)
       end
       {}
     rescue StandardError => e

@@ -64,7 +64,7 @@ module Sessions
       # The message is redacted first (#redact): it quotes the pane, it is stored in
       # `error_message`, and from there it reaches the step's error and the Slack notice.
       def fail_session(message, &still)
-        failed = SessionService.fail_session_if(session: session, error_message: redact(message),
+        failed = Sessions::Lifecycle.fail_if(session, error_message: redact(message),
                                                 expected_state: session.state) do |locked|
           self.class.applies_to?(locked) && (still.nil? || still.call(locked))
         end
