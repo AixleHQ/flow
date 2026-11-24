@@ -85,7 +85,7 @@ module PullRequests
       end
 
       test "acting as a person sends that person's token and mints nothing for the connection" do
-        acting = PullRequests::Acting.new(user_id: 7, login: "octo-user", token: "ghu_person")
+        acting = PullRequests::Acting.new(user_id: 7) { { login: "octo-user", token: "ghu_person" } }
         stub_request(:get, "#{REPO}/pulls/5").with(headers: { "Authorization" => "token ghu_person" })
                                              .to_return(json(pr(5)))
 

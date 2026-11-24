@@ -76,7 +76,7 @@ module PullRequests
 
       test "acting as a person sends that person's token instead of the connection's" do
         token = "p" * 64
-        acting = PullRequests::Acting.new(user_id: 7, login: "lab-user", token: token)
+        acting = PullRequests::Acting.new(user_id: 7) { { login: "lab-user", token: token } }
         stub_request(:get, mr_url(4)).with(headers: { "Authorization" => "Bearer #{token}" }).to_return(json(mr(4)))
 
         PullRequests::Provider.for(@integration, acting: acting).get(@repository, 4)
