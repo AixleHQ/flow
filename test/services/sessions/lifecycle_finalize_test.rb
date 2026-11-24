@@ -46,7 +46,11 @@ module Sessions
         assert_equal to, session.state
         assert_not_nil session.finished_at
         assert_nil session.container_id
-        assert_equal error, session.error_message
+        if error
+          assert_equal error, session.error_message
+        else
+          assert_nil session.error_message
+        end
       end
     end
 
