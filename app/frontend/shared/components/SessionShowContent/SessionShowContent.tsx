@@ -56,7 +56,6 @@ import {
   ConsoleFrame,
   DetailHeader,
   LiveTerminal,
-  sessionStatusTone,
   StatusTag,
   type Crumb,
   type HeaderStat,
@@ -326,7 +325,6 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
       extraMeta={runsOnMeta}
       title={sessionTitle(s, workflowContext)}
       state={s.state}
-      statusTone={sessionStatusTone(s.state)}
       statusLabel={SESSION_STATE_LABELS[s.state]}
       identifier={`#${s.id}`}
       description={workflowContext ? null : s.initialPrompt}
@@ -420,9 +418,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
             <Text size="lg" fw={500}>
               {launchWaitMessage(s.launchPhase)}
             </Text>
-            <StatusTag state={s.state} tone={sessionStatusTone(s.state)}>
-              {SESSION_STATE_LABELS[s.state]}
-            </StatusTag>
+            <StatusTag state={s.state}>{SESSION_STATE_LABELS[s.state]}</StatusTag>
             {waitingForSlot && (
               <Text size="sm" c="dimmed">
                 Your session will start automatically when a slot frees up.

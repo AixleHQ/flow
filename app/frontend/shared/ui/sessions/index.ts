@@ -7,6 +7,5 @@ export { ModeTag } from './ModeTag';
 export { RestoreSessionButton } from './RestoreSessionButton';
 export { FormSection, ModeCards, RuntimeTiles } from './SelectableTiles';
 export { SessionCard, type SessionCardData } from './SessionCard';
-export { sessionStatusTone } from '../StatusBadge';
 export { StatusTag } from './StatusTag';
 export { TabBar } from './TabBar';
