@@ -13,7 +13,7 @@
 #
 # This sweep closes the loop: it asks the runtime whether each active session's
 # container is still there, and drives the ones that are not through the existing
-# `fail` path (SessionService.fail_session → container_finished → cleanup phase →
+# `fail` path (Sessions::Lifecycle.fail → container_finished → cleanup phase →
 # CompleteStepActivity), which is what fails the step and reclaims the pod,
 # Service, IngressRoute and Middlewares.
 #
@@ -120,7 +120,7 @@ module Activities
         return false if first_seen > CONFIRMATION_DELAY.ago
         return false unless session.reload.container_up?
 
-        SessionService.fail_session(session: session, error_message: failure_message(session, status, runtime))
+        Sessions::Lifecycle.fail(session, error_message: failure_message(session, status, runtime))
         log(:info, "Failed session #{session.id}: container #{status}")
         true
       end

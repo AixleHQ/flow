@@ -200,7 +200,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     session = create(:terminal_session, user: @user, project: @project,
                                         error_message: "You've hit your individual spend limit")
     step_run.update!(terminal_session: session, state: "running")
-    SessionService.stubs(:cancel)
+    Sessions::Lifecycle.stubs(:cancel)
 
     WorkflowService.cancel(run: run)
 
@@ -215,7 +215,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     step_run = run.step_runs.first
     session = create(:terminal_session, user: @user, project: @project, error_message: "Workflow cancelled")
     step_run.update!(terminal_session: session, state: "running")
-    SessionService.stubs(:cancel)
+    Sessions::Lifecycle.stubs(:cancel)
 
     WorkflowService.cancel(run: run)
 

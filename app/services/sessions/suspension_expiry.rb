@@ -49,7 +49,7 @@ module Sessions
       import_outputs(checkpoint) if checkpoint
       checkpoint&.destroy!
       @session.change_jsonb!(:metadata) { |doc| doc[Suspension::EXPIRED_KEY] = true }
-      @session.expire_suspension!
+      Lifecycle.expire_suspension(@session)
       true
     rescue StandardError => e
       Rails.logger.error("[SuspensionExpiry] session=#{@session.id}: #{e.class}: #{e.message}")
@@ -62,11 +62,12 @@ module Sessions
       return discard! unless Suspension.step_waiting_on?(@session)
 
       @session.session_checkpoint&.destroy!
-      @session.update!(state: "failed", error_message: "Suspended, and not restored before " \
-                                                       "#{@session.restore_expires_at&.utc&.strftime('%Y-%m-%d %H:%M UTC')}",
-                       metadata: @session.metadata.to_h.merge(Suspension::EXPIRED_KEY => true))
-      @session.step_run.update!(state: :running)
-      WorkflowService.notify_container_finished(step_run: @session.step_run)
+      Lifecycle.expire_suspended_step(
+        @session,
+        error_message: "Suspended, and not restored before " \
+                       "#{@session.restore_expires_at&.utc&.strftime('%Y-%m-%d %H:%M UTC')}",
+        metadata: @session.metadata.to_h.merge(Suspension::EXPIRED_KEY => true)
+      )
       true
     rescue StandardError => e
       Rails.logger.error("[SuspensionExpiry] step session=#{@session.id}: #{e.class}: #{e.message}")
@@ -76,7 +77,8 @@ module Sessions
     # A suspended step its run no longer waits on: nothing can restore it.
     def discard!
       @session.session_checkpoint&.destroy!
-      @session.update!(state: "finished", metadata: @session.metadata.to_h.merge(DISCARDED_KEY => true))
+      @session.metadata = @session.metadata.to_h.merge(DISCARDED_KEY => true)
+      Lifecycle.expire_suspension(@session)
       true
     end
 

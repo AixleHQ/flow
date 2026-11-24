@@ -114,7 +114,7 @@ The outcome rules do not change, but they move out of the activity into the mode
 | From | To | Event |
 |---|---|---|
 | `finishing` | `finished` | `finish` (exists) |
-| `not_started`, `running`, `ready` | `finished` | **new** `finish_without_request` (the agent exited) |
+| `not_started`, `queued`, `running`, `ready` | `finished` | **new** `finish_without_request` (the agent exited). `queued` was added in the implementation: a launch that ends before the first phase starts the session is finalized from `queued` today, so the table had to cover it |
 | `not_started`, `queued`, `running`, `ready`, `finishing` | `failed` | `fail` (exists) |
 | `finished` | `failed` | **new** `fail_after_finish` (output collection failed) |
 | `not_started`, `queued`, `running`, `ready`, `finishing` | `cancelled` | `cancel` (exists) |

@@ -43,7 +43,7 @@ module Activities
         # cannot leave an unresolved operation behind.
         SessionAdmissionService.permit!(admission.id, input.permit_token)
         SessionService.revalidate_admission!(session) if REVALIDATED_PHASES.include?(phase)
-        session.start! if session.may_start?
+        Sessions::Lifecycle.start(session)
 
         operation = nil
         if RUNTIME_PHASES.include?(phase)
@@ -146,8 +146,7 @@ module Activities
           absent = runtime.session_absent?(admission.runtime_id)
         end
 
-        session.send(:sync_usage)
-        finalize_session(session, state)
+        Sessions::Lifecycle.finalize(session, error: state[:error], suspend: state[:suspend])
 
         # Deletion is asynchronous — Kubernetes accepts the DELETE long before
         # the Pod and its routing objects are gone, and an accepted request is
@@ -180,7 +179,7 @@ module Activities
         return state.merge(cleanup_pending: true, unresolved_operation: true) if unresolved && !absence_settled?(admission)
 
         SessionAdmissionService.release!(admission)
-        session.send(:notify_workflow_execution_if_step_session)
+        Sessions::Lifecycle.slot_released(session)
         # The slot that just came back is worth handing to whoever is waiting
         # for it; this runs in a worker, so the fan-out costs the user nothing.
         SessionLaunchRelay.drain(limit: 25)
@@ -244,15 +243,15 @@ module Activities
                  .update_all(absent_since: nil, updated_at: Time.current)
       end
 
-      # Whether the session is ending as a failure: the state `finalize_session`
+      # Whether the session is ending as a failure: the state `Sessions::Lifecycle.finalize`
       # is about to record for it is `failed`, decided by the same outcome
-      # (#outcome_error, #outcome_state), so cleanup and the session's final
+      # (TerminalSession#ending_error, #ending_state), so cleanup and the session's final
       # state never disagree. A stop the person asked for, a session that
       # finished, and one that ends with only the queue's own generic error
       # after a requested finish are not failures.
       def session_failed?(session, state)
         session.reload
-        outcome_state(session, outcome_error(session, state[:error])) == "failed"
+        session.ending_state(session.ending_error(state[:error])) == "failed"
       end
 
       # Output collection walks the container filesystem and must not repeat on
@@ -262,7 +261,7 @@ module Activities
 
         # Decided once, with the container still there to take the checkpoint from, and
         # kept in the phase state so a retried cleanup finalizes the same way.
-        state[:suspend] = true if Sessions::Suspension.due?(session.reload, outcome_error(session, state[:error]))
+        state[:suspend] = true if Sessions::Suspension.due?(session.reload, session.ending_error(state[:error]))
         begin
           session.strategy.before_cleanup(**strategy_state(state))
         rescue StandardError => e
@@ -271,57 +270,6 @@ module Activities
         state[:cleanup_collected] = true
         admission.update!(phase_state: state)
         state
-      end
-
-      # Terminal state is settled as soon as the work is over, independently of
-      # how long the runtime takes to disappear. The parent workflow reads
-      # "unreleased + terminal" as `finishing`, so it still waits for capacity
-      # to come back before starting the next step.
-      #
-      # Written directly, not through an event: the outcome can be a move the
-      # state machine does not offer (finished → failed when output collection
-      # failed, running → finished when the agent simply exited).
-      def finalize_session(session, state)
-        ActiveRecord::Base.transaction do
-          session.reload
-          error = outcome_error(session, state[:error])
-          # A checkpoint that could not be taken leaves no row, and the session ends as
-          # any other does, its outputs already turned into assets by the strategy.
-          if state[:suspend] && error.nil? && !session.cancelled? && session.session_checkpoint.present?
-            Sessions::Suspension.suspended!(session)
-            next
-          end
-
-          session.update!(state: outcome_state(session, error), finished_at: session.finished_at || Time.current,
-            container_id: nil,
-            error_message: TerminalSession.preferred_error_message(session.error_message, error))
-        end
-      end
-
-      # A stop the person asked for is not a failure, and the queue's own
-      # vocabulary is not a diagnosis. `finish` can land while the launch is
-      # still running — the next activity then hits a closed permit — so a
-      # requested finish keeps whatever real error it already had, and nothing
-      # more.
-      def outcome_error(session, error)
-        return error if error.blank?
-        return nil if session.finishing_at && TerminalSession::GENERIC_ERROR_MESSAGES.include?(error)
-
-        error
-      end
-
-      # A session the person stopped before it was ever usable was cancelled,
-      # not finished — closing the dialog on a container that is still coming up
-      # is a cancellation, and the only button on that screen says so. `ready_at`
-      # is the fact that separates the two: across three days of production,
-      # `finishing_at` without `ready_at` described exactly the two
-      # authentication sessions this is about and not one workflow step.
-      def outcome_state(session, error)
-        return "cancelled" if session.cancelled?
-        return "failed" if error || session.failed?
-        return "cancelled" if session.finishing_at && session.ready_at.nil?
-
-        "finished"
       end
     end
   end

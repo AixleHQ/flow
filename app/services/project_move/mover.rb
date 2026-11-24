@@ -69,13 +69,7 @@ module ProjectMove
 
     def cancel_waiting_work!(preflight)
       preflight.runs_to_cancel.each { |run| WorkflowService.cancel(run: run) }
-      # A session with no admission yet is not something the admission service
-      # cancels; it has to be closed here.
-      preflight.waiting_sessions.find_each do |session|
-        SessionService.cancel(session: session)
-        session.reload
-        session.cancel! if session.waiting? && session.may_cancel?
-      end
+      preflight.waiting_sessions.find_each { |session| Sessions::Lifecycle.cancel(session) }
     end
 
     def move!(first_reading, copier)
