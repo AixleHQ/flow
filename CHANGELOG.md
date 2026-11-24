@@ -46,6 +46,9 @@ governance, community health — carry none.
 - **Profile**: connecting Amazon Bedrock through IAM Identity Center keeps the sign-in in
   progress (the client registration and the tokens) encrypted in the cache. A connect left
   open across the upgrade has to be started again.
+- **Sign-in & onboarding**: `AUTH_ENABLED_KINDS` now narrows the sign-in methods an
+  installation offers. It was ignored, so every configured method was offered. If you set it,
+  check the value before upgrading: a method it leaves out stops being offered.
 - **Sessions & Runs**: a running session shows an amber "Running" status in the all-projects
   and project lists, on its page and in Usage. It used to read green, like a finished one.
 - **Analytics**: token counts of a billion or more read as `1.1B` instead of `1069.7M`, and
