@@ -9,6 +9,7 @@ class Web::ApplicationController < ApplicationController
   before_action :negotiate_format
   before_action :match_partial_keys_in_either_case
   before_action :redirect_super_admin_to_admin_panel
+  before_action :refuse_company_out_of_reach
   # Before the auth policy: a person with no company at all has no policy to
   # satisfy, and one screen to be on until they do.
   before_action :enforce_workspace
@@ -173,6 +174,10 @@ class Web::ApplicationController < ApplicationController
       # PALAD-AI-RAILS-1N). Web pages are HTML-only, so coerce to HTML.
       request.format = :html
     end
+  end
+
+  def refuse_company_out_of_reach
+    render_not_found if company_in_path_out_of_reach?
   end
 
   def redirect_super_admin_to_admin_panel

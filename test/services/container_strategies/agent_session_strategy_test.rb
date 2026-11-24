@@ -726,6 +726,7 @@ module ContainerStrategies
       assert_includes env_vars, "HOME_DIR=/home/grok"
       assert_includes env_vars, "AUTH_WATCH_PATH=/home/grok/.grok/auth.json"
       assert_includes env_vars, "MITM_TRACKED_DOMAINS=x.ai,grok.com"
+      assert_includes env_vars, "MITM_LOG_BODIES=#{Agents::GrokAdapter.new.mitm_logged_bodies.join(',')}"
       assert_includes env_vars, "XAI_API_KEY=xai-company-key"
     end
 

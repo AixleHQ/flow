@@ -239,6 +239,21 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
     );
   });
 
+  it("says when the run is a test run of a workflow draft, and numbers its versions as the draft's", () => {
+    const run = makeRun({
+      draftTest: true,
+      workflowVersionNumbers: [2],
+      stepRuns: [buildStepRun({ id: 101, stepId: 1, stepName: 'Say OK', stepPosition: 1, workflowVersionNumber: 2 })],
+    });
+
+    renderAuthedPage(<ShowPage />, { props: seed({ run }) });
+
+    expect(screen.getByText('the draft — a test run')).toBeInTheDocument();
+    expect(screen.getByText('Draft version')).toBeInTheDocument();
+    expect(screen.getByText('draft v2')).toBeInTheDocument();
+    expect(screen.getByText('Session 1 · draft v2')).toBeInTheDocument();
+  });
+
   it('renders one session card per step run', () => {
     renderAuthedPage(<ShowPage />, { props: seed() });
 

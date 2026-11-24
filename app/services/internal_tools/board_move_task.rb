@@ -52,22 +52,28 @@ module InternalTools
       return error("Cannot determine the acting user") unless actor
 
       from_column_name = task.board_column.name
+      draft_test = draft_test_run?
       TaskService.move(
         task: task,
         to_column: target_column,
         position: position,
         actor: actor,
-        actor_type: :agent
+        actor_type: :agent,
+        start_column_workflow: !draft_test
       )
 
-      success({
+      result = {
         id: task.id,
         number: task.number,
         title: task.title,
         from_column: from_column_name,
         to_column: target_column.name,
         position: task.position
-      }.to_json)
+      }
+      if draft_test && target_column.column_workflow_binding&.trigger_mode&.to_sym == :auto
+        result[:column_workflow] = "not started: this is a test run of a workflow draft"
+      end
+      success(result.to_json)
     end
   end
 end

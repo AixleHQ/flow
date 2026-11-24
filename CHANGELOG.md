@@ -13,15 +13,36 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Workflows**: change a workflow that is in use through a draft. **Edit in draft** (or
+  **Save as draft** when a Save would go live) opens a copy that you edit and test-run while
+  triggers and board columns keep running the live version; **Apply** makes it live as one
+  new version, **Discard draft** drops it. The personal MCP has the same flow:
+  `create_workflow_draft`, `get_workflow_draft_diff`, `apply_workflow_draft`,
+  `discard_workflow_draft`.
+
 ### Changed
+- **Companies & projects**: every page of a company carries it in its address,
+  `/company/<company>/…`, so a link to a project, a workflow or any company page opens in
+  the right company, and two tabs can stay on two companies. Links from before keep
+  working and open in the project's company, or in the one you used last. A company's short
+  name in the address comes from its email domain (`acme.com` → `acme`).
 - **Admin**: the dashboard opens on the current week, shows Utilization, Average wait and
   p95 wait right after Company, keeps the table's header and Company column in view while
   it scrolls, and folds its explanation into a "How to read this dashboard" section.
+- **Sessions & Runs**: a session's HTTP log records each call's method, address, status,
+  headers and size, and keeps a request or response body only where Flow reads the
+  session's usage from it. Before, most of the log was the conversation the agent re-sent
+  to the model on every turn.
+- **Sessions & Runs**: the HTTP log of an Antigravity, Gemini or Copilot session records only
+  the agent's own model and sign-in traffic. Gemini's used to record everything the agent
+  downloaded or called, and a Copilot session now keeps this log at all.
 
 ### Fixed
-- **Sessions & Runs**: a running session shows the same amber "Running" status in the
-  all-projects list, on its page and in Usage as it does in a project; it used to read green
-  there, like a finished one.
+- **Sessions & Runs**: a running session shows an amber "Running" status in the all-projects
+  and project lists, on its page and in Usage. It used to read green, like a finished one.
+- **Aixle Builder**: restoring a suspended build, and the "Continued in session" link on a
+  restored one, open the build's session. They used to lead to a page that does not exist.
 - **Admin**: deleting a company that has set up SCIM provisioning works again. It used to
   end in an error page and leave the company in place.
 - **Repositories**: adding a GitLab repository no longer ends in an error page when GitLab

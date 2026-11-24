@@ -208,8 +208,11 @@ class Web::OidcSessionsController < Web::ApplicationController
   def enter(user, provider, return_to)
     sign_in_or_prove(user, provider: provider)
 
-    session[:current_company_id] = provider.company_id if member_of?(user, provider.company_id)
-    redirect_to(safe_return_to(return_to) || take_pending_sign_in_path || company_projects_path)
+    if member_of?(user, provider.company_id)
+      session[:current_company_id] = provider.company_id
+      reset_membership_memoization
+    end
+    redirect_to(safe_return_to(return_to) || take_pending_sign_in_path || app_home_path)
   end
 
   def member_of?(user, company_id)

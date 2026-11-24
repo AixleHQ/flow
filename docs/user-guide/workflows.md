@@ -102,7 +102,7 @@ A `WorkflowRun` can be triggered by:
 - the **Trigger workflow** button on a task,
 - the workflow's "Run" button outside the board,
 - a schedule, a Slack message, or an inbound webhook,
-- the API (`POST /company/projects/:project_id/workflow_runs`).
+- the API (`POST /company/:company_slug/projects/:project_id/workflow_runs`).
 
 > All of these flow through one event pipeline, and each off-board trigger carries a
 > `subject_policy` deciding whether the run gets a board task. The in-app docs page
@@ -119,9 +119,9 @@ For a step that should pause for a human:
 
 The API endpoints behind those buttons:
 
-- `POST /company/projects/:id/workflow_runs/:run_id/approve_step`
-- `POST /company/projects/:id/workflow_runs/:run_id/retry_step`
-- `POST /company/projects/:id/workflow_runs/:run_id/skip_step`
+- `POST /company/:company_slug/projects/:id/workflow_runs/:run_id/approve_step`
+- `POST /company/:company_slug/projects/:id/workflow_runs/:run_id/retry_step`
+- `POST /company/:company_slug/projects/:id/workflow_runs/:run_id/skip_step`
 
 ## Assets in and out
 
@@ -181,6 +181,39 @@ are versioned the same way, one version per Save of their form.
   session launches, and the run page shows the version per session. A Save made
   while a run is in progress affects the sessions that have not started yet —
   the run page then says so.
+
+## Changing a workflow that is in use: drafts
+
+A Save goes live at once: every trigger and board column that starts the
+workflow runs the new version from then on. To try a change first, work in a
+**draft** — a copy of the workflow that only you start.
+
+- **Edit in draft** in the builder's header opens one. Saving a workflow that
+  triggers or columns start also asks first: **Save to live**, or **Save as
+  draft** to put your unsaved edits into a new draft instead.
+- The draft opens in the same builder, under the same workflow's address, with a
+  banner saying so. Save it as often as you like; triggers and columns keep
+  running the live version.
+- **Test run** starts the draft like any run. It is a real run — its agents push,
+  comment and message with your credentials — except that a card it moves into
+  a column does not start that column's workflow. Choose the custom mode in the
+  run drawer to start each step yourself. The run page says it ran the draft and
+  gives the draft's own version numbers (`draft v2`), which are not the live
+  workflow's.
+- **What will change** compares the draft with the live workflow.
+- **Apply** makes the draft the live workflow, as one new version, and closes
+  the draft. The version history marks that version **Applied from draft**. If
+  someone saved the live workflow after the draft was made, Apply says so first:
+  **Apply anyway** replaces their change too.
+- **Discard draft** closes it and leaves the live workflow as it was.
+
+A workflow has at most one draft, shared by everyone who can edit the workflow.
+Triggers belong to the live workflow, so a draft has none. Agents, skills,
+wrappers and connectors are not part of a draft: editing one changes it for the
+live workflow too. Over the personal MCP the same flow is
+`create_workflow_draft`, `get_workflow_draft_diff`, `apply_workflow_draft` and
+`discard_workflow_draft`; `list_workflow_runs` and `get_workflow_run` mark a
+test run of a draft with `draft_test`.
 
 ## Aixle Builder
 

@@ -256,7 +256,7 @@ class Web::Company::UsersControllerTest < ActionDispatch::IntegrationTest
   test "a logged-out request cannot load the page" do
     delete logout_path
 
-    get user_path(@colleague)
+    get user_path(@colleague, company_slug: @company.slug)
 
     assert_redirected_to login_path
   end

@@ -107,9 +107,17 @@ module Agents
 
     # == Logs ==
 
-    test "session_log_paths collects the CLI's own transcript" do
-      assert_equal [ "/var/log/context.log", "/home/copilot/.copilot/session-state/*/events.jsonl" ],
+    test "session_log_paths collects the CLI's own transcript and the proxy's log" do
+      assert_equal [ "/var/log/context.log", "/home/copilot/.copilot/session-state/*/events.jsonl", "/var/log/mitm/http.log" ],
                    @adapter.session_log_paths
+    end
+
+    test "the proxy logs the model API, not the agent's calls to GitHub" do
+      env = @adapter.mitm_env
+
+      assert_includes env["MITM_TRACKED_DOMAINS"].split(","), "api.business.githubcopilot.com"
+      assert_not_includes env["MITM_TRACKED_DOMAINS"].split(","), "api.github.com"
+      assert_equal "none", env["MITM_LOG_BODIES"]
     end
 
     test "session_log_name folds the CLI's session id into the transcript's name" do

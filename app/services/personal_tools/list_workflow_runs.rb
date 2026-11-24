@@ -11,7 +11,8 @@ module PersonalTools
       description "List a project's workflow runs one page at a time, with the filters and sort of " \
                   "the Sessions & Runs list. Newest first unless you ask otherwise. Each row carries " \
                   "the run's tokens and cost, summed over its step sessions; list_sessions with " \
-                  "workflow_id lists those sessions themselves."
+                  "workflow_id lists those sessions themselves. A test run of a workflow draft has `draft_test` " \
+                  "true and `draft_of_workflow_id` naming the live workflow."
       audience :user
       tags :workflows
       read_only
@@ -54,7 +55,7 @@ module PersonalTools
     def row(run)
       step_runs = RunListEntryResource.ordered_step_runs(run)
       sessions = step_runs.filter_map(&:terminal_session)
-      { id: run.id, workflow_id: run.workflow_id, workflow_name: run.workflow&.name,
+      { id: run.id, workflow_id: run.workflow_id, workflow_name: run.workflow&.name, **draft_fields(run),
         state: run.displayed_state, source: run.source, mode: run.mode,
         user_id: run.user_id, user: run.user&.email, team: run.picked_from_team&.name,
         agent_type: sessions.first&.agent_type,

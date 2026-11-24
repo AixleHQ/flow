@@ -285,6 +285,21 @@ class InternalTools::BoardWriteToolsTest < ActiveSupport::TestCase
     assert_empty TaskComment.where(body: "x")
   end
 
+  test "board_move_task in a draft's test run moves the card without starting the column's live workflow" do
+    live = create(:workflow, scope: @project, name: "Live")
+    create(:step, workflow: live, allow_non_interactive: true)
+    @workflow.update!(name: "Live", draft_of: live)
+    ColumnWorkflowBinding.create!(board_column: @col2, workflow: live, trigger_mode: :auto, cooldown_seconds: 0)
+
+    result = assert_no_difference(-> { TriggerEvent.count }) do
+      InternalTools::BoardMoveTask.new(params: { task_id: @task.id, column_name: "In Dev" }, session: @session).execute
+    end
+
+    assert_equal 0, result[:exit_code]
+    assert_equal @col2.id, @task.reload.board_column_id
+    assert_equal "not started: this is a test run of a workflow draft", JSON.parse(result[:stdout])["column_workflow"]
+  end
+
   test "board_move_task returns error for unknown column" do
     result = InternalTools::BoardMoveTask.new(
       params: { task_id: @task.id, column_name: "Nonexistent" },

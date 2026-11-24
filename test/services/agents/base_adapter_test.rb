@@ -39,6 +39,20 @@ module Agents
       @adapter = TestAdapter.new
     end
 
+    # An image reads an absent MITM_LOG_BODIES as "keep every body", so an adapter that
+    # names none still says so.
+    test "an adapter that names no hosts and no bodies has the proxy log nothing" do
+      assert_equal({ "MITM_LOG_PATH" => "/var/log/mitm/http.log", "MITM_TRACKED_DOMAINS" => "", "MITM_LOG_BODIES" => "none" },
+                   @adapter.mitm_env)
+    end
+
+    test "every runtime names the hosts its proxy logs" do
+      AgentRuntime.ids.each do |id|
+        adapter = AgentCredentialsService.for(id).adapter
+        assert adapter.mitm_tracked_domains.any?, "#{id} would log no traffic at all"
+      end
+    end
+
     # == Required Methods Tests ==
 
     test "an adapter that reads no OTLP usage accepts a payload without printing it" do

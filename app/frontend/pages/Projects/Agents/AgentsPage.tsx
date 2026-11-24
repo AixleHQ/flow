@@ -3,6 +3,7 @@ import { Head, usePage } from '@inertiajs/react';
 import type { Agent, Project } from '@/types/generated';
 
 import { AgentsContent } from 'shared/resources/agents/AgentsContent';
+import { companyProjectAgentsPath } from 'shared/routes';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -22,7 +23,7 @@ const AgentsPage = () => {
         agents={agents}
         archivedAgents={archivedAgents}
         projectId={project.id}
-        basePath={`/company/projects/${project.id}/agents`}
+        basePath={companyProjectAgentsPath(project.id)}
         title="Project Agents"
         subtitle="Manage project-specific agent configurations."
       />

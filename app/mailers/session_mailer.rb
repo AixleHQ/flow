@@ -30,7 +30,8 @@ class SessionMailer < ApplicationMailer
   end
 
   def session_url_for(session)
-    options = { host: Settings.domain, protocol: Settings.protocol }
+    company = session.company || session.project&.company
+    options = { host: Settings.domain, protocol: Settings.protocol, company_slug: company&.slug }
     return company_project_session_url(session.project_id, session.id, **options) if session.project_id
 
     company_session_url(session.id, **options)

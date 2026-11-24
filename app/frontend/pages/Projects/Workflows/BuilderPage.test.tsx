@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildAssetPicker } from 'test/factories/assetPicker';
 import { buildRunnerSummary } from 'test/factories/runner';
-import { answerFetch } from 'test/fetchStub';
+import { answerFetch, jsonResponse } from 'test/fetchStub';
 import { visitHeld } from 'test/inertiaVisit';
 import { act, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
@@ -1374,6 +1374,7 @@ describe('Projects/Workflows/BuilderPage', () => {
       restoredFromNumber: null,
       baseline: false,
       duplicatedFromId: null,
+      appliedFromDraft: false,
       disabledTriggerIds: [],
     });
     answerFetch({
@@ -1623,5 +1624,330 @@ describe('Projects/Workflows/BuilderPage @ references and data-flow issues', () 
     expect(editor).toHaveAttribute('contenteditable', 'false');
     expect(within(editor).getByText('brand-guide.pdf')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+  });
+});
+
+// --- Drafts: a hidden copy edited in the same builder, applied onto the live workflow ---
+
+const DRAFT_ROUTE = 'POST /api/v1/projects/7/workflows/3/draft';
+const LIVE_URL = '/company/acme/projects/7/workflows/3/builder';
+const DRAFT_URL = '/company/acme/projects/7/workflows/3/draft';
+
+const liveWithDraft = { id: 30, updatedAt: '2026-11-20T10:00:00Z', updatedBy: 'Ada' };
+const draftOf = (overrides: Record<string, unknown> = {}) => ({
+  id: 3,
+  name: 'Release pipeline',
+  currentVersionNumber: 4,
+  baseVersionNumber: 4,
+  ...overrides,
+});
+// The draft's page: the draft's own row, and the live workflow it is a draft of.
+const draftPageProps = (overrides: Record<string, unknown> = {}) =>
+  projectProps({ workflow: makeWorkflow({ id: 30 }), draft: null, draftOf: draftOf(), ...overrides });
+
+const renameFirstSession = () => userEvent.type(screen.getByRole('textbox', { name: 'Session name' }), '!');
+
+describe('Projects/Workflows/BuilderPage drafts', () => {
+  // The builder is a company page: its links name the company the tab is on.
+  beforeEach(() => window.history.pushState({}, '', LIVE_URL));
+  afterEach(() => window.history.pushState({}, '', '/'));
+
+  it('asks before saving a workflow that triggers run, and Save to live saves it', async () => {
+    const { bodies } = answerSave();
+    renderAuthedPage(<BuilderPage />, { props: projectProps({ activeTriggerCount: 2 }) });
+
+    await renameFirstSession();
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    const prompt = await screen.findByRole('dialog', { name: 'Save to the live workflow?' });
+    expect(
+      within(prompt).getByText(
+        '2 triggers or board columns start this workflow. Saving changes what they run from now on.',
+      ),
+    ).toBeInTheDocument();
+    expect(bodies).toHaveLength(0);
+
+    await userEvent.click(within(prompt).getByRole('button', { name: 'Save to live' }));
+
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0].aggregate.steps[0].name).toBe('Draft spec!');
+    expect(await screen.findByText('Saved as version 2')).toBeInTheDocument();
+  });
+
+  it('Save as draft sends the unsaved edits to a new draft and leaves for it without asking', async () => {
+    const drafts: unknown[] = [];
+    answerFetch({
+      [CHECK_ROUTE]: { issues: [] },
+      [DRAFT_ROUTE]: (init?: RequestInit) => {
+        drafts.push(JSON.parse(String(init?.body)));
+        return jsonResponse({ draftId: 30, url: DRAFT_URL }, 201);
+      },
+    });
+    renderAuthedPage(<BuilderPage />, { props: projectProps({ activeTriggerCount: 1 }) });
+
+    await renameFirstSession();
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const prompt = await screen.findByRole('dialog', { name: 'Save to the live workflow?' });
+    expect(
+      within(prompt).getByText(
+        '1 trigger or board column starts this workflow. Saving changes what they run from now on.',
+      ),
+    ).toBeInTheDocument();
+    await userEvent.click(within(prompt).getByRole('button', { name: 'Save as draft' }));
+
+    await waitFor(() => expect(router.visit).toHaveBeenCalledWith(DRAFT_URL));
+    const [body] = drafts as { aggregate: Aggregate }[];
+    expect(body.aggregate.steps.map((step) => [step.id, step.name])).toEqual([
+      [1, 'Draft spec!'],
+      [2, 'Implement'],
+    ]);
+    expect(visitHeld(DRAFT_URL)).toBe(false);
+  });
+
+  it('keeps the edits and says why when the draft cannot be made', async () => {
+    answerFetch({
+      [CHECK_ROUTE]: { issues: [] },
+      [DRAFT_ROUTE]: jsonResponse({ errors: ['This workflow already has a draft — open it instead'] }, 422),
+    });
+    renderAuthedPage(<BuilderPage />, { props: projectProps({ activeTriggerCount: 1 }) });
+
+    await renameFirstSession();
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const prompt = await screen.findByRole('dialog', { name: 'Save to the live workflow?' });
+    await userEvent.click(within(prompt).getByRole('button', { name: 'Save as draft' }));
+
+    expect(await screen.findByText('This workflow already has a draft — open it instead')).toBeInTheDocument();
+    expect(router.visit).not.toHaveBeenCalled();
+    expect(screen.getByDisplayValue('Draft spec!')).toBeInTheDocument();
+  });
+
+  it('shows the open draft on the live page, and does not offer to save into it', async () => {
+    renderAuthedPage(<BuilderPage />, { props: projectProps({ draft: liveWithDraft, activeTriggerCount: 1 }) });
+
+    expect(
+      screen.getByText(
+        /^This workflow has an open draft, last changed .+ by Ada\. Triggers keep running this live version until the draft is applied\.$/,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open draft' })).toHaveAttribute('href', DRAFT_URL);
+    expect(screen.queryByRole('button', { name: 'Edit in draft' })).not.toBeInTheDocument();
+
+    await renameFirstSession();
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const prompt = await screen.findByRole('dialog', { name: 'Save to the live workflow?' });
+
+    expect(
+      within(prompt).getByText(
+        'This workflow has an open draft. Applying it later will ask before replacing this change.',
+      ),
+    ).toBeInTheDocument();
+    expect(within(prompt).queryByRole('button', { name: 'Save as draft' })).not.toBeInTheDocument();
+  });
+
+  it('Edit in draft waits for a clean editor, then opens the draft', async () => {
+    const drafts: unknown[] = [];
+    answerFetch({
+      [DRAFT_ROUTE]: (init?: RequestInit) => {
+        drafts.push(JSON.parse(String(init?.body)));
+        return jsonResponse({ draftId: 30, url: DRAFT_URL }, 201);
+      },
+    });
+    renderAuthedPage(<BuilderPage />, { props: projectProps() });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit in draft' }));
+
+    await waitFor(() => expect(router.visit).toHaveBeenCalledWith(DRAFT_URL));
+    expect(drafts).toEqual([{}]);
+  });
+
+  it('does not open a draft over unsaved edits on the live page', async () => {
+    renderAuthedPage(<BuilderPage />, { props: projectProps() });
+
+    await renameFirstSession();
+    const editInDraft = screen.getByRole('button', { name: 'Edit in draft' });
+    expect(editInDraft).toHaveAttribute('aria-disabled', 'true');
+    await userEvent.click(editInDraft);
+
+    expect(router.visit).not.toHaveBeenCalled();
+  });
+
+  it("on a draft's page says what runs where, test-runs the draft and leaves triggers to the live workflow", () => {
+    window.history.pushState({}, '', `${DRAFT_URL}?tab=triggers`);
+    renderAuthedPage(<BuilderPage />, {
+      props: draftPageProps({ draftOf: draftOf({ currentVersionNumber: 5, baseVersionNumber: 4 }) }),
+    });
+
+    expect(
+      screen.getByText(
+        'Draft of “Release pipeline”. Triggers and board columns keep running the live workflow (v5); runs started here run this draft.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'The live workflow changed after this draft was made (v4 → v5). Applying the draft replaces those changes too.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open live workflow' })).toHaveAttribute('href', LIVE_URL);
+    expect(screen.getByText('Draft')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Test run' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Run' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit in draft' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Triggers' })).not.toBeInTheDocument();
+    // The Sessions tab opens instead of the Triggers one the link asked for.
+    expect(screen.getByDisplayValue('Draft spec')).toBeInTheDocument();
+  });
+
+  it("a test run is started from the draft and is named as the draft's", async () => {
+    renderAuthedPage(<BuilderPage />, {
+      props: draftPageProps({
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, instructions: 'Do the thing' })],
+      }),
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Test run' }));
+
+    const drawer = await screen.findByRole('dialog');
+    expect(drawer.textContent).toMatch(/Run:.*Release pipeline \(draft\)/);
+  });
+
+  it('applying the draft says which version it became and leaves for the live workflow', async () => {
+    const applies: unknown[] = [];
+    answerFetch({
+      'POST /api/v1/projects/7/workflows/3/draft/apply': (init?: RequestInit) => {
+        applies.push(JSON.parse(String(init?.body)));
+        return { currentVersionNumber: 5, versionCreated: true, url: LIVE_URL };
+      },
+    });
+    renderAuthedPage(<BuilderPage />, { props: draftPageProps() });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    const confirm = await screen.findByRole('dialog', { name: 'Apply this draft to “Release pipeline”?' });
+    expect(
+      within(confirm).getByText('It becomes the live version, and triggers run it from then on.'),
+    ).toBeInTheDocument();
+    await userEvent.click(within(confirm).getByRole('button', { name: 'Apply' }));
+
+    expect(await screen.findByText('Draft applied as version 5')).toBeInTheDocument();
+    await waitFor(() => expect(router.visit).toHaveBeenCalledWith(LIVE_URL));
+    expect(applies).toEqual([{}]);
+  });
+
+  it('asks again when the live workflow changed since the draft was made, and Apply anyway overwrites it', async () => {
+    const conflict =
+      'The live workflow changed after this draft was made (v4 → v5). Applying the draft replaces those changes too.';
+    const applies: { overwrite?: boolean }[] = [];
+    answerFetch({
+      'POST /api/v1/projects/7/workflows/3/draft/apply': (init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body)) as { overwrite?: boolean };
+        applies.push(body);
+        return body.overwrite
+          ? { currentVersionNumber: 6, versionCreated: true, url: LIVE_URL }
+          : jsonResponse({ error: conflict, baseVersionNumber: 4, liveVersionNumber: 5 }, 409);
+      },
+    });
+    renderAuthedPage(<BuilderPage />, { props: draftPageProps() });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    const confirm = await screen.findByRole('dialog', { name: 'Apply this draft to “Release pipeline”?' });
+    await userEvent.click(within(confirm).getByRole('button', { name: 'Apply' }));
+
+    expect(await within(confirm).findByText(conflict)).toBeInTheDocument();
+    expect(router.visit).not.toHaveBeenCalled();
+
+    await userEvent.click(within(confirm).getByRole('button', { name: 'Apply anyway' }));
+
+    await waitFor(() => expect(router.visit).toHaveBeenCalledWith(LIVE_URL));
+    expect(applies).toEqual([{}, { overwrite: true }]);
+    expect(screen.getByText('Draft applied as version 6')).toBeInTheDocument();
+  });
+
+  it('applying waits for unsaved edits to be saved into the draft', async () => {
+    renderAuthedPage(<BuilderPage />, { props: draftPageProps() });
+
+    await renameFirstSession();
+    const apply = screen.getByRole('button', { name: 'Apply' });
+    expect(apply).toHaveAttribute('aria-disabled', 'true');
+    await userEvent.click(apply);
+
+    expect(screen.queryByRole('dialog', { name: /Apply this draft/ })).not.toBeInTheDocument();
+  });
+
+  it('discarding the draft deletes it and leaves for the live workflow, its unsaved edits with it', async () => {
+    const deletes: string[] = [];
+    answerFetch({
+      'DELETE /api/v1/projects/7/workflows/3/draft': () => {
+        deletes.push('draft');
+        return { url: LIVE_URL };
+      },
+    });
+    renderAuthedPage(<BuilderPage />, { props: draftPageProps() });
+
+    await renameFirstSession();
+    await userEvent.click(screen.getByRole('button', { name: 'Discard draft' }));
+    const confirm = await screen.findByRole('dialog', { name: 'Discard this draft?' });
+    expect(within(confirm).getByText('The live workflow stays as it is.')).toBeInTheDocument();
+    await userEvent.click(within(confirm).getByRole('button', { name: 'Discard' }));
+
+    await waitFor(() => expect(router.visit).toHaveBeenCalledWith(LIVE_URL));
+    expect(deletes).toEqual(['draft']);
+    expect(visitHeld(LIVE_URL)).toBe(false);
+  });
+
+  it('What will change compares the saved draft with the live workflow, a step it added included', async () => {
+    answerFetch({
+      'GET /api/v1/projects/7/workflows/3/draft/changes': {
+        live: {
+          name: 'Release pipeline',
+          steps: [{ id: 1, name: 'Draft spec', instructions: 'Write it', depends_on_step_ids: [], sub_steps: [] }],
+        },
+        draft: {
+          name: 'Release pipeline',
+          steps: [
+            { id: 1, name: 'Draft spec', instructions: 'Write it', depends_on_step_ids: [], sub_steps: [] },
+            {
+              id: 'new-31',
+              name: 'Ship it',
+              instructions: 'Deploy the release',
+              depends_on_step_ids: [1],
+              sub_steps: [{ id: 'new-77', name: 'Smoke test', instructions: null, required: true }],
+            },
+          ],
+        },
+        references: {},
+        liveVersionNumber: 4,
+        baseVersionNumber: 4,
+        draftVersionNumber: 2,
+      },
+    });
+    renderAuthedPage(<BuilderPage />, { props: draftPageProps() });
+
+    await userEvent.click(screen.getByRole('button', { name: 'What will change' }));
+    const drawer = await screen.findByRole('dialog', { name: 'What will change' });
+
+    expect(await within(drawer).findByText('Ship it')).toBeInTheDocument();
+    expect(within(drawer).getAllByText('added')).not.toHaveLength(0);
+    expect(within(drawer).getByLabelText('added: Deploy the release')).toBeInTheDocument();
+    expect(within(drawer).getByText('Smoke test')).toBeInTheDocument();
+  });
+
+  it('What will change says so when the draft changes nothing yet', async () => {
+    const snapshot = { name: 'Release pipeline', steps: [{ id: 1, name: 'Draft spec', sub_steps: [] }] };
+    answerFetch({
+      'GET /api/v1/projects/7/workflows/3/draft/changes': {
+        live: snapshot,
+        draft: snapshot,
+        references: {},
+        liveVersionNumber: 4,
+        baseVersionNumber: 4,
+        draftVersionNumber: 1,
+      },
+    });
+    renderAuthedPage(<BuilderPage />, { props: draftPageProps() });
+
+    await userEvent.click(screen.getByRole('button', { name: 'What will change' }));
+
+    expect(
+      await within(await screen.findByRole('dialog', { name: 'What will change' })).findByText('No changes yet'),
+    ).toBeInTheDocument();
   });
 });

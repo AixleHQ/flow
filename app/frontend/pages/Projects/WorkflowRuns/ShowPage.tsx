@@ -27,6 +27,7 @@ import { restoreDaysLeft, restoreSession } from 'shared/lib/sessionRestore';
 import { RunsOnBadge } from 'shared/resources/runners/runnerChoice';
 import { useRunsOnMeta } from 'shared/resources/runners/useRunsOnMeta';
 import {
+  companyProjectPath,
   exportAllApiV1ProjectWorkflowRunWorkflowRunAssetsPath,
   exportApiV1ProjectWorkflowRunWorkflowRunAssetPath,
   finishApiV1TerminalSessionPath,
@@ -73,14 +74,19 @@ function stepTitle(stepRun: StepRun, index: number) {
   return stepRun.stepName ?? `Step ${stepRun.stepPosition ?? index + 1}`;
 }
 
+/** A draft numbers its versions on its own, so its v2 is not the live workflow's v2. */
+function versionLabel(number: number, draftTest: boolean) {
+  return draftTest ? `draft v${number}` : `v${number}`;
+}
+
 /** Sessions inside a run are numbered; their checklist items are the steps. */
-function toCardData(stepRun: StepRun, index: number): SessionCardData {
+function toCardData(stepRun: StepRun, index: number, draftTest: boolean): SessionCardData {
   return {
     id: stepRun.id,
     ordinal:
       stepRun.workflowVersionNumber === null
         ? `Session ${index + 1}`
-        : `Session ${index + 1} · v${stepRun.workflowVersionNumber}`,
+        : `Session ${index + 1} · ${versionLabel(stepRun.workflowVersionNumber, draftTest)}`,
     title: stepTitle(stepRun, index),
     state: stepRun.terminalSessionState === 'queued' ? 'queued' : stepRun.state,
     terminalSessionId: stepRun.terminalSessionId,
@@ -182,7 +188,7 @@ const WorkflowRunShowPage = () => {
 
   useInertiaCableStream(cableStream, { only: ['run', 'assets'], enabled: !isTerminal });
 
-  const basePath = `/company/projects/${project.id}`;
+  const basePath = companyProjectPath(project.id);
   const workflowName = run.workflowName ?? 'Workflow run';
   const runPath = `${basePath}/workflow_runs/${run.id}`;
 
@@ -291,7 +297,12 @@ const WorkflowRunShowPage = () => {
     { label: 'Duration', value: formatDuration(run.executionStartedAt, run.completedAt, run.state, now) },
     { label: 'Cost', value: formatCost(run.costCents), color: costColor(run.costCents) },
     ...(run.workflowVersionNumbers.length > 0
-      ? [{ label: 'Workflow version', value: run.workflowVersionNumbers.map((n) => `v${n}`).join(' → ') }]
+      ? [
+          {
+            label: run.draftTest ? 'Draft version' : 'Workflow version',
+            value: run.workflowVersionNumbers.map((n) => versionLabel(n, run.draftTest)).join(' → '),
+          },
+        ]
       : []),
     run.state === 'failed' && failedStep
       ? {
@@ -327,7 +338,7 @@ const WorkflowRunShowPage = () => {
       <SessionCard
         key={entry.step.id}
         runsOn={<RunsOnBadge runner={run.runner} runnerId={run.runnerId} projectId={project.id} />}
-        data={toCardData(entry.step, entry.index)}
+        data={toCardData(entry.step, entry.index, run.draftTest)}
         live={isActive && liveStepIds.has(entry.step.id)}
         defaultOpen={isActive ? liveStepIds.has(entry.step.id) : isTerminal || entry.step.state === 'failed'}
         sessionHref={entry.step.terminalSessionId ? `${basePath}/sessions/${entry.step.terminalSessionId}` : null}
@@ -454,7 +465,7 @@ const WorkflowRunShowPage = () => {
           agentType={run.agentType}
           userName={runOwnerLabel(run.teamName, run.userName)}
           mode={run.mode}
-          extraMeta={[...chatOriginMeta(run.chatOrigin), ...runsOnMeta]}
+          extraMeta={[...draftTestMeta(run.draftTest), ...chatOriginMeta(run.chatOrigin), ...runsOnMeta]}
           stats={stats}
           formatTokenValue={formatTokens}
           actions={
@@ -492,13 +503,13 @@ const WorkflowRunShowPage = () => {
           <Alert
             icon={<IconAlertTriangle size={16} />}
             color="yellow"
-            title="The workflow was saved while this run was in progress"
+            title={`The ${run.draftTest ? 'draft' : 'workflow'} was saved while this run was in progress`}
             radius={0}
           >
             <Text size="sm">
               Its sessions launched with different versions (
-              {run.workflowVersionNumbers.map((n) => `v${n}`).join(' → ')}): each session ran the version saved when it
-              started. Each session card names its version.
+              {run.workflowVersionNumbers.map((n) => versionLabel(n, run.draftTest)).join(' → ')}): each session ran the
+              version saved when it started. Each session card names its version.
             </Text>
           </Alert>
         )}
@@ -737,6 +748,10 @@ export default WorkflowRunShowPage;
 
 // Where a chat-started run's request came from: the messenger, the conversation,
 // who asked, and a link back to their message when the messenger has one.
+function draftTestMeta(draftTest: boolean) {
+  return draftTest ? [{ label: 'Runs', value: 'the draft — a test run' }] : [];
+}
+
 function chatOriginMeta(origin: WorkflowRun['chatOrigin']) {
   if (!origin) return [];
   const where = [origin.provider, origin.conversation, origin.sender].filter(Boolean).join(' · ');

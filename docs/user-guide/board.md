@@ -91,7 +91,7 @@ Every task has a numeric id that is stable for its lifetime. It appears next to
 the task title on the card, in collapsed-column chips (hover to see), and in the
 detail drawer header. Clicking `#42` copies the number to the clipboard.
 
-Every task also has a page of its own at `/company/projects/<project>/tasks/42`.
+Every task also has a page of its own at `/company/<company>/projects/<project>/tasks/42`.
 **Open as page** (↗ in the drawer header) goes there, and **Copy link** copies
 that address — the one to share or to keep in release notes. The page has the
 drawer's tabs, with the properties beside the description, and still opens once
