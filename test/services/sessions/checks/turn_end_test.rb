@@ -166,7 +166,7 @@ module Sessions
       end
 
       test "a session that started finishing after the scan read it is not failed at the limit" do
-        result = give_up_on_a_stale_copy { |other| other.update!(state: "finishing") }
+        result = give_up_on_a_stale_copy { |other| put_session_in_state!(other, "finishing") }
 
         assert_equal :taken_over, result
         @session.reload
@@ -230,7 +230,7 @@ module Sessions
       end
 
       test "a finishing session is left alone" do
-        @session.update!(state: "finishing")
+        put_session_in_state!(@session, "finishing")
 
         assert_nil observe_twice(pane("turn_ended"))
         assert_equal 0, reminders

@@ -20,7 +20,7 @@ class SessionMailerTest < ActionMailer::TestCase
   end
 
   test "the reminder is not sent for a session that was restored meanwhile" do
-    @session.update!(state: "restored")
+    put_session_in_state!(@session, "restored")
 
     assert_nil SessionMailer.restore_expiring(@session.id).message.to
   end

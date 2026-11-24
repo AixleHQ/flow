@@ -620,22 +620,22 @@ class TerminalSessionTest < ActiveSupport::TestCase
   test "ended? and ended_state? are true for finished, failed and cancelled only" do
     %w[finished failed cancelled].each do |state|
       assert TerminalSession.ended_state?(state), state
-      assert TerminalSession.new(state: state).ended?, state
+      assert new_session_in_state(state).ended?, state
     end
     %w[not_started queued running ready finishing].each do |state|
       assert_not TerminalSession.ended_state?(state), state
-      assert_not TerminalSession.new(state: state).ended?, state
+      assert_not new_session_in_state(state).ended?, state
     end
   end
 
   test "launched? and launched_state? are true for ready and finishing only" do
     %w[ready finishing].each do |state|
       assert TerminalSession.launched_state?(state), state
-      assert TerminalSession.new(state: state).launched?, state
+      assert new_session_in_state(state).launched?, state
     end
     %w[not_started queued running finished failed cancelled].each do |state|
       assert_not TerminalSession.launched_state?(state), state
-      assert_not TerminalSession.new(state: state).launched?, state
+      assert_not new_session_in_state(state).launched?, state
     end
   end
 
@@ -666,27 +666,27 @@ class TerminalSessionTest < ActiveSupport::TestCase
   end
 
   test "concluded? is true for finished and failed, not for cancelled" do
-    assert TerminalSession.new(state: "finished").concluded?
-    assert TerminalSession.new(state: "failed").concluded?
+    assert new_session_in_state("finished").concluded?
+    assert new_session_in_state("failed").concluded?
     %w[not_started queued running ready finishing cancelled].each do |state|
-      assert_not TerminalSession.new(state: state).concluded?, state
+      assert_not new_session_in_state(state).concluded?, state
     end
   end
 
   test "aborted? is true for failed and cancelled, not for finished" do
-    assert TerminalSession.new(state: "failed").aborted?
-    assert TerminalSession.new(state: "cancelled").aborted?
+    assert new_session_in_state("failed").aborted?
+    assert new_session_in_state("cancelled").aborted?
     %w[not_started queued running ready finishing finished].each do |state|
-      assert_not TerminalSession.new(state: state).aborted?, state
+      assert_not new_session_in_state(state).aborted?, state
     end
   end
 
   test "deletable? is true for a session not started or ended, not for one in flight" do
     %w[not_started finished failed cancelled].each do |state|
-      assert TerminalSession.new(state: state).deletable?, state
+      assert new_session_in_state(state).deletable?, state
     end
     %w[queued running ready finishing].each do |state|
-      assert_not TerminalSession.new(state: state).deletable?, state
+      assert_not new_session_in_state(state).deletable?, state
     end
   end
 
@@ -737,7 +737,7 @@ class TerminalSessionTest < ActiveSupport::TestCase
       %w[not_started queued running ready finishing finished failed cancelled].each do |state|
         expected = states.include?(state)
         assert_equal expected, TerminalSession.public_send(:"#{name}_state?", state), "#{name}_state? #{state}"
-        assert_equal expected, TerminalSession.new(state: state).public_send(:"#{name}?"), "#{name}? #{state}"
+        assert_equal expected, new_session_in_state(state).public_send(:"#{name}?"), "#{name}? #{state}"
       end
     end
   end

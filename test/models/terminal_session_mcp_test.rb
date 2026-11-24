@@ -13,7 +13,6 @@ class TerminalSessionMCPTest < ActiveSupport::TestCase
     session = TerminalSession.create!(
       session_type: "agent_session",
       agent_type: "claude_code",
-      state: "not_started",
       user: @user,
       project: @project
     )

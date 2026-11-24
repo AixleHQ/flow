@@ -248,7 +248,7 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
     @admission.stubs(:terminal_session).returns(@session)
     strategy.stubs(:before_cleanup).returns({})
     @runtime.stubs(:session_absent?).returns(true)
-    @session.update!(state: "running", finishing_at: Time.current)
+    put_session_in_state!(@session, "running", finishing_at: Time.current)
 
     @activity.run(Hashie::Mash.new(phase: "cleanup", admission_id: @admission.id,
       error: "Session admission is closed"))
@@ -265,7 +265,7 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
     @admission.stubs(:terminal_session).returns(@session)
     strategy.stubs(:before_cleanup).returns({})
     @runtime.stubs(:session_absent?).returns(true)
-    @session.update!(state: "running", finishing_at: Time.current, ready_at: 1.minute.ago)
+    put_session_in_state!(@session, "running", finishing_at: Time.current, ready_at: 1.minute.ago)
 
     @activity.run(Hashie::Mash.new(phase: "cleanup", admission_id: @admission.id))
 
@@ -279,7 +279,7 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
     @admission.stubs(:terminal_session).returns(@session)
     strategy.stubs(:before_cleanup).returns({})
     @runtime.stubs(:session_absent?).returns(true)
-    @session.update!(state: "running", finishing_at: Time.current)
+    put_session_in_state!(@session, "running", finishing_at: Time.current)
 
     @activity.run(Hashie::Mash.new(phase: "cleanup", admission_id: @admission.id,
       error: "Agent image could not be pulled"))
@@ -297,7 +297,7 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
     @admission.stubs(:terminal_session).returns(@session)
     strategy.stubs(:before_cleanup).returns({})
     @runtime.stubs(:session_absent?).returns(false, true)
-    @session.update!(state: "running", finishing_at: Time.current, ready_at: 1.minute.ago)
+    put_session_in_state!(@session, "running", finishing_at: Time.current, ready_at: 1.minute.ago)
   end
 
   test "a session finished with a real error is cleaned up as a failure" do
@@ -328,7 +328,7 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
   # what it was asked and, when asked to suspend, leaves a checkpoint as the real one does.
   def stub_suspendable_cleanup(take_checkpoint: true)
     use_checkpoint_storage
-    @session.update!(session_type: "agent_session", mode: "interactive", state: "ready")
+    put_session_in_state!(@session, "ready", session_type: "agent_session", mode: "interactive")
     asked = []
     session = @session
     helper = self
