@@ -19,9 +19,8 @@ class AttachPullRequestToolsToWorkflowsTest < ActiveSupport::TestCase
     Tool.where(source: "code", name: AttachPullRequestToolsToWorkflows::PULL_REQUEST_TOOLS).pluck(:id)
   end
 
-  # The migration predates the resource links and works on the jsonb list itself.
   def base_tool_ids(workflow)
-    Array(workflow.reload.config["base_tool_ids"])
+    workflow.reload.base_tool_ids
   end
 
   test "lists exactly the tools that carry the pull_requests tag" do
@@ -33,7 +32,7 @@ class AttachPullRequestToolsToWorkflowsTest < ActiveSupport::TestCase
   test "a workflow of a company with a code-host connection gets the tools, keeping what it had" do
     kept = Tool.shadow_for(Tools::Registry.fetch("board_list_tasks"))
     workflow = create(:workflow, scope: @project)
-    workflow.update_columns(config: { "base_tool_ids" => [ kept.id ] })
+    workflow.update!(base_tool_ids: [ kept.id ])
 
     migrate
 
