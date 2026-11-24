@@ -143,7 +143,7 @@ The tools are one group, **Pull requests**, in the tool picker. Add the group to
 a workflow's base resources, or to a single step, as you add other tools, and
 remove it the same way; a session whose workflow does not have it has no
 `pull_request_*` tools. Workflows that existed before the group became
-attachable kept the tools. The tools work on a session that holds a Bitbucket,
+attachable kept the tools. A session that isn't a workflow run, an interactive one for example, gets the tools only when the group **Pull requests** is picked in the new session form's Tools; they are no longer added on their own. The tools work on a session that holds a Bitbucket,
 GitHub or GitLab repository, and say so when it holds none. It is the same set
 on every host:
 

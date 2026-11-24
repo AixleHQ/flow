@@ -6,6 +6,10 @@
 # connection to one of the three) get them attached once here: nothing they could do
 # before stops working. Afterwards a workflow or a step can remove them like any
 # other tool.
+#
+# System-scoped (platform) workflows are left out on purpose: they have no company or
+# project, so no connection reaches them here. The only one is the Aixle Builder, which
+# builds workflows through the personal tools and has no use for pull-request tools.
 class AttachPullRequestToolsToWorkflows < ActiveRecord::Migration[8.1]
   PULL_REQUEST_TOOLS = %w[
     pull_request_list pull_request_get pull_request_changes pull_request_create pull_request_update
@@ -41,6 +45,7 @@ class AttachPullRequestToolsToWorkflows < ActiveRecord::Migration[8.1]
     projects = connections.filter_map { |_, project_id| project_id&.to_i }
 
     MigrationWorkflow.where(deleted_at: nil).find_each do |workflow|
+      # A System workflow has neither id, so it falls through to `companies.include?(nil)`: false.
       reachable = company_wide.include?(workflow.company_id) ||
                   (workflow.project_id ? projects.include?(workflow.project_id) : companies.include?(workflow.company_id))
       next unless reachable
