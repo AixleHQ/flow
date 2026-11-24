@@ -22,7 +22,7 @@ import type { Project, User } from '@/types/generated';
 
 import { getInitials } from 'shared/lib/getInitials';
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
-import { userPath } from 'shared/routes';
+import { companyProjectMembersPath, userPath } from 'shared/routes';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
@@ -58,7 +58,7 @@ const MembersPage = () => {
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
-  const basePath = `/company/projects/${project.id}/members`;
+  const basePath = companyProjectMembersPath(project.id);
 
   const existingIds = new Set(members.map((m) => m.id));
   const availableUsers = companyUsers.filter((u) => !existingIds.has(u.id));

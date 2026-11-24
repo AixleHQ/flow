@@ -14,6 +14,11 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Changed
+- **Companies & projects**: every page of a company carries it in its address,
+  `/company/<company>/…`, so a link to a project, a workflow or any company page opens in
+  the right company, and two tabs can stay on two companies. Links from before keep
+  working and open in the project's company, or in the one you used last. A company's short
+  name in the address comes from its email domain (`acme.com` → `acme`).
 - **Admin**: the dashboard opens on the current week, shows Utilization, Average wait and
   p95 wait right after Company, keeps the table's header and Company column in view while
   it scrolls, and folds its explanation into a "How to read this dashboard" section.

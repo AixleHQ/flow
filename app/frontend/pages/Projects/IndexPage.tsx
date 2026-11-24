@@ -8,7 +8,7 @@ import { AuthLayout } from 'layouts/AuthLayout';
 
 import { CreateProjectModal } from 'shared/components/CreateProjectModal';
 import { useCanWrite } from 'shared/lib/hooks/useCanWrite';
-import { companyProjectFavoritePath } from 'shared/routes';
+import { companyProjectFavoritePath, companyProjectPath } from 'shared/routes';
 import { EmptyState } from 'shared/ui';
 import { PageHeader } from 'shared/ui/PageHeader';
 
@@ -78,7 +78,7 @@ const IndexPage = () => {
   }, [byState, searchQuery, sortBy]);
 
   const handleProjectClick = (projectId: number) => {
-    router.visit(`/company/projects/${projectId}`);
+    router.visit(companyProjectPath(projectId));
   };
 
   // The server owns the favorite (it is per-user and must survive a reload), so

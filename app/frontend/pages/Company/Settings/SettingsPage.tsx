@@ -24,6 +24,7 @@ import { z } from 'zod';
 import { AuthLayout } from 'layouts/AuthLayout';
 
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
+import { companySettingsPath } from 'shared/routes';
 
 import { SettingsTabs } from './SettingsTabs';
 
@@ -137,11 +138,11 @@ const SettingsPage = () => {
           fd.append(`company[${key}]`, String(value));
         });
         if (capacity.canManage) fd.append('capacity', values.capacity.trim());
-        router.post('/company/settings', fd, { ...callbacks, forceFormData: true });
+        router.post(companySettingsPath(), fd, { ...callbacks, forceFormData: true });
         return;
       }
 
-      router.patch('/company/settings', payload, callbacks);
+      router.patch(companySettingsPath(), payload, callbacks);
     });
 
   useUnsavedChanges({

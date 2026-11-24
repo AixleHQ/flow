@@ -7,6 +7,7 @@ import { useMemo, useState } from 'react';
 import { AuthLayout } from 'layouts/AuthLayout';
 
 import { useCanWrite } from 'shared/lib/hooks/useCanWrite';
+import { duplicateCompanyWorkflowCatalogPath } from 'shared/routes';
 import { PageHeader } from 'shared/ui/PageHeader';
 
 interface CatalogWorkflow {
@@ -53,7 +54,7 @@ const IndexPage = () => {
     if (!duplicateWorkflow || !selectedProjectId) return;
     setLoading(true);
     router.post(
-      `/company/workflow_catalog/${duplicateWorkflow.id}/duplicate`,
+      duplicateCompanyWorkflowCatalogPath(duplicateWorkflow.id),
       { project_id: selectedProjectId },
       {
         onFinish: () => setLoading(false),

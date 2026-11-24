@@ -102,7 +102,7 @@ A `WorkflowRun` can be triggered by:
 - the **Trigger workflow** button on a task,
 - the workflow's "Run" button outside the board,
 - a schedule, a Slack message, or an inbound webhook,
-- the API (`POST /company/projects/:project_id/workflow_runs`).
+- the API (`POST /company/:company_slug/projects/:project_id/workflow_runs`).
 
 > All of these flow through one event pipeline, and each off-board trigger carries a
 > `subject_policy` deciding whether the run gets a board task. The in-app docs page
@@ -119,9 +119,9 @@ For a step that should pause for a human:
 
 The API endpoints behind those buttons:
 
-- `POST /company/projects/:id/workflow_runs/:run_id/approve_step`
-- `POST /company/projects/:id/workflow_runs/:run_id/retry_step`
-- `POST /company/projects/:id/workflow_runs/:run_id/skip_step`
+- `POST /company/:company_slug/projects/:id/workflow_runs/:run_id/approve_step`
+- `POST /company/:company_slug/projects/:id/workflow_runs/:run_id/retry_step`
+- `POST /company/:company_slug/projects/:id/workflow_runs/:run_id/skip_step`
 
 ## Assets in and out
 

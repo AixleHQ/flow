@@ -20,7 +20,7 @@ class Admin::NavigationTest < ActionDispatch::IntegrationTest
 
   test "back to the app is offered only during an impersonation, and leaves Turbo out of it" do
     get admin_companies_path
-    assert_select "nav.navigation a[href=?]", company_projects_url, count: 0
+    assert_select "nav.navigation a", text: I18n.t("administrate.navigation.back_to_app"), count: 0
 
     member = create(:user, :admin, :onboarding_completed)
     post impersonate_admin_user_path(member)

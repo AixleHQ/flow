@@ -215,7 +215,7 @@ describe('Company/Sessions/Index', () => {
       <SessionsIndex {...seed({ sessions: [makeSession({ id: 150, userId: 42, userName: 'Ada Lovelace' })] })} />,
     );
 
-    expect(screen.getByRole('link', { name: 'Ada Lovelace' })).toHaveAttribute('href', '/user/42');
+    expect(screen.getByRole('link', { name: 'Ada Lovelace' })).toHaveAttribute('href', '/company/user/42');
   });
 
   it('links openable rows to the company session show page but not pending ones', () => {

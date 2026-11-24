@@ -16,7 +16,7 @@ class SessionMailerTest < ActionMailer::TestCase
     assert_equal [ "owner@example.com" ], mail.to
     assert_equal "Your session ##{@session.id} was suspended — restore it by December 20, 2026", mail.subject
     assert_includes mail.text_part.body.to_s, "23-hour limit"
-    assert_includes mail.html_part.body.to_s, "/company/projects/#{@project.id}/sessions/#{@session.id}"
+    assert_includes mail.html_part.body.to_s, "/company/#{@project.company.slug}/projects/#{@project.id}/sessions/#{@session.id}"
   end
 
   test "the reminder is not sent for a session that was restored meanwhile" do

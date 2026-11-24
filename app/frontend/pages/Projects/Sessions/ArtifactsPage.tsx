@@ -6,6 +6,8 @@ import { useCallback, useState } from 'react';
 
 import type { Project, SessionArtifact, TerminalSession } from '@/types/generated';
 
+import { companyProjectSessionsPath } from 'shared/routes';
+
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
 interface Props {
@@ -25,7 +27,7 @@ function formatFileSize(bytes: number | null): string {
 const ProjectSessionArtifactsPage = () => {
   const { project, session, artifacts, alreadyReviewed } = usePage<{ props: Props }>().props as unknown as Props;
 
-  const basePath = `/company/projects/${project.id}/sessions`;
+  const basePath = companyProjectSessionsPath(project.id);
   const sessionPath = `${basePath}/${session.id}`;
 
   const [selected, setSelected] = useState<Set<number>>(() => new Set(artifacts.map((a) => a.id)));

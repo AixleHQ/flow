@@ -31,7 +31,7 @@ class Web::TemplatesControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_inertia_page "Templates/ShowPage"
     assert_inertia_props do |props|
-      props[:installPath] == new_company_template_install_path(namespace: "acme", slug: "dev-team-sdlc", version: 3) &&
+      props[:installPath] == install_template_path("acme", "dev-team-sdlc", version: 3) &&
         props[:template][:boardColumns] == [ "Backlog", "Tech Design", "Code Review", "Done" ]
     end
   end

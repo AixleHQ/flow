@@ -5,6 +5,7 @@ import type { Project, ProjectTracker } from '@/types/generated';
 import type { AvailableScopeGroup } from 'shared/resources/trackers/AddTrackerDrawer';
 import type { IntakeOption } from 'shared/resources/trackers/ConnectColumnDrawer';
 import { TrackersContent, type TrackerTriggerSummary } from 'shared/resources/trackers/TrackersContent';
+import { companyProjectTrackersPath } from 'shared/routes';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -31,7 +32,7 @@ const TrackersPage = () => {
         triggers={triggers}
         workflows={workflows}
         boardColumns={boardColumns}
-        basePath={`/company/projects/${project.id}/trackers`}
+        basePath={companyProjectTrackersPath(project.id)}
       />
     </>
   );

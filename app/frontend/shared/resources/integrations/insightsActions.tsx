@@ -2,6 +2,8 @@ import { router } from '@inertiajs/react';
 import { Text } from '@mantine/core';
 import { modals } from '@mantine/modals';
 
+import { companyProjectInsightsPath } from 'shared/routes';
+
 export interface InsightsProps {
   enabled: boolean;
   connection?: { status: string; organizationName: string | null; connectedAt: string } | null;
@@ -16,7 +18,7 @@ export interface InsightsProps {
   };
 }
 
-export const insightsPath = (projectId: number) => `/company/projects/${projectId}/insights`;
+export const insightsPath = (projectId: number) => companyProjectInsightsPath(projectId);
 
 export const confirmInsightsDisconnect = (projectId: number, organizationName: string | null | undefined) =>
   modals.openConfirmModal({

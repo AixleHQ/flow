@@ -4,6 +4,7 @@ import { AuthLayout } from 'layouts/AuthLayout';
 import type { InviteProject } from 'shared/resources/members/InviteMemberDrawer';
 import { MembersContent } from 'shared/resources/members/MembersContent';
 import type { ProjectHandover } from 'shared/resources/members/projectHandover';
+import { companyMembersPath } from 'shared/routes';
 
 interface Props {
   users: Member[];
@@ -16,7 +17,7 @@ function MembersIndex({ users, projectHandover, inviteProjects }: Props) {
     <AuthLayout>
       <MembersContent
         users={users}
-        basePath="/company/members"
+        basePath={companyMembersPath()}
         projectHandover={projectHandover}
         inviteProjects={inviteProjects}
         title="Company Members"
