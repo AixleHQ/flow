@@ -1408,6 +1408,11 @@ export function templatePath(namespace: ScalarType, slug: ScalarType, options?: 
   return "/" + "templates" + "/" + namespace + "/" + slug + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["namespace","slug","format"]);
 }
 
+/** /templates/:namespace/:slug/install(.:format) */
+export function installTemplatePath(namespace: ScalarType, slug: ScalarType, options?: object): string {
+  return "/" + "templates" + "/" + namespace + "/" + slug + "/" + "install" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["namespace","slug","format"]);
+}
+
 /** /login(.:format) */
 export function loginPath(options?: object): string {
   return "/" + "login" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
