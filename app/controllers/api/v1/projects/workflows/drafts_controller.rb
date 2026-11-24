@@ -13,7 +13,7 @@ module Api
             aggregate = params[:aggregate].present? ? AggregatesController.permitted(params) : nil
             existing = current_workflow.open_draft
             draft = WorkflowDrafts.open!(current_workflow, actor: version_actor, aggregate: aggregate)
-            render json: { draftId: draft.id, url: draft_company_project_workflow_path(current_project, current_workflow) },
+            render json: { draftId: draft.id, url: draft_company_project_workflow_path(current_project, current_workflow, **page_slug) },
                    status: draft == existing ? :ok : :created
           rescue WorkflowDrafts::Error, WorkflowAggregateSave::Invalid => e
             render json: { errors: [ e.message ] }, status: :unprocessable_entity
@@ -35,7 +35,7 @@ module Api
             render json: {
               currentVersionNumber: current_workflow.reload.current_version_number,
               versionCreated: version.present?,
-              url: builder_company_project_workflow_path(current_project, current_workflow)
+              url: builder_company_project_workflow_path(current_project, current_workflow, **page_slug)
             }
           rescue WorkflowDrafts::LiveChanged => e
             render json: { error: e.message, baseVersionNumber: e.base_version, liveVersionNumber: e.live_version },
@@ -46,10 +46,14 @@ module Api
 
           def destroy
             WorkflowDrafts.discard!(open_draft, actor: version_actor)
-            render json: { url: builder_company_project_workflow_path(current_project, current_workflow) }
+            render json: { url: builder_company_project_workflow_path(current_project, current_workflow, **page_slug) }
           end
 
           private
+
+          # An API path names no company, so the page link takes the project's, not the
+          # session's last one.
+          def page_slug = { company_slug: current_project.company.slug }
 
           def open_draft
             current_workflow.open_draft or raise ActiveRecord::RecordNotFound

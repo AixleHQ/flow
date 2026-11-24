@@ -123,13 +123,13 @@ between steps.
 
 ## 7. Surfaces
 
-**Builder** (`/company/projects/:project_id/workflows/:id/builder`):
+**Builder** (`/company/:company_slug/projects/:project_id/workflows/:id/builder`):
 - props `draft` (the open draft: id, last change, by whom), `draft_of` (on the
   draft page: the live workflow's id, name, current and base version) and
   `active_trigger_count` (enabled triggers + bound columns);
 - live page: *Edit in draft*, or a banner with *Open draft* when one is open; a
   Save with `active_trigger_count > 0` asks *Save to live* / *Save as draft*;
-- draft page (`/company/projects/:project_id/workflows/:id/draft`, the live id):
+- draft page (`/company/:company_slug/projects/:project_id/workflows/:id/draft`, the live id):
   banner, *Test run*, *What will change*, *Apply* (with *Apply anyway* on a
   conflict), *Discard draft*; no Triggers tab. The builder URL of a draft's own
   id redirects here.

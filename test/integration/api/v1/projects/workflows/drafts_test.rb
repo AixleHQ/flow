@@ -31,6 +31,19 @@ class Api::V1::Projects::Workflows::DraftsTest < ActionDispatch::IntegrationTest
     assert_match(/already has a draft/, response.parsed_body["errors"].first)
   end
 
+  test "the page it links to is under the project's company, not the one the session opened last" do
+    other = create(:company)
+    create(:company_membership, :admin, user: @owner, company: other, accepted_at: 1.day.ago,
+                                        onboarding_state: "completed", onboarding_completed_at: Time.current,
+                                        position: "engineering", preferred_agent_language: "en")
+    get company_projects_path(company_slug: other.slug)
+
+    post api_v1_project_workflow_draft_path(@project, @workflow), as: :json
+
+    assert_equal "/company/#{@company.slug}/projects/#{@project.id}/workflows/#{@workflow.id}/draft",
+                 response.parsed_body["url"]
+  end
+
   test "changes are the live snapshot and the draft in live step ids, with the names of what they reference" do
     draft = open_draft
     put api_v1_project_workflow_aggregate_path(@project, draft),
