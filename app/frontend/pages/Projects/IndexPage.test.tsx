@@ -221,7 +221,7 @@ describe('Projects/IndexPage', () => {
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
 
-    expect(form.post).toHaveBeenCalledWith('/company/projects', expect.any(Object));
+    expect(form.post).toHaveBeenCalledWith('/company/test-company/projects', expect.any(Object));
   });
 
   it('navigates to project settings from the card settings action', async () => {
