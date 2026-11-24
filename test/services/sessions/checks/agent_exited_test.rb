@@ -93,7 +93,7 @@ module Sessions
       end
 
       test "a step that is finishing is not failed for its CLI exiting" do
-        @session.update!(state: "finishing")
+        put_session_in_state!(@session, "finishing")
 
         assert_not AgentExited.applies_to?(@session)
       end

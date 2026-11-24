@@ -322,5 +322,152 @@ module Sessions
 
       assert_empty signals
     end
+
+    test "a runner session that was not ready sends no session_ended" do
+      machine = create(:runner_environment, runner: create(:runner, :manual))
+      signals = []
+      Runners::RelaySignals.stubs(:session_ended).with { |id| signals << id }
+      session = create(:runner_session, environment: machine, state: "running")
+
+      Lifecycle.transition!(session, :fail)
+
+      assert_empty signals
+    end
+
+    test "a hosted session leaving ready sends no session_ended" do
+      signals = []
+      Runners::RelaySignals.stubs(:session_ended).with { |id| signals << id }
+      session = create(:terminal_session, user: @user, state: "ready")
+
+      Lifecycle.transition!(session, :fail)
+
+      assert_empty signals
+    end
+
+    test "session_ended goes out after the commit, never on a rollback" do
+      machine = create(:runner_environment, runner: create(:runner, :manual))
+      signals = []
+      Runners::RelaySignals.stubs(:session_ended).with { |id| signals << id }
+      session = create(:runner_session, environment: machine, state: "ready")
+
+      ActiveRecord::Base.transaction do
+        Lifecycle.transition!(session, :fail)
+        assert_empty signals
+        raise ActiveRecord::Rollback
+      end
+
+      assert_empty signals
+    end
+
+    # == waking the parent run ==
+
+    def step_session(state:)
+      workflow = create(:workflow, scope: @project)
+      run = create(:workflow_run, workflow: workflow, project: @project, user: @user)
+      step_run = create(:step_run, workflow_run: run, step: create(:step, workflow: workflow))
+      session = create(:terminal_session, user: @user, project: @project, session_type: "workflow_step", state: state)
+      step_run.update!(terminal_session: session)
+      [ session, step_run, run ]
+    end
+
+    test "each ending event wakes the run once, after the commit" do
+      { finish: "finishing", fail: "running", cancel: "running",
+        finish_without_request: "running" }.each do |event, from|
+        session, step_run, = step_session(state: from)
+        WorkflowService.expects(:notify_container_finished).with(step_run: step_run).once
+
+        Lifecycle.transition!(session, event)
+      end
+    end
+
+    test "expire_suspended_step wakes the run once" do
+      session, step_run, = step_session(state: "suspended")
+      WorkflowService.expects(:notify_container_finished).with(step_run: step_run).once
+
+      Lifecycle.transition!(session, :expire_suspended_step)
+    end
+
+    test "a move that does not end the session wakes nobody" do
+      %i[start_finishing mark_ready].each do |event|
+        session, = step_session(state: "running")
+        WorkflowService.expects(:notify_container_finished).never
+
+        Lifecycle.transition!(session, event)
+      end
+    end
+
+    test "notify: false keeps an ending from waking the run" do
+      session, = step_session(state: "running")
+      WorkflowService.expects(:notify_container_finished).never
+
+      Lifecycle.transition!(session, :fail, notify: false)
+    end
+
+    test "a run whose stop was requested is not woken" do
+      session, _step_run, run = step_session(state: "running")
+      run.update!(stop_requested_at: Time.current)
+      WorkflowService.expects(:notify_container_finished).never
+
+      Lifecycle.transition!(session, :cancel)
+    end
+
+    test "a rolled-back ending wakes nobody" do
+      session, = step_session(state: "running")
+      WorkflowService.expects(:notify_container_finished).never
+
+      ActiveRecord::Base.transaction do
+        Lifecycle.transition!(session, :fail)
+        raise ActiveRecord::Rollback
+      end
+    end
+
+    # == the run's execution start ==
+
+    test "start of a workflow step records the run's execution start, once" do
+      session, _step_run, run = step_session(state: "queued")
+
+      Lifecycle.transition!(session, :start)
+
+      assert_equal session.reload.started_at.to_i, run.reload.execution_started_at.to_i
+      first = run.execution_started_at
+      other = create(:terminal_session, user: @user, project: @project, session_type: "workflow_step", state: "queued")
+      create(:step_run, workflow_run: run, step: create(:step, workflow: run.workflow), terminal_session: other)
+      Lifecycle.transition!(other, :start)
+      assert_equal first, run.reload.execution_started_at
+    end
+
+    test "start of a session that is not a workflow step touches no run" do
+      session = create(:terminal_session, user: @user, state: "not_started")
+
+      assert_nothing_raised { Lifecycle.transition!(session, :start) }
+    end
+
+    # == restoring the suspended session ==
+
+    test "mark_ready of a session that continues a suspended one marks that one restored" do
+      origin = create(:terminal_session, user: @user, state: "suspended")
+      session = create(:terminal_session, user: @user, state: "running", restored_from_session: origin)
+
+      Lifecycle.transition!(session, :mark_ready)
+
+      assert_equal "restored", origin.reload.state
+    end
+
+    test "mark_ready of an ordinary session restores nothing" do
+      session = create(:terminal_session, user: @user, state: "running")
+      Lifecycle.expects(:restored).never
+
+      Lifecycle.transition!(session, :mark_ready)
+    end
+
+    # == the guards ==
+
+    test "a direct write of state raises" do
+      session = create(:terminal_session, user: @user)
+
+      assert_raises(AASM::NoDirectAssignmentError) { session.update!(state: "finished") }
+      assert_raises(AASM::NoDirectAssignmentError) { session.state = "finished" }
+      assert_equal "not_started", session.reload.state
+    end
   end
 end

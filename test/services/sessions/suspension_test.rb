@@ -91,7 +91,7 @@ module Sessions
       continued = create(:terminal_session, :running, :agent_session, user: @user, project: @project,
                                                                       restored_from_session: @session)
 
-      continued.mark_ready!
+      Lifecycle.transition!(continued, :mark_ready)
 
       assert_equal "restored", @session.reload.state
       assert_equal continued.id, @session.restored_session.id

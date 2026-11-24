@@ -440,7 +440,7 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     SessionAdmissionService.drain!
     admission.reload.update!(launch_state: "acknowledged")
     session = admission.terminal_session
-    session.update!(state: "finished", finished_at: Time.current)
+    put_session_in_state!(session, "finished", finished_at: Time.current)
 
     SessionAdmissionService.cancel!(session)
 

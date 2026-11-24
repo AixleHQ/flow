@@ -105,7 +105,7 @@ class AzureGitCredentialsTest < ActionDispatch::IntegrationTest
   end
 
   test "a finished session vends nothing" do
-    @session.update!(state: "finished")
+    put_session_in_state!(@session, "finished")
 
     post PATH, params: { repository_id: @repository.id }, headers: headers
 
