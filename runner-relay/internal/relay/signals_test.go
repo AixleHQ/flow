@@ -3,9 +3,8 @@ package relay
 import "testing"
 
 // Rails publishes through Action Cable's pub/sub, which names a channel
-// `<channel_prefix>:<channel>` (ActionCable::Server::Base#channel_with_prefix, Action
-// Cable 8.1; test/services/runners/relay_signals_test.rb checks the Rails side against
-// the same rule), and the channel alone when the configuration has no prefix. Until
+// `<channel_prefix>:<channel>` (ActionCable::SubscriptionAdapter::ChannelPrefix#channel_with_prefix,
+// Action Cable 8.1), and the channel alone when the configuration has no prefix. Until
 // this test the relay joined the two without the colon and listened to a channel nobody
 // published on: its tests used the same wrong name for both ends.
 func TestChannelIsNamedTheWayActionCableNamesIt(t *testing.T) {
