@@ -590,8 +590,8 @@ In the relay:
    `(session id, environment id, ports)` from the `machine_session` signal (§8.1); on a miss, one short
    call, `GET /api/v1/internal/runner_relay/holders/:route_token` (§8.2), asks Rails, which answers from
    `runner_environments.current_session_id` and the session's `route_token`. A token Rails does not know
-   is `404`; a session not held by a machine, or a machine not connected, is `503` with `Retry-After: 2`
-   (a runner session whose tunnel is briefly down is not gone).
+   is `404`; a session not held by a machine, or a machine not connected (including a machine of a runner
+   version with no tunnel), is `503` with `Retry-After: 2` (a runner session whose tunnel is briefly down is not gone).
 3. **Cross-check.** `X-Session-Id` must equal the session id found by the token. A mismatch is `403`.
    The relay trusts the header only because Traefik wrote it after `ws_auth` and the NetworkPolicies of §2.3
    admit only Traefik and the platform's own pods, and checks it against the token as defence in depth.

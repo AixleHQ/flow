@@ -37,7 +37,9 @@ const FLOW_LIMIT = 100_000;
 const FLOW_HIGH_WATER = 10;
 const FLOW_LOW_WATER = 4;
 
-const DEFAULT_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 15_000];
+// About 2 minutes in all: a runner's tunnel redials with a backoff of up to 60 s, so after a
+// relay restart the terminal is back only when the machine has dialed again.
+const DEFAULT_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 15_000, 15_000, 15_000, 15_000, 30_000, 30_000];
 
 const OPEN = 1;
 // ttyd closes with 1000 when the command exits (the tmux session ended); any
