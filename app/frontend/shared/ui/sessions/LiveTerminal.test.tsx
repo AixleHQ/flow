@@ -69,10 +69,13 @@ describe('LiveTerminal', () => {
     renderPage(<LiveTerminal url={URL_WITH_PASS} />);
     const socket = await connected();
 
+    // A clean close is retried once, since a relay restart ends a stream that way.
     act(() => socket.drop(1000));
+    await waitFor(() => expect(FakeWebSocket.instances).toHaveLength(2), { timeout: 3_000 });
+    act(() => FakeWebSocket.instances[1].drop(1000));
     await userEvent.click(await screen.findByRole('button', { name: 'Reconnect' }));
 
-    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(FakeWebSocket.instances).toHaveLength(3);
   });
 
   it("answers a clipboard query from the session with nothing, not the viewer's clipboard", async () => {
