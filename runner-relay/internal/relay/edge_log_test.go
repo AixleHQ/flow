@@ -1,6 +1,8 @@
 package relay
 
 import (
+	"context"
+	"net/http/httptest"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -140,4 +142,17 @@ func TestAHoldersAnswerReplacesAStaleSessionTheRegistryHolds(t *testing.T) {
 	if len(e.refusals()) != 0 {
 		t.Fatalf("refusals: %v", e.refusals())
 	}
+}
+
+// The environment of a failed stream comes from the request's own route, not from the
+// registry at error time: the session may have left the registry by then, which is what
+// the line exists to show.
+func TestAFailedStreamIsLoggedWithTheEnvironmentOfItsRouteEvenIfTheRegistryLostIt(t *testing.T) {
+	e := newEdgeHarness(t)
+	r := httptest.NewRequest("GET", "/t/"+tokenA+"/tty/x", nil)
+	r = r.WithContext(context.WithValue(r.Context(), edgeKey{}, edgeTarget{surface: "tty", sessionID: 123, environmentID: 42}))
+
+	e.server.proxyError(httptest.NewRecorder(), r, errors.New("boom"))
+
+	e.wantRefusal("proxy_error", 502, map[string]any{"session_id": float64(123), "surface": "tty", "environment_id": float64(42)})
 }

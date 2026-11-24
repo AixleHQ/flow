@@ -90,7 +90,7 @@ func run(logger *slog.Logger) error {
 	// The platform's signals and the reconcile pass that makes up for a lost one (§8).
 	background, stopBackground := context.WithCancel(context.Background())
 	defer stopBackground()
-	go server.RunSignals(background, rdb, cfg.RedisChannelPrefix+relay.SignalChannel)
+	go server.RunSignals(background, rdb, relay.Channel(cfg.RedisChannelPrefix))
 	go server.RunReconciler(background)
 	select {
 	case err := <-failed:

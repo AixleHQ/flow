@@ -76,7 +76,7 @@ environment variables only, read once at start; the service never reads `config/
 | Variable | Meaning | Default |
 | --- | --- | --- |
 | `RUNNER_RELAY_LISTEN`, `RUNNER_RELAY_ADMIN_LISTEN` | Listen addresses | `:8080`, `:9090` |
-| `RUNNER_RELAY_REDIS_URL`, `RUNNER_RELAY_REDIS_CHANNEL_PREFIX` | The platform's Redis. The prefix is the one `config/cable.yml` gives Action Cable (`aixle_<env>_`), because Rails publishes through `ActionCable.server.pubsub`, which prefixes the channel | none, none |
+| `RUNNER_RELAY_REDIS_URL`, `RUNNER_RELAY_REDIS_CHANNEL_PREFIX` | The platform's Redis. The prefix is `config/cable.yml`'s `channel_prefix` as it is (`aixle_<env>`, no colon), because Rails publishes through `ActionCable.server.pubsub`, which names the channel `<prefix>:<channel>` | none, none |
 | `RUNNER_RELAY_RAILS_URL` | The web app's internal URL, for the short calls of §8.2 | none |
 | `RUNNER_RELAY_INTERNAL_TOKEN` | Bearer for those calls (§8.2) | none |
 | `RUNNER_RELAY_TICKET_KEY` | HMAC key that verifies tunnel tickets (§3.1) | none |
@@ -636,7 +636,7 @@ Each `Machine` owns its multiplexer, its open browser connections per session (t
 Rails publishes JSON on one channel, `runner_relay`, through `ActionCable.server.pubsub.broadcast`, after
 the transaction commits (`ActiveRecord.after_all_transactions_commit`), the way `Runners::Operations#wake`
 does, and logs and swallows a failed publish (the reconcile pass of §8.3 is the safety net). The relay
-subscribes with `RUNNER_RELAY_REDIS_CHANNEL_PREFIX` + `runner_relay`.
+subscribes to `<RUNNER_RELAY_REDIS_CHANNEL_PREFIX>:runner_relay`, the name Action Cable gives the channel (`ActionCable::SubscriptionAdapter::ChannelPrefix#channel_with_prefix`).
 
 | `type` | Published when | Relay does |
 | --- | --- | --- |

@@ -40,9 +40,10 @@ type edgeKey struct{}
 
 // edgeTarget is what the edge handler decided for one request, for the proxy's Rewrite.
 type edgeTarget struct {
-	surface   string
-	sessionID int64
-	port      int
+	surface       string
+	sessionID     int64
+	environmentID int64
+	port          int
 	// path and rawPath are the path the port sees.
 	path, rawPath string
 }
@@ -108,7 +109,7 @@ func (s *Server) edge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	target := edgeTarget{surface: surface, sessionID: route.SessionID, port: port}
+	target := edgeTarget{surface: surface, sessionID: route.SessionID, environmentID: route.EnvironmentID, port: port}
 	if stripped(surface) {
 		target.rawPath = rest
 		if target.rawPath == "" {
@@ -200,7 +201,7 @@ type refusal struct {
 	quiet bool
 }
 
-// log writes one line for a refused request: the status, a reason code, the session,
+// logRefusal writes one line for a refused request: the status, a reason code, the session,
 // the surface and the environment. The route token, the ticket and the headers are
 // never in it.
 func (s *Server) logRefusal(r *http.Request, status int, why refusal) {
@@ -359,10 +360,7 @@ func (c *stream) release() {
 // proxyError answers the browser when the stream could not be opened or broke.
 func (s *Server) proxyError(w http.ResponseWriter, r *http.Request, err error) {
 	t, _ := r.Context().Value(edgeKey{}).(edgeTarget)
-	route := &SessionRoute{SessionID: t.sessionID}
-	if cur, ok := s.registry.BySession(t.sessionID); ok {
-		route.EnvironmentID = cur.EnvironmentID
-	}
+	route := &SessionRoute{SessionID: t.sessionID, EnvironmentID: t.environmentID}
 	why := refusal{route: route, surface: t.surface, err: err}
 	var reset *tunnel.ResetError
 	switch {
