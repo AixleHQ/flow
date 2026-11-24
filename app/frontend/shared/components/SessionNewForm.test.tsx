@@ -761,7 +761,7 @@ describe('SessionNewForm — Runs on', () => {
   const runners = [buildRunnerSummary({ id: 4, name: 'Prod VPC', operatedBy: 'Acme/Payments' })];
   const props = { ...authProps(['claude_code']), features: { externalRunners: true } };
 
-  it('keeps runners off for an interactive session, and sends an automatic one to the picked runner', async () => {
+  it('sends an interactive session to the picked runner', async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
@@ -770,14 +770,6 @@ describe('SessionNewForm — Runs on', () => {
     renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 42, runners })} />, { props });
 
     await user.click(screen.getByText('Claude Code'));
-    await user.click(screen.getByRole('combobox', { name: 'Runs on' }));
-    expect(
-      await screen.findByRole('option', { name: "Prod VPC · Connected · can't run interactive sessions yet" }),
-    ).toBeInTheDocument();
-    await user.keyboard('{Escape}');
-
-    await user.click(screen.getByRole('radio', { name: /Automatic/ }));
-    await user.type(screen.getByLabelText(/Initial Prompt/), 'ship it');
     await user.click(screen.getByRole('combobox', { name: 'Runs on' }));
     await user.click(await screen.findByRole('option', { name: 'Prod VPC · Connected' }));
     expect(screen.getByText(/which is operated by/)).toHaveTextContent('Acme/Payments');

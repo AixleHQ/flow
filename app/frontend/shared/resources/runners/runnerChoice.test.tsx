@@ -77,26 +77,6 @@ describe('RunnerSelect', () => {
 
     expect(onChange).toHaveBeenCalledWith(1);
   });
-
-  it('turns every runner off for an interactive session', async () => {
-    renderAuthedPage(
-      <RunnerSelect
-        label="Runs on"
-        hostedLabel="Hosted"
-        runners={runners}
-        value={null}
-        onChange={vi.fn()}
-        interactive
-      />,
-    );
-
-    await userEvent.click(screen.getByRole('combobox', { name: 'Runs on' }));
-
-    const option = await screen.findByRole('option', {
-      name: "Prod VPC · Connected · can't run interactive sessions yet",
-    });
-    expect(option).toHaveAttribute('data-combobox-disabled', 'true');
-  });
 });
 
 describe('runnerUnusableReason', () => {

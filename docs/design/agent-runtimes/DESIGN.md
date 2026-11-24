@@ -54,11 +54,12 @@ place and are not a new numbered revision:
 **Decisions of 2026-10-30, after task 4** (#193, PR #614). They amend revision 5 in place
 and are not a new numbered revision:
 
-- **Interactive work on runners waits for the tunnel, with no interim checks.** Named
+- **Interactive work on runners waited for the tunnel, with no interim checks; 16g lifts
+  it.** The refusal is gone and runner sessions are interactive like hosted ones. Named
   companies get the `external_runners` override only after phase 4 (§12.2, §15 task 16);
-  until then the flag stays on for the test company only. The run-override and publish
-  `interactive_terminal` checks and the Base Resources interactive-step warning are not
-  built (§4, §11).
+  until the staging validation of 16g the flag stays on for the test company only. The
+  run-override and publish `interactive_terminal` checks and the Base Resources
+  interactive-step warning are not built (§4, §11).
 - **Project-move edge cases are accepted, not fixed:** a queued manual launch naming a
   runner, the lock order against a concurrent workflow save, and a project that owns a
   runner (§3.4, "Known limitations of the move").
@@ -895,7 +896,7 @@ container mode, so they are the same across the three external types; the `host`
 | `reusable` | false | true | true | false (v1) | Lifecycle (§7), scrub |
 | `persistent_disk` | false | true | true (mounted volumes only) | false (a PVC option is later) | Reset semantics, UI copy |
 | `human_accessible` | false | true (it is the operator's machine; there is no link to open) | true (Coder's own SSH, web terminal, IDE) | false | "Open in Coder" link on the session, when there is a link |
-| `interactive_terminal` | true | false until the tunnel (§12.2, phase 4), then true | same | same | Not declared or read in v1. Its first reader comes with the tunnel (§15 task 16); until then interactive standalone sessions refuse every external runner unconditionally (below) |
+| `interactive_terminal` | true | true (the tunnel, §15 task 16g) | same | same | Not declared or read: the same on every type, so nothing reads it. Interactive standalone sessions pick a runner like any other session |
 | `max_concurrency` | not enforced by admission while row 9 is deferred | `runners.max_concurrency` | `runners.max_concurrency` | `runners.max_concurrency` | Admission (§10) |
 | `max_environments` | n/a | number of registered machines (a fact) | `runners.max_environments` (a setting) | `runners.max_concurrency` | Allocation (§7.3) |
 | `concurrency_per_environment` | 1 | 1 | 1 | 1 | Allocation (§7.3) |
@@ -909,12 +910,10 @@ relays ports the image already serves, so it lifts on all types at once.
 
 Validation that uses these flags:
 
-- **Built (§15 task 4), and not a capability check:** an interactive standalone session
-  cannot pick any external runner before the tunnel. `Runners::Selection.error` refuses
-  every runner when `interactive: true`, so `POST /api/v1/terminal_sessions` refuses the
-  pick (§3.3), and the runner select disables every runner with the reason. No
-  `interactive_terminal` capability is declared or read today. It gets its first reader
-  with the tunnel (§15 task 16), which replaces this unconditional refusal.
+- **Built in §15 task 4, lifted in task 16g:** an interactive standalone session could not pick
+  an external runner before the tunnel (`Runners::Selection` refused it, and the new-session
+  form disabled the runners). The tunnel lifted that: the `interactive:` argument and the
+  form's disabled options are gone, and no `interactive_terminal` capability is declared or read.
 - **Not built, by decision (2026-10-30):** refusing a run launched with an override to a
   runner without `interactive_terminal`, and refusing to publish a workflow that has an
   interactive step on such a runner. No real user has `external_runners` before the
@@ -2952,7 +2951,6 @@ infrastructure, with credentials the customer meant to keep inside their perimet
 | Runner deleted, disabled or revoked | Launch (`Runners::Resolver`) | Fails before admission, `runner_unavailable` | "Runner "X" is disabled. Re-enable it or pick another runner on the workflow." |
 | Runner not visible to the project | Launch | Fails, `runner_forbidden` | "Runner 12 is not available to project P." (by id: the runner is looked up through `TenantScope.owned`, so a foreign runner's name is never read) |
 | Runner `unreachable` (`kubernetes`: controller silent; `coder`: health) | Launch | Fails, `runner_unreachable` | "Runner "X" is unreachable since 14:02: controller has not connected for 6 min." For `manual` the launch does not read the runner's status: it refuses on the machines (the two `manual` rows below), and the `unreachable` status, set by the periodic check (§2.5), is only shown. |
-| Session mode not supported by the runner (an interactive standalone session, §4) | Selection | Refused | "Runner "X" can't run interactive sessions yet." |
 | At `max_concurrency` | n/a | Not enforced: admission is unchanged for runner sessions, row 9 is deferred (§10) | n/a |
 | At `max_environments`, or provider capacity (Coder quota, unschedulable pod) | `create_container` | `capacity_wait`, wait reason `runner_capacity`, reservation kept (session-admission §7) | "Waiting for capacity on runner "X"." |
 | `provision` fails (template error, image pull, RBAC) | `create_container` | Diagnosed failure, environment `failed` | Provider message, e.g. "Coder: template parameter `instance_type` invalid" |
@@ -3364,7 +3362,7 @@ runners. The limit logic may be revisited later (task row 9 of §15 is deferred)
 | **Runner page** | Status and health facts, capabilities, the container options that widen access (§6.8), environments table (state, current session link, last used, version; action Rebuild where `rebuildable`), Disable / Revoke / Delete. For `manual` the table is **Machines**: name, online / idle / offline, os/arch, first-seen IP, created by (`created_by_id`), runner version and auto-update; actions Return to service, per-machine Revoke; and "Add machine", which mints a new registration token. The runner page does not show the runner version against `recommended_version` (§14.2), the egress list (§9.5) or the §9.7 disclosure: those two are in the user documentation only. It has no Rotate token, no Reset, no Force release, and no machine facts (Docker version, free disk, images present; check-in still collects them, §2.2). |
 | **Workflow builder → Base Resources** (`BaseResourcesTab.tsx`) | "Runner" select: `Hosted (default)` + visible runners with status. Inline warning when the referenced runner is not usable (§3.4). No warning for an interactive step on a runner without `interactive_terminal`: it is not built, for the reason in §4. |
 | **Run drawer** (`RunWorkflowDrawer.tsx`) | "Runs on" select defaulting to the workflow's runner. For an external runner a one-line note: "Your agent login is used on this runner, which is operated by *Company/Project*." |
-| **New session form** (`SessionNewForm.tsx`) | Same select and note. Interactive mode greys out every external runner until the tunnel (§4, §15 task 16). |
+| **New session form** (`SessionNewForm.tsx`) | Same select and note, in both modes (§4, §15 task 16g). |
 | **Session page, run page, step list, board task run history** | A "Runs on" badge: `Hosted`, or `Prod VPC · coder`, linking to the runner and environment. "Open in Coder" when `human_accessible`. There is no connection-lost banner (§6.7). This is where users see where a run actually executed. |
 | **Admin (Administrate)** | No runners or environments dashboards (removed from the plan, Alex 2026-11-13). |
 
@@ -3431,8 +3429,8 @@ type, status, `deleted`, `operatedBy`). The badges are fed by the slimmer `Runne
   same reason as the §4 publish check.
 - **The run drawer** (`shared/components/RunWorkflowDrawer.tsx`, used by the builder, the workflows
   page and Sessions & Runs) has "Runs on", starting from the workflow's runner, with the §11 note
-  naming who operates it. **The new-session form** has the same select and note; in interactive
-  mode every runner is disabled with "can't run interactive sessions yet".
+  naming who operates it. **The new-session form** has the same select and note; in both modes
+  (until 16g, interactive mode disabled every runner).
 - **"Runs on"** shows `Hosted` or "name · type", linking to the runner, in the session and run
   headers, on each session card of the run page, and on the board task's run tiles. The badge
   serializes a runner only when it is in the record's tenant (`RunnerReference#owned_runner`,

@@ -1,6 +1,6 @@
 # The Go runner relay service: the interactive tunnel, and the home of the runner's long-held connections
 
-**Status:** accepted (task #253, "Runners 16a"), revised after Alex's review of PR #796 (2026-11-19). Rows 16b–16e of §13 are built (#815, #818, #821, #828); 16f (`aixle-infra`), 16g and the takeover rows 24–27 are pending: `Runners::Selection` still refuses interactive sessions on a runner, and the `runner-gateway` process still runs (`config/puma_runner_gateway.rb`, `Procfile.dev`) beside `runner_relay`. **Round 2 (task #267, "Runners 16b", 2026-11-19):** §5.7 compares our own multiplexer with smux, yamux and SSH channels and recommends keeping §5 (own protocol); §5.8, §12, §13 and §13.1 are written for it. The build took our own protocol: `runner/protocol/tunnel` imports no third-party multiplexer.
+**Status:** accepted (task #253, "Runners 16a"), revised after Alex's review of PR #796 (2026-11-19). Rows 16b–16f of §13 are built (#815, #818, #821, #828, #276) and 16g (#277) lifted the interactive refusal in `Runners::Selection` (its staging validation is the QA of #277); the takeover rows 24–27 are pending, and the `runner-gateway` process still runs (`config/puma_runner_gateway.rb`, `Procfile.dev`) beside `runner_relay`. **Round 2 (task #267, "Runners 16b", 2026-11-19):** §5.7 compares our own multiplexer with smux, yamux and SSH channels and recommends keeping §5 (own protocol); §5.8, §12, §13 and §13.1 are written for it. The build took our own protocol: `runner/protocol/tunnel` imports no third-party multiplexer.
 **Naming (Alex, 2026-11-19):** the service is **`runner-relay`** everywhere: the directory `runner-relay/`, the binary `aixle-runner-relay`, the image and the Helm workload `runner-relay`, the variables `RUNNER_RELAY_*`, the metric prefix `runner_relay_`, the Redis channel `runner_relay` and the internal endpoints `/api/v1/internal/runner_relay/…`. It is not `runner-gateway`: that name belongs to the Rails deployment until row 26, and the Go service never becomes the whole gateway (the token checks, `Rack::Attack` and every short endpoint stay in Rails). In the text, "the relay" means this service.
 **Parent:** [`DESIGN.md`](DESIGN.md) §6.9.5 (the tunnel) and §15 row 16. It refines §6.9.5 and
 replaces row 16 with the rows 16b to 16g of §13 below, and adds the rows 24 to 26 for the
@@ -76,7 +76,7 @@ environment variables only, read once at start; the service never reads `config/
 | Variable | Meaning | Default |
 | --- | --- | --- |
 | `RUNNER_RELAY_LISTEN`, `RUNNER_RELAY_ADMIN_LISTEN` | Listen addresses | `:8080`, `:9090` |
-| `RUNNER_RELAY_REDIS_URL`, `RUNNER_RELAY_REDIS_CHANNEL_PREFIX` | The platform's Redis. The prefix is the one `config/cable.yml` gives Action Cable (`aixle_<env>_`), because Rails publishes through `ActionCable.server.pubsub`, which prefixes the channel | none, none |
+| `RUNNER_RELAY_REDIS_URL`, `RUNNER_RELAY_REDIS_CHANNEL_PREFIX` | The platform's Redis. The prefix is `config/cable.yml`'s `channel_prefix` as it is (`aixle_<env>`, no colon), because Rails publishes through `ActionCable.server.pubsub`, which names the channel `<prefix>:<channel>` | none, none |
 | `RUNNER_RELAY_RAILS_URL` | The web app's internal URL, for the short calls of §8.2 | none |
 | `RUNNER_RELAY_INTERNAL_TOKEN` | Bearer for those calls (§8.2) | none |
 | `RUNNER_RELAY_TICKET_KEY` | HMAC key that verifies tunnel tickets (§3.1) | none |
@@ -590,8 +590,8 @@ In the relay:
    `(session id, environment id, ports)` from the `machine_session` signal (§8.1); on a miss, one short
    call, `GET /api/v1/internal/runner_relay/holders/:route_token` (§8.2), asks Rails, which answers from
    `runner_environments.current_session_id` and the session's `route_token`. A token Rails does not know
-   is `404`; a session not held by a machine, or a machine not connected, is `503` with `Retry-After: 2`
-   (a runner session whose tunnel is briefly down is not gone).
+   is `404`; a session not held by a machine, or a machine not connected (including a machine of a runner
+   version with no tunnel), is `503` with `Retry-After: 2` (a runner session whose tunnel is briefly down is not gone).
 3. **Cross-check.** `X-Session-Id` must equal the session id found by the token. A mismatch is `403`.
    The relay trusts the header only because Traefik wrote it after `ws_auth` and the NetworkPolicies of §2.3
    admit only Traefik and the platform's own pods, and checks it against the token as defence in depth.
@@ -636,7 +636,7 @@ Each `Machine` owns its multiplexer, its open browser connections per session (t
 Rails publishes JSON on one channel, `runner_relay`, through `ActionCable.server.pubsub.broadcast`, after
 the transaction commits (`ActiveRecord.after_all_transactions_commit`), the way `Runners::Operations#wake`
 does, and logs and swallows a failed publish (the reconcile pass of §8.3 is the safety net). The relay
-subscribes with `RUNNER_RELAY_REDIS_CHANNEL_PREFIX` + `runner_relay`.
+subscribes to `<RUNNER_RELAY_REDIS_CHANNEL_PREFIX>:runner_relay`, the name Action Cable gives the channel (`ActionCable::SubscriptionAdapter::ChannelPrefix#channel_with_prefix`).
 
 | `type` | Published when | Relay does |
 | --- | --- | --- |
@@ -666,7 +666,9 @@ answers in milliseconds and holds no connection.
 - `POST /api/v1/internal/runner_relay/checks` (`...ChecksController#create`), body
   `{"machines": [{"environment_id": 7, "session_id": 123}]}`, answer `{"machines": [true]}`. A machine is
   valid when it is registered, its runner is not revoked, the company's `external_runners` flag is on and it
-  still holds that session (and that session is still `ready`). The body is validated with a JSON Schema,
+  still holds that session, and that session is `running` or `ready`. A route exists from the moment the machine
+  holds the session, and `checks` confirms it until the session ends or starts finishing; a pass in the window
+  before `ready` closes nothing. The edge still refuses streams until `ready` (§9). The body is validated with a JSON Schema,
   `runner-relay/schemas/checks.request.json` (checked through `Runners::ProtocolSchema`, as the runner gateway's
   bodies are): `machines` is an array of objects, `environment_id` an integer, `session_id` an integer, `null`
   or absent; anything else is `422`. Other keys are ignored, so a newer relay is not refused by an older platform.
@@ -696,10 +698,10 @@ the page, the read-only viewers, the IDE link (`ide_url`), the file panel (`watc
 (`upload_url`) work as on hosted. What 16g changes is only what hides them:
 
 - `Runners::Selection.refusal`'s `:interactive` refusal and the new-session form's disabled runners ("can't
-  run interactive sessions yet") go;
+  run interactive sessions yet") go (**done in 16g**);
 - the capability table's `interactive_terminal` becomes true on every type (`DESIGN.md` §4);
 - the session page's runner-specific "no live terminal" state, if the page has one, goes. (16g looks for it;
-  none was found by this design's search.)
+  none was found, so nothing was removed.)
 
 The exec-based snapshot (`Sessions::Snapshot::ExecSource`, `get_session_log`, `NoOutput`) is **not**
 touched: it feeds the monitor and the MCP tool, not the browser.

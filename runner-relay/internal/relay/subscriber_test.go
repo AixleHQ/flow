@@ -10,7 +10,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-const testChannel = "aixle_test_" + SignalChannel
+const testChannel = "aixle_test:" + SignalChannel
 
 func startSubscriber(t *testing.T, e *edgeHarness) (*redis.Client, context.CancelFunc) {
 	t.Helper()

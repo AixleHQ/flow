@@ -84,6 +84,12 @@ type Server struct {
 	registry Registry
 	metrics  *Metrics
 
+	// routeGen counts the changes of a session's route that signals and the reconcile
+	// pass made, under routeMu with the registry write itself: a `holders` answer is
+	// newer than the registry only if the count did not move during its call.
+	routeMu  sync.Mutex
+	routeGen uint64
+
 	mu       sync.Mutex
 	draining bool
 	wg       sync.WaitGroup // one per connected machine, until its session ended
