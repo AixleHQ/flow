@@ -30,7 +30,7 @@ type Config struct {
 
 	// RedisURL is the platform's Redis, which holds the single-use record of ticket
 	// ids. RedisChannelPrefix is the prefix Action Cable gives its channels
-	// (`aixle_<env>_`), for the signals of a later task.
+	// (`aixle_<env>`, as `config/cable.yml` has it, with no colon: the relay adds it).
 	RedisURL           string
 	RedisChannelPrefix string
 

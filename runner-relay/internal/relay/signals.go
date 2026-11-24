@@ -16,6 +16,17 @@ import (
 // (Runners::RelaySignals::CHANNEL).
 const SignalChannel = "runner_relay"
 
+// Channel is the Redis channel the platform publishes on. Action Cable's pub/sub names a
+// channel `<channel_prefix>:<channel>` (`ActionCable::SubscriptionAdapter::ChannelPrefix#channel_with_prefix`,
+// 8.1), or the channel alone when the configuration has no prefix. prefix is
+// `config/cable.yml`'s `channel_prefix` as it is (`aixle_<env>`), without the colon.
+func Channel(prefix string) string {
+	if prefix == "" {
+		return SignalChannel
+	}
+	return prefix + ":" + SignalChannel
+}
+
 // The signal types of §8.1.
 const (
 	signalMachineSession = "machine_session"
@@ -117,6 +128,15 @@ func (s *Server) setSession(environmentID int64, route SessionRoute) (SessionRou
 	return s.registry.SetSession(environmentID, route)
 }
 
+// clearSession drops the session's route and counts it like setSession, so that every
+// write of the registry's routes goes through one place that owns routeGen.
+func (s *Server) clearSession(sessionID int64) {
+	s.routeMu.Lock()
+	defer s.routeMu.Unlock()
+	s.routeGen++
+	s.registry.ClearSession(sessionID)
+}
+
 // routeGeneration is the number of route changes the signals and the reconcile pass made
 // so far.
 func (s *Server) routeGeneration() uint64 {
@@ -175,10 +195,7 @@ func (s *Server) endOnMachine(environmentID, sessionID int64, code tunnel.ResetC
 // sessionEnded resets the session's streams with code and closes its browser
 // connections, on whichever machine carries them (§8.1).
 func (s *Server) sessionEnded(sessionID int64, code tunnel.ResetCode, text string) {
-	s.routeMu.Lock()
-	s.routeGen++
-	s.registry.ClearSession(sessionID)
-	s.routeMu.Unlock()
+	s.clearSession(sessionID)
 	for _, m := range s.registry.All() {
 		if n := m.EndSession(sessionID, code, text); n > 0 {
 			s.log.Info("a session ended", "environment_id", m.EnvironmentID, "session_id", sessionID, "reset", code.String(), "streams", n)

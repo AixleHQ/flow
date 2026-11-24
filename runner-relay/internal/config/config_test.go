@@ -36,13 +36,13 @@ func TestFromEnvValues(t *testing.T) {
 		"RUNNER_RELAY_INTERNAL_TOKEN":       "tok",
 		"RUNNER_RELAY_STREAM_WINDOW":        "65536",
 		"RUNNER_RELAY_MAX_FRAME":            "16384",
-		"RUNNER_RELAY_REDIS_CHANNEL_PREFIX": "aixle_dev_",
+		"RUNNER_RELAY_REDIS_CHANNEL_PREFIX": "aixle_dev",
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if c.Listen != "127.0.0.1:1" || c.RailsURL != "http://web:4000" || string(c.TicketKey) != "0123456789abcdef0123" ||
-		c.MaxStreams != 8 || c.CheckInterval != 5*time.Second || c.RedisChannelPrefix != "aixle_dev_" {
+		c.MaxStreams != 8 || c.CheckInterval != 5*time.Second || c.RedisChannelPrefix != "aixle_dev" {
 		t.Fatalf("values: %+v", c)
 	}
 }
