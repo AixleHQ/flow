@@ -2,7 +2,10 @@
 
 require "test_helper"
 
-class Web::Company::SwitchControllerTest < ActionDispatch::IntegrationTest
+# The company a page opens is the one its path names. Opening it also makes it
+# the one a link without a company (/company/projects, from before the slug was
+# in the path) and every page of no company (/profile) go to.
+class Web::LastUsedCompanyTest < ActionDispatch::IntegrationTest
   setup do
     @company_a = create(:company, name: "Alpha")
     @company_b = create(:company, name: "Beta")
@@ -31,35 +34,33 @@ class Web::Company::SwitchControllerTest < ActionDispatch::IntegrationTest
     inertia.props[:currentUser][:currentCompany][:id]
   end
 
-  test "switch to a member company opens its pages and becomes the one unscoped links open" do
+  test "opening a company's page makes it the one unscoped links open" do
     assert_equal @company_a.id, current_company_id
 
-    post company_switch_path, params: { company_id: @company_b.id }
-    assert_redirected_to company_projects_path(company_slug: @company_b.slug)
+    get company_projects_path(company_slug: @company_b.slug)
+    assert_response :success
 
     assert_equal @company_b.id, current_company_id
   end
 
-  test "switch to a non-member company_id is rejected and leaves the session unchanged" do
-    stranger_company = create(:company)
-
-    post company_switch_path, params: { company_id: stranger_company.id }
+  test "a company the person does not belong to leaves the last used one as it was" do
+    get company_projects_path(company_slug: create(:company).slug)
     assert_response :not_found
 
     assert_equal @company_a.id, current_company_id
   end
 
-  test "switch to a company where the membership is not active is rejected" do
+  test "a company whose membership is not active leaves the last used one as it was" do
     @membership_b.revoke!
 
-    post company_switch_path, params: { company_id: @company_b.id }
+    get company_projects_path(company_slug: @company_b.slug)
     assert_response :not_found
 
     assert_equal @company_a.id, current_company_id
   end
 
   test "revoking the current membership falls back to the remaining one on the next request" do
-    post company_switch_path, params: { company_id: @company_b.id }
+    get company_projects_path(company_slug: @company_b.slug)
     assert_equal @company_b.id, current_company_id
 
     @membership_b.revoke!
@@ -88,12 +89,12 @@ class Web::Company::SwitchControllerTest < ActionDispatch::IntegrationTest
   # which for a consultant whose home company is the newest one is wrong every
   # single time.
 
-  test "the switched-to company is still current after signing out and back in" do
-    post company_switch_path, params: { company_id: @company_b.id }
+  test "the company last opened is still current after signing out and back in" do
+    get company_projects_path(company_slug: @company_b.slug)
     assert_equal @company_b.id, current_company_id
     assert_equal @company_b.id, @user.reload.last_company_id
 
-    # A fresh session: the switcher choice lives only in the cookie, so without
+    # A fresh session: the session's company died with the cookie, so without
     # the persisted hint this would resolve back to A (oldest accepted).
     delete logout_path
     sign_in_as(@user)

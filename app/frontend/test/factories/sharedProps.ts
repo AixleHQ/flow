@@ -11,6 +11,7 @@ import type { SharedPermissions, SharedProps, SharedSettings, SharedTrial } from
 const buildSharedCompany = (overrides: Partial<Company> = {}): Company => ({
   id: 1,
   name: 'Test Company',
+  slug: 'test-company',
   emailDomain: 'example.com',
   logoUrl: null,
   primaryColor: null,

@@ -42,6 +42,7 @@ import type { Membership } from '@/types/generated';
 import { CreateProjectModal } from 'shared/components/CreateProjectModal';
 import { FeedbackModal } from 'shared/components/FeedbackModal';
 import { getInitials } from 'shared/lib/getInitials';
+import { useCompanySlug } from 'shared/lib/hooks/useCompanySlug';
 import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
 import { confirmLeave } from 'shared/lib/unsaved-changes/guards';
 import {
@@ -73,7 +74,6 @@ import {
   companyProjectWorkflowsPath,
   companyProjectsPath,
   companySessionsPath,
-  companySwitchPath,
   companyWorkflowCatalogIndexPath,
   dashboardPath,
   profilePath,
@@ -220,9 +220,9 @@ const buildCompanyNavGroups = (): NavGroup[] => [
 // ─── Company rail (Slack-style workspace switcher) ───────────────────────────
 // A narrow strip left of the sidebar, rendered ONLY for people who belong to
 // more than one company — a single-company user should never see tenancy chrome
-// at all. Each company is one square; the current one is marked. Switching is a
-// full Inertia visit, so every shared prop (projects, permissions, current user)
-// re-resolves server-side for the new company.
+// at all. Each company is one square linking to its projects; the current one is
+// marked. The link names the company, so Cmd/Ctrl+click opens it in a new tab and
+// leaves this one in the company it is on.
 
 function CompanyRail({
   memberships,
@@ -231,11 +231,6 @@ function CompanyRail({
   memberships: Membership[];
   currentCompanyId: number | null;
 }) {
-  const switchTo = (companyId: number) => {
-    if (companyId === currentCompanyId) return;
-    router.post(companySwitchPath(), { company_id: companyId });
-  };
-
   return (
     <div className={classes.rail} role="navigation" aria-label="Switch company">
       {memberships.map((membership) => {
@@ -245,7 +240,8 @@ function CompanyRail({
         return (
           <Tooltip key={membership.id} label={`${membership.company.name} — ${role}`} position="right" withArrow>
             <UnstyledButton
-              onClick={() => switchTo(membership.company.id)}
+              component={Link}
+              href={companyProjectsPath({ company_slug: membership.company.slug })}
               className={`${classes.railItem} ${isCurrent ? classes.railItemActive : ''}`}
               aria-label={`${membership.company.name} (${role})`}
               aria-current={isCurrent ? 'true' : undefined}
@@ -450,6 +446,7 @@ function SidebarWorkspaceSwitcher({
   canCreateProject,
   onExpand,
 }: SidebarWorkspaceSwitcherProps) {
+  const companySlug = useCompanySlug();
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [createModalOpened, setCreateModalOpened] = useState(false);
@@ -495,7 +492,7 @@ function SidebarWorkspaceSwitcher({
   };
 
   const handleToggleFavorite = (project: SharedProject) => {
-    const path = companyProjectFavoritePath(project.id);
+    const path = companyProjectFavoritePath(project.id, { company_slug: companySlug });
     const options = { preserveScroll: true, preserveState: true };
 
     if (project.favorite) {
