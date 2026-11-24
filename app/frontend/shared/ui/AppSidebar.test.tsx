@@ -40,6 +40,7 @@ describe('AppSidebar', () => {
           currentCompany: {
             id: 1,
             name: 'Globex Labs',
+            slug: 'globex-labs',
             emailDomain: 'example.com',
             logoUrl: null,
             primaryColor: null,
@@ -53,6 +54,7 @@ describe('AppSidebar', () => {
               company: {
                 id: 1,
                 name: 'Globex Labs',
+                slug: 'globex-labs',
                 emailDomain: 'example.com',
                 logoUrl: null,
                 primaryColor: null,
@@ -362,32 +364,26 @@ describe('AppSidebar', () => {
     });
 
     const rail = screen.getByRole('navigation', { name: 'Switch company' });
-    expect(within(rail).getByRole('button', { name: /Vega Corp/ })).toHaveAttribute('aria-current', 'true');
-    expect(within(rail).getByRole('button', { name: /Client Co/ })).not.toHaveAttribute('aria-current');
+    expect(within(rail).getByRole('link', { name: /Vega Corp/ })).toHaveAttribute('aria-current', 'true');
+    expect(within(rail).getByRole('link', { name: /Client Co/ })).not.toHaveAttribute('aria-current');
   });
 
-  it('switches company from the rail for a multi-membership user', async () => {
+  // A link, not a POST: Cmd/Ctrl+click opens the other company in a new tab and
+  // leaves this one where it is.
+  it('links each rail tile to its company', () => {
     renderAuthedPage(<AppSidebar context="company" projects={projects} />, {
       props: { currentUser: { ...buildUser(), memberships: dualMemberships() } },
     });
 
     const rail = screen.getByRole('navigation', { name: 'Switch company' });
-    await userEvent.click(within(rail).getByRole('button', { name: /Client Co/ }));
-
-    expect(router.post).toHaveBeenCalledWith('/company/switch', { company_id: 2 });
-  });
-
-  it('does not post a switch when re-selecting the current company', async () => {
-    renderAuthedPage(<AppSidebar context="company" projects={projects} />, {
-      props: { currentUser: { ...buildUser(), memberships: dualMemberships() } },
-    });
-
-    // Scope to the rail: the sidebar's workspace button also carries the
-    // company name as its sub-label.
-    const rail = screen.getByRole('navigation', { name: 'Switch company' });
-    await userEvent.click(within(rail).getByRole('button', { name: /Vega Corp/ }));
-
-    expect(router.post).not.toHaveBeenCalled();
+    expect(within(rail).getByRole('link', { name: /Client Co/ })).toHaveAttribute(
+      'href',
+      '/company/client-co/projects',
+    );
+    expect(within(rail).getByRole('link', { name: /Vega Corp/ })).toHaveAttribute(
+      'href',
+      '/company/vega-corp/projects',
+    );
   });
 
   it('lists favorites before non-favorites in the workspace switcher', async () => {
@@ -445,7 +441,7 @@ describe('AppSidebar', () => {
     await user.click(await screen.findByRole('button', { name: 'Add Acme to favorites' }));
 
     expect(router.post).toHaveBeenCalledWith(
-      '/company/projects/5/favorite',
+      '/company/test-company/projects/5/favorite',
       {},
       { preserveScroll: true, preserveState: true },
     );
@@ -465,7 +461,7 @@ describe('AppSidebar', () => {
     await user.click(screen.getByRole('button', { name: /All Projects/ }));
     await user.click(await screen.findByRole('button', { name: 'Remove Acme from favorites' }));
 
-    expect(router.delete).toHaveBeenCalledWith('/company/projects/5/favorite', {
+    expect(router.delete).toHaveBeenCalledWith('/company/test-company/projects/5/favorite', {
       preserveScroll: true,
       preserveState: true,
     });
@@ -500,6 +496,7 @@ function dualMemberships(): Membership[] {
       company: {
         id: 2,
         name: 'Client Co',
+        slug: 'client-co',
         emailDomain: 'client-co.test',
         logoUrl: null,
         primaryColor: null,
@@ -528,6 +525,7 @@ function buildUser() {
     currentCompany: {
       id: 1,
       name: 'Vega Corp',
+      slug: 'vega-corp',
       emailDomain: 'example.com',
       logoUrl: null,
       primaryColor: null,
@@ -541,6 +539,7 @@ function buildUser() {
         company: {
           id: 1,
           name: 'Vega Corp',
+          slug: 'vega-corp',
           emailDomain: 'example.com',
           logoUrl: null,
           primaryColor: null,

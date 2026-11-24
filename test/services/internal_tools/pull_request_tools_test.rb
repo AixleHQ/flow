@@ -285,32 +285,31 @@ class InternalTools::PullRequestToolsTest < ActiveSupport::TestCase
     assert_equal "validation_failed", json(result)["error"]
   end
 
-  # == injection ==
+  # == attaching ==
 
-  test "the tools come with a GitHub, GitLab or Bitbucket repository, and not with an Azure or public one" do
+  test "a session has the tools only when its workflow attached them, and not for any repository" do
     definition = Tools::Registry.fetch("pull_request_merge")
-    bitbucket = create(:repository, :bitbucket)
-    bitbucket_session = create(:terminal_session, :running, user: @user, project: bitbucket.scope)
-    bitbucket_session.repositories << bitbucket
-    github_session = create(:terminal_session, :running, user: @user, project: @project)
-    github_session.repositories << create(:repository, scope: @project,
-                                                       integration: create(:integration, :active, company: @company))
 
-    public_session = create(:terminal_session, :running, user: @user, project: @project)
-    public_session.repositories << create(:repository, :public_source, scope: @project, full_name: "torvalds/linux",
-                                                                       clone_url: "https://github.com/torvalds/linux.git")
-    azure = create(:repository, :azure_devops)
-    azure_session = create(:terminal_session, :running, user: @user, project: azure.scope)
-    azure_session.repositories << azure
+    assert_not definition.inject?(Tools::Context.for_session(@session))
+    assert_not_includes @session.available_tools.map(&:name), "pull_request_create"
 
-    assert definition.inject?(Tools::Context.for_session(@session))
-    assert definition.inject?(Tools::Context.for_session(bitbucket_session))
-    assert definition.inject?(Tools::Context.for_session(github_session))
-    assert_not definition.inject?(Tools::Context.for_session(public_session))
-    assert_not definition.inject?(Tools::Context.for_session(azure_session))
-    assert definition.available?(Tools::Context.for_session(@session))
-    assert_not definition.user_attachable
+    @session.tools << Tool.shadow_rows_for_names(Tools::Registry.definitions.values
+                                                   .select { |d| d.tags.include?(:pull_requests) }.map(&:name))
+    @session.reload
+
     assert_includes @session.available_tools.map(&:name), "pull_request_create"
+    assert_includes @session.available_tools.map(&:name), "pull_request_merge"
+    assert definition.available?(Tools::Context.for_session(@session))
+    assert definition.user_attachable
+  end
+
+  test "attached without a repository on the session, a tool says there is none" do
+    session = create(:terminal_session, :running, user: @user, project: @project)
+
+    result = run_tool(InternalTools::PullRequestList, {}, session: session)
+
+    assert_equal "repository_required", json(result)["error"]
+    assert_match(/no GitHub, GitLab or Bitbucket repository/, json(result)["message"])
   end
 
   private

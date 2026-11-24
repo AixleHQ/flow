@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it, vi } from 'vitest';
 
-import { fireEvent, makeFormStub, renderPage, screen, userEvent, within } from 'test/renderPage';
+import { fireEvent, makeFormStub, renderAuthedPage, renderPage, screen, userEvent, within } from 'test/renderPage';
 
 import { FeedbackModal } from './FeedbackModal';
 
@@ -33,10 +33,11 @@ describe('shared/components/FeedbackModal', () => {
     expect(form.setData).toHaveBeenCalledWith('kind', 'feature_request');
   });
 
-  it('sends the message with the page it was written on, and closes once sent', async () => {
+  // The page may name no company (/profile); the message still goes to the one it shows.
+  it('sends the message with the page it was written on to the company shown, and closes once sent', async () => {
     const onClose = vi.fn();
     const form = makeFormStub({ kind: 'support', message: 'How do I connect Jira?', attachments: [] as File[] });
-    renderPage(<FeedbackModal opened onClose={onClose} />, { form });
+    renderAuthedPage(<FeedbackModal opened onClose={onClose} />, { form });
 
     await userEvent.click(screen.getByRole('button', { name: 'Send' }));
 
@@ -46,7 +47,7 @@ describe('shared/components/FeedbackModal', () => {
     });
     const [url, options] = vi.mocked(form.post as (url: string, options: { onSuccess: () => void }) => void).mock
       .calls[0];
-    expect(url).toBe('/company/feedback');
+    expect(url).toBe('/company/test-company/feedback');
 
     options.onSuccess();
     expect(form.reset).toHaveBeenCalled();

@@ -24,7 +24,7 @@ module PersonalTools
       end
 
       if session.queued?
-        SessionService.finish(session: session)
+        Sessions::Lifecycle.finish(session)
         return stopped(session, "cancel")
       end
       params[:force] ? force_stop(session) : graceful_stop(session)
@@ -44,17 +44,17 @@ module PersonalTools
       membership.nil? || membership.viewer?
     end
 
-    # Through SessionService, never `session.finish!`/`fail!`: only the service
+    # Through Sessions::Lifecycle, never `session.finish!`/`fail!`: only the service
     # signals the session's own container workflow, and only that signal lets its
     # cleanup phase run — which is what deletes the pod, Service, IngressRoute
     # and Middlewares and uploads the logs.
     def graceful_stop(session)
-      SessionService.finish(session: session)
+      Sessions::Lifecycle.finish(session)
       stopped(session, "finish")
     end
 
     def force_stop(session)
-      SessionService.fail_session(session: session, error_message: params[:reason].presence || "Stopped over MCP")
+      Sessions::Lifecycle.fail(session, error_message: params[:reason].presence || "Stopped over MCP")
       stopped(session, "fail")
     end
 

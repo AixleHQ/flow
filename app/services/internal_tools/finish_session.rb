@@ -33,7 +33,7 @@ module InternalTools
         append_step_note(params[:note])
       end
 
-      SessionService.finish(session: session)
+      Sessions::Lifecycle.finish(session)
       success("Session finished successfully.")
     end
 

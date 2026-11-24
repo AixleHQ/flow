@@ -76,7 +76,7 @@ module ContainerStrategies
     # config file may exist without a token — so gating on completion is what
     # prevents an empty/garbage credential from being created on a failed/aborted login.
     # A cancelled session saves nothing at all: cancelling is how the user throws a
-    # login away (SessionService.reset_auth), whatever it captured.
+    # login away (Sessions::Lifecycle.reset_auth), whatever it captured.
 
     def before_cleanup(container_id: nil, session_id: nil, error: nil, **)
       return {} if container_id.blank?

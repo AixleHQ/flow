@@ -34,7 +34,7 @@ module Runners
     def end_session(runner, session, running:)
       Machines.let_go!(session) if running
       # A compare-and-set: a session that finished or was cancelled meanwhile keeps its outcome.
-      SessionService.fail_session_if(session: session, error_message: message(runner, session, running))
+      Sessions::Lifecycle.fail_if(session, error_message: message(runner, session, running))
     end
     private_class_method :end_session
 

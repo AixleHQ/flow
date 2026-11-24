@@ -227,8 +227,9 @@ class TerminalSessionResourceTest < ActiveSupport::TestCase
 
   test "a suspended session says what was saved and that its owner may restore it" do
     use_checkpoint_storage
-    session = create(:terminal_session, :agent_session, user: @user, project: @project, mode: "interactive")
-    Sessions::Suspension.suspended!(session)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, mode: "interactive",
+                                        state: "ready")
+    Sessions::Lifecycle.suspended(session)
     create_checkpoint(session, manifest: { "reason" => "time_limit", "repos" => [ { "repository_id" => 1 } ] })
 
     payload = viewed_by(session, @user)

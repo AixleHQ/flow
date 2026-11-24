@@ -182,7 +182,7 @@ module Api
 
       test "finish returns session json" do
         ts = create(:terminal_session, :running, user: @user, project: @project)
-        SessionService.stubs(:finish)
+        Sessions::Lifecycle.stubs(:finish)
 
         post :finish, params: { id: ts.id }
 

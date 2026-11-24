@@ -10,17 +10,20 @@ module PullRequests
   # browser URL. Values come back as PullRequests::PullRequest, Comment, …,
   # errors as PullRequests::Error.
   class Provider
-    def self.for(integration)
+    # `acting`, a PullRequests::Acting, makes every call as that person with their own
+    # token; without it the adapter acts as the connection.
+    def self.for(integration, acting: nil)
       klass = PullRequests.provider_class(integration.provider)
       raise Error::Unsupported, "#{integration.provider} has no pull-request tools" unless klass
 
-      klass.new(integration)
+      klass.new(integration, acting: acting)
     end
 
-    attr_reader :integration
+    attr_reader :integration, :acting
 
-    def initialize(integration)
+    def initialize(integration, acting: nil)
       @integration = integration
+      @acting = acting
     end
 
     def list(_repository, state:, source_branch:, cursor:, limit:) = raise NotImplementedError

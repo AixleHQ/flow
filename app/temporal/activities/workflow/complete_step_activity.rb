@@ -87,10 +87,10 @@ module Activities
       end
 
       # Ended through `finishing`, which stamps finishing_at before the session ends
-      # `finished`: SessionService.finish (the agent's finish_session, or a person's
+      # `finished`: Sessions::Lifecycle.finish (the agent's finish_session, or a person's
       # stop through the API, the personal tools or the builder) and the stale-session
-      # cleanup (CleanupStaleActivity#full_cleanup). AdmittedPhaseActivity#outcome_state
-      # and #outcome_error read finishing_at the same way, as a requested finish.
+      # cleanup (CleanupStaleActivity#full_cleanup). TerminalSession#ending_state
+      # and #ending_error read finishing_at the same way, as a requested finish.
       def finish_requested?(session)
         session.finished? && session.finishing_at.present?
       end

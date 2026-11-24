@@ -167,23 +167,27 @@ Pattern: `visible_for_project(project)` → the project's own rows, plus platfor
 ### TerminalSession State Machine
 
 ```
-enqueue           not_started → queued                      (admission queue)
-start             not_started | queued → running
-mark_ready        not_started | running → ready
-start_finishing   not_started | running | ready → finishing
-finish            finishing → finished
-fail              not_started | queued | running | ready | finishing → failed
-cancel            not_started | queued | running | ready | finishing → cancelled
-mark_restored     suspended → restored                      (Sessions::Suspension)
-expire_suspension suspended → finished
+enqueue                 not_started → queued                      (admission queue)
+start                   not_started | queued → running
+mark_ready              not_started | running → ready
+start_finishing         not_started | running | ready → finishing
+finish                  finishing → finished
+finish_without_request  not_started | queued | running | ready → finished   (the agent exited)
+fail                    not_started | queued | running | ready | finishing → failed
+fail_after_finish       finished → failed                         (output collection failed)
+cancel                  not_started | queued | running | ready | finishing → cancelled
+mark_suspended          running | ready | finishing → suspended   (Sessions::Suspension)
+mark_restored           suspended → restored
+expire_suspension       suspended → finished
+expire_suspended_step   suspended → failed                        (a step's restore window closed)
 ```
 
 Source of truth: `app/state_machines/terminal_session_state_machine.rb`.
 
-State changes go through these events, with one exception: `Activities::Container::AdmittedPhaseActivity#finalize_session`
-settles the final state from what the runtime reported, which can mean a transition the machine does not
-offer (a finished session relabelled failed when its output collection failed). It also writes `suspended`,
-through `Sessions::Suspension.suspended!`; `mark_restored` and `expire_suspension` are the moves after it. Transition callbacks only
+`Sessions::Lifecycle` (`app/services/sessions/lifecycle.rb`) is the one owner of these moves: other code
+calls its methods (`finish`, `fail`, `fail_if`, `cancel`, `finalize`, …) and does not fire an event or write
+`state` itself. `Lifecycle.finalize` settles the final state from what the runtime reported, by the
+(from, to) table in `docs/design/session-lifecycle.md` §3.4. Transition callbacks only
 assign attributes (they persist with the state); anything that leaves the process, such as waking the
 parent workflow run, waits for the commit (`ActiveRecord.after_all_transactions_commit`).
 

@@ -11,8 +11,6 @@ module InternalTools
                   "{repository_id, comments: [{id, parent_id, author, body, file_path, line, resolved, created_at}], " \
                   "next_cursor}."
       tags :pull_requests
-      inject_when :pull_request_repositories_attached
-      user_attachable false
       requires_integration :pull_requests
       unavailable_message Concerns::PullRequestContext::UNAVAILABLE
       read_only

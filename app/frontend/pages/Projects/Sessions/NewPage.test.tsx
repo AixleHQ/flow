@@ -47,6 +47,7 @@ describe('Projects/Sessions/NewPage', () => {
           company: {
             id: 1,
             name: 'Test Company',
+            slug: 'test-company',
             emailDomain: 'example.com',
             logoUrl: null,
             primaryColor: null,
@@ -89,6 +90,7 @@ describe('Projects/Sessions/NewPage', () => {
           company: {
             id: 1,
             name: 'Test Company',
+            slug: 'test-company',
             emailDomain: 'example.com',
             logoUrl: null,
             primaryColor: null,
@@ -139,6 +141,7 @@ describe('Projects/Sessions/NewPage', () => {
           company: {
             id: 1,
             name: 'Test Company',
+            slug: 'test-company',
             emailDomain: 'example.com',
             logoUrl: null,
             primaryColor: null,

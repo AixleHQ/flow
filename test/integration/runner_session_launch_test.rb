@@ -269,8 +269,8 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     broken = create(:runner_session, :holding, environment: @machine)
     other_machine = create(:runner_environment, runner: @runner)
     fine = create(:runner_session, :holding, environment: other_machine)
-    SessionService.stubs(:fail_session_if).with { |args| args[:session].id == broken.id }.raises(StandardError, "boom")
-    SessionService.stubs(:fail_session_if).with { |args| args[:session].id == fine.id }.returns(true)
+    Sessions::Lifecycle.stubs(:fail_if).with { |s, **| s.id == broken.id }.raises(StandardError, "boom")
+    Sessions::Lifecycle.stubs(:fail_if).with { |s, **| s.id == fine.id }.returns(true)
     Sentry.expects(:capture_exception).with(instance_of(StandardError), extra: { runner_id: @runner.id, session_id: broken.id }).once
 
     @runner.revoke!
