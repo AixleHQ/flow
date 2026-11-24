@@ -199,7 +199,8 @@ workflow runs the new version from then on. To try a change first, work in a
   a column does not start that column's workflow. Choose the custom mode in the
   run drawer to start each step yourself. The run page says it ran the draft and
   gives the draft's own version numbers (`draft v2`), which are not the live
-  workflow's.
+  workflow's. In **Sessions & Runs** a draft's test runs are listed under the
+  workflow, named `<workflow> (draft)`.
 - **What will change** compares the draft with the live workflow.
 - **Apply** makes the draft the live workflow, as one new version, and closes
   the draft. The version history marks that version **Applied from draft**. If
