@@ -64,8 +64,8 @@ Checked against Atlassian documentation in October 2026. Each one changed the de
 | [Repositories::CiWebhook](../../app/services/repositories/ci_webhook.rb) | Registers a per-repository hook for GitLab only | No change: Bitbucket uses Forge events, or the sweep in token mode (§8) |
 | [Gate](../../app/models/gate.rb), [GateService](../../app/services/gate_service.rb), [Ci::GateProbe](../../app/services/ci/gate_probe.rb), [GateReconciler](../../app/services/gate_reconciler.rb) | Gate type → provider by prefix; metadata scopes cast to integers; `PASSING_CONCLUSIONS` lowercase; verdict key is `status` for GitLab, `conclusion` otherwise (:171) | New gate type keyed by repository UUID and pull request (§8) |
 | [BoardCreateGate](../../app/services/internal_tools/board_create_gate.rb), [TaskStatisticsResource](../../app/resources/task_statistics_resource.rb) | Gate-type enum in the tool schema; TS union that already omits the two Azure gate types | Add the Bitbucket type; fix the Azure omission in the same change |
-| [Tools::InjectionRules](../../app/services/tools/injection_rules.rb), [Tools::Context](../../app/services/tools/context.rb) | Closed rule vocabulary; synthetic capabilities for trackers and chat | Add `pull_request_repositories_attached` and a `pull_requests` capability (§4.6) |
-| [ContextBuilders::Resources](../../app/services/context_builders/resources.rb) | Provider paragraphs: helper (:54), `gh` (:60), Azure tools (:65) | A paragraph for GitLab/Bitbucket PR tools |
+| [Tools::InjectionRules](../../app/services/tools/injection_rules.rb), [Tools::Context](../../app/services/tools/context.rb) | Closed rule vocabulary; synthetic capabilities for trackers and chat | Add a `pull_requests` capability (§4.6); the tools are attached, not injected |
+| [ContextBuilders::Resources](../../app/services/context_builders/resources.rb) | Provider paragraphs: helper (:54), `gh` (:60), Azure tools (:65) | No paragraph for the PR tools (§4.12) |
 | `config/templates/template.v1.json` | `requires.integrations` enum | Add `bitbucket` |
 | [Gitlab::TokenService](../../app/services/gitlab/token_service.rb) | `gitlab` gem 6.1 client; only users, projects, branches, hooks and pipelines are used | Merge-request calls for the GitLab PR adapter |
 
@@ -112,7 +112,7 @@ Implemented for **GitLab, Bitbucket and GitHub** (the GitHub adapter was added o
 
 ### 4.5 Tools
 
-All `tags :pull_requests` (hidden, like `:azure_devops`), `inject_when :pull_request_repositories_attached`, `user_attachable false`, `requires_integration :pull_requests`. None declares `repository_binding :legacy_github`.
+All `tags :pull_requests` (a picker group, "Pull requests"), `requires_integration :pull_requests`. They are attachable like any other tool and are not injected (§4.6). None declares `repository_binding :legacy_github`.
 
 | Tool | Parameters (besides `repository_id`) | Ledger |
 |---|---|---|
@@ -120,19 +120,19 @@ All `tags :pull_requests` (hidden, like `:azure_devops`), `inject_when :pull_req
 | `pull_request_get` | `pull_request` (number or URL) | — |
 | `pull_request_changes` | `pull_request`, `limit`, `cursor` | — |
 | `pull_request_checks` | `pull_request` | — |
-| `pull_request_create` | `source_branch`*, `target_branch`, `title`*, `description`, `draft` (default true), `operation_key` | yes |
-| `pull_request_update` | `pull_request`*, `title`, `description`, `target_branch`, `draft`, `state` | — (idempotent) |
+| `pull_request_create` | `source_branch`*, `target_branch`, `title`*, `description`, `draft` (default true), `user_id`, `operation_key` | yes |
+| `pull_request_update` | `pull_request`*, `title`, `description`, `target_branch`, `draft`, `state`, `user_id` | — (idempotent) |
 | `pull_request_list_comments` | `pull_request`*, `limit`, `cursor` | — |
-| `pull_request_add_comment` | `pull_request`*, `body`*, `file_path`, `line`, `reply_to`, `operation_key` | yes |
-| `pull_request_review` | `pull_request`*, `verdict`*, `body`, `operation_key` | yes |
-| `pull_request_merge` | `pull_request`*, `expected_head_sha`*, `strategy`, `delete_source_branch`, `message`, `operation_key` | yes |
+| `pull_request_add_comment` | `pull_request`*, `body`*, `file_path`, `line`, `reply_to`, `user_id`, `operation_key` | yes |
+| `pull_request_review` | `pull_request`*, `verdict`*, `body`, `user_id`, `operation_key` | yes |
+| `pull_request_merge` | `pull_request`*, `expected_head_sha`*, `strategy`, `delete_source_branch`, `message`, `user_id`, `operation_key` | yes |
 
 `target_branch` defaults to the repository's `source_branch` in Aixle — the branch sessions check out, chosen when the repository was attached — rather than the host's default branch. `pull_request_create` first looks for an open pull request from the same source to the same target and returns it (`existing: true`) rather than creating a second one; both hosts refuse or confuse duplicates, and an agent retrying after a timeout should get the one it made.
 
-### 4.6 Availability and injection
+### 4.6 Availability and attaching
 
 - `PullRequests::CAPABILITY = "pull_requests"`, added to `Tools::Context#connected_providers` when the project has an active GitHub, GitLab or Bitbucket integration — the way `Trackers::CAPABILITY` is (`context.rb:54`). `requires_integration` takes one provider, which is why a capability is needed.
-- `pull_request_repositories_attached: ->(ctx) { ctx.repository_providers.intersect?(PullRequests::PROVIDERS.keys) }`. A session with only Azure repositories does not see these tools.
+- **The tools are attached, not injected.** The set is a picker group ("Pull requests"): a workflow's base resources or a step adds or removes it as it does other tools, and a session whose workflow does not have it has no `pull_request_*` tools. The tools still need a GitHub, GitLab or Bitbucket repository on the session, and say so when there is none (`repository_required`). The first version injected them with the rule `pull_request_repositories_attached`; that rule is gone, and a migration attached the set once to the workflows of every company or project with a GitHub, GitLab or Bitbucket connection, so existing workflows kept the tools.
 
 ### 4.7 Target resolution
 
@@ -159,7 +159,7 @@ Taken from the Azure implementation (`pull_request_service.rb:226-300`), where A
 6. Bitbucket may answer 202: poll `merge/task-status/{id}` up to a configured number of times, then report `pending: true` rather than wait.
 7. Merging is a per-connection capability, on by default — the Azure decision of 2026-09-13 — and can be turned off per integration.
 
-`pull_request_review` refuses to approve a pull request the same connection opened (found in the ledger: a succeeded `create` that did not return an existing one). Bitbucket accepts such an approval — verified live for the Bitbucket app's bot on 2026-10-16 — and GitLab does unless the project prevents approval by the author, so without the check an agent could open a pull request and meet a required approval itself; GitHub refuses it on its own.
+`pull_request_review` refuses to approve a pull request the same identity opened (found in the ledger: a succeeded `create` that did not return an existing one, by the same `acting_user_id`, nil being the connection). A member who opens a pull request as themselves cannot approve it as themselves, and the connection can still approve one a member opened. Bitbucket accepts such an approval — verified live for the Bitbucket app's bot on 2026-10-16 — and GitLab does unless the project prevents approval by the author, so without the check an agent could open a pull request and meet a required approval itself; GitHub refuses it on its own.
 
 ### 4.10 Errors
 
@@ -180,9 +180,17 @@ Taken from the Azure implementation (`pull_request_service.rb:226-300`), where A
 
 On GitLab the token's owner is the author of everything the tools do. The user guide should recommend a project or group access token (a bot user) over an employee's personal token; both pass the existing `/user` verification.
 
-### 4.12 What agents are told
+### 4.12 Acting as a user, and what agents are told
 
-`resources.rb` gains a paragraph for sessions holding GitLab or Bitbucket repositories: pull requests go through the `pull_request_*` tools; there is no `glab` or Bitbucket CLI; use `pull_request_checks` or a gate to wait for CI; merge only with the head commit you reviewed. When the run came from a tracker issue and the session holds any code-host repository, the agent is also told to start branch names with the issue key and put it at the start of pull-request titles and commit messages (decision 5, §1); `pull_request_create` prefixes the title itself when the key is missing.
+**Acting as a user.** Every write tool (`create`, `update`, `add_comment`, `review`, `merge`) takes an optional `user_id`, the company member to act as, as `*_user_token_for` takes it. Without it the tool acts as the connection, as before. With it:
+
+- The checks and the token path are the user-token tools' own, reused: `InternalTools::PullRequestActor` includes `Concerns::UserTokenContext` and the host's context (`GithubUserTokenContext`, `GitlabUserTokenContext`, `BitbucketUserTokenContext`), limited to the repository of the call. That is the project membership, the live connected account, the consent (the "own tasks" switch when the named member is the session's user, otherwise the "tasks that aren't mine" switch), a fresh token, the issuance record (`user_token_issuances`, under the pull-request tool's name) and each refusal's wording. Which OAuth credentials count stays behind those contexts.
+- The token goes to the host's client for that one call (`PullRequests::Provider.for(integration, acting:)`) and is never part of a result, a log line or an error message. The agent never sees it.
+- A host without a user identity refuses the parameter with an `unsupported` error. Azure DevOps has its own tools and is not behind this port.
+- The ledger records the actor in `pull_request_operations.acting_user_id` and the actor is part of the request digest, so a retry with the same `operation_key` returns the first result (the pull request and its author) and cannot change the actor: the same key with another actor is a `conflict`.
+- Merging still obeys the connection's merge switch.
+
+**What agents are told.** The session context carries no instruction to use the `pull_request_*` tools: the tools' own descriptions and parameters say what they require (the head commit to merge, `pull_request_checks` or a gate to wait for CI). The session context keeps the authentication facts: the credential helper for git, and `gh` signed in for reading. When the run came from a tracker issue and the session holds any code-host repository, the agent is also told to start branch names with the issue key and put it at the start of pull-request titles and commit messages (decision 5, §1); `pull_request_create` prefixes the title itself when the key is missing.
 
 ## 5. Bitbucket connection model
 

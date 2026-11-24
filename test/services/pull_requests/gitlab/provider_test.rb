@@ -74,6 +74,16 @@ module PullRequests
         assert page.items.last.draft
       end
 
+      test "acting as a person sends that person's token instead of the connection's" do
+        token = "p" * 64
+        acting = PullRequests::Acting.new(user_id: 7, login: "lab-user", token: token)
+        stub_request(:get, mr_url(4)).with(headers: { "Authorization" => "Bearer #{token}" }).to_return(json(mr(4)))
+
+        PullRequests::Provider.for(@integration, acting: acting).get(@repository, 4)
+
+        assert_requested :get, mr_url(4), headers: { "Authorization" => "Bearer #{token}" }
+      end
+
       test "get maps the merge request and builds its URL from the configured host" do
         stub_mr(7, mr(7, web_url: "https://evil.example/x", detailed_merge_status: "ci_still_running"))
 

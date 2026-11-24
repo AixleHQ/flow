@@ -167,16 +167,30 @@ to that one repository, or everything the personal access token reaches.
 
 ## Pull-request tools
 
-Sessions that hold a GitHub repository connected through the App or a personal
-access token get the `pull_request_*` tools — the same ones GitLab and Bitbucket
-repositories get, so a workflow written for one host runs on the others.
+The `pull_request_*` tools are the same ones GitLab and Bitbucket repositories
+use, so a workflow written for one host runs on the others. They are one group,
+**Pull requests**, in the tool picker: add it to a workflow's base resources or
+to a single step as you add other tools, and remove it the same way. A session
+whose workflow does not have the group has no `pull_request_*` tools; workflows
+that existed before the group became attachable kept them. They work on a
+session that holds a GitHub repository connected through the App or a personal
+access token, and say so when it holds none.
 `pull_request_list`, `_get`, `_changes`, `_checks` and `_list_comments` read;
 `_create`, `_update`, `_add_comment`, `_review` and `_merge` write. Agents read
-with `gh` as they like, but open, review and merge through the tools: only
-they check the head commit before a merge and record each write, so a call
-repeated after a timeout returns the first result instead of a second pull
-request or comment. A public repository attached without a connection gets no
-tools.
+with `gh` as they like. The tools check the head commit before a merge and
+record each write, so a call repeated after a timeout returns the first result
+instead of a second pull request or comment. A public repository attached
+without a connection gets no tools.
+
+### Acting as a person
+
+By default the write tools act as the connection: on GitHub, the App's bot (or the owner of a personal access token). To make a pull request, comment, review or merge a person's own, the agent passes `user_id`, the id of a company member (`board_list_members` lists them). Flow then makes that one call with the person's own GitHub token, which the agent never sees. It works under the same conditions as `github_user_token_for`:
+
+- the person is a member of the project;
+- they connected their GitHub account under **Profile → Connected accounts**, and the connection is current;
+- they turned on the switch for this project: **in their own tasks** when they are the person the session runs for, otherwise **in tasks that aren't theirs**.
+
+Otherwise the call is refused with the same message as the token tools, and nothing is written. A retry with the same `operation_key` returns the first result and cannot change who it was made as. A person cannot approve, as themselves, a pull request they opened this way. Merging still obeys the connection's merge switch.
 
 What differs on GitHub:
 

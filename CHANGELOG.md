@@ -27,6 +27,10 @@ governance, community health — carry none.
   continues the same step. A suspended session holds no slot; its owner is emailed when it is suspended and three days
   before it expires. Needs S3-compatible storage; without it sessions finish as before. Operators: a workflow run may now
   last 40 days instead of 7.
+- **Integrations**: the `pull_request_*` tools can act as a person. Pass `user_id` to `pull_request_create`,
+  `_update`, `_add_comment`, `_review` or `_merge` and the pull request, comment, review or merge is that
+  member's own, under the same conditions as `github_user_token_for` (a connected account and the consent for
+  the project). Without it the tools act as the connection, as before.
 - **Workflows**: change a workflow that is in use through a draft. **Edit in draft** (or
   **Save as draft** when a Save would go live) opens a copy that you edit and test-run while
   triggers and board columns keep running the live version; **Apply** makes it live as one
@@ -35,6 +39,10 @@ governance, community health — carry none.
   `discard_workflow_draft`.
 
 ### Changed
+- **Workflows**: the `pull_request_*` tools are a tool group, **Pull requests**, that a workflow or a step can
+  add or remove. Existing workflows keep them through a migration; sessions no longer get them just because
+  they hold a GitHub, GitLab or Bitbucket repository, and the session context no longer tells agents to use
+  them.
 - **Companies & projects**: every page of a company carries it in its address,
   `/company/<company>/…`, so a link to a project, a workflow or any company page opens in
   the right company, and two tabs can stay on two companies. Links from before keep
