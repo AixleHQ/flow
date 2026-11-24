@@ -12,13 +12,15 @@ where every card represents a unit of work — and where automation lives.
 | **Subtask**         | One level of nesting (epic → story).                              |
 | **Comment**         | Threaded discussion; agents can tag comments (`code_review`, `qa_report`). |
 | **Asset**           | File attached to a task; the agent fetches it with `board_get_task_assets` (not mounted in the container). |
-| **Wait**            | External blocker — e.g. waiting for a GitHub PR check.            |
+| **Gate**            | External blocker — e.g. waiting for a GitHub PR check.            |
 | **Activity log**    | Immutable event stream — every move, comment, run.                |
 
 ## Column → Workflow Bindings
 
-This is the trigger that makes the board *do* things. Each column can
-have **at most one** `ColumnWorkflowBinding`:
+This is the board-native trigger. Each column can have **at most one**
+`ColumnWorkflowBinding`. It's one of several trigger sources — for schedules,
+Slack and webhooks (and the full model), see
+[Triggers and Gates](triggers-and-gates.md).
 
 | Field             | Purpose                                                                |
 | ----------------- | ---------------------------------------------------------------------- |
@@ -28,7 +30,7 @@ have **at most one** `ColumnWorkflowBinding`:
 
 When a card enters a bound column in auto mode and:
 
-- there is **no pending TaskWait** on the card, **and**
+- there is **no pending Gate** on the card, **and**
 - there is **no active WorkflowRun** on the card,
 
 a new non-interactive `WorkflowRun` starts. The agent reads the card
@@ -82,8 +84,8 @@ The task's attachments are available through `board_get_task_assets` (they are
 not mounted in the container).
 
 This is the **BoardContext** builder — one of the layers in the agent
-context stack. See [agents.md](agents.md#how-context-is-built) for the
-full stack.
+context stack. See [How context is built](agents.md#how-context-is-built)
+for the full stack.
 
 ## Task IDs
 
@@ -106,8 +108,9 @@ before — a query like `login` still finds cards by name.
 ## Common gotchas
 
 - **A card "stuck" in a bound column** usually means there's a
-  `TaskWait` on it (e.g. a CI check that never completed). Open the
-  card and clear the wait — the binding will re-evaluate.
+  `Gate` on it (e.g. a CI check that never completed). A gate is not a
+  trigger — it holds the auto-trigger until it resolves. Open the card
+  and clear the gate, and the binding re-evaluates.
 - **Auto-trigger didn't fire** — check the `cooldown_seconds` window
   and whether the binding was set to `manual` instead of `auto`.
 - **Two workflows on one column** is not supported. Build a single

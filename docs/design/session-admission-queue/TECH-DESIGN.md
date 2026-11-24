@@ -1,10 +1,18 @@
 # Session launch queues and concurrency limits
 
-Date: 2026-09-05. Status: design proposal with implementation underway.
+Date: 2026-09-05. Status: Built 2026-09-05 (#201); decision A1 has since been replaced.
 
 Inspected checkouts: app@32efafaa and aixle-infra@c4bff01. Live cluster configuration and production database records were not inspected.
 
-The current activation and recovery procedure is in [ROLLOUT.md](ROLLOUT.md). Implementation adjustments take precedence over the detailed proposal below: short admission transactions serialize on one policy row; uncertain create/start/exec requires operator-confirmed fencing; activation follows a complete legacy producer/worker drain. Marketplace entitlement APIs are outside this change. An absent ENV always selects project/user fallback queues.
+Where the build departs from the proposal below:
+
+- **A1 is replaced.** There is no installation-wide cap: `SESSION_CONCURRENCY_LIMIT` is read by nothing. The budget is each company's own limit (a `SessionConcurrencyLimit` row with scope `Company`), a ceiling over that company's project queues, and a project limit is a reservation drawn from it (#297, after #278 had made the variable a ceiling over project queues).
+- **Admission is always on** and cannot be paused; there is no activation step and no drain-gated cutover (#325).
+- **The user queue has a fixed size.** A session with a project always joins its project's queue. A session without one, in practice an agent login, joins its user's queue, two at a time (`SessionAdmissionService::AUTH_POOL_LIMIT`), outside any company's limit (#325); there is no user-scoped limit to configure.
+- **A pinned reservation is released automatically** once the workload's absence has been proven for a confirmation window (#286). Operator-confirmed fencing is needed only when that release is switched off.
+- Short admission transactions serialize on one policy row. Marketplace entitlement APIs are outside this change.
+
+Operations are in [ROLLOUT.md](ROLLOUT.md).
 
 ## 1. Proposed solution
 

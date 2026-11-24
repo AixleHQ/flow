@@ -17,8 +17,8 @@ inherited from the company. Removing one asks for confirmation.
 ## Repositories
 
 A **repository** is a Git repo agents can read, work in, and push to. Each row
-shows the branch the project works from, and company-wide repositories appear
-in the same table with their scope marked.
+shows the branch the project works from. A repository belongs to the project
+that links it; another project that needs the same repo links it too.
 
 Link the repos a project actually needs — not every repo the company owns. A
 step only reaches the repositories its Resources section lists.

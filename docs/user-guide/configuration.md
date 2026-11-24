@@ -8,7 +8,7 @@ Stored in `.env.development` (or `.env.production`). These configure
 the Rails app itself: database, Redis, OAuth provider credentials, Git
 host integrations.
 
-See [reference/configuration.md](../reference/configuration.md) for the
+See the [Configuration reference](../reference/configuration.md) for the
 complete list of supported variables.
 
 ## 2. Config Items — project level

@@ -17,9 +17,10 @@ endpoint. Use this as the canonical source — the tables below give you
 the shape, but the explorer has the full request/response specs and
 lets you try calls inline.
 
-> The `/api-docs` endpoint is protected by HTTP Basic Auth in non-dev
-> environments. Set `DOCS_LOGIN` and `DOCS_PASSWORD` env vars to
-> configure credentials; with either unset it admits nobody.
+> **Auth required in non-dev environments.** The `/api-docs` endpoint is
+> protected by HTTP Basic Auth in non-dev environments. Set `DOCS_LOGIN` and
+> `DOCS_PASSWORD` env vars to configure credentials; with either unset it
+> admits nobody.
 
 ## Authentication
 
@@ -88,14 +89,16 @@ returned only by the `POST`.
 
 Run lifecycle actions live in the **web** namespace (they back the
 Inertia-rendered UI). They're documented here because they're stable
-and you can call them from a session-authenticated client:
+and you can call them from a session-authenticated client.
+`:company_slug` is the company's short name, the word after `/company/` in
+the app's address bar:
 
 ```
-POST /company/projects/:project_id/workflow_runs                  (start a run)
-POST /company/projects/:project_id/workflow_runs/:id/cancel
-POST /company/projects/:project_id/workflow_runs/:id/approve_step
-POST /company/projects/:project_id/workflow_runs/:id/retry_step
-POST /company/projects/:project_id/workflow_runs/:id/skip_step
+POST /company/:company_slug/projects/:project_id/workflow_runs                  (start a run)
+POST /company/:company_slug/projects/:project_id/workflow_runs/:id/cancel
+POST /company/:company_slug/projects/:project_id/workflow_runs/:id/approve_step
+POST /company/:company_slug/projects/:project_id/workflow_runs/:id/retry_step
+POST /company/:company_slug/projects/:project_id/workflow_runs/:id/skip_step
 ```
 
 Asset endpoints for a workflow run are in `/api/v1`:
@@ -185,9 +188,9 @@ the board's bulk assign and a view preset's filters.
 GET /api/v1/assets/presign          # -> { method: "PUT", url, key } for a direct upload
 PUT /api/v1/assets/upload/*key      # development/test only: stands in for S3
 
-POST   /api/v1/company/assets
-DELETE /api/v1/company/assets/:id
-GET    /api/v1/company/assets/:id/download
+POST   /api/v1/company/:company_slug/assets
+DELETE /api/v1/company/:company_slug/assets/:id
+GET    /api/v1/company/:company_slug/assets/:id/download
 
 POST   /api/v1/projects/:project_id/assets
 DELETE /api/v1/projects/:project_id/assets/:id
@@ -226,8 +229,8 @@ identify themselves with a Client ID Metadata Document URL or register at
 | `POST /webhooks/slack/events`              | Slack Events API, routed to the workspace's installation.      |
 | `POST /webhooks/in/:slug`                  | Generic inbound webhooks that fire workflow triggers.          |
 
-See [user-guide/integrations.md](../user-guide/integrations.md) for
-how to wire these up.
+See [Integrations](../user-guide/integrations.md) for how to wire these
+up.
 
 ## Versioning
 

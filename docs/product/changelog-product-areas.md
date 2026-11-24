@@ -44,7 +44,7 @@ they name a flow users would recognize.
 | Area | What it covers |
 | --- | --- |
 | **Overview** | Project home: activity, task distribution, token and session-time usage, workflow run status |
-| **Tasks** | The board: columns, cards, subtasks, comments, attachments, waits, activity. Column → workflow binding (auto or manual). Board templates (Simple Kanban, Dev Team, Full SDLC) offered on an empty board |
+| **Tasks** | The board: columns, cards, subtasks, comments, attachments, gates, activity. Column → workflow binding (auto or manual). Board templates (Simple Kanban, Dev Team, Full SDLC) offered on an empty board |
 | **Workflows** | Named processes made of steps: instructions, which agent runs, dependencies, on-failure behavior (fail / retry / skip), human approval, inputs/outputs. Publishing and duplicating |
 | **Triggers & gates** | When a workflow starts (task enters column, manual run, schedule, Slack or Teams message, incoming webhook, task tracker event, pull request review or comment) and what can pause a run: a gate waiting on CI (waiting / passed / failed / stale) or a step waiting on a person |
 | **Sessions & Runs** | One list for both: workflow runs (step timeline, parallel waves, approve / retry / skip, cost) and the agent sessions inside them (status, live terminal, log, tokens, artifacts, cost) |
@@ -59,7 +59,7 @@ they name a flow users would recognize.
 | **Skills** | Reusable know-how installed from a catalog or written by hand |
 | **Connectors** | External tool servers agents can call, from a catalog or added by hand |
 | **Repositories** | Linked Git repos the agent can work in and push to |
-| **Trackers** | Task trackers the project works with — GitHub Projects, Azure Boards, Jira, Linear, YouTrack — primary or read-only, mapped to board columns |
+| **Trackers** | Task trackers the project works with — GitHub Projects, GitLab issues, Azure Boards, Jira, Linear, YouTrack — primary or read-only, mapped to board columns |
 | **Integrations** | Connected accounts: GitHub, GitLab, Bitbucket, Azure DevOps, Jira, Linear, YouTrack, Slack, Microsoft Teams, Coder |
 
 ### Project — Admin
@@ -130,12 +130,12 @@ wrappers, connectors, repositories, and secrets.
 6. Keep this snapshot as the baseline. When a release adds a new area (a new
    nav item or a new first-class object), update this snapshot in the same
    change as the changelog entry — and add the matching chapter to
-   [user-guide-outline.md](./user-guide-outline.md).
+   the [user guide outline](./user-guide-outline.md).
 
 ## Area → guide chapter
 
-Every area above is documented in one chapter of
-[user-guide-outline.md](./user-guide-outline.md). Keep the two in step.
+Every area above is documented in one chapter of the
+[user guide outline](./user-guide-outline.md). Keep the two in step.
 
 | Area | Chapter |
 | --- | --- |

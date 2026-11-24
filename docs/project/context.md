@@ -131,19 +131,19 @@ Temporal Workflow → PhaseActivity → ContainerService → Strategy → Runtim
 
 **Key classes:**
 - `ContainerService` — phase runner, calls `before_X`, `X`, `after_X` hooks
-- `ContainerRuntime.build` — factory, returns Docker or Kubernetes runtime based on Settings
+- `ContainerRuntime.build` — factory, returns Docker or Kubernetes runtime based on Settings; `ContainerRuntime.for_session` returns `RunnerRuntime` for a session on an external runner and `build`'s runtime for every other session
 - `BaseStrategy` → `AgentBaseStrategy` → `AgentAuthStrategy` / `AgentSessionStrategy`
 - `BaseStrategy` → `ToolStrategy` → `CustomToolStrategy` / `InternalToolStrategy`
-- `BaseRuntime` → `DockerRuntime` / `KubernetesRuntime`
+- `BaseRuntime` → `DockerRuntime` / `KubernetesRuntime` / `RunnerRuntime`
 - `BaseAdapter` → `ClaudeCodeAdapter` / `CursorCliAdapter` / `CodexAdapter` / `GeminiCliAdapter` / `AntigravityCliAdapter` / `GrokAdapter` / `KiroCliAdapter` / `CopilotCliAdapter`
 
 **Phases:** `pull_image → create_container → start_container → exec → cleanup`
 
 ### Multi-tenancy & Scoping
 
-Polymorphic `scope` (Company or Project) used by: Agent, Tool, Workflow, MCPServer, Skill, Asset, ConfigItem, Repository.
+Polymorphic `scope` used by: Agent, Tool, Workflow, MCPServer, Skill, Asset, ConfigItem, Repository. Each row belongs to one project, with three exceptions: Workflow can also be `System` (the platform's own), Asset (and Folder) can be company-wide, and platform code tools and internal MCP servers are platform-owned.
 
-Pattern: `visible_for_project(project)` → unions code/platform + company-scoped + project-scoped rows. No name-level override; System-scoped and non-attachable meta/Builder rows are excluded via `user_attachable`. (`visible_for_company` is the company-level analogue.)
+Pattern: `visible_for_project(project)` → the project's own rows, plus platform code tools, internal MCP servers or the company's assets. No name-level override; non-attachable meta/Builder tools are excluded via `user_attachable`. (`visible_for_company` exists only on Asset, the company's assets, and Tool, the platform code tools for project-less sessions.)
 
 **Referencing another tenant's row by id.** `visible_for_project` / `visible_for_company` decide what a picker offers. Whether an id may be *stored* is a different question, answered by `TenantScope` (`app/services/tenant_scope.rb`, see its header): ownership only, no enabled/attachable filtering, and platform-owned rows (code tools, internal MCP servers) belong to every tenant.
 
@@ -267,7 +267,7 @@ layouts/AuthLayout.tsx           # the signed-in shell
 shared/
   ui/                            # app chrome and small primitives (AppSidebar, PageShell, PageHeader, …)
   components/                    # components several pages use (AssetPicker, SessionNewForm, …)
-  resources/<resource>/          # resource-centric UI shared by company and project pages (agents/, tools/, …)
+  resources/<resource>/          # resource-centric UI (agents/, tools/, …), shared where company and project pages show the same resource (assets/, runners/)
   lib/, lib/hooks/               # utilities and hooks (apiFetch, formatDate, useInertiaCableStream, …)
   theme/, analytics/             # Mantine theme; chart helpers
 types/generated/                 # Typelizer output — regenerate, never edit
@@ -371,7 +371,7 @@ app/
   services/
     agents/                             # Agent adapters (per-agent logic)
     container_strategies/               # Strategy pattern (auth, session, tool)
-    container_runtime/                  # Runtime implementations (docker, k8s)
+    container_runtime/                  # Runtime implementations (docker, k8s, runner)
     container_runtime.rb                # Runtime factory
     container_service.rb                # Phase runner
     agent_credentials_service.rb        # Agent credential facade
@@ -445,11 +445,11 @@ docs/                                   # Architecture & design docs (see docs/i
 | Term | Meaning | DB column | Examples |
 |------|---------|-----------|----------|
 | **Agent Runtime** | Which AI agent CLI to use | `workflow_runs.agent_runtime`, `terminal_sessions.agent_type` | `claude_code`, `cursor_cli`, `codex`, `gemini_cli`, `antigravity_cli`, `grok`, `kiro_cli`, `copilot_cli` |
-| **Container Runtime** | Infrastructure that runs containers | `ContainerRuntime.build` (code-level) | Docker (local development), Kubernetes (production) |
+| **Container Runtime** | Infrastructure that runs containers | `ContainerRuntime.for_session` (code-level) | Docker (local development), Kubernetes (production), an external runner (`RunnerRuntime`) |
 | **Internal Tool** | Platform tool defined in code (`Tools::Registry`), runs in-process | `tools.source = 'code'`, `execution_mode = 'app'` | `list_sub_steps`, `chat_post_message`, `board_*`, `coder_*` |
 | **Workflow Tool** | Internal tool needing workflow context, auto-injected via code-only `inject_when` rules | `Tools::Registry` `inject_when` (no DB column) | `list_sub_steps`, `mark_sub_step`, `finish_session`, `fail_session` |
 | **Builder Tool** | Personal MCP tools served inside an Aixle Builder session, pinned to its project and run as its user | `Tools::BuilderToolset` (no rows) | `create_workflow`, `create_workflow_trigger`, `validate_workflow` |
-| **Custom Tool** | User-created tool in Docker container | `tools.source = 'db'`, `execution_mode = 'container'` | Company- or project-scoped |
+| **Custom Tool** | User-created tool in Docker container | `tools.source = 'db'`, `execution_mode = 'container'` | Project-scoped |
 | **Alba Resource** | Serializer for Inertia props + JSON | `app/resources/` | `BoardTaskResource`, `ProjectResource` |
 | **Inertia Cable** | Real-time prop refresh via ActionCable | `broadcasts_to` / `broadcast_refresh_to` | Board live updates |
 | **Shared Props** | Auto-injected Inertia props | `inertia_share` | `current_user`, `projects`, `flash`, `settings`, `permissions`, `project` |

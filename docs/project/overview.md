@@ -9,14 +9,14 @@
 ### Key capabilities
 
 - **Board + workflows** — column → workflow bindings; a workflow is a DAG of agent steps with retries, approval gates, and parallel runs
-- **Agent Sessions** — interactive and non-interactive sessions with AI agents in containers (Docker locally, Kubernetes in production)
+- **Agent Sessions** — interactive and non-interactive sessions with AI agents in containers (Docker locally, Kubernetes in production, or an external runner)
 - **Agent Auth** — each user signs in to each runtime's own CLI once, in a terminal in the browser; the credential is captured and stored encrypted
 - **Tool Execution** — custom tools in containers with parameters and files, platform tools in-process, MCP servers
-- **Multi-Runtime** — pluggable Docker and Kubernetes runtimes (via the Strategy + Runtime pattern)
+- **Multi-Runtime** — pluggable Docker, Kubernetes and external-runner runtimes (via the Strategy + Runtime pattern)
 - **Usage Tracking** — tokens and cost per session, from OTLP telemetry, MITM proxy logs, or the CLI's own output
 - **Session Context** — injection of configuration, MCP servers, skills, repositories, and assets into containers
 - **Asset Management** — uploading, versioning, and reviewing artifacts
-- **Multi-tenancy** — Company → Projects with polymorphic scoping for resources; a user can belong to several companies
+- **Multi-tenancy** — Company → Projects; resources belong to one project (assets can also be company-wide); a user can belong to several companies
 - **Personal MCP** — a user can drive their own account from an external agent with a personal MCP token
 
 ---
@@ -59,6 +59,9 @@ PhaseActivity → ContainerService → Strategy → Runtime
 **Runtimes** (define WHERE to run):
 - `DockerRuntime` — local Docker (docker-api gem); the default, used in development
 - `KubernetesRuntime` — Kubernetes Pods + Services + Traefik IngressRoutes (kubeclient + websocket); used in production
+- `RunnerRuntime` — a session on an external runner, a company's or project's own machines (`manual`, `coder` or `kubernetes`): each runtime call is an op queued to the session's runner machine
+
+`ContainerRuntime.for_session` picks `RunnerRuntime` for a session on a runner, and the hosted runtime (`Settings.container_runtime`) for every other session.
 
 **Phases** (container lifecycle):
 ```
@@ -77,9 +80,9 @@ One adapter per runtime in `app/services/agents/` (`claude_code`, `cursor_cli`, 
 
 ### Multi-tenancy & Scoping
 
-Polymorphic `scope` (Company/Project) for: Agent, Tool, Workflow, MCPServer, Skill, Asset, ConfigItem, Repository.
+Agent, Tool, Workflow, MCPServer, Skill, Asset, ConfigItem and Repository carry a polymorphic `scope`, and each belongs to one project. The exceptions: Workflow can also be `System` (the platform's own), Asset can be company-wide, and platform code tools and internal MCP servers are platform-owned.
 
-Merge logic: `visible_for_project` unions code/platform + company-scoped + project-scoped rows (System-scoped and non-attachable rows excluded via `user_attachable`); no name-level override.
+`visible_for_project` returns the project's own rows plus the platform's code tools (non-attachable ones excluded via `user_attachable`), internal MCP servers or the company's assets; no name-level override.
 
 ---
 
@@ -98,7 +101,7 @@ Merge logic: `visible_for_project` unions code/platform + company-scoped + proje
 - **UsageStatistic** — token usage & cost breakdown per session
 
 ### Tools & Configuration
-- **Tool** — custom Docker-based tools with command, parameters, scoped to company/project
+- **Tool** — custom Docker-based tools with command, parameters, scoped to a project
 - **ToolFile** — files mounted into tool containers
 - **Agent** — configured agent personas with system prompts
 - **MCPServer** — MCP server connections (HTTP/SSE/stdio)

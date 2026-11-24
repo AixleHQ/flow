@@ -24,6 +24,7 @@ Read in any order:
 
 - **[Board](/docs/board)** — projects, columns, cards, and column → workflow bindings.
 - **[Workflows](/docs/workflows)** — DAG steps, retries, approval gates, parallel runs.
+- **Token-efficient workflows** (`docs/user-guide/token-efficient-workflows.md` in the repository) — proportional spec-first delivery, focused context and measuring cost per accepted task.
 - **[Triggers and gates](/docs/triggers-and-gates)** — every way a run starts, who it runs as, and the CI gates that hold one back.
 - **[Prompt guide](/docs/prompt-guide)** — writing session instructions an agent can run.
 - **[Agents](/docs/agents)** — personas, the container, and how session context is built.

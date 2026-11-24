@@ -10,7 +10,7 @@ Each integration has its own page:
 | Integration | What it gives a project | Page |
 | --- | --- | --- |
 | **GitHub** | Repositories cloned in sessions with `git` and `gh` authenticated, the `pull_request_*` tools, CI gates on checks and workflow runs, GitHub Projects as trackers | [GitHub](/docs/github) |
-| **GitLab** | Repositories cloned in sessions, the `pull_request_*` tools for merge requests, CI gates on pipelines | [GitLab](/docs/gitlab) |
+| **GitLab** | Repositories cloned in sessions, the `pull_request_*` tools for merge requests, CI gates on pipelines, pull request triggers on merge request reviews and comments, GitLab projects' issues as trackers | [GitLab](/docs/gitlab) |
 | **Bitbucket** | Repositories cloned in sessions, the `pull_request_*` tools, CI gates on pull-request builds — through the Aixle Flow app or an access token | [Bitbucket](/docs/bitbucket) |
 | **Azure DevOps** | Repositories and pull requests, Azure Boards as a tracker, Service Hooks | [Azure DevOps](/docs/azure-devops) |
 | **Jira** | Jira Cloud projects as trackers: tracker triggers and the `tracker_*` tools | [Jira](/docs/jira) |
@@ -22,7 +22,7 @@ Each integration has its own page:
 
 Jira and Bitbucket are both under **Connect → Atlassian**: pick Jira for issues as trackers, Bitbucket for repositories. They stay two integrations — a Jira site and a Bitbucket workspace are connected separately — and a run started from a Jira issue puts the issue key in its branch and pull-request names, so Jira links them when your Atlassian organization connects the two products.
 
-Azure Boards, Jira, GitHub Projects, Linear and YouTrack are all **trackers**. What a
+Azure Boards, Jira, GitHub Projects, GitLab issues, Linear and YouTrack are all **trackers**. What a
 tracker is, the project's **Trackers** page, the one-column intake and tracker
 triggers are described once, on [Trackers](/docs/trackers).
 
@@ -43,7 +43,7 @@ each verifies the caller its own way.
 | Source | Endpoint | Verified by |
 | --- | --- | --- |
 | GitHub | `POST /webhooks/github` (CI gates and GitHub Projects trackers) | HMAC signature with `GITHUB_WEBHOOK_SECRET` |
-| GitLab | `POST /webhooks/gitlab` | A secret per repository hook |
+| GitLab | `POST /webhooks/gitlab` (CI gates and pull request triggers), and `POST /webhooks/trackers/<endpoint token>`, one per tracked GitLab project | A secret per repository hook, or per tracked project, in `X-Gitlab-Token` |
 | Bitbucket (the Aixle Flow app) | `POST /webhooks/bitbucket/forge/<lifecycle, heartbeat, events, uninstall, ui/…>` | The Forge invocation token: Atlassian's keys, the app id and the Forge environment the deployment serves |
 | Azure DevOps | `POST /webhooks/azure_devops/<endpoint id>` | HTTP Basic, one password per subscription |
 | Jira | `POST /webhooks/trackers/<endpoint token>`, or `POST /webhooks/trackers/app/jira` for the Atlassian app | HMAC signature per subscription; the app's signed JWT |

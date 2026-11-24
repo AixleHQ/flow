@@ -71,11 +71,11 @@ API tree (no `Api::V1::Company::ApplicationController` layer):
 ```ruby
 ApplicationController                    # AuthConcern, allow_browser, underscore_params
   Api::V1::ApplicationController         # JSON API, pagination, rescue_from, dynamic_authorize!
-    Api::V1::Company::AssetsController   # inherits directly; uses AuthConcern's session company
+    Api::V1::Company::AssetsController   # inherits directly; uses the company its path names
     Api::V1::Projects::ApplicationController  # current_project
 ```
 
-`dynamic_authorize!` is a `before_action` in `Api::V1::ApplicationController` (applies to the whole api/v1 tree). Company controllers inherit directly from it and use AuthConcern's `current_company` — the session company, validated against active memberships on every request. The SPA calls the API on the same cookie session as the page, so never re-resolve the company (for example to the first membership): a multi-company user would write into a company other than the one on screen. `current_project` lives in `Api::V1::Projects::ApplicationController`.
+`dynamic_authorize!` is a `before_action` in `Api::V1::ApplicationController` (applies to the whole api/v1 tree). Company controllers inherit directly from it and use AuthConcern's `current_company` — the company the path names (`/api/v1/company/:company_slug/…`), validated against active memberships on every request; a slug the user cannot enter is answered 404 (`refuse_company_out_of_reach`). The SPA's generated route helpers fill the slug from the tab's own URL (`shared/lib/currentCompanySlug.ts`), so never re-resolve the company (for example to the session's last company or the first membership): a multi-company user would write into a company other than the one on screen. `current_project` lives in `Api::V1::Projects::ApplicationController`.
 
 The **Web** namespace has its own base-controller chain:
 
@@ -121,7 +121,7 @@ What the controllers return — no envelope around the resource:
 - **Services:** `app/services/` — all business logic
 - **API clients:** the library for that API (`octokit`, `gitlab`), used from the provider's service in `app/services/<provider>/`; our own client under `app/services/<provider>/` only when no library we use covers the API
 - **Strategies:** `app/services/container_strategies/` — Strategy pattern for container types
-- **Runtimes:** `app/services/container_runtime/` — Runtime abstraction for Docker/K8s
+- **Runtimes:** `app/services/container_runtime/` — Runtime abstraction for Docker, Kubernetes and external runners (`RunnerRuntime`)
 - **Adapters:** `app/services/agents/` — per-agent credential/config logic
 - **Concerns:** `app/controllers/concerns/`, `app/models/concerns/`
 - **State machines:** `app/state_machines/` — AASM definitions
@@ -175,10 +175,10 @@ What a model's state, type or columns mean is decided in the model. Other code a
 
 ### Polymorphic Scoping
 - Agent, Tool, Workflow, MCPServer, Skill, Asset, ConfigItem, Repository
-- `scope_type` + `scope_id` → Company or Project
-- `visible_for_project(project)` → union of Company-scoped + Project-scoped rows (System-scoped excluded; no name override)
-- `visible_for_company(company)` → Company-scoped rows
-- `for_project(project)` / `for_company(company)` → a single scope only
+- `scope_type` + `scope_id` → `Project` for all of them, with three exceptions: Workflow can be `System` (the platform's own), Asset (and Folder) can be `Company`, and platform code tools and internal MCP servers are platform-owned
+- `visible_for_project(project)` → the project's own rows, plus platform code tools, internal MCP servers or the company's assets (no name override)
+- `visible_for_company(company)` → Asset (the company's assets) and Tool (platform code tools, for project-less sessions) only
+- `for_project(project)` / `for_company(company)` → a single scope only (`for_company` on Asset and Folder)
 - These scopes decide what a **picker** offers. Whether an id may be **referenced** is decided by `TenantScope` — a different question (see Tenant References)
 
 ### Tenant References

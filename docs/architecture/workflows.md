@@ -31,7 +31,7 @@ system with tracking, assets, versioning, and automation.
 - [5. Workflow Context Injection](#5-workflow-context-injection)
 - [6. Internal Tools (Workflow-specific)](#6-internal-tools-workflow-specific)
 - [7. Asset Versioning](#7-asset-versioning)
-- [8. Asset Public Sharing (planned)](#8-asset-public-sharing-planned)
+- [8. Asset Public Sharing](#8-asset-public-sharing)
 - [9. Validation](#9-validation)
 - [10. BMAD Mapping](#10-bmad-mapping)
 - [11. GitHub Integration](#11-github-integration)
@@ -45,10 +45,10 @@ system with tracking, assets, versioning, and automation.
 | Concept | Description |
 |---------|-------------|
 | **Agent** | LLM configuration (persona, system prompt). Not tied to a workflow |
-| **Workflow** | Process definition: steps, inputs, outputs. **Polymorphic scope** (Company or Project) — same pattern as Agent/Tool/Skill |
+| **Workflow** | Process definition: steps, inputs, outputs. Belongs to one project (polymorphic `scope`: `Project`, or `System` for the platform's own) |
 | **Step** | Single step within a workflow with instructions |
 | **SubStep** | Unit of work within a step |
-| **WorkflowRun** | Specific workflow execution, always project-scoped (even for company workflows) |
+| **WorkflowRun** | Specific workflow execution, always project-scoped |
 | **StepRun** | Single step execution (= one terminal session) |
 | **SubStepRun** | Tracked execution of one sub-step |
 | **WorkflowRunAsset** | Intermediate file shared between steps |
@@ -58,10 +58,11 @@ system with tracking, assets, versioning, and automation.
 
 > **2026-02-22**
 
-Workflow uses polymorphic `scope` (Company | Project) with `visible_for_project(project)`.
-A Company defines standard workflows available in all its projects; projects can create
-project-specific workflows or override by name. `WorkflowRun` always `belongs_to :project` —
-execution is project-scoped.
+Workflow uses polymorphic `scope` (`Project` | `System`): a workflow belongs to one
+project, and `System` holds the platform's own. `visible_for_project(project)` returns that
+project's workflows (drafts left out); nothing is shared between projects, and
+`duplicate_workflow` copies a workflow into another project. `WorkflowRun` always
+`belongs_to :project` — execution is project-scoped.
 
 ## Implementation Phases & Dependency Graph
 
@@ -129,7 +130,7 @@ A BMAD workflow like "Create Architecture" (8 step-files producing 1 document) b
 
 ```ruby
 class Workflow < ApplicationRecord
-  belongs_to :scope, polymorphic: true, optional: true  # Company | Project | System
+  belongs_to :scope, polymorphic: true, optional: true  # Project | System
   belongs_to :published_by, class_name: 'User', optional: true
   has_many :steps, dependent: :destroy
   has_many :runs, class_name: 'WorkflowRun', dependent: :destroy
@@ -147,10 +148,9 @@ class Workflow < ApplicationRecord
 end
 ```
 
-Workflows are **scoped polymorphically** (`Company` | `Project` | `System`) — the
-same pattern used for Agent/Tool/Skill/Asset — rather than owned by a single
-project. A project sees its own workflows plus its company's via a `visible_for_project`
-scope.
+Workflows are **scoped polymorphically** (`Project` | `System`): a workflow belongs to
+one project, or to the platform (`System`). A project sees only its own workflows, through
+the `visible_for_project` scope.
 
 ### 2.2 Step
 
@@ -375,11 +375,11 @@ Shrine `file_data`.
 
 ### 2.8 Asset (Polymorphic Scope + Separate Versions)
 
-> **Updated 2026-02-18:** Redesigned from `belongs_to :project` to polymorphic `scope` (Company | Project), matching Agent/Tool/Skill pattern. Versioning moved to separate `AssetVersion` model. `step_run_id` for workflow provenance.
+> **Updated 2026-02-18:** Redesigned from `belongs_to :project` to polymorphic `scope` (Company | Project). Versioning moved to separate `AssetVersion` model. `step_run_id` for workflow provenance.
 
 ```ruby
 class Asset < ApplicationRecord
-  belongs_to :scope, polymorphic: true          # Company | Project (same pattern as Agent/Tool/Skill)
+  belongs_to :scope, polymorphic: true          # Company | Project
   belongs_to :created_by, class_name: 'User'
   belongs_to :step_run, optional: true          # provenance: created during workflow step
   has_many :versions, class_name: 'AssetVersion', dependent: :destroy
@@ -438,9 +438,10 @@ class TerminalSession < ApplicationRecord
 end
 ```
 
-Both `Workflow` and `Asset` `belong_to :scope, polymorphic: true`; a `Company`
-carries the same `as: :scope` associations, so company-level workflows/assets are
-shared across that company's projects.
+Both `Workflow` and `Asset` `belong_to :scope, polymorphic: true`. A workflow's scope is
+its project (or `System`); `Company` reaches workflows only through its projects
+(`has_many :workflows, through: :projects`). An asset's scope can be its project or the
+company, and a company asset is visible in every project of that company.
 
 ---
 
@@ -1021,31 +1022,32 @@ it). Resolution helpers: `Asset#latest_version` and
 
 ---
 
-## 8. Asset Public Sharing (planned)
+## 8. Asset Public Sharing
 
-The data model is in place — `assets.public` (boolean) and `assets.public_token`
-(string) columns exist — **but the public read endpoint is not yet implemented**.
-There is no `SharedAssetsController` and no `/shared/{token}` route in the codebase
-today.
+A file can be published at a stable anonymous link, `/share/:token`, served by
+`Web::PublicAssetsController` without a sign-in. Three kinds of file can be shared,
+through the `PubliclyShareable` concern: a project `Asset`, a workflow run output
+(`WorkflowRunAsset`) and a task attachment (`TaskAsset`). One route serves all three,
+so a token is unique across the three tables, and `PubliclyShareable.find_shared`
+looks it up in each.
 
-Intended design once built:
-
-```ruby
-# PLANNED — not yet implemented
-class SharedAssetsController < ApplicationController
-  skip_before_action :authenticate_user!
-
-  def show
-    asset = Asset.find_by!(public_token: params[:token], public: true)
-    # For HTML: render inline; for other types: redirect to a pre-signed URL
-  end
-end
-```
-
-- URL: `https://app.example.com/shared/{public_token}`
-- Toggle `public` on/off from the Asset detail view
-- `public_token` generated once and preserved (stable URL); revoking sets
-  `public: false` while keeping the token for re-enabling
+- **`GET /share/:token`** renders the app's own viewer page, which may be embedded
+  anywhere (`frame-ancestors *`) and loads the file in a sandboxed iframe.
+- **`GET /share/:token/raw`** streams the file's bytes through the app, not as a
+  storage redirect, under `Content-Security-Policy: sandbox` and
+  `X-Content-Type-Options: nosniff`: the content is untrusted, since an agent may
+  have written arbitrary HTML or JavaScript. For an `Asset` it serves the latest
+  version, so the link stays the same as new versions arrive.
+- **Making a link:** the `share_asset` tool, injected into workflow step sessions, is
+  what shares a file: a project asset, an output of the session's run, or an
+  attachment of a task on the project's board. A company asset is never shared, since
+  every project of the company sees it. `share!` is idempotent (a shared file keeps its
+  link) and records who shared it and from which session (`shared_by`,
+  `shared_in_session`, `shared_at`). A shared file's resource carries its `share_url`.
+- **Revoking:** `DELETE …/share` (the `unshare` action) on the project asset, company
+  asset, run output and task attachment API routes; the UI's "Stop sharing" calls it
+  for assets and task attachments. Unsharing clears the token, so the old link stays
+  dead and sharing again makes a new one. Deleting an asset clears its share too.
 
 ---
 
@@ -1234,7 +1236,7 @@ end
 | 9 | Sub-steps | ✅ Separate model, configurable in UI, pre-created on StepRun start |
 | 10 | Agent context | ✅ Injected into CLI context files, no read tools |
 | 11 | Skip policy | ✅ never / if_outputs_exist / manual (no condition) |
-| 12 | Workflow scope | ✅ Polymorphic scope (Company / Project / System), same as Agent/Tool/Skill/Asset |
+| 12 | Workflow scope | ✅ Polymorphic scope (Project / System); a workflow belongs to one project |
 | 13 | Asset versioning | ✅ Same name → new version; different name → new asset |
 | 14 | Asset organization | ✅ One-level folders + tags |
 | 15 | Public sharing | ✅ public flag + public_token → shareable URL |
@@ -1251,12 +1253,8 @@ The subsystems this design builds on all exist today: secrets management, Agents
 Tools, MCP servers, container/session execution, and session context injection. The
 workflow and asset stack described above (Asset + AssetVersion, Workflow / Step /
 SubStep definitions, WorkflowRun / StepRun / SubStepRun execution, WorkflowRunAsset,
-the sub-step internal tools, and `ContextBuilders::WorkflowContext`) is implemented.
-
-Remaining forward-looking work:
-
-- **Asset public sharing** — columns exist; the public read endpoint / route is not
-  yet built (see [§8](#8-asset-public-sharing-planned)).
+the sub-step internal tools, `ContextBuilders::WorkflowContext`, and public sharing)
+is implemented.
 
 ---
 

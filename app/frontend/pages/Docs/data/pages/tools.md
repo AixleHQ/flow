@@ -1,7 +1,7 @@
 # Tools
 
 A **Tool** is a callable an agent can invoke during a session. Tools are
-delivered to the runtime over MCP (see the MCP servers page); this page
+delivered to the runtime over MCP (see [MCP servers](/docs/mcp)); this page
 covers what a tool is, who owns it, where it runs, and how it ends up
 available to an agent.
 
@@ -11,10 +11,10 @@ Every tool is one of two things:
 
 | | Platform tool | Custom tool |
 | --- | --- | --- |
-| Owned by | Aixle (built in) | you (Company / Project) |
-| Created | ships with the platform | in the UI, by the Aixle Builder, or over the personal MCP |
+| Owned by | Aixle (built in) | your project |
+| Created | ships with the platform | in the UI or over the personal MCP |
 | Runs in | the Aixle process (fast) or a container | a Docker container you specify |
-| Managed where | nothing to manage — always current | **Project → Tools** (and **Company → Tools**) |
+| Managed where | nothing to manage — always current | **Project → Wrappers** |
 
 The rule of thumb: **platform behaviour comes built in; custom tools are
 your own code in a container.** You never seed or register a platform
@@ -24,8 +24,8 @@ tool — it is always there and always up to date.
 
 | Mode | Runs in | Characteristics |
 | --- | --- | --- |
-| In-process | the Aixle process | synchronous, fast (board edits, workflow control, session lifecycle) |
-| Container | a Docker container via Temporal | asynchronous, isolated, long-running (up to 1 hour) |
+| In-process (`app`) | the Aixle process | synchronous, fast (board edits, workflow control, session lifecycle) |
+| Container (`container`) | a Docker container via Temporal | asynchronous, isolated, long-running (up to 1 hour) |
 
 A container tool returns an execution id immediately; the container runs in
 the background and the agent reads the result back with `read_tool_result`.
@@ -33,22 +33,24 @@ the background and the agent reads the result back with `read_tool_result`.
 ## Built-in tools
 
 The most visible built-ins are the **board tools**, plus workflow-control
-and lifecycle tools. Every board tool that acts on a task takes either its
-`#N` board number (`task_number`) or its internal id (`task_id`):
+and lifecycle tools. A board tool that acts on one task takes either its
+`#N` board number (`task_number`) or its internal id (`task_id`);
+`board_manage_tags` takes the internal id only:
 
 | Tool | Purpose |
 | --- | --- |
 | `board_get_board_info` | Return the current board with its columns. |
 | `board_list_tasks` | List a page of tasks (no descriptions), searched by title or `#N`, filtered by column / tag / type / assignee. Archived tasks only with `include_archived`. |
-| `board_get_task` | Full details for a task. |
+| `board_get_task` | Full details for a task (the workflow's bound task when neither is given). |
 | `board_create_task` | Create a task, optionally in a specific column and assigned to a person (`assignee_id`) or a team (`assignee_team_id`). |
 | `board_update_task` | Update title, description, priority, tags, type, or assignee — a person (`assignee_id`) or a team (`assignee_team_id`); `unassign` clears either. |
 | `board_list_members` | List the project's people and teams, with the ids a task can be assigned to. |
-| `board_move_task` | Move a task to another column, optionally to a `position` in it (0 = top; bottom by default). |
+| `board_move_task` | Move a task to another column by name, optionally to a `position` in it (0 = top; bottom by default). |
 | `board_add_comment` / `board_get_comments` | Add or read comments (Markdown). |
 | `board_attach_asset` / `board_get_task_assets` | Attach or list task files. |
 | `board_manage_tags` | Add or remove a tag on a task or comment. |
-| `board_create_gate` | Hold a column's auto-workflow until a gate resolves. |
+| `board_create_gate` | Create a gate on a task, so its column's auto-workflow won't fire until the gate resolves (e.g. `github_checks_completed`). |
+| `board_list_gates` | List a task's gates, with the CI verdict each holds so far. |
 | `list_sub_steps` / `mark_sub_step` | Track progress within a step. |
 | `finish_session` / `fail_session` | Signal a non-interactive session done or failed. |
 | `read_tool_result` | Fetch the result of an async container tool. |
@@ -75,10 +77,11 @@ given as `column_id`. It no longer takes the old `archived` parameter; use
 
 ## Custom tools
 
-Create custom tools under **Project → Tools** (or **Company → Tools**). A
-custom tool needs a Docker image and a unique, lowercase `name` within its
-scope. It runs in a container, receives your parameters, and its output
-becomes a tool result the agent reads back with `read_tool_result`.
+Create custom tools under **Project → Wrappers** (**Add wrapper**). A custom
+tool needs a Docker image and a `name` that is unique within its project, in
+lowercase letters, digits and underscores. It runs in a container, receives
+your parameters, and its output becomes a tool result the agent reads back
+with `read_tool_result`.
 
 Because a custom tool's name, description and schema are shown to the agent
 alongside built-in tools, Aixle validates them on save: the name can't
@@ -105,6 +108,20 @@ tool the rules don't add: for example, giving the board tools to a workflow
 that did *not* start from a board task, or adding a specific custom tool to
 one step.
 
+### Resource resolution
+
+For a workflow step, what is attached is computed by **adding** three
+layers — there is no subtraction layer, so build narrowly and add up:
+
+1. The workflow's base resources (`base_tool_ids` and the like).
+2. The step's own resources.
+3. The project's resources, if the workflow sets `inherit_all_project_resources`.
+
+Duplicates are dropped. Skills and MCP servers resolve the same way.
+Repositories do not: a pick on the run, the workflow's base or the step is
+the whole set, and the project's repositories are used only when none of
+them names one.
+
 ### Integration gating
 
 A tool that needs an integration only appears once that integration is
@@ -125,11 +142,12 @@ individual tools.
 ## Personal MCP
 
 You can also connect your own AI agent (Claude Code, Cursor, …) to Aixle
-directly, without a session, using a personal token from your profile — it
-gets exactly your access level. See the MCP servers page.
+directly, without a session, by signing in or with a personal token from
+your profile — it gets exactly your access level. See [MCP servers](/docs/mcp).
 
 ## See also
 
-- **MCP servers** — the transport that delivers tools, and the personal token.
-- **Workflows** — attaching tools to steps.
-- **Integrations** — connecting Slack, Coder, GitHub and more.
+- [MCP servers](/docs/mcp) — the transport that delivers tools, and the personal token.
+- [Agents](/docs/agents) — how tools fit into the assembled session context.
+- [Workflows](/docs/workflows) — attaching tools to steps.
+- [Integrations](/docs/integrations) — connecting Slack, Coder, GitHub and more.

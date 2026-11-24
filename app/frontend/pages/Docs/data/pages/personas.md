@@ -21,8 +21,8 @@ that, not the persona.
 
 - **Create** a persona, give it a name and its instructions.
 - **Search** the list by name.
-- Each persona carries a **scope badge**: defined in this project, or shared
-  from the company.
+- A persona belongs to the project it is created in; other projects do not see
+  it.
 - Pick one in a workflow step's Resources section.
 
 > info A persona describes behaviour, not permission. What an agent can reach —

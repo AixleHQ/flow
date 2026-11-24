@@ -109,8 +109,8 @@ and test fall back to fixed non-secret values.
 | `SESSION_PINNED_RELEASE_ENABLED` | no | `true` | `false` stops the reconciler from ending a pinned reservation on its own, leaving it for an operator. A reservation is pinned when a create or start never reported its outcome; the slot is held so a late Pod cannot land on someone else's. |
 | `SESSION_PINNED_RELEASE_CONFIRMATION_MINUTES` | no | `5` | How long the reconciler must keep re-proving that no workload exists before it abandons such an operation and releases the slot. A pass that sees the workload again resets the clock. |
 
-A row in `session_concurrency_limits` overrides the default for one project or
-user; edit those in the admin, not here.
+A row in `session_concurrency_limits` sets the limit of one project (in place
+of the default above) or one company; edit those in the admin, not here.
 
 ## Internal URLs & routing
 
@@ -580,3 +580,8 @@ files and CI build args:
   now read through the Rails cache with a fixed 10-second TTL, and an admin
   change drops the cached values at once. Left set, they are reported at boot
   as `FEATURE_*` variables no flag declares.
+- SESSION_CONCURRENCY_LIMIT — a session ceiling for the whole installation. A
+  project's limit is a reservation drawn from its company's own limit, which
+  is set in the admin.
+- SESSION_USER_CONCURRENCY_DEFAULT — sessions started outside a project are
+  not queued, so there is no per-user default.

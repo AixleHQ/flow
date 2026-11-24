@@ -29,7 +29,7 @@ The persona runs on top of one of eight LLM CLIs — `claude_code`,
 `cursor_cli`, `codex`, `gemini_cli`, `antigravity_cli`, `grok`, `kiro_cli`, or `copilot_cli`. Each runs in its own Docker
 image and needs its own per-user credentials, configured on the
 **Profile** page. The full runtime table, credential requirements, and
-cost-tracking notes live on the dedicated Runtimes page.
+cost-tracking notes live on the dedicated [Runtimes](/docs/runtimes) page.
 
 ## The container the agent runs in
 

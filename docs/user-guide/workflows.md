@@ -13,7 +13,7 @@ agent session in one container.
 
 | Field                            | Description                                                                 |
 | -------------------------------- | --------------------------------------------------------------------------- |
-| `name`                           | Unique within its scope (Company or Project).                                |
+| `name`                           | Unique within its project.                                                   |
 | `description`                    | What the workflow accomplishes.                                              |
 | `config.base_tool_ids`           | Tools always available to every step in this workflow.                       |
 | `config.base_skill_ids`          | Skills always injected into agent context.                                   |
@@ -34,7 +34,7 @@ One Step = one agent session = one container = one major deliverable.
 | `agent_id`             | Which agent persona runs this step.                                      |
 | `allow_non_interactive`| Can the step run with no user in the loop.                                |
 | `skip_policy`          | `never`, `if_outputs_exist`, or `manual`.                                |
-| `on_failure`           | `retry`, `skip`, or `fail` (default). A step that stopped on its owner's agent quota is not retried — the same account would fail again — except in a run a team handed out, where the retry goes to the team's next member. |
+| `on_failure`           | `retry`, `skip`, or `fail` (default). A step that stopped on its owner's agent quota is not retried — the same account would fail again. In a run a team handed out, a quota stop or a failed login hands the step to the team's next member whatever this says, without using a retry. |
 | `max_retries`          | Times a failed step starts again when `on_failure` is `retry`: 1–10.     |
 | `tool_ids`             | Tools available in this step (merged with workflow base).                |
 | `skill_ids`            | Skills injected (merged with workflow base).                             |
@@ -104,10 +104,7 @@ A `WorkflowRun` can be triggered by:
 - a schedule, a Slack message, or an inbound webhook,
 - the API (`POST /company/:company_slug/projects/:project_id/workflow_runs`).
 
-> All of these flow through one event pipeline, and each off-board trigger carries a
-> `subject_policy` deciding whether the run gets a board task. The in-app docs page
-> **Triggers and Gates** (`/docs/triggers-and-gates`) has the full model — including
-> why a CI **gate** is not a trigger.
+> All of these flow through one event pipeline, and each off-board trigger carries a `subject_policy` deciding whether the run gets a board task. See [Triggers and Gates](triggers-and-gates.md) for the full model — including why a CI **gate** is not a trigger.
 
 ## Approval gates and human-in-the-loop
 
@@ -194,10 +191,8 @@ workflow runs the new version from then on. To try a change first, work in a
 - The draft opens in the same builder, under the same workflow's address, with a
   banner saying so. Save it as often as you like; triggers and columns keep
   running the live version.
-- **Test run** starts the draft like any run. It is a real run — its agents push,
-  comment and message with your credentials — except that a card it moves into
-  a column does not start that column's workflow. Choose the custom mode in the
-  run drawer to start each step yourself. The run page says it ran the draft and
+- **Test run** starts the draft like any run. Choose the custom mode in the run
+  drawer to start each step yourself. The run page says it ran the draft and
   gives the draft's own version numbers (`draft v2`), which are not the live
   workflow's. In **Sessions & Runs** a draft's test runs are listed under the
   workflow, named `<workflow> (draft)`.
@@ -207,6 +202,8 @@ workflow runs the new version from then on. To try a change first, work in a
   someone saved the live workflow after the draft was made, Apply says so first:
   **Apply anyway** replaces their change too.
 - **Discard draft** closes it and leaves the live workflow as it was.
+
+> A test run is a real run: its agents push, comment and message with your credentials. The only thing it leaves out is the workflow of a board column it moves a card into, which does not start.
 
 A workflow has at most one draft, shared by everyone who can edit the workflow.
 Triggers belong to the live workflow, so a draft has none. Agents, skills,

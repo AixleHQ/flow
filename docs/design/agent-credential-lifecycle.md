@@ -4,7 +4,7 @@
 `artempartos/harness-cred-refresh-strategy`). Each section below marks what has landed and
 what has not.
 **Date:** 2026-09-17
-**Scope:** the seven agent runtimes in `CompanyMembership::AVAILABLE_AGENTS`, their stored
+**Scope:** the eight agent runtimes in `CompanyMembership::AVAILABLE_AGENTS`, their stored
 credentials, and everything that reads, refreshes, injects or recaptures them.
 
 Related: `docs/design/oauth-implementation.md` (as-built OAuth guide),
@@ -15,8 +15,9 @@ Related: `docs/design/oauth-implementation.md` (as-built OAuth guide),
 
 ## 1. The three questions this answers
 
-1. **Does every harness actually refresh?** Six of seven do since 2026-09-24; `gemini_cli`
-   stores an API key, which has nothing to refresh. Each runtime declares why in
+1. **Does every harness actually refresh?** Six of eight do since 2026-09-24; `gemini_cli`
+   stores an API key, which has nothing to refresh, and `copilot_cli` (added 2026-11-11, #684)
+   stores a GitHub token it declares with no expiry and no refresh. Each runtime declares why in
    `BaseAdapter#credential_lifecycle`, pinned by the contract test.
 2. **Why do sessions that end in the middle lose their credential, and why can the sweep not
    fix it?** Because the grant has more than one holder and only the *container* writes back —
@@ -48,6 +49,7 @@ Four mechanisms, each independently correct, none aware of the others:
 | `antigravity_cli` | `token.{access_token,refresh_token,expiry}` | yes, consumer login only | **yes** — `oauth2.googleapis.com/token` with agy's consumer client (measured 2026-09-24: 3599s, refresh token not rotated), when `Settings.agents.antigravity` holds the client | us + container | Cloud-project login's client unverified: no expiry published, CLI renews it |
 | `grok` | per-scope `{key, refresh_token, expires_at, oidc_issuer}` | yes | **yes** — `auth.x.ai/oauth2/token`, public client = the scope key's client id (`key` is the access token, 6h) | us + container | rotation not measured, declared `:rotating`; pre-OIDC logins without a refresh token are condemned at their expiry |
 | `gemini_cli` | API key (encrypted blob) | no | n/a | n/a | none — static by design |
+| `copilot_cli` | the GitHub token from `copilot login`'s `authTokens` (`gho_`, `ghu_` or `github_pat_`), with its host, login and kind | no | no | n/a | none declared — the adapter keeps `BaseAdapter#credential_lifecycle`'s default (`expiry: :none`, `refresh: :none`) |
 
 Sources: `app/services/agents/*_adapter.rb`, `AgentCredential::REFRESHABLE_AGENT_TYPES`
 (`app/models/agent_credential.rb:53`), and the protocol notes in
@@ -255,7 +257,7 @@ to a vendor is not working until it has been seen working on live traffic.
 ### Layer 2 — single writer in production (the core fix) — **2a and 2b landed, 2c open**
 
 **2a. Live write-back.** The container already runs the watcher
-(`docker/shared/watcher/index.js`), which already watches an auth path and already knows the
+(`docker/base/watcher/index.js`), which already watches an auth path and already knows the
 agent type. Extend it to watch the adapter's `auth_file_paths` **in agent sessions**, debounce
 a few seconds, and POST the file contents to a new endpoint:
 

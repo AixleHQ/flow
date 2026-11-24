@@ -1,10 +1,12 @@
 # Plans & limits
 
-> **This page is about Aixle Flow hosted by us.** If your company runs Flow on its
-> own servers, nothing here applies — your operator sets the limits and nobody is
-> billed. If you bought Flow through AWS Marketplace, see
+> **This page is about Aixle Flow hosted by us and paid for by card.** If your
+> company runs Flow on its own servers, nothing here applies — your operator sets
+> the limits and nobody is billed. If you bought Flow through AWS Marketplace,
+> hosted by us or installed in your own AWS account, see
 > [AWS Marketplace billing](/docs/aws-marketplace-billing) instead: AWS invoices
-> you, and there is no free trial or card here.
+> you, and there is no free trial or card. Where it is offered, **Pay via AWS
+> Marketplace** on **Settings → Billing** moves a hosted workspace to AWS billing.
 
 ## What you pay for
 

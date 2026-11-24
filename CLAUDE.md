@@ -7,6 +7,33 @@ Guidance for AI agents working in this repository.
 `docs/index.md` is the index of all architecture/design/research docs. Whenever you
 add, remove, or move a document under `docs/`, update `docs/index.md` in the same change.
 
+## Keeping docs in step with the code
+
+People and agents act on what the docs say, so a change is finished only when every
+place that states the changed fact says the same thing. Same change, same PR.
+
+- **Code → docs.** When you rename, remove or change something a reader acts on — an
+  env var or its default, a route or webhook URL, an agent tool, a UI label or where a
+  screen lives, a setting, a limit, a state, a runtime — search for the old name before
+  you finish and fix every hit:
+  `grep -rn '<old name>' docs references app/frontend/pages/Docs/data/pages`.
+  An empty result is the check passing, not a step to skip.
+- **Mirror pairs.** The `/docs` portal serves `app/frontend/pages/Docs/data/pages/<name>.md`,
+  not `docs/`. `docs/user-guide/`, `docs/reference/` and `docs/product/` hold hand-kept
+  copies of those pages, mostly under the same file name; the exceptions are
+  `reference/api.md` ↔ `api-guide.md`, `reference/cli.md` ↔ `cli-ref.md`,
+  `reference/configuration.md` ↔ `config-schema.md`, `reference/index.md` ↔ `reference.md`,
+  `user-guide/index.md` ↔ `user-guide.md` and `quickstart.md` ↔ `quick-start.md`. Edit both
+  files of a pair together. They may differ only in link form (relative `.md` links in
+  `docs/`, `/docs/<slug>` or plain text in the portal), never in content.
+- **Design docs.** When a designed feature ships, its doc says so at the top
+  (`Built <date> (#PR)`), and where the build departs from the proposal goes into the doc
+  in the same PR. A dropped proposal says it was dropped. Research reports
+  (`docs/research/`, `docs/planning-artifacts/research/`) are dated snapshots: leave them.
+- **One fact, one home.** A list that more than one doc needs (runtimes, trigger sources,
+  env vars) lives in one place and the others link to it. Where a doc does restate it,
+  the change updates every copy.
+
 ## Before pushing a branch or opening/updating a PR
 
 Run the cheap checks locally, then let CI run the full suite on the PR.

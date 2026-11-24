@@ -84,8 +84,8 @@ The task's attachments are available through `board_get_task_assets` (they are
 not mounted in the container).
 
 This is the **BoardContext** builder — one of the layers in the agent
-context stack. See the Agents page (How context is built) for the full
-stack.
+context stack. See [How context is built](/docs/agents#how-context-is-built)
+for the full stack.
 
 ## Task IDs
 

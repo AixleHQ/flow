@@ -13,7 +13,7 @@ agent session in one container.
 
 | Field                            | Description                                                                 |
 | -------------------------------- | --------------------------------------------------------------------------- |
-| `name`                           | Unique within its scope (Company or Project).                                |
+| `name`                           | Unique within its project.                                                   |
 | `description`                    | What the workflow accomplishes.                                              |
 | `config.base_tool_ids`           | Tools always available to every step in this workflow.                       |
 | `config.base_skill_ids`          | Skills always injected into agent context.                                   |
@@ -67,6 +67,8 @@ Step A ┤                   ├── Step D (merge)
 A step's starting context summarizes only the steps it depends on, directly or
 through others, each from its latest completed or skipped attempt. In the diagram,
 Step D gets A, B and C; Step B gets only A, never C, which runs beside it.
+For spec-first workflows and the context budget, see
+`docs/user-guide/token-efficient-workflows.md` in the repository.
 
 Aixle Flow uses **Temporal** to orchestrate this — runs survive process
 restarts, retries are durable, and you can attach to a long-running

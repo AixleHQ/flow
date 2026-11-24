@@ -173,9 +173,8 @@ agent's system prompt.
 
 **Runtimes** — the CLI that executes a session: `claude_code`, `cursor_cli`,
 `codex`, `gemini_cli`, `antigravity_cli`, `grok`, `kiro_cli`, `copilot_cli`. Each user connects
-their own credentials per runtime; a step can pin one with
-`required_agent_runtime` (`claude_code`, `cursor_cli`, `codex`, `gemini_cli`,
-`antigravity_cli`).
+their own credentials per runtime; a step can pin any of them with
+`required_agent_runtime`.
 
 ---
 
@@ -211,8 +210,8 @@ by users in the UI and never returned by any tool.
 
 **Integrations**: `github`, `gitlab`, `bitbucket`, `slack`, `teams`, `azure_devops`, `jira`, `coder`, `linear`, `youtrack`, `insights`.
 Users connect them in the browser (`get_integration_setup_url`). Azure DevOps,
-`jira`, `linear` and `youtrack` connections, and GitHub Projects, map their
-projects (Linear: teams) in as task trackers. `insights` is the company's
+`jira`, `linear` and `youtrack` connections, GitHub Projects and GitLab issues map
+their projects (Linear: teams) in as task trackers. `insights` is the company's
 connection to Aixle Insights, made by a company admin with an Insights owner's
 pairing code; each project then chooses to forward its agents' telemetry there.
 

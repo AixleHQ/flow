@@ -30,8 +30,9 @@ on exactly these and `None` on everything else:
 - Prices
 - Customers
 - Checkout Sessions
-- Billing Portal
 - Subscriptions
+- Invoices — the application holds, finalizes and charges the final invoice
+  of a cancellation (see *The final invoice* below)
 - Webhook Endpoints
 
 A restricted key is the better habit: it is revoked with one button and is

@@ -68,14 +68,33 @@ the numbers come from depends on the runtime:
 If `cost_cents` is `null` on a finished session, the runtime didn't emit
 usage events; check **Admin → Session Logs**.
 
+## Usage limits
+
+The Usage limits card on the Profile page shows each runtime's *remaining*
+subscription quota. A runtime whose login bills per token (an API key, a
+Bedrock connection) has no subscription window, so it is omitted from the card.
+The source depends on the runtime:
+
+| Runtime           | Remaining-quota source                                                                 |
+| ----------------- | -------------------------------------------------------------------------------------- |
+| `claude_code`     | Anthropic's OAuth usage endpoint — 5-hour and weekly windows (subscription logins only). |
+| `codex`           | ChatGPT's usage endpoint — primary/secondary windows and monthly spend (ChatGPT logins only). |
+| `cursor_cli`      | Cursor's dashboard `usage-summary` — plan allowance, Cursor Models / Other Models, on-demand. |
+| `grok`            | The CLI's billing endpoint — weekly credit and monthly spend (signed-in sessions only). |
+| `kiro_cli`        | Kiro's credit allowance for the billing period, from its control-plane API.            |
+| `antigravity_cli` | A snapshot of `agy`'s own `/usage` view, captured at the end of each session.          |
+| `gemini_cli`      | — (API-key only; no subscription quota to read).                                       |
+| `copilot_cli`     | — (one Copilot plan, no per-window quota reading).                                     |
+
 ## MCP support
 
 Every runtime's adapter writes the CLI's own MCP configuration, so all
 eight reach the same MCP servers. The internal `aixle-tools` server
 (board tools, progress, session lifecycle) is always connected
-regardless of runtime — see the MCP servers page.
+regardless of runtime — see [MCP servers](/docs/mcp).
 
 ## See also
 
-- **Agents** — personas, the container layout, and how context is assembled.
-- **MCP servers** — the tool layer every runtime shares.
+- [Agents](/docs/agents) — personas, the container layout, and how context
+  is assembled.
+- [MCP servers](/docs/mcp) — the tool layer every runtime shares.

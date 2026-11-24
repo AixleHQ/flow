@@ -62,11 +62,8 @@ npx bmad-method install \
 #### What the installer does automatically
 
 1. Copies `_bmad/` (core + selected modules) into `--directory`
-2. Generates **skills** into IDE-specific folders:
-   - Cursor: `.cursor/skills/<name>/SKILL.md`
-   - Claude Code: `.claude/skills/<name>/SKILL.md`
-   - Codex: `.agents/skills/<name>/SKILL.md`
-   - Gemini: `.gemini/skills/<name>/SKILL.md`
+2. Generates **skills** into IDE-specific folders, `<dir>/<name>/SKILL.md` (the directories per
+   runtime are in §3)
 3. Patches `config.yaml` with the user settings
 4. Generates manifests (agent-manifest.csv, workflow-manifest.csv, etc.)
 
@@ -82,10 +79,17 @@ npx bmad-method install \
 
 | Aixle `agent_type` | BMAD `--tools` flag | Skills directory |
 |---------------------|---------------------|----------------------------------|
-| `cursor_cli` | `cursor` | `.cursor/skills/<name>/SKILL.md` |
+| `cursor_cli` | `cursor` | `.agents/skills/<name>/SKILL.md` |
 | `claude_code` | `claude-code` | `.claude/skills/<name>/SKILL.md` |
 | `codex` | `codex` | `.agents/skills/<name>/SKILL.md` |
-| `gemini_cli` | `gemini` | `.gemini/skills/<name>/SKILL.md` |
+| `gemini_cli` | `gemini` | `.agents/skills/<name>/SKILL.md` |
+| `antigravity_cli` | `gemini` | `.agents/skills/<name>/SKILL.md` |
+| `grok` | `claude-code` | `.claude/skills/<name>/SKILL.md` — BMAD has no `grok` platform; Grok CLI reads Claude Code's skills |
+| `kiro_cli` | `kiro` | `.kiro/skills/<name>/SKILL.md` |
+| `copilot_cli` | `github-copilot` | `.agents/skills/<name>/SKILL.md` |
+
+The source is `BmadMethodInjector::AGENT_TYPE_TO_BMAD_TOOL`. Since `bmad-method` 6.6.0, Cursor, Codex
+and Gemini install into `.agents/skills`.
 
 ### 4. Architecture
 
@@ -159,7 +163,11 @@ class BmadMethodInjector
     "cursor_cli" => "cursor",
     "claude_code" => "claude-code",
     "codex" => "codex",
-    "gemini_cli" => "gemini"
+    "gemini_cli" => "gemini",
+    "antigravity_cli" => "gemini",
+    "grok" => "claude-code",
+    "kiro_cli" => "kiro",
+    "copilot_cli" => "github-copilot"
   }.freeze
 
   BMAD_HIDDEN_PATHS = %w[

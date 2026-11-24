@@ -1,6 +1,6 @@
 # Azure DevOps integration — technical design
 
-**Status:** Proposed; core release under implementation.  
+**Status:** Built 2026-09-14 (#251): the core release and the parity extension (§12 steps 1–6). Where the build departs: Boards work items are not Azure-specific tools; since #366 they go through the provider-neutral `tracker_*` tools (§8.1).  
 **Date:** 2026-09-11 (revised after a code/API review — see §7 credential-endpoint authentication, §6.2 `Repository` changes, §1 MSA boundary)  
 **Code baseline:** `f9521f19`  
 **Audience:** Backend, frontend, and runtime engineers implementing the integration.
@@ -382,7 +382,7 @@ This does NOT widen what an agent may do. Injection decides which tools are *off
 
 ### 8.1 Core tool contracts
 
-All names below are proposed. `repository_id` always means an Aixle repository ID; `pull_request_id` and `work_item_id` mean Azure IDs.
+`repository_id` always means an Aixle repository ID; `pull_request_id` and `work_item_id` mean Azure IDs.
 
 | Tool                                      | Main input                                                                         | Result / behavior                                                               |
 | ----------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |

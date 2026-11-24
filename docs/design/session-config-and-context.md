@@ -1,7 +1,10 @@
 # Session Config & Context
 
 **Date:** 2026-02-28
-**Status:** Draft
+**Status:** Built 2026-03-02 (commit `2b11e173f`, no PR): both stages, including migration phases 1–5 of §2.8.3. Where the build departs:
+the workflow-step half of §1.6.3 lives in `SessionService.build_for_workflow_step` (runtime priority chain, then
+`SessionConfigResolver.resolve`), which `LaunchStepSessionActivity` only calls; and since #309 the task prompt is not
+an `AGENT_PROMPT` env var but a file (§2.8.2). §2.1 and the "Before" half of §2.8.1 describe the code before the build.
 **Author:** Artem Petrov + AI Analysis
 
 ---
@@ -21,8 +24,7 @@ caller never decides which session type it is dealing with.
 
 2. **Context construction** — `SessionContextConstructor.build(session)` decides
    *what the agent knows*: it assembles the XML-structured context prompt (the
-   `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` file and, where relevant, the
-   `AGENT_PROMPT` env var) from a pipeline of composable builders, each
+   `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` file) from a pipeline of composable builders, each
    contributing prioritized sections.
 
 The first stage feeds the second: the resolved config (runtime, persona,
@@ -437,8 +439,12 @@ The builder, the API and templates still send the base lists inside `config`;
 
 ### 1.6.3 LaunchStepSessionActivity — use the Resolver
 
+Built in `SessionService.build_for_workflow_step`, which `LaunchStepSessionActivity` calls: it picks the
+runtime by the full chain (step, run, membership default, latest credential, `claude_code`), then runs
+`SessionConfigResolver.resolve(session)`.
+
 ```ruby
-# Now:
+# Before the build:
 agent_type = workflow_run.agent_runtime || "claude_code"
 # tools, skills, mcp_servers are taken only from the step
 
@@ -705,8 +711,7 @@ SessionContextConstructor.build(session)
   │
   └─→ Renderer.render(sections, format: :xml_markdown)
         │
-        ├─→ Context file (CLAUDE.md / AGENTS.md / GEMINI.md)
-        └─→ AGENT_PROMPT env var (for non-interactive / workflow steps)
+        └─→ Context file (CLAUDE.md / AGENTS.md / GEMINI.md)
 ```
 
 ### 2.4.2 Value Objects
@@ -1619,7 +1624,7 @@ Which builders run for which types of sessions:
 ### 2.8.1 Where the Constructor Fits
 
 ```
-Before (current):
+Before (replaced by the build):
   AgentSessionStrategy#before_exec
     → SessionContextService.assemble_session_context
         → build_context_content (markdown)
@@ -1628,32 +1633,38 @@ Before (current):
   WorkflowStepStrategy#build_env_vars
     → build_workflow_prompt (separate markdown in AGENT_PROMPT)
 
-After (proposed):
+After (built):
   AgentSessionStrategy#before_exec
     → SessionContextService.assemble_session_context
         → SessionContextConstructor.build(session)     ← NEW: unified pipeline
         → inject_context_file (with XML-structured output)
 
   WorkflowStepStrategy#build_env_vars
-    → AGENT_PROMPT = step.instructions                  ← simplified, context is in file
+    → agent_prompt = step instructions, rendered        ← simplified, context is in file
 ```
 
-### 2.8.2 Context File vs AGENT_PROMPT Split
+### 2.8.2 Context File vs Prompt File Split
 
 | Destination | What goes there | Why |
 |-------------|----------------|-----|
 | Context file (CLAUDE.md etc.) | Everything from Constructor | Persistent, visible to agent throughout session |
-| AGENT_PROMPT env var | Only the user's initial prompt (for non-interactive) or step instructions (for workflow) | This is the "task" — what to do, not how to behave |
+| Prompt file (`/tmp/.aixle-prompt`) | Only the user's initial prompt (for non-interactive) or step instructions (for workflow) | This is the "task" — what to do, not how to behave |
 
-Key principle: **Context file = who you are + what you know + the rules. AGENT_PROMPT = what to do.**
+Key principle: **Context file = who you are + what you know + the rules. The prompt = what to do.**
+
+A non-interactive session's prompt is written to `AgentSessionStrategy::PROMPT_PATH` (`/tmp/.aixle-prompt`,
+mode 0600, owned by the agent's uid), and the CLI gets it as `"$(cat /tmp/.aixle-prompt)"`. It is not an
+environment variable: that would be part of the pod spec, readable by anyone who can read the Kubernetes API,
+and every process in the container would inherit it. `WorkflowStepStrategy#agent_prompt` supplies a step's
+rendered instructions as that prompt.
 
 ### 2.8.3 Migration Path
 
-1. **Phase 1:** Create `SessionContextConstructor` and builders, output same markdown (no XML yet)
-2. **Phase 2:** Switch `SessionContextService#build_context_content` to use Constructor
-3. **Phase 3:** Add XML tags to renderer
-4. **Phase 4:** Move workflow context from `WorkflowStepStrategy` to `WorkflowContextBuilder`
-5. **Phase 5:** Add `BoardContextBuilder`
+1. **Phase 1:** ✅ Done — Create `SessionContextConstructor` and builders, output same markdown (no XML yet)
+2. **Phase 2:** ✅ Done — Switch `SessionContextService#build_context_content` to use Constructor
+3. **Phase 3:** ✅ Done — Add XML tags to renderer
+4. **Phase 4:** ✅ Done — Move workflow context from `WorkflowStepStrategy` to `WorkflowContextBuilder`
+5. **Phase 5:** ✅ Done — Add `BoardContextBuilder`
 6. **Phase 6:** ✅ Done — `WorkflowContextAssembler` has been deleted; clean up `WorkflowStepStrategy`
 
 ## 2.9 Token Budget Considerations
@@ -1927,7 +1938,7 @@ section(tag: "board-context", priority: :important, content: text, position_hint
 |---|----------|---------|
 | 1 | Is a `<critical-rules>` sandwich needed (duplication at the end)? | Yes — the LLM remembers the beginning and end better, the "middle gets lost" |
 | 2 | XML tags or `===== CRITICAL: ... =====` markers? | XML — more structural, less ambiguity, parses better |
-| 3 | A separate AGENT_PROMPT for the workflow or everything in the context file? | Separate — context file = role/rules, AGENT_PROMPT = task |
+| 3 | A separate AGENT_PROMPT for the workflow or everything in the context file? | Separate — context file = role/rules, the prompt file = task (§2.8.2) |
 | 4 | Are nested tags needed (`<workflow><step>...</step></workflow>`)? | No — flat structure is simpler, the LLM does not get lost in nesting |
 | 5 | Is a `priority` attribute needed or is the position in the document enough? | Both — priority for validation/tests, position for LLM attention |
 | 6 | Custom instructions from the user — where? | A separate builder, priority=important, position=middle |

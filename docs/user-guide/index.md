@@ -1,5 +1,9 @@
 # User Guide
 
+> Using Flow rather than installing it? Start with
+> **What Flow is** (`/docs/using-flow` in the app). This section describes how Flow works
+> underneath — containers, DAGs, credentials — for the people who run it.
+
 Aixle Flow turns AI coding agents into a team workflow. Every run, whatever
 started it, takes the same path:
 
@@ -32,8 +36,7 @@ Read in any order:
 - **[Configuration](configuration.md)** — env vars, OAuth, agent credentials, and other knobs.
 - **[Configuring sign-in methods](configuring-sso.md)** — Google, Microsoft Entra and per-company OpenID Connect on your installation.
 
-If you've just installed Aixle Flow and want to see something move, go
-to [Quickstart](../quickstart.md) first.
+If you've just installed Aixle Flow and want to see something move, see the [Quick start](../quickstart.md) page first.
 
 ## Mental model
 

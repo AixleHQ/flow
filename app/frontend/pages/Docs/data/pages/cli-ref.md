@@ -1,7 +1,21 @@
 # CLI reference
 
-Aixle Flow exposes its lifecycle through a single `Makefile`. Run any
-of these from the repo root.
+Aixle Flow exposes its lifecycle through a single `Makefile`. Where a
+target runs depends on what it calls:
+
+- **On the host**, from the repo root: everything under *Lifecycle* and
+  *Images*, and `make restore-dump`. These drive Docker; `make setup` and
+  `make build-agents` also need `jq`.
+- **Inside the `web` container**: `make deps`, `make db-prepare`,
+  `make db-reset` and everything under *Checks and linters*. These call
+  `bundle`, `yarn` and `rails` directly, and those exist only in the
+  container.
+
+With the stack up, run a container target through it:
+
+```bash
+docker compose exec -T web make <target>
+```
 
 ## Lifecycle
 
@@ -16,7 +30,7 @@ of these from the repo root.
 
 | Command            | What it does                                                       |
 | ------------------ | ------------------------------------------------------------------ |
-| `make deps`        | `bundle install` + `yarn install` inside the web container.        |
+| `make deps`        | `bundle install` + `yarn install`.                                 |
 | `make db-prepare`  | `db:create db:migrate db:seed`.                                    |
 | `make db-reset`    | `db:drop db:create db:migrate db:seed`. **Destroys local data.**   |
 | `make restore-dump`| Replace the local dev database with `/db_dumps/latest.sql.gz` (refuses any other database). |
@@ -26,7 +40,7 @@ of these from the repo root.
 | Command            | What it does                                                                |
 | ------------------ | --------------------------------------------------------------------------- |
 | `make check`       | The gate: every check CI runs (same as `check_all`), nothing autocorrected. |
-| `make check_all`   | Run all checks in parallel (this is what CI runs), never short-circuit, print the full log of any failed check, exit non-zero if any fail. |
+| `make check_all`   | Run all checks in parallel, never short-circuit, print the full log of any failed check, exit non-zero if any fail. |
 | `make lint`        | All linters: eslint, rubocop, brakeman, typescript — no autocorrect.        |
 | `make fix`         | Autocorrect: rubocop -a, eslint --fix, steiger --fix.                       |
 | `make test`        | Rails tests (`bundle exec rails test`).                                     |
