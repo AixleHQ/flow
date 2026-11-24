@@ -39,6 +39,8 @@ governance, community health — carry none.
   downloaded or called, and a Copilot session now keeps this log at all.
 
 ### Fixed
+- **Sessions & Runs**: a running session shows an amber "Running" status in the all-projects
+  and project lists, on its page and in Usage. It used to read green, like a finished one.
 - **Aixle Builder**: restoring a suspended build, and the "Continued in session" link on a
   restored one, open the build's session. They used to lead to a page that does not exist.
 - **Admin**: deleting a company that has set up SCIM provisioning works again. It used to
