@@ -120,6 +120,13 @@ class WorkspaceOnboardingFormTest < ActiveSupport::TestCase
     assert_includes built.errors[:email].to_sentence, "is not an email address"
   end
 
+  test "a malformed address reports a single error" do
+    built = stranger(email: "foo")
+
+    assert_not built.valid?
+    assert_equal [ "is not an email address" ], built.errors[:email]
+  end
+
   # The allowance is chosen by the path that creates a company, never by the
   # column: one that stopped after a hundred worker-hours because a default said
   # so would be a surprise nobody would connect to anything.

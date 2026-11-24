@@ -173,10 +173,7 @@ class User < ApplicationRecord
   # Validations
   validates :email, presence: true,
                     uniqueness: { case_sensitive: false },
-                    format: { with: URI::MailTo::EMAIL_REGEXP }
-  # Only on an otherwise valid address, so a malformed one reports a single error.
-  validates :email, format: { with: EmailAddress::DOTTED_DOMAIN },
-                    if: -> { email.to_s.match?(URI::MailTo::EMAIL_REGEXP) }
+                    format: { with: EmailAddress::FORMAT }
   validates :name, presence: true
   validates :password, length: { minimum: PASSWORD_MIN_LENGTH }, if: :password_digest_changed?, allow_blank: true
 
