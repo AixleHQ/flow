@@ -42,14 +42,16 @@ const FLOW_LOW_WATER = 4;
 const DEFAULT_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 15_000, 15_000, 15_000, 15_000, 30_000, 30_000];
 
 const OPEN = 1;
-// ttyd closes with 1000 when the command exits (the tmux session ended); any
-// other close is the connection failing, which is worth retrying.
+// ttyd closes with 1000 when the command exits (the tmux session ended), but a relay
+// restart drains the stream the same way, so a 1000 close is retried once. Another 1000
+// with no output in between is the end of the session.
 const CLOSE_NORMAL = 1000;
 
 export class TtydConnection {
   private readonly options: TtydConnectionOptions;
   private socket: SocketLike | null = null;
   private retries = 0;
+  private normalCloses = 0;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private opened = false;
   private disposed = false;
@@ -86,14 +88,21 @@ export class TtydConnection {
     socket.addEventListener('message', (event) => {
       if (socket !== this.socket) return;
       const frame = decodeFrame((event as MessageEvent<ArrayBuffer>).data);
-      if (frame.type === 'output') this.write(frame.data);
+      if (frame.type === 'output') {
+        this.normalCloses = 0;
+        this.write(frame.data);
+      }
     });
 
     socket.addEventListener('close', (event) => {
       if (socket !== this.socket) return;
       this.socket = null;
       const delays = this.options.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
-      const retryable = (event as CloseEvent).code !== CLOSE_NORMAL && this.retries < delays.length;
+      let retryable = this.retries < delays.length;
+      if ((event as CloseEvent).code === CLOSE_NORMAL) {
+        this.normalCloses += 1;
+        retryable = retryable && this.normalCloses <= 1;
+      }
       if (this.disposed || !retryable) {
         this.options.onStatus('closed');
         return;
@@ -107,6 +116,7 @@ export class TtydConnection {
   /** A manual reconnect after the connection gave up; restarts the retry budget. */
   reconnect(): void {
     this.retries = 0;
+    this.normalCloses = 0;
     this.connect();
   }
 
