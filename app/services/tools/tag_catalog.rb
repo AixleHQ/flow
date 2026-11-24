@@ -37,9 +37,8 @@ module Tools
       # thing — and let someone attach half a working set by hand. Azure Boards
       # work items are reached through the :tracker tools.
       Entry.new(tag: :azure_devops, label: "Azure DevOps", ui_visible: false),
-      # Hidden for the same reason: the pull_request_* tools arrive with a GitLab
-      # or Bitbucket repository attached to the session.
-      Entry.new(tag: :pull_requests, label: "Pull requests", ui_visible: false),
+      # Chosen like any other tools: a workflow or a step attaches or removes the set.
+      Entry.new(tag: :pull_requests, label: "Pull requests", ui_visible: true),
       Entry.new(tag: :assets, label: "Assets", ui_visible: true),
       # Read-only supervision of the OTHER sessions in the project. Its own tag
       # rather than the personal server's :sessions, so a user-audience tool can

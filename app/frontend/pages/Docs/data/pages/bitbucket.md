@@ -17,7 +17,7 @@ Either way, from then on:
 - agents clone, fetch and push them in their sessions, without a token ever
   sitting in the checkout;
 - agents open, review, comment on and merge pull requests with the
-  `pull_request_*` tools;
+  `pull_request_*` tools, when the workflow has them;
 - a CI gate on a board task waits for the pull request's builds.
 
 Bitbucket Data Center is not supported. Bitbucket issues are not a tracker —
@@ -134,12 +134,18 @@ anonymously, so agents can read it but cannot push or open pull requests.
 - Flow clones the source branch with every branch and the full commit history.
 - Every `git fetch` and `git push` asks Flow for a credential through the
   credential helper; nothing goes into `.git/config` or the remote URL.
-- There is no Bitbucket CLI. Agents use the `pull_request_*` tools.
+- There is no Bitbucket CLI. Agents use the `pull_request_*` tools, so add them
+  to the workflow (see below).
 
 ## Pull-request tools
 
-Sessions that hold a Bitbucket, GitHub or GitLab repository get these tools
-automatically — the same set on every host:
+The tools are one group, **Pull requests**, in the tool picker. Add the group to
+a workflow's base resources, or to a single step, as you add other tools, and
+remove it the same way; a session whose workflow does not have it has no
+`pull_request_*` tools. Workflows that existed before the group became
+attachable kept the tools. A session that isn't a workflow run, an interactive one for example, gets the tools only when the group **Pull requests** is picked in the new session form's Tools; they are no longer added on their own. The tools work on a session that holds a Bitbucket,
+GitHub or GitLab repository, and say so when it holds none. It is the same set
+on every host:
 
 | Tool | What it does |
 | --- | --- |
@@ -151,7 +157,7 @@ automatically — the same set on every host:
 | `pull_request_update` | Title, description, target branch, draft, close or reopen |
 | `pull_request_list_comments` | Comments, with threads and inline positions |
 | `pull_request_add_comment` | A comment, a reply, or an inline comment on a file and line |
-| `pull_request_review` | Approve, withdraw an approval, or request changes — never approve a pull request the same connection opened |
+| `pull_request_review` | Approve, withdraw an approval, or request changes — never approve a pull request the same identity opened |
 | `pull_request_merge` | Merges, only if the head commit is still the one the agent names |
 
 Each write is recorded, so an agent repeating a call after a timeout gets the
@@ -160,6 +166,16 @@ first result instead of a second pull request or comment.
 agent reviewed, never bypasses approvals or branch restrictions, and can be
 turned off for a connection. Bitbucket may finish a merge in the background;
 the tool then reports it as pending.
+
+### Acting as a person
+
+By default the write tools act as the connection: on Bitbucket, the app's bot (or the access token's bot). To make a pull request, comment, review or merge a person's own, the agent passes `user_id`, the id of a company member (`board_list_members` lists them). Flow then makes that one call with the person's own Bitbucket token, which the agent never sees. It works under the same conditions as `bitbucket_user_token_for`:
+
+- the person is a member of the project;
+- they connected their Bitbucket account under **Profile → Connected accounts**, and the connection is current;
+- they turned on the switch for this project: **in their own tasks** when they are the person the session runs for, otherwise **in tasks that aren't theirs**.
+
+Otherwise the call is refused with the same message as the token tools, and nothing is written. A retry with the same `operation_key` returns the first result and cannot change who it was made as. A person cannot approve, as themselves, a pull request they opened this way. Merging still obeys the connection's merge switch.
 
 ---
 

@@ -10,8 +10,6 @@ module InternalTools
                   "session, most recently updated first. Returns JSON: {repository_id, pull_requests: [{number, url, " \
                   "title, state, draft, source_branch, target_branch, head_sha, author, …}], next_cursor}."
       tags :pull_requests
-      inject_when :pull_request_repositories_attached
-      user_attachable false
       requires_integration :pull_requests
       unavailable_message Concerns::PullRequestContext::UNAVAILABLE
       read_only

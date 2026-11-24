@@ -84,6 +84,18 @@ module PullRequests
         end
       end
 
+      test "acting as a person sends that person's token and mints nothing for the connection" do
+        acting = PullRequests::Acting.new(user_id: 7) { { login: "octo-user", token: "ghu_person" } }
+        stub_request(:get, "#{REPO}/pulls/5").with(headers: { "Authorization" => "token ghu_person" })
+                                             .to_return(json(pr(5)))
+
+        PullRequests::Provider.for(@integration, acting: acting).get(@repository, 5)
+
+        assert_requested :get, "#{REPO}/pulls/5", headers: { "Authorization" => "token ghu_person" }
+        assert_not_requested @minted
+        assert_not_includes acting.inspect, "ghu_person"
+      end
+
       test "a PAT connection uses its own token and mints nothing" do
         pat = create(:integration, :github_pat, :active, company: @company, connected_by: @user, project: @project)
         repository = create(:repository, integration: pat, scope: @project, full_name: "acme/tool",

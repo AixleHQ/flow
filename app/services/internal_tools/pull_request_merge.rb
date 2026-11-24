@@ -17,8 +17,6 @@ module InternalTools
                   "means the host accepted the merge and has not finished it — read the pull request rather than " \
                   "calling this again."
       tags :pull_requests
-      inject_when :pull_request_repositories_attached
-      user_attachable false
       requires_integration :pull_requests
       unavailable_message Concerns::PullRequestContext::UNAVAILABLE
       destructive
@@ -30,12 +28,13 @@ module InternalTools
                                      "rebases the commits onto the target (linear history, new commit ids)."
       param :delete_source_branch, type: :boolean, default: false, description: "Delete the source branch after merging."
       param :message, type: :string, description: "Merge (or squash) commit message."
+      param :user_id, type: :integer, description: Concerns::PullRequestContext::USER_PARAM
       param :operation_key, type: :string, description: Concerns::PullRequestContext::OPERATION_KEY_PARAM
     end
 
     def execute
       pull_request_guard do
-        repository, provider = resolve_target!
+        repository, provider = resolve_target!(as_user: true)
         unless repository.integration.pull_request_merge_enabled?
           raise PullRequests::Error.new("Merging is turned off for the #{repository.integration.name} connection",
                                         code: "permission_denied")
@@ -45,7 +44,7 @@ module InternalTools
         number = provider.number_of(repository, params[:pull_request])
         payload = { repository_id: repository.id, pull_request: number, expected_head_sha: params[:expected_head_sha],
                     strategy: params[:strategy] }.compact
-        with_write(repository, "merge", payload, number: number) do
+        with_write(repository, provider, "merge", payload, number: number) do
           provider.merge(repository, number, expected_head_sha: params[:expected_head_sha].strip,
                                              strategy: params[:strategy].presence,
                                              delete_source_branch: params[:delete_source_branch] == true,

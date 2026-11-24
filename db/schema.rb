@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_24_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_24_112933) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1280,6 +1280,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_24_100000) do
     t.bigint "user_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "acting_user_id"
     t.index ["integration_id", "operation_key"], name: "idx_pull_request_operations_key", unique: true
     t.index ["repository_id", "pull_request_number"], name: "idx_on_repository_id_pull_request_number_59fcb5ad05"
   end
@@ -2620,6 +2621,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_24_100000) do
   add_foreign_key "projects", "users", column: "owner_id"
   add_foreign_key "pull_request_operations", "integrations", on_delete: :cascade
   add_foreign_key "pull_request_operations", "repositories", on_delete: :cascade
+  add_foreign_key "pull_request_operations", "users", column: "acting_user_id", on_delete: :nullify
   add_foreign_key "received_webhooks", "webhook_endpoints", on_delete: :cascade
   add_foreign_key "repositories", "companies", on_delete: :cascade, validate: false
   add_foreign_key "repositories", "integrations", column: ["integration_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_repositories_integration_company", validate: false

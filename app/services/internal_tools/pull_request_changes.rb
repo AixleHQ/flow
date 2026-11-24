@@ -10,8 +10,6 @@ module InternalTools
                   "and line counts. For the diff itself, fetch the branches in your checkout and use git. " \
                   "Returns JSON: {repository_id, files: [{path, old_path, status, additions, deletions}], next_cursor}."
       tags :pull_requests
-      inject_when :pull_request_repositories_attached
-      user_attachable false
       requires_integration :pull_requests
       unavailable_message Concerns::PullRequestContext::UNAVAILABLE
       read_only
