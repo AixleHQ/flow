@@ -24,16 +24,19 @@ module Bitbucket
     # A client for the person's token. It has no refresher: a 401 is the token being
     # refused, and the caller decides what that means for the connection.
     def api_for(credential)
-      Api.new(Credential.new(token: credential.access_token, kind: :access_token))
+      api_for_token(credential.access_token)
     end
 
-    # Called by the OAuth callback right after the token is stored. A failed lookup never
-    # destroys the credential: the stored identity is cleared so the new token is not
-    # paired with the previous account's, and identity_for refetches it.
-    def record_identity!(credential)
-      store_identity!(credential, fetch_profile(credential))
+    def api_for_token(access_token)
+      Api.new(Credential.new(token: access_token, kind: :access_token))
+    end
+
+    # Called by the OAuth callback with the new access token, before the credential is
+    # stored: the identity to store with it. A failed lookup fails the connection, so
+    # nothing is stored and a previous credential stays as it was.
+    def fetch_identity(access_token)
+      build_identity(fetch_profile(access_token))
     rescue Bitbucket::Error
-      credential.update!(metadata: credential.metadata.to_h.except(metadata_key))
       raise ::Oauth::TokenExchangeError, "bitbucket identity unavailable"
     end
 
@@ -44,7 +47,7 @@ module Bitbucket
       fetched_at = stored && Time.zone.parse(stored["fetched_at"].to_s)
       return stored if stored && fetched_at && fetched_at > IDENTITY_TTL.ago
 
-      store_identity!(credential, fetch_profile(credential))
+      store_identity!(credential, fetch_profile(credential.access_token))
     rescue Bitbucket::Error
       stored
     end
@@ -65,24 +68,28 @@ module Bitbucket
     # already handed out works until it expires, and the authorization stays listed in the
     # person's Atlassian account until they remove it there (design §2.5).
     def disconnect!(user)
-      OauthCredential.bitbucket_connections_of(user).destroy_all
+      OauthCredential.all_connections_of(user, PROVIDER).destroy_all
       ActAsConsent.where(user_id: user.id, provider: PROVIDER).delete_all
     end
 
-    def fetch_profile(credential)
-      api = api_for(credential)
+    def fetch_profile(access_token)
+      api = api_for_token(access_token)
       profile = api.current_user
       emails = api.user_emails
       primary = emails.find { |entry| entry[:is_primary] && entry[:is_confirmed] }
       profile.merge(commit_email: primary && primary[:email].presence)
     end
 
-    def store_identity!(credential, profile)
-      identity = {
+    def build_identity(profile)
+      {
         "id" => profile[:uuid], "nickname" => profile[:nickname], "name" => profile[:display_name],
         "avatar_url" => profile[:avatar_url], "commit_email" => profile[:commit_email],
         "fetched_at" => Time.current.iso8601
       }
+    end
+
+    def store_identity!(credential, profile)
+      identity = build_identity(profile)
       credential.update!(metadata: credential.metadata.to_h.merge(metadata_key => identity))
       identity
     end

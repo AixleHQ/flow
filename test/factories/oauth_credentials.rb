@@ -16,6 +16,7 @@ FactoryBot.define do
     # A user's own GitHub connection (docs/design/github-user-identity.md §3.3).
     trait :github_user do
       provider { "github" }
+      oauth_client factory: %i[oauth_client github_current]
       metadata { { "github_user" => { "id" => 123, "login" => "octo-user", "name" => "Octo User",
                                         "avatar_url" => "https://a.test/123", "fetched_at" => Time.current.iso8601 } } }
     end

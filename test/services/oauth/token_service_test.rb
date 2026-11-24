@@ -99,6 +99,7 @@ module Oauth
     # == fresh: a GitLab grant of a previous GITLAB_ENDPOINT ==
 
     test "does not refresh a GitLab grant issued by another instance, and does not mark it" do
+      Settings.gitlab.stubs(:oauth_client_id).returns("lab-cid")
       old_host = create(:oauth_client, :gitlab, issuer: "https://old.gitlab.example.com", token_endpoint: TOKEN_ENDPOINT)
       cred = create(:oauth_credential, :gitlab_user, owner: @user, oauth_client: old_host,
                                                      expires_at: 1.minute.from_now)
@@ -109,6 +110,24 @@ module Oauth
       assert_not_requested :post, TOKEN_ENDPOINT
       assert_equal 0, cred.reload.refresh_failure_count
       assert_predicate cred, :active?
+    end
+
+    test "does not refresh a credential of a retired client id, and does not mark it" do
+      Settings.github.stubs(:client_id).returns("Iv1.client")
+      Settings.bitbucket.oauth.stubs(:client_id).returns("bb-cid")
+      Settings.gitlab.stubs(:oauth_client_id).returns("lab-cid")
+      {
+        "github" => create(:oauth_client, client_id: "Iv1.retired", token_endpoint: TOKEN_ENDPOINT),
+        "bitbucket" => create(:oauth_client, :bitbucket, client_id: "bb-retired", token_endpoint: TOKEN_ENDPOINT)
+      }.each do |provider, client|
+        cred = create(:oauth_credential, :"#{provider}_user", owner: @user, oauth_client: client, expires_at: 1.minute.from_now)
+
+        assert_raises(Oauth::ReauthRequired) { Oauth::TokenService.fresh(cred) }
+        assert_equal 0, cred.reload.refresh_failure_count
+        assert_predicate cred, :active?
+      end
+
+      assert_not_requested :post, TOKEN_ENDPOINT
     end
 
     # == fresh: reauth-required paths ==
@@ -440,6 +459,7 @@ module Oauth
     test "a gitlab credential refreshes against the operator's host although it resolves privately" do
       Settings.gitlab.stubs(:endpoint).returns("https://gitlab.corp.internal/api/v4")
       UrlSafetyValidator.stubs(:resolved_addresses).returns([ IPAddr.new("10.0.0.5") ])
+      Settings.gitlab.stubs(:oauth_client_id).returns("lab-cid")
       client = create(:oauth_client, :gitlab)
       cred = build_credential(owner: @user, oauth_client: client, provider: "gitlab", access_token: "old",
                               refresh_token: "old-refresh", expires_at: 1.minute.from_now)
@@ -464,7 +484,8 @@ module Oauth
     # == client authentication: Bitbucket sends the client as HTTP Basic ==
 
     test "a bitbucket refresh authenticates the client with HTTP Basic and keeps it out of the body" do
-      client = build_client(client_id: "bb-key", client_secret: "bb secret/1")
+      Settings.bitbucket.oauth.stubs(:client_id).returns("bb-key")
+      client = build_client(client_id: "bb-key", client_secret: "bb secret/1", issuer: Bitbucket::AppConfig::WEB_HOST)
       cred = build_credential(owner: @user, oauth_client: client, provider: "bitbucket", access_token: "old",
                               refresh_token: "old-refresh", expires_at: 1.minute.from_now)
       basic = "Basic #{Base64.strict_encode64('bb-key:bb+secret%2F1')}"
@@ -484,7 +505,8 @@ module Oauth
     end
 
     test "a provider that does not say client_auth: :basic still sends the secret in the body" do
-      client = build_client(client_id: "gh-id", client_secret: "gh-secret")
+      Settings.github.stubs(:client_id).returns("gh-id")
+      client = build_client(client_id: "gh-id", client_secret: "gh-secret", issuer: "https://github.com/login/oauth")
       cred = build_credential(owner: @user, oauth_client: client, provider: "github", access_token: "old",
                               refresh_token: "old-refresh", expires_at: 1.minute.from_now)
       stub_token_endpoint(access_token: "new", expires_in: 3600)
@@ -535,9 +557,9 @@ module Oauth
 
     private
 
-    def build_client(client_id: "public-client", client_secret: nil)
+    def build_client(client_id: "public-client", client_secret: nil, issuer: "https://provider.test")
       client = OauthClient.new(
-        issuer: "https://provider.test",
+        issuer: issuer,
         authorization_endpoint: "https://provider.test/oauth/authorize",
         token_endpoint: TOKEN_ENDPOINT,
         client_id: client_id,

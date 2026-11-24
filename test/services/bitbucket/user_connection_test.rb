@@ -19,10 +19,10 @@ module Bitbucket
                        { email: "bee@example.com", is_primary: true, is_confirmed: true } ]
     end
 
-    test "record_identity! stores the account and its primary confirmed address" do
-      UserConnection.record_identity!(@credential)
+    test "fetch_identity returns the account and its primary confirmed address, storing nothing" do
+      identity = UserConnection.fetch_identity("bb-new-token")
 
-      identity = @credential.reload.metadata["bitbucket_user"]
+      assert_nil @credential.reload.metadata["bitbucket_user"]
       assert_equal "{6c1f0a4e-0000-4000-8000-0000000000b1}", identity["id"]
       assert_equal "bb-user", identity["nickname"]
       assert_equal "Bee Bucket", identity["name"]
@@ -34,27 +34,27 @@ module Bitbucket
       @fake.emails = [ { email: "bee@example.com", is_primary: true, is_confirmed: false },
                        { email: "alt@example.com", is_primary: false, is_confirmed: true } ]
 
-      UserConnection.record_identity!(@credential)
+      identity = UserConnection.fetch_identity("bb-new-token")
 
-      assert_nil UserConnection.commit_email(@credential.reload.metadata["bitbucket_user"])
+      assert_nil UserConnection.commit_email(identity)
     end
 
     test "the lookup is made with the person's own token" do
       Bitbucket::Api.unstub(:new)
-      Bitbucket::Api.expects(:new).with { |credential| credential.token == @credential.access_token && credential.kind == :access_token }
+      Bitbucket::Api.expects(:new).with { |credential| credential.token == "bb-new-token" && credential.kind == :access_token }
                     .returns(@fake)
 
-      UserConnection.record_identity!(@credential)
+      UserConnection.fetch_identity("bb-new-token")
     end
 
-    test "a failed lookup clears the stored identity, keeps the credential and fails the connection" do
+    test "a failed lookup fails the connection and touches no stored credential" do
       @credential.update!(metadata: { "bitbucket_user" => { "id" => "{old}", "nickname" => "previous" } })
       @fake.fail_on(:current_user, Bitbucket::Error::NotAuthorized.new)
 
-      assert_raises(Oauth::TokenExchangeError) { UserConnection.record_identity!(@credential) }
+      assert_raises(Oauth::TokenExchangeError) { UserConnection.fetch_identity("bb-new-token") }
 
       assert @credential.reload.active?
-      assert_nil @credential.metadata["bitbucket_user"]
+      assert_equal "previous", @credential.metadata.dig("bitbucket_user", "nickname")
     end
 
     test "identity_for returns a fresh stored identity without a request" do
@@ -87,6 +87,16 @@ module Bitbucket
       assert_nil OauthCredential.find_by(id: @credential.id)
       assert OauthCredential.exists?(other.id)
       assert_equal 0, ActAsConsent.where(user: @user).count
+      assert_empty @fake.calls
+    end
+
+    test "disconnect! also deletes a credential of a retired client, without a request" do
+      retired = create(:oauth_credential, :bitbucket_user, owner: @user,
+                                                           oauth_client: create(:oauth_client, :bitbucket, client_id: "bb-retired"))
+
+      UserConnection.disconnect!(@user)
+
+      assert_nil OauthCredential.find_by(id: retired.id)
       assert_empty @fake.calls
     end
 
