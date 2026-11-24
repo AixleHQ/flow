@@ -19,7 +19,7 @@ module Sessions
   # lock, where closing the admission and ending the session must be one write.
   module Lifecycle
     # The move `finalize` makes for each (from, to) pair. A session already in the state
-    # it ends in makes no move: only its columns are written.
+    # it ends in, or already suspended or restored, makes no move: only its columns are written.
     FINALIZE_EVENTS = {
       %w[finishing finished] => :finish,
       %w[not_started finished] => :finish_without_request,
@@ -47,6 +47,8 @@ module Sessions
     # no lock of its own, so the caller holds whatever it needs.
     #
     # `notify: false` keeps the move from waking the parent run (see `finalize`).
+    # Temporary: the flag is passed as an argument to the event's callback (`on_finished`,
+    # `on_failed`, `on_cancelled`). #283 removes it, when the effects move into this method.
     def transition!(session, event, error_message: nil, notify: true)
       ActiveRecord::Base.transaction do
         session.update!(error_message: error_message) if error_message.present?
@@ -232,7 +234,9 @@ module Sessions
     # The outcome rules are the model's (`TerminalSession#ending_state`, `#ending_error`).
     # The move is the event for the (from, to) pair, with no wake-up of the run: that
     # waits for `slot_released`, after the reservation is released. A session already in
-    # the state it ends in (a repeated cleanup) changes no state, only its columns.
+    # the state it ends in, or one already suspended or restored (a repeated cleanup),
+    # changes no state, only its columns: raising there would retry the cleanup forever,
+    # before the reservation is released.
     #
     # `suspend` is the cleanup's decision to end the session suspended; it takes effect
     # when a checkpoint was kept and nothing failed.
@@ -252,8 +256,11 @@ module Sessions
         finished_at = session.finished_at
         session.error_message = TerminalSession.preferred_error_message(session.error_message, error)
         # Fired without saving: the one save below writes the state with its columns.
-        # `false` keeps the move from waking the run.
-        session.public_send(finalize_event(session.state, to), false) unless session.state == to
+        # The `false` argument keeps the move from waking the run. It is temporary and
+        # bypasses `transition!`; #283 removes it, when `finalize` goes through `transition!`.
+        unless session.state == to || session.suspended? || session.restored?
+          session.public_send(finalize_event(session.state, to), false)
+        end
         session.finished_at = finished_at || Time.current
         session.container_id = nil
         session.save!

@@ -118,7 +118,7 @@ The outcome rules do not change, but they move out of the activity into the mode
 | `not_started`, `queued`, `running`, `ready`, `finishing` | `failed` | `fail` (exists) |
 | `finished` | `failed` | **new** `fail_after_finish` (output collection failed) |
 | `not_started`, `queued`, `running`, `ready`, `finishing` | `cancelled` | `cancel` (exists) |
-| `finished`, `failed`, `cancelled` | the same state | no event: no state changes. Only `finished_at`, `container_id` and `error_message` are assigned, which are plain columns with no owner method |
+| `finished`, `failed`, `cancelled`, `suspended`, `restored` | the same state | no event: no state changes. Only `finished_at`, `container_id` and `error_message` are assigned, which are plain columns with no owner method |
 | anything else | | `finalize` raises `TerminalSession::InvalidStateError`: the cleanup retries and Sentry shows it. No state is guessed |
 
 The `suspended` branch of `finalize_session` becomes `Lifecycle.suspended`, firing the new event `mark_suspended` (from `running`, `ready`, `finishing`; callback assigns `finished_at ||= now`, `container_id = nil`; `suspended_at` and `restore_expires_at` are passed as event arguments). `Suspension` keeps `window_end` and `due?`, and writes no state.

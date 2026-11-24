@@ -79,13 +79,27 @@ module Sessions
       assert_equal "Container failed to start", session.error_message
     end
 
-    test "a state the machine has no move to the outcome from raises, and changes nothing" do
-      session = session_in("suspended")
+    %w[suspended restored].each do |state|
+      test "a #{state} session makes no move in finalize, whatever the outcome, and raises nothing" do
+        [ [ "no suspend, no checkpoint", nil ], [ "an error", "boom" ] ].each do |_label, error|
+          session = session_in(state)
 
-      assert_raises(TerminalSession::InvalidStateError) { Lifecycle.finalize(session, error: "boom") }
+          assert_nothing_raised { Lifecycle.finalize(session, error: error, suspend: false) }
 
-      assert_equal "suspended", session.reload.state
-      assert_equal "ctr-1", session.container_id
+          session.reload
+          assert_equal state, session.state
+          assert_not_nil session.finished_at
+          assert_nil session.container_id
+        end
+      end
+
+      test "a #{state} session with suspend set and the checkpoint gone keeps its state" do
+        session = session_in(state)
+
+        assert_nothing_raised { Lifecycle.finalize(session, error: nil, suspend: true) }
+
+        assert_equal state, session.reload.state
+      end
     end
 
     test "finalize wakes nobody, and slot_released wakes the run once the reservation is back" do
