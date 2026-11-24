@@ -68,7 +68,8 @@ This single command:
 - Creates the database, runs migrations, and seeds defaults.
 - Builds the shared `aixle/agent-base-core` base image plus the eight agent
   runtime images (`aixle/claude-code`, `aixle/cursor-cli`, `aixle/codex`,
-  `aixle/gemini-cli`, `aixle/antigravity-cli`, `aixle/grok`, `aixle/kiro-cli`).
+  `aixle/gemini-cli`, `aixle/antigravity-cli`, `aixle/grok`, `aixle/kiro-cli`,
+  `aixle/copilot-cli`).
 
 ## 4. Run
 
@@ -82,8 +83,7 @@ start.
 
 Open **<http://localhost:4000>** and sign in with the seeded user —
 `admin@example.com`, an admin of the seeded *Demo Company*, with the
-`ADMIN_PASSWORD` from `.env.development` (or register a new one if
-registration is enabled in your `.env`).
+`ADMIN_PASSWORD` from `.env.development`.
 
 ## 5. First workflow run
 
@@ -107,6 +107,18 @@ starts a workflow until a trigger binds one to it.
 To try a workflow without a trigger, press **Run** on it instead.
 
 If the run fails, see [Agents → Troubleshooting](user-guide/agents.md#troubleshooting).
+
+## Updating
+
+```bash
+git pull
+make up
+```
+
+The web container installs new gems and JS packages and runs pending
+migrations every time it starts. When `config/agent_runtimes.json` changes
+(a new runtime, or a new CLI version), rebuild the agent images with
+`make build-agents`.
 
 ## Troubleshooting
 

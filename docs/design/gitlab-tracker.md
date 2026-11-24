@@ -93,7 +93,8 @@ Integrations → Connect GitLab → "Connect with GitLab"
   - An issue's status is Closed when it is closed. Otherwise it is the first list, in board order, whose
     label the issue carries, or Open if it carries none.
   - Categories follow the list name, as on GitHub Projects. Open is `todo` and Closed is `done`.
-- **Issues.** An issue is keyed by its global id. Its readable key is `group/project#iid`, and it can also be
+- **Issues.** An issue's id is `<project id>:<iid>`, not GitLab's global id, which only an administrator
+  can look an issue up by. Its readable key is `group/project#iid`, and it can also be
   referred to by its URL. `tracker_create_issue` files it in the scope's project.
 - **Events.**
   - One project hook per tracked project. It points at the tracker ingress (`/webhooks/trackers/:token`),

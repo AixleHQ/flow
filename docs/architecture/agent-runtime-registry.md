@@ -31,7 +31,7 @@ repository's matrix still lacked it after that.
 
 | Consumer | Uses |
 | --- | --- |
-| `AgentRuntime` (`app/models/agent_runtime.rb`) | `ids` is `CompanyMembership::AVAILABLE_AGENTS`, which steps, sessions, credentials and the generated TypeScript unions validate against. `fetch(id).image` names the image `AgentBaseStrategy#resolve_image` launches. `Codex::Api::CLIENT_VERSION` is the Codex pin. `reasoning_effort_levels(model)` is what a step's or session's reasoning effort is validated against, and what `CompanyMembership#agent_models_for_props` puts on each model option as `reasoning_effort_levels`. The class method `AgentRuntime.reasoning_effort_levels`, the union of every runtime's levels, is only the enum of the `create_workflow_step` and `update_workflow_step` MCP tools. |
+| `AgentRuntime` (`app/models/agent_runtime.rb`) | `ids` is `CompanyMembership::AVAILABLE_AGENTS`, which steps, sessions, credentials and the generated TypeScript unions validate against. `fetch(id).image` names the image `AgentBaseStrategy#resolve_image` launches, and the one `ContainerRuntime::RunnerRuntime` starts for a runner session. `Codex::Api::CLIENT_VERSION` is the Codex pin, and `Antigravity::Api::USER_AGENT` carries the Antigravity pin to the model catalogue endpoint. `Sessions::Checkpoint` records a suspended session's `cli_version`, and `Sessions::Restore` resumes its conversation only under the same pin. `reasoning_effort_levels(model)` is what a step's or session's reasoning effort is validated against, and what `CompanyMembership#agent_models_for_props` puts on each model option as `reasoning_effort_levels`. The class method `AgentRuntime.reasoning_effort_levels`, the union of every runtime's levels, is only the enum of the `create_workflow_step` and `update_workflow_step` MCP tools. |
 | `app/frontend/shared/ui/agentRuntimes.ts` | Order, labels and copy of `AGENT_RUNTIMES`. Badge colors stay in the frontend. The reasoning-effort select does not read the registry: it offers the `reasoningEffortLevels` the server sent on the selected model option. |
 | `.github/workflows/images.yml` | The `agent-images` build matrix (with each runtime's `platforms`), the `CLI_VERSION` build arg, the canary's newest-release lookup (`bin/agent-cli-latest`), and its update report (`bin/agent-cli-report`). |
 | `bin/build-agent-images` (`make build-agents`) | Local builds, with the same build args. |
@@ -148,7 +148,15 @@ what the new CLI exports: `make build-agents`, then `bin/capture-agent-otlp <id>
 model API, its telemetry relayed through `docker/otlp-ingest`).
 `test/services/agents/otlp_contract_test.rb` parses that fixture with the real adapter and
 fails while the pinned version has none — so a renamed metric or attribute is caught in CI,
-not in production usage numbers.
+not in production usage numbers. Kiro CLI's credit telemetry also arrives over OTLP, but
+neither the capture script nor the contract test covers Kiro, so nothing in CI catches a
+renamed Kiro metric; its MITM-captured usage summaries and the account's credit counter are
+the fallbacks ([index.md](./index.md#agent-adapters)).
+
+A raised pin also changes what a restore does: `Sessions::Restore` resumes a suspended
+session's conversation only when the `cli_version` recorded at suspension is the current
+pin, so a session suspended before the raise restores with a fresh conversation. Its old
+one stays as files in the CLI's home directory, which the restored session's notes name.
 
 Read the vendor's release notes between the two versions against the adapter too, for more
 than credentials: a CLI can keep its login files and telemetry and still change a default

@@ -80,10 +80,9 @@ touches customers.
 
 ## Reusing a workflow
 
-- **Duplicate** — copy it inside the project and edit the copy.
 - **Publish to the catalog** — offer it to the whole company. It then appears
-  in the [Workflow Catalog](/docs/company-workspace) with a **Copy & Configure**
-  action, so another project can take it and adjust the details.
+  in the [Workflow Catalog](/docs/company-workspace) with a **Duplicate to
+  project** action, so another project can take a copy and adjust the details.
 - **Run it by hand** — **Run workflow** starts a run without a card moving.
 
 ## Starting it automatically

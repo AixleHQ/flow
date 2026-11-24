@@ -17,7 +17,7 @@
 - **Session Context** — injection of configuration, MCP servers, skills, repositories, and assets into containers
 - **Asset Management** — uploading, versioning, and reviewing artifacts
 - **Multi-tenancy** — Company → Projects; resources belong to one project (assets can also be company-wide); a user can belong to several companies
-- **Personal MCP** — a user can drive their own account from an external agent with a personal MCP token
+- **Personal MCP** — a user can drive their own account from an external agent with a personal MCP token, or by connecting the client over OAuth
 
 ---
 
@@ -33,7 +33,7 @@
 | **Containers** | docker-api gem (Docker), kubeclient gem (Kubernetes) |
 | **File Storage** | Shrine + S3 |
 | **MCP** | `mcp` gem (official Ruby SDK) |
-| **Auth** | Email + password, Google OAuth (OmniAuth), invitations; Pundit |
+| **Auth** | Email + password, Google and Microsoft (OmniAuth), per-company OIDC, passkeys, magic links, TOTP step-up, invitations, SCIM provisioning; Pundit |
 | **Error tracking** | Sentry |
 
 Versions are pinned in `.ruby-version`, `Gemfile.lock`, `package.json` / `yarn.lock`, and `docker-compose.yml`.
@@ -76,7 +76,7 @@ One adapter per runtime in `app/services/agents/` (`claude_code`, `cursor_cli`, 
 
 ### Temporal Workflows
 
-`ContainerWorkflow` orchestrates a container's lifecycle (auth, session, or tool); `WorkflowExecutionWorkflow` runs a workflow run's steps; `ScheduledTriggerWorkflow` fires schedule triggers. The periodic sweeps and syncs are declared in `app/temporal/schedules.yml`. See [architecture/index.md](../architecture/index.md#temporal-workflows).
+`ContainerWorkflowV2` orchestrates a session's container lifecycle (agent logins included) and `ContainerWorkflow` a custom tool's; `WorkflowExecutionWorkflowV2` runs a workflow run's steps; `ScheduledTriggerWorkflow` fires schedule triggers. The periodic sweeps and syncs are declared in `app/temporal/schedules.yml`. See [architecture/index.md](../architecture/index.md#temporal-workflows).
 
 ### Multi-tenancy & Scoping
 
@@ -91,11 +91,11 @@ Agent, Tool, Workflow, MCPServer, Skill, Asset, ConfigItem and Repository carry 
 ### Core
 - **Company** — tenant (memberships, projects, scoped resources)
 - **CompanyMembership** — a user's place in one company: role (`admin` / `employee` / `viewer`), state (invited → active, suspended, revoked), and that company's onboarding
-- **User** — account (state machine active/pending/suspended/archived), password and/or Google sign-in, personal MCP token; `super_admin` flag for the platform admin
+- **User** — account (state machine active/pending/suspended/archived), password and/or other sign-in methods (Google, Microsoft, company OIDC, passkeys, magic links), optional TOTP, personal MCP token; `super_admin` flag for the platform admin
 - **Project** — company → project hierarchy, owner + collaborators
 
 ### Agent Infrastructure
-- **TerminalSession** — state machine (not_started → running → ready → finishing → finished, waiting in `queued` first when the admission queue holds it; `failed` and `cancelled` from any live state — see `app/state_machines/terminal_session_state_machine.rb`), links user + project + agent + container
+- **TerminalSession** — state machine (not_started → running → ready → finishing → finished, waiting in `queued` first when the admission queue holds it; `failed` and `cancelled` from any live state; a suspended session goes `suspended` → `restored`, or → `finished` when its suspension expires — see `app/state_machines/terminal_session_state_machine.rb`), links user + project + agent + container
 - **AgentCredential** — encrypted runtime credentials per user, company, and agent type
 - **SessionLog** — collected log files (terminal output, MITM HTTP logs) per session
 - **UsageStatistic** — token usage & cost breakdown per session
@@ -113,7 +113,7 @@ Agent, Tool, Workflow, MCPServer, Skill, Asset, ConfigItem and Repository carry 
 - **AssetVersion** — Shrine-attached file versions
 
 ### Integrations
-- **Integration** — GitHub, GitLab, Linear, Slack, Coder, and Azure DevOps connections, owned by a company and either company-wide or attached to one project
+- **Integration** — GitHub, GitLab, Bitbucket, Linear, Coder, Slack, Teams, Azure DevOps, Jira, YouTrack and Insights connections, owned by a company and either company-wide or attached to one project
 - **Repository** — linked Git repositories
 
 ---
@@ -123,10 +123,11 @@ Agent, Tool, Workflow, MCPServer, Skill, Asset, ConfigItem and Repository carry 
 ```
 /                     Inertia web app (Rails routes in the Web namespace)
 /api/v1/...           JSON API the web app calls (cookie session + CSRF); OpenAPI at /api-docs
-/api/v1/internal/...  ws_auth (Traefik ForwardAuth for container terminals), usage_statistics (OTLP ingest)
-/mcp, /action_mcp     MCP server (containers are configured with /action_mcp): session keys and personal MCP tokens
+/api/v1/internal/...  ws_auth (Traefik ForwardAuth for container terminals), usage_statistics (OTLP ingest), runner_relay (the runner-relay service's calls)
+/mcp, /action_mcp     MCP server (containers are configured with /action_mcp): session keys, personal MCP tokens and MCP OAuth access tokens
+/mcp-oauth/...        OAuth authorization server for the personal MCP server (token, register, revoke; authorize in the web app); metadata at /.well-known/oauth-*
 /cable                Action Cable (Inertia Cable streams)
-/webhooks/...         GitHub, GitLab, Azure DevOps, Slack, and the generic /webhooks/in/:slug
+/webhooks/...         GitHub, GitLab, Bitbucket Forge, Azure DevOps, Slack, Teams, Stripe, trackers (/webhooks/trackers/...), and the generic /webhooks/in/:slug
 /admin/               Administrate panel (super admins; they sign in at /admin/login)
 /docs                 In-app documentation portal
 ```
@@ -140,7 +141,7 @@ Endpoint-level detail: [reference/api.md](../reference/api.md).
 ```bash
 make setup   # First time: build images, install deps, prepare database
 make up      # Daily: start all services
-docker compose exec -T web make check_all   # The full check suite, as CI runs it
+docker compose exec -T web make check_all   # CI's Rails, Vitest, system and lint checks (not the secret scan or the Go runner jobs)
 
 # Access
 open http://localhost:4000      # Web UI

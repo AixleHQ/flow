@@ -24,8 +24,8 @@ caller never decides which session type it is dealing with.
 
 2. **Context construction** — `SessionContextConstructor.build(session)` decides
    *what the agent knows*: it assembles the XML-structured context prompt (the
-   `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` file) from a pipeline of composable builders, each
-   contributing prioritized sections.
+   runtime's context file, `Agents::*Adapter#context_file_path`) from a pipeline of
+   composable builders, each contributing prioritized sections.
 
 The first stage feeds the second: the resolved config (runtime, persona,
 resource ids) is exactly the material the context builders describe to the
@@ -115,8 +115,9 @@ A scalar value. Resolved by priority (first non-empty wins):
 ```
 1. step.required_agent_runtime     ← the step REQUIRES a specific runtime
 2. workflow_run.agent_runtime      ← user override on a manual launch
-3. user.default_agent_runtime      ← default credential's runtime (from Profile)
-4. "claude_code"                   ← hardcoded fallback
+3. membership.default_agent_runtime ← default credential's runtime (from Profile), per company
+4. the member's latest credential  ← its runtime
+5. "claude_code"                   ← hardcoded fallback
 ```
 
 **A step may require a specific runtime.** For example, the "Code Generation" step may require `claude_code`, because only it supports the needed capabilities. If `step.required_agent_runtime` is set — it overrides everything else.
@@ -125,19 +126,19 @@ A scalar value. Resolved by priority (first non-empty wins):
 
 On the **Profile** page the user sees the list of their AgentCredentials. One of them is marked as **default** — by default this is the last one added.
 
-**New field on User:** `default_agent_credential_id` (references, nullable). When a new `AgentCredential` is created, it is automatically set as default.
+**Field on CompanyMembership:** `default_agent_credential_id` (references, nullable). Credentials and the default are per company: the membership in the session's company holds them, never the user. When a new `AgentCredential` is created, it is automatically set as that membership's default.
 
 ```ruby
 def resolve_agent_runtime
   step&.required_agent_runtime.presence ||
     workflow_run&.agent_runtime.presence ||
-    user&.default_agent_runtime ||
-    user&.agent_credentials&.order(created_at: :desc)&.first&.agent_type ||
+    membership&.default_agent_runtime ||
+    credentials.order(created_at: :desc).first&.agent_type ||
     "claude_code"
 end
 ```
 
-`User#default_agent_runtime` returns `default_agent_credential&.agent_type` (see `app/models/user.rb`).
+`membership` is `SessionCompany.membership_for(session)` and `credentials` is `SessionCompany.agent_credentials_for(session)`. `CompanyMembership#default_agent_runtime` returns the default credential's `agent_type` (see `app/models/company_membership.rb`).
 
 ### 1.3.2 configured_agent (persona)
 
@@ -148,6 +149,7 @@ configured_agent = step.agent_id
 ```
 
 Each step knows which persona it needs (Architect, PM, Analyst). Not inherited, not accumulated.
+A standalone session keeps the agent picked for it (`session.configured_agent_id`).
 
 ### 1.3.3 tools, skills, mcp_servers — additive
 
@@ -234,23 +236,34 @@ end
 
 | Parameter | Type | Source | Additivity |
 |----------|-----|----------|-------------|
-| `agent_runtime` | scalar | Step required → WorkflowRun override → User default | No, priority chain |
-| `configured_agent` | scalar | Step.agent_id | No, scalar |
+| `agent_runtime` | scalar | Step required → WorkflowRun override → Membership default → latest credential → `claude_code` | No, priority chain |
+| `configured_agent` | scalar | Step.agent_id (standalone: the session's own) | No, scalar |
 | `tools` | set | Workflow.base + Step + (Project if inherit_all) | Yes, union |
 | `skills` | set | Workflow.base + Step + (Project if inherit_all) | Yes, union |
 | `mcp_servers` | set | Workflow.base + Step + (Project if inherit_all) | Yes, union |
-| `repositories` | set | WorkflowRun (user) or Project (fallback) | No, fallback |
+| `config_items` | set | Workflow.base + Step + (Project if inherit_all), plus items an attached MCP server names (`config_item:NAME`) | Yes, union |
+| `repositories` | set | WorkflowRun + Workflow.base + Step (union); Project only if nothing is named and inherit_all | Union, then fallback |
 | `input_assets` | set | Workflow.base + Step + WorkflowRun (user) [+ BoardTask, not yet impl] | Yes, union |
 | `mode` | scalar | WorkflowRun.step_auto_run? + WorkflowRun.mode + Step.allow_non_interactive | No, resolved |
+| `bmad_enabled` | scalar | Step.bmad_enabled (standalone: the session's own) | No, scalar |
+
+A standalone session takes these values from the session itself, as the user picked them; the config
+items its MCP servers name are added for it too.
+
+`config_items` is entitlement, not delivery: nothing is injected into the container. It is the set
+`get_config_item` may decrypt, and `SessionConfigResolver#resolve_config_item_ids` is public because
+that tool, its injection rule (`Tools::InjectionRules`), `Sessions::SecretRedactor` and the `ConfigItems`
+builder call it directly.
 
 ## 1.5 SessionConfigResolver
 
 A single entry point — `TerminalSession`. The resolver itself determines the session type and assembles the config.
+Two more public methods sit beside `resolve`: `resolve_with_breakdown` returns each value with where it came
+from (`SessionContextConstructor` stores it as `config_resolution`, §1.9), and `resolve_config_item_ids` (§1.4)
+is called directly by the tool layer. The sketch below does not define them.
 
 ```ruby
 class SessionConfigResolver
-  TYPES = %i[workflow standalone].freeze
-
   attr_reader :session
 
   def self.resolve(session)
@@ -265,13 +278,15 @@ class SessionConfigResolver
     {
       session_type: session_type,
       agent_runtime: resolve_agent_runtime,
-      configured_agent_id: step&.agent_id,
+      configured_agent_id: resolve_configured_agent_id,
       tool_ids: resolve_tool_ids,
       skill_ids: resolve_skill_ids,
       mcp_server_ids: resolve_mcp_server_ids,
+      config_item_ids: resolve_config_item_ids,
       repository_ids: resolve_repository_ids,
       input_asset_ids: resolve_input_asset_ids,
-      mode: resolve_mode
+      mode: resolve_mode,
+      bmad_enabled: resolve_bmad_enabled
     }
   end
 
@@ -280,6 +295,8 @@ class SessionConfigResolver
   # --- Session navigation (same pattern as SessionContextConstructor) ---
 
   def user            = session.user
+  def membership      = SessionCompany.membership_for(session)
+  def credentials     = SessionCompany.agent_credentials_for(session)
   def project         = session.project
   def step_run        = session.step_run
   def workflow_run    = step_run&.workflow_run
@@ -307,9 +324,19 @@ class SessionConfigResolver
 
     step&.required_agent_runtime.presence ||
       workflow_run&.agent_runtime.presence ||
-      user&.default_agent_runtime ||
-      user&.agent_credentials&.order(created_at: :desc)&.first&.agent_type ||
+      membership&.default_agent_runtime ||
+      credentials.order(created_at: :desc).first&.agent_type ||
       "claude_code"
+  end
+
+  def resolve_configured_agent_id
+    return session.configured_agent_id if standalone_session?
+
+    step&.agent_id
+  end
+
+  def resolve_bmad_enabled
+    standalone_session? ? session.bmad_enabled? : (step&.bmad_enabled || false)
   end
 
   def resolve_mode
@@ -410,17 +437,18 @@ end
 
 ## 1.6 Required changes
 
-### 1.6.1 User — default agent credential
+### 1.6.1 CompanyMembership — default agent credential
 
 ```ruby
-# New field:
+# Field on company_memberships:
 # default_agent_credential_id: references (nullable)
 #
-# When creating an AgentCredential:
-# after_create :set_as_default_if_first_or_latest
+# On AgentCredential:
+# after_create :set_as_membership_default
+# before_destroy :reassign_membership_default   # falls back to the member's next-newest credential
 ```
 
-Configured on the **Profile** page. By default — the last added `AgentCredential`. The user can switch the default in the UI.
+Configured on the **Profile** page, per company. By default — the last added `AgentCredential`. The user can switch the default in the UI.
 
 ### 1.6.2 Workflow — base resources + inherit_all
 
@@ -461,7 +489,7 @@ config = SessionConfigResolver.resolve(session)
 ```
 Input: session (session.step_run → workflow_run → workflow)
 
-User: default_agent_runtime = "gemini_cli"
+Membership: default_agent_runtime = "gemini_cli"
 User selects at start: repos=[1,3], assets=[10], does not change runtime
 
 Workflow:
@@ -476,7 +504,7 @@ Step 1 (Create Architecture):
 
 SessionConfigResolver.resolve(session):
   session_type      = :workflow
-  agent_runtime     = gemini_cli       (user default credential)
+  agent_runtime     = gemini_cli       (membership default credential)
   configured_agent  = Architect        (step)
   tools             = [context7, cloc, security_scan]  (workflow + step)
   skills            = [arch_skill]     (step)
@@ -489,7 +517,7 @@ SessionConfigResolver.resolve(session):
 ```
 Input: session (session.step_run → workflow_run → workflow)
 
-User: default_agent_runtime = "gemini_cli"
+Membership: default_agent_runtime = "gemini_cli"
 
 Workflow: (the same as in example 1)
 
@@ -500,7 +528,7 @@ Step 2 (Code Generation):
 
 SessionConfigResolver.resolve(session):
   session_type      = :workflow
-  agent_runtime     = claude_code        (step required — overrides user default)
+  agent_runtime     = claude_code        (step required — overrides membership default)
   configured_agent  = Developer          (step)
   tools             = [context7, code_gen]  (workflow + step)
 ```
@@ -510,7 +538,7 @@ SessionConfigResolver.resolve(session):
 ```
 Input: session (session.step_run → workflow_run → board_task)
 
-User (task assignee): default_agent_runtime = "claude_code"
+Membership (task assignee's): default_agent_runtime = "claude_code"
 Board task: assets attached: [doc.pdf, spec.md]
 
 Workflow:
@@ -524,13 +552,13 @@ Step 1 (Tech Design):
 
 SessionConfigResolver.resolve(session):
   session_type      = :board_triggered
-  agent_runtime     = claude_code             (user default credential)
+  agent_runtime     = claude_code             (membership default credential)
   configured_agent  = Architect               (step)
   tools             = [all project tools] + [security_scan]  (inherit_all + step)
   skills            = [all project skills]    (inherit_all)
   mcp_servers       = [all project mcp]       (inherit_all)
   repositories      = [all project repos]     (project fallback)
-  input_assets      = [doc.pdf, spec.md]      (board task assets)
+  input_assets      = []                      (board task attachments are not contributed)
 ```
 
 ### Example 4: Standalone session
@@ -538,7 +566,7 @@ SessionConfigResolver.resolve(session):
 ```
 Input: session (session.step_run = nil)
 
-On standalone start, the UI populates user.default_agent_runtime
+On standalone start, the UI populates the membership's default_agent_runtime
 into the agent_type field. The user can change it, but by default it is their default.
 
 The user selects tools, repos, assets. Runtime is already prefilled.
@@ -546,7 +574,7 @@ The user selects tools, repos, assets. Runtime is already prefilled.
 SessionConfigResolver.resolve(session):
   session_type      = :standalone
   agent_runtime     = gemini_cli            (session.agent_type — prefilled default, user did not change)
-  configured_agent  = nil
+  configured_agent  = Analyst               (session.configured_agent_id — picked by user, nil if none)
   tools             = [tool1, tool2]         (session.tool_ids — selected by user)
   skills            = [skill1]               (session.skill_ids — selected by user)
   repositories      = [repo1]               (session.repository_ids — selected by user)
@@ -591,7 +619,7 @@ A `config_resolution` section is added to `ContextResult.to_json_hash` (see
 {
   "config_resolution": {
     "agent_runtime": "claude_code",
-    "agent_runtime_source": "user_default",
+    "agent_runtime_source": "membership_default",
     "tools": {
       "from_project_inherit_all": [1, 2, 3],
       "from_workflow_base": [4],
@@ -601,8 +629,8 @@ A `config_resolution` section is added to `ContextResult.to_json_hash` (see
     "input_assets": {
       "from_workflow_base": [10],
       "from_run_user": [],
-      "from_board_task": [11, 12],
-      "resolved": [10, 11, 12]
+      "from_board_task": [],
+      "resolved": [10]
     }
   }
 }
@@ -682,16 +710,24 @@ From the analysis of BMAD-METHOD (and confirmed in practice in Cursor, Claude, G
 | Tag | Purpose | Priority |
 |-----|-----------|----------|
 | `<critical-rules>` | Mandatory behavior rules | critical |
+| `<aixle_builder_role>`, `<aixle_builder_project>`, `<aixle_builder_tools>` | Aixle Builder sessions only: role, project snapshot, tool catalog | critical, important, important |
 | `<agent-role>` | Persona, communication style, principles | important |
 | `<session-context>` | Session ID, mode, project, language | info |
 | `<workspace>` | Directory layout, file rules | important |
 | `<workflow-context>` | Workflow name, mode, run info | important |
-| `<current-step>` | Step instructions, sub-steps | critical |
+| `<trigger-message>` | The chat message that started the run | critical |
+| `<current-step>` | Step instructions | critical |
+| `<earlier-files>` | Files earlier steps wrote, copied into `/workspace/assets/` | important |
+| `<sub-steps>` | Sub-step checklist with statuses | important |
 | `<previous-steps>` | History from prior steps | info |
+| `<tracker-trigger>`, `<pull-request-trigger>`, `<webhook-trigger>` | The tracker event, pull-request event or webhook request that started the run | critical |
 | `<board-context>` | Board task, column, related tasks | important |
-| `<available-tools>` | MCP servers, tools, shell commands | info |
+| `<shell-tools>`, `<mcp-servers>`, `<custom-tools>` | Shell commands, MCP servers, tools | info |
 | `<available-resources>` | Repos, assets, skills | info |
+| `<available-config-items>` | Config items the agent may read, by name | important |
+| `<bmad-method>` | BMAD Method instructions (when enabled) | info |
 | `<output-rules>` | Where/how to save results | critical |
+| `<session-completion>` | Non-interactive only: end with `finish_session` / `fail_session` | critical |
 
 ## 2.4 Architecture: Context Constructor Pipeline
 
@@ -701,18 +737,37 @@ From the analysis of BMAD-METHOD (and confirmed in practice in Cursor, Claude, G
 SessionContextConstructor.build(session)
   │
   ├─→ CriticalRules             (always)      → critical-rules
-  ├─→ AixleBuilder              (if aixle)    → aixle platform context
+  ├─→ AixleBuilder              (if aixle)    → aixle_builder_role, _project, _tools
   ├─→ AgentRole                 (if agent)    → agent-role
   ├─→ SessionInfo / Workspace   (always)      → session-context, workspace
-  ├─→ WorkflowContext           (if workflow)  → workflow-context, current-step, previous-steps
+  ├─→ WorkflowContext           (if workflow)  → workflow-context, trigger-message, current-step,
+  │                                              earlier-files, sub-steps, previous-steps
+  ├─→ TrackerContext            (if tracker)   → tracker-trigger
+  ├─→ PullRequestContext        (if PR event)  → pull-request-trigger
+  ├─→ WebhookContext            (if webhook)   → webhook-trigger
   ├─→ BoardContext              (if board)     → board-context
-  ├─→ Tools / Resources         (always)      → available-tools, available-resources
-  ├─→ BmadMethod                (if bmad)      → BMAD method sections
+  ├─→ Tools                     (always)      → shell-tools, mcp-servers, custom-tools
+  ├─→ Resources                 (if any)       → available-resources
+  ├─→ ConfigItems               (if any)       → available-config-items
+  ├─→ BmadMethod                (if bmad)      → bmad-method
+  ├─→ OutputRules               (not aixle)    → output-rules
+  ├─→ SessionCompletion         (non-interactive) → session-completion
   │
   └─→ Renderer.render(sections, format: :xml_markdown)
         │
-        └─→ Context file (CLAUDE.md / AGENTS.md / GEMINI.md)
+        └─→ Context file (`Agents::*Adapter#context_file_path`)
 ```
+
+The context file is per runtime:
+
+| Runtime | Context file |
+|---------|--------------|
+| `claude_code` | `~/.claude/CLAUDE.md` |
+| `codex`, `cursor_cli` | `/workspace/AGENTS.md` |
+| `gemini_cli`, `antigravity_cli` | `~/.gemini/GEMINI.md` |
+| `copilot_cli` | `~/.copilot/copilot-instructions.md` |
+| `grok` | `~/.grok/rules/aixle-session-context.md` |
+| `kiro_cli` | `~/.kiro/steering/aixle-session-context.md` |
 
 ### 2.4.2 Value Objects
 
@@ -721,7 +776,7 @@ Clean, frozen value objects with validation — no bare hashes or mutable struct
 ```ruby
 class ContextSection
   PRIORITIES = %i[critical important info].freeze
-  POSITIONS  = %i[top middle bottom].freeze
+  POSITIONS  = %i[top middle bottom footer].freeze # :footer is below bottom, for session-completion only
 
   attr_reader :tag, :priority, :content, :position_hint, :builder_name
 
@@ -802,17 +857,22 @@ end
 ```ruby
 class SessionContextConstructor
   BUILDERS = [
-    ContextBuilders::CriticalRules,    # Always first
-    ContextBuilders::AixleBuilder,     # Aixle platform context
-    ContextBuilders::AgentRole,        # Persona
-    ContextBuilders::SessionInfo,      # Session metadata
-    ContextBuilders::Workspace,        # Directory layout
-    ContextBuilders::WorkflowContext,  # Workflow + step (if applicable)
-    ContextBuilders::BoardContext,     # Board task (if applicable)
-    ContextBuilders::Tools,            # MCP servers, tools, shell tools
-    ContextBuilders::Resources,        # Repos, assets, skills
-    ContextBuilders::BmadMethod,       # BMAD method sections (if enabled)
-    ContextBuilders::OutputRules,      # Always last
+    ContextBuilders::CriticalRules,      # Always first
+    ContextBuilders::AixleBuilder,       # Aixle platform context
+    ContextBuilders::AgentRole,          # Persona
+    ContextBuilders::SessionInfo,        # Session metadata
+    ContextBuilders::Workspace,          # Directory layout
+    ContextBuilders::WorkflowContext,    # Workflow + step (if applicable)
+    ContextBuilders::TrackerContext,     # Tracker event that started the run
+    ContextBuilders::PullRequestContext, # Pull-request event that started the run
+    ContextBuilders::WebhookContext,     # Webhook request that started the run
+    ContextBuilders::BoardContext,       # Board task (if applicable)
+    ContextBuilders::Tools,              # MCP servers, tools, shell tools
+    ContextBuilders::Resources,          # Repos, assets, skills
+    ContextBuilders::ConfigItems,        # Config items the agent may read
+    ContextBuilders::BmadMethod,         # BMAD method sections (if enabled)
+    ContextBuilders::OutputRules,        # Skipped for Aixle Builder sessions
+    ContextBuilders::SessionCompletion   # Last: ties in the renderer's sort keep builder order
   ].freeze
 
   # Primary API — returns rendered XML-markdown string
@@ -985,7 +1045,7 @@ class ContextBuilders::CriticalRules < ContextBuilders::Base
   end
 
   def language_rule
-    lang = session.user&.preferred_agent_language
+    lang = SessionCompany.membership_for(session)&.preferred_agent_language
     return nil if lang.blank?
     "**Communication Language:** #{lang} — ALL communication with the user MUST be in this language."
   end
@@ -1027,10 +1087,11 @@ class ContextBuilders::WorkflowContext < ContextBuilders::Base
   def build
     sections = []
     sections << workflow_overview_section
+    sections << trigger_message_section if trigger_message.present? # chat-triggered runs
     sections << current_step_section
+    sections << earlier_files_section if earlier_files.any?         # files earlier steps wrote
     sections << sub_steps_section if sub_steps.any?
     sections << previous_steps_section if completed_step_runs.any?
-    sections << workflow_tools_section if sub_steps.any?
     sections
   end
 
@@ -1068,15 +1129,6 @@ class ContextBuilders::WorkflowContext < ContextBuilders::Base
       tag: "previous-steps",
       priority: :info,
       content: build_previous_steps,
-      position_hint: :middle
-    )
-  end
-
-  def workflow_tools_section
-    ContextSection.new(
-      tag: "workflow-tools",
-      priority: :important,
-      content: build_workflow_tools,
       position_hint: :middle
     )
   end
@@ -1163,16 +1215,6 @@ class ContextBuilders::WorkflowContext < ContextBuilders::Base
     lines.join("\n")
   end
 
-  def build_workflow_tools
-    <<~MD
-      ## Workflow Tools (via MCP)
-
-      - **list_sub_steps** — List all sub-steps with current statuses
-      - **mark_sub_step** — Update status: `id`, `status` (in_progress/completed/skipped), optional `note`, `data`
-      - **write_step_note** — Save a note visible to subsequent steps
-    MD
-  end
-
   # Helpers
 
   def step_run     = session.step_run
@@ -1194,6 +1236,9 @@ class ContextBuilders::WorkflowContext < ContextBuilders::Base
   end
 end
 ```
+
+No section lists the workflow tools. A step note, shown to later steps in `<previous-steps>`, comes from the
+`note` param of `finish_session` / `fail_session`.
 
 ### 2.5.4 BoardContext Builder
 
@@ -1238,17 +1283,9 @@ class ContextBuilders::BoardContext < ContextBuilders::Base
       lines << "- **Tags:** #{task.tags.join(', ')}"
     end
 
-    # Related context
-    if task.task_comments.recent.any?
-      lines << ""
-      lines << "### Recent Comments"
-      task.task_comments.recent.limit(5).each do |comment|
-        lines << "- #{comment.author_name}: #{comment.body.truncate(200)}"
-      end
-    end
-
+    # Comments are never inlined: the agent reads them with board_get_comments
     lines << ""
-    lines << "Use board MCP tools (`board_get_task`, `board_add_comment`, `board_move_task`) to interact with the board."
+    lines << "The task's comments are not repeated here: read them with `board_get_comments`."
     lines.join("\n")
   end
 
@@ -1320,10 +1357,18 @@ end
 
 ### 2.5.7 OutputRules Builder
 
-Always last. Repeats the critical rules (sandwich pattern — the key points at the beginning AND at the end).
+At the bottom. Repeats the critical rules (sandwich pattern — the key points at the beginning AND at the end).
+Skipped for Aixle Builder sessions, whose deliverable is configuration made through tools, not files. Below it,
+in the `:footer` position, a non-interactive session gets one more critical section from
+`ContextBuilders::SessionCompletion`: `<session-completion>`, the mandate to end with `finish_session` or
+`fail_session`, so it is the last thing the agent reads.
 
 ```ruby
 class ContextBuilders::OutputRules < ContextBuilders::Base
+  def applicable?
+    !session.aixle_builder?
+  end
+
   def build
     [
       ContextSection.new(
@@ -1363,14 +1408,15 @@ The renderer takes `Array<ContextSection>` and renders it into an XML-Markdown h
 ```ruby
 class ContextRenderer
   PRIORITY_ORDER = { critical: 0, important: 1, info: 2 }.freeze
-  POSITION_ORDER = { top: 0, middle: 1, bottom: 2 }.freeze
+  POSITION_ORDER = { top: 0, middle: 1, bottom: 2, footer: 3 }.freeze
 
   def self.render(sections)
-    sorted = sections.sort_by do |s|
-      [POSITION_ORDER[s.position_hint], PRIORITY_ORDER[s.priority]]
+    # sort_by is not stable: the index tiebreak keeps builder order for equal pairs
+    sorted = sections.each_with_index.sort_by do |s, i|
+      [POSITION_ORDER[s.position_hint], PRIORITY_ORDER[s.priority], i]
     end
 
-    parts = sorted.map { |s| render_section(s) }
+    parts = sorted.map { |s, _i| render_section(s) }
     parts.join("\n\n")
   end
 
@@ -1433,11 +1479,7 @@ You are working on a specific task from the project board.
 - **Priority:** high
 - **Description:** Add JWT-based authentication with refresh tokens...
 
-### Recent Comments
-- PM: Please use bcrypt for password hashing
-- Dev Lead: Consider OAuth2 for third-party providers
-
-Use board MCP tools (`board_get_task`, `board_add_comment`, `board_move_task`) to interact with the board.
+The task's comments are not repeated here: read them with `board_get_comments`.
 
 </board-context>
 
@@ -1522,16 +1564,6 @@ Your working directory is `/workspace`.
 
 </workspace>
 
-<workflow-tools priority="important">
-
-## Workflow Tools (via MCP)
-
-- **list_sub_steps** — List all sub-steps with current statuses
-- **mark_sub_step** — Update status: `id`, `status` (in_progress/completed/skipped), optional `note`, `data`
-- **write_step_note** — Save a note visible to subsequent steps
-
-</workflow-tools>
-
 <available-resources priority="info">
 
 ## Available Repositories
@@ -1601,6 +1633,22 @@ Parameters: repository_id (integer), scan_type (string)
 - Marking the last sub-step `completed` triggers session termination — ensure all files are saved first
 
 </output-rules>
+
+<session-completion priority="critical">
+
+## MANDATORY: how this session ends
+
+This session does NOT end when you stop writing. It ends ONLY when you call
+one of these two tools:
+
+- **`finish_session`** — the objective is FULLY met and every deliverable
+  exists on disk. Optional `note`: a short summary of what you produced.
+- **`fail_session`** — the objective cannot be met. Required `reason`,
+  optional `note`.
+
+…
+
+</session-completion>
 ```
 
 ## 2.7 Session Type Matrix
@@ -1614,10 +1662,16 @@ Which builders run for which types of sessions:
 | SessionInfo | ✅ | ✅ | ✅ | ✅ |
 | Workspace | ✅ | ✅ | ❌ | ✅ |
 | WorkflowContext | ❌ | ✅ | ❌ | ✅ (if from workflow) |
+| TrackerContext / PullRequestContext / WebhookContext | ❌ | ✅ (if that trigger started the run) | ❌ | ✅ (if that trigger started the run) |
 | BoardContext | ❌ | ✅ (if board_task) | ❌ | ✅ |
 | Tools | ✅ | ✅ | ✅ (minimal) | ✅ |
 | Resources | ✅ | ✅ | ❌ | ✅ |
+| ConfigItems | ✅ (if any attached) | ✅ (if any attached) | ❌ | ✅ (if any attached) |
 | OutputRules | ✅ | ✅ | ❌ | ✅ |
+| SessionCompletion | ✅ (if non-interactive) | ✅ (if non-interactive) | ❌ | ✅ (if non-interactive) |
+
+AixleBuilder runs only for Aixle Builder sessions, which skip OutputRules; BmadMethod runs when BMAD is
+enabled and its install did not fail.
 
 ## 2.8 Integration Plan
 
@@ -1677,13 +1731,15 @@ XML tags add ~2-5% overhead to the context size. This is acceptable, given:
 
 ### 2.9.1 Section Compression for Large Contexts
 
-If the context exceeds the threshold (~6000 tokens), we apply:
+If the rendered context exceeds the budget (`Settings.context.token_budget`, default 6000 tokens, estimated
+at 4 characters per token), `ContextRenderer` compresses one section:
 
-1. **Previous steps** — truncate notes, drop data fields
-2. **Board comments** — limit to 3 most recent
-3. **Tool descriptions** — drop parameter details, keep names only
-4. **Skills** — omit content, keep names only
-5. Never truncate: critical-rules, current-step, output-rules
+1. **Previous steps** — drop the `→ data:` lines and truncate other `→` lines to 100 characters
+
+Nothing else is compressed. Board comments are never inlined (the board context points the agent at
+`board_get_comments`), and tool and skill descriptions are not shortened. Critical sections are never
+touched. The before/after estimates, the budget and the compressed tags are reported under `rendering` in
+`ContextResult#to_json_hash`.
 
 ## 2.10 Validation & Testing
 

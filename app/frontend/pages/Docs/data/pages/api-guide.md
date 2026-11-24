@@ -31,23 +31,36 @@ for the API too. Requests other than GET must also send the page's CSRF
 token in `X-CSRF-Token`. There is no API token or login endpoint here —
 programmatic access goes through the MCP server with a personal token.
 
-The endpoints that answer without a browser session authenticate their
-caller themselves:
+Apart from signing in itself, the endpoints that answer without a browser
+session authenticate their caller themselves:
 
 | Endpoint | Caller | Authenticated by |
 | -------- | ------ | ---------------- |
 | `POST /webhooks/github` | GitHub App | HMAC SHA-256 signature using `GITHUB_WEBHOOK_SECRET`. |
 | `POST /webhooks/gitlab` | GitLab project hook | The repository's secret in the `X-Gitlab-Token` header. |
 | `POST /webhooks/azure_devops/:endpoint_id` | Azure DevOps Service Hooks | HTTP Basic, with the credentials of that subscription. |
-| `POST /webhooks/slack/events` | Slack Events API | The Slack app's signing secret. |
+| `POST /webhooks/slack/events`, `/interactions`, `/commands` | Slack | The Slack app's signing secret. |
+| `POST /webhooks/teams/activities` | Microsoft Teams, through the Bot Framework | A Bot Framework token in `Authorization: Bearer`, checked against Microsoft's signing keys. |
+| `POST /webhooks/stripe` | Stripe | The `Stripe-Signature` header, checked with the webhook signing secret. With no secret configured, nothing is accepted. |
+| `POST /webhooks/trackers/:endpoint_token` | Jira, Linear, YouTrack and GitLab tracker webhooks | The token routes to one tracker subscription; the provider checks that subscription's secret. |
+| `POST /webhooks/trackers/app/jira` | The Aixle Jira app | A token signed with the Jira app's client secret, in `Authorization: Bearer`. |
+| `POST /webhooks/trackers/app/linear` | The Aixle Linear app | A signature made with the Linear app's webhook secret. |
+| `POST /webhooks/bitbucket/forge/*` | The Aixle Flow Forge app in Bitbucket | A Forge Invocation Token on every call. |
+| `/integrations/youtrack/pairings`, `/pairings/:id`, `/pairings/:id/complete` | The Aixle Flow YouTrack app, during Connect | The first `POST` starts a pairing and returns its secret; the other two calls send that secret in `Authorization: Bearer`. |
+| `/scim/Users`, `/scim/Users/:id` | A company's identity provider (SCIM 2.0) | A per-company SCIM bearer token, which also decides the company. |
 | `POST /webhooks/in/:slug` | Any configured source | The endpoint's own verification strategy, checked on the raw body. |
 | `GET /api/v1/internal/ws_auth` | Traefik ForwardAuth, before it proxies a container's terminal, IDE, or file view | A signed-in viewer: the session cookie on the app's host, or a short-lived container ticket on a sandbox host. The viewer must be allowed to reach the session, only the session's owner gets the writable terminal and the IDE, and the session must be `ready`. |
 | `POST /api/v1/internal/usage_statistics` | The OTLP ingest relay, forwarding agent telemetry | Each batch names its session in the `terminal_session_token` resource attribute and proves it with `terminal_session_key`, a key the app derives from that session and recomputes on arrival. |
 | `/mcp`, `/action_mcp` | Agent sessions; people's own agents | A session's MCP key, a personal MCP token (`amcp_…`), or an OAuth access token an app holds for a person (`aoat_…`), in `X-Session-Key` or `Authorization: Bearer`. Without one, the answer names the authorization server in `WWW-Authenticate`. |
 | `/.well-known/oauth-*`, `POST /mcp-oauth/token`, `/register`, `/revoke` | MCP clients signing a person in to the personal MCP | None: public discovery documents, and token requests proved by PKCE or a refresh token. |
 | `/mcp-oauth/authorize` | A person allowing an MCP client | The signed-in viewer's own session. |
-| `POST /cloud/aws/credentials`, `/agents/credentials`, `/agents/git/credentials`, `/azure/git/credentials` | Helpers inside an agent container | `X-Session-Id` plus a key the app derives for that session; a session that is no longer active is refused. |
+| `POST /cloud/aws/credentials`, `/agents/credentials`, `/agents/credentials/refresh`, `/agents/git/credentials`, `/azure/git/credentials` | Helpers inside an agent container | `X-Session-Id` plus a key the app derives for that session; a session that is no longer active is refused. |
 | `PUT`, `GET /agents/storage` | An agent container saving or fetching a suspended session's archive, where the storage cannot sign URLs (development) | A `token` query parameter the app minted for one object and one method, valid for the script's run. Where the storage signs URLs (S3), the endpoint answers 404. |
+| `GET /api/v1/internal/runner_relay/holders/:route_token`, `POST /api/v1/internal/runner_relay/checks` | The `runner-relay` service | `RUNNERS_RELAY_INTERNAL_TOKEN` in `Authorization: Bearer`. With no token set, every call is refused. |
+| `/runner/v1/*`, on the runner gateway's own port | `aixle-runner` on a runner machine | `Authorization: Bearer`: a registration token for `register`, a refresh token for `token`, an access token for the rest. `releases/*` is public. |
+| `GET /share/:token`, `/share/:token/raw` | Anyone with an asset's share link | The share token in the path. |
+| `/marketplace/aws/*` | A buyer arriving from AWS Marketplace | None: the `POST` exchanges the token AWS sends, and the pages after it read a signed ticket or an emailed link. |
+| `POST /csp-violation-report-endpoint` | Browsers reporting a Content Security Policy violation | None. |
 
 ## REST surface — by resource
 
@@ -223,10 +236,15 @@ identify themselves with a Client ID Metadata Document URL or register at
 
 | Endpoint                                   | Purpose                                                        |
 | ------------------------------------------ | -------------------------------------------------------------- |
-| `POST /webhooks/github`                    | GitHub App events: CI (`check_suite`, `workflow_run`), tracker issues, pull request reviews and comments. |
+| `POST /webhooks/github`                    | GitHub App events: CI (`check_suite`, `workflow_run`), the App's `installation` and `github_app_authorization`, tracker items (`projects_v2_item`, `issues`, `issue_comment`), and pull request reviews and comments (`pull_request_review`, `pull_request_review_comment`, `issue_comment`). |
 | `POST /webhooks/gitlab`                    | GitLab project hooks: pipelines, merge requests and notes.     |
 | `POST /webhooks/azure_devops/:endpoint_id` | Azure DevOps Service Hook deliveries.                          |
 | `POST /webhooks/slack/events`              | Slack Events API, routed to the workspace's installation.      |
+| `POST /webhooks/slack/interactions`, `/commands` | The Slack **Run workflow** shortcut, its modal, and the slash command. |
+| `POST /webhooks/teams/activities`          | Microsoft Teams activities for the deployment's bot.           |
+| `POST /webhooks/stripe`                    | Stripe checkout, subscription and invoice events for hosted billing. |
+| `POST /webhooks/trackers/:endpoint_token`, `/app/jira`, `/app/linear` | Tracker events from Jira, Linear, YouTrack and GitLab issues. |
+| `POST /webhooks/bitbucket/forge/*`         | The Bitbucket Forge app: install lifecycle, events, heartbeat, and its page in Bitbucket workspace settings. |
 | `POST /webhooks/in/:slug`                  | Generic inbound webhooks that fire workflow triggers.          |
 
 See [Integrations](/docs/integrations) for how to wire these

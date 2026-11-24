@@ -12,9 +12,9 @@ moves between workspaces — each with its own projects, members, and numbers.
 ## Workflow Catalog
 
 Workflows published from a project land in the catalog, with their publisher
-named. Anyone can search it and **Copy & Configure** one into a project of
-their choice — the copy is theirs to edit, so adjusting the steps does not
-touch the original.
+named. Anyone can search it, and **Duplicate to project** copies one into a
+project of their choice — the copy is theirs to edit, so adjusting the steps
+does not touch the original.
 
 If you are not on any project yet, the catalog says so instead of offering a
 project to copy into.

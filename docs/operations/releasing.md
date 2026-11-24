@@ -26,8 +26,9 @@ straight from `develop`, without a changelog PR.
 Pushing `vX.Y.Z` runs two workflows:
 
 - **`images.yml`** publishes every image — `flow-web`, `flow-otlp-ingest`,
-  `flow-agent-base-core` and one `flow-<image>` per entry in `config/agent_runtimes.json`
-  — to `ghcr.io/aixlehq` as `X.Y.Z`, plus `X.Y`, `X` and `latest` for a stable release.
+  `flow-runner-relay`, `flow-agent-base-core` and one `flow-<image>` per entry in
+  `config/agent_runtimes.json` — to `ghcr.io/aixlehq` as `X.Y.Z`, plus `X.Y`, `X` and
+  `latest` for a stable release.
   The web image carries `APP_VERSION=X.Y.Z` (the Sentry release) and
   `AGENT_IMAGE_TAG=X.Y.Z`, so it launches the agent images built with it. A deployment
   that pins `flow-web:X.Y.Z` therefore runs one version end to end.

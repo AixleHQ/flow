@@ -427,8 +427,9 @@ below run in order, and the first failure answers with an `error(...)`:
    error: "<name>'s GitHub connection needs to be renewed under Profile → Connected
    accounts."
 7. **Mint the tokens.** Call `Github::UserTokenService#scoped_token` once per owner
-   group. A 404 marks the credential `error` through `mark_refresh_error!`, which
-   sends the existing email, and gives the reconnect error. A 422 gives "GitHub refused
+   group. A 404 counts as one refresh failure (`mark_refresh_error!`; the third
+   consecutive failure marks the credential `error` and sends the existing email) and
+   gives the reconnect error. A 422 gives "GitHub refused
    access to <owner>/<repos> for <login>: the user or the App has no access there."
 8. **Record and arm.** Write one `UserTokenIssuance` row per token, then
    `Sessions::SecretRegistry.publish!(session)`. If arming fails, the tool refuses,

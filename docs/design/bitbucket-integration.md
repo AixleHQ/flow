@@ -83,7 +83,7 @@ Implemented for **GitLab, Bitbucket and GitHub** (the GitHub adapter was added o
 
 ### 4.3 Port
 
-`PullRequests::Provider.for(integration)`, with a `PullRequests::PROVIDERS` hash of class-name strings (`"gitlab"`, `"bitbucket"`), mirroring `Trackers::PROVIDERS`. Every method takes the Aixle `Repository` and checks that what it fetched belongs to that repository (Azure's `verify_pr_scope!`).
+`PullRequests::Provider.for(integration)`, with a `PullRequests::PROVIDERS` hash of class-name strings (`"github"`, `"gitlab"`, `"bitbucket"`), mirroring `Trackers::PROVIDERS`. Every method takes the Aixle `Repository` and checks that what it fetched belongs to that repository (Azure's `verify_pr_scope!`).
 
 | Method | Returns |
 |---|---|
@@ -132,7 +132,7 @@ All `tags :pull_requests` (hidden, like `:azure_devops`), `inject_when :pull_req
 ### 4.6 Availability and injection
 
 - `PullRequests::CAPABILITY = "pull_requests"`, added to `Tools::Context#connected_providers` when the project has an active GitHub, GitLab or Bitbucket integration — the way `Trackers::CAPABILITY` is (`context.rb:54`). `requires_integration` takes one provider, which is why a capability is needed.
-- `pull_request_repositories_attached: ->(ctx) { ctx.repository_providers.intersect?(PullRequests::PROVIDERS.keys) }`. A session with only GitHub or Azure repositories does not see these tools.
+- `pull_request_repositories_attached: ->(ctx) { ctx.repository_providers.intersect?(PullRequests::PROVIDERS.keys) }`. A session with only Azure repositories does not see these tools.
 
 ### 4.7 Target resolution
 
@@ -393,7 +393,7 @@ As `youtrack_pairings`: `installation_id`, `account_id`, `workspace_uuid`, `secr
 
 ### 6.5 `pull_request_operations`
 
-`integration_id`, `repository_id`, `operation_key` (unique with `integration_id`), `operation`, `request_digest`, `state`, `result` (jsonb), `pull_request_number`, `terminal_session_id`, `workflow_run_id`, `workflow_id`, `user_id`, timestamps. Shared by GitLab and Bitbucket.
+`integration_id`, `repository_id`, `operation_key` (unique with `integration_id`), `operation`, `request_digest`, `state`, `result` (jsonb), `pull_request_number`, `terminal_session_id`, `workflow_run_id`, `workflow_id`, `user_id`, timestamps. Shared by GitHub, GitLab and Bitbucket.
 
 ### 6.6 `gates`
 

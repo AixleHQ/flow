@@ -24,10 +24,12 @@ existed.
 worker, and a calculator driven by the visitor's own numbers. It works out how many
 workers their workload needs once they pay; the trial itself runs one.
 
-**`/workspace/new`** asks two things: a workspace name and the work email address
-the workspace will be owned with. It does not ask how many workers: the trial runs
-one, and the company chooses its number once it adds a card. Someone already
-signed in is not asked for an address — theirs is the one they already proved.
+**`/workspace/new`** asks for a workspace name and the work email address the
+workspace will be owned with, and has one checkbox: the creator accepts the Terms
+of Service on the company's behalf and the Terms of Use for themselves. It does
+not ask how many workers: the trial runs one, and the company chooses its number
+once it adds a card. Someone already signed in is not asked for an address —
+theirs is the one they already proved.
 
 **Nothing is written when the form is submitted.** The answers travel in a signed
 link to the address that was typed, and opening that link is what proves the
@@ -45,6 +47,7 @@ the company's unique domain, which is the same answer by a shorter route.
 | --- | --- |
 | A domain that is not the one your address is at | A workspace claims a whole domain; claiming one you have no address at is claiming somebody else's |
 | A domain another workspace already has | One workspace per domain |
+| The Terms checkbox left unticked | The company is bound to the Terms of Service, and its creator to the Terms of Use, before the company exists |
 | A public mail service (`gmail.com`, `outlook.com`, `yandex.ru`, …) | The first person to sign up would take the service, funnel every later visitor from it into their workspace, and lock it away for everyone. See `PublicEmailDomains` |
 
 ### Where the sign-in screen sends people

@@ -3,7 +3,7 @@
 Every environment variable Aixle Flow reads, what it does, and whether
 it's required.
 
-> **info** **Keep secrets out of git.** Variables live in `.env.development` for local dev, `.env.production` for production. Anything that's a secret should never be committed. See `.env.example` for the template.
+> **info** **Keep secrets out of git.** Variables live in `.env.development` for local dev. Production reads real environment variables: no `.env` file is loaded there or copied into the image. Anything that's a secret should never be committed. See `.env.example` for the template.
 
 Almost everything here is read in one place — `config/settings.yml` (plus the
 per-environment files beside it) — and reached from code as `Settings.*`. The
@@ -23,7 +23,7 @@ code from reading the environment behind this file's back.
 | `APP_VERSION`           | no         | `unknown`        | Version string shown in the UI and used as the Sentry release. Set as a build arg by the Dockerfile. |
 | `DOMAIN`                | no         | `localhost:4000` | Public host the app is reachable at. Also the mailer's domain. |
 | `PROTOCOL`              | no         | `https`          | `http` or `https` (development and test default to `http`).   |
-| `ASSET_HOST`            | no         | `localhost:4000` | Host static assets are served from; also becomes the frontend build's asset host. |
+| `ASSET_HOST`            | no         | blank (Rails serves assets) | Host static assets are served from; also becomes the frontend build's asset host. |
 | `CONTAINER_ASSET_HOST`  | no         | `web:4000`       | Host an agent container uses to fetch and upload assets.      |
 | `CSP_ENFORCE`           | no         | `false`          | `true` enforces the full Content-Security-Policy; otherwise it is sent report-only (violations go to Sentry's security endpoint when `SENTRY_FRONTEND_DSN` is set). `base-uri`, `object-src` and `frame-ancestors` are enforced either way. |
 | `ALLOWED_HOSTS`         | no         | unset            | Comma-separated `Host` header allowlist (DNS rebinding and Host header protection). Unset leaves it off. Name every host the app is dialed on: `DOMAIN` and its `www.`, a separate webhook host, and the in-cluster service names agent containers (`INTERNAL_BASE_URL`) and Traefik's ForwardAuth use — anything missing gets a 403. `/up` is always allowed. |
@@ -128,7 +128,7 @@ of the default above) or one company; edit those in the admin, not here.
 
 | Variable                                   | Required | Default             | Purpose                                     |
 | ------------------------------------------ | -------- | ------------------- | ------------------------------------------- |
-| `TEMPORAL_ENABLED`                         | no       | unset (on in dev and prod) | Toggles Temporal workflow execution. |
+| `TEMPORAL_ENABLED`                         | no       | unset (off in test) | Toggles Temporal workflow execution in the test environment only. Development, staging and production always run Temporal: their settings files set `temporal.enabled: true` and ignore the variable. |
 | `TEMPORAL_HOST`                            | no       | `temporal`          | Temporal server host.                       |
 | `TEMPORAL_PORT`                            | no       | `7233`              | Temporal server port.                       |
 | `TEMPORAL_NAMESPACE`                       | no       | `default`           | Temporal namespace.                         |
@@ -294,7 +294,7 @@ stored on the integration row, not environment variables.
 | `GITHUB_APP_VERIFY_INSTALLATION_OWNER` | no | `false`                    | When `true` (and the client id and secret are set, and "Request user authorization (OAuth) during installation" is on the App), a new installation connects only for a user who can see it on GitHub — and then one GitHub organization can be connected to several companies. Off, an installation belongs to the first company that connects it. |
 | `GITLAB_ENDPOINT`              | no       | `https://gitlab.com/api/v4`   | GitLab API base URL. Repositories clone from the same host. |
 | `GITLAB_WEBHOOK_BASE_URL`      | no       | `<protocol>://<domain>`       | Where GitLab posts pipeline events (`/webhooks/gitlab` is appended). Set it only when the deployment's own domain is not reachable from GitLab (a tunnel in development). A loopback host registers no hooks, and neither does a private one unless `GITLAB_ENDPOINT` is itself on a private host. |
-| `GITLAB_OAUTH_CLIENT_ID`       | no       | unset                         | Application ID of the deployment's GitLab OAuth app (scope `api`, redirect URI `<protocol>://<domain>/integrations/gitlab/oauth/callback`). With the secret, it turns on **Connect with GitLab**: a group Owner signs in once and Flow creates a service account for the connection. |
+| `GITLAB_OAUTH_CLIENT_ID`       | no       | unset                         | Application ID of the deployment's GitLab OAuth app (scope `api`, redirect URI `<protocol>://<domain>/integrations/gitlab/oauth/callback`). With the secret, it turns on **Sign in with GitLab** in the Connect GitLab dialog: a group Owner signs in once and Flow creates a service account for the connection. |
 | `GITLAB_OAUTH_CLIENT_SECRET`   | no       | unset                         | Secret of the deployment's GitLab OAuth app. |
 | `GIT_CREDENTIALS_URL`                   | no       | `<internal base>/agents/git/credentials`       | Where the in-container git credential helper asks for a short-lived GitHub, GitLab or Bitbucket token. Never a public host: the request carries a per-session vending key. |
 
@@ -430,7 +430,7 @@ owner's pairing code; each connection then gets its own secret, stored encrypted
 | `SLACK_CLIENT_ID`            | no       | unset              | Slack app client ID — one app per deployment, multi-workspace via OAuth. Without it and `SLACK_CLIENT_SECRET`, projects are not offered Slack. |
 | `SLACK_CLIENT_SECRET`        | no       | unset              | Slack app client secret.                                      |
 | `SLACK_SIGNING_SECRET`       | no       | unset              | Verifies the Slack event payloads posted to `/webhooks/slack/events`. |
-| `SLACK_SCOPES`               | no       | `app_mentions:read,channels:history,groups:history,files:read,files:write,chat:write,commands` | Bot scopes requested at install time. |
+| `SLACK_SCOPES`               | no       | `app_mentions:read,channels:history,groups:history,channels:read,groups:read,users:read,files:read,files:write,chat:write,commands` | Bot scopes requested at install time. |
 | `TEAMS_APP_ID`               | no       | `MICROSOFT_CLIENT_ID` | The Entra application (client) id of the deployment's Teams bot. |
 | `TEAMS_HOME_TENANT_ID`       | no       | unset              | The tenant the bot's app registration and Azure Bot live in. Without it projects are not offered Microsoft Teams. |
 | `TEAMS_PRIVATE_KEY`          | no       | `MICROSOFT_PRIVATE_KEY` | PEM private key of the bot's certificate.                    |

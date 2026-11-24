@@ -105,7 +105,7 @@ These are declaration-based estimates, not measured production limits. Overrides
 | [Run stale scanner](../../../app/temporal/activities/workflow/cleanup_stale_runs_activity.rb) | Age-only 4-hour running/paused threshold |
 | [OutboxRelay](../../../app/services/outbox_relay.rb) and [GateReconciler](../../../app/services/gate_reconciler.rb) | Existing durable delivery and reconciliation patterns with external work after commit |
 | [Orphan sweeper](../../../app/temporal/activities/container/sweep_orphaned_resources_activity.rb) | Route-token ownership, 10-minute sweep and 15-minute age guard; too slow for ordinary slot release |
-| [Production HPA](../../../../aixle-infra/kube/prod/15-hpa.yaml) | Web/MCP: 2-6 replicas; workers: 1-4; process-local counters are insufficient |
+| Production HPA (`kube/prod/15-hpa.yaml` in aixle-infra) | Web/MCP: 2-6 replicas; workers: 1-4; process-local counters are insufficient |
 
 ## 3. Limit selection
 
@@ -302,7 +302,7 @@ Use idempotent endpoint creation and bounded readiness probes, with retry timers
 
 **Assumption A5:** runtime capacity waiting consumes the existing 24-hour container execution budget, with earlier operational alerts. Exhaustion produces an infrastructure error and cleanup. Do not send an admitted agent back to the business queue automatically.
 
-A DB-only queue does not stimulate the cluster autoscaler; admitted unschedulable Pods do. Choose N with node capacity, Pod requests/limits and platform/tool workloads in mind. N does not guarantee available RAM. [Autoscaler manifest](../../../../aixle-infra/kube/prod/14-cluster-autoscaler.yaml)
+A DB-only queue does not stimulate the cluster autoscaler; admitted unschedulable Pods do. Choose N with node capacity, Pod requests/limits and platform/tool workloads in mind. N does not guarantee available RAM. Autoscaler manifest: `kube/prod/14-cluster-autoscaler.yaml` in aixle-infra.
 
 ## 8. Reconciliation and operations
 
@@ -332,7 +332,7 @@ Operational diagnostics should expose queue age/depth, occupied capacity, dispat
 2. Deployment applies migrations and explicitly syncs ENV into DB policy. Existing workloads use envFrom; changing ENV requires process recreation, but worker boots must not overwrite policy. [ConfigMaps](https://kubernetes.io/docs/concepts/configuration/configmap/)
 3. Use an operational admission pause for cutover. Replicas may scale independently of the shared DB cap.
 4. Inventory exact legacy aixle-resource-quota objects using runtime-origin/scope ownership on the Namespace. Quotas themselves lack these labels. Record an audited UID allowlist; changed UIDs require re-review.
-5. Cleanup needs list/delete permissions on an appropriate migration identity. Existing [runtime RBAC](../../../../aixle-infra/kube/prod/06-rbac-runtime.yaml) supplies create/get/update for quotas. Retire unnecessary rights after cleanup.
+5. Cleanup needs list/delete permissions on an appropriate migration identity. Existing runtime RBAC (`kube/prod/06-rbac-runtime.yaml` in aixle-infra) supplies create/get/update for quotas. Retire unnecessary rights after cleanup.
 6. Preserve namespace isolation, network policies, secrets, routing and per-Pod resources. No extra Redis, broker or Terraform resource is needed for admission.
 
 If independent safety quotas remain, document them separately and verify compatibility with N. Do not silently retain old 4000m/8Gi limits as a second business cap.

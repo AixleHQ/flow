@@ -371,7 +371,7 @@ Two injection rules, matching the two ways a tool is scoped:
 
 | Rule | Fires when | Covers |
 | ---- | ---------- | ------ |
-| `azure_repositories_attached` | the session holds a repository whose integration is Azure | the 13 tools taking a `repository_id` — pull requests, threads, reviewers, votes, policies, `link_work_item` |
+| `azure_repositories_attached` | the session holds a repository whose integration is Azure | the 15 tools taking a `repository_id` — pull requests, threads, reviewers, votes, policies, `link_work_item` |
 | `azure_integration_connected` | the project has an active Azure connection | the 2 tools taking an `integration_id` — `list_builds`, `list_connections` |
 
 The split is not cosmetic. A repository tool has nothing to act on without an attached clone, so injecting it would only produce a tool that answers "not attached to this session". A build tool is scoped by the connection, so it needs no clone. Boards work items are task tracker tools and follow the tracker rules instead: they are attached from the picker.

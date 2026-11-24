@@ -23,7 +23,7 @@ that, not the persona.
 - **Search** the list by name.
 - A persona belongs to the project it is created in; other projects do not see
   it.
-- Pick one in a workflow step's Resources section.
+- Pick one with **Agent**, in the Execution section of a workflow's session.
 
 > info A persona describes behaviour, not permission. What an agent can reach —
 > repositories, connectors, secrets — comes from the step's resources, and the

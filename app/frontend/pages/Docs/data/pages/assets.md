@@ -56,7 +56,8 @@ A run's output starts inside the run. Two ways it reaches the project:
 
 1. **Promote** a file from the run's Assets tab — a deliberate "this one
    matters" gesture.
-2. **Review outputs** on the run in the list, keeping what you select.
+2. **Review outputs** in the Outputs panel of a finished session's page,
+   keeping what you select.
 
 That two-step shape is on purpose: a long run can touch dozens of files, and
 most of them are scratch.

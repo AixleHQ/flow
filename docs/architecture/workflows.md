@@ -113,7 +113,7 @@ A BMAD workflow like "Create Architecture" (8 step-files producing 1 document) b
 
 ### 1.3 Key Decisions
 
-- **Assets, not Artifacts** — "Asset" is broader: covers uploads, agent outputs, repos, templates, reports
+- **Assets, not Artifacts** — "Asset" is broader: covers uploads, agent outputs, templates, reports (repositories are their own model, see [§11](#11-github-integration))
 - **Two-tier asset model** — WorkflowRunAsset (intermediate) → Asset (project-level, explicit export)
 - **SubSteps as goals** — Checklist of work units, not interactive menu items
 - **Mixed execution mode** — Non-interactive steps auto-proceed, interactive steps wait for user
@@ -137,14 +137,14 @@ class Workflow < ApplicationRecord
 
   # name: string
   # description: text
-  # config: jsonb (base_tool_ids, base_skill_ids, base_mcp_server_ids,
-  #                base_asset_ids, inherit_all_project_resources)
+  has_many :base_resource_links, class_name: 'WorkflowResourceLink'
+  # base_tool_ids / base_skill_ids / base_mcp_server_ids / base_asset_ids /
+  #   base_repository_ids / base_config_item_ids: read and written as id lists,
+  #   stored as WorkflowResourceLink rows (one resource per row, with a position)
+  # config: jsonb (inherit_all_project_resources; the builder and API send the
+  #   base_* lists inside it, and Workflow#config= moves them to the links)
   # published_at: datetime (nil until published)
   # deleted_at: datetime (soft delete)
-
-  def can_run_non_interactive?
-    steps.all?(&:allow_non_interactive)
-  end
 end
 ```
 
@@ -174,7 +174,7 @@ class Step < ApplicationRecord
   #
   # input_asset_specs: jsonb
   #   [{ name: "prd", asset_type: "document", required: true },
-  #    { name: "repo", asset_type: "repository", required: false }]
+  #    { name: "notes/*.md", required: false }]
   #   Checked before the step starts against attached assets and the outputs of every
   #   step it runs after (transitively). Names and matching: DataFlow::AssetSpec
   #   (docs/design/at-references.md §5).
@@ -188,8 +188,9 @@ class Step < ApplicationRecord
   # preferred_model: string (optional model override, e.g. "claude-sonnet-4")
   # required_agent_runtime: string (optional — one of Step::SUPPORTED_AGENT_RUNTIMES)
   # bmad_enabled: boolean (default: false — inject BMAD-method context)
-  # tool_ids / mcp_server_ids / skill_ids / asset_ids: jsonb (resources available in this step)
-  # repository_ids: jsonb (repositories cloned for this step, merged with the workflow's base_repository_ids)
+  # tool_ids / mcp_server_ids / skill_ids / asset_ids / config_item_ids: id lists stored as
+  #   StepResourceLink rows (has_many :resource_links; one resource per row, with a position)
+  # repository_ids: the same, repositories cloned for this step, merged with the workflow's base_repository_ids
   # deleted_at: datetime (soft delete — steps with runs are soft-deleted, not destroyed)
   #
   # on_failure: enum (retry, skip, fail)
@@ -249,13 +250,17 @@ class WorkflowRun < ApplicationRecord
   #   pending → running → (paused ↔ running) → completed / failed / cancelled
   # mode: enum (interactive, non_interactive, mixed)
   #   interactive      — all steps wait for user input/approval
-  #   non_interactive  — all steps auto-proceed (only if workflow.can_run_non_interactive?)
+  #   non_interactive  — all steps auto-proceed (only if can_run_non_interactive?)
   #   mixed            — steps with allow_non_interactive auto-proceed, others wait
   #
   # input_asset_ids: jsonb (project Assets selected by user at workflow start)
   # shared_context: jsonb (accumulated from step notes, injected into CLI context files)
   # started_at: datetime
   # completed_at: datetime
+
+  def can_run_non_interactive?
+    workflow.steps.not_deleted.all?(&:allow_non_interactive)
+  end
 end
 ```
 
@@ -265,7 +270,7 @@ end
 if workflow_run.mode == 'interactive'
   # Always wait for user action (Approve / Retry / Stop)
 elsif workflow_run.mode == 'non_interactive'
-  # Only possible if workflow.can_run_non_interactive?
+  # Only possible if workflow_run.can_run_non_interactive?
   # Auto-proceed to next step
 elsif workflow_run.mode == 'mixed'
   if step.allow_non_interactive
@@ -287,7 +292,7 @@ class StepRun < ApplicationRecord
   has_many :produced_workflow_run_assets, class_name: 'WorkflowRunAsset',
            foreign_key: :produced_by_step_run_id
 
-  # state: enumerize (pending, running, waiting_input, completed, failed, skipped, cancelled)
+  # state: enumerize (pending, running, waiting_input, suspended, completed, failed, skipped, cancelled)
   # step_note: text (final note carried into subsequent steps' context;
   #                  populated from finish_session / fail_session notes)
   # skip_reason: string (why skipped, if state=skipped)
@@ -359,18 +364,21 @@ class WorkflowRunAsset < ApplicationRecord
   belongs_to :workflow_run
   belongs_to :produced_by_step_run, class_name: 'StepRun', optional: true
 
+  include PubliclyShareable  # public_token, shared_at, shared_by, shared_in_session
+
   # name: string (relative path under /workspace/assets, see SafeRelativePath)
-  # file_data: text (Shrine attachment metadata — storage key, mime, size)
+  # file_data: jsonb (Shrine attachment metadata)
+  # content_type: string, file_size: integer, s3_key: string (written at collection)
 end
 ```
 
-The blob is a Shrine `file` attachment (`WorkflowRunAssetUploader`) — there is no
-separate `s3_key` / `content_type` / `file_size` column; those live inside the
-Shrine `file_data`.
+The blob is a Shrine `file` attachment (`WorkflowRunAssetUploader`). Output collection
+also writes `content_type`, `file_size` and `s3_key` as columns; `OutputValidator`
+reads `file_size` and `content_type`.
 
 **Lifecycle:**
-1. Step completes → files from `/workspace/output/` uploaded as Shrine attachments → WorkflowRunAsset records created
-2. Next step starts → ALL WorkflowRunAssets from previous steps + user-selected project Assets mounted to `/workspace/input/`
+1. Step completes → files from `/workspace/outputs/` uploaded as Shrine attachments → WorkflowRunAsset records created
+2. Next step starts → the WorkflowRunAssets of every step it runs after, plus the run's picked project Assets, copied into `/workspace/assets/`
 3. After workflow completes → user sees all WorkflowRunAssets and can export selected ones to project-level Assets (via the export UI / `AssetExportService`)
 
 ### 2.8 Asset (Polymorphic Scope + Separate Versions)
@@ -385,8 +393,7 @@ class Asset < ApplicationRecord
   has_many :versions, class_name: 'AssetVersion', dependent: :destroy
 
   # name: string
-  # asset_type: enum (document, image, archive, code, diagram, data, html, repository, other)
-  # folder: string (optional, one-level nesting — "architecture", "stories", "reports")
+  # folder: string (optional path, nested with "/" — "architecture", "specs/api"; Folder::PATH_FORMAT)
   # tags: string[] (postgres array — ["prd", "v2", "approved", "client-facing"])
   # public: boolean (default: false)
   # public_token: string (unique, generated when public=true)
@@ -407,7 +414,7 @@ class AssetVersion < ApplicationRecord
   belongs_to :asset, inverse_of: :versions
   belongs_to :uploaded_by, class_name: 'User'
 
-  enumerize :source, in: %i[upload workflow github session slack], default: :upload
+  enumerize :source, in: %i[upload workflow github session slack teams], default: :upload
 
   before_validation :set_version, on: :create  # auto-increment within asset
 
@@ -415,7 +422,7 @@ class AssetVersion < ApplicationRecord
   # file_data: text (Shrine attachment metadata)
   # content_type: string (mime type)
   # file_size: integer
-  # source: enum (upload | workflow | github | session | slack)
+  # source: enum (upload | workflow | github | session | slack | teams)
 end
 ```
 
@@ -451,48 +458,31 @@ company, and a company asset is visible in every project of that company.
 
 ```
 /workspace/
-├── input/                  # READONLY — all available files for this step
-│   ├── _index.md           # Auto-generated: describes all input files
-│   ├── prd.md              # Project Asset (selected at workflow start)
-│   ├── template.md         # Project Asset (selected at workflow start)
-│   ├── repo/               # GitHub clone (if repository asset)
-│   ├── code_report.md      # WorkflowRunAsset from previous step
-│   └── analysis.md         # WorkflowRunAsset from previous step
+├── assets/                 # READ-ONLY by instruction — files provided for this step
+│   ├── prd.md              # Project Asset attached to the workflow or step, or picked for the run
+│   ├── code_report.md      # WorkflowRunAsset from an earlier step
+│   └── analysis.md         # WorkflowRunAsset from an earlier step
 │
-└── output/                 # COLLECT — everything agent produces
-    ├── architecture.md     # Will become WorkflowRunAsset
+├── repo/                   # Repositories, one directory each (RepositoryWorkspacePath)
+│   └── backend/
+│
+└── outputs/                # COLLECT — everything the agent produces
+    ├── architecture.md     # Will become a WorkflowRunAsset
     └── diagrams/           # Will become WorkflowRunAssets
 ```
 
-### 3.2 Dynamic _index.md
+`Asset::CONTAINER_DIR` and `Asset::OUTPUT_DIR` name the two file directories. No index
+file is written into the workspace; the instructions file lists what is there instead
+(`ContextBuilders::Workspace`, and `ContextBuilders::WorkflowContext`'s "Files from
+earlier steps" section, which names each file and the step that wrote it).
 
-Auto-generated at each step start:
-
-```markdown
-# Workspace Input Index
-
-## Project Assets (selected at workflow start)
-- **prd.md** — Product Requirements Document (document, 2.3KB)
-- **company-template.md** — Code Report Template (document, 1.1KB)
-- **repo/** — Repository: github.com/acme/backend (repository, branch: main)
-
-## Workflow Run Assets (from previous steps)
-- **code_report.md** — from Step 1 "Generate Code Report" (document, 15.2KB)
-- **security_findings.json** — from Step 1 "Generate Code Report" (data, 3.4KB)
-
-## Instructions
-- Read from: /workspace/input/
-- Save all results to: /workspace/output/
-- If you need to modify an existing document, copy it from input to output first
-```
-
-### 3.3 Output Collection
+### 3.2 Output Collection
 
 When step completes:
-1. Collect all files from `/workspace/output/`
+1. Collect all files from `/workspace/outputs/`
 2. Upload each to S3
 3. Create `WorkflowRunAsset` records (belonging to WorkflowRun, linked to StepRun)
-4. Available to all subsequent steps automatically
+4. Copied into `/workspace/assets/` of every later step that runs after it
 
 ---
 
@@ -505,7 +495,7 @@ User clicks "Run Workflow"
     │
     ├─→ Select mode:
     │     • Interactive (all steps require user interaction)
-    │     • Non-interactive (only if workflow.can_run_non_interactive?)
+    │     • Non-interactive (only if WorkflowRun#can_run_non_interactive?)
     │     • Mixed (non-interactive steps auto-proceed, others wait)
     │
     ├─→ Select project Assets as inputs
@@ -517,7 +507,9 @@ User clicks "Run Workflow"
 Create WorkflowRun (state: pending, input_asset_ids: [...])
     │
     ▼
-Start first step
+Run the steps in passes: each pass starts, in parallel, every step whose
+depends_on_step_ids are all done (the first pass: the root steps), and waits
+for all of them before the next pass
 ```
 
 ### 4.2 Start Step
@@ -632,17 +624,18 @@ Description: Make critical architectural decisions through collaborative discove
   - Note: "12 FRs, 8 NFRs, 3 risk areas identified"
 - Step 4: UX Design ⏭️ Skipped
 
-### Available Input Files:
-See /workspace/input/_index.md for full list.
+### Files from earlier steps (in /workspace/assets/):
+- `/workspace/assets/product-brief.md` — written by Product Brief
+- `/workspace/assets/PRD.md` — written by Create PRD
 
 ### Workflow Tools (MCP):
 - list_sub_steps — list current sub-steps with statuses
 - mark_sub_step(id, status, note, data) — update sub-step progress
 
 ### Workspace Rules:
-- Read from: /workspace/input/
-- Save all results to: /workspace/output/
-- If you need to modify an existing document, copy from input to output first
+- Read from: /workspace/assets/
+- Save all results to: /workspace/outputs/
+- Files in /workspace/assets/ are read-only — copy to outputs before editing
 
 # ===== END WORKFLOW CONTEXT =====
 ```
@@ -745,10 +738,15 @@ workflow execution:
 - **read_tool_result** — injected when container tools are present; fetches status
   and presigned download URLs for an async tool execution.
 
-There is **no** `write_step_note` or `export_asset` internal tool. Step notes are
-written through `finish_session` / `fail_session`; promoting an output to a
-project-level Asset is handled by `AssetExportService` (via the post-workflow
-export UI), not an agent tool.
+- **promote_asset** — injected when `workflow_step_session`; promotes a file in
+  `/workspace/outputs/` or an output an earlier step of the run produced to a
+  versioned project-level Asset (into a folder, `/` nesting), through
+  `AssetExportService`, the same service the post-workflow export UI uses.
+- **share_asset** — injected when `workflow_step_session`; publishes a file at a
+  public link (see [§8](#8-asset-public-sharing)).
+
+There is **no** `write_step_note` internal tool. Step notes are written through
+`finish_session` / `fail_session`.
 
 ### Session monitoring: one snapshot per session per pass
 
@@ -881,11 +879,12 @@ Automatic sessions run each CLI's TUI. When a turn ends, the TUI waits at its
 prompt for a person, whether the model forgot `finish_session` or a provider
 error ended the turn. Two sweeps cover that state:
 
-- **The reminder (Kiro, Copilot CLI).** `Sessions::Monitor` reads each session's
+- **The reminder (Kiro, Copilot CLI, Antigravity CLI).** `Sessions::Monitor` reads each session's
   pane once a minute. When `TurnEndDetector` sees the runtime's idle prompt on two
   reads of the same screen — Kiro's under a `▸ Credits: turn …` summary, Copilot's
   `← open sidebar · Interactive` hint four lines under its `Session: … AIC used`
-  line — `Sessions::Checks::TurnEnd` types a reminder into the pane: call
+  line, Antigravity's `? for shortcuts` footer with an empty input box two lines
+  above it — `Sessions::Checks::TurnEnd` types a reminder into the pane: call
   `finish_session` if the work is done, otherwise continue. The agent takes it
   as its next message. `Sessions::PaneInput` sends the text and `Enter` in one
   `tmux send-keys -l … ; run-shell "sleep 0.2" ; send-keys Enter` call, so a
@@ -955,7 +954,8 @@ Kiro's `Stop` hook was measured as an alternative on kiro-cli 3.0.0 and not
 used: a `{"decision":"block"}` answer makes the agent continue, but the hook
 runs only once per prompt, does not run when a provider error ends the turn,
 and receives only the CLI's own `session_id`, `hook_event_name` and `cwd`.
-Other runtimes have the same gap and get only the mtime watchdog until a
+The runtimes without a `TurnEndDetector` signature (Claude Code, Cursor CLI, Codex,
+Gemini CLI, Grok) have the same gap and get only the mtime watchdog until a
 signature for their idle prompt and a capture of their working screen are
 measured.
 
@@ -1015,7 +1015,7 @@ columns — see [§2.8](#28-asset-polymorphic-scope--separate-versions) for the 
 ### 7.2 Version provenance
 
 Each `AssetVersion` records where it came from via an `enumerize :source`
-(`upload | workflow | github | session | slack`) plus `uploaded_by`. Workflow
+(`upload | workflow | github | session | slack | teams`) plus `uploaded_by`. Workflow
 provenance is additionally captured on `Asset#step_run` (the step run that produced
 it). Resolution helpers: `Asset#latest_version` and
 `Asset#resolve_version(version_number)`.
@@ -1057,24 +1057,28 @@ looks it up in each.
 
 ```yaml
 output_asset_specs:
-  - name: "architecture"
-    asset_type: document
-    name_pattern: "*.md"
+  - name: "architecture.md"     # a path under /workspace/outputs, or a glob ("reports/*.md")
+    asset_type: document        # a free-text label; nothing checks it
     required: true
-    validation:
-      format: markdown
-      required_sections:
-        - "## Core Decisions"
-        - "## Implementation Patterns"
-      min_length: 500
+    min_size: 500               # bytes
+    required_sections:          # heading text, matched at any heading level, case-insensitive
+      - "Core Decisions"
+      - "Implementation Patterns"
 ```
+
+`name_pattern` (a regular expression) is the legacy alternative to `name`.
+`min_size` and `required_sections` are set through the Builder's and personal MCP's
+`create_workflow_step` / `update_workflow_step`; the API's step params take only
+`name`, `asset_type`, `required` and `name_pattern`.
 
 ### 9.2 Validation Process
 
-1. **Existence** — file exists in output
-2. **Naming** — matches name_pattern
-3. **Structure** — contains required sections (markdown)
-4. **Size** — minimum length
+`OutputValidator` checks each spec against the step's collected outputs:
+
+1. **Existence** — a required spec with no matching output fails
+2. **Naming** — `name` matches exactly or as a glob; `name_pattern` as a regex
+3. **Structure** — each matching markdown output (`.md`, or a markdown content type) has every `required_sections` heading
+4. **Size** — each matching output is at least `min_size` bytes (`file_size`)
 
 ### 9.3 On Validation Failure
 
@@ -1193,31 +1197,21 @@ Step 2: "Create Client Report"
 
 ## 11. GitHub Integration
 
-### 11.1 Repository as Asset
+### 11.1 Repositories
 
-Repositories are a special `asset_type`. Cloned and mounted as directories.
-
-```ruby
-# Asset with asset_type: "repository"
-# provenance: { source: "github", repo_url: "...", branch: "main", commit: "abc123" }
-# Mounted to: /workspace/input/repo/
-```
+A repository is its own model, `Repository` (`repositories` table), not an asset. It
+belongs to a project and to the integration it is cloned through (GitHub, GitLab,
+Bitbucket or Azure DevOps), or to none for a public repository. A step names
+repositories in its `repository_ids`, merged with the workflow's `base_repository_ids`.
 
 ### 11.2 Clone Process
 
-```ruby
-class WorkspacePreparator
-  def prepare_repository_asset(asset, workspace_path)
-    repo_path = "#{workspace_path}/input/repo"
-    Git.clone(
-      asset.provenance['repo_url'], repo_path,
-      depth: asset.provenance['depth'] || 1,
-      branch: asset.provenance['branch'] || 'main',
-      credentials: resolve_github_credentials(asset.project)
-    )
-  end
-end
-```
+`SessionContextService` clones each repository the session names into the container,
+with a token minted from the repository's integration, or anonymously for a public
+repository. `RepositoryWorkspacePath` decides the directory once, for the whole set:
+`/workspace/repo/<name>`, or an id-qualified directory when two names would collide
+(and for every Azure DevOps repository). The paths are stored in the session's
+metadata and read back from there, so a renamed remote never moves a live checkout.
 
 ---
 
@@ -1229,7 +1223,7 @@ end
 | 2 | Entity naming | ✅ Workflow → Step → SubStep (clean, no prefixes) |
 | 3 | Granularity | ✅ BMAD workflow = Aixle Step; BMAD step-file = Aixle SubStep |
 | 4 | Tool calling | ✅ MCP servers |
-| 5 | Parallel steps | ❌ Sequential only |
+| 5 | Parallel steps | ✅ Steps form a DAG (`depends_on_step_ids`); each pass runs every ready step in parallel |
 | 6 | Branching | ❌ Not needed |
 | 7 | Execution modes | ✅ Interactive / Non-interactive / Mixed |
 | 8 | Intermediate files | ✅ Two-tier: WorkflowRunAsset → explicit export to Asset |
@@ -1238,7 +1232,7 @@ end
 | 11 | Skip policy | ✅ never / if_outputs_exist / manual (no condition) |
 | 12 | Workflow scope | ✅ Polymorphic scope (Project / System); a workflow belongs to one project |
 | 13 | Asset versioning | ✅ Same name → new version; different name → new asset |
-| 14 | Asset organization | ✅ One-level folders + tags |
+| 14 | Asset organization | ✅ Nested folders (paths, `/`) + tags |
 | 15 | Public sharing | ✅ public flag + public_token → shareable URL |
 | 16 | Menus | ✅ Through step/sub-step instructions, not separate model |
 | 17 | Tri-modal | ✅ Separate workflows (Create PRD vs Validate/Edit PRD) |

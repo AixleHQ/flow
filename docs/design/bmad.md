@@ -45,12 +45,13 @@ Add a **"Use BMAD Method"** checkbox when launching a standalone session and in 
 
 ### 2. Key decision: we use `npx bmad-method install`
 
-BMAD Method v6.2 provides an npm CLI with a **non-interactive install mode**:
+BMAD Method provides an npm CLI with a **non-interactive install mode**. The version is pinned
+(`BmadMethodInjector::BMAD_METHOD_VERSION`, `6.11.0`):
 
 ```bash
-npx bmad-method install \
+npx -y bmad-method@6.11.0 install \
   --directory /workspace \
-  --modules bmm,cis,bmb \
+  --modules bmm,wds \
   --tools cursor \
   --user-name "Artem" \
   --communication-language Russian \
@@ -58,6 +59,11 @@ npx bmad-method install \
   --output-folder /workspace/outputs \
   --yes
 ```
+
+The default modules are `bmm, wds` (`TerminalSession::BMAD_DEFAULT_MODULES`). Since 6.10.0 the external
+modules (`bmb`, `cis`, `wds`) are fetched from GitHub during the install, so the container needs outbound
+access to github.com; the injector passes `Settings.github.read_token` as `GITHUB_TOKEN` when it is set,
+so tag lookups do not exhaust the anonymous api.github.com budget.
 
 #### What the installer does automatically
 
@@ -69,10 +75,10 @@ npx bmad-method install \
 
 #### Advantages
 
-- We don't write our own installer — we use the official CLI, always the latest version
-- Automatic support for new community modules
+- We don't write our own installer — we use the official CLI, at a pinned version
 - Correct format for each IDE — the CLI knows 20+ IDEs
-- BMAD updates for free — a new npm version = new workflows
+- A BMAD update is a deliberate bump of `BMAD_METHOD_VERSION`: a bump has to re-validate the skill
+  directories in §3, which moved in 6.6.0
 - Non-interactive mode — ideal for the container
 
 ### 3. Mapping agent_type → BMAD tools flag
@@ -100,9 +106,9 @@ and Gemini install into `.agents/skills`.
 │  What happens on assemble_session_context:                       │
 │                                                                      │
 │  1. RUN in the container:                                               │
-│     npx bmad-method install \                                       │
+│     npx -y bmad-method@<BMAD_METHOD_VERSION> install \               │
 │       --directory /workspace \                                       │
-│       --modules bmm,cis,bmb \                                       │
+│       --modules bmm,wds \                                            │
 │       --tools <agent_type_mapped> \                                  │
 │       --user-name "<user.display_name>" \                            │
 │       --communication-language "<user.locale>" \                     │
@@ -135,7 +141,7 @@ and Gemini install into `.agents/skills`.
 ```ruby
 # terminal_sessions — add to the session_config jsonb
 # session_config["bmad_enabled"] = true/false
-# session_config["bmad_modules"] = ["bmm", "cis", "bmb"] (optional, default: all)
+# session_config["bmad_modules"] = ["bmm", "wds"] (optional, default: TerminalSession::BMAD_DEFAULT_MODULES = bmm, wds)
 
 # steps — add a field
 add_column :steps, :bmad_enabled, :boolean, default: false
@@ -198,7 +204,7 @@ class BmadMethodInjector
     modules = resolve_modules.join(",")
 
     cmd = [
-      "npx", "bmad-method", "install",
+      "npx", "-y", "bmad-method@#{BMAD_METHOD_VERSION}", "install",
       "--directory", "/workspace",
       "--modules", modules,
       "--tools", tool,
@@ -213,7 +219,7 @@ class BmadMethodInjector
   end
 
   def resolve_modules
-    @session.session_config&.dig("bmad_modules") || %w[bmm cis bmb]
+    @session.bmad_modules # session_config["bmad_modules"] || BMAD_DEFAULT_MODULES (%w[bmm wds])
   end
 
   def resolve_language
@@ -301,8 +307,10 @@ In `docker/base/vscode-settings.json` or dynamically in `BmadMethodInjector#hide
 
 #### 5.7 Frontend
 
-- `SessionLaunchWidget` — add a "Use BMAD Method" toggle
-- Step editor (workflow builder) — add a "Use BMAD Method" toggle
+- `SessionNewForm` (`app/frontend/shared/components/SessionNewForm.tsx`) — the "Use BMAD Method" toggle
+  for a standalone session
+- `SessionEditorPanel` (`app/frontend/pages/Projects/Workflows/SessionEditorPanel.tsx`) — the "BMAD Method"
+  toggle for a workflow step
 - Both pass `bmad_enabled: true` into session_config / step
 
 #### 5.8 Docker — Node.js in the container
@@ -364,7 +372,7 @@ BmadModuleRegistry, agent mapping, composite workflows.
 | `BmadMethodInjector` (running npx in the container + post-install) | 1.5 days |
 | `ContextBuilders::BmadMethod` | 0.5 days |
 | VS Code settings (files.exclude for BMAD) | 0.5 days |
-| Frontend — checkbox in SessionLaunchWidget + Step editor | 1 day |
+| Frontend — checkbox in SessionNewForm + SessionEditorPanel | 1 day |
 | Docker — verify/add Node.js v20+ in agent images | 0.5 days |
 | e2e testing (all 4 agent types) | 1 day |
 | **Total** | **~5.5 days** |
@@ -375,7 +383,7 @@ BmadModuleRegistry, agent mapping, composite workflows.
 |---|--------|-------------|
 | 1 | Is Node.js v20+ present in all agent container images? | Check the Dockerfiles. If not — add it to the base image. |
 | 2 | Do we need to cache the BMAD install between sessions? | MVP: no, we install every time. V2: Docker layer cache or pre-baked image. |
-| 3 | Which modules should be installed by default? | MVP: bmm (core methodology). Optionally: cis, bmb. |
+| 3 | Which modules should be installed by default? | Built: `bmm, wds` (`TerminalSession::BMAD_DEFAULT_MODULES`). |
 | 4 | How should npx install errors be handled? | Log them, don't block the session. BMAD = nice-to-have, not critical path. |
 | 5 | Do we need `--communication-language` from the user profile? | Yes, map it from user.locale or user.settings. MVP: English. |
 | 6 | How long does npx bmad-method install take? | ~10-30 sec. Run it in parallel with other assemble_session_context steps if possible. |

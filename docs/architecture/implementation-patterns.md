@@ -34,7 +34,7 @@
 | TS constants | UPPER_SNAKE_CASE | `API_BASE_URL` |
 
 ### Field Naming
-- **State columns:** `state` (not `status`) — AASM convention
+- **State columns:** an AASM machine keeps its state in `state` (or `<name>_state`, as `onboarding_state` and `subscription_state`), not `status`. The one exception is `Runner`, whose machine runs on `runners.status` (with `status_reason`). The `enumerize` columns named `status` (`Integration`, `Gate`, `ProjectTracker`, …) are not state machines
 - **Enums:** via `enumerize` gem, never `ActiveRecord::Enum`
 - **Encrypted:** `encrypted_config_data` (column), `config_data` (accessor)
 
@@ -152,8 +152,11 @@ What the controllers return — no envelope around the resource:
   - **User:** `state` (active/pending/suspended/archived)
   - **CompanyMembership:** `state` (invited/active/suspended/revoked), `onboarding_state` (step1→step2→completed)
   - **Company:** `state` (active/suspended/archived)
-  - **TerminalSession:** `state` (not_started/queued/running/ready/finishing/finished/failed/cancelled)
+  - **TerminalSession:** `state` (not_started/queued/running/ready/finishing/finished/failed/cancelled/suspended/restored)
   - **WorkflowRun:** `state` (pending/running/paused/completed/failed/cancelled)
+  - **Runner:** `status` (pending/connected/degraded/unreachable/disabled/revoked)
+  - **RunnerEnvironment:** `state` (registered/resetting/failed/gone)
+  - **MarketplaceLicense:** `subscription_state` (pending/active/ending/ended)
 - **A state changes only through its events.** Other code does not write `state` with `update` or `state =`; a move the machine lacks is added to the machine (see Anti-Patterns → change a record's state, or another column whose change has an owner, past that owner)
 
 ### Model Predicates
@@ -191,7 +194,7 @@ What a model's state, type or columns mean is decided in the model. Other code a
   - `error_on:` → the attribute that gets the error
   - Validate only when the value can change. For a column (a foreign key or an id array), use the `if:` above. For an association collection (`has_and_belongs_to_many`), which has no `will_save_change_to_<name>?` method, validate where the ids arrive instead, e.g. `on: :create` (`TerminalSession`)
 - **Examples:** `Repository#integration_id` (`project: :scope_project, error_on: :integration`), `WorkflowRun#input_asset_ids` / `#repository_ids` (with the change guard), `TriggerBinding#subject_column_id` (`error_on: :subject_column`), the `TerminalSession` associations (`company: :company, on: :create`)
-- **Reading an id back:** an id read from a JSON column, a stored id list or a tool argument is resolved through the tenant, `TenantScope.owned(X, project:).find_by(id: id)` / `.where(id: ids)`, never `X.find(id)` / `X.find_by(id:)`, so a foreign id is not found. Examples: `SessionContextService` (`:445`), `TriggerEngine` (`:342`), `WorkflowStepStrategy` (`:161`), `Chat::SlackProvider` / `Chat::TeamsProvider`, `InternalTools::GetConfigItem`, `AzureDevopsContext`, `TerminalSession` (`:310`). The `Tenant/ScopedToolLookup` cop enforces it in `app/services/internal_tools` and `app/services/personal_tools` only
+- **Reading an id back:** an id read from a JSON column, a stored id list or a tool argument is resolved through the tenant, `TenantScope.owned(X, project:).find_by(id: id)` / `.where(id: ids)`, never `X.find(id)` / `X.find_by(id:)`, so a foreign id is not found. Examples: `SessionContextService#tenant_owned`, `TriggerEngine#owned_asset_ids`, `WorkflowStepStrategy#inject_workflow_run_assets`, `Chat::SlackProvider` / `Chat::TeamsProvider`, `InternalTools::GetConfigItem`, `AzureDevopsContext`, `TerminalSession#available_tools`. The `Tenant/ScopedToolLookup` cop enforces it in `app/services/internal_tools` and `app/services/personal_tools` only
 - **Ownership** is defined in one place: `TenantScope.owned` (`app/services/tenant_scope.rb`). Ownership only, no enabled/attachable filtering; platform-owned rows (code tools, internal MCP servers) belong to every tenant. A new model that can be referenced gets its rule there (otherwise `owned` raises `no tenant rule for …`), not in a model scope of its own
 - **Database keys:** polymorphically scoped tables carry real `project_id` / `company_id` columns, kept in step with the scope pair by `TenantColumns`, with foreign keys, a composite key `(project_id, company_id)` → `projects (id, company_id)` and a check against the scope pair (`AddTenantColumnsToScopedResources`, which also ties `repositories (integration_id, company_id)` to `integrations (id, company_id)`). A table that carries `company_id` directly gets the same composite keys (`CreateRunners`). The company boundary holds in the database itself; a new scoped table follows the same pattern
 

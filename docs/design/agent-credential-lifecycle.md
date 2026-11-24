@@ -1,8 +1,8 @@
 # Agent credential lifecycle: one contract for every harness
 
-**Status:** design, with the first four layers implemented (branch
-`artempartos/harness-cred-refresh-strategy`). Each section below marks what has landed and
-what has not.
+**Status:** mostly built. Layers 0, 1, 5 and 6 have landed (Layer 0 in #279, Layer 6 in #430),
+Layer 2 apart from the 2c lease, and Layer 4 apart from its event log; Layer 3 is open. Each
+section below marks what has landed and what has not.
 **Date:** 2026-09-17
 **Scope:** the eight agent runtimes in `CompanyMembership::AVAILABLE_AGENTS`, their stored
 credentials, and everything that reads, refreshes, injects or recaptures them.
@@ -33,9 +33,9 @@ Four mechanisms, each independently correct, none aware of the others:
 
 | # | Mechanism | Code | Runs when |
 |---|---|---|---|
-| M1 | Launch top-up | `AgentCredential#refresh_if_expiring!` (`app/models/agent_credential.rb:219`) | session launch, `SESSION_REFRESH_THRESHOLD = 60.minutes` |
-| M2 | Proactive sweep | `Activities::AgentCredentials::RefreshExpiringTokensActivity` (`:21`), `*/5` Temporal | `refreshable.refresh_due(15.minutes).without_live_session` |
-| M3 | Cleanup merge-back | `AgentSessionStrategy#persist_refreshed_credentials` (`app/services/container_strategies/agent_session_strategy.rb:425`) | inside `before_cleanup` only |
+| M1 | Launch top-up | `AgentCredential#refresh_if_expiring!` (`app/models/agent_credential.rb`) | session launch, `SESSION_REFRESH_THRESHOLD = 60.minutes` |
+| M2 | Proactive sweep | `Activities::AgentCredentials::RefreshExpiringTokensActivity`, `*/5` Temporal | `refreshable.refresh_due(15.minutes).without_live_session` |
+| M3 | Cleanup merge-back | `AgentSessionStrategy#persist_refreshed_credentials` (`app/services/container_strategies/agent_session_strategy.rb`) | inside `before_cleanup` only |
 | M4 | Launch gate | `SessionService#preflight_agent_credential!` | session launch, refuses a `status: error` row, or an expired login nothing can repair (no server refresh, or a rotating grant a live holder holds; §7). A Builder ID / IdC Kiro login is not rotating, so a holder does not make it unrepairable |
 
 ### Per-runtime coverage
@@ -51,11 +51,14 @@ Four mechanisms, each independently correct, none aware of the others:
 | `gemini_cli` | API key (encrypted blob) | no | n/a | n/a | none — static by design |
 | `copilot_cli` | the GitHub token from `copilot login`'s `authTokens` (`gho_`, `ghu_` or `github_pat_`), with its host, login and kind | no | no | n/a | none declared — the adapter keeps `BaseAdapter#credential_lifecycle`'s default (`expiry: :none`, `refresh: :none`) |
 
-Sources: `app/services/agents/*_adapter.rb`, `AgentCredential::REFRESHABLE_AGENT_TYPES`
-(`app/models/agent_credential.rb:53`), and the protocol notes in
+Sources: `app/services/agents/*_adapter.rb`, `AgentCredential.refreshable_agent_types` (derived
+from each adapter's `credential_lifecycle`, Layer 0), and the protocol notes in
 `docs/research/technical-container-token-brokering-research-2026-09-05.md`.
 
 ### Blind spots
+
+As found on 2026-09-17. Layer 0 closes B1, and Layer 4's `error` status and mailer close B5; §4 marks the
+rest.
 
 - **B1 — coverage is a literal.** `REFRESHABLE_AGENT_TYPES = %w[claude_code codex cursor_cli]`
   and `token_expires_at` are declared independently. A runtime can ship with an expiry and no
@@ -79,7 +82,7 @@ Sources: `app/services/agents/*_adapter.rb`, `AgentCredential::REFRESHABLE_AGENT
   far from expiry — none of it is kept, which is why the 2026-09-05 incident still cannot
   distinguish "rotated out from under us" from "aged out".
 - **B5 — no signal to anyone.** `AgentCredentialResource#connection_status`
-  (`app/resources/agent_credential_resource.rb:24`) derives from `expires_at` alone: a
+  (`app/resources/agent_credential_resource.rb`) derives from `expires_at` alone: a
   credential the sweep has condemned to `status: error` still renders **active** when its
   expiry is nil or in the future. There is no mailer for agent credentials (only
   `OauthMailer#refresh_failed` for `OauthCredential`), no metric, no alert.
@@ -186,20 +189,21 @@ Add one descriptor to `BaseAdapter`, overridden by every adapter:
 
 ```ruby
 # app/services/agents/base_adapter.rb
+#   expiry      :token | :none                                  — is an expiry readable from the blob?
+#   refresh     :server | :container_only | :reauth_only | :none
+#   rotation    :rotating | :static                             — does a refresh invalidate the old grant?
+#   nominal_ttl the vendor's documented/measured token life, nil when unknown
+#   reauth_required_on_expiry  optional; set only when `expiry: :token` meets a refresh that cannot renew
 def credential_lifecycle
-  {
-    expiry:     :none,        # :token | :none | :unknown  — is an expiry readable from the blob?
-    refresh:    :reauth_only, # :server | :container_only | :reauth_only
-    rotation:   :static,      # :rotating | :static        — does a refresh invalidate the old grant?
-    nominal_ttl: nil,         # documented vendor TTL, for the UI and for alert thresholds
-    reauth:     :profile      # what the user must do when it dies
-  }
+  { expiry: :none, refresh: :none, rotation: :static, nominal_ttl: nil }.freeze
 end
 ```
 
+The values are pinned by `test/services/agents/credential_lifecycle_contract_test.rb`.
+
 What it buys, immediately:
 
-- `REFRESHABLE_AGENT_TYPES` is **derived** from `refresh == :server`, not maintained by hand.
+- `AgentCredential.refreshable_agent_types` is **derived** from `refresh == :server`, not maintained by hand.
 - A model test asserts every `CompanyMembership::AVAILABLE_AGENTS` entry declares one and that
   the illegal combinations cannot ship:
   - `expiry: :token` + `refresh: :reauth_only` is only legal when the runtime also declares
@@ -280,7 +284,7 @@ then hand the result to the holder — otherwise refreshing merely moves the inv
 to the container.
 
 The delivery path already exists: `AgentCredential#write_to_container`
-(`app/models/agent_credential.rb:192`) is exactly what launch uses. After a server-side
+(`app/models/agent_credential.rb`) is exactly what launch uses. After a server-side
 refresh, rewrite the credential files of every live container holding that credential.
 
 One unknown gates how far this goes: **whether a CLI re-reads its credentials file mid-run**.
@@ -513,7 +517,8 @@ deleted container took the work with it.
 | **P1** | 2c lease (replacing the per-sweep idle probe) | open |
 | **P1** | 2d refresh broker + fan-out to every holder; Layer 6 pause, heal and resume in place | **done** (task #2731); the broker needs the agent images rebuilt |
 | **P2** | Layer 4 event log + sweep metrics | open — turns the next incident into a query |
-| **P3** | antigravity refresh; the cursor 404; Layer 3 broker probes | open — each blocked on a live credential or a vendor answer |
+| **P3** | antigravity refresh; the cursor 404 | **done** (Layer 1) |
+| **P3** | Layer 3 broker probes | open — blocked on a live credential or a vendor answer |
 | **P4** | Layer 5: publishing, canary, version file | **done**; the per-runtime login pass after a rebuild is manual and open |
 | — | PR #222 (cursor `NULL`-expiry launch gate) | someone else's branch; it touches the same preflight, so it lands before or after this, not alongside |
 

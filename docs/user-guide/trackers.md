@@ -192,8 +192,8 @@ A mention is recognised only once Flow knows its own account in the tracker:
   **This Linear account is kept for Aixle**, or Aixle's Linear app. Linear's
   mention picker does not offer the app, but a comment that types its username
   (`@<app username>`, as its profile in Linear shows it) counts.
-- **YouTrack** — a connection marked **This YouTrack account is kept for
-  Aixle**; people mention it as `@<login>`.
+- **YouTrack** — always: the connection writes as the Aixle Flow app's
+  service user, and people mention it as `@aixle-flow`.
 
 A mention inside code — in backticks, a code block, or Jira's `{code}` and
 `{{…}}` — does not count, as it notifies nobody in the tracker either. That is
@@ -380,7 +380,7 @@ them without attaching anything.
 | --- | --- |
 | `tracker_list` | Lists the project's trackers: handle, provider, primary, access, whether each is usable, and which one started this run |
 | `tracker_describe` | A tracker's statuses with a portable category (todo, in_progress, done, canceled), its issue types and the extra fields that can be set |
-| `tracker_search_issues` | Searches issues by text, status, type, assignee, labels or ids, paginated; Jira also takes JQL in `native_query`, and GitHub Projects its project filter syntax |
+| `tracker_search_issues` | Searches issues by text, status, type, assignee, labels or ids, paginated; Jira also takes JQL in `native_query`, GitHub Projects its project filter syntax, and YouTrack its query language |
 | `tracker_get_issue` | Reads one issue in full, by id, key or URL |
 | `tracker_list_comments` | Lists an issue's comments, paginated |
 | `tracker_list_users` | Finds people an issue can be assigned to; not every tracker can list users |

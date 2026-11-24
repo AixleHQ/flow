@@ -2,7 +2,7 @@
 
 Complete surface area, organized by what you reach for:
 
-- **[CLI](cli.md)** — every `make` target and what it does.
+- **[CLI](cli.md)** — the `make` targets, where each runs and what it does.
 - **[API](api.md)** — REST endpoints, webhooks, the OpenAPI explorer.
 - **[Configuration](configuration.md)** — every environment variable.
 

@@ -14,7 +14,7 @@ Versions are not repeated here: they live in `.ruby-version`, `Gemfile.lock`,
 
 **Multi-tenancy:** Company → Project hierarchy. Scoped resources carry a polymorphic `scope` and belong to one project, except assets (and their folders), which can also be company-wide, and the platform's own workflows (`System`). All tenant queries filter by `company_id`.
 
-**State machines:** AASM gem, in `app/state_machines/`. Five: `Company`, `CompanyMembership` (membership state + onboarding), `User` (account state), `TerminalSession`, `WorkflowRun`.
+**State machines:** AASM gem, in `app/state_machines/`: `Company`, `CompanyMembership` (membership state + onboarding), `User` (account state), `TerminalSession`, `WorkflowRun`, `Runner` (connection status), `RunnerEnvironment` (one runner machine) and `MarketplaceLicense` (an AWS Marketplace agreement).
 
 **Enums:** `enumerize` gem. Never `ActiveRecord::Enum`.
 
@@ -30,9 +30,9 @@ Versions are not repeated here: they live in `.ruby-version`, `Gemfile.lock`,
 
 ## Authentication & Authorization
 
-**Authentication:** email + password (`has_secure_password`, no Devise), Google OAuth via OmniAuth, and sign-up through an invitation. The Rails cookie store holds the session, and the cookie points at a server-side `UserSession` row, so signing out elsewhere takes effect immediately. No JWT.
+**Authentication:** email + password (`has_secure_password`, no Devise), Google and Microsoft via OmniAuth, per-company OIDC SSO (`openid_connect`), passkeys (`webauthn`), emailed magic links, TOTP as a step-up factor (never a sign-in on its own), and sign-up through an invitation. A company's directory can provision members over SCIM 2.0 (`scimitar`). The Rails cookie store holds the session, and the cookie points at a server-side `UserSession` row, so signing out elsewhere takes effect immediately. No JWT.
 
-**Other principals:** a personal MCP token per user (the `/mcp` endpoint); per-session keys for agent containers (MCP, credential vending, credential write-back, usage ingest); inbound webhooks that verify their own signature or secret (GitHub, GitLab, Azure DevOps, Slack, the generic `/webhooks/in/:slug`); HTTP Basic for `/api-docs` outside development.
+**Other principals:** a personal MCP token per user, and the OAuth access tokens Flow issues as the personal MCP server's authorization server (`/mcp-oauth/*`), both on the `/mcp` endpoint; per-session keys for agent containers (MCP, credential vending, credential write-back, usage ingest); a company's SCIM bearer token (`/scim`); runner credentials on the runner gateway (`/runner/v1/*`); the runner-relay's internal token (`/api/v1/internal/runner_relay/*`); inbound webhooks that verify their own signature or secret (GitHub, GitLab, Bitbucket Forge, Azure DevOps, Slack, Teams, Stripe, the tracker webhooks under `/webhooks/trackers/`, the generic `/webhooks/in/:slug`); HTTP Basic for `/api-docs` outside development.
 
 **Authorization:** Pundit policies. Auto-matched to controllers via `AuthorizationConcern#dynamic_authorize!`. Policy hierarchy mirrors controller namespace hierarchy. `deny_read_only_mutation!` backs the policies up by refusing writes from read-only members.
 
@@ -82,7 +82,7 @@ Versions are not repeated here: they live in `.ruby-version`, `Gemfile.lock`,
 
 **Real-time:** Inertia Cable signed streams only — no custom ActionCable channels. A page that has authorized its viewer renders the signed stream name as a prop, so only that viewer can subscribe. Models send refresh signals (`broadcasts_to`, which reloads the page's props) or, for the session and run lists, id-only row updates (`session_update` / `run_update`); the list fetches those rows back through its own authorized endpoint (`GET /company/:company_slug/sessions/rows`, `GET /company/:company_slug/projects/:id/sessions/rows`), serialized for that viewer. A broadcast never carries a payload, because one message reaches every subscriber and cannot be redacted per viewer. The cable connection refuses anyone without a live sign-in.
 
-**Internal endpoints:** `/api/v1/internal/` — the Traefik ForwardAuth check for container terminals (`ws_auth`) and OTLP usage ingestion. No user-facing Pundit; each authenticates its caller itself (see [API reference](../reference/api.md#authentication)).
+**Internal endpoints:** `/api/v1/internal/` — the Traefik ForwardAuth check for container terminals (`ws_auth`), OTLP usage ingestion, and the runner-relay service's calls (`runner_relay/holders`, `runner_relay/checks`). No user-facing Pundit; each authenticates its caller itself (see [API reference](../reference/api.md#authentication)).
 
 ---
 

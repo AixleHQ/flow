@@ -49,7 +49,7 @@ each verifies the caller its own way.
 | Jira | `POST /webhooks/trackers/<endpoint token>`, or `POST /webhooks/trackers/app/jira` for the Atlassian app | HMAC signature per subscription; the app's signed JWT |
 | Linear | `POST /webhooks/trackers/<endpoint token>` for an API-key connection, or `POST /webhooks/trackers/app/linear` for the Linear app | `Linear-Signature` HMAC with the subscription's secret, or with `LINEAR_WEBHOOK_SECRET`, and a timestamp within a minute |
 | YouTrack | `POST /webhooks/trackers/<endpoint token>`, one per connected YouTrack project | The secret the Aixle Flow app keeps for that project, in `X-Aixle-Token` |
-| Slack | `POST /webhooks/slack/events` | Slack's request signature with `SLACK_SIGNING_SECRET` |
+| Slack | `POST /webhooks/slack/events`, `POST /webhooks/slack/interactions` (the **Run workflow** shortcut and its form) and `POST /webhooks/slack/commands` (the slash command) | Slack's request signature with `SLACK_SIGNING_SECRET` |
 | Microsoft Teams | `POST /webhooks/teams/activities` | The Bot Framework's signed token: its keys, issuer, audience (the bot's app id) and service URL |
 | Incoming webhook trigger | `POST /webhooks/in/<slug>` | What the trigger is set to: HMAC SHA-256, a shared token header, or nothing |
 

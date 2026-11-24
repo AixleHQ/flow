@@ -115,10 +115,10 @@ There is no button per provider on the sign-in screen, on purpose: one screen
 serves every workspace on the installation, and a row of customer names would
 tell any visitor who your customers are.
 
-Members press **Sign in with your company SSO** and give their address. The
+Members type their address on the sign-in screen and press **Continue**. The
 domain resolves to the workspace, and its connection starts. A workspace with
-several connections shows a choice rather than guessing; a domain with none says
-so instead of failing obscurely.
+several connections shows a choice rather than guessing; a domain with none goes
+on to the sign-in methods its workspace accepts.
 
 ## Being asked to confirm
 

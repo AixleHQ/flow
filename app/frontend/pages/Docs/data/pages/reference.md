@@ -2,7 +2,7 @@
 
 Complete surface area, organized by what you reach for:
 
-- **[CLI](/docs/cli-ref)** — every `make` target and what it does.
+- **[CLI](/docs/cli-ref)** — the `make` targets, where each runs and what it does.
 - **[API](/docs/api-guide)** — REST endpoints, webhooks, the OpenAPI explorer.
 - **[Configuration](/docs/config-schema)** — every environment variable.
 

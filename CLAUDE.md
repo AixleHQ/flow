@@ -47,12 +47,13 @@ Before a push:
   lint job)
 
 Once the PR is open, CI runs everything: lint, system tests, sharded Rails and Vitest,
-the merged coverage floors and the secret scan. Watch it (`gh pr checks <n> --watch`).
-When a check is red, fix it on the branch and push again. A PR is done when CI is green,
-not when it is opened.
+the merged coverage floors, the secret scan and the Go `runner` and `runner-relay` jobs.
+Watch it (`gh pr checks <n> --watch`). When a check is red, fix it on the branch and push
+again. A PR is done when CI is green, not when it is opened.
 
-`make check_all` still runs the whole CI suite in one local pass. Use it to reproduce a
-CI failure locally, not as a gate before every push.
+`make check_all` runs CI's lint, system, Rails and Vitest checks in one local pass. It
+leaves out the secret scan (`make secret-scan`, on the host) and the Go `runner` and
+`runner-relay` jobs. Use it to reproduce a CI failure locally, not as a gate before every push.
 
 ## Docker is required
 
@@ -65,7 +66,7 @@ on the host). If the container isn't running: `docker compose up -d`.
 
 - Backend tests: `docker compose exec -T web bin/rails test <files>`
 - Frontend tests: `docker compose exec -T web ./node_modules/.bin/vitest run <files>` (`npx` is not on the container PATH)
-- The whole CI suite in one local pass, when you need it: `docker compose exec -T web make check_all`
+- CI's lint, system, Rails and Vitest checks in one local pass, when you need it: `docker compose exec -T web make check_all`
 
 **Never run two backend test invocations at the same time** (including from another
 agent session or a git worktree that shares a Postgres — overlapping runs corrupt
@@ -102,7 +103,7 @@ shared per-worker databases.
 `app/frontend/types/generated/` (Typelizer) and `app/frontend/shared/routes.ts` (ts_routes) are generated. **Never edit them by hand**, not even for one union or one route: a later generation reverts the edit or shows the drift.
 
 - Regenerate types with `bin/rails typelizer:generate` after changing an Alba resource, or the enumerize / AASM values a resource exposes.
-- Regenerate routes with `bin/rails ts:routes` after changing routes.
+- Regenerate routes with `docker compose exec -T -e RAILS_ENV=test web bin/rails ts:routes` after changing routes. The `web` container runs in development, where the routes also mount letter_opener; a development run writes that route into `routes.ts`.
 - Commit the output with the change that caused it.
 - Both need the migrated database schema, so run them in the `web` container (`docker compose exec -T web …`) or in a Coder workspace. If a generator can't run in your environment (no schema, route generation off), don't edit its output: run it where it works, or say in your result that it could not run.
 

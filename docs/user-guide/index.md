@@ -29,7 +29,7 @@ Read in any order:
 - **[Prompt guide](prompt-guide.md)** — writing session instructions an agent can run.
 - **[Agents](agents.md)** — personas, the container, and how session context is built.
 - **[Runtimes](runtimes.md)** — the eight LLM CLIs (Claude Code, Cursor CLI, Codex, Gemini CLI, Antigravity CLI, Grok, Kiro CLI, Copilot CLI), their images, credentials, and cost tracking.
-- **[Tools](tools.md)** — tool kinds, execution modes, the built-in board tools, and resource resolution.
+- **[Tools](tools.md)** — platform and custom tools, where a tool runs, the built-in board tools, and resource resolution.
 - **[MCP servers](mcp.md)** — transports, the internal `aixle-tools` server, Config Items credentials, and the personal token that turns Aixle itself into an MCP server.
 - **[Integrations](integrations.md)** — GitHub, GitLab, Bitbucket, Azure DevOps, Jira, Linear, YouTrack, Slack, Microsoft Teams, Coder and the trackers they provide, and webhooks.
 - **[Session queues](session-queues.md)** — why a session waits before its container starts, and the limits behind it.
@@ -52,10 +52,12 @@ they connected, and their usage.
 **Triggers start runs.** A workflow declares how it launches. A card entering a
 bound column is one way. The others are **Run** on a task or a workflow (or an
 agent calling the MCP tools), a cron schedule, a Slack or Teams message, an
-inbound webhook, and an event in a connected tracker — Jira, Linear, YouTrack,
-Azure Boards or GitHub Projects. A run that does not start from a card is about
+inbound webhook, an event in a connected tracker (Jira, Linear, YouTrack,
+Azure Boards, GitHub Projects or GitLab issues), a review or comment on a pull
+request, and a run that stopped on its owner's agent quota. A run that does not start from a card is about
 no card, an existing one, or a card it creates. **Gates defer runs:** a card waiting on CI — a
-GitHub check, a GitLab pipeline, an Azure build or PR policies — does not set
+GitHub check or Actions workflow, a GitLab pipeline, an Azure build or PR
+policies, or Bitbucket pull request statuses — does not set
 off its column's workflow until the check reports or goes stale.
 
 **A workflow is a DAG of steps.** Each step is one **Agent** session — a

@@ -1354,10 +1354,10 @@ Aixle Builder has **its own routes**, separate from the regular workflow run pag
 
 ```
 # Rails routes (see companyProjectAixleBuilder* helpers in shared/routes.ts)
-GET  /company/projects/:project_id/aixle_builder             → landing
-POST /company/projects/:project_id/aixle_builder/start       → launch a builder session
-GET  /company/projects/:project_id/aixle_builder/:id/session → running builder session
-POST /company/projects/:project_id/aixle_builder/:id/finish  → finish a builder session
+GET  /company/:company_slug/projects/:project_id/aixle_builder             → landing
+POST /company/:company_slug/projects/:project_id/aixle_builder/start       → launch a builder session
+GET  /company/:company_slug/projects/:project_id/aixle_builder/:id/session → running builder session
+POST /company/:company_slug/projects/:project_id/aixle_builder/:id/finish  → finish a builder session
 ```
 
 The pages live under `app/frontend/pages/Projects/AixleBuilder/`:
@@ -1376,47 +1376,44 @@ The pages live under `app/frontend/pages/Projects/AixleBuilder/`:
 ### 6.1 Activity Log
 
 There is no dedicated `MetaWorkflowActivity` ActiveRecord model. Builder
-activities are appended to a JSONB array on the run/session's `metadata`
-column (`metadata["builder_activities"]`), capped at the last 100 entries. Each
-meta-tool calls the shared `broadcast_meta_activity` helper
-(`InternalTools::MetaToolHelpers`), which persists the activity and triggers a
-Turbo refresh:
+activities are appended to a JSONB array on the builder session's `metadata`
+column (`metadata["builder_activities"]`), capped at the last 100 entries.
+`Tools::BuilderToolset#record_activity` records one after each successful call of
+a personal tool that is not read-only. It writes through
+`change_jsonb!(:metadata, callbacks: true)`, so the session's update broadcast
+refreshes the page:
 
 ```ruby
-# app/services/internal_tools/meta_tool_helpers.rb
-def broadcast_meta_activity(action:, entity_type:, entity_name:, entity_id:, details: {})
+# app/services/tools/builder_toolset.rb
+def record_activity(defn, result, session)
+  payload = parse(result[:stdout])
   activity = {
-    "action" => action, "entity_type" => entity_type, "entity_name" => entity_name,
-    "entity_id" => entity_id, "details" => details, "timestamp" => Time.current.iso8601
-  }
-  persist_activity(activity)
-end
+    "action" => defn.name.to_s,
+    "entity_type" => entity_type(defn.name.to_s),
+    "entity_name" => payload["name"] || payload["title"] || payload["full_name"],
+    "entity_id" => payload["id"],
+    "timestamp" => Time.current.iso8601
+  }.compact
 
-def persist_activity(activity)
-  target = session || workflow_run
-  return unless target.respond_to?(:metadata)
-
-  meta = target.metadata || {}
-  meta["builder_activities"] ||= []
-  meta["builder_activities"] << activity
-  meta["builder_activities"] = meta["builder_activities"].last(100)
-  target.update_column(:metadata, meta)
-  target.broadcast_refresh_to(target)   # Turbo Streams refresh
+  session.change_jsonb!(:metadata, callbacks: true) do |doc|
+    doc["builder_activities"] = (Array(doc["builder_activities"]) << activity).last(100)
+  end
 end
 ```
 
-Each activity is a plain hash: `action` (created_step, created_agent, ...),
-`entity_type`, `entity_name`, `entity_id`, `details` (jsonb), and `timestamp`.
+Each activity is a plain hash: `action` (the personal tool's name, e.g.
+`create_workflow_step`), `entity_type` (from `ACTIVITY_ENTITIES`, e.g. `Step`),
+`entity_name`, `entity_id` and `timestamp`. There is no `details` key.
 
 ### 6.2 Live Workflow Constructor
 
 There is no dedicated `MetaWorkflowChannel` — `app/channels/` holds no custom
-channels at all. Real-time updates ride on **Inertia Cable** streams: after each
-meta-tool persists a builder activity, `persist_activity` calls
-`broadcast_refresh_to(target)` (see §6.1). The target (workflow run or session)
-broadcasts a Turbo refresh over its own stream; the frontend re-fetches the
-current view rather than applying a granular, typed cache invalidation. There is
-no per-entity RTK Query tag-invalidation flow for builder events.
+channels at all. Real-time updates ride on **Inertia Cable** streams: recording a
+builder activity updates the session (see §6.1), and the session broadcasts on
+update over its own stream (`broadcasts_to` in `TerminalSession`); the frontend
+re-fetches the current view rather than applying a granular, typed cache
+invalidation. There is no per-entity RTK Query tag-invalidation flow for builder
+events.
 
 ### 6.3 UI Layout: SessionPage
 
@@ -1734,7 +1731,7 @@ Meta-tools have limits for safety:
 ## 10. Implementation Status
 
 See the note at the top of this document. Built: the Aixle Builder routes
-(`/company/projects/:id/aixle_builder`, `…/start`, `…/:id/session`, `…/:id/finish`), the
+(`/company/:company_slug/projects/:id/aixle_builder`, `…/start`, `…/:id/session`, `…/:id/finish`), the
 `LandingPage` / `SessionPage` frontend, the builder's reference files and workflow guides
 in the session context, and the `builder_activities` metadata log, refreshed on the page
 through Inertia Cable (`broadcasts_to`) rather than a dedicated Action Cable channel or an
