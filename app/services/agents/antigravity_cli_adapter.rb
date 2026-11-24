@@ -230,13 +230,12 @@ module Agents
       { "#{home_dir}/#{SETTINGS_PATH}" => settings.to_json }
     end
 
-    # `agy` is a Go binary, so it honours HTTP(S)_PROXY and its traffic already goes
-    # through the container's MITM proxy — but until now nothing collected the log, so 51
-    # production sessions in 30 days produced zero HTTP records and the refresh protocol
-    # stayed a guess read out of the binary. Google's token endpoint is the one that
-    # matters; bodies for it are dropped by the logger, so what lands is that a refresh
-    # happened, against which endpoint, with what status.
-    MITM_DOMAINS = %w[googleapis.com google.com].freeze
+    # `agy` is a Go binary, so it honours HTTP(S)_PROXY and its traffic goes through the
+    # container's MITM proxy. Google's token endpoint is the one that matters — that a
+    # refresh happened, against which endpoint, with what status — and the Cloud Code
+    # service shows the model calls and the quota answers. Not `googleapis.com` whole:
+    # that is also every GCS download and Google Cloud call the agent makes.
+    MITM_DOMAINS = %w[oauth2.googleapis.com cloudcode-pa.googleapis.com daily-cloudcode-pa.googleapis.com].freeze
 
     def default_env_vars(session, callbacks:)
       {
@@ -246,8 +245,6 @@ module Agents
         # session runs whatever shipped that day instead of the pin. Only the exact value
         # "true" is honoured: "1", "TRUE" and "yes" still update.
         "AGY_CLI_DISABLE_AUTO_UPDATE" => "true",
-        "MITM_LOG_PATH" => "/var/log/mitm/http.log",
-        "MITM_TRACKED_DOMAINS" => MITM_DOMAINS.join(","),
         **otlp_hook_env(session, callbacks[:otel])
       }
     end

@@ -184,11 +184,8 @@ module Agents
     # Both inference routes must be tracked: api.x.ai for an API-key login and
     # cli-chat-proxy.grok.com for the default signed-in (device-code/OAuth) login.
     # Tracking x.ai alone leaves every OAuth session with no usage at all.
-    test "default_env_vars tracks both the x.ai and grok.com traffic through the MITM proxy" do
-      env = @adapter.default_env_vars(@session, callbacks: hosted_callbacks)
-
-      assert_equal "x.ai,grok.com", env["MITM_TRACKED_DOMAINS"]
-      assert_equal "/var/log/mitm/http.log", env["MITM_LOG_PATH"]
+    test "the proxy tracks both the x.ai and grok.com traffic" do
+      assert_equal "x.ai,grok.com", @adapter.mitm_env["MITM_TRACKED_DOMAINS"]
       assert_equal [ "x.ai", "grok.com" ], @adapter.mitm_tracked_domains
       assert_includes @adapter.session_log_paths, "/var/log/mitm/http.log"
     end
