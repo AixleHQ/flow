@@ -82,27 +82,5 @@ module Sessions
 
       [ ends, run.created_at + TemporalWorkflowRegistry::RUN_TIMEOUT.seconds - 12.hours ].min
     end
-
-    # Called by the cleanup activity once the checkpoint is stored, in place of the
-    # usual final state. Cleanup is repeated until the container is gone (a Kubernetes Pod
-    # outlives the first pass), so it comes back here for a session already suspended.
-    def suspended!(session, now: Time.current)
-      return if session.suspended? || session.restored?
-
-      session.update!(state: "suspended", finished_at: session.finished_at || now, container_id: nil,
-                      suspended_at: now, restore_expires_at: window_end(session, now))
-      session.step_run&.mark_suspended! if session.workflow_step?
-      ActiveRecord.after_all_transactions_commit { SessionMailer.suspended(session.id).deliver_later }
-    end
-
-    # The session that continued it reached `ready`: the suspended one is done with.
-    def restored!(restored)
-      origin = restored.restored_from_session
-      return unless origin&.suspended?
-
-      origin.mark_restored!
-    rescue StandardError => e
-      Rails.logger.warn("[Suspension] could not mark session #{origin&.id} restored: #{e.message}")
-    end
   end
 end

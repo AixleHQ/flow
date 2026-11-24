@@ -812,7 +812,7 @@ pass and hands the snapshot to them (task #211).
   checks that the session is still in the state the pass read, that the check
   still applies (state, mode, auth pause) and that the check's own condition
   still holds, then changes it in the same transaction:
-  - failing goes through `SessionService.fail_session_if` (and, for an
+  - failing goes through `Sessions::Lifecycle.fail_if` (and, for an
     admitted session, `SessionAdmissionService.fail_if!` under the writer lock),
     which reports whether it applied. Only the Temporal signal that wakes the
     container workflow is sent after the commit. The message is passed through

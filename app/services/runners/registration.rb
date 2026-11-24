@@ -108,8 +108,8 @@ module Runners
       return if session.nil?
 
       # A compare-and-set: a session that finished or was cancelled meanwhile keeps its outcome.
-      SessionService.fail_session_if(
-        session: session,
+      Sessions::Lifecycle.fail_if(
+        session,
         error_message: "Machine \"#{Machines.label(environment)}\" of runner \"#{environment.runner.name}\" was #{ended_by}."
       )
     end

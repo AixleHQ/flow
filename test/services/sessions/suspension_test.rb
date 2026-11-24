@@ -75,7 +75,7 @@ module Sessions
     test "suspending opens a 30-day restore window and tells the owner" do
       freeze_time do
         assert_enqueued_emails 1 do
-          Suspension.suspended!(@session)
+          Lifecycle.suspended(@session)
         end
 
         @session.reload
@@ -87,7 +87,7 @@ module Sessions
     end
 
     test "the suspended session becomes restored once the session continuing it is ready" do
-      Suspension.suspended!(@session)
+      Lifecycle.suspended(@session)
       continued = create(:terminal_session, :running, :agent_session, user: @user, project: @project,
                                                                       restored_from_session: @session)
 
@@ -98,7 +98,7 @@ module Sessions
     end
 
     test "a restore window that has closed cannot be restored" do
-      Suspension.suspended!(@session)
+      Lifecycle.suspended(@session)
       create_checkpoint(@session)
       assert Suspension.restorable?(@session.reload)
 

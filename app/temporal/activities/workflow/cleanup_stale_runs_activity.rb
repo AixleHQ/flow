@@ -73,8 +73,8 @@ module Activities
                              .filter_map(&:terminal_session)
                              .select(&:may_fail?)
         active_sessions.each do |session|
-          SessionService.fail_session(
-            session: session,
+          Sessions::Lifecycle.fail(
+            session,
             error_message: "Terminated by stale run reaper (WorkflowRun ##{run.id})"
           )
         rescue StandardError => e

@@ -24,6 +24,13 @@ class SessionAdmission < ApplicationRecord
     wait_reason == "runner_capacity"
   end
 
+  # Whether no launch has been dispatched for this reservation yet: it is still
+  # queued, or granted but not claimed by the relay. Closing it needs no cleanup of
+  # a runtime, so it is released at once.
+  def unlaunched?
+    admitted_at.nil? || (launch_state == "pending" && claimed_at.nil?)
+  end
+
   # What this reservation is ACTUALLY waiting on, for the screens that have to
   # tell a person why nothing is happening yet.
   #

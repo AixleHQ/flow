@@ -137,7 +137,7 @@ module Api
       end
 
       test "finish: owner clears authorization on own session" do
-        # A failed session cannot transition to finishing, so SessionService.finish
+        # A failed session cannot transition to finishing, so Sessions::Lifecycle.finish
         # raises TerminalSession::InvalidStateError and the controller renders 400.
         # A 400 rather than 403 proves the policy permitted the owner (a viewer is
         # 403); no valid finishable state is needed to prove "not denied".

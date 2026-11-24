@@ -53,7 +53,7 @@ module Activities
             # letting confirmed cleanup return the slot. Reaching into the
             # runtime here would free the resources while the reservation stayed
             # occupied forever.
-            SessionService.fail_session(session: session, error_message: "Stale session: reaped after #{threshold.inspect} without progress")
+            Sessions::Lifecycle.fail(session, error_message: "Stale session: reaped after #{threshold.inspect} without progress")
           else
             try_cancel_workflow(session)
             cleanup_session(session)
@@ -109,26 +109,23 @@ module Activities
         if container
           full_cleanup(session, container)
         else
-          session.update(error_message: "Stale session: workflow ended without cleanup")
-          session.fail! if session.may_fail?
+          Sessions::Lifecycle.record_failure(session, error_message: "Stale session: workflow ended without cleanup")
         end
       rescue StandardError => e
         log(:warn, "Failed to resolve container for session #{session.id}: #{e.message}")
-        session.update(error_message: "Stale session: #{e.message}")
-        session.fail! if session.may_fail?
+        Sessions::Lifecycle.record_failure(session, error_message: "Stale session: #{e.message}")
       end
 
       def full_cleanup(session, _container)
-        session.start_finishing! if session.may_start_finishing?
+        Sessions::Lifecycle.record_finishing(session)
 
         strategy = session.strategy
         strategy.before_cleanup(container_id: session.container_id, session_id: session.id)
         strategy.cleanup(container_id: session.container_id)
-        session.finish! if session.may_finish?
+        Sessions::Lifecycle.record_finished(session)
       rescue StandardError => e
         log(:warn, "Full cleanup failed for session #{session.id}: #{e.message}, falling back to fail!")
-        session.update(error_message: "Stale session: cleanup failed — #{e.message}")
-        session.fail! if session.may_fail?
+        Sessions::Lifecycle.record_failure(session, error_message: "Stale session: cleanup failed — #{e.message}")
       end
 
       def try_cancel_workflow(session)
@@ -153,8 +150,7 @@ module Activities
           Runners::Machines.fail!(machine, reason, holder: session)
           log(:warn, "Machine #{machine.key} of runner #{session.runner_id} was #{reason}; moved to failed")
         end
-        session.update(error_message: "Stale session: workflow ended without cleanup")
-        session.fail! if session.may_fail?
+        Sessions::Lifecycle.record_failure(session, error_message: "Stale session: workflow ended without cleanup")
       end
     end
   end

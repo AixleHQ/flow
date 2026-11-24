@@ -566,7 +566,7 @@ class CompanyMembership < ApplicationRecord
 
   def stop_company_sessions
     TerminalSession.active.where(user_id: user_id, company_id: company_id).find_each do |session|
-      SessionService.fail_session(session: session, error_message: "Stopped: the owner's membership was revoked")
+      Sessions::Lifecycle.fail(session, error_message: "Stopped: the owner's membership was revoked")
     rescue StandardError => e
       Rails.logger.warn("[CompanyMembership] Failed to stop session #{session.id} for revoked user #{user_id}: #{e.message}")
     end

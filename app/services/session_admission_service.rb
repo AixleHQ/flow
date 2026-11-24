@@ -52,7 +52,7 @@ class SessionAdmissionService
           p.policy_revision = policy.revision
         end
         pool.lock!
-        session.enqueue!
+        Sessions::Lifecycle.transition!(session, :enqueue)
         SessionAdmission.create!(terminal_session: session, session_admission_pool: pool)
       end
     end
@@ -106,10 +106,10 @@ class SessionAdmissionService
         next unless admission
         admission.update!(stop_requested_at: admission.stop_requested_at || Time.current)
         verdict = session.reload.ended? ? nil : outcome
-        if admission.admitted_at.nil? || (admission.launch_state == "pending" && admission.claimed_at.nil?)
+        if admission.unlaunched?
           close_queued!(admission, verdict)
         elsif verdict
-          conclude!(session, verdict)
+          end_session!(session, verdict)
         end
       end
       session.reload
@@ -118,7 +118,7 @@ class SessionAdmissionService
     # cancel!(session, outcome: "failed") as a compare-and-set: nothing is stopped or
     # failed unless the block holds for the session's row, read under its lock inside the
     # writer lock. The error message is written in the same transaction, so a session
-    # that is not failed does not get one either (SessionService.fail_session_if).
+    # that is not failed does not get one either (Sessions::Lifecycle.fail_if).
     # @return [Boolean] whether the session was failed
     def fail_if!(session, error_message: nil)
       failed = transaction do
@@ -130,10 +130,10 @@ class SessionAdmissionService
 
         admission.update!(stop_requested_at: admission.stop_requested_at || Time.current)
         session.update!(error_message: error_message) if error_message.present?
-        if admission.admitted_at.nil? || (admission.launch_state == "pending" && admission.claimed_at.nil?)
+        if admission.unlaunched?
           close_queued!(admission, "failed")
         else
-          conclude!(session, "failed")
+          end_session!(session, "failed")
         end
         true
       end
@@ -259,13 +259,13 @@ class SessionAdmissionService
 
     def close_queued!(admission, verdict = "cancelled")
       admission.update!(released_at: Time.current, launch_state: "closed", wait_reason: nil)
-      conclude!(admission.terminal_session, verdict) if verdict
+      end_session!(admission.terminal_session, verdict) if verdict
     end
 
-    # Through the state machine, so the ending is recorded like any other. A
+    # Through Sessions::Lifecycle, so the ending is recorded like any other. A
     # failure's wake-up of the parent run waits for the commit (on_failed).
-    def conclude!(session, verdict)
-      verdict == "failed" ? session.fail! : session.cancel!
+    def end_session!(session, verdict)
+      Sessions::Lifecycle.transition!(session, verdict == "failed" ? :fail : :cancel)
     end
 
     # Every admitted session belongs to exactly one pool: its project's, or for an

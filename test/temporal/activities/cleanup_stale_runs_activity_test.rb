@@ -110,8 +110,8 @@ module Activities
                          company: @company, state: "ready")
         create(:step_run, :running, workflow_run: run, terminal_session: session)
 
-        SessionService.expects(:fail_session).with(
-          session: session,
+        Sessions::Lifecycle.expects(:fail).with(
+          session,
           error_message: regexp_matches(/stale run reaper/)
         )
 
@@ -127,7 +127,7 @@ module Activities
                          company: @company, state: "finished")
         create(:step_run, :running, workflow_run: run, terminal_session: session)
 
-        SessionService.expects(:fail_session).never
+        Sessions::Lifecycle.expects(:fail).never
 
         run_activity(CleanupStaleRunsActivity)
 

@@ -99,7 +99,7 @@ class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::A
                  .find_by(id: params[:id])
     return head :not_found unless ts
 
-    SessionService.finish(session: ts)
+    Sessions::Lifecycle.finish(ts)
     redirect_to company_project_aixle_builder_session_path(current_project, ts)
   rescue TerminalSession::InvalidStateError => e
     redirect_to company_project_aixle_builder_session_path(current_project, ts), alert: e.message

@@ -31,7 +31,7 @@ module Runners
 
       session.mark_contact_lost!(now)
       # A compare-and-set: a session that finished or was cancelled meanwhile keeps its outcome.
-      failed = SessionService.fail_session_if(session: session, expected_state: session.state, error_message: MESSAGE)
+      failed = Sessions::Lifecycle.fail_if(session, expected_state: session.state, error_message: MESSAGE)
       if failed
         Machines.let_go!(session) if session.runner.retired?
       else

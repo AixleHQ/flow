@@ -172,9 +172,9 @@ class Web::Company::Projects::AixleBuilderControllerTest < ActionDispatch::Integ
 
   # ── finish ────────────────────────────────────────
 
-  test "finish delegates to SessionService and redirects" do
+  test "finish delegates to Sessions::Lifecycle and redirects" do
     ts = create(:terminal_session, :aixle_builder, :started, user: @user, project: @project)
-    SessionService.stubs(:finish)
+    Sessions::Lifecycle.stubs(:finish)
 
     post company_project_aixle_builder_finish_path(@project, ts)
     assert_redirected_to company_project_aixle_builder_session_path(@project, ts)
