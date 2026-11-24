@@ -337,11 +337,12 @@ machine. The connection exists only while the machine holds a session.
   the longest. If the page shows an error in that window, reload it.
 - **A machine needs runner 0.5.0 or later.** Earlier versions have no tunnel.
   A session started on one runs, but its terminal does not open: the page shows
-  the relay's "not found" answer. Update the runner (self-update does it while
+  an "unavailable" (503) answer from the relay. Update the runner (self-update does it while
   the machine is idle) and start the session again.
 - **The connection ends with the session.** Ending the session, or revoking the
-  machine, closes it. A restart of the relay drops it for a moment and the
-  terminal reconnects by itself.
+  machine, closes it. A restart of the relay drops it until the machine has
+  dialed again (up to a minute or two). The terminal retries by itself for about
+  two minutes; after that, use its Reconnect button.
 
 ## What you take on with a `manual` machine
 
