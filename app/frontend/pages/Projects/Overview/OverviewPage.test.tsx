@@ -147,7 +147,7 @@ describe('Projects/Overview/OverviewPage', () => {
         summary: { ...buildProps().summary, sessionsLaunched: 10, totalTokens: 450_000, sessionSeconds: 3 * 3600 },
       }),
     });
-    expect(screen.getByText('45K avg per session')).toBeInTheDocument();
+    expect(screen.getByText('45.0k avg per session')).toBeInTheDocument();
     expect(screen.getByText('18m avg per session')).toBeInTheDocument();
   });
 

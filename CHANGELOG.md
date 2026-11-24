@@ -41,6 +41,9 @@ governance, community health — carry none.
 ### Fixed
 - **Sessions & Runs**: a running session shows an amber "Running" status in the all-projects
   and project lists, on its page and in Usage. It used to read green, like a finished one.
+- **Analytics**: token counts of a billion or more read as `1.1B` instead of `1069.7M`, and
+  every page writes token counts the same way (`12.5k`, `2.0M`): Usage, Sessions & Runs, the
+  project overview and task cards.
 - **Aixle Builder**: restoring a suspended build, and the "Continued in session" link on a
   restored one, open the build's session. They used to lead to a page that does not exist.
 - **Admin**: deleting a company that has set up SCIM provisioning works again. It used to

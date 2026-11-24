@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import type { Project } from '@/types/generated';
 
+import { formatTokens } from 'shared/lib/sessionFormat';
 import { companyProjectBoardPath, companyProjectWorkflowRunsPath } from 'shared/routes';
 import { PageHeader } from 'shared/ui/PageHeader';
 
@@ -60,13 +61,6 @@ interface Props {
   boardTaskDistribution: BoardTaskDistribution;
   allBoardTaskDistribution: BoardTaskDistribution;
   recentActivity: ActivityItem[];
-}
-
-const compactNumber = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
-
-function formatTokenCount(tokens: number): string {
-  if (!tokens) return '—';
-  return compactNumber.format(tokens);
 }
 
 function formatSessionTime(seconds: number): string {
@@ -228,11 +222,9 @@ const OverviewPage = () => {
               <IconChartBar size={15} color={KPI_ICON_COLOR} />
               <Text className={classes.kpiLabel}>Tokens Used</Text>
             </Box>
-            <Text className={`${classes.kpiValue} ${classes.kpiValueMono}`}>
-              {formatTokenCount(summary.totalTokens)}
-            </Text>
+            <Text className={`${classes.kpiValue} ${classes.kpiValueMono}`}>{formatTokens(summary.totalTokens)}</Text>
             {avgTokensPerSession != null && (
-              <Text className={classes.kpiDelta}>{formatTokenCount(avgTokensPerSession)} avg per session</Text>
+              <Text className={classes.kpiDelta}>{formatTokens(avgTokensPerSession)} avg per session</Text>
             )}
           </Box>
 
