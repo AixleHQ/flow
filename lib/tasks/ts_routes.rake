@@ -21,12 +21,12 @@ namespace :ts do
     end
 
     # Generate TypeScript routes with all routes included
-    source = TsRoutes.generate(
+    source = CompanyScopedTsRoutes.new(
       # No exclusions - include all named routes
       include: [ /.*/ ],
       # Still exclude any internal Rails routes you don't need
       exclude: [ /rails_/ ]
-    )
+    ).generate
 
     # Ensure directory exists
     FileUtils.mkdir_p(File.dirname(routes_file))

@@ -28,6 +28,7 @@ import type { ToolGroup } from 'shared/lib/toolPicker';
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import type { TrackerOption } from 'shared/resources/triggers/trackerTrigger';
 import type { ChatProviderOption, TriggerRepository } from 'shared/resources/triggers/types';
+import { companyProjectsPath, companyProjectWorkflowsPath } from 'shared/routes';
 import { UnsavedChangesNotice } from 'shared/ui/UnsavedChangesNotice';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -133,8 +134,8 @@ const BuilderPage = () => {
   const projectId = project?.id ?? null;
   const archived = initialWorkflow.archivedAt != null;
   const backPath = projectId
-    ? `/company/projects/${projectId}/workflows${archived ? '?view=archived' : ''}`
-    : '/company/projects';
+    ? companyProjectWorkflowsPath(projectId, archived ? { view: 'archived' } : undefined)
+    : companyProjectsPath();
 
   const [workflow, setWorkflow] = useState(initialWorkflow);
   const [steps, setSteps] = useState(initialSteps);

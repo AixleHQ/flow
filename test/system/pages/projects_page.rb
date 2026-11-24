@@ -3,7 +3,7 @@
 # SitePrism page object for the company Projects index (Projects/IndexPage) and
 # its "Create New Project" modal (CreateProjectModal).
 class ProjectsPage < SitePrism::Page
-  set_url "/company/projects"
+  set_url "/company/{company_slug}/projects"
 
   # The projects index shows a header "Create Project" button and, when empty, a
   # prominent "Create Your First Project" CTA — both open the same modal.

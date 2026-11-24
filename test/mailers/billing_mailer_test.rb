@@ -23,7 +23,7 @@ class BillingMailerTest < ActionMailer::TestCase
       assert_includes body, "No new sessions start"
       assert_includes body, "billed on the final invoice"
       assert_includes body, "history are kept"
-      assert_includes body, "/company/settings/billing"
+      assert_includes body, "/company/#{@company.slug}/settings/billing"
     end
   end
 
@@ -41,7 +41,7 @@ class BillingMailerTest < ActionMailer::TestCase
     [ email.text_part.decoded, email.html_part.decoded ].each do |body|
       assert_includes body, "declined"
       assert_includes body, "Acme Robotics"
-      assert_includes body, "/company/settings/billing"
+      assert_includes body, "/company/#{@company.slug}/settings/billing"
     end
   end
 end

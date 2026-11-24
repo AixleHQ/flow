@@ -225,10 +225,10 @@ class RackAttackTest < ActionDispatch::IntegrationTest
   end
 
   test "member invites and re-sends are what the invite limit counts" do
-    assert Rack::Attack.member_invite?(rack_request({}, method: "POST", path: "/company/members"))
-    assert Rack::Attack.member_invite?(rack_request({}, method: "POST", path: "/company/members/12/resend"))
-    assert_not Rack::Attack.member_invite?(rack_request({}, method: "PATCH", path: "/company/members/12"))
-    assert_not Rack::Attack.member_invite?(rack_request({}, method: "GET", path: "/company/members"))
+    assert Rack::Attack.member_invite?(rack_request({}, method: "POST", path: "/company/acme/members"))
+    assert Rack::Attack.member_invite?(rack_request({}, method: "POST", path: "/company/acme/members/12/resend"))
+    assert_not Rack::Attack.member_invite?(rack_request({}, method: "PATCH", path: "/company/acme/members/12"))
+    assert_not Rack::Attack.member_invite?(rack_request({}, method: "GET", path: "/company/acme/members"))
   end
 
   private

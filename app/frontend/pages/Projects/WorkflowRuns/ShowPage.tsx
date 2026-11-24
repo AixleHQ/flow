@@ -27,6 +27,7 @@ import { restoreDaysLeft, restoreSession } from 'shared/lib/sessionRestore';
 import { RunsOnBadge } from 'shared/resources/runners/runnerChoice';
 import { useRunsOnMeta } from 'shared/resources/runners/useRunsOnMeta';
 import {
+  companyProjectPath,
   exportAllApiV1ProjectWorkflowRunWorkflowRunAssetsPath,
   exportApiV1ProjectWorkflowRunWorkflowRunAssetPath,
   finishApiV1TerminalSessionPath,
@@ -182,7 +183,7 @@ const WorkflowRunShowPage = () => {
 
   useInertiaCableStream(cableStream, { only: ['run', 'assets'], enabled: !isTerminal });
 
-  const basePath = `/company/projects/${project.id}`;
+  const basePath = companyProjectPath(project.id);
   const workflowName = run.workflowName ?? 'Workflow run';
   const runPath = `${basePath}/workflow_runs/${run.id}`;
 

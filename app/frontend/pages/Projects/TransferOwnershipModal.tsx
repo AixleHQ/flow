@@ -4,6 +4,8 @@ import { notifications } from '@mantine/notifications';
 import { IconCrown, IconSearch, IconShieldLock, IconUser, IconUserPlus } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
+import { companyProjectOwnershipPath } from 'shared/routes';
+
 import type { OwnershipCandidate } from './ownership';
 
 // Mount only while open: the picked member and step are taken from props once.
@@ -45,7 +47,7 @@ export function TransferOwnershipModal({
     if (!picked) return;
     setSubmitting(true);
     router.patch(
-      `/company/projects/${projectId}/ownership`,
+      companyProjectOwnershipPath(projectId),
       { ownership: { userId: picked.id } },
       {
         preserveScroll: true,

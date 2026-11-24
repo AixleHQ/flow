@@ -16,6 +16,7 @@ module Api
           file_data = document_file_cache_data
 
           post :create, params: {
+            company_slug: @company.slug,
             asset: {
               name: "doc.md",
               content_type: "text/markdown",
@@ -28,6 +29,7 @@ module Api
 
         test "create answers 422 and names the offending field for an invalid folder" do
           post :create, params: {
+            company_slug: @company.slug,
             asset: { name: "doc.md", folder: "docs/..", file: document_file_cache_data }
           }
 
@@ -39,12 +41,14 @@ module Api
         # the new folder instead of creating a sibling.
         test "create makes a separate asset when the same filename lands in another folder" do
           post :create, params: {
+            company_slug: @company.slug,
             asset: { name: "readme.md", folder: "docs", file: document_file_cache_data }
           }
           assert_response :created
 
           assert_difference -> { @company.assets.count }, 1 do
             post :create, params: {
+              company_slug: @company.slug,
               asset: { name: "readme.md", folder: "reports", file: document_file_cache_data }
             }
           end
@@ -57,6 +61,7 @@ module Api
         # "—" in the Size column for everything uploaded through the UI.
         test "create records file size and content type for a browser-style payload" do
           post :create, params: {
+            company_slug: @company.slug,
             asset: {
               name: "doc.md",
               file: document_file_cache_data
@@ -72,48 +77,48 @@ module Api
         test "destroy soft-deletes asset" do
           asset = create(:asset, :with_company_scope, scope: @company, created_by: @user)
 
-          delete :destroy, params: { id: asset.id }
+          delete :destroy, params: { company_slug: @company.slug, id: asset.id }
 
           assert_response :success
         end
 
-        test "a viewer in the resolved (first) company cannot mutate its assets, even as a writer elsewhere" do
+        test "a viewer of the company in the path cannot mutate its assets, even as a writer elsewhere" do
           viewer = create(:user, :viewer, :onboarding_completed, company: @company)
           viewer.company_memberships.find_by!(company: @company).update!(accepted_at: 2.days.ago)
           create(:company_membership, user: viewer, company: create(:company),
                                       role: "employee", accepted_at: 1.day.ago)
           sign_in viewer
 
-          post :create, params: { asset: { name: "doc.md", content_type: "text/markdown" } }
+          post :create, params: { company_slug: @company.slug, asset: { name: "doc.md", content_type: "text/markdown" } }
           assert_response :forbidden
 
           asset = create(:asset, :with_company_scope, scope: @company, created_by: @user)
-          delete :destroy, params: { id: asset.id }
+          delete :destroy, params: { company_slug: @company.slug, id: asset.id }
           assert_response :forbidden
         end
 
-        # The SPA calls this API on the page's own session, so a multi-company user
-        # writes into the company on screen, not into their oldest membership.
-        test "uploads, moves and deletes act on the session's company, not the oldest membership" do
-          @user.company_memberships.find_by!(company: @company).update!(accepted_at: 3.days.ago)
+        # The SPA calls this API with the page's own company in the path, so a
+        # multi-company user writes into the company on screen, whichever one
+        # another tab left the session on.
+        test "uploads, moves and deletes act on the company in the path, not the session's" do
           other = create(:company)
           create(:company_membership, user: @user, company: other, role: "admin", accepted_at: 1.day.ago)
-          session[:current_company_id] = other.id
+          session[:current_company_id] = @company.id
 
-          post :create, params: { asset: { name: "doc.md", content_type: "text/markdown" } }
+          post :create, params: { company_slug: other.slug, asset: { name: "doc.md", content_type: "text/markdown" } }
 
           assert_response :created
           assert_equal [ "Company", other.id ], Asset.find(response.parsed_body["id"]).then { |a| [ a.scope_type, a.scope_id ] }
 
-          oldest_company_asset = create(:asset, :with_company_scope, scope: @company, created_by: @user)
-          delete :destroy, params: { id: oldest_company_asset.id }
+          session_company_asset = create(:asset, :with_company_scope, scope: @company, created_by: @user)
+          delete :destroy, params: { company_slug: other.slug, id: session_company_asset.id }
           assert_response :not_found
         end
 
         test "a user with no active membership gets 404 (no resolvable company)" do
           sign_in create(:user, :onboarding_completed)
 
-          post :create, params: { asset: { name: "doc.md", content_type: "text/markdown" } }
+          post :create, params: { company_slug: @company.slug, asset: { name: "doc.md", content_type: "text/markdown" } }
           assert_response :not_found
         end
 
@@ -121,7 +126,7 @@ module Api
           asset = create(:asset, :with_company_scope, scope: @company, created_by: @user)
           create(:asset_version, :with_file, asset: asset, uploaded_by: @user)
 
-          get :download, params: { id: asset.id }
+          get :download, params: { company_slug: @company.slug, id: asset.id }
 
           assert_response :redirect
         end

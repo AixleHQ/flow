@@ -45,8 +45,8 @@ describe('Projects/Members/MembersPage', () => {
   it('links each member name to their profile', () => {
     renderAuthedPage(<MembersPage />, { props: baseProps });
 
-    expect(screen.getByRole('link', { name: 'Ada Owner' })).toHaveAttribute('href', '/user/1');
-    expect(screen.getByRole('link', { name: 'Bo Member' })).toHaveAttribute('href', '/user/2');
+    expect(screen.getByRole('link', { name: 'Ada Owner' })).toHaveAttribute('href', '/company/user/1');
+    expect(screen.getByRole('link', { name: 'Bo Member' })).toHaveAttribute('href', '/company/user/2');
   });
 
   it('marks the owner with an Owner badge and hides Remove for them', () => {

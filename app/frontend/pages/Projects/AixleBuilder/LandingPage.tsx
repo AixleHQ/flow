@@ -22,6 +22,7 @@ import type { Project, TerminalSession } from '@/types/generated';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { companyProjectAixleBuilderSessionPath, companyProjectAixleBuilderStartPath } from 'shared/routes';
 import { AGENT_RUNTIMES, AGENT_SELECT_OPTIONS, isAgentType, NO_AGENT_CREDENTIALS } from 'shared/ui/agentRuntimes';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
@@ -85,7 +86,7 @@ const LandingPage = () => {
     if (!runtime) return;
     setStarting(true);
     router.post(
-      `/company/projects/${project.id}/aixle_builder/start`,
+      companyProjectAixleBuilderStartPath(project.id),
       {
         agentRuntime: runtime,
         preferredModel: selectedModel || undefined,
@@ -99,7 +100,7 @@ const LandingPage = () => {
 
   const handleContinue = useCallback(() => {
     if (activeSessionId) {
-      router.visit(`/company/projects/${project.id}/aixle_builder/${activeSessionId}/session`);
+      router.visit(companyProjectAixleBuilderSessionPath(project.id, activeSessionId));
     }
   }, [activeSessionId, project.id]);
 
@@ -243,7 +244,7 @@ const LandingPage = () => {
                           aria-label="Open session"
                           variant="subtle"
                           size="sm"
-                          onClick={() => router.visit(`/company/projects/${project.id}/aixle_builder/${s.id}/session`)}
+                          onClick={() => router.visit(companyProjectAixleBuilderSessionPath(project.id, s.id))}
                         >
                           <IconExternalLink size={14} />
                         </ActionIcon>

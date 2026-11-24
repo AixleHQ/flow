@@ -73,14 +73,16 @@ admin — and each trigger returns its `run_as_team`.
 
 Run lifecycle actions live in the **web** namespace (they back the
 Inertia-rendered UI). They're documented here because they're stable
-and you can call them from a session-authenticated client:
+and you can call them from a session-authenticated client.
+`:company_slug` is the company's short name, the word after `/company/` in
+the app's address bar:
 
 ```
-POST /company/projects/:project_id/workflow_runs                  (start a run)
-POST /company/projects/:project_id/workflow_runs/:id/cancel
-POST /company/projects/:project_id/workflow_runs/:id/approve_step
-POST /company/projects/:project_id/workflow_runs/:id/retry_step
-POST /company/projects/:project_id/workflow_runs/:id/skip_step
+POST /company/:company_slug/projects/:project_id/workflow_runs                  (start a run)
+POST /company/:company_slug/projects/:project_id/workflow_runs/:id/cancel
+POST /company/:company_slug/projects/:project_id/workflow_runs/:id/approve_step
+POST /company/:company_slug/projects/:project_id/workflow_runs/:id/retry_step
+POST /company/:company_slug/projects/:project_id/workflow_runs/:id/skip_step
 ```
 
 Asset endpoints for a workflow run are in `/api/v1`:
@@ -168,9 +170,9 @@ the board's bulk assign and a view preset's filters.
 GET /api/v1/assets/presign          # -> { method: "PUT", url, key } for a direct upload
 PUT /api/v1/assets/upload/*key      # development/test only: stands in for S3
 
-POST   /api/v1/company/assets
-DELETE /api/v1/company/assets/:id
-GET    /api/v1/company/assets/:id/download
+POST   /api/v1/company/:company_slug/assets
+DELETE /api/v1/company/:company_slug/assets/:id
+GET    /api/v1/company/:company_slug/assets/:id/download
 
 POST   /api/v1/projects/:project_id/assets
 DELETE /api/v1/projects/:project_id/assets/:id

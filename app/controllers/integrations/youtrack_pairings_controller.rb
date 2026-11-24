@@ -47,7 +47,7 @@ class Integrations::YoutrackPairingsController < ActionController::API
                                                              project_ids: Array(params[:projects]).map { |p| p[:id].to_s },
                                                              app_version: params[:app_version])
       @pairing.complete!(integration)
-      render json: { projects: subscriptions_json(integration), return_url: app_url(company_project_trackers_path(@pairing.project)) }
+      render json: { projects: subscriptions_json(integration), return_url: app_url(project_trackers_path(@pairing.project)) }
     end
   rescue Trackers::Error => e
     error(:unprocessable_content, e.code, e.message)
@@ -67,6 +67,8 @@ class Integrations::YoutrackPairingsController < ActionController::API
   # request came through: a staging deployment serves this API on its public
   # webhook host, which forwards that host along.
   def app_url(path) = "#{Settings.protocol || 'https'}://#{Settings.domain}#{path}"
+
+  def project_trackers_path(project) = company_project_trackers_path(project, company_slug: project.company.slug)
 
   def instance_url(value)
     url = Youtrack::Config.normalize_base_url(value.to_s)

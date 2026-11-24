@@ -16,7 +16,7 @@ class AuthenticationTest < ApplicationSystemTestCase
     login.load
     login.sign_in(@user.email, AuthHelper::TEST_PASSWORD)
 
-    assert_current_path "/company/projects", wait: 10
+    assert_current_path "/company/#{@company.slug}/projects", wait: 10
     assert_selector "button", text: "Create Project"
   end
 

@@ -19,7 +19,7 @@ module PersonalTools
       authorize!(project, :index?, policy: Web::Company::Projects::IntegrationsPolicy, project: project)
 
       url = Rails.application.routes.url_helpers.company_project_integrations_url(
-        project, host: Settings.domain, protocol: Settings.protocol
+        project, company_slug: project.company.slug, host: Settings.domain, protocol: Settings.protocol
       )
       provider = params[:provider].presence
       hint = provider ? "Open this page and connect #{provider}." : "Open this page to manage integrations."
