@@ -65,6 +65,9 @@ governance, community health — carry none.
 - **Sessions & Runs**: a Kiro session's HTTP log now records only Kiro's own traffic. It
   used to record every request the agent made to AWS, response bodies included, which
   could push the log past 1 GB.
+- **Connectors**: the daily check that warns when a catalog connector changes the tools it
+  offers checks every connector again. A connector deleted and then installed again under
+  the same name used to stop the check, so the connectors after it were not checked.
 
 ## [1.17.0] - 2026-11-23
 
