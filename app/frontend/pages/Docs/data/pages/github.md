@@ -172,7 +172,7 @@ use, so a workflow written for one host runs on the others. They are one group,
 **Pull requests**, in the tool picker: add it to a workflow's base resources or
 to a single step as you add other tools, and remove it the same way. A session
 whose workflow does not have the group has no `pull_request_*` tools; workflows
-that existed before the group became attachable kept them. They work on a
+that existed before the group became attachable kept them. A session that isn't a workflow run, an interactive one for example, gets the tools only when the group **Pull requests** is picked in the new session form's Tools; they are no longer added on their own. They work on a
 session that holds a GitHub repository connected through the App or a personal
 access token, and say so when it holds none.
 `pull_request_list`, `_get`, `_changes`, `_checks` and `_list_comments` read;

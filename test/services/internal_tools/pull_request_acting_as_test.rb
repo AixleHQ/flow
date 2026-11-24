@@ -152,7 +152,7 @@ class InternalTools::PullRequestActingAsTest < ActiveSupport::TestCase
       end
 
       assert_empty @fake.calls
-      assert_equal 0, PullRequestOperation.count
+      assert_equal [ "failed" ], PullRequestOperation.pluck(:state).map(&:to_s).uniq
       assert_equal 0, UserTokenIssuance.count
     end
 
@@ -278,6 +278,58 @@ class InternalTools::PullRequestActingAsTest < ActiveSupport::TestCase
       assert_equal "permission_denied", json(result)["error"]
       assert_match(/Merging is turned off/, json(result)["message"])
       assert_not @fake.called?(:merge)
+    end
+
+    test "#{host}: merging as a member without consent on a connection with merging off says merging is off" do
+      connect!(host)
+      consent!(@colleague, in_own_tasks: true)
+      @repository.integration.update!(settings: @repository.integration.settings.to_h.merge("pull_request_merge" => false))
+
+      result = run_write(:merge, user_id: @colleague.id)
+
+      assert_match(/Merging is turned off/, json(result)["message"])
+      assert_equal 0, UserTokenIssuance.count
+      assert_equal 0, PullRequestOperation.count
+    end
+
+    test "#{host}: refused calls mint no token and record no issuance" do
+      connect!(host)
+      consent!(@colleague, in_others_tasks: true)
+      opened = json(run_write(:create, user_id: @colleague.id))
+      issuances = UserTokenIssuance.count
+
+      same_branch = InternalTools::PullRequestCreate.new(
+        params: { source_branch: @repository.source_branch, title: "x", user_id: @colleague.id }, session: @session
+      ).execute
+      self_approval = InternalTools::PullRequestReview.new(
+        params: { pull_request: opened.dig("pull_request", "number").to_s, verdict: "approve", user_id: @colleague.id },
+        session: @session
+      ).execute
+
+      assert_equal "validation_failed", json(same_branch)["error"]
+      assert_equal "permission_denied", json(self_approval)["error"]
+      assert_equal issuances, UserTokenIssuance.count
+    end
+
+    test "#{host}: a replayed retry mints no token and records no issuance" do
+      connect!(host)
+      consent!(@colleague, in_others_tasks: true)
+      run_write(:create, user_id: @colleague.id, extra: { operation_key: "k3" })
+      assert_equal 1, UserTokenIssuance.count
+
+      replay = json(run_write(:create, user_id: @colleague.id, extra: { operation_key: "k3" }))
+
+      assert replay["replayed"]
+      assert_equal 1, UserTokenIssuance.count
+    end
+
+    test "#{host}: a successful write as a member records exactly one issuance" do
+      connect!(host)
+      consent!(@colleague, in_others_tasks: true)
+
+      assert_equal 0, run_write(:create, user_id: @colleague.id)[:exit_code]
+
+      assert_equal 1, UserTokenIssuance.count
     end
   end
 end

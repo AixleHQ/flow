@@ -69,4 +69,12 @@ class AttachPullRequestToolsToWorkflowsTest < ActiveSupport::TestCase
     assert_not_empty base_tool_ids(on_connected)
     assert_empty base_tool_ids(on_other)
   end
+
+  test "a System workflow gets no tools: the Aixle Builder has no use for them" do
+    builder = create(:workflow, :system)
+
+    migrate
+
+    assert_empty base_tool_ids(builder)
+  end
 end

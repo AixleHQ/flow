@@ -49,7 +49,8 @@ module InternalTools
         [ repository, PullRequests::Provider.for(integration, acting: acting) ]
       end
 
-      # The person to act as, with their token for this call, or nil to act as the connection.
+      # The person to act as, or nil to act as the connection. Their token is acquired when
+      # the provider first needs it, inside the write after the ledger claim.
       def acting_for!(repository)
         return if params[:user_id].nil?
 

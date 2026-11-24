@@ -18,8 +18,13 @@ module InternalTools
       "bitbucket" => "InternalTools::PullRequestActor::BitbucketActor"
     }.freeze
 
+    # The refusals that need no token come now: a host without a user identity. The member,
+    # connected account, consent and token checks run when the provider first needs the
+    # token, so a call refused or replayed before it reaches the host mints none.
+    #
     # @return [PullRequests::Acting]
-    # @raise [PullRequests::Error] with the token tools' wording when the user may not be acted as
+    # @raise [PullRequests::Error] now for an unsupported host, and from the returned
+    #   Acting's first token read with the token tools' wording when the user may not be acted as
     def self.acting_as(user, session:, repository:, tool_name:)
       provider = repository.integration.provider.to_s
       klass = CLASSES[provider]&.constantize
@@ -29,7 +34,8 @@ module InternalTools
                                       code: "unsupported")
       end
 
-      klass.new(session: session, repository: repository, tool_name: tool_name).acting_as(user)
+      actor = klass.new(session: session, repository: repository, tool_name: tool_name)
+      PullRequests::Acting.new(user_id: user.id) { actor.acting_as(user) }
     end
 
     def initialize(session:, repository:, tool_name:)
@@ -38,13 +44,14 @@ module InternalTools
       @tool_name = tool_name
     end
 
+    # @return [Hash] `{ login:, token: }`
     def acting_as(user)
       scope = user.id == session_user&.id ? :own : :others
       acquired = acquire_user_tokens(user: user, consent_scope: scope)
       token = acquired.tokens.first&.fetch(:token)
       raise Concerns::UserTokenContext::Refusal, no_identity_message if token.blank?
 
-      PullRequests::Acting.new(user_id: user.id, login: login_of(acquired.identity), token: token)
+      { login: login_of(acquired.identity), token: token }
     rescue Concerns::UserTokenContext::Refusal => e
       raise PullRequests::Error.new(e.message, code: "permission_denied")
     end

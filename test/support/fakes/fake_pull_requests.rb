@@ -174,7 +174,10 @@ module Fakes
         raise(Error.new("No pull request #{ref} in #{repository.full_name}", code: "not_found_or_inaccessible"))
     end
 
+    # Every call to the host needs the caller's token, as the real adapters build their client
+    # on first use: reading it here is when a lazily resolved `acting` mints it, or refuses.
     def record(name, **args)
+      acting&.token
       @calls << Call.new(name: name, args: args)
       error = @failures.delete(name)
       raise error if error
