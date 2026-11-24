@@ -2,6 +2,8 @@
 
 require "test_helper"
 
+# What a transition of a TerminalSession sets off, and what it assigns. The effects are
+# sent by Sessions::Lifecycle.transition!, after the commit; the model's callbacks assign.
 class TerminalSessionTransitionsTest < ActiveSupport::TestCase
   setup do
     @user = create(:user, :with_company)
@@ -79,12 +81,12 @@ class TerminalSessionTransitionsTest < ActiveSupport::TestCase
     second = queued_step_session(run)
 
     freeze_time do
-      first.start!
+      Sessions::Lifecycle.transition!(first, :start)
       assert_equal Time.current, run.reload.execution_started_at
     end
 
     travel 10.minutes do
-      second.start!
+      Sessions::Lifecycle.transition!(second, :start)
     end
     assert_equal first.reload.started_at, run.reload.execution_started_at
   end
@@ -95,7 +97,7 @@ class TerminalSessionTransitionsTest < ActiveSupport::TestCase
     queued = queued_step_session(run)
 
     TerminalSession.transaction do
-      queued.start!
+      Sessions::Lifecycle.transition!(queued, :start)
       raise ActiveRecord::Rollback
     end
 

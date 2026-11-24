@@ -50,7 +50,7 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     admission = enqueue
     SessionAdmissionService.drain!
     token = admission.reload.permit_token
-    SessionAdmissionService.begin_operation!(admission.id, token, put_session_in_state!("exec"), "uncertain")
+    SessionAdmissionService.begin_operation!(admission.id, token, "exec").update!(state: "uncertain")
 
     assert_raises(SessionAdmissionService::UncertainOperation) do
       SessionAdmissionService.begin_operation!(admission.id, token, "exec")
@@ -63,7 +63,7 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     admission = enqueue
     SessionAdmissionService.drain!
     token = admission.reload.permit_token
-    SessionAdmissionService.begin_operation!(admission.id, token, put_session_in_state!("create_container"), "uncertain")
+    SessionAdmissionService.begin_operation!(admission.id, token, "create_container").update!(state: "uncertain")
 
     assert_raises(SessionAdmissionService::UncertainOperation) { SessionAdmissionService.release!(admission) }
     assert_nil admission.reload.released_at
@@ -76,7 +76,7 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     admission = enqueue
     SessionAdmissionService.drain!
     token = admission.reload.permit_token
-    SessionAdmissionService.begin_operation!(admission.id, token, put_session_in_state!("exec"), "uncertain")
+    SessionAdmissionService.begin_operation!(admission.id, token, "exec").update!(state: "uncertain")
 
     SessionAdmissionService.release!(admission)
 
@@ -104,7 +104,7 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     admission = enqueue
     SessionAdmissionService.drain!
     token = admission.reload.permit_token
-    SessionAdmissionService.begin_operation!(admission.id, token, put_session_in_state!("start_container"), "uncertain")
+    SessionAdmissionService.begin_operation!(admission.id, token, "start_container").update!(state: "uncertain")
 
     assert_equal "in_flight", SessionAdmissionService.begin_operation!(admission.id, token, "start_container").state
   end
@@ -116,7 +116,7 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     admission = enqueue
     SessionAdmissionService.drain!
     token = admission.reload.permit_token
-    SessionAdmissionService.begin_operation!(admission.id, token, put_session_in_state!("exec"), "uncertain")
+    SessionAdmissionService.begin_operation!(admission.id, token, "exec").update!(state: "uncertain")
 
     error = assert_raises(SessionAdmissionService::UncertainOperation) do
       SessionAdmissionService.begin_operation!(admission.id, token, "exec")
