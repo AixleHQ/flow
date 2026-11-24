@@ -159,7 +159,7 @@ class Web::OauthController < Web::ApplicationController
 
     # A person's own account is looked up with the new token first: when that fails
     # nothing is stored, and a reconnect keeps the credential it already had.
-    identity = provider.start_with?("mcp:") ? nil : Oauth::Providers.fetch_identity(provider, resp["access_token"])
+    identity = Oauth::Providers.fetch_identity(provider, resp["access_token"])
 
     OauthCredential.upsert_from_token!(
       owner: owner,
