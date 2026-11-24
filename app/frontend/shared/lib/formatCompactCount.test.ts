@@ -21,8 +21,8 @@ describe('formatCompactCount', () => {
     expect(formatCompactCount(999_949)).toBe('999.9k');
   });
 
-  it('uses the given thousands suffix', () => {
-    expect(formatCompactCount(1_500, { thousandsSuffix: 'K' })).toBe('1.5K');
-    expect(formatCompactCount(2_500_000, { thousandsSuffix: 'K' })).toBe('2.5M');
+  it('rounds a fractional count, such as an average, to a whole number first', () => {
+    expect(formatCompactCount(523.4)).toBe('523');
+    expect(formatCompactCount(999.6)).toBe('1.0k');
   });
 });

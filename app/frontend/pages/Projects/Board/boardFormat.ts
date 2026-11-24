@@ -8,7 +8,7 @@ export function formatCostCents(cents: number): string {
 }
 
 export function formatTokens(tokens: number): string {
-  return formatCompactCount(tokens, { thousandsSuffix: 'K' });
+  return formatCompactCount(tokens);
 }
 
 export function formatDuration(seconds: number): string {
