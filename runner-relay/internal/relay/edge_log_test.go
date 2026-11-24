@@ -2,9 +2,9 @@ package relay
 
 import (
 	"context"
-	"net/http/httptest"
 	"encoding/json"
 	"errors"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
