@@ -18,6 +18,11 @@ class AttachPullRequestToolsToWorkflows < ActiveRecord::Migration[8.1]
     self.table_name = "workflows"
   end
 
+  # A workflow's base lists are rows of workflow_resource_links, not config keys.
+  class MigrationLink < ActiveRecord::Base
+    self.table_name = "workflow_resource_links"
+  end
+
   def up
     # The tools were injected until now, so their shadow rows exist wherever a
     # session ever used them; an installation without the rows has nothing to keep.
@@ -40,12 +45,14 @@ class AttachPullRequestToolsToWorkflows < ActiveRecord::Migration[8.1]
                   (workflow.project_id ? projects.include?(workflow.project_id) : companies.include?(workflow.company_id))
       next unless reachable
 
-      config = workflow.config.to_h
-      current = Array(config["base_tool_ids"])
-      missing = tool_ids - current.map(&:to_i)
+      links = MigrationLink.where(workflow_id: workflow.id)
+      missing = tool_ids - links.where.not(tool_id: nil).pluck(:tool_id)
       next if missing.empty?
 
-      workflow.update_columns(config: config.merge("base_tool_ids" => current + missing))
+      position = links.maximum(:position).to_i
+      missing.each_with_index do |tool_id, index|
+        MigrationLink.create!(workflow_id: workflow.id, tool_id: tool_id, position: position + index + 1)
+      end
     end
   end
 
