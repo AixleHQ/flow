@@ -17,7 +17,7 @@ module PersonalTools
       tags :workflows
       read_only
       param :project_id, type: :integer, description: "Project id.", required: true
-      param :workflow_id, type: :integer, description: "Filter to one workflow id."
+      param :workflow_id, type: :integer, description: "Filter to one workflow id; its drafts' test runs are included."
       param :state, type: :string,
                     description: "The Sessions & Runs status filter (default all). `queued` is a run " \
                                  "waiting for a session slot for one of its steps; `pending` takes paused runs too.",

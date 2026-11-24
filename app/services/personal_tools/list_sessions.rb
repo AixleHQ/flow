@@ -43,7 +43,7 @@ module PersonalTools
                            enum: SESSION_TYPES
       param :agent_type, type: :string, description: "Only sessions on this agent runtime, e.g. `claude_code`."
       param :user_id, type: :integer, description: "Only sessions this user owns (a row's `owner_id`)."
-      param :workflow_id, type: :integer, description: "Only the step sessions of this workflow's runs."
+      param :workflow_id, type: :integer, description: "Only the step sessions of this workflow's runs, its drafts' test runs included."
       param :search, type: :string, description: "Words from the prompt the session was started with."
       SessionListSupport.declare_params(self, "sessions")
     end
@@ -88,7 +88,8 @@ module PersonalTools
       scope = scope.where(agent_type: params[:agent_type]) if params[:agent_type].present?
       scope = scope.where(user_id: params[:user_id]) if params[:user_id].present?
       if params[:workflow_id].present?
-        steps = StepRun.joins(:workflow_run).where(workflow_runs: { workflow_id: params[:workflow_id] })
+        steps = StepRun.joins(:workflow_run)
+                       .where(workflow_runs: { workflow_id: Workflow.with_drafts_of(params[:workflow_id]).select(:id) })
         scope = scope.where(id: steps.select(:terminal_session_id))
       end
       if params[:search].present?
