@@ -38,7 +38,7 @@ class WorkflowRunResourceTest < ActiveSupport::TestCase
   end
 
   test "a step whose container is not up yet has no terminal socket" do
-    @session.update!(state: "running")
+    put_session_in_state!(@session, "running")
     @owner.update!(share_active_sessions: false)
     colleague = create(:user, :employee, company: @owner.companies.first)
 

@@ -207,8 +207,7 @@ class SessionService
       kind, error = if session.project.nil?
         [ :project_required, "Runner can only be picked for a project's session." ]
       else
-        Runners::Selection.refusal(params[:runner_id], project: session.project,
-                                                       interactive: session.mode != "non_interactive")
+        Runners::Selection.refusal(params[:runner_id], project: session.project)
       end
       # The kind rides on the error so the API can tell a runner the project may not use (403) from the rest (422).
       session.errors.add(:base, kind, message: error) if error

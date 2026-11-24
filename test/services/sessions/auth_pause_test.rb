@@ -167,7 +167,7 @@ module Sessions
     # read was in flight. The pause is a compare-and-set under the row lock.
     test "does not pause a step that started finishing while the pass read it" do
       @credential.mark_refresh_error!("invalid_grant", permanent: true)
-      @runtime.on_next_exec("capture-pane") { TerminalSession.find(@session.id).update!(state: "finishing") }
+      @runtime.on_next_exec("capture-pane") { put_session_in_state!(TerminalSession.find(@session.id), "finishing") }
 
       assert_equal :taken_over, observe
 

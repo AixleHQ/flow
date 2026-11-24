@@ -431,7 +431,6 @@ export const SessionNewForm = ({
             runners={runners}
             value={runnerId}
             onChange={setRunnerId}
-            interactive={mode === 'interactive'}
           />
           <RunnerCredentialNote runner={runner} />
           {runnerWarning && (

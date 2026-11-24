@@ -177,7 +177,7 @@ module ContainerStrategies
       stub_container_runtime(agent_type: "claude_code")
       create(:agent_credential, user: @user, agent_type: "claude_code")
       session, = create_workflow_step_session
-      session.update!(state: "running")
+      put_session_in_state!(session, "running")
       WorkflowService.expects(:notify_container_finished).with { TerminalSession.find(session.id).failed? }.once
 
       run_cleanup_phase(session, error: "Phase start_container failed: Waiting for cluster capacity")
@@ -189,7 +189,7 @@ module ContainerStrategies
       stub_container_runtime(agent_type: "claude_code")
       create(:agent_credential, user: @user, agent_type: "claude_code")
       session, step_run, = create_workflow_step_session
-      session.update!(state: "finishing")
+      put_session_in_state!(session, "finishing")
       WorkflowService.expects(:notify_container_finished)
         .with { |step_run:| step_run.produced_workflow_run_assets.exists? }.once
 

@@ -42,7 +42,7 @@ class CloudCredentialsTest < ActionDispatch::IntegrationTest
   # A finished session must not be able to mint AWS credentials.
   test "rejects a session that is no longer active" do
     connect_aws
-    @session.update!(state: "finished")
+    put_session_in_state!(@session, "finished")
 
     post PATH, headers: headers
 

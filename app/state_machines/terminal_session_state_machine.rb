@@ -8,7 +8,10 @@ module TerminalSessionStateMachine
 
     # whiny_persistence: a state that fails to save raises instead of returning
     # false unnoticed.
-    aasm column: :state, whiny_persistence: true do
+    # no_direct_assignment: `state=` and `update!(state: ...)` raise
+    # AASM::NoDirectAssignmentError. A state changes only through an event, and the events
+    # are fired only by Sessions::Lifecycle (docs/design/session-lifecycle.md, §3.7).
+    aasm column: :state, whiny_persistence: true, no_direct_assignment: true do
       state :not_started, initial: true
       state :queued
       state :cancelled

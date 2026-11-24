@@ -53,15 +53,6 @@ class SessionServiceRunnerTest < ActiveSupport::TestCase
     assert_equal 0, TerminalSession.count
   end
 
-  test "an interactive session cannot pick a runner yet" do
-    session = with_feature(:external_runners, true, company: @company) do
-      create_session(runner_id: @runner.id, mode: "interactive", initial_prompt: nil)
-    end
-
-    assert_not session.persisted?
-    assert_equal [ "Runner \"Prod VPC\" can't run interactive sessions yet." ], session.errors.full_messages
-  end
-
   test "a session without a pick is hosted and admitted as before" do
     mock_temporal_start
 

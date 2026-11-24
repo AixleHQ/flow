@@ -15,7 +15,12 @@ FactoryBot.define do
     end
     session_type { "auth_setup" }
     agent_type { "claude_code" }
-    state { "not_started" }
+    # The state is not an attribute the factory assigns: a session's state is written
+    # only by its events (AASM `no_direct_assignment`). A test that wants a session in
+    # a state says so here, and the factory writes the column without the setter.
+    transient do
+      state { "not_started" }
+    end
     route_token { SecureRandom.hex(16) }
     temporal_workflow_id { nil }
     temporal_run_id { nil }
@@ -28,6 +33,9 @@ FactoryBot.define do
     finishing_at { nil }
     finished_at { nil }
     collected_at { nil }
+
+    after(:build) { |session, evaluator| session[:state] = evaluator.state.to_s }
+    after(:stub) { |session, evaluator| session[:state] = evaluator.state.to_s }
 
     # == Association Traits ==
 

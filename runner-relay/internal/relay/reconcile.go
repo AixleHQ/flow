@@ -127,7 +127,7 @@ func (s *Server) revokeStale(m *Machine, sessionID int64) {
 	s.metrics.ReconcileRevocations.Inc()
 	s.log.Warn("the reconcile pass found a machine the platform does not confirm; closing it, as its signal would have",
 		"environment_id", m.EnvironmentID, "session_id", sessionID)
-	s.registry.ClearSession(sessionID)
+	s.clearSession(sessionID)
 	m.EndSession(sessionID, tunnel.ResetRevoked, "revoked by the reconcile pass")
 	go m.CloseWith(tunnel.CloseRevoked, "revoked")
 }

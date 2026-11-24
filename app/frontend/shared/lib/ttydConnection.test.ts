@@ -104,14 +104,29 @@ describe('TtydConnection', () => {
     const connection = start();
     latest().open();
     latest().drop(1000);
+    vi.advanceTimersByTime(10);
+    expect(sockets).toHaveLength(2);
+    latest().open();
+    latest().drop(1000);
 
     vi.advanceTimersByTime(1_000);
-    expect(sockets).toHaveLength(1);
+    expect(sockets).toHaveLength(2);
     expect(statuses.at(-1)).toBe('closed');
 
     connection.reconnect();
-    expect(sockets).toHaveLength(2);
+    expect(sockets).toHaveLength(3);
     expect(statuses.at(-1)).toBe('reconnecting');
+  });
+
+  it('reconnects after a clean close, as when the relay restarts and drains the stream', () => {
+    start();
+    latest().open();
+    latest().receive(bytes('0hello'));
+    latest().drop(1000);
+
+    expect(statuses.at(-1)).toBe('reconnecting');
+    vi.advanceTimersByTime(10);
+    expect(sockets).toHaveLength(2);
   });
 
   it('gives up once the retry delays are used up', () => {

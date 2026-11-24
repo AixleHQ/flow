@@ -40,9 +40,10 @@ type edgeKey struct{}
 
 // edgeTarget is what the edge handler decided for one request, for the proxy's Rewrite.
 type edgeTarget struct {
-	surface   string
-	sessionID int64
-	port      int
+	surface       string
+	sessionID     int64
+	environmentID int64
+	port          int
 	// path and rawPath are the path the port sees.
 	path, rawPath string
 }
@@ -78,32 +79,37 @@ func edgeTokens(escapedPath string) (token, surface, rest string, ok bool) {
 func (s *Server) edge(w http.ResponseWriter, r *http.Request) {
 	token, surface, rest, ok := edgeTokens(r.URL.EscapedPath())
 	if !ok {
-		s.edgeRefuse(w, http.StatusNotFound, "not_found", "not_found", "")
+		s.edgeRefuse(w, r, http.StatusNotFound, "not_found", "not_found", "", refusal{reason: "bad_route"})
 		return
 	}
-	route, status, code := s.resolve(r.Context(), token)
+	route, status, code, why := s.resolve(r.Context(), token)
 	if status != 0 {
 		retry := ""
 		if status == http.StatusServiceUnavailable {
 			retry = retryAfter
 		}
-		s.edgeRefuse(w, status, code, code, retry)
+		why.surface = surface
+		s.edgeRefuse(w, r, status, code, code, retry, why)
 		return
 	}
 	// Defence in depth: the header is Traefik's, written after ws_auth, and must name the
 	// session the token names.
 	if r.Header.Get("X-Session-Id") != strconv.FormatInt(route.SessionID, 10) {
-		s.edgeRefuse(w, http.StatusForbidden, "forbidden", "session_mismatch", "")
+		s.edgeRefuse(w, r, http.StatusForbidden, "forbidden", "session_mismatch", "", refusal{reason: "session_mismatch", route: &route, surface: surface})
 		return
 	}
 	m, connected := s.registry.Machine(route.EnvironmentID)
 	port := route.Ports[surface]
 	if !connected || port == 0 {
-		s.edgeRefuse(w, http.StatusServiceUnavailable, "unavailable", "machine_not_connected", retryAfter)
+		reason := "machine_not_connected"
+		if connected {
+			reason = "no_port"
+		}
+		s.edgeRefuse(w, r, http.StatusServiceUnavailable, "unavailable", reason, retryAfter, refusal{reason: reason, route: &route, surface: surface})
 		return
 	}
 
-	target := edgeTarget{surface: surface, sessionID: route.SessionID, port: port}
+	target := edgeTarget{surface: surface, sessionID: route.SessionID, environmentID: route.EnvironmentID, port: port}
 	if stripped(surface) {
 		target.rawPath = rest
 		if target.rawPath == "" {
@@ -114,7 +120,7 @@ func (s *Server) edge(w http.ResponseWriter, r *http.Request) {
 	}
 	unescaped, err := url.PathUnescape(target.rawPath)
 	if err != nil {
-		s.edgeRefuse(w, http.StatusBadRequest, "bad_request", "bad_path", "")
+		s.edgeRefuse(w, r, http.StatusBadRequest, "bad_request", "bad_path", "", refusal{reason: "bad_path", route: &route, surface: surface})
 		return
 	}
 	target.path = unescaped
@@ -130,7 +136,7 @@ func (s *Server) edge(w http.ResponseWriter, r *http.Request) {
 	// signal updates the registry before it ends the session's requests, so one that
 	// registered late sees the change here and does not outlive it.
 	if cur, ok := s.registry.Session(route.EnvironmentID); !ok || cur.SessionID != route.SessionID {
-		s.edgeRefuse(w, http.StatusServiceUnavailable, "unavailable", "session_changed", retryAfter)
+		s.edgeRefuse(w, r, http.StatusServiceUnavailable, "unavailable", "session_changed", retryAfter, refusal{reason: "session_changed", route: &route, surface: surface})
 		return
 	}
 	s.metrics.EdgeRequests.WithLabelValues("proxied").Inc()
@@ -138,39 +144,40 @@ func (s *Server) edge(w http.ResponseWriter, r *http.Request) {
 }
 
 // resolve finds the session a route token names: from the registry, or with one
-// `holders` call on a miss. A non-zero status is the refusal to send.
-func (s *Server) resolve(ctx context.Context, token string) (route SessionRoute, status int, code string) {
+// `holders` call on a miss. A non-zero status is the refusal to send, and why says why
+// (for the log).
+func (s *Server) resolve(ctx context.Context, token string) (route SessionRoute, status int, code string, why refusal) {
 	if route, ok := s.registry.ByRouteToken(token); ok && route.SessionID != 0 && len(route.Ports) > 0 {
-		return route, 0, ""
+		return route, 0, "", refusal{}
 	}
 	if s.opts.Rails == nil {
-		return route, http.StatusServiceUnavailable, "unavailable"
+		return route, http.StatusServiceUnavailable, "unavailable", refusal{reason: "no_platform"}
 	}
+	gen := s.routeGeneration()
 	holder, err := s.opts.Rails.Holders(ctx, token)
 	switch {
 	case errors.Is(err, rails.ErrNotFound):
-		return route, http.StatusNotFound, "not_found"
+		return route, http.StatusNotFound, "not_found", refusal{reason: "unknown_token"}
 	case err != nil:
-		if ctx.Err() == nil {
-			s.log.Warn("asking the platform who holds a session failed", "error", err.Error())
-		}
-		return route, http.StatusServiceUnavailable, "unavailable"
+		return route, http.StatusServiceUnavailable, "unavailable", refusal{reason: "holders_error", err: err, quiet: ctx.Err() != nil}
 	case holder.EnvironmentID == nil:
 		// No machine holds the session now: it is not gone, the machine may be between two
 		// sessions' hands or reconnecting.
-		return route, http.StatusServiceUnavailable, "unavailable"
+		return route, http.StatusServiceUnavailable, "unavailable", refusal{reason: "holders_no_machine", sessionID: holder.SessionID}
 	}
 	route = SessionRoute{SessionID: holder.SessionID, EnvironmentID: *holder.EnvironmentID, RouteToken: token, Ports: holder.Ports}
 	if !validPorts(route.Ports) {
-		s.log.Warn("the platform's holders answer has no usable ports", "session_id", route.SessionID)
-		return route, http.StatusServiceUnavailable, "unavailable"
+		return route, http.StatusServiceUnavailable, "unavailable", refusal{reason: "holders_bad_ports", route: &route}
 	}
-	// The answer may be older than a signal that arrived while the call was out. It is
-	// stored only if the registry still has no routed session for the machine (the
-	// placeholder a connection's ticket leaves has no token), decided by the registry in
-	// one call; this request uses it either way.
-	s.assignIfAbsent(route)
-	return route, 0, ""
+	// The answer may be older than a signal that arrived while the call was out. If no
+	// signal changed a route since the call began, the answer is the newest word the
+	// relay has, and it replaces whatever the registry holds for the machine: a session
+	// the relay still has there is one whose end or change it never heard of, and
+	// keeping it would refuse every request of the real one. Otherwise it is stored
+	// only if the registry still has no routed session for the machine (the placeholder
+	// a connection's ticket leaves has no token); this request uses it either way.
+	s.applyHolders(route, gen)
+	return route, 0, "", refusal{}
 }
 
 // validPorts says whether ports names every surface with a port of 1024 to 65535.
@@ -183,8 +190,46 @@ func validPorts(ports map[string]int) bool {
 	return true
 }
 
-func (s *Server) edgeRefuse(w http.ResponseWriter, status int, code, result, retry string) {
+// refusal says why the edge refused a request or a stream failed, for the log.
+type refusal struct {
+	reason    string
+	route     *SessionRoute
+	sessionID int64
+	surface   string
+	err       error
+	// quiet keeps the line out of the log: the browser went away.
+	quiet bool
+}
+
+// logRefusal writes one line for a refused request: the status, a reason code, the session,
+// the surface and the environment. The route token, the ticket and the headers are
+// never in it.
+func (s *Server) logRefusal(r *http.Request, status int, why refusal) {
+	if why.quiet || why.reason == "" {
+		return
+	}
+	attrs := []any{"status", status, "reason", why.reason, "surface", why.surface}
+	sessionID := why.sessionID
+	if why.route != nil {
+		sessionID = why.route.SessionID
+		attrs = append(attrs, "environment_id", why.route.EnvironmentID)
+	}
+	if sessionID != 0 {
+		attrs = append(attrs, "session_id", sessionID)
+	}
+	if why.err != nil {
+		attrs = append(attrs, "error", why.err.Error())
+	}
+	level := slog.LevelWarn
+	if status < 500 {
+		level = slog.LevelInfo
+	}
+	s.log.Log(r.Context(), level, "the edge refused a request", attrs...)
+}
+
+func (s *Server) edgeRefuse(w http.ResponseWriter, r *http.Request, status int, code, result, retry string, why refusal) {
 	s.metrics.EdgeRequests.WithLabelValues(result).Inc()
+	s.logRefusal(r, status, why)
 	if retry != "" {
 		w.Header().Set("Retry-After", retry)
 	}
@@ -314,6 +359,9 @@ func (c *stream) release() {
 
 // proxyError answers the browser when the stream could not be opened or broke.
 func (s *Server) proxyError(w http.ResponseWriter, r *http.Request, err error) {
+	t, _ := r.Context().Value(edgeKey{}).(edgeTarget)
+	route := &SessionRoute{SessionID: t.sessionID, EnvironmentID: t.environmentID}
+	why := refusal{route: route, surface: t.surface, err: err}
 	var reset *tunnel.ResetError
 	switch {
 	case errors.Is(err, context.Canceled) || r.Context().Err() != nil:
@@ -321,14 +369,23 @@ func (s *Server) proxyError(w http.ResponseWriter, r *http.Request, err error) {
 		s.metrics.EdgeRequests.WithLabelValues("cancelled").Inc()
 		w.WriteHeader(http.StatusBadGateway)
 	case errors.Is(err, tunnel.ErrStreamLimit), errors.Is(err, tunnel.ErrGoAway), errors.Is(err, tunnel.ErrSessionClosed):
-		s.edgeRefuse(w, http.StatusServiceUnavailable, "unavailable", "unavailable", retryAfter)
+		why.reason = "tunnel_unavailable"
+		s.edgeRefuse(w, r, http.StatusServiceUnavailable, "unavailable", "unavailable", retryAfter, why)
 	case errors.As(err, &reset) && reset.Code == tunnel.ResetSessionChange:
-		s.edgeRefuse(w, http.StatusServiceUnavailable, "unavailable", "session_changed", retryAfter)
-	default:
-		// dial_failed, refused, timeout, a reset in flight: the port did not answer. A
-		// terminal that is not listening yet is the window of §9, and ttyd's own client
+		why.reason = "stream_reset"
+		s.edgeRefuse(w, r, http.StatusServiceUnavailable, "unavailable", "session_changed", retryAfter, why)
+	case errors.As(err, &reset):
+		// refused, dial_failed, timeout: the runner or the port did not take the stream.
+		// A terminal that is not listening yet is the window of §9, and ttyd's own client
 		// retries.
-		s.log.Debug("proxying a browser request failed", "error", err.Error())
-		s.edgeRefuse(w, http.StatusBadGateway, "bad_gateway", "bad_gateway", "")
+		if reset.Code == tunnel.ResetRefused {
+			why.reason = "stream_refused"
+		} else {
+			why.reason = "stream_reset"
+		}
+		s.edgeRefuse(w, r, http.StatusBadGateway, "bad_gateway", "bad_gateway", "", why)
+	default:
+		why.reason = "proxy_error"
+		s.edgeRefuse(w, r, http.StatusBadGateway, "bad_gateway", "bad_gateway", "", why)
 	}
 }

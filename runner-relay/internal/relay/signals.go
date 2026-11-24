@@ -16,6 +16,17 @@ import (
 // (Runners::RelaySignals::CHANNEL).
 const SignalChannel = "runner_relay"
 
+// Channel is the Redis channel the platform publishes on. Action Cable's pub/sub names a
+// channel `<channel_prefix>:<channel>` (`ActionCable::SubscriptionAdapter::ChannelPrefix#channel_with_prefix`,
+// 8.1), or the channel alone when the configuration has no prefix. prefix is
+// `config/cable.yml`'s `channel_prefix` as it is (`aixle_<env>`), without the colon.
+func Channel(prefix string) string {
+	if prefix == "" {
+		return SignalChannel
+	}
+	return prefix + ":" + SignalChannel
+}
+
 // The signal types of §8.1.
 const (
 	signalMachineSession = "machine_session"
@@ -104,8 +115,49 @@ func (s *Server) machineSession(sig signal) error {
 // with `session_changed` (§6, item 2): a new session on the same connection gets new
 // streams only.
 func (s *Server) assign(route SessionRoute) {
-	previous, had := s.registry.SetSession(route.EnvironmentID, route)
+	previous, had := s.setSession(route.EnvironmentID, route)
 	s.endReplaced(route, previous, had)
+}
+
+// setSession writes a route that a signal brought, and counts it, so that a `holders`
+// answer that was out meanwhile knows it may be older (see applyHolders).
+func (s *Server) setSession(environmentID int64, route SessionRoute) (SessionRoute, bool) {
+	s.routeMu.Lock()
+	defer s.routeMu.Unlock()
+	s.routeGen++
+	return s.registry.SetSession(environmentID, route)
+}
+
+// clearSession drops the session's route and counts it like setSession, so that every
+// write of the registry's routes goes through one place that owns routeGen.
+func (s *Server) clearSession(sessionID int64) {
+	s.routeMu.Lock()
+	defer s.routeMu.Unlock()
+	s.routeGen++
+	s.registry.ClearSession(sessionID)
+}
+
+// routeGeneration is the number of route changes the signals and the reconcile pass made
+// so far.
+func (s *Server) routeGeneration() uint64 {
+	s.routeMu.Lock()
+	defer s.routeMu.Unlock()
+	return s.routeGen
+}
+
+// applyHolders stores the route of a `holders` answer asked for when the generation was
+// gen: it replaces the machine's route if nothing changed one since, and fills in only
+// an absent one otherwise.
+func (s *Server) applyHolders(route SessionRoute, gen uint64) {
+	s.routeMu.Lock()
+	if s.routeGen == gen {
+		previous, had := s.registry.SetSession(route.EnvironmentID, route)
+		s.routeMu.Unlock()
+		s.endReplaced(route, previous, had)
+		return
+	}
+	s.routeMu.Unlock()
+	s.assignIfAbsent(route)
 }
 
 // assignIfAbsent records route only if the machine holds no routed session, in one
@@ -127,7 +179,7 @@ func (s *Server) endReplaced(route, previous SessionRoute, had bool) {
 
 // release records that a machine holds no session.
 func (s *Server) release(environmentID int64, code tunnel.ResetCode, text string) {
-	previous, had := s.registry.SetSession(environmentID, SessionRoute{})
+	previous, had := s.setSession(environmentID, SessionRoute{})
 	if had && previous.SessionID != 0 {
 		s.endOnMachine(environmentID, previous.SessionID, code, text)
 	}
@@ -143,7 +195,7 @@ func (s *Server) endOnMachine(environmentID, sessionID int64, code tunnel.ResetC
 // sessionEnded resets the session's streams with code and closes its browser
 // connections, on whichever machine carries them (§8.1).
 func (s *Server) sessionEnded(sessionID int64, code tunnel.ResetCode, text string) {
-	s.registry.ClearSession(sessionID)
+	s.clearSession(sessionID)
 	for _, m := range s.registry.All() {
 		if n := m.EndSession(sessionID, code, text); n > 0 {
 			s.log.Info("a session ended", "environment_id", m.EnvironmentID, "session_id", sessionID, "reset", code.String(), "streams", n)
@@ -154,7 +206,7 @@ func (s *Server) sessionEnded(sessionID int64, code tunnel.ResetCode, text strin
 // machineRevoked closes the machine's connection with 4001, and every browser connection
 // of its session with it (§6, item 4).
 func (s *Server) machineRevoked(environmentID int64) {
-	previous, had := s.registry.SetSession(environmentID, SessionRoute{})
+	previous, had := s.setSession(environmentID, SessionRoute{})
 	m, ok := s.registry.Machine(environmentID)
 	if !ok {
 		return

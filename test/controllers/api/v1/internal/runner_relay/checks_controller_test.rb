@@ -63,7 +63,13 @@ module Api
             assert_equal [ false ], check(@machine, @session)
           end
 
-          test "a session that is not ready is not valid" do
+          test "a machine that holds a running session is valid" do
+            @session.update_columns(state: "running")
+
+            assert_equal [ true ], check(@machine, @session)
+          end
+
+          test "a session that is finishing is not valid" do
             @session.update_columns(state: "finishing")
 
             assert_equal [ false ], check(@machine, @session)

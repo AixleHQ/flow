@@ -97,6 +97,7 @@ class ActiveSupport::TestCase
   # Include FactoryBot methods
   include FactoryBot::Syntax::Methods
   include AuthHelper
+  include SessionStateHelper
   include TemporalHelper
   include UploadSupport
   include StubSupport

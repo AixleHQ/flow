@@ -8,7 +8,9 @@ module Runners
   #
   # A machine is valid when it is registered, its runner is not revoked or deleted, the
   # company's `external_runners` flag is on, it still holds that session, and that
-  # session is `ready`. The answers are in the order of the questions. Whatever is
+  # session has not ended or started finishing (`running` or `ready`: a route exists from
+  # the moment the machine holds the session, and the edge refuses streams until `ready`).
+  # The answers are in the order of the questions. Whatever is
   # unknown to the platform is `false`.
   module RelayChecks
     module_function
@@ -16,7 +18,7 @@ module Runners
     # Four queries however many machines are asked about.
     def valid(machines)
       environments = RunnerEnvironment.where(id: machines.pluck("environment_id")).index_by(&:id)
-      ready = TerminalSession.ready.where(id: environments.values.filter_map(&:current_session_id)).ids.to_set
+      held = TerminalSession.container_up.where(id: environments.values.filter_map(&:current_session_id)).ids.to_set
       live_runners = Runner.not_retired.where(id: environments.values.map(&:runner_id).uniq).ids.to_set
       companies = Company.where(id: environments.values.map(&:company_id).uniq).index_by(&:id)
       enabled = {}
@@ -24,7 +26,7 @@ module Runners
       machines.map do |machine|
         environment = environments[machine["environment_id"]]
         next false unless environment&.registered? && environment.current_session_id == machine["session_id"]
-        next false unless ready.include?(environment.current_session_id) && live_runners.include?(environment.runner_id)
+        next false unless held.include?(environment.current_session_id) && live_runners.include?(environment.runner_id)
 
         enabled.fetch(environment.company_id) do
           enabled[environment.company_id] = Feature.enabled?(:external_runners, company: companies[environment.company_id])
