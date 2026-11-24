@@ -51,48 +51,9 @@ class SessionService
       Versions::LaunchRecord.record!(session)
       # The writer lock is taken around the queue write only — never around the
       # save, which touches half a dozen join tables.
-      SessionAdmissionService.enqueue!(session)
+      Sessions::Lifecycle.enqueue(session)
       launch_session(session)
 
-      session
-    end
-
-    def finish(session:)
-      if session.queued?
-        if session.step_run
-          WorkflowService.cancel(run: session.step_run.workflow_run)
-          return session.reload
-        end
-        return cancel(session: session)
-      end
-      unless session.may_start_finishing? || session.finishing?
-        raise TerminalSession::InvalidStateError, "Cannot finish session in state: #{session.state}"
-      end
-
-      return unless session.may_start_finishing?
-
-      stop_admission_operations(session)
-      session.start_finishing!
-
-      if session.temporal_workflow_id.present?
-        signal_container_finished(session)
-      else
-        session.finish! if session.may_finish?
-      end
-    end
-
-    # Ends an interactive session the way the 23-hour limit does: its files and its
-    # conversation are kept for Restore (Sessions::Suspension). The cleanup activity
-    # reads the request off the session, so the signal is the same one Finish sends.
-    def suspend(session:)
-      unless Sessions::Suspension.supported?(session) && session.container_up? && session.temporal_workflow_id.present?
-        raise TerminalSession::InvalidStateError, "This session cannot be suspended"
-      end
-
-      stop_admission_operations(session)
-      session.change_jsonb!(:metadata) { |doc| doc[Sessions::Suspension::REQUESTED_KEY] = Time.current.utc.iso8601 }
-      session.start_finishing!
-      signal_container_finished(session)
       session
     end
 
@@ -162,92 +123,6 @@ class SessionService
         session_type: session.session_type, excluding_session_id: session.id)
       preflight_url_safety!(session.mcp_server_ids)
       refresh_oauth_tokens_for_session(session) if refresh_tokens
-    end
-
-    def cancel(session:)
-      SessionAdmissionService.cancel!(session)
-      TemporalService.cancel_workflow(session.workflow_id) unless session.session_admission&.reload&.released_at
-      session
-    end
-
-    # The way out of a login that went wrong — a dead pane, a code pasted into the
-    # shell — short of waiting out the login's TTL (AgentAuthStrategy.login_ttl). The
-    # session is cancelled, so its container is torn down and nothing it captured is
-    # saved (AgentAuthStrategy#before_cleanup); a session that already ended, or is
-    # already being finished, is left as it is.
-    def reset_auth(session:)
-      return session unless session.active?
-
-      cancel(session: session)
-    end
-
-    # Fail a session AND wake its container workflow, so the container's cleanup
-    # phase actually runs. THE blessed way to fail a session from outside the
-    # container workflow (watchdogs, scanners) — do not hand-roll
-    # `update!(error_message:) + fail!`.
-    #
-    # Why the signal is not optional: `TerminalSession#on_failed` only notifies the
-    # PARENT workflow run ("workflow-execution-<id>", via WorkflowService), which
-    # completes the step. The session's own container workflow is a different
-    # execution ("agent-session-<id>") and it is parked in its `exec` phase
-    # awaiting `container_finished` with a 23-hour signal timeout (see
-    # WorkflowStepStrategy#phase_config). Failing the row without signalling that
-    # execution leaves it spinning until the timeout, and its cleanup phase — the
-    # only thing that deletes the pod, Service, IngressRoute and Middlewares —
-    # never runs. Every such failure leaked its Kubernetes objects for a day.
-    #
-    # Ordering mirrors `finish`: transition first, signal second. The cleanup phase
-    # decides the step's outcome from `session.state` (CompleteStepActivity), so it
-    # must already read `failed`. Clearing `container_id` in `on_failed` is safe —
-    # the cleanup phase takes its container reference from the workflow's own
-    # accumulated state, not from the row.
-    def fail_session(session:, error_message: nil)
-      session.update!(error_message: error_message) if error_message.present?
-      return fail_admitted_session(session) if unreleased_admission?(session)
-
-      stop_admission_operations(session)
-      session.fail! if session.may_fail?
-      signal_container_finished(session) if session.temporal_workflow_id.present?
-      session
-    end
-
-    # fail_session as a compare-and-set, for a caller that decided on a copy of the row
-    # that may be stale (Sessions::Checks). The session is failed only if, under its row
-    # lock, it is still in `expected_state` and the block (when given) still holds for the
-    # locked row; the check and the transition are one transaction, so a finish_session or
-    # an auth pause cannot land between them. The container workflow is woken after the
-    # commit, as by fail_session.
-    #
-    # Without `expected_state`, the condition is "not finished, failed or cancelled yet", for
-    # a caller that ends whatever the session is doing (a revoked runner or machine).
-    #
-    # @return [Boolean] whether the session was failed
-    def fail_session_if(session:, expected_state: nil, error_message: nil, &guard)
-      still = lambda do |locked|
-        in_state = expected_state.nil? ? !locked.ended? : locked.state == expected_state.to_s
-        in_state && (guard.nil? || guard.call(locked))
-      end
-
-      if unreleased_admission?(session)
-        return false unless SessionAdmissionService.fail_if!(session, error_message: error_message, &still)
-
-        TemporalService.cancel_workflow(session.workflow_id) unless session.session_admission.reload.released_at
-        WorkflowService.notify_container_finished(step_run: session.step_run) if session.step_run
-        return true
-      end
-
-      failed = session.with_lock do
-        next false unless still.call(session) && session.may_fail?
-
-        session.update!(error_message: error_message) if error_message.present?
-        session.fail!
-        true
-      end
-      return false unless failed
-
-      stop_admission_operations(session)
-      signal_container_finished(session) if session.temporal_workflow_id.present?
-      true
     end
 
     # Built first and admitted second, in separate transactions. Building renders
@@ -344,8 +219,7 @@ class SessionService
       Runners::Resolver.resolve!(session, pick_from: "for the session")
       false
     rescue Runners::Resolver::Refused => e
-      session.update!(error_message: e.message)
-      session.fail!
+      Sessions::Lifecycle.fail(session, error_message: e.message)
       true
     end
 
@@ -354,41 +228,11 @@ class SessionService
     def admit_step_session!(step_run, session)
       SessionAdmissionService.transaction do
         step_run.workflow_run.lock!
-        SessionAdmissionService.enqueue!(session)
+        Sessions::Lifecycle.enqueue(session)
       end
     rescue SessionAdmissionService::Stopped
-      session.reload
-      session.cancel! if session.may_cancel?
+      Sessions::Lifecycle.cancel(session.reload)
       raise
-    end
-
-    def stop_admission_operations(session)
-      return unless session.session_admission
-      SessionAdmissionService.transaction do
-        admission = session.session_admission.reload
-        admission.update!(stop_requested_at: admission.stop_requested_at || Time.current) unless admission.released_at
-      end
-    end
-
-    def unreleased_admission?(session)
-      admission = session.session_admission
-      admission.present? && admission.released_at.nil?
-    end
-
-    # Marking the row failed frees nothing: the reservation is only released once
-    # the runtime is confirmed gone (AD-6), and cancelling the session's container
-    # workflow is what starts that. The verdict is `failed`, not `cancelled`: a
-    # cancelled step session cancels its whole run (WorkflowExecutionWorkflowV2),
-    # which would skip on_failure, quota classification and the Slack failure notice.
-    def fail_admitted_session(session)
-      SessionAdmissionService.cancel!(session, outcome: "failed")
-      TemporalService.cancel_workflow(session.workflow_id) unless session.session_admission.reload.released_at
-      # #cancel! fails the session under the writer lock, and #fail! wakes the parent
-      # run only after that commits. This covers a session that had already ended,
-      # which #cancel! leaves alone; the signal just sets a decision flag, so a
-      # second one changes nothing.
-      WorkflowService.notify_container_finished(step_run: session.step_run) if session.step_run
-      session
     end
 
     # Granting is cheap and must happen now so the caller sees a real queue
@@ -536,18 +380,6 @@ class SessionService
       end
 
       raise UnsafeMcpUrlError, "MCP server URL failed a safety check at launch: #{unsafe.join('; ')}" if unsafe.any?
-    end
-
-    def signal_container_finished(session)
-      result = TemporalService.send_signal(session.workflow_id, :container_finished, session.step_run&.id)
-
-      # A workflow that is already gone leaves the reservation to the reconciler,
-      # which confirms the runtime is absent before releasing it.
-      if result.is_a?(Hash) && !result[:ok]
-        Rails.logger.warn("[SessionService] Signal failed for session #{session.id}: #{result[:error]}")
-      end
-    rescue StandardError => e
-      Rails.logger.error("[SessionService] Failed to signal container_finished for session #{session.id}: #{e.message}")
     end
 
     def refresh_oauth_tokens_for_session(session)

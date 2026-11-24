@@ -375,7 +375,7 @@ class WorkflowService
     def cancel_active_step_runs(run)
       run.step_runs.unfinished.find_each do |sr|
         session = sr.terminal_session
-        SessionService.cancel(session: session) if session
+        Sessions::Lifecycle.cancel(session) if session
         # Read after the cancel: the session is where a diagnosed reason lives, and
         # cleanup may have just written one.
         sr.mark_cancelled!(diagnosed_reason(session))
@@ -457,7 +457,7 @@ class WorkflowService
     def fail_active_step_runs(run)
       run.step_runs.unfinished.find_each do |sr|
         session = sr.terminal_session
-        SessionService.fail_session(session: session) if session && !session.ended?
+        Sessions::Lifecycle.fail(session) if session && !session.ended?
         sr.mark_failed!(diagnosed_reason(session) || "Run failed while this step was in flight")
       rescue StandardError => e
         Rails.logger.warn("[WorkflowService] Failed to fail step_run ##{sr.id}: #{e.message}")

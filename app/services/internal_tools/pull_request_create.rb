@@ -16,8 +16,6 @@ module InternalTools
                   "Jira and the code host link the pull request to the issue. Returns JSON: {pull_request, " \
                   "existing, operation_key}."
       tags :pull_requests
-      inject_when :pull_request_repositories_attached
-      user_attachable false
       requires_integration :pull_requests
       unavailable_message Concerns::PullRequestContext::UNAVAILABLE
       param :repository_id, type: :integer, description: Concerns::PullRequestContext::REPOSITORY_PARAM
@@ -28,19 +26,20 @@ module InternalTools
       param :title, type: :string, required: true, description: "Pull request title."
       param :description, type: :string, description: "Pull request description (Markdown)."
       param :draft, type: :boolean, default: true, description: "Open as a draft."
+      param :user_id, type: :integer, description: Concerns::PullRequestContext::USER_PARAM
       param :operation_key, type: :string, description: Concerns::PullRequestContext::OPERATION_KEY_PARAM
     end
 
     def execute
       pull_request_guard do
-        repository, provider = resolve_target!(ref: nil)
+        repository, provider = resolve_target!(ref: nil, as_user: true)
         target = params[:target_branch].presence || repository.source_branch
         source = params[:source_branch].to_s.strip
         raise PullRequests::Error.new("source_branch and target_branch are the same", code: "validation_failed") if source == target
 
         title = keyed_title(params[:title].to_s.strip)
         payload = { repository_id: repository.id, source_branch: source, target_branch: target, title: title }
-        with_write(repository, "create", payload) do
+        with_write(repository, provider, "create", payload) do
           existing = open_pull_request(provider, repository, source, target)
           next { pull_request: existing, existing: true } if existing
 

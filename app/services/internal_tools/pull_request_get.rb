@@ -11,8 +11,6 @@ module InternalTools
                   "the host considers it mergeable (null while it is still deciding). Returns JSON: " \
                   "{repository_id, pull_request}."
       tags :pull_requests
-      inject_when :pull_request_repositories_attached
-      user_attachable false
       requires_integration :pull_requests
       unavailable_message Concerns::PullRequestContext::UNAVAILABLE
       read_only

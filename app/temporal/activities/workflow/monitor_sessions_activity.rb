@@ -14,7 +14,7 @@
 #   - an unattended step whose screen (Kiro) or log has not changed for 30 minutes is
 #     failed (Checks::NoOutput).
 #
-# A failure goes through SessionService.fail_session_if, which completes the step and wakes
+# A failure goes through Sessions::Lifecycle.fail_if, which completes the step and wakes
 # the session's own container workflow so its cleanup runs, instead of it waiting out its
 # 23-hour signal timeout.
 #

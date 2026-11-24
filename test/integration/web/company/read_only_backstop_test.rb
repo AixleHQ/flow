@@ -10,7 +10,6 @@ class Web::Company::ReadOnlyBackstopTest < ActiveSupport::TestCase
     Web::Company::FeedbackController
     Web::Company::MembershipsController
     Web::Company::Projects::FavoritesController
-    Web::Company::SwitchController
   ].freeze
 
   test "every company controller but the personal ones refuses a viewer's writes" do

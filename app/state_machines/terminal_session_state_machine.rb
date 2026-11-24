@@ -48,14 +48,39 @@ module TerminalSessionStateMachine
         transitions from: %i[not_started queued running ready finishing], to: :failed, after: :on_failed
       end
 
-      # Sessions::Suspension. The cleanup activity writes `suspended` itself, as it
-      # writes every final state; these are the moves that happen after it.
+      # The moves Sessions::Lifecycle.finalize records once the container's work is
+      # over (`finish`, `fail` and `cancel` above cover the rest). They are events of
+      # their own, not wider `from` lists on `finish` and `fail`, because `may_finish?`
+      # and `may_fail?` guard live code: failing a suspended session must stay a no-op.
+      #
+      # The agent simply exited, with no finish requested. `queued` is a session whose
+      # launch ended before the first phase started it.
+      event :finish_without_request do
+        transitions from: %i[not_started queued running ready], to: :finished, after: :on_ended_by_cleanup
+      end
+
+      # Output collection failed after the session had already finished.
+      event :fail_after_finish do
+        transitions from: :finished, to: :failed, after: :on_ended_by_cleanup
+      end
+
+      # Sessions::Suspension. A checkpoint was taken, so the session ends suspended;
+      # the moves after it are the three below.
+      event :mark_suspended do
+        transitions from: %i[running ready finishing], to: :suspended, after: :on_ended_by_cleanup
+      end
+
       event :mark_restored do
         transitions from: :suspended, to: :restored
       end
 
       event :expire_suspension do
         transitions from: :suspended, to: :finished
+      end
+
+      # A suspended workflow step whose restore window closed.
+      event :expire_suspended_step do
+        transitions from: :suspended, to: :failed
       end
     end
   end

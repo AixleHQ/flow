@@ -44,7 +44,7 @@ module PersonalTools
       end
 
       # Not just a state change: WorkflowService.cancel drives each active step's
-      # session through SessionService.cancel, and that Temporal cancellation
+      # session through Sessions::Lifecycle.cancel, and that Temporal cancellation
       # still runs the container workflow's cleanup phase — so the pod is
       # reclaimed and the terminal log collected before the retrigger.
       WorkflowService.cancel(run: active_run) if active_run

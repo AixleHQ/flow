@@ -1,8 +1,9 @@
 import '@testing-library/jest-dom/vitest';
+import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
 import { buildSharedPermissions, buildSharedTrial } from 'test/factories/sharedProps';
-import { renderPage, screen } from 'test/renderPage';
+import { renderAuthedPage, renderPage, screen, userEvent } from 'test/renderPage';
 
 import { TrialBanner } from './TrialBanner';
 
@@ -49,6 +50,15 @@ describe('TrialBanner', () => {
     renderPage(<TrialBanner />, { props: { trial, permissions: admin } });
 
     expect(screen.getByRole('button', { name: 'Add a card' })).toBeInTheDocument();
+  });
+
+  // The banner is on pages that name no company too (/profile).
+  it('takes the card for the company shown', async () => {
+    renderAuthedPage(<TrialBanner />, { props: { trial, permissions: admin } });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add a card' }));
+
+    expect(router.post).toHaveBeenCalledWith('/company/test-company/billing_checkout', {}, expect.anything());
   });
 
   it('presses for the card once the trial is running out', () => {

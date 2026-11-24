@@ -28,6 +28,16 @@ class ToolTest < ActiveSupport::TestCase
     assert_includes Tool.visible_for_project(@project).pluck(:id), tool.id
   end
 
+  test "visible_for_project shows the pull request tools once a code host is connected" do
+    tool = Tool.create!(name: "pull_request_get", display_name: "Pull Request Get",
+      source: "code", execution_mode: "app", enabled: true, requires_integration: PullRequests::CAPABILITY, input_schema: {})
+    assert_not_includes Tool.visible_for_project(@project).pluck(:id), tool.id
+
+    create(:integration, :gitlab, :active, company: @company, project: @project)
+
+    assert_includes Tool.visible_for_project(@project).pluck(:id), tool.id
+  end
+
   test "an inactive integration does not unlock a gated tool" do
     tool = gated_tool
     create(:integration, company: @company, project: @project, provider: :slack,

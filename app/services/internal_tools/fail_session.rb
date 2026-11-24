@@ -40,7 +40,7 @@ module InternalTools
       end
 
       step_run&.update!(error_message: reason)
-      SessionService.fail_session(session: session, error_message: reason)
+      Sessions::Lifecycle.fail(session, error_message: reason)
       success("Session marked as failed: #{reason}")
     end
 

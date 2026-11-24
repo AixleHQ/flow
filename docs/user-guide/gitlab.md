@@ -20,7 +20,7 @@ From then on:
 - agents clone, fetch and push them in their sessions, without the token ever
   sitting in the checkout;
 - agents open, review, comment on and merge merge requests with the
-  `pull_request_*` tools;
+  `pull_request_*` tools, when the workflow has them;
 - Flow registers a pipeline hook on each attached project, so a CI gate on a
   board task resolves as soon as its pipeline finishes.
 
@@ -149,13 +149,18 @@ A session gets a repository when its step lists one
   `git push` asks Flow for the credential. Nothing goes into `.git/config` or
   the remote URL, and agents are told not to put credentials there.
 - No GitLab CLI is authenticated. GitHub sessions get a `gh` that is signed in;
-  GitLab sessions get git and the `pull_request_*` tools instead.
+  GitLab sessions get git, and the `pull_request_*` tools when the workflow has
+  them.
 
 ## Merge-request tools
 
-Sessions that hold a GitLab repository get these tools automatically. They are
-the same tools GitHub and Bitbucket repositories get, so a workflow written for
-one host runs on the others.
+The tools are the same ones GitHub and Bitbucket repositories use, so a workflow
+written for one host runs on the others. They are one group, **Pull requests**,
+in the tool picker: add it to a workflow's base resources or to a single step as
+you add other tools, and remove it the same way. A session whose workflow does
+not have the group has no `pull_request_*` tools; workflows that existed before
+the group became attachable kept them. A session that isn't a workflow run, an interactive one for example, gets the tools only when the group **Pull requests** is picked in the new session form's Tools; they are no longer added on their own. They work on a session that holds a
+GitLab repository, and say so when it holds none.
 
 | Tool | What it does |
 | --- | --- |
@@ -180,6 +185,16 @@ first result instead of a second merge request or comment.
 agent reviewed — Flow checks, and GitLab checks the same commit again — and
 never bypasses approval rules or protected branches. GitLab merges with the
 project's own merge method; `fast_forward` cannot be asked for.
+
+### Acting as a person
+
+By default the write tools act as the connection: on GitLab, the owner of the connection's token. To make a pull request, comment, review or merge a person's own, the agent passes `user_id`, the id of a company member (`board_list_members` lists them). Flow then makes that one call with the person's own GitLab token, which the agent never sees. It works under the same conditions as `gitlab_user_token_for`:
+
+- the person is a member of the project;
+- they connected their GitLab account under **Profile → Connected accounts**, and the connection is current;
+- they turned on the switch for this project: **in their own tasks** when they are the person the session runs for, otherwise **in tasks that aren't theirs**.
+
+Otherwise the call is refused with the same message as the token tools, and nothing is written. A retry with the same `operation_key` returns the first result and cannot change who it was made as. A person cannot approve, as themselves, a pull request they opened this way. Merging still obeys the connection's merge switch.
 
 ## Acting as yourself
 

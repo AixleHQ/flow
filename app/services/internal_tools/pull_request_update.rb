@@ -9,8 +9,6 @@ module InternalTools
       description "Change a pull request's title, description, target branch or draft flag, or close or reopen " \
                   "it. Only the fields you pass change. Returns JSON: {repository_id, pull_request}."
       tags :pull_requests
-      inject_when :pull_request_repositories_attached
-      user_attachable false
       requires_integration :pull_requests
       unavailable_message Concerns::PullRequestContext::UNAVAILABLE
       idempotent
@@ -21,11 +19,12 @@ module InternalTools
       param :target_branch, type: :string, description: "New target branch."
       param :draft, type: :boolean, description: "Mark as draft (true) or ready for review (false)."
       param :state, type: :string, enum: %w[open closed], description: "Close or reopen the pull request."
+      param :user_id, type: :integer, description: Concerns::PullRequestContext::USER_PARAM
     end
 
     def execute
       pull_request_guard do
-        repository, provider = resolve_target!
+        repository, provider = resolve_target!(as_user: true)
         attributes = params.slice(:title, :description, :target_branch, :state).compact_blank.symbolize_keys
         attributes[:draft] = params[:draft] unless params[:draft].nil?
         raise PullRequests::Error.new("Nothing to change", code: "validation_failed") if attributes.empty?

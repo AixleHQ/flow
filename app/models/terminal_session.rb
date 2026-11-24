@@ -438,12 +438,53 @@ class TerminalSession < ApplicationRecord
     company_id.present? && CompanyMembership.active.exists?(company_id: company_id, user_id: user_id)
   end
 
-  # Idempotently runs the `start_finishing! → finish!` chain that fires at the
-  # tail of every finalization path. Safe to call multiple times: each AASM
-  # transition is guarded by its `may_*?` predicate.
-  def complete_finish!
-    start_finishing! if may_start_finishing?
-    finish! if may_finish?
+  # The error that ends a session. A stop the person asked for is not a failure, and
+  # the queue's own vocabulary is not a diagnosis. `finish` can land while the launch
+  # is still running (the next activity then hits a closed permit), so a requested
+  # finish keeps whatever real error it already had, and nothing more.
+  def ending_error(error)
+    return error if error.blank?
+    return nil if finishing_at && GENERIC_ERROR_MESSAGES.include?(error)
+
+    error
+  end
+
+  # The state the session ends in, given the error `ending_error` returned.
+  #
+  # A session the person stopped before it was ever usable was cancelled, not
+  # finished: closing the dialog on a container that is still coming up is a
+  # cancellation, and the only button on that screen says so. `ready_at` is the fact
+  # that separates the two: across three days of production, `finishing_at` without
+  # `ready_at` described exactly the two authentication sessions this is about and
+  # not one workflow step.
+  def ending_state(error)
+    return "cancelled" if cancelled?
+    return "failed" if error || failed?
+    return "cancelled" if finishing_at && ready_at.nil?
+
+    "finished"
+  end
+
+  # Wakes the parent workflow run of a step session, unless the run is being stopped.
+  # Sessions::Lifecycle calls it; the callbacks below do for the moves they make.
+  def notify_workflow_execution_if_step_session
+    return unless session_type == "workflow_step"
+
+    sr = step_run
+    return unless sr&.workflow_run_id
+    # A run being stopped was already told so (workflow_cancelled); its steps end with it.
+    return if sr.workflow_run.stop_requested?
+
+    WorkflowService.notify_container_finished(step_run: sr)
+  rescue StandardError => e
+    Rails.logger.error("[TerminalSession] notify_workflow_execution_if_step_session failed: #{e.message}")
+  end
+
+  def sync_usage
+    assign_usage_totals
+    save! if changed?
+  rescue StandardError => e
+    Rails.logger.error("[TerminalSession] Failed to sync usage for #{id}: #{e.message}")
   end
 
   def config_files
@@ -570,7 +611,7 @@ class TerminalSession < ApplicationRecord
 
   def on_ready
     self.ready_at = Time.current
-    ActiveRecord.after_all_transactions_commit { Sessions::Suspension.restored!(self) } if restored_from_session_id
+    ActiveRecord.after_all_transactions_commit { Sessions::Lifecycle.restored(self) } if restored_from_session_id
   end
 
   def on_queued
@@ -581,26 +622,41 @@ class TerminalSession < ApplicationRecord
     self.finishing_at = Time.current
   end
 
-  def on_finished
-    assign_usage_totals
-    self.finished_at = Time.current
+  # A transition that records an ending the cleanup found (Sessions::Lifecycle.finalize):
+  # only assignments. Nothing is sent from here, because finalize wakes nobody.
+  def on_ended_by_cleanup
+    self.finished_at ||= Time.current
     self.container_id = nil
-    ActiveRecord.after_all_transactions_commit { notify_workflow_execution_if_step_session }
   end
 
-  def on_failed
+  # `notify` is false for the moves finalize makes: the run is woken once, by
+  # Sessions::Lifecycle.slot_released, after the reservation is released (the parent
+  # reads "unreleased + terminal" as `finishing`, so waking it earlier would start the
+  # next step before the capacity is back). The argument is temporary: #283 removes it,
+  # when the effects move into Sessions::Lifecycle.transition! (also for on_failed and
+  # on_cancelled).
+  def on_finished(notify = true)
     assign_usage_totals
     self.finished_at = Time.current
     self.container_id = nil
-    ActiveRecord.after_all_transactions_commit { notify_workflow_execution_if_step_session }
+    ActiveRecord.after_all_transactions_commit { notify_workflow_execution_if_step_session } if notify
+  end
+
+  # `notify` is temporary, removed by #283 (see on_finished).
+  def on_failed(notify = true)
+    assign_usage_totals
+    self.finished_at = Time.current
+    self.container_id = nil
+    ActiveRecord.after_all_transactions_commit { notify_workflow_execution_if_step_session } if notify
   end
 
   # The container is still being torn down (by its own workflow), so it keeps
   # its id; the usage it ran up so far is recorded like any other ending.
-  def on_cancelled
+  # `notify` is temporary, removed by #283 (see on_finished).
+  def on_cancelled(notify = true)
     assign_usage_totals
     self.finished_at = Time.current
-    ActiveRecord.after_all_transactions_commit { notify_workflow_execution_if_step_session }
+    ActiveRecord.after_all_transactions_commit { notify_workflow_execution_if_step_session } if notify
   end
 
   # A run starts the moment it is dispatched, while its first step may still sit
@@ -613,26 +669,6 @@ class TerminalSession < ApplicationRecord
     return unless run_id
 
     WorkflowRun.where(id: run_id, execution_started_at: nil).update_all(execution_started_at: started_at)
-  end
-
-  def notify_workflow_execution_if_step_session
-    return unless session_type == "workflow_step"
-
-    sr = step_run
-    return unless sr&.workflow_run_id
-    # A run being stopped was already told so (workflow_cancelled); its steps end with it.
-    return if sr.workflow_run.stop_requested?
-
-    WorkflowService.notify_container_finished(step_run: sr)
-  rescue StandardError => e
-    Rails.logger.error("[TerminalSession] notify_workflow_execution_if_step_session failed: #{e.message}")
-  end
-
-  def sync_usage
-    assign_usage_totals
-    save! if changed?
-  rescue StandardError => e
-    Rails.logger.error("[TerminalSession] Failed to sync usage for #{id}: #{e.message}")
   end
 
   def assign_usage_totals

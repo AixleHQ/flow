@@ -32,7 +32,22 @@ module InternalTools
 
       private
 
+      # The answer of a tool that hands a token to the agent.
       def issue_user_tokens(user:, consent_scope:)
+        acquired = acquire_user_tokens(user: user, consent_scope: consent_scope)
+        raise Refusal, unarmed_message unless Sessions::SecretRegistry.publish!(session)
+
+        success(result(user, acquired.identity, acquired.tokens, acquired.skipped).to_json)
+      rescue Refusal => e
+        error(e.message)
+      end
+
+      Acquired = Struct.new(:identity, :tokens, :skipped, keyword_init: true)
+
+      # The checks and the minting, in order, up to the tokens: the part a caller that
+      # keeps the token on the server (the pull-request tools acting as a user) shares
+      # with the tools that hand it out. Raises Refusal.
+      def acquire_user_tokens(user:, consent_scope:)
         raise Refusal, NO_USER if session_user.nil?
         raise Refusal, NO_PROJECT if project.nil?
 
@@ -47,12 +62,11 @@ module InternalTools
         raise Refusal, no_identity_message unless identity_usable?(identity)
 
         tokens, more_skipped = mint_tokens!(user, credential, user_token, repositories, identity)
-        raise Refusal, unarmed_message unless Sessions::SecretRegistry.publish!(session)
-
-        success(result(user, identity, tokens, skipped + more_skipped).to_json)
-      rescue Refusal => e
-        error(e.message)
+        Acquired.new(identity: identity, tokens: tokens, skipped: skipped + more_skipped)
       end
+
+      # The tool the issuance is recorded under.
+      def issuing_tool_name = self.class.tool_definition.name
 
       def check_member!(user)
         return if user.authenticatable? && project.accessible_by?(user)
@@ -87,7 +101,7 @@ module InternalTools
       def record_issuance!(user:, credential:, token:, target_login:, repositories:, expires_at:, token_last_eight: nil)
         UserTokenIssuance.create!(
           terminal_session: session, company: project.company, project: project, acting_for_user: user,
-          session_user: session_user, tool_name: self.class.tool_definition.name, provider: provider_name,
+          session_user: session_user, tool_name: issuing_tool_name, provider: provider_name,
           oauth_credential: credential, token: token, token_last_eight: token_last_eight || token.to_s.last(8),
           target_login: target_login, repository_full_names: repositories.map(&:full_name), expires_at: expires_at
         )

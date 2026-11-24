@@ -15,6 +15,8 @@ class PullRequestOperation < ApplicationRecord
 
   belongs_to :integration
   belongs_to :repository
+  # The member the write was made as; nil when the connection made it.
+  belongs_to :acting_user, class_name: "User", optional: true
 
   validates :operation, presence: true
   validates :operation_key, presence: true, length: { maximum: 200 }

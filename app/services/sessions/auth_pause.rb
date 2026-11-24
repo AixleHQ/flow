@@ -167,15 +167,15 @@ module Sessions
     end
 
     # Fails the session after the pause limit: a compare-and-set
-    # (SessionService.fail_session_if). Under the session's lock the row must still be in
+    # (Sessions::Lifecycle.fail_if). Under the session's lock the row must still be in
     # `episode`, the pause the caller observed, and that pause must be past the limit by the
     # locked row. A session that was unpaused, paused again since, or started finishing is
     # left as it is.
     # @return [Boolean] whether the session was failed
     def expire!(episode:, &still)
       reason = session.metadata["auth_pause_reason"].presence || "login expired"
-      failed = SessionService.fail_session_if(
-        session: session, expected_state: session.state,
+      failed = Sessions::Lifecycle.fail_if(
+        session, expected_state: session.state,
         error_message: "Session terminated: agent authentication failed — #{reason}. " \
                        "Nobody signed in again within #{self.class.limit.inspect}."
       ) { |locked| in_episode?(locked, episode) && expired?(locked) && (still.nil? || still.call(locked)) }
