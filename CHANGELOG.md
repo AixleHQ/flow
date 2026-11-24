@@ -24,6 +24,8 @@ governance, community health — carry none.
   it scrolls, and folds its explanation into a "How to read this dashboard" section.
 
 ### Fixed
+- **Aixle Builder**: restoring a suspended build, and the "Continued in session" link on a
+  restored one, open the build's session. They used to lead to a page that does not exist.
 - **Admin**: deleting a company that has set up SCIM provisioning works again. It used to
   end in an error page and leave the company in place.
 - **Repositories**: adding a GitLab repository no longer ends in an error page when GitLab
