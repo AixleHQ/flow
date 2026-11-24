@@ -212,7 +212,8 @@ Triggers belong to the live workflow, so a draft has none. Agents, skills,
 wrappers and connectors are not part of a draft: editing one changes it for the
 live workflow too. Over the personal MCP the same flow is
 `create_workflow_draft`, `get_workflow_draft_diff`, `apply_workflow_draft` and
-`discard_workflow_draft`.
+`discard_workflow_draft`; `list_workflow_runs` and `get_workflow_run` mark a
+test run of a draft with `draft_test`.
 
 ## Aixle Builder
 

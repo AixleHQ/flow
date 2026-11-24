@@ -486,6 +486,10 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     test_run = payload(call_tool("trigger_workflow", { project_id: @project.id, workflow_id: draft_id }))
     assert_equal draft_id, WorkflowRun.find(test_run["run_id"]).workflow_id
     assert_equal "make", build.reload.instructions
+    listed = payload(call_tool("list_workflow_runs", { project_id: @project.id }))["runs"].sole
+    shown = payload(call_tool("get_workflow_run", { project_id: @project.id, run_id: test_run["run_id"] }))
+    assert_equal [ [ true, @workflow.id ] ] * 2,
+                 [ listed, shown ].map { |run| run.values_at("draft_test", "draft_of_workflow_id") }
 
     diff = payload(call_tool("get_workflow_draft_diff", args))
     assert_equal false, diff["live_changed_since_draft"] # rubocop:disable Minitest/RefuteFalse
