@@ -368,16 +368,14 @@ class OauthCredentialTest < ActiveSupport::TestCase
   end
 
   test "latest_github_connection_of returns a revoked connection, live_github_connection_of does not" do
-    revoked = create(:oauth_credential, :github_user, owner: @user, status: :revoked)
+    credential = create(:oauth_credential, :github_user, owner: @user)
 
-    assert_equal revoked, OauthCredential.latest_github_connection_of(@user)
+    assert_equal credential, OauthCredential.live_github_connection_of(@user)
+
+    credential.update!(status: :revoked)
+
+    assert_equal credential, OauthCredential.latest_github_connection_of(@user)
     assert_nil OauthCredential.live_github_connection_of(@user)
-
-    live = create(:oauth_credential, :github_user, owner: @user)
-    revoked.touch
-
-    assert_equal revoked, OauthCredential.latest_github_connection_of(@user)
-    assert_equal live, OauthCredential.live_github_connection_of(@user)
   end
 
   test "gitlab_connections_of finds only that person's credentials on the current GitLab host" do
@@ -472,15 +470,14 @@ class OauthCredentialTest < ActiveSupport::TestCase
   end
 
   test "latest_gitlab_connection_of returns a revoked connection, live_gitlab_connection_of does not" do
-    revoked = create(:oauth_credential, :gitlab_user, owner: @user, status: :revoked)
+    credential = create(:oauth_credential, :gitlab_user, owner: @user)
 
-    assert_equal revoked, OauthCredential.latest_gitlab_connection_of(@user)
+    assert_equal credential, OauthCredential.live_gitlab_connection_of(@user)
+
+    credential.update!(status: :revoked)
+
+    assert_equal credential, OauthCredential.latest_gitlab_connection_of(@user)
     assert_nil OauthCredential.live_gitlab_connection_of(@user)
-
-    live = create(:oauth_credential, :gitlab_user, owner: @user)
-    live.touch
-
-    assert_equal live, OauthCredential.live_gitlab_connection_of(@user)
   end
 
   test "the Bitbucket identity is read from bitbucket_user, with nickname as the login" do
@@ -499,15 +496,14 @@ class OauthCredentialTest < ActiveSupport::TestCase
   end
 
   test "latest_bitbucket_connection_of returns a revoked connection, live_bitbucket_connection_of does not" do
-    revoked = create(:oauth_credential, :bitbucket_user, owner: @user, status: :revoked)
+    credential = create(:oauth_credential, :bitbucket_user, owner: @user)
 
-    assert_equal revoked, OauthCredential.latest_bitbucket_connection_of(@user)
+    assert_equal credential, OauthCredential.live_bitbucket_connection_of(@user)
+
+    credential.update!(status: :revoked)
+
+    assert_equal credential, OauthCredential.latest_bitbucket_connection_of(@user)
     assert_nil OauthCredential.live_bitbucket_connection_of(@user)
-
-    live = create(:oauth_credential, :bitbucket_user, owner: @user)
-    live.touch
-
-    assert_equal live, OauthCredential.live_bitbucket_connection_of(@user)
   end
 
   test "a refresh response with a rotated refresh token and `scopes` is stored for Bitbucket" do

@@ -226,7 +226,7 @@ class OauthCredential < ApplicationRecord
     )
     cred.resource = resource.presence || mcp_server&.url
     cred.connected_by = connected_by if connected_by
-    cred.apply_token_response!(token_response, identity: identity)
+    cred.apply_token_response!(token_response, identity)
     cred
   end
 
@@ -256,7 +256,7 @@ class OauthCredential < ApplicationRecord
   # Persist a token/refresh response (from exchange OR refresh). Never wipes an
   # existing refresh_token when the response omits one (rotation: providers may
   # return only a new access token). Sets status: :active, clears refresh_error.
-  def apply_token_response!(resp, identity: nil)
+  def apply_token_response!(resp, identity = nil)
     self.access_token  = resp["access_token"]
     self.refresh_token = resp["refresh_token"] if resp["refresh_token"].present?
     self.token_type    = resp["token_type"].presence || "Bearer"
