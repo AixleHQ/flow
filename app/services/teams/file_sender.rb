@@ -49,7 +49,8 @@ module Teams
 
     def as_asset_links(conversation, thread_id, files, project, user)
       assets = files.map { |file| FileIngestor.store(project: project, user: user, filename: safe_name(file[:filename]), bytes: file[:content].to_s.b) }
-      url = "#{Settings.protocol}://#{Settings.domain}#{Rails.application.routes.url_helpers.company_project_assets_path(project)}"
+      path = Rails.application.routes.url_helpers.company_project_assets_path(project, company_slug: project.company.slug)
+      url = "#{Settings.protocol}://#{Settings.domain}#{path}"
       names = assets.map { |asset| Notifier.escape(asset.name) }.join(", ")
       Messages.post(conversation, thread_id: thread_id, new_thread: false, card: nil,
                                   text: "📎 #{names} — in [the project's files in Aixle](#{url})")

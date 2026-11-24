@@ -9,11 +9,12 @@
 # nonce, (3) double user-pinning (signed + cached), (4) mandatory PKCE/S256,
 # (5) owner authorization bound to what the current user may act for,
 # (6) open-redirect-safe return_to, (7) token-free error logging, (8) cancel
-# handled before the nonce is consumed so the user can retry within the TTL.
+# handled before the nonce is consumed so the user can retry within the TTL,
+# (9) RFC 9207 issuer check.
 #
 # MCP OAuth (oauth-unification §5): #mcp_connect discovers + dynamically registers
 # a client (MCP::OauthDiscoveryService) then runs the same consent flow; the
-# callback loads the signed DCR client (constrained to source:"dcr") and threads
+# callback loads the signed client (constrained to OauthClient::MCP_SOURCES) and threads
 # the RFC 8707 resource indicator through the exchange. A DCR token_endpoint is
 # attacker-authored, so it is re-validated against the SSRF guard at exchange time.
 class Web::OauthController < Web::ApplicationController

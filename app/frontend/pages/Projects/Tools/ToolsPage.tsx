@@ -3,6 +3,7 @@ import { Head, usePage } from '@inertiajs/react';
 import type { Project, Tool } from '@/types/generated';
 
 import { ToolsContent } from 'shared/resources/tools/ToolsContent';
+import { companyProjectToolsPath } from 'shared/routes';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -24,7 +25,7 @@ const ToolsPage = () => {
         archivedTools={archivedTools}
         projectId={project.id}
         configItemNames={configItemNames}
-        basePath={`/company/projects/${project.id}/tools`}
+        basePath={companyProjectToolsPath(project.id)}
         title="Wrappers"
         subtitle="No MCP server for a service you use? Write a wrapper for it — any language, any runtime — and agents get it as a tool."
         editableScopeIndicator="project"

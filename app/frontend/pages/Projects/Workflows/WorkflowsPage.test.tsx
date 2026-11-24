@@ -83,7 +83,7 @@ describe('Projects/Workflows/WorkflowsPage', () => {
     afterEach(() => window.history.pushState({}, '', '/'));
 
     it('opens on the archived list the builder links back to, each name leading to its read-only builder', () => {
-      window.history.pushState({}, '', '/company/projects/7/workflows?view=archived');
+      window.history.pushState({}, '', '/company/acme/projects/7/workflows?view=archived');
       renderAuthedPage(<WorkflowsPage />, {
         props: {
           ...baseProps([workflow()]),
@@ -94,7 +94,7 @@ describe('Projects/Workflows/WorkflowsPage', () => {
       expect(screen.queryByText('Nightly Build')).not.toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'Old pipeline' })).toHaveAttribute(
         'href',
-        '/company/projects/7/workflows/5/builder',
+        '/company/acme/projects/7/workflows/5/builder',
       );
     });
   });

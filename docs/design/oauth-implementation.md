@@ -11,8 +11,8 @@ for *why*; read this for *what runs*.
 
 | Store | For | Model | Where tokens live | Refresh |
 |---|---|---|---|---|
-| **OAuth broker** | third-party providers (Sentry, Railway) + user-added MCP servers | `OauthCredential` (+ `OauthClient`) | encrypted columns, DB | on-demand at use + Temporal sweep |
-| **Agent-CLI login** | the agent CLIs' own auth (Claude / Codex / Cursor / Gemini) | `AgentCredential` | encrypted `config_data` blob, DB | Temporal sweep + reactive-on-401 |
+| **OAuth broker** | third-party providers (Sentry, Railway; a person's own GitHub, GitLab and Bitbucket account) + user-added MCP servers | `OauthCredential` (+ `OauthClient`) | encrypted columns, DB | on-demand at use + Temporal sweep |
+| **Agent-CLI login** | every agent CLI's own auth (Claude / Codex / Cursor / Gemini / Antigravity / Grok / Kiro / Copilot) | `AgentCredential` | encrypted `config_data` blob, DB | Temporal sweep + reactive-on-401 |
 
 They are deliberately separate: the broker is *the app acting as an OAuth client against someone else's
 authorization server*; the agent-CLI store is *the coding agent's own login captured from its container*.
@@ -27,7 +27,10 @@ authorization server*; the agent-CLI store is *the coding agent's own login capt
   - `static` — materialized from the `Oauth::Providers` registry (Settings-backed).
   - `dcr` — RFC 7591 Dynamic Client Registration.
   - `cimd` — RFC "Client ID Metadata Document": our hosted metadata-doc URL *is* the client_id.
-  `OauthClient::DISCOVERED_SOURCES = %w[dcr cimd]` (the callback constrains signed client ids to these).
+  - `manual` — credentials an operator registered by hand at the provider, for an authorization server
+    that will not let us register ourselves. Scoped to one MCP server (`oauth_clients.mcp_server_id`).
+  `OauthClient::DISCOVERED_SOURCES = %w[dcr cimd]`; `OauthClient::MCP_SOURCES` adds `manual`. The MCP
+  callback constrains signed client ids to `MCP_SOURCES`, so a `static` client can never be spent there.
 - **`oauth_credentials`** — the tokens: polymorphic **`owner`** (User | Company | Project = *whose identity
   the agent acts as*), `oauth_client`, nullable `mcp_server`, `provider` (`"sentry"`, `"mcp:<host>"`),
   encrypted `access_token`/`refresh_token`, `token_type`, `scopes`, **plaintext `expires_at`** (so the sweep
@@ -41,16 +44,22 @@ Unique/idempotency key for a credential: `(owner, oauth_client, provider, mcp_se
 
 ## 3. Acquiring a client
 
-**Static providers** (`app/services/oauth/providers.rb`): a registry declares Sentry/Railway (endpoints +
-scopes in code, `client_id`/`client_secret` from `Settings`). `client_for` reconciles a `source:static`
-`OauthClient` row.
+**Static providers** (`app/services/oauth/providers.rb`): a registry declares `sentry`, `railway`,
+`github`, `gitlab` and `bitbucket`. Each entry has its endpoints and scopes in code, or an `endpoints`
+callable (GitLab's follow `GITLAB_ENDPOINT`), and an `oauth_app` callable for the client id and secret
+from `Settings` (through `Gitlab::AppConfig` and `Bitbucket::AppConfig` for those two).
+Optional keys: `owner_types` (GitHub, GitLab and Bitbucket take only a `User`), `after_connect` (records the
+connected identity), `client_auth: :basic` (Bitbucket) and `trust_endpoint_host` (GitLab, whose token call may
+reach a privately resolving host). `client_for` reconciles a `source:static` `OauthClient` row.
 
 **MCP servers** (`app/services/mcp/oauth_discovery_service.rb`) — any pasted URL, per the MCP auth spec:
 1. Probe the MCP URL; on 401 read `WWW-Authenticate` → RFC 9728 protected-resource metadata → authorization
    server list.
 2. Fetch RFC 8414 / OIDC authorization-server metadata → endpoints.
 3. Register the client:
-   - **CIMD preferred** — if the AS advertises `client_id_metadata_document_supported`, use our hosted
+   - **Manual first** — a hand-registered client on the server outranks every automatic path; discovery
+     fills in its endpoints and issuer. `source:manual`.
+   - **CIMD next** — if the AS advertises `client_id_metadata_document_supported`, use our hosted
      `/oauth/client-metadata.json` as the client_id (no network registration). `source:cimd`.
    - **DCR otherwise** — POST `registration_endpoint` (`client_name: "Aixle Flow"`, single callback), persist
      `source:dcr`.
@@ -73,8 +82,10 @@ a freshly discovered one.
 
 One controller, **one deployment-wide redirect URI** (`/oauth/callback`).
 
-- `GET /oauth/:provider/authorize` (static) / `GET /oauth/mcp/:mcp_server_id/connect` (MCP): build the
-  provider authorize URL with **mandatory PKCE (S256)** and a signed `Oauth::State`.
+- `POST /oauth/:provider/authorize` (static) / `POST /oauth/mcp/:mcp_server_id/connect` (MCP): build the
+  provider authorize URL with **mandatory PKCE (S256)** and a signed `Oauth::State`. A `GET` of the MCP
+  connect URL (reconnect emails, old links) starts nothing: it lands on the project's MCP servers page and
+  asks the person to press Connect.
 - `GET /oauth/callback`: verify state, exchange the code at `token_endpoint`, `upsert_from_token!`, redirect
   to `return_to`.
 - `GET /oauth/client-metadata.json`: public (no auth) RFC CIMD document. Its `client_id` **must equal** the
@@ -89,7 +100,10 @@ the cache entry under the nonce and is handed back exactly once. The signed payl
 
 Callback guards, in order: (1) signature + TTL, (2) single-use nonce, (3) double user-pin,
 (4) mandatory PKCE, (5) owner authorization (what the current user may act for), (6) open-redirect-safe
-`return_to`, (7) token-free error logging, (8) cancel handled before the nonce is consumed (retry within TTL).
+`return_to`, (7) token-free error logging, (8) cancel handled before the nonce is consumed (retry within TTL),
+(9) RFC 9207 issuer check — an `iss` in the response must match the client's issuer. For MCP the callback
+also refuses a grant whose signed `resource` origin no longer matches the server's URL (the server was
+re-pointed mid-connect).
 
 The **GitHub App setup** callback reuses `Oauth::State` too (`IntegrationsController#github_app_install`
 mints it; `GithubSetupController` verifies) — replacing the old plaintext, replayable `project:<id>` state.
@@ -105,7 +119,10 @@ For an `auth_type: oauth` server it calls `inject_oauth_token! → Oauth::TokenS
   `shared`, the server's scope owner (Company/Project). Never an owner-blind fallback (confused-deputy
   guard). A missing OAuth credential raises `Oauth::ReauthRequired`.
 - **`fresh`** — returns the stored token unless within `REFRESH_SKEW` (10 min) of expiry; if so, refreshes
-  **under `with_lock`** with a re-check + no-downgrade guard.
+  under a **refresh lease** (`RefreshLease`): one refresher at a time, a re-check once the lease is held,
+  the provider call outside any transaction, and only the persist under `with_lock` with a no-downgrade
+  guard. A rolled-back write of a rotated refresh token would lose the only valid one. A caller that finds
+  the lease taken waits for that refresh and uses its result.
 - The token is injected as an `Authorization: Bearer <token>` header into the rendered per-CLI MCP config.
   **Adapters are unchanged** — they see a resolved header exactly like a `config_item:` today.
 
@@ -124,10 +141,11 @@ that is the optional Phase-4 proxy.
 Two layers, both single-flight and rotation-safe (keep the old refresh_token until the new pair commits;
 never clobber a fresher token):
 
-- **On-demand** at use time (`TokenService.fresh`, under `with_lock`).
+- **On-demand** at use time (`TokenService.fresh`, under the refresh lease).
 - **Proactive** — `Workflows::OauthTokenRefreshWorkflow` (`*/5`, `overlap: skip`) runs
   `Activities::Oauth::RefreshExpiringTokensActivity`, sweeping `OauthCredential.refresh_due` (active +
-  expiring within 15 min) via `TokenService.refresh_credential`.
+  expiring within 15 min) via `TokenService.refresh_credential`, which does not wait on a credential
+  another refresher holds.
 
 **Failure escalation**: `mark_refresh_error!` increments `refresh_failure_count`; a single blip keeps the
 credential `active` (the sweep retries). After `MAX_REFRESH_FAILURES = 3` consecutive failures it escalates
@@ -178,7 +196,8 @@ scrapes the auth files and saves a sliced `AgentCredential`.
 | **Claude Platform** (Console login, CLI ≥ 2.1.281) | Bearer + oauth beta header | `platformOauth` (tokens) + `platformProfile` (org/workspace/client) — rendered to `~/.config/anthropic/{credentials,configs}/default.json`, both **0600** and agent-owned (the CLI refuses a group/world-readable credentials file) | yes (`api.anthropic.com/v1/oauth/token`, JSON body, profile's `client_id`) |
 | **platform.claude.com** (Console API key, older CLIs) | `x-api-key` | `primaryApiKey` in `.claude.json` | no (long-lived key) |
 | **`/design-login`** | OAuth, *layered on* claude.ai | `designOauth` in `.credentials.json` | yes (own `clientId`) |
-| **Bedrock / Vertex** | AWS SSO / GCP ADC via **env** | **not modeled** (deferred) | — |
+| **Amazon Bedrock** | AWS (IAM Identity Center role credentials, or a Bedrock API key / long-term keys from Claude Code's wizard) | `awsBedrock` block (region, profile, credential source) | Identity Center: yes, server-side at vending time; keys: no |
+| **Vertex** | GCP ADC via **env** | **not modeled** (deferred) | — |
 
 The interactive `claude` login already covers **both** claude.ai and platform.claude.com (the user chooses
 inside Claude Code's own TUI), so the profile's **Authenticate** button simply launches `claude` — we do
@@ -186,8 +205,7 @@ NOT present our own method chooser. The login method (and, in Claude's native me
 option) is picked inside the terminal.
 
 Only the OAuth blocks (`claudeAiOauth`, `platformOauth`, `designOauth`) expire and refresh — `token_expires_at` reads only
-those, so API-key credentials get `expires_at = nil` (always active, never swept) and Bedrock has no stored
-credential at all. `AgentCredentialResource#connection_status` (active/expiring/expired, derived from the **base login's** expiry —
+those, so API-key and Bedrock credentials get `expires_at = nil` (always active, never swept). `AgentCredentialResource#connection_status` (active/expiring/expired, derived from the **base login's** expiry —
 `metadata.login_expires_at`, written beside `expires_at` by `sync_expires_at` — never from an add-on like `designOauth`;
 `expires_at` stays the soonest block expiry because it is what the sweep selects on)
 drives the badge on the profile page.
@@ -200,22 +218,34 @@ The **"Connect Design"** button on the Claude profile card (shown when the crede
 login — `claudeAiOauth`, `platformOauth` or `primaryApiKey`; Bedrock users can't design-login) opens the auth modal in `authKind: "design"`
 mode. Backend (`AgentAuthStrategy`, keyed on `session.metadata["auth_kind"] == "design"`):
 1. `before_exec` **injects the user's existing base credential** (minus `designOauth`) so the CLI starts
-   logged in. Because the base auth container's entrypoint launches `TTYD_CMD` at container start (before
-   `before_exec`), design uses `ttyd_command = "bash"` and launches `claude` in `#exec` *after* the creds are
-   seeded (the session pattern — `send_tmux_command`); otherwise `claude` would race ahead of the creds and
-   show a fresh login.
-2. Env `AUTH_REQUIRED_KEYS = designOauth.accessToken` (the watcher needs no change — it's key-agnostic),
-   because the base token is present from the start and must not be mistaken for completion.
-3. The user runs `/design-login` in the terminal → `designOauth` lands in `.credentials.json`.
-4. `before_cleanup` gates completion on `design_auth_complete?` and saves the merged blob (base + design).
+   logged in (`auth_setup_files_for`). Because the base auth container's entrypoint launches `TTYD_CMD` at
+   container start (before `before_exec`), design uses `ttyd_command = "bash"` and `#exec` launches the
+   adapter's `auth_launch_commands_for` — `claude /design-login`, so the CLI starts already running the
+   command — with `send_tmux_sequence` *after* the creds are seeded; otherwise `claude` would race ahead of
+   the creds and show a fresh login.
+2. Env `AUTH_REQUIRED_KEYS = designOauth.accessToken` (`auth_required_keys_for`; the watcher needs no
+   change — it's key-agnostic), because the base token is present from the start and must not be mistaken
+   for completion.
+3. The user approves in the browser → `designOauth` lands in `.credentials.json`.
+4. `before_cleanup` gates completion on `auth_complete_for?` and saves the merged blob (base + design).
 
-### Bedrock / Vertex — deferred (not modeled)
-Real-world corporate Bedrock (see the employee onboarding doc) is **AWS SSO** (per-dev browser login, no
-static keys), with the Bedrock config — `CLAUDE_CODE_USE_BEDROCK=1`, `AWS_PROFILE`, `AWS_REGION`, model ARNs,
-guardrail headers — living in a **committed `.claude/settings.json`** (non-secret), refreshed via
-`aws sso login`. That is a *project-level env config + interactive SSO*, not a per-user stored secret, so it
-does **not** belong in the OAuth token engine. Deferred until needed; if built, model it on that flow
-(project Bedrock config injected as env + an SSO login step in the session), NOT a static-key form.
+### Amazon Bedrock
+Bedrock lives on the `claude_code` `AgentCredential`, not in the OAuth token engine: an `awsBedrock` block
+(`ClaudeCodeAdapter::BEDROCK_KEY`), one of the mutually exclusive `INFERENCE_KEYS`. The user picks Amazon
+Bedrock inside Claude Code's own login wizard in the auth container. Two sources:
+
+- **IAM Identity Center** — `CloudAuth::AwsDeviceFlow` runs the device flow server-side and stores the OIDC
+  client registration and tokens in the block. The container gets only a `credential_process` helper, which
+  asks `CloudCredentialsController` for short-lived role credentials (`CloudAuth::AwsCredentialVendor`).
+- **Wizard-entered keys** — a Bedrock API key or long-term access keys are captured from the settings the
+  wizard writes, and rendered back into Claude Code's user settings file each session.
+
+`CloudAuth::Preflight` blocks a launch on a broken connection and offers a "Reconnect AWS" CTA. Design and
+security notes: [cloud-connection-security.md](./cloud-connection-security.md) and
+`docs/research/technical-aws-bedrock-cloud-provider-auth-2026-07-25.md`.
+
+### Vertex — deferred (not modeled)
+Vertex (GCP ADC via env) has no stored credential and no connect flow.
 
 ---
 

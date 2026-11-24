@@ -7,6 +7,33 @@ Guidance for AI agents working in this repository.
 `docs/index.md` is the index of all architecture/design/research docs. Whenever you
 add, remove, or move a document under `docs/`, update `docs/index.md` in the same change.
 
+## Keeping docs in step with the code
+
+People and agents act on what the docs say, so a change is finished only when every
+place that states the changed fact says the same thing. Same change, same PR.
+
+- **Code → docs.** When you rename, remove or change something a reader acts on — an
+  env var or its default, a route or webhook URL, an agent tool, a UI label or where a
+  screen lives, a setting, a limit, a state, a runtime — search for the old name before
+  you finish and fix every hit:
+  `grep -rn '<old name>' docs references app/frontend/pages/Docs/data/pages`.
+  An empty result is the check passing, not a step to skip.
+- **Mirror pairs.** The `/docs` portal serves `app/frontend/pages/Docs/data/pages/<name>.md`,
+  not `docs/`. `docs/user-guide/`, `docs/reference/` and `docs/product/` hold hand-kept
+  copies of those pages, mostly under the same file name; the exceptions are
+  `reference/api.md` ↔ `api-guide.md`, `reference/cli.md` ↔ `cli-ref.md`,
+  `reference/configuration.md` ↔ `config-schema.md`, `reference/index.md` ↔ `reference.md`,
+  `user-guide/index.md` ↔ `user-guide.md` and `quickstart.md` ↔ `quick-start.md`. Edit both
+  files of a pair together. They may differ only in link form (relative `.md` links in
+  `docs/`, `/docs/<slug>` or plain text in the portal), never in content.
+- **Design docs.** When a designed feature ships, its doc says so at the top
+  (`Built <date> (#PR)`), and where the build departs from the proposal goes into the doc
+  in the same PR. A dropped proposal says it was dropped. Research reports
+  (`docs/research/`, `docs/planning-artifacts/research/`) are dated snapshots: leave them.
+- **One fact, one home.** A list that more than one doc needs (runtimes, trigger sources,
+  env vars) lives in one place and the others link to it. Where a doc does restate it,
+  the change updates every copy.
+
 ## Before pushing a branch or opening/updating a PR
 
 Run the cheap checks locally, then let CI run the full suite on the PR.
@@ -20,12 +47,13 @@ Before a push:
   lint job)
 
 Once the PR is open, CI runs everything: lint, system tests, sharded Rails and Vitest,
-the merged coverage floors and the secret scan. Watch it (`gh pr checks <n> --watch`).
-When a check is red, fix it on the branch and push again. A PR is done when CI is green,
-not when it is opened.
+the merged coverage floors, the secret scan and the Go `runner` and `runner-relay` jobs.
+Watch it (`gh pr checks <n> --watch`). When a check is red, fix it on the branch and push
+again. A PR is done when CI is green, not when it is opened.
 
-`make check_all` still runs the whole CI suite in one local pass. Use it to reproduce a
-CI failure locally, not as a gate before every push.
+`make check_all` runs CI's lint, system, Rails and Vitest checks in one local pass. It
+leaves out the secret scan (`make secret-scan`, on the host) and the Go `runner` and
+`runner-relay` jobs. Use it to reproduce a CI failure locally, not as a gate before every push.
 
 ## Docker is required
 
@@ -38,7 +66,7 @@ on the host). If the container isn't running: `docker compose up -d`.
 
 - Backend tests: `docker compose exec -T web bin/rails test <files>`
 - Frontend tests: `docker compose exec -T web ./node_modules/.bin/vitest run <files>` (`npx` is not on the container PATH)
-- The whole CI suite in one local pass, when you need it: `docker compose exec -T web make check_all`
+- CI's lint, system, Rails and Vitest checks in one local pass, when you need it: `docker compose exec -T web make check_all`
 
 **Never run two backend test invocations at the same time** (including from another
 agent session or a git worktree that shares a Postgres — overlapping runs corrupt
@@ -75,7 +103,7 @@ shared per-worker databases.
 `app/frontend/types/generated/` (Typelizer) and `app/frontend/shared/routes.ts` (ts_routes) are generated. **Never edit them by hand**, not even for one union or one route: a later generation reverts the edit or shows the drift.
 
 - Regenerate types with `bin/rails typelizer:generate` after changing an Alba resource, or the enumerize / AASM values a resource exposes.
-- Regenerate routes with `bin/rails ts:routes` after changing routes.
+- Regenerate routes with `docker compose exec -T -e RAILS_ENV=test web bin/rails ts:routes` after changing routes. The `web` container runs in development, where the routes also mount letter_opener; a development run writes that route into `routes.ts`.
 - Commit the output with the change that caused it.
 - Both need the migrated database schema, so run them in the `web` container (`docker compose exec -T web …`) or in a Coder workspace. If a generator can't run in your environment (no schema, route generation off), don't edit its output: run it where it works, or say in your result that it could not run.
 

@@ -19,18 +19,23 @@ class Web::Company::SwitchControllerTest < ActionDispatch::IntegrationTest
     sign_in_as(@user)
   end
 
+  # The company an unscoped link (/company/projects, from before the slug was in
+  # the path) opens: the one last used.
   def current_company_id
-    get company_projects_path
+    get "/company/projects"
+    return nil unless response.redirect?
+
+    follow_redirect!
     return nil unless response.status == 200
 
     inertia.props[:currentUser][:currentCompany][:id]
   end
 
-  test "switch to a member company updates the session and re-scopes subsequent pages" do
+  test "switch to a member company opens its pages and becomes the one unscoped links open" do
     assert_equal @company_a.id, current_company_id
 
     post company_switch_path, params: { company_id: @company_b.id }
-    assert_redirected_to company_projects_path
+    assert_redirected_to company_projects_path(company_slug: @company_b.slug)
 
     assert_equal @company_b.id, current_company_id
   end
@@ -59,6 +64,8 @@ class Web::Company::SwitchControllerTest < ActionDispatch::IntegrationTest
 
     @membership_b.revoke!
 
+    get company_projects_path(company_slug: @company_b.slug)
+    assert_response :not_found
     assert_equal @company_a.id, current_company_id
   end
 
@@ -68,11 +75,11 @@ class Web::Company::SwitchControllerTest < ActionDispatch::IntegrationTest
     @membership_b.revoke!
     @membership_a.revoke!
 
-    get company_projects_path
+    get company_projects_path(company_slug: @company_a.slug)
     assert_redirected_to login_path(error: "no_active_membership")
 
     # Session is gone: the next request is treated as unauthenticated.
-    get company_projects_path
+    get company_projects_path(company_slug: @company_a.slug)
     assert_redirected_to login_path
   end
   # === stickiness across sessions (users.last_company_id) ===

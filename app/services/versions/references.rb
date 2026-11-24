@@ -27,11 +27,15 @@ module Versions
     end
 
     def step_usages(steps)
-      steps.map { |step| { workflow: step.workflow.name, step: step.name } }
+      steps.map { |step| { workflow: label(step.workflow), step: step.name } }
     end
 
     def workflow_usages(workflows)
-      workflows.order(:name).map { |workflow| { workflow: workflow.name } }
+      workflows.order(:name).map { |workflow| { workflow: label(workflow) } }
+    end
+
+    def label(workflow)
+      workflow.draft? ? "#{workflow.name} (draft)" : workflow.name
     end
   end
 end

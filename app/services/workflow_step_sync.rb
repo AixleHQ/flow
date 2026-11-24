@@ -9,6 +9,8 @@
 #   "key"                 how other specs name this step in "depends_on_step_ids"
 #                         (defaults to "id"; a new step needs one of its own)
 #   "sub_steps"           the step's sub-steps, each with "id" nil for a new one
+#   "origin_step_id"      with `keep_origins:` only — the step a draft's copy came from,
+#                         and "origin_sub_step_id" on its sub-steps
 #
 # Steps and sub-steps missing from the list are soft-deleted, never removed, so
 # every id a version snapshot names keeps its row. The order of writes is chosen
@@ -31,8 +33,10 @@ class WorkflowStepSync
     ids.select { |id| found.include?(id) }
   end
 
-  def initialize(workflow, specs)
+  def initialize(workflow, specs, keep_origins: false)
     @workflow = workflow
+    @step_columns = keep_origins ? STEP_COLUMNS + %w[origin_step_id] : STEP_COLUMNS
+    @sub_step_columns = keep_origins ? SUB_STEP_COLUMNS + %w[origin_sub_step_id] : SUB_STEP_COLUMNS
     @specs = specs.each_with_index.map do |spec, index|
       spec.merge("key" => spec_key(spec), "position" => spec["position"] || (index + 1))
     end
@@ -67,7 +71,7 @@ class WorkflowStepSync
   def write_steps(rows)
     @specs.each_with_object({}) do |spec, steps|
       step = rows[spec["id"].presence&.to_i] || @workflow.steps.new
-      attrs = spec.slice(*STEP_COLUMNS)
+      attrs = spec.slice(*@step_columns)
       Versions::Snapshots::Workflow::STEP_REFERENCES.each do |column, model|
         attrs[column] = self.class.existing_ids(model, attrs[column]) if attrs.key?(column)
       end
@@ -138,7 +142,7 @@ class WorkflowStepSync
     rows = step.sub_steps.to_a.index_by(&:id)
     kept = specs.each_with_index.map do |spec, index|
       sub = rows[spec["id"].presence&.to_i] || step.sub_steps.new
-      attrs = spec.slice(*SUB_STEP_COLUMNS)
+      attrs = spec.slice(*@sub_step_columns)
       attrs["position"] ||= index + 1
       sub.assign_attributes(attrs.merge("deleted_at" => nil))
       sub.save!

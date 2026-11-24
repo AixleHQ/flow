@@ -214,13 +214,10 @@ module Agents
       "\"#{escaped}\""
     end
 
-    # Env for the MITM proxy, which is where session usage comes from (see
-    # #collect_usage), plus the API key when the credential is an API-key login.
+    # Telemetry, plus the API key when the credential is an API-key login. Usage comes
+    # from the proxy's log (#mitm_logged_bodies, #collect_usage).
     def default_env_vars(session, callbacks:)
-      env = {
-        "MITM_LOG_PATH" => "/var/log/mitm/http.log",
-        "MITM_TRACKED_DOMAINS" => MITM_DOMAINS.join(",")
-      }.merge(telemetry_env(session, callbacks))
+      env = telemetry_env(session, callbacks)
 
       # Inject the API key from the credential of THIS session's company: keys are per
       # company so the vendor bill lands on the company that ran the session.
@@ -266,6 +263,11 @@ module Agents
 
     def mitm_tracked_domains
       MITM_DOMAINS.dup
+    end
+
+    # The completions #collect_usage prices, on either login's host.
+    def mitm_logged_bodies
+      %w[response:grok.com/v1/responses response:x.ai/v1/responses response:x.ai/v1/chat/completions]
     end
 
     def session_log_paths

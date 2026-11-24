@@ -85,7 +85,7 @@ module Templates
     # ---- workflows --------------------------------------------------------
 
     def workflows_scope
-      scope = @project.workflows.active.order(:id)
+      scope = @project.workflows.active.not_drafts.order(:id)
       @workflow_ids ? scope.where(id: @workflow_ids) : scope
     end
 

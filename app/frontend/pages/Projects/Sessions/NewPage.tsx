@@ -7,6 +7,7 @@ import type { AssetPickerItem } from 'shared/components/AssetPicker';
 import { SessionNewForm } from 'shared/components/SessionNewForm';
 import type { ConfigItemOption, NamedItem, SessionCostHint } from 'shared/components/SessionNewForm';
 import type { ToolGroup } from 'shared/lib/toolPicker';
+import { companyProjectSessionPath, companyProjectSessionsPath } from 'shared/routes';
 import { PageHeader } from 'shared/ui/PageHeader';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -72,8 +73,8 @@ const ProjectSessionNewPage = () => {
           assets={assets}
           configItems={configItems}
           runners={runners}
-          onCreatedPath={(sessionId) => `/company/projects/${project.id}/sessions/${sessionId}`}
-          fallbackPath={`/company/projects/${project.id}/sessions`}
+          onCreatedPath={(sessionId) => companyProjectSessionPath(project.id, sessionId)}
+          fallbackPath={companyProjectSessionsPath(project.id)}
         />
       </Box>
     </>

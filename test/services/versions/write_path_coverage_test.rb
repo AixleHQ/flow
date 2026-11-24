@@ -8,8 +8,8 @@ require "test_helper"
 # one of the five types directly would silently punch a hole in the history;
 # this fails instead.
 class Versions::WritePathCoverageTest < ActiveSupport::TestCase
-  VERSIONED_NOUNS = /\A(create|update|delete|install|uninstall|duplicate|reorder)_(agent|skill|custom_tool|mcp_server|
-                     connector|workflow|workflow_step|workflow_steps|sub_step|sub_steps)\z/x
+  VERSIONED_NOUNS = /\A(create|update|delete|install|uninstall|duplicate|reorder|apply|discard)_(agent|skill|custom_tool|
+                     mcp_server|connector|workflow|workflow_step|workflow_steps|sub_step|sub_steps|workflow_draft)\z/x
   # Writers that hand an actor to a service which records the version itself,
   # or wrap the write in the workflows API's `versioned` helper.
   DELEGATES = /Versions\.|actor: version_actor|versioned \{/
@@ -25,6 +25,7 @@ class Versions::WritePathCoverageTest < ActiveSupport::TestCase
     app/controllers/api/v1/projects/workflows_controller.rb
     app/controllers/api/v1/projects/workflows/steps_controller.rb
     app/controllers/api/v1/projects/workflows/aggregates_controller.rb
+    app/controllers/api/v1/projects/workflows/drafts_controller.rb
     app/controllers/web/company/template_installs_controller.rb
   ].freeze
 
@@ -36,6 +37,7 @@ class Versions::WritePathCoverageTest < ActiveSupport::TestCase
     app/services/skills_registry_service.rb
     app/services/workflow_duplicator.rb
     app/services/workflow_duplicator/dependency_copier.rb
+    app/services/workflow_drafts.rb
   ].freeze
 
   test "every personal tool that writes a versioned entity records a version" do

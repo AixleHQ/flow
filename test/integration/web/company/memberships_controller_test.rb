@@ -61,7 +61,7 @@ class Web::Company::MembershipsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to login_path
     assert @membership_a.reload.revoked?
 
-    get company_projects_path
+    get company_projects_path(company_slug: @membership_a.company.slug)
     assert_redirected_to login_path
   end
 

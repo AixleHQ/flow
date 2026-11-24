@@ -7,6 +7,8 @@ import { AuthLayout } from 'layouts/AuthLayout';
 import type SessionArtifact from 'types/generated/SessionArtifact';
 import type TerminalSession from 'types/generated/TerminalSession';
 
+import { companySessionPath, reviewCompanySessionArtifactsPath } from 'shared/routes';
+
 interface Props {
   session: TerminalSession;
   artifacts: SessionArtifact[];
@@ -60,7 +62,7 @@ const SessionArtifactsPage = () => {
       }
 
       router.post(
-        `/company/sessions/${session.id}/artifacts/review`,
+        reviewCompanySessionArtifactsPath(session.id),
         { decisions },
         {
           onFinish: () => setSubmitting(false),
@@ -78,7 +80,7 @@ const SessionArtifactsPage = () => {
             variant="subtle"
             size="sm"
             leftSection={<IconChevronLeft size={16} />}
-            onClick={() => router.visit(`/company/sessions/${session.id}`)}
+            onClick={() => router.visit(companySessionPath(session.id))}
           >
             Back to Session
           </Button>

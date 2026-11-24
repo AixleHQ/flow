@@ -75,7 +75,8 @@ module PersonalTools
 
     def checklist_url(result)
       Rails.application.routes.url_helpers.company_project_template_install_url(
-        result.project, result.install, host: Settings.domain, protocol: Settings.protocol
+        result.project, result.install,
+        company_slug: result.project.company.slug, host: Settings.domain, protocol: Settings.protocol
       )
     end
   end

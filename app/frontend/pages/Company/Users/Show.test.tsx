@@ -190,7 +190,7 @@ describe('Company/Users/Show', () => {
     await user.click(screen.getByDisplayValue('Last 30 days'));
     await user.click(await screen.findByText('Last 7 days'));
 
-    expect(router.get).toHaveBeenCalledWith('/user/7', { period: '7d' }, expect.anything());
+    expect(router.get).toHaveBeenCalledWith('/company/user/7', { period: '7d' }, expect.anything());
   });
 
   it('renders the spend numbers once the deferred usage props arrive', () => {

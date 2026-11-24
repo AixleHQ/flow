@@ -51,7 +51,7 @@ class Web::Company::Projects::MembersControllerTest < ActionDispatch::Integratio
     colleague = create(:user, :employee, company: other)
     session_company_member = create(:user, :employee, company: @company)
 
-    get company_project_members_path(other_project)
+    get company_project_members_path(other_project, company_slug: other.slug)
 
     ids = inertia.props[:companyUsers].map { |u| u[:id] }
     assert_includes ids, colleague.id

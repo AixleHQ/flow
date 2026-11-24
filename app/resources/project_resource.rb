@@ -44,7 +44,7 @@ class ProjectResource < ApplicationResource
     if project.respond_to?(:cached_workflows_count)
       project.cached_workflows_count.to_i
     else
-      project.workflows.where(deleted_at: nil).count
+      project.workflows.where(deleted_at: nil, draft_of_id: nil).count
     end
   end
 

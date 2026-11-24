@@ -7,7 +7,7 @@ class BillingMailer < ApplicationMailer
     @actor = cancellation.user
     @recipient = recipient
     @ended_on = cancellation.cancels_at.strftime("%B %-d, %Y")
-    @billing_url = company_settings_billing_url
+    @billing_url = company_settings_billing_url(company_slug: @company.slug)
 
     mail(
       to: recipient.email,
@@ -20,7 +20,7 @@ class BillingMailer < ApplicationMailer
   # not Stripe's.
   def final_invoice_unpaid(company, recipient)
     @company = company
-    @billing_url = company_settings_billing_url
+    @billing_url = company_settings_billing_url(company_slug: @company.slug)
 
     mail(
       to: recipient.email,

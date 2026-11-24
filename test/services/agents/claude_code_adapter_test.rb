@@ -576,16 +576,16 @@ module Agents
 
     # == Env ==
 
-    test "default_env_vars includes MITM and OTLP settings" do
+    test "default_env_vars includes OTLP settings, and the proxy logs Anthropic's hosts without bodies" do
       Settings.stubs(:otel).returns(OpenStruct.new(endpoint: "http://otel:4318"))
 
       env = @adapter.default_env_vars(@session, callbacks: hosted_callbacks)
 
-      assert_equal "/var/log/mitm/http.log", env["MITM_LOG_PATH"]
       # The OAuth host is tracked alongside the inference host: without it the log says
       # nothing about when this credential was renewed or by whom.
       assert_equal "api.anthropic.com,platform.claude.com,console.anthropic.com",
-                   env["MITM_TRACKED_DOMAINS"]
+                   @adapter.mitm_env["MITM_TRACKED_DOMAINS"]
+      assert_equal "none", @adapter.mitm_env["MITM_LOG_BODIES"]
       assert_includes env["OTEL_RESOURCE_ATTRIBUTES"], @session.route_token
       assert_equal "90000", env["MCP_TIMEOUT"]
     end

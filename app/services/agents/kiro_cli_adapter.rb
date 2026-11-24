@@ -815,8 +815,6 @@ module Agents
     # vendor's collector.
     def default_env_vars(session, callbacks:)
       {
-        "MITM_LOG_PATH" => "/var/log/mitm/http.log",
-        "MITM_TRACKED_DOMAINS" => mitm_tracked_domains.join(","),
         # Opens 127.0.0.1:MCP_FORWARD_PORT onto the platform's MCP service, which is
         # what makes the loopback URL in mcp.json resolve. See #loopback_url.
         "MCP_FORWARD_PORT" => MCP_FORWARD_PORT.to_s,
@@ -842,6 +840,12 @@ module Agents
     # image layers pulled from S3 too, which can pass the 1 GB a stored log may hold.
     def mitm_tracked_domains
       %w[kiro.dev]
+    end
+
+    # What #collect_usage reads: the credits on each model response, and the turn
+    # summaries older CLIs post to `/agents/activity`.
+    def mitm_logged_bodies
+      %w[response:kiro.dev/v1/responses request:kiro.dev/agents/activity]
     end
 
     def session_log_paths

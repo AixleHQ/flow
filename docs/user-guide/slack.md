@@ -321,9 +321,9 @@ Some details:
 - **Blocks with files.** Slack cannot attach files to a Block Kit message, so
   blocks and files go out in two parts: the message first, then the files in
   its thread.
-- **Interactive blocks.** Flow rejects `actions` and `input` blocks. This
-  deployment runs no Slack interactivity endpoint, so a click on them would go
-  nowhere.
+- **Interactive blocks.** Flow rejects `actions` and `input` blocks. The app's
+  interactivity endpoint answers only the **Run workflow** shortcut and its
+  form, so a click on them would go nowhere.
 - **Throttling.** When Slack rate-limits the app, the tool returns
   `rate_limited` with how many seconds to wait (`retry_after`). The limit is
   the app's in that workspace, shared by every company that connected it.
@@ -459,7 +459,7 @@ The links in status cards are built from `PROTOCOL` and `DOMAIN`.
 | An agent sees *"No channel given. Only a run started from Slack has one to fall back on — pass `conversation` explicitly."* | The session did not start from Slack | Pass a connected channel's name or ID |
 | An agent sees *"… is not a Slack channel connected to …"* | The channel is not connected to the company | Connect it: **Integrations → Slack → Connect a channel** |
 | An agent sees *"Slack rejected the request: …"* | Slack's own error code, such as `not_in_channel` | Invite the app to the channel |
-| A run failed but Slack heard nothing | **Report failures back to Slack** is off, the run was started again by hand, or the install is inactive | Turn the switch on, or check the row |
+| A run failed but Slack heard nothing | **Report back in the thread** is **Nothing**, the run was started again by hand, or the install is inactive | Choose **A status card that follows the run** or **Only when a run fails**, or check the row |
 | Files from the message are missing in the run | Over 50 MB, after the tenth file, or not hosted by Slack | Share them another way, for example as project assets |
 
 See [Triggers & gates](/docs/triggers-and-gates) for how triggers and subjects

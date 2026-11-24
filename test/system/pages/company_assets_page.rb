@@ -3,7 +3,7 @@
 # SitePrism page object for the company Assets index (Company/Assets/Index) and its
 # "Upload Assets" modal, both rendered by shared/resources/assets/AssetsContent.
 class CompanyAssetsPage < SitePrism::Page
-  set_url "/company/assets"
+  set_url "/company/{company_slug}/assets"
 
   # The index shows a header "Upload" button and, when empty, an "Upload your first file"
   # CTA — both open the same modal.

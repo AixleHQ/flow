@@ -60,7 +60,7 @@ the numbers come from depends on the runtime:
 | `cursor_cli`      | Cursor's usage API, matched to the requests in the session's MITM log at cleanup.          |
 | `codex`           | OpenTelemetry, streamed; the MITM log at cleanup as a fallback.                            |
 | `gemini_cli`      | OpenTelemetry, streamed.                                                                   |
-| `antigravity_cli` | The cumulative usage in an automatic session's terminal `result` event, priced from the selected model's configured pricing. |
+| `antigravity_cli` | Per-model token totals from `agy`'s conversation transcripts, read at cleanup, priced from each model's configured pricing. |
 | `grok`            | The session's MITM log, priced from the xAI model catalogue.                              |
 | `kiro_cli`        | Credits: the CLI's own credit telemetry, else the usage summaries in the MITM log, else the change in the account's credit counter. |
 | `copilot_cli`     | GitHub AI credits per model call, from the CLI's OpenTelemetry traces, streamed (`COPILOT_AI_CREDIT_USD` per credit). |

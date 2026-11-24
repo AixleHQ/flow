@@ -17,6 +17,7 @@ module PersonalTools
       workflow = find_workflow!(project)
 
       return error("Cannot delete system workflow '#{workflow.name}'") if workflow.system?
+      return error("Workflow #{workflow.id} is a draft — use discard_workflow_draft") if workflow.draft?
       return error("Cannot delete '#{workflow.name}' — it has active runs") if workflow.has_active_runs?
 
       name = workflow.name

@@ -6,7 +6,7 @@
 > release reads as a change to a named part of the product — not as a list of
 > tickets.
 >
-> **Snapshot date:** 2026-08-20. Area names are verified against the product
+> **Snapshot date:** 2026-10-08 (the 1.0.0 baseline). Area names are verified against the product
 > UI itself (sidebar labels, page titles, and on-screen control copy),
 > not internal engineering names.
 
@@ -22,7 +22,8 @@ workflow is a sequence of steps; each step is one agent doing one job. Steps
 can run in parallel, wait for each other, retry, or pause for a human. Every
 run leaves a trail: status, log, artifacts, tokens, and cost.
 
-Supported agent runtimes: Claude Code, Cursor CLI, Codex, Gemini CLI, Grok.
+Supported agent runtimes: Claude Code, Cursor CLI, Codex, Gemini CLI,
+Antigravity CLI, Grok, Kiro CLI and GitHub Copilot CLI.
 
 ## Product areas (changelog taxonomy)
 
@@ -42,10 +43,10 @@ they name a flow users would recognize.
 
 | Area | What it covers |
 | --- | --- |
-| **Overview** | Project home: activity, task distribution, spend, workflow run status |
-| **Tasks** | The board: columns, cards, subtasks, comments, attachments, waits, activity. Column → workflow binding (auto or manual). Board templates (Simple Kanban, Dev Team, Full SDLC) offered on an empty board |
+| **Overview** | Project home: activity, task distribution, token and session-time usage, workflow run status |
+| **Tasks** | The board: columns, cards, subtasks, comments, attachments, gates, activity. Column → workflow binding (auto or manual). Board templates (Simple Kanban, Dev Team, Full SDLC) offered on an empty board |
 | **Workflows** | Named processes made of steps: instructions, which agent runs, dependencies, on-failure behavior (fail / retry / skip), human approval, inputs/outputs. Publishing and duplicating |
-| **Triggers & gates** | When a workflow starts (task enters column, manual run, schedule, Slack message, incoming webhook) and what can pause a run: a gate waiting on CI (waiting / passed / failed / stale) or a step waiting on a person |
+| **Triggers & gates** | When a workflow starts (task enters column, manual run, schedule, Slack or Teams message, incoming webhook, task tracker event, pull request review or comment) and what can pause a run: a gate waiting on CI (waiting / passed / failed / stale) or a step waiting on a person |
 | **Sessions & Runs** | One list for both: workflow runs (step timeline, parallel waves, approve / retry / skip, cost) and the agent sessions inside them (status, live terminal, log, tokens, artifacts, cost) |
 | **Assets** | Files the team uploads and files agents produce; versioning and review |
 
@@ -58,6 +59,7 @@ they name a flow users would recognize.
 | **Skills** | Reusable know-how installed from a catalog or written by hand |
 | **Connectors** | External tool servers agents can call, from a catalog or added by hand |
 | **Repositories** | Linked Git repos the agent can work in and push to |
+| **Trackers** | Task trackers the project works with — GitHub Projects, GitLab issues, Azure Boards, Jira, Linear, YouTrack — primary or read-only, mapped to board columns |
 | **Integrations** | Connected accounts: GitHub, GitLab, Bitbucket, Azure DevOps, Jira, Linear, YouTrack, Slack, Microsoft Teams, Coder |
 
 ### Project — Admin
@@ -80,17 +82,26 @@ they name a flow users would recognize.
 
 | Area | What it covers |
 | --- | --- |
+| **Templates** | The public template catalog: projects, workflows, boards and resources to install into a project |
 | **Workflow Catalog** | Shared workflows the team can copy into a project |
 | **Company analytics** | Spend and activity across projects (admins) |
 | **Company sessions** | Cross-project run visibility (admins) |
 | **Company assets** | Workspace-level files (admins) |
 | **Company members** | Who belongs to the company |
+| **Company settings** | Company name, branding and workers; sign-in access, SSO connections, domain verification and directory sync; billing (admins) |
+
+### Platform admin
+
+| Area | What it covers |
+| --- | --- |
+| **Admin** | The superadmin area: the dashboard (the platform at a glance, and worker hours, busy hours, peak workers, queue wait and session outcomes per company and period, with each company's creation date, account status, account type and billing method, filters on them, and a breakdown of one company's queue) and the administration of companies, users and the rest |
 
 ### Help
 
 | Area | What it covers |
 | --- | --- |
 | **Docs** | The in-product documentation, linked from the public site as **Documentation** |
+| **Feedback** | **Send feedback** in the user menu: a bug, a feature request or a support question sent to the team that runs the installation |
 
 ## How the pieces fit (for changelog writers)
 
@@ -141,13 +152,13 @@ Every area above is documented in one chapter of the
 | Wrappers | 11. Wrappers |
 | Skills | 12. Skills |
 | Connectors | 13. Connectors |
-| Repositories, Integrations | 14. Repositories & Integrations |
+| Repositories, Trackers, Integrations | 14. Repositories & Integrations |
 | Aixle Builder | 15. AI Builder |
 | Members, Teams | 16. Team |
 | Secrets & Variables | 17. Secrets & Variables |
 | Analytics | 18. Analytics |
 | Settings | 19. Settings |
-| Workflow Catalog, Company analytics / sessions / assets / members | 20. The company workspace |
+| Templates, Workflow Catalog, Company analytics / sessions / assets / members / settings | 20. The company workspace |
 | Docs | Not a chapter — the operator portal at `/docs` is a separate document set |
 
 ## Out of scope

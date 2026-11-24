@@ -12,9 +12,9 @@ module CloudAuth
   #
   # Three calls: #start → #poll (repeatedly) → #finish.
   #
-  # In-flight state lives in Rails.cache under an opaque handle, never in the
-  # credential: a half-finished flow must not leave a partial credential behind, and
-  # the device code is bearer-shaped. The cache TTL tracks the device
+  # In-flight state lives in Rails.cache under an opaque handle, encrypted, never in
+  # the credential: a half-finished flow must not leave a partial credential behind,
+  # and the device code is bearer-shaped. The cache TTL tracks the device
   # authorization's own expiry.
   #
   # See docs/research/technical-aws-bedrock-cloud-provider-auth-2026-07-25.md.
@@ -270,12 +270,14 @@ module CloudAuth
       "#{CACHE_NAMESPACE}:#{handle}"
     end
 
+    # The state carries the OIDC client secret and, once approved, the Identity Center
+    # tokens, and the cache is a shared Redis: it is stored encrypted, bound to its handle.
     def write_state(handle, state, ttl:)
-      Rails.cache.write(cache_key(handle), state, expires_in: ttl)
+      Rails.cache.write(cache_key(handle), encryptor.encrypt_and_sign(state, purpose: handle), expires_in: ttl)
     end
 
     def read_state!(handle)
-      state = Rails.cache.read(cache_key(handle))
+      state = read_state(handle)
       raise ExpiredError, "device authorization is no longer in progress" if state.blank?
       # A handle is unguessable, but bind it to its owner anyway so a leaked handle
       # cannot be redeemed onto a different account.
@@ -284,8 +286,23 @@ module CloudAuth
       state
     end
 
+    # Anything that does not decrypt (tampered, or written before the state was encrypted)
+    # reads as an expired flow: the user starts the connect again.
+    def read_state(handle)
+      sealed = Rails.cache.read(cache_key(handle))
+      return unless sealed.is_a?(String)
+
+      encryptor.decrypt_and_verify(sealed, purpose: handle)
+    rescue ActiveSupport::MessageEncryptor::InvalidMessage
+      nil
+    end
+
     def delete_state(handle)
       Rails.cache.delete(cache_key(handle))
+    end
+
+    def encryptor
+      ActiveSupport::MessageEncryptor.new(Rails.application.key_generator.generate_key("#{CACHE_NAMESPACE} state", 32))
     end
   end
 end

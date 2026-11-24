@@ -278,19 +278,17 @@ module Agents
       { status: :refreshed, detail: nil }
     end
 
-    # Env vars for MITM proxy and http2-logger configuration.
-    # MITM_TRACKED_DOMAINS limits mitm_logger.py to cursor.sh traffic only.
-    # http2-logger.js uses MITM_LOG_PATH to write AgentService/Run timestamps.
+    # cursor.com as well as cursor.sh: Cursor has been moving off the .sh domain (the
+    # installer already lives on cursor.com), and our own server-side refresh has been
+    # answered with a 404 HTML page since 2026-09-05 — which host the CLI actually talks
+    # to is exactly what the log has to show. #collect_usage reads only the timing and
+    # request ids of AgentService/Run, so no body is kept.
+    def mitm_tracked_domains
+      %w[cursor.sh cursor.com]
+    end
+
     def default_env_vars(session, callbacks:)
-      {
-        **otlp_hook_env(session, callbacks[:otel]),
-        "MITM_LOG_PATH" => "/var/log/mitm/http.log",
-        # cursor.com as well as cursor.sh: the filter is a suffix match, Cursor has been
-        # moving off the .sh domain (the installer already lives on cursor.com), and our
-        # own server-side refresh has been answered with a 404 HTML page since 2026-09-05
-        # — which host the CLI actually talks to is exactly what the log has to show.
-        "MITM_TRACKED_DOMAINS" => "cursor.sh,cursor.com"
-      }
+      otlp_hook_env(session, callbacks[:otel])
     end
 
     # Log files to collect from container after session ends

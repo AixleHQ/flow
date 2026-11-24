@@ -47,9 +47,9 @@ days, and YouTrack never updates an installed app by itself. Plan releases accor
 6. Submit and wait for the review e-mail.
 
 While the review runs, fill the plugin page: description (English), screenshots, change notes,
-links to the privacy policy and support. Once the app is approved, replace the Marketplace search
-link in `Youtrack::Config::MARKETPLACE_URL` and in `docs/user-guide/youtrack.md` with the plugin's
-own URL.
+links to the privacy policy and support. `Youtrack::Config::MARKETPLACE_URL` and
+`docs/user-guide/youtrack.md` link the plugin's own page,
+<https://plugins.jetbrains.com/plugin/34863-aixle-flow>.
 
 ## New versions
 

@@ -23,7 +23,7 @@ module PersonalTools
     def execute
       project = find_project!
       authorize!(project, :create?, policy: Web::Company::Projects::WorkflowRunsPolicy, project: project)
-      workflow = Workflow.visible_for_project(project).find_by(id: params[:workflow_id])
+      workflow = Workflow.editable_for_project(project).find_by(id: params[:workflow_id])
       return error("Workflow not found in this project") unless workflow
 
       key = params[:idempotency_key].presence

@@ -206,6 +206,12 @@ module Agents
       :merge_json
     end
 
+    # The API-key host, the Code Assist service a Google login talks to, and the token
+    # endpoint. Nothing parses this log, so it keeps no body.
+    def mitm_tracked_domains
+      %w[generativelanguage.googleapis.com cloudcode-pa.googleapis.com oauth2.googleapis.com]
+    end
+
     def session_log_paths
       super + %w[/var/log/mitm/http.log]
     end

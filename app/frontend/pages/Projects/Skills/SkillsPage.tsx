@@ -3,6 +3,7 @@ import { Head, usePage } from '@inertiajs/react';
 import type { CatalogSkill, Project, Skill } from '@/types/generated';
 
 import { SkillsContent } from 'shared/resources/skills/SkillsContent';
+import { companyProjectSkillsPath } from 'shared/routes';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -26,7 +27,7 @@ const SkillsPage = () => {
         skills={skills}
         archivedSkills={archivedSkills}
         projectId={project.id}
-        basePath={`/company/projects/${project.id}/skills`}
+        basePath={companyProjectSkillsPath(project.id)}
         title="Project Skills"
         subtitle="Skills this project can use — installed from the public catalog or written by hand."
         catalogQuery={catalogQuery}

@@ -3,6 +3,7 @@ import { Head, usePage } from '@inertiajs/react';
 import type { Project, Repository } from '@/types/generated';
 
 import { RepositoriesContent } from 'shared/resources/repositories/RepositoriesContent';
+import { companyProjectRepositoriesPath } from 'shared/routes';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -21,7 +22,7 @@ const RepositoriesPage = () => {
       <RepositoriesContent
         repositories={repositories}
         editBranches={editBranches}
-        basePath={`/company/projects/${project.id}/repositories`}
+        basePath={companyProjectRepositoriesPath(project.id)}
         title="Repositories"
       />
     </>

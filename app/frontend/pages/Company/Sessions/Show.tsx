@@ -4,6 +4,7 @@ import { AuthLayout } from 'layouts/AuthLayout';
 import type TerminalSession from 'types/generated/TerminalSession';
 
 import { SessionShowContent } from 'shared/components/SessionShowContent/SessionShowContent';
+import { companySessionArtifactsPath, companySessionsPath } from 'shared/routes';
 
 interface Props {
   session: TerminalSession;
@@ -20,10 +21,10 @@ const SessionShowPage = () => {
         session={session}
         cableStream={cableStream}
         context={{
-          backPath: '/company/sessions',
+          backPath: companySessionsPath(),
           backLabel: 'Sessions & Runs',
           // Company-level session creation was removed; omit newSessionPath to hide the "New Session" button.
-          artifactsPath: `/company/sessions/${session.id}/artifacts`,
+          artifactsPath: companySessionArtifactsPath(session.id),
         }}
       />
     </AuthLayout>

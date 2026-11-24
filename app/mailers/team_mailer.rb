@@ -28,7 +28,8 @@ class TeamMailer < ApplicationMailer
     @member = member
     @teams = teams
     @project = teams.first.project
-    @teams_url = company_project_teams_url(@project, host: Settings.domain, protocol: Settings.protocol)
+    @teams_url = company_project_teams_url(@project, company_slug: @project.company.slug, host: Settings.domain,
+                                                         protocol: Settings.protocol)
 
     mail(to: owner.email, subject: "#{member.name} left the teams of #{@project.name}")
   end

@@ -166,7 +166,7 @@ class Web::SessionsControllerTest < ActionDispatch::IntegrationTest
     assert membership.invited?
 
     # No session was established.
-    get company_projects_path
+    get "/company/projects"
     assert_redirected_to login_path
   end
 
@@ -279,7 +279,7 @@ class Web::SessionsControllerTest < ActionDispatch::IntegrationTest
     # Inertia XHR we must reply 409 + X-Inertia-Location so the client performs a
     # full-page visit. A plain redirect_to would return non-Inertia HTML, which
     # Inertia dumps into its error modal (admin page in a box over a dark backdrop).
-    get company_projects_path, headers: { "X-Inertia" => "true" }
+    get "/company/projects", headers: { "X-Inertia" => "true" }
 
     assert_response :conflict
     assert_equal admin_root_path, response.headers["X-Inertia-Location"]
@@ -289,7 +289,7 @@ class Web::SessionsControllerTest < ActionDispatch::IntegrationTest
     super_admin = create(:user, :super_admin, :onboarding_completed, password: AuthHelper::TEST_PASSWORD)
     sign_in_as(super_admin)
 
-    get company_projects_path
+    get "/company/projects"
 
     assert_redirected_to admin_root_path
   end

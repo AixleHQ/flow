@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { statusLabel, statusTone, type StatusTone } from '../StatusBadge';
+import { sessionStatusTone, statusLabel, type StatusTone } from '../StatusBadge';
 
 import classes from './StatusTag.module.css';
 
@@ -28,10 +28,12 @@ interface StatusTagProps {
 /**
  * The dense status tag used across Sessions & Runs (list rows, detail headers,
  * session cards). Tone resolution is shared with {@link StatusBadge} so a state
- * cannot read green here and grey there; only the shape differs.
+ * cannot read green here and grey there; only the shape differs. The one
+ * exception is a session's `ready`, which reads as running here
+ * ({@link sessionStatusTone}).
  */
 export function StatusTag({ state, tone, children, plain = false, className }: StatusTagProps) {
-  const resolved = tone ?? statusTone(state);
+  const resolved = tone ?? sessionStatusTone(state);
   const classNames = [classes.tag, plain ? classes.plain : TONE_CLASS[resolved], className].filter(Boolean).join(' ');
 
   return (

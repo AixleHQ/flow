@@ -19,6 +19,7 @@ import remarkGfm from 'remark-gfm';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
+import { companyProjectOverviewIndexPath, companyProjectTemplateInstallSetupItemPath } from 'shared/routes';
 import { MarkdownLink } from 'shared/ui/MarkdownLink';
 import { PageHeader } from 'shared/ui/PageHeader';
 
@@ -51,7 +52,7 @@ const STATUS_COLORS: Record<SetupItem['status'], string> = {
 function ItemActions({ item, props }: { item: SetupItem; props: Props }) {
   const [value, setValue] = useState('');
   const [repositoryId, setRepositoryId] = useState<string | null>(null);
-  const url = `/company/projects/${props.project.id}/template_installs/${props.install.id}/setup_items/${item.id}`;
+  const url = companyProjectTemplateInstallSetupItemPath(props.project.id, props.install.id, item.id);
   const act = (operation: string, data: Record<string, unknown> = {}) =>
     router.patch(url, { operation, ...data }, { preserveScroll: true });
 
@@ -189,7 +190,7 @@ const ShowPage = () => {
             ))}
           </Card>
         )}
-        <Anchor href={`/company/projects/${props.project.id}/overview`} size="sm">
+        <Anchor href={companyProjectOverviewIndexPath(props.project.id)} size="sm">
           Go to the project
         </Anchor>
       </Stack>

@@ -87,7 +87,10 @@ module Trackers
     end
 
     def task_url
-      path = Rails.application.routes.url_helpers.company_project_board_path(@tracker.project, n: @task.number)
+      project = @tracker.project
+      path = Rails.application.routes.url_helpers.company_project_board_path(
+        project, company_slug: project.company.slug, n: @task.number
+      )
       "#{Settings.protocol}://#{Settings.domain}#{path}"
     end
 
