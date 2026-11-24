@@ -63,12 +63,12 @@ module Sessions
     # `save: false` fires the event without saving, for a caller that writes more columns
     # and saves once, inside its own transaction (`finalize`).
     def transition!(session, event, error_message: nil, notify: true, save: true)
-      from = session.state
+      was_ready = session.ready?
       ActiveRecord::Base.transaction do
         session.update!(error_message: error_message) if error_message.present?
         session.public_send(save ? :"#{event}!" : event)
         start_run_execution(session) if event == :start
-        schedule_effects(session, event, from: from, notify: notify)
+        schedule_effects(session, event, was_ready: was_ready, notify: notify)
       end
       session
     end
@@ -329,10 +329,16 @@ module Sessions
 
     # == Helpers ==
 
-    def schedule_effects(session, event, from:, notify:)
-      ActiveRecord.after_all_transactions_commit { notify_run(session) } if notify && ENDING_EVENTS.include?(event)
-      ActiveRecord.after_all_transactions_commit { Runners::RelaySignals.session_ended(session.id) } if from == "ready" && session.on_runner?
-      ActiveRecord.after_all_transactions_commit { restored(session) } if event == :mark_ready && session.restored_from_session_id
+    def schedule_effects(session, event, was_ready:, notify:)
+      if notify && ENDING_EVENTS.include?(event)
+        ActiveRecord.after_all_transactions_commit { notify_run(session) }
+      end
+      if was_ready && session.on_runner?
+        ActiveRecord.after_all_transactions_commit { Runners::RelaySignals.session_ended(session.id) }
+      end
+      if event == :mark_ready && session.restored_from_session_id
+        ActiveRecord.after_all_transactions_commit { restored(session) }
+      end
     end
     private_class_method :schedule_effects
 
@@ -340,7 +346,7 @@ module Sessions
     # admission queue for minutes; its duration counts from here instead. Written in the
     # transition's transaction, so it rolls back with the state.
     def start_run_execution(session)
-      return unless session.session_type == "workflow_step"
+      return unless session.workflow_step?
 
       run_id = session.step_run&.workflow_run_id
       return unless run_id
@@ -351,7 +357,7 @@ module Sessions
 
     # Wakes the parent workflow run of a step session, unless the run is being stopped.
     def notify_run(session)
-      return unless session.session_type == "workflow_step"
+      return unless session.workflow_step?
 
       step_run = session.step_run
       return unless step_run&.workflow_run_id
