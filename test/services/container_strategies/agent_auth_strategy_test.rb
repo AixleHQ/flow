@@ -466,7 +466,7 @@ module ContainerStrategies
       runtime.write_file("abc", "/home/claude/.claude.json", { "oauthAccount" => { "emailAddress" => "u@x.com" } }.to_json)
       runtime.write_file("abc", "/home/claude/.claude/.credentials.json",
         { "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-z", "refreshToken" => "sk-ant-ort01-z" } }.to_json)
-      @session.update!(state: "cancelled")
+      put_session_in_state!(@session, "cancelled")
 
       assert_no_difference "AgentCredential.count" do
         result = build_strategy.before_cleanup(container_id: "abc", session_id: @session.id)

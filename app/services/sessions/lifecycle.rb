@@ -40,19 +40,35 @@ module Sessions
     }.freeze
     private_constant :FINALIZE_EVENTS
 
+    # The events that end a session's part in its run: the run is woken once they commit.
+    ENDING_EVENTS = %i[finish fail cancel expire_suspended_step finish_without_request].freeze
+    private_constant :ENDING_EVENTS
+
     module_function
 
-    # The primitive underneath every move: sets the error message, then fires `event`.
-    # Public for `SessionAdmissionService`, which calls it inside its writer lock; it takes
-    # no lock of its own, so the caller holds whatever it needs.
+    # The primitive underneath every move: sets the error message, fires `event`, and runs
+    # the effects of the move (design §3.6). Public for `SessionAdmissionService`, which
+    # calls it inside its writer lock; it takes no lock of its own, so the caller holds
+    # whatever it needs.
     #
-    # `notify: false` keeps the move from waking the parent run (see `finalize`).
-    # Temporary: the flag is passed as an argument to the event's callback (`on_finished`,
-    # `on_failed`, `on_cancelled`). #283 removes it, when the effects move into this method.
-    def transition!(session, event, error_message: nil, notify: true)
+    # The model's callbacks only assign. What leaves the process is sent here, after the
+    # outermost transaction commits (at once when none is open), so a signal never reaches
+    # a workflow before the state does and a rolled-back move announces nothing:
+    #
+    # - the parent run is woken by an ending event (ENDING_EVENTS), unless `notify: false`
+    #   or the run's stop was requested; `finalize` passes `notify: false` (see there);
+    # - the relay's `session_ended` goes out when the move leaves `ready`, for a runner session;
+    # - `Suspension`'s `restored` runs when a session that continues a suspended one is `ready`.
+    #
+    # `save: false` fires the event without saving, for a caller that writes more columns
+    # and saves once, inside its own transaction (`finalize`).
+    def transition!(session, event, error_message: nil, notify: true, save: true)
+      was_ready = session.ready?
       ActiveRecord::Base.transaction do
         session.update!(error_message: error_message) if error_message.present?
-        session.public_send(:"#{event}!", *(notify ? [] : [ false ]))
+        session.public_send(save ? :"#{event}!" : event)
+        start_run_execution(session) if event == :start
+        schedule_effects(session, event, was_ready: was_ready, notify: notify)
       end
       session
     end
@@ -256,10 +272,9 @@ module Sessions
         finished_at = session.finished_at
         session.error_message = TerminalSession.preferred_error_message(session.error_message, error)
         # Fired without saving: the one save below writes the state with its columns.
-        # The `false` argument keeps the move from waking the run. It is temporary and
-        # bypasses `transition!`; #283 removes it, when `finalize` goes through `transition!`.
+        # `notify: false` keeps the move from waking the run: `slot_released` does.
         unless session.state == to || session.suspended? || session.restored?
-          session.public_send(finalize_event(session.state, to), false)
+          transition!(session, finalize_event(session.state, to), notify: false, save: false)
         end
         session.finished_at = finished_at || Time.current
         session.container_id = nil
@@ -304,16 +319,56 @@ module Sessions
         transition!(session, :expire_suspended_step, error_message: error_message)
         session.step_run.update!(state: :running)
       end
-      WorkflowService.notify_container_finished(step_run: session.step_run)
     end
 
     # The reservation was released, so a run that waits for capacity can start its next
     # step. The signal only sets a decision flag, so a repeat changes nothing.
     def slot_released(session)
-      session.notify_workflow_execution_if_step_session
+      notify_run(session)
     end
 
     # == Helpers ==
+
+    def schedule_effects(session, event, was_ready:, notify:)
+      if notify && ENDING_EVENTS.include?(event)
+        ActiveRecord.after_all_transactions_commit { notify_run(session) }
+      end
+      if was_ready && session.on_runner?
+        ActiveRecord.after_all_transactions_commit { Runners::RelaySignals.session_ended(session.id) }
+      end
+      if event == :mark_ready && session.restored_from_session_id
+        ActiveRecord.after_all_transactions_commit { restored(session) }
+      end
+    end
+    private_class_method :schedule_effects
+
+    # A run starts the moment it is dispatched, while its first step may still sit in the
+    # admission queue for minutes; its duration counts from here instead. Written in the
+    # transition's transaction, so it rolls back with the state.
+    def start_run_execution(session)
+      return unless session.workflow_step?
+
+      run_id = session.step_run&.workflow_run_id
+      return unless run_id
+
+      WorkflowRun.where(id: run_id, execution_started_at: nil).update_all(execution_started_at: session.started_at)
+    end
+    private_class_method :start_run_execution
+
+    # Wakes the parent workflow run of a step session, unless the run is being stopped.
+    def notify_run(session)
+      return unless session.workflow_step?
+
+      step_run = session.step_run
+      return unless step_run&.workflow_run_id
+      # A run being stopped was already told so (workflow_cancelled); its steps end with it.
+      return if step_run.workflow_run.stop_requested?
+
+      WorkflowService.notify_container_finished(step_run: step_run)
+    rescue StandardError => e
+      Rails.logger.error("[Sessions::Lifecycle] notify_run failed for session #{session.id}: #{e.message}")
+    end
+    private_class_method :notify_run
 
     def finalize_event(from, to)
       FINALIZE_EVENTS.fetch([ from, to ]) do

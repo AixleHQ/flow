@@ -54,7 +54,7 @@ module Sessions
     test "a restored session's archive is deleted when its window closes" do
       session = suspended_session(expires_at: 1.hour.ago)
       create_checkpoint(session)
-      session.update!(state: "restored")
+      put_session_in_state!(session, "restored")
 
       SuspensionExpiry.expire_due
 

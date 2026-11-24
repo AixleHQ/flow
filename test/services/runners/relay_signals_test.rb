@@ -85,46 +85,6 @@ class Runners::RelaySignalsTest < ActiveSupport::TestCase
     assert_empty signals
   end
 
-  # -- session_ended ---------------------------------------------------------
-
-  test "a runner session leaving ready sends session_ended, by whichever event it leaves" do
-    %i[start_finishing! fail! cancel!].each do |event|
-      session = create(:runner_session, environment: @machine, state: "ready")
-      clear
-
-      session.public_send(event)
-
-      assert_equal [ { "type" => "session_ended", "session_id" => session.id } ], signals, event.to_s
-    end
-  end
-
-  test "a state written directly out of ready sends session_ended too" do
-    session = create(:runner_session, environment: @machine, state: "ready")
-    clear
-
-    session.update!(state: "finished", finished_at: Time.current)
-
-    assert_equal [ { "type" => "session_ended", "session_id" => session.id } ], signals
-  end
-
-  test "a runner session that was not ready sends no session_ended" do
-    session = create(:runner_session, environment: @machine, state: "running")
-    clear
-
-    session.fail!
-
-    assert_empty signals
-  end
-
-  test "a hosted session leaving ready sends no session_ended" do
-    session = create(:terminal_session, user: create(:user, company: create(:company)), state: "ready")
-    clear
-
-    session.fail!
-
-    assert_empty signals
-  end
-
   # -- machine_revoked -------------------------------------------------------
 
   test "an unregistered machine sends machine_revoked" do

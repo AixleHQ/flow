@@ -25,7 +25,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   test "a closed container workflow releases the reservation it left behind" do
     session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 1.hour.ago)
     admission = admit(session)
-    session.update!(state: "running", started_at: 1.hour.ago)
+    put_session_in_state!(session, "running", started_at: 1.hour.ago)
     admission.update!(launch_state: "acknowledged", runtime_id: nil)
 
     runtime = ContainerRuntime::DockerRuntime.new
@@ -46,7 +46,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   test "an unresolved runtime operation keeps its slot through reconciliation" do
     session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 1.hour.ago)
     admission = admit(session)
-    session.update!(state: "running", started_at: 1.hour.ago)
+    put_session_in_state!(session, "running", started_at: 1.hour.ago)
     admission.update!(launch_state: "acknowledged")
     admission.session_runtime_operations.create!(phase: "create_container", state: "uncertain")
 
@@ -59,7 +59,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   test "a closed workflow strands its in-flight operation instead of leaving it silent" do
     session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
     admission = admit(session)
-    session.update!(state: "cancelled", started_at: 2.hours.ago)
+    put_session_in_state!(session, "cancelled", started_at: 2.hours.ago)
     admission.update!(launch_state: "acknowledged", runtime_id: nil)
     op = admission.session_runtime_operations.create!(phase: "create_container", state: "in_flight")
 
@@ -80,7 +80,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   test "a wedged admission is examined rather than skipped over" do
     session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
     admission = admit(session)
-    session.update!(state: "cancelled", started_at: 2.hours.ago)
+    put_session_in_state!(session, "cancelled", started_at: 2.hours.ago)
     # Output collection is a separate concern and reaches the real strategy;
     # marking it done keeps this test on the deletion it is about.
     admission.update!(launch_state: "acknowledged", runtime_id: "runtime-id",
@@ -108,7 +108,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   test "an unaccountable exec stops pinning the slot once the container is gone" do
     session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
     admission = admit(session)
-    session.update!(state: "cancelled", started_at: 2.hours.ago)
+    put_session_in_state!(session, "cancelled", started_at: 2.hours.ago)
     admission.update!(launch_state: "acknowledged", runtime_id: "runtime-id",
                       phase_state: { "cleanup_collected" => true })
     op = admission.session_runtime_operations.create!(phase: "exec", state: "in_flight")
@@ -138,7 +138,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   test "a pinned reservation is not released by the first pass that proves absence" do
     session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
     admission = admit(session)
-    session.update!(state: "cancelled", started_at: 2.hours.ago)
+    put_session_in_state!(session, "cancelled", started_at: 2.hours.ago)
     admission.update!(launch_state: "acknowledged", runtime_id: "runtime-id",
                       phase_state: { "cleanup_collected" => true })
     op = admission.session_runtime_operations.create!(phase: "create_container", state: "uncertain")
@@ -158,7 +158,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   test "a pinned reservation is released once proven absence has held the window" do
     session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
     admission = admit(session)
-    session.update!(state: "cancelled", started_at: 2.hours.ago)
+    put_session_in_state!(session, "cancelled", started_at: 2.hours.ago)
     admission.update!(launch_state: "acknowledged", runtime_id: "runtime-id",
                       phase_state: { "cleanup_collected" => true })
     op = admission.session_runtime_operations.create!(phase: "create_container", state: "uncertain")
@@ -186,7 +186,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   test "a workload that reappears resets the confirmation clock" do
     session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
     admission = admit(session)
-    session.update!(state: "cancelled", started_at: 2.hours.ago)
+    put_session_in_state!(session, "cancelled", started_at: 2.hours.ago)
     admission.update!(launch_state: "acknowledged", runtime_id: "runtime-id",
                       phase_state: { "cleanup_collected" => true })
     op = admission.session_runtime_operations.create!(phase: "create_container", state: "uncertain")
@@ -211,7 +211,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     Settings.stubs(:session_admission).returns(Hashie::Mash.new(project_default: 1, pinned_release_enabled: false))
     session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
     admission = admit(session)
-    session.update!(state: "cancelled", started_at: 2.hours.ago)
+    put_session_in_state!(session, "cancelled", started_at: 2.hours.ago)
     admission.update!(launch_state: "acknowledged", runtime_id: "runtime-id",
                       phase_state: { "cleanup_collected" => true })
     op = admission.session_runtime_operations.create!(phase: "create_container", state: "uncertain")
@@ -235,7 +235,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   test "a workflow Temporal has no record of releases its reservation" do
     session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
     admission = admit(session)
-    session.update!(state: "cancelled", started_at: 2.hours.ago)
+    put_session_in_state!(session, "cancelled", started_at: 2.hours.ago)
     admission.update!(launch_state: "acknowledged", runtime_id: "runtime-id",
                       phase_state: { "cleanup_collected" => true })
     admission.session_runtime_operations.create!(phase: "exec", state: "uncertain")
@@ -305,7 +305,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   test "a stop whose cancel never reached Temporal is cancelled again" do
     session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 1.hour.ago)
     admission = admit(session)
-    session.update!(state: "running", started_at: 1.hour.ago)
+    put_session_in_state!(session, "running", started_at: 1.hour.ago)
     admission.update!(launch_state: "acknowledged", stop_requested_at: 5.minutes.ago)
     stub_open_workflow(session.workflow_id)
     TemporalService.expects(:cancel_workflow).with(session.workflow_id).once.returns({ ok: true })
@@ -318,7 +318,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   test "a running workflow nobody asked to stop is left alone" do
     session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 1.hour.ago)
     admission = admit(session)
-    session.update!(state: "running", started_at: 1.hour.ago)
+    put_session_in_state!(session, "running", started_at: 1.hour.ago)
     admission.update!(launch_state: "acknowledged")
     stub_open_workflow(session.workflow_id)
     TemporalService.expects(:cancel_workflow).never
@@ -329,7 +329,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   test "a workflow that is merely unreachable keeps its reservation" do
     session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 1.hour.ago)
     admission = admit(session)
-    session.update!(state: "running", started_at: 1.hour.ago)
+    put_session_in_state!(session, "running", started_at: 1.hour.ago)
     admission.update!(launch_state: "acknowledged")
 
     ContainerRuntime.expects(:build).never
@@ -357,7 +357,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   test "the stale reaper leaves a reservation that is waiting for cluster capacity alone" do
     session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 2.hours.ago)
     admission = admit(session)
-    session.update!(state: "running", started_at: 2.hours.ago)
+    put_session_in_state!(session, "running", started_at: 2.hours.ago)
     admission.update!(wait_reason: "cluster_capacity")
     TemporalService.expects(:cancel_workflow).never
 
@@ -370,7 +370,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   test "the stale reaper leaves a reservation that is waiting for a free machine of its runner alone" do
     session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 2.hours.ago)
     admission = admit(session)
-    session.update!(state: "running", started_at: 2.hours.ago)
+    put_session_in_state!(session, "running", started_at: 2.hours.ago)
     admission.update!(wait_reason: "runner_capacity")
     TemporalService.expects(:cancel_workflow).never
 
@@ -384,7 +384,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 2.hours.ago,
       temporal_workflow_id: "agent-session-x")
     admission = admit(session)
-    session.update!(state: "running", started_at: 2.hours.ago)
+    put_session_in_state!(session, "running", started_at: 2.hours.ago)
     admission.update!(wait_reason: nil, launch_state: "acknowledged")
     # Reaping means cancelling the workflow so confirmed cleanup returns the
     # slot — never deleting the runtime behind the reservation's back.

@@ -61,11 +61,11 @@ class GitCredentialsTest < ActionDispatch::IntegrationTest
   end
 
   test "stops vending once the session has ended or its owner has left" do
-    @session.update!(state: "finished")
+    put_session_in_state!(@session, "finished")
     ask
     assert_response :unauthorized
 
-    @session.update!(state: "running")
+    put_session_in_state!(@session, "running")
     @user.company_memberships.find_by(company: @company).update_columns(state: "revoked")
     ask
     assert_response :unauthorized
