@@ -54,7 +54,7 @@ module Api
           create(:company_membership, user: viewer, company: create(:company),
                                       onboarding_state: "completed", onboarding_completed_at: Time.current)
           sign_in_as viewer
-          post company_switch_path, params: { company_id: @company.id }
+          get company_projects_path(company_slug: @company.slug)
 
           post api_v1_cloud_aws_connection_path, params: { start_url: START_URL, sso_region: "us-west-2" }
           assert_response :forbidden

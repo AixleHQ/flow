@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { companyProjectBoardPath, companySwitchPath, userPath } from '@/shared/routes';
+import { companyMembershipPath, companyProjectBoardPath, userPath } from '@/shared/routes';
 
 import { currentCompanySlug } from './currentCompanySlug';
 
@@ -26,6 +26,6 @@ describe('company links', () => {
 
     expect(currentCompanySlug()).toBeNull();
     expect(companyProjectBoardPath(7)).toBe('/company/projects/7/board');
-    expect(companySwitchPath()).toBe('/company/switch');
+    expect(companyMembershipPath(3)).toBe('/company/memberships/3');
   });
 });

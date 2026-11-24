@@ -91,7 +91,7 @@ class Web::Company::WorkflowCatalogControllerTest < ActionDispatch::IntegrationT
     create(:company_membership, :viewer, user: @user, company: other_company,
                                          onboarding_state: "completed", onboarding_completed_at: Time.current)
     other_project = create(:project, company: other_company, owner: @user)
-    post company_switch_path, params: { company_id: @company.id }
+    get company_projects_path(company_slug: @company.slug)
     workflow = create(:workflow, scope: @project, published_at: Time.current, published_by: @user)
 
     get company_workflow_catalog_index_path

@@ -4,7 +4,7 @@ require "test_helper"
 
 # Cross-company isolation suite: a dual-membership user (admin in A, viewer in
 # B) must only ever see the CURRENT company's data, on every screen, and the
-# slice must flip completely after POST /company/switch.
+# slice must flip completely once they open the other company.
 class Web::CrossCompanyIsolationTest < ActionDispatch::IntegrationTest
   setup do
     @company_a = create(:company, name: "Alpha")
@@ -47,8 +47,8 @@ class Web::CrossCompanyIsolationTest < ActionDispatch::IntegrationTest
   end
 
   def switch_to(company)
-    post company_switch_path, params: { company_id: company.id }
-    assert_redirected_to company_projects_path
+    get company_projects_path(company_slug: company.slug)
+    assert_response :success
   end
 
   def usage_props

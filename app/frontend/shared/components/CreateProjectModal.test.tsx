@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it, vi } from 'vitest';
 
-import { makeFormStub, renderPage, screen, userEvent, within } from 'test/renderPage';
+import { makeFormStub, renderAuthedPage, renderPage, screen, userEvent, within } from 'test/renderPage';
 
 import { CreateProjectModal } from './CreateProjectModal';
 
@@ -37,9 +37,9 @@ describe('shared/components/CreateProjectModal', () => {
     expect(screen.getByRole('button', { name: 'Create' })).toBeDisabled();
   });
 
-  it('submits to the projects endpoint with valid data', async () => {
+  it('creates the project in the company shown', async () => {
     const form = makeFormStub({ name: 'Onboarding Revamp', description: 'A fresh start' });
-    renderPage(<CreateProjectModal opened onClose={vi.fn()} />, { form });
+    renderAuthedPage(<CreateProjectModal opened onClose={vi.fn()} />, { form });
 
     const createButton = screen.getByRole('button', { name: 'Create' });
     expect(createButton).toBeEnabled();
@@ -47,7 +47,7 @@ describe('shared/components/CreateProjectModal', () => {
 
     expect(form.transform).toHaveBeenCalled();
     expect(form.post).toHaveBeenCalledWith(
-      '/company/projects',
+      '/company/test-company/projects',
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
   });

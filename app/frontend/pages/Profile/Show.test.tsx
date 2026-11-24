@@ -14,6 +14,7 @@ import ProfilePage from './Show';
 const acmeCompany = {
   id: 9,
   name: 'Acme Robotics',
+  slug: 'acme-robotics',
   emailDomain: 'acme.test',
   logoUrl: null,
   primaryColor: null,
