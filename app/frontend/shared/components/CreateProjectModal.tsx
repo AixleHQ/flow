@@ -1,6 +1,7 @@
 import { useForm } from '@inertiajs/react';
 import { Alert, Button, Group, Modal, Stack, TextInput, Textarea } from '@mantine/core';
 
+import { useCompanySlug } from 'shared/lib/hooks/useCompanySlug';
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { companyProjectsPath } from 'shared/routes';
 
@@ -22,6 +23,7 @@ const errorMessages = (errors: Record<string, string | string[] | undefined>) =>
   });
 
 export const CreateProjectModal = ({ opened, onClose }: CreateProjectModalProps) => {
+  const companySlug = useCompanySlug();
   const { data, setData, post, processing, errors, reset, clearErrors, transform } = useForm(BLANK_PROJECT);
 
   const handleClose = () => {
@@ -36,7 +38,7 @@ export const CreateProjectModal = ({ opened, onClose }: CreateProjectModalProps)
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     transform((d) => ({ project: d }));
-    post(companyProjectsPath(), {
+    post(companyProjectsPath({ company_slug: companySlug }), {
       onSuccess: handleClose,
     });
   };

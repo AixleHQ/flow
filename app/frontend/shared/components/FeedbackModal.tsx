@@ -15,6 +15,7 @@ import { IconPaperclip } from '@tabler/icons-react';
 import { useRef, useState } from 'react';
 
 import { formatFileSize } from 'shared/lib/formatFileSize';
+import { useCompanySlug } from 'shared/lib/hooks/useCompanySlug';
 import { pastedImages } from 'shared/lib/imagePaste';
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { companyFeedbackPath } from 'shared/routes';
@@ -45,6 +46,7 @@ interface FeedbackModalProps {
 }
 
 export const FeedbackModal = ({ opened, onClose }: FeedbackModalProps) => {
+  const companySlug = useCompanySlug();
   const { data, setData, post, processing, progress, errors, reset, clearErrors, transform } = useForm(BLANK_FEEDBACK);
   const [fileNotice, setFileNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -90,7 +92,7 @@ export const FeedbackModal = ({ opened, onClose }: FeedbackModalProps) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     transform((d) => ({ feedback: { ...d, page_url: window.location.href } }));
-    post(companyFeedbackPath(), {
+    post(companyFeedbackPath({ company_slug: companySlug }), {
       preserveScroll: true,
       // A refused message comes back to this page: keep the dialog open with what was typed.
       preserveState: true,

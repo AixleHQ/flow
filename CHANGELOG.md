@@ -27,6 +27,8 @@ governance, community health — carry none.
   the right company, and two tabs can stay on two companies. Links from before keep
   working and open in the project's company, or in the one you used last. A company's short
   name in the address comes from its email domain (`acme.com` → `acme`).
+- **Companies & projects**: each company in the switcher on the far left is a link, so
+  Cmd/Ctrl+click opens it in a new tab and leaves the current tab where it is.
 - **Admin**: the dashboard opens on the current week, shows Utilization, Average wait and
   p95 wait right after Company, keeps the table's header and Company column in view while
   it scrolls, and folds its explanation into a "How to read this dashboard" section.

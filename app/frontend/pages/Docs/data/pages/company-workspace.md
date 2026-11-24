@@ -8,6 +8,7 @@ be reinvented per project live.
 The **Projects** page lists what you have access to and is where new ones are
 created. If you belong to more than one company, a switcher on the far left
 moves between workspaces — each with its own projects, members, and numbers.
+Cmd/Ctrl+click a company there to open it in a new tab.
 
 ## Workflow Catalog
 
