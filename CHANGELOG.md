@@ -37,6 +37,14 @@ governance, community health — carry none.
   new version, **Discard draft** drops it. The personal MCP has the same flow:
   `create_workflow_draft`, `get_workflow_draft_diff`, `apply_workflow_draft`,
   `discard_workflow_draft`.
+- Runners: an interactive session can run on a runner. The new-session form no longer
+  disables runners in interactive mode, and the session page has the terminal, the read-only
+  view, the file panel, uploads and the IDE, as for a hosted session. A machine needs
+  `aixle-runner` 0.5.0 or later for this; on an older one the session starts and its terminal
+  does not open. The platform now recommends 0.5.0 and pins the `linux-amd64` and
+  `linux-arm64` binaries of
+  [runner-v0.5.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.5.0) by their
+  SHA-256. No minimum runner version: older runners keep working.
 
 ### Changed
 - **Workflows**: the `pull_request_*` tools are a tool group, **Pull requests**, that a workflow or a step can

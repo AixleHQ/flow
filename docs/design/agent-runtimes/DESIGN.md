@@ -54,11 +54,12 @@ place and are not a new numbered revision:
 **Decisions of 2026-10-30, after task 4** (#193, PR #614). They amend revision 5 in place
 and are not a new numbered revision:
 
-- **Interactive work on runners waits for the tunnel, with no interim checks.** Named
+- **Interactive work on runners waited for the tunnel, with no interim checks; 16g lifts
+  it.** The refusal is gone and runner sessions are interactive like hosted ones. Named
   companies get the `external_runners` override only after phase 4 (§12.2, §15 task 16);
-  until then the flag stays on for the test company only. The run-override and publish
-  `interactive_terminal` checks and the Base Resources interactive-step warning are not
-  built (§4, §11).
+  until the staging validation of 16g the flag stays on for the test company only. The
+  run-override and publish `interactive_terminal` checks and the Base Resources
+  interactive-step warning are not built (§4, §11).
 - **Project-move edge cases are accepted, not fixed:** a queued manual launch naming a
   runner, the lock order against a concurrent workflow save, and a project that owns a
   runner (§3.4, "Known limitations of the move").

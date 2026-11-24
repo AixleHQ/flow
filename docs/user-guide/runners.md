@@ -14,8 +14,7 @@ This page covers adding machines to a `manual` runner and reading the
 machines list on its page, what the runner's status means, what a session shows
 while it waits for a free machine, the reuse policy and Return to service, what
 you take on with a `manual` machine, what it reaches outbound and its known
-limits, and interactive sessions. The
-rest of the manual runner's guide (health) is not written yet.
+limits, and interactive sessions.
 
 ---
 
@@ -336,9 +335,10 @@ machine. The connection exists only while the machine holds a session.
   who can see the session gets the read-only terminal.
 - **The surfaces start a few seconds after the container does.** The IDE takes
   the longest. If the page shows an error in that window, reload it.
-- **A machine running a version before the tunnel can't serve them.** Update the
-  runner (self-update does it while the machine is idle); until then the
-  terminal does not open.
+- **A machine needs runner 0.5.0 or later.** Earlier versions have no tunnel.
+  A session started on one runs, but its terminal does not open: the page shows
+  the relay's "not found" answer. Update the runner (self-update does it while
+  the machine is idle) and start the session again.
 - **The connection ends with the session.** Ending the session, or revoking the
   machine, closes it. A restart of the relay drops it for a moment and the
   terminal reconnects by itself.

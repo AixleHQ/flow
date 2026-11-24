@@ -1,6 +1,6 @@
 # The Go runner relay service: the interactive tunnel, and the home of the runner's long-held connections
 
-**Status:** accepted (task #253, "Runners 16a"), revised after Alex's review of PR #796 (2026-11-19). Rows 16b–16e of §13 are built (#815, #818, #821, #828); 16f (`aixle-infra`), 16g and the takeover rows 24–27 are pending: `Runners::Selection` still refuses interactive sessions on a runner, and the `runner-gateway` process still runs (`config/puma_runner_gateway.rb`, `Procfile.dev`) beside `runner_relay`. **Round 2 (task #267, "Runners 16b", 2026-11-19):** §5.7 compares our own multiplexer with smux, yamux and SSH channels and recommends keeping §5 (own protocol); §5.8, §12, §13 and §13.1 are written for it. The build took our own protocol: `runner/protocol/tunnel` imports no third-party multiplexer.
+**Status:** accepted (task #253, "Runners 16a"), revised after Alex's review of PR #796 (2026-11-19). Rows 16b–16f of §13 are built (#815, #818, #821, #828, #276) and 16g (#277) lifted the interactive refusal in `Runners::Selection` (its staging validation is the QA of #277); the takeover rows 24–27 are pending, and the `runner-gateway` process still runs (`config/puma_runner_gateway.rb`, `Procfile.dev`) beside `runner_relay`. **Round 2 (task #267, "Runners 16b", 2026-11-19):** §5.7 compares our own multiplexer with smux, yamux and SSH channels and recommends keeping §5 (own protocol); §5.8, §12, §13 and §13.1 are written for it. The build took our own protocol: `runner/protocol/tunnel` imports no third-party multiplexer.
 **Naming (Alex, 2026-11-19):** the service is **`runner-relay`** everywhere: the directory `runner-relay/`, the binary `aixle-runner-relay`, the image and the Helm workload `runner-relay`, the variables `RUNNER_RELAY_*`, the metric prefix `runner_relay_`, the Redis channel `runner_relay` and the internal endpoints `/api/v1/internal/runner_relay/…`. It is not `runner-gateway`: that name belongs to the Rails deployment until row 26, and the Go service never becomes the whole gateway (the token checks, `Rack::Attack` and every short endpoint stay in Rails). In the text, "the relay" means this service.
 **Parent:** [`DESIGN.md`](DESIGN.md) §6.9.5 (the tunnel) and §15 row 16. It refines §6.9.5 and
 replaces row 16 with the rows 16b to 16g of §13 below, and adds the rows 24 to 26 for the
@@ -696,10 +696,10 @@ the page, the read-only viewers, the IDE link (`ide_url`), the file panel (`watc
 (`upload_url`) work as on hosted. What 16g changes is only what hides them:
 
 - `Runners::Selection.refusal`'s `:interactive` refusal and the new-session form's disabled runners ("can't
-  run interactive sessions yet") go;
+  run interactive sessions yet") go (**done in 16g**);
 - the capability table's `interactive_terminal` becomes true on every type (`DESIGN.md` §4);
 - the session page's runner-specific "no live terminal" state, if the page has one, goes. (16g looks for it;
-  none was found by this design's search.)
+  none was found, so nothing was removed.)
 
 The exec-based snapshot (`Sessions::Snapshot::ExecSource`, `get_session_log`, `NoOutput`) is **not**
 touched: it feeds the monitor and the MCP tool, not the browser.
