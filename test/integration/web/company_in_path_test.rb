@@ -82,14 +82,13 @@ class Web::CompanyInPathTest < ActionDispatch::IntegrationTest
     assert_redirected_to "/company/#{@company_b.slug}/projects/#{@project_b.id}/board"
   end
 
-  test "an unscoped write is passed on with its method" do
+  test "a write that names no company is not found rather than sent to one" do
     post "/company/members", params: { user: { email: "late@example.com", name: "Late", role: "employee" } }
-    assert_response :temporary_redirect
-    assert_equal "/company/#{@company_a.slug}/members", URI(response.location).path
+    assert_response :not_found
+    assert_nil User.find_by(email: "late@example.com")
 
-    post "/api/v1/company/folders", params: { path: "docs" }, as: :json
-    assert_response :temporary_redirect
-    assert_equal "/api/v1/company/#{@company_a.slug}/folders", URI(response.location).path
+    get "/api/v1/company/assets"
+    assert_response :not_found
   end
 
   test "a path under a company that names no page is not found rather than passed on" do

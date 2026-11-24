@@ -22,13 +22,6 @@ governance, community health — carry none.
   personal access token is stored, Aixle never receives an administrator credential,
   and deleting the credential or the app stops Flow from signing in (a token already issued lasts up to about an hour). Operators enable it by
   setting `AZURE_DEVOPS_FEDERATION_SIGNING_KEY`.
-- **Sessions & Runs**: an interactive session can be suspended instead of finished, by its owner with **Suspend** or
-  by the 23-hour limit, which used to finish it. Its files, each repository's unpushed commits and uncommitted changes,
-  and the agent's conversation are kept for 30 days, and **Restore** starts a new session that picks up the same
-  conversation. An interactive workflow step can be suspended too: its run waits for it, and **Restore** on the run page
-  continues the same step. A suspended session holds no slot; its owner is emailed when it is suspended and three days
-  before it expires. Needs S3-compatible storage; without it sessions finish as before. Operators: a workflow run may now
-  last 40 days instead of 7.
 - **Integrations**: the `pull_request_*` tools can act as a person. Pass `user_id` to `pull_request_create`,
   `_update`, `_add_comment`, `_review` or `_merge` and the pull request, comment, review or merge is that
   member's own, under the same conditions as `github_user_token_for` (a connected account and the consent for
@@ -81,6 +74,8 @@ governance, community health — carry none.
   the right company, and two tabs can stay on two companies. Links from before keep
   working and open in the project's company, or in the one you used last. A company's short
   name in the address comes from its email domain (`acme.com` → `acme`).
+- **Companies & projects**: each company in the switcher on the far left is a link, so
+  Cmd/Ctrl+click opens it in a new tab and leaves the current tab where it is.
 - **Admin**: the dashboard opens on the current week, shows Utilization, Average wait and
   p95 wait right after Company, keeps the table's header and Company column in view while
   it scrolls, and folds its explanation into a "How to read this dashboard" section.

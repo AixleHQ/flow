@@ -4,6 +4,7 @@ import { IconAlertTriangle, IconCreditCard, IconHourglassHigh } from '@tabler/ic
 import { useState } from 'react';
 
 import { formatCalendarDay } from 'shared/lib/formatDate';
+import { useCompanySlug } from 'shared/lib/hooks/useCompanySlug';
 import { companyBillingCheckoutPath, companyBillingInvoicePaymentPath } from 'shared/routes';
 
 import classes from './TrialBanner.module.css';
@@ -21,6 +22,7 @@ const days = (count: number) => `${count} day${count === 1 ? '' : 's'}`;
  */
 export const TrialBanner = () => {
   const { trial, permissions } = usePage<Partial<SharedProps> & { [key: string]: unknown }>().props;
+  const companySlug = useCompanySlug();
   const [starting, setStarting] = useState(false);
   if (!trial) return null;
 
@@ -90,7 +92,9 @@ export const TrialBanner = () => {
           onClick={() => {
             setStarting(true);
             router.post(
-              unpaid ? companyBillingInvoicePaymentPath() : companyBillingCheckoutPath(),
+              unpaid
+                ? companyBillingInvoicePaymentPath({ company_slug: companySlug })
+                : companyBillingCheckoutPath({ company_slug: companySlug }),
               {},
               {
                 onFinish: () => setStarting(false),

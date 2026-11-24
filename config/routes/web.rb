@@ -346,8 +346,6 @@ namespace :api, defaults: { format: :json } do
         end
       end
     end
-
-    match "company(/*rest)", to: "/web/unscoped_company_paths#show", via: :all, format: false, as: nil
   end
 end
 
@@ -607,7 +605,6 @@ scope module: :web, defaults: { format: :html } do
   # its company and every tab stays in its own. Left unscoped is what belongs to
   # no one company.
   namespace :company do
-    post "switch", to: "switch#create", as: :switch
     # Self-removal ("Leave company" on the profile page) — id is the
     # MEMBERSHIP id, and it may belong to any of the user's companies.
     resources :memberships, only: %i[destroy]
@@ -848,7 +845,7 @@ scope module: :web, defaults: { format: :html } do
     end
   end
 
-  # Paths from before the slug, in links already sent and in pages loaded
-  # before the deploy: each goes on to the same path in its company.
-  match "company(/*rest)", to: "unscoped_company_paths#show", via: :all, format: false, as: nil
+  # Links from before the slug, in chat, e-mail and trackers: each goes on to
+  # the same page in its company.
+  get "company(/*rest)", to: "unscoped_company_paths#show", format: false, as: nil
 end

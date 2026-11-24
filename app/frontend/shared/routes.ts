@@ -1768,11 +1768,6 @@ export function oauthMCPConnectPath(mcp_server_id: ScalarType, options?: object)
   return "/" + "oauth" + "/" + "mcp" + "/" + mcp_server_id + "/" + "connect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["mcp_server_id","format"]);
 }
 
-/** /company/switch(.:format) */
-export function companySwitchPath(options?: object): string {
-  return "/" + "company" + "/" + "switch" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
-}
-
 /** /company/memberships/:id(.:format) */
 export function companyMembershipPath(id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "memberships" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
