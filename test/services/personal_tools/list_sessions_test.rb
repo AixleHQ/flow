@@ -207,16 +207,20 @@ module PersonalTools
       assert_equal [ solo.id ], listed.call(search: "100% cpu")
     end
 
-    test "workflow_id keeps the step sessions of that workflow's runs" do
+    test "workflow_id keeps the step sessions of that workflow's runs, its drafts' test runs included" do
       workflow = create(:workflow, scope: @project)
-      run = create(:workflow_run, workflow: workflow, project: @project, user: @user)
-      step = create(:terminal_session, :collected, session_type: "workflow_step", user: @user, project: @project)
-      create(:step_run, workflow_run: run, terminal_session: step)
+      draft = WorkflowDrafts.open!(workflow, actor: Versions::Actor.ui(@user))
+      steps = [ workflow, draft ].map do |ran|
+        run = create(:workflow_run, workflow: ran, project: @project, user: @user)
+        step = create(:terminal_session, :collected, session_type: "workflow_step", user: @user, project: @project)
+        create(:step_run, workflow_run: run, terminal_session: step)
+        step
+      end
       create(:terminal_session, :collected, session_type: "workflow_step", user: @user, project: @project)
 
       ids = payload(execute(state: "all", workflow_id: workflow.id))["sessions"].map { |s| s["id"] }
 
-      assert_equal [ step.id ], ids
+      assert_equal steps.map(&:id).sort, ids.sort
     end
 
     test "company_id narrows to one company and refuses one the caller is not in" do
