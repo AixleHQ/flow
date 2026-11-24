@@ -20,8 +20,9 @@ The platform uses a connection for three things:
 - the developer's agent sessions invoke Bedrock models (Claude Code runs in the session's
   container);
 - when the developer opens a page with a model picker, the platform lists the account's
-  inference profiles (`bedrock:ListInferenceProfiles`, cached for a day) so the picker
-  offers only what the account has; a permission set without that action leaves the
+  inference profiles (`bedrock:ListInferenceProfiles`, cached for up to a day and read
+  again after each token refresh) so the picker offers only what the account has; a
+  permission set without that action leaves the
   picker on a static list;
 - when the developer runs the connection health check, the platform makes one
   `bedrock:InvokeModel` call capped at a single output token and shows AWS's own error
