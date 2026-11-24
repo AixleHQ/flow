@@ -112,6 +112,17 @@ module Oauth
       assert_predicate cred, :active?
     end
 
+    test "does not return the token of an unexpired credential of another client" do
+      Settings.github.stubs(:client_id).returns("Iv1.client")
+      retired = create(:oauth_client, client_id: "Iv1.retired", token_endpoint: TOKEN_ENDPOINT)
+      cred = create(:oauth_credential, :github_user, owner: @user, oauth_client: retired, expires_at: 1.hour.from_now)
+
+      assert_raises(Oauth::ReauthRequired) { Oauth::TokenService.fresh(cred) }
+
+      assert_not_requested :post, TOKEN_ENDPOINT
+      assert_predicate cred.reload, :active?
+    end
+
     test "does not refresh a credential of a retired client id, and does not mark it" do
       Settings.github.stubs(:client_id).returns("Iv1.client")
       Settings.bitbucket.oauth.stubs(:client_id).returns("bb-cid")
