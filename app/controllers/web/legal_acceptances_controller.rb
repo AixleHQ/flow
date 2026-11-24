@@ -14,7 +14,7 @@ class Web::LegalAcceptancesController < Web::ApplicationController
   before_action :require_signed_in
 
   def show
-    return redirect_to(company_projects_path) if impersonated? || pending_legal_documents.empty?
+    return redirect_to(app_home_path) if impersonated? || pending_legal_documents.empty?
 
     render inertia: "Legal/AcceptPage", props: {
       company_name: current_company.branded_name,
@@ -23,7 +23,7 @@ class Web::LegalAcceptancesController < Web::ApplicationController
   end
 
   def create
-    return redirect_to(company_projects_path) if impersonated?
+    return redirect_to(app_home_path) if impersonated?
 
     pending = pending_legal_documents
     accepted = accepted_versions(pending)
@@ -36,7 +36,7 @@ class Web::LegalAcceptancesController < Web::ApplicationController
         LegalAcceptance.record!(document, user: current_user, company: current_company, evidence: evidence)
       end
     end
-    redirect_to company_projects_path
+    redirect_to app_home_path
   end
 
   private

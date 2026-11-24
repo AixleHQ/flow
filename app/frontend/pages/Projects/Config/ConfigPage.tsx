@@ -3,6 +3,7 @@ import { Head, usePage } from '@inertiajs/react';
 import type { ConfigItem, Project } from '@/types/generated';
 
 import { ConfigItemsContent } from 'shared/resources/config-items/ConfigItemsContent';
+import { companyProjectConfigItemsPath } from 'shared/routes';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -19,7 +20,7 @@ const ConfigPage = () => {
       <Head title={`Secrets & Variables — ${project.name}`} />
       <ConfigItemsContent
         configItems={configItems}
-        basePath={`/company/projects/${project.id}/config_items`}
+        basePath={companyProjectConfigItemsPath(project.id)}
         title="Secrets & Variables"
       />
     </>

@@ -79,8 +79,8 @@ class Web::Company::BillingCheckoutsTest < ActionDispatch::IntegrationTest
     post company_billing_checkout_path
 
     opened = @client.checkout_sessions.sole
-    assert_match(%r{/company/settings/billing\?billing=done}, opened[:success_url])
-    assert_match(%r{/company/settings/billing\?billing=cancelled}, opened[:cancel_url])
+    assert_match(%r{/company/#{@company.slug}/settings/billing\?billing=done}, opened[:success_url])
+    assert_match(%r{/company/#{@company.slug}/settings/billing\?billing=cancelled}, opened[:cancel_url])
   end
 
   # The meter sums by customer and every subscription carrying the price

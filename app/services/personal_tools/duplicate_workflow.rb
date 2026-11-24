@@ -21,6 +21,7 @@ module PersonalTools
       project = find_project!
       authorize!(project, :duplicate?, policy: Web::Company::Projects::WorkflowsPolicy, project: project)
       workflow = find_workflow!(project)
+      return error("Workflow #{workflow.id} is a draft — duplicate workflow #{workflow.draft_of_id} instead") if workflow.draft?
 
       target = target_project(project)
       # Copying into another project writes there, so it needs write access there too.

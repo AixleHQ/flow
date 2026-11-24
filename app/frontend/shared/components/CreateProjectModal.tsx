@@ -2,6 +2,7 @@ import { useForm } from '@inertiajs/react';
 import { Alert, Button, Group, Modal, Stack, TextInput, Textarea } from '@mantine/core';
 
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
+import { companyProjectsPath } from 'shared/routes';
 
 interface CreateProjectModalProps {
   opened: boolean;
@@ -35,7 +36,7 @@ export const CreateProjectModal = ({ opened, onClose }: CreateProjectModalProps)
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     transform((d) => ({ project: d }));
-    post('/company/projects', {
+    post(companyProjectsPath(), {
       onSuccess: handleClose,
     });
   };

@@ -36,7 +36,7 @@ class PersonalMCPResourcesTest < ActionDispatch::IntegrationTest
   test "get_integration_setup_url returns the project integrations page URL, no credentials" do
     body = call_tool("get_integration_setup_url", { project_id: @project.id, provider: "slack" })
     data = payload(body)
-    assert_match %r{/company/projects/#{@project.id}/integrations}, data["setup_url"]
+    assert_match %r{/company/#{@project.company.slug}/projects/#{@project.id}/integrations}, data["setup_url"]
     assert_match(/slack/i, data["instructions"])
     refute_includes data.keys, "credentials"
   end

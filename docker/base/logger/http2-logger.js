@@ -21,8 +21,10 @@ const aixleRedact = require('./aixle-redact');
 
 const LOG_PATH = process.env.MITM_LOG_PATH || '/var/log/mitm/http.log';
 
-const _rawDomains = (process.env.MITM_TRACKED_DOMAINS || '').trim();
-const TRACKED_DOMAINS = new Set(_rawDomains ? _rawDomains.split(',').map(d => d.trim()).filter(Boolean) : []);
+// Unset logs everything (a container started by hand); set but empty logs nothing.
+const _rawDomains = process.env.MITM_TRACKED_DOMAINS;
+const LOG_ALL_HOSTS = _rawDomains === undefined;
+const TRACKED_DOMAINS = new Set((_rawDomains || '').split(',').map(d => d.trim().toLowerCase()).filter(Boolean));
 
 let dirReady = false;
 
@@ -41,9 +43,11 @@ function appendLog(entry) {
 }
 
 function shouldLog(host) {
-  if (!host || TRACKED_DOMAINS.size === 0) return TRACKED_DOMAINS.size === 0;
+  if (LOG_ALL_HOSTS) return true;
+  if (!host) return false;
+  const lowered = host.toLowerCase();
   for (const d of TRACKED_DOMAINS) {
-    if (host === d || host.endsWith('.' + d)) return true;
+    if (lowered === d || lowered.endsWith('.' + d)) return true;
   }
   return false;
 }

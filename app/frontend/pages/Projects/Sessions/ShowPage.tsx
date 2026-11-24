@@ -6,6 +6,11 @@ import {
   SessionShowContent,
   type SessionWorkflowContext,
 } from 'shared/components/SessionShowContent/SessionShowContent';
+import {
+  companyProjectSessionArtifactsPath,
+  companyProjectSessionsPath,
+  newCompanyProjectSessionPath,
+} from 'shared/routes';
 
 import { persistentProjectLayoutNoPadding, setPageLayout } from '../ProjectLayout';
 
@@ -18,7 +23,6 @@ interface Props {
 
 const ProjectSessionShowPage = () => {
   const { project, session, workflowContext, cableStream } = usePage<{ props: Props }>().props as unknown as Props;
-  const basePath = `/company/projects/${project.id}/sessions`;
 
   return (
     <>
@@ -28,9 +32,9 @@ const ProjectSessionShowPage = () => {
         cableStream={cableStream}
         workflowContext={workflowContext}
         context={{
-          backPath: basePath,
-          newSessionPath: `${basePath}/new`,
-          artifactsPath: `${basePath}/${session.id}/artifacts`,
+          backPath: companyProjectSessionsPath(project.id),
+          newSessionPath: newCompanyProjectSessionPath(project.id),
+          artifactsPath: companyProjectSessionArtifactsPath(project.id, session.id),
         }}
       />
     </>

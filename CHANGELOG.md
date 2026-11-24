@@ -13,14 +13,37 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Workflows**: change a workflow that is in use through a draft. **Edit in draft** (or
+  **Save as draft** when a Save would go live) opens a copy that you edit and test-run while
+  triggers and board columns keep running the live version; **Apply** makes it live as one
+  new version, **Discard draft** drops it. The personal MCP has the same flow:
+  `create_workflow_draft`, `get_workflow_draft_diff`, `apply_workflow_draft`,
+  `discard_workflow_draft`.
+
 ### Changed
+- **Companies & projects**: every page of a company carries it in its address,
+  `/company/<company>/…`, so a link to a project, a workflow or any company page opens in
+  the right company, and two tabs can stay on two companies. Links from before keep
+  working and open in the project's company, or in the one you used last. A company's short
+  name in the address comes from its email domain (`acme.com` → `acme`).
 - **Admin**: the dashboard opens on the current week, shows Utilization, Average wait and
   p95 wait right after Company, keeps the table's header and Company column in view while
   it scrolls, and folds its explanation into a "How to read this dashboard" section.
+- **Sessions & Runs**: a session's HTTP log records each call's method, address, status,
+  headers and size, and keeps a request or response body only where Flow reads the
+  session's usage from it. Before, most of the log was the conversation the agent re-sent
+  to the model on every turn.
+- **Sessions & Runs**: the HTTP log of an Antigravity, Gemini or Copilot session records only
+  the agent's own model and sign-in traffic. Gemini's used to record everything the agent
+  downloaded or called, and a Copilot session now keeps this log at all.
 
 ### Fixed
-- **Analytics**: token counts of a billion or more read as `1.1B` instead of `1069.7M`, here and
-  wherever else tokens are counted (Usage, Sessions & Runs, task cards).
+- **Analytics**: token counts of a billion or more read as `1.1B` instead of `1069.7M`, and
+  every page writes token counts the same way (`12.5k`, `2.0M`): Usage, Sessions & Runs, the
+  project overview and task cards.
+- **Aixle Builder**: restoring a suspended build, and the "Continued in session" link on a
+  restored one, open the build's session. They used to lead to a page that does not exist.
 - **Admin**: deleting a company that has set up SCIM provisioning works again. It used to
   end in an error page and leave the company in place.
 - **Repositories**: adding a GitLab repository no longer ends in an error page when GitLab

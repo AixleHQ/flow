@@ -35,6 +35,7 @@ import { useState } from 'react';
 import { z } from 'zod';
 
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
+import { companyProjectPath, companyProjectSettingsPath, companyProjectsPath } from 'shared/routes';
 
 import { NO_OWNERSHIP_TRANSFER, type Ownership } from '../ownership';
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -129,7 +130,6 @@ const SettingsPage = () => {
     ownership = NO_OWNERSHIP_TRANSFER,
   } = usePage<{ props: Props }>().props as unknown as Props;
   const pageErrors = (usePage().props as unknown as { errors?: Record<string, string> }).errors;
-  const basePath = `/company/projects/${project.id}`;
 
   const form = useForm({
     initialValues: {
@@ -148,7 +148,7 @@ const SettingsPage = () => {
     new Promise<boolean>((resolve) => {
       setIsSubmitting(true);
       router.patch(
-        `${basePath}/settings`,
+        companyProjectSettingsPath(project.id),
         {
           project: {
             name: values.name.trim(),
@@ -196,14 +196,14 @@ const SettingsPage = () => {
       confirmProps: { color: 'red' },
       onConfirm: () => {
         router.patch(
-          `${basePath}/settings`,
+          companyProjectSettingsPath(project.id),
           {
             project: { state: 'archived' },
           } as Record<string, FormDataConvertible>,
           {
             onSuccess: () => {
               notifications.show({ message: 'Project archived', color: 'red' });
-              router.visit('/company/projects');
+              router.visit(companyProjectsPath());
             },
             onError: () => {
               notifications.show({ message: 'Failed to archive project', color: 'red' });
@@ -221,10 +221,10 @@ const SettingsPage = () => {
   const handleDelete = () => setDeleteOpen(true);
 
   const confirmDelete = () => {
-    router.delete(`/company/projects/${project.id}`, {
+    router.delete(companyProjectPath(project.id), {
       onSuccess: () => {
         notifications.show({ message: 'Project deleted', color: 'red' });
-        router.visit('/company/projects');
+        router.visit(companyProjectsPath());
       },
       onError: () => {
         notifications.show({ message: 'Failed to delete project', color: 'red' });

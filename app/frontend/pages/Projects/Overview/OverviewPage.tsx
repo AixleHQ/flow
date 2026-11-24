@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import type { Project } from '@/types/generated';
 
+import { companyProjectBoardPath, companyProjectWorkflowRunsPath } from 'shared/routes';
 import { PageHeader } from 'shared/ui/PageHeader';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -308,7 +309,7 @@ const OverviewPage = () => {
                 variant="subtle"
                 size="compact-xs"
                 rightSection={<IconArrowRight size={13} />}
-                onClick={() => router.visit(`/company/projects/${project.id}/workflow_runs`)}
+                onClick={() => router.visit(companyProjectWorkflowRunsPath(project.id))}
               >
                 Open Runs
               </Button>
@@ -365,7 +366,7 @@ const OverviewPage = () => {
                 variant="subtle"
                 size="compact-xs"
                 rightSection={<IconArrowRight size={13} />}
-                onClick={() => router.visit(`/company/projects/${project.id}/board`)}
+                onClick={() => router.visit(companyProjectBoardPath(project.id))}
               >
                 Open board
               </Button>

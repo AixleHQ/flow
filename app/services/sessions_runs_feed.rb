@@ -87,7 +87,7 @@ class SessionsRunsFeed
   # Workflows this project has run — the Workflow filter's options.
   def workflow_options
     Workflow.where(id: WorkflowRun.where(project: project).select(:workflow_id))
-            .order(:name).map { |w| { id: w.id, name: w.name } }
+            .order(:name).map { |w| { id: w.id, name: w.draft? ? "#{w.name} (draft)" : w.name } }
   end
 
   private

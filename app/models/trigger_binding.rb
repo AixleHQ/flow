@@ -368,6 +368,7 @@ class TriggerBinding < ApplicationRecord
 
   def workflow_accessible_from_project
     return unless workflow && project
+    return errors.add(:workflow, "is a draft: triggers start the live workflow") if workflow.draft?
 
     unless Workflow.visible_for_project(project).exists?(id: workflow_id)
       errors.add(:workflow, "must be accessible from this project")
