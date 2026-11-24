@@ -39,6 +39,8 @@ governance, community health — carry none.
   downloaded or called, and a Copilot session now keeps this log at all.
 
 ### Fixed
+- **Sessions & Runs**: a running session shows an amber "Running" status in the all-projects
+  and project lists, on its page and in Usage. It used to read green, like a finished one.
 - **Analytics**: token counts of a billion or more read as `1.1B` instead of `1069.7M`, and
   every page writes token counts the same way (`12.5k`, `2.0M`): Usage, Sessions & Runs, the
   project overview and task cards.
