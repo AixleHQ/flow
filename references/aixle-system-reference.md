@@ -173,9 +173,8 @@ agent's system prompt.
 
 **Runtimes** — the CLI that executes a session: `claude_code`, `cursor_cli`,
 `codex`, `gemini_cli`, `antigravity_cli`, `grok`, `kiro_cli`, `copilot_cli`. Each user connects
-their own credentials per runtime; a step can pin one with
-`required_agent_runtime` (`claude_code`, `cursor_cli`, `codex`, `gemini_cli`,
-`antigravity_cli`).
+their own credentials per runtime; a step can pin any of them with
+`required_agent_runtime`.
 
 ---
 
@@ -211,8 +210,8 @@ by users in the UI and never returned by any tool.
 
 **Integrations**: `github`, `gitlab`, `bitbucket`, `slack`, `teams`, `azure_devops`, `jira`, `coder`, `linear`, `youtrack`, `insights`.
 Users connect them in the browser (`get_integration_setup_url`). Azure DevOps,
-`jira`, `linear` and `youtrack` connections, and GitHub Projects, map their
-projects (Linear: teams) in as task trackers. `insights` is the company's
+`jira`, `linear` and `youtrack` connections, GitHub Projects and GitLab issues map
+their projects (Linear: teams) in as task trackers. `insights` is the company's
 connection to Aixle Insights, made by a company admin with an Insights owner's
 pairing code; each project then chooses to forward its agents' telemetry there.
 
@@ -244,7 +243,8 @@ repository. How the run started never changes this.
 with `inherit_all_project_resources`). The internal `aixle-tools` MCP server is
 always connected: session lifecycle, sub-steps, board tools, and integration
 tools (Slack and Microsoft Teams, Azure DevOps, Coder) when connected. Task tracker tools
-(`tracker_*`) are attached like other tools once the project has a tracker.
+(`tracker_*`) are attached like other tools once the project has a tracker; a run started
+by a tracker event gets them without attaching.
 
 **Secrets**: the step reads its config items with `get_config_item`; MCP
 credentials are resolved from config items at launch.
@@ -275,9 +275,11 @@ task, so tagged comments carry structured hand-offs.
 - Secrets: `get_config_item`
 - Async tools: `read_tool_result`
 - When connected: `chat_post_message`, `chat_read_thread`, `chat_update_message`,
-  `chat_delete_message` (Slack or Teams; the `slack_*` ones are deprecated),
+  `chat_delete_message` (Slack or Teams),
   `azure_devops_*`, `coder_*`, `refresh_github_token`
-- Task trackers (attached; the project needs a tracker): `tracker_list`, `tracker_describe`,
+- Task trackers (the project needs a tracker; attached, or present without attaching in a run
+  a tracker event started): `tracker_list`, `tracker_describe`,
   `tracker_search_issues`, `tracker_get_issue`, `tracker_list_comments`, `tracker_create_issue`,
   `tracker_update_issue`, `tracker_transition_issue`, `tracker_assign_issue`, `tracker_add_comment`,
-  `tracker_link_task`, `tracker_list_users` (Jira)
+  `tracker_link_task`, `tracker_list_attachments`, `tracker_download_attachments`,
+  `tracker_attach_files`, `tracker_list_users` (Jira)

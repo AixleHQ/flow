@@ -1,6 +1,6 @@
 # Coder pool hardening — design
 
-**Status:** proposed
+**Status:** Built 2026-08-10 (#75, #76): platform phases 1–3 except D-8 (per decision below).
 **Created:** 2026-08-10
 **Baseline:** `origin/develop` @ `6e98a7b7`
 **Trigger:** field report from agent sessions working Flow project 27 (Collectively) on
@@ -8,6 +8,17 @@
 template `aws-ec2-spot-v1`. Two cards burned two QA windows each without running a
 single check; three more queued behind them. In none of the runs was the product code
 in question.
+
+| Decision | State |
+|---|---|
+| D-0 to D-6, D-9 | Built in #75 |
+| D-7 | Built: `Coder::Allocator::ExhaustedError` names the pool size, why each workspace was passed over, and the missing `default_template` (#71, extended in #386) |
+| D-8 | Not built: there is no `coder_list_machines` tool |
+| D-10 | Built in #76 |
+| D-11 to D-14 | aixle-infra and ops; their state is not tracked in this repository |
+
+Where the build departs: D-6 clamps to a setting, `CODER_SSH_EXEC_CEILING_SECONDS` (default 120),
+rather than lowering `SshRunner::MAX_TIMEOUT`, which stays 600.
 
 This document covers the platform (`AixleHQ/flow`) side and the infrastructure
 (`aixle-infra`) side. It supersedes nothing; it extends the Coder MCP tooling shipped

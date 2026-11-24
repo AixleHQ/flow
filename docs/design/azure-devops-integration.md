@@ -1,6 +1,6 @@
 # Azure DevOps integration — technical design
 
-**Status:** Proposed; core release under implementation.  
+**Status:** Built 2026-09-14 (#251): the core release and the parity extension (§12 steps 1–6). Where the build departs: Boards work items are not Azure-specific tools; since #366 they go through the provider-neutral `tracker_*` tools (§8.1).  
 **Date:** 2026-09-11 (revised after a code/API review — see §7 credential-endpoint authentication, §6.2 `Repository` changes, §1 MSA boundary)  
 **Code baseline:** `f9521f19`  
 **Audience:** Backend, frontend, and runtime engineers implementing the integration.
@@ -371,7 +371,7 @@ Two injection rules, matching the two ways a tool is scoped:
 
 | Rule | Fires when | Covers |
 | ---- | ---------- | ------ |
-| `azure_repositories_attached` | the session holds a repository whose integration is Azure | the 13 tools taking a `repository_id` — pull requests, threads, reviewers, votes, policies, `link_work_item` |
+| `azure_repositories_attached` | the session holds a repository whose integration is Azure | the 15 tools taking a `repository_id` — pull requests, threads, reviewers, votes, policies, `link_work_item` |
 | `azure_integration_connected` | the project has an active Azure connection | the 2 tools taking an `integration_id` — `list_builds`, `list_connections` |
 
 The split is not cosmetic. A repository tool has nothing to act on without an attached clone, so injecting it would only produce a tool that answers "not attached to this session". A build tool is scoped by the connection, so it needs no clone. Boards work items are task tracker tools and follow the tracker rules instead: they are attached from the picker.
@@ -382,7 +382,7 @@ This does NOT widen what an agent may do. Injection decides which tools are *off
 
 ### 8.1 Core tool contracts
 
-All names below are proposed. `repository_id` always means an Aixle repository ID; `pull_request_id` and `work_item_id` mean Azure IDs.
+`repository_id` always means an Aixle repository ID; `pull_request_id` and `work_item_id` mean Azure IDs.
 
 | Tool                                      | Main input                                                                         | Result / behavior                                                               |
 | ----------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |

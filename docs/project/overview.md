@@ -9,15 +9,15 @@
 ### Key capabilities
 
 - **Board + workflows** — column → workflow bindings; a workflow is a DAG of agent steps with retries, approval gates, and parallel runs
-- **Agent Sessions** — interactive and non-interactive sessions with AI agents in containers (Docker locally, Kubernetes in production)
+- **Agent Sessions** — interactive and non-interactive sessions with AI agents in containers (Docker locally, Kubernetes in production, or an external runner)
 - **Agent Auth** — each user signs in to each runtime's own CLI once, in a terminal in the browser; the credential is captured and stored encrypted
 - **Tool Execution** — custom tools in containers with parameters and files, platform tools in-process, MCP servers
-- **Multi-Runtime** — pluggable Docker and Kubernetes runtimes (via the Strategy + Runtime pattern)
+- **Multi-Runtime** — pluggable Docker, Kubernetes and external-runner runtimes (via the Strategy + Runtime pattern)
 - **Usage Tracking** — tokens and cost per session, from OTLP telemetry, MITM proxy logs, or the CLI's own output
 - **Session Context** — injection of configuration, MCP servers, skills, repositories, and assets into containers
 - **Asset Management** — uploading, versioning, and reviewing artifacts
-- **Multi-tenancy** — Company → Projects with polymorphic scoping for resources; a user can belong to several companies
-- **Personal MCP** — a user can drive their own account from an external agent with a personal MCP token
+- **Multi-tenancy** — Company → Projects; resources belong to one project (assets can also be company-wide); a user can belong to several companies
+- **Personal MCP** — a user can drive their own account from an external agent with a personal MCP token, or by connecting the client over OAuth
 
 ---
 
@@ -33,7 +33,7 @@
 | **Containers** | docker-api gem (Docker), kubeclient gem (Kubernetes) |
 | **File Storage** | Shrine + S3 |
 | **MCP** | `mcp` gem (official Ruby SDK) |
-| **Auth** | Email + password, Google OAuth (OmniAuth), invitations; Pundit |
+| **Auth** | Email + password, Google and Microsoft (OmniAuth), per-company OIDC, passkeys, magic links, TOTP step-up, invitations, SCIM provisioning; Pundit |
 | **Error tracking** | Sentry |
 
 Versions are pinned in `.ruby-version`, `Gemfile.lock`, `package.json` / `yarn.lock`, and `docker-compose.yml`.
@@ -59,6 +59,9 @@ PhaseActivity → ContainerService → Strategy → Runtime
 **Runtimes** (define WHERE to run):
 - `DockerRuntime` — local Docker (docker-api gem); the default, used in development
 - `KubernetesRuntime` — Kubernetes Pods + Services + Traefik IngressRoutes (kubeclient + websocket); used in production
+- `RunnerRuntime` — a session on an external runner, a company's or project's own machines (`manual`, `coder` or `kubernetes`): each runtime call is an op queued to the session's runner machine
+
+`ContainerRuntime.for_session` picks `RunnerRuntime` for a session on a runner, and the hosted runtime (`Settings.container_runtime`) for every other session.
 
 **Phases** (container lifecycle):
 ```
@@ -73,13 +76,13 @@ One adapter per runtime in `app/services/agents/` (`claude_code`, `cursor_cli`, 
 
 ### Temporal Workflows
 
-`ContainerWorkflow` orchestrates a container's lifecycle (auth, session, or tool); `WorkflowExecutionWorkflow` runs a workflow run's steps; `ScheduledTriggerWorkflow` fires schedule triggers. The periodic sweeps and syncs are declared in `app/temporal/schedules.yml`. See [architecture/index.md](../architecture/index.md#temporal-workflows).
+`ContainerWorkflowV2` orchestrates a session's container lifecycle (agent logins included) and `ContainerWorkflow` a custom tool's; `WorkflowExecutionWorkflowV2` runs a workflow run's steps; `ScheduledTriggerWorkflow` fires schedule triggers. The periodic sweeps and syncs are declared in `app/temporal/schedules.yml`. See [architecture/index.md](../architecture/index.md#temporal-workflows).
 
 ### Multi-tenancy & Scoping
 
-Polymorphic `scope` (Company/Project) for: Agent, Tool, Workflow, MCPServer, Skill, Asset, ConfigItem, Repository.
+Agent, Tool, Workflow, MCPServer, Skill, Asset, ConfigItem and Repository carry a polymorphic `scope`, and each belongs to one project. The exceptions: Workflow can also be `System` (the platform's own), Asset can be company-wide, and platform code tools and internal MCP servers are platform-owned.
 
-Merge logic: `visible_for_project` unions code/platform + company-scoped + project-scoped rows (System-scoped and non-attachable rows excluded via `user_attachable`); no name-level override.
+`visible_for_project` returns the project's own rows plus the platform's code tools (non-attachable ones excluded via `user_attachable`), internal MCP servers or the company's assets; no name-level override.
 
 ---
 
@@ -88,17 +91,17 @@ Merge logic: `visible_for_project` unions code/platform + company-scoped + proje
 ### Core
 - **Company** — tenant (memberships, projects, scoped resources)
 - **CompanyMembership** — a user's place in one company: role (`admin` / `employee` / `viewer`), state (invited → active, suspended, revoked), and that company's onboarding
-- **User** — account (state machine active/pending/suspended/archived), password and/or Google sign-in, personal MCP token; `super_admin` flag for the platform admin
+- **User** — account (state machine active/pending/suspended/archived), password and/or other sign-in methods (Google, Microsoft, company OIDC, passkeys, magic links), optional TOTP, personal MCP token; `super_admin` flag for the platform admin
 - **Project** — company → project hierarchy, owner + collaborators
 
 ### Agent Infrastructure
-- **TerminalSession** — state machine (not_started → running → ready → finishing → finished, waiting in `queued` first when the admission queue holds it; `failed` and `cancelled` from any live state — see `app/state_machines/terminal_session_state_machine.rb`), links user + project + agent + container
+- **TerminalSession** — state machine (not_started → running → ready → finishing → finished, waiting in `queued` first when the admission queue holds it; `failed` and `cancelled` from any live state; a suspended session goes `suspended` → `restored`, or → `finished` when its suspension expires — see `app/state_machines/terminal_session_state_machine.rb`), links user + project + agent + container
 - **AgentCredential** — encrypted runtime credentials per user, company, and agent type
 - **SessionLog** — collected log files (terminal output, MITM HTTP logs) per session
 - **UsageStatistic** — token usage & cost breakdown per session
 
 ### Tools & Configuration
-- **Tool** — custom Docker-based tools with command, parameters, scoped to company/project
+- **Tool** — custom Docker-based tools with command, parameters, scoped to a project
 - **ToolFile** — files mounted into tool containers
 - **Agent** — configured agent personas with system prompts
 - **MCPServer** — MCP server connections (HTTP/SSE/stdio)
@@ -110,7 +113,7 @@ Merge logic: `visible_for_project` unions code/platform + company-scoped + proje
 - **AssetVersion** — Shrine-attached file versions
 
 ### Integrations
-- **Integration** — GitHub, GitLab, Linear, Slack, Coder, and Azure DevOps connections, owned by a company and either company-wide or attached to one project
+- **Integration** — GitHub, GitLab, Bitbucket, Linear, Coder, Slack, Teams, Azure DevOps, Jira, YouTrack and Insights connections, owned by a company and either company-wide or attached to one project
 - **Repository** — linked Git repositories
 
 ---
@@ -120,10 +123,11 @@ Merge logic: `visible_for_project` unions code/platform + company-scoped + proje
 ```
 /                     Inertia web app (Rails routes in the Web namespace)
 /api/v1/...           JSON API the web app calls (cookie session + CSRF); OpenAPI at /api-docs
-/api/v1/internal/...  ws_auth (Traefik ForwardAuth for container terminals), usage_statistics (OTLP ingest)
-/mcp, /action_mcp     MCP server (containers are configured with /action_mcp): session keys and personal MCP tokens
+/api/v1/internal/...  ws_auth (Traefik ForwardAuth for container terminals), usage_statistics (OTLP ingest), runner_relay (the runner-relay service's calls)
+/mcp, /action_mcp     MCP server (containers are configured with /action_mcp): session keys, personal MCP tokens and MCP OAuth access tokens
+/mcp-oauth/...        OAuth authorization server for the personal MCP server (token, register, revoke; authorize in the web app); metadata at /.well-known/oauth-*
 /cable                Action Cable (Inertia Cable streams)
-/webhooks/...         GitHub, GitLab, Azure DevOps, Slack, and the generic /webhooks/in/:slug
+/webhooks/...         GitHub, GitLab, Bitbucket Forge, Azure DevOps, Slack, Teams, Stripe, trackers (/webhooks/trackers/...), and the generic /webhooks/in/:slug
 /admin/               Administrate panel (super admins; they sign in at /admin/login)
 /docs                 In-app documentation portal
 ```
@@ -137,7 +141,7 @@ Endpoint-level detail: [reference/api.md](../reference/api.md).
 ```bash
 make setup   # First time: build images, install deps, prepare database
 make up      # Daily: start all services
-docker compose exec -T web make check_all   # The full check suite, as CI runs it
+docker compose exec -T web make check_all   # CI's Rails, Vitest, system and lint checks (not the secret scan or the Go runner jobs)
 
 # Access
 open http://localhost:4000      # Web UI

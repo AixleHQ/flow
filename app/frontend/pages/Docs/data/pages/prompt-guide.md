@@ -24,7 +24,7 @@ Your instructions are not the whole prompt. Before a session starts, Flow writes
 | **Tools and resources** | Shell and MCP tools (always including `aixle-tools`), attached tools, repositories, input assets **with their paths**, skills. | Attached resources are listed for the agent, but nothing tells it *which one to use for this step*. The instructions do. |
 | **Config items** | Names, types and descriptions of secrets and variables. **Never their values.** | Tell the agent which item to read, by name, with `get_config_item`. Never paste a secret into instructions. |
 
-Flow's generated context file has a soft budget of roughly 6,000 estimated tokens. Over that, previous-step summaries, skills and repository descriptions may be shortened. Your instructions and the rules are kept. This budget does not cover comments returned by tools, file reads or the rest of the session, and the generated file can still exceed it.
+Flow's generated context file has a soft budget of roughly 6,000 estimated tokens. Over that, only the previous-steps section is shortened: sub-step data lines are dropped and notes longer than 100 characters are cut. Your instructions, the rules, skills and repository descriptions are kept. This budget does not cover comments returned by tools, file reads or the rest of the session, and the generated file can still exceed it.
 
 ---
 
@@ -109,7 +109,7 @@ A lot of what people try to say in instructions is really a setting. When it's a
 | A step to fail if a file it needs is missing | **`@` the file** (an asset or an earlier session's output): every reference is checked before the step starts. For a file picked when the run starts, a required **input spec** with its name. |
 | A step to fail if it didn't produce a file | A required **output spec** with that name, or a glob such as `reports/*.md`. It is checked when the step ends. |
 | A step to be skipped when its output already exists | **Skip policy: if outputs exist** (it needs output specs). `manual` currently has no effect at run time. |
-| A retry on failure | **On failure: retry**. The number of retries isn't in the builder yet and defaults to 0, so retry currently behaves like fail. |
+| A retry on failure | **On failure: retry**, and **Max retries** (1–10) for how many times the step starts again. |
 | A step to run without a person in the loop | **Auto-run available**, on a run mode that allows it |
 
 The mismatch to avoid is in both directions. Don't attach every server on the project and write a prompt that never says which to use. And don't name a server in the prompt that isn't attached: the agent will look for it and fail, or improvise.
@@ -295,7 +295,7 @@ Then re-read the card, confirm its column, and call `finish_session`.
 - **Raw ids pasted from another page**, such as a step id or asset id, "so the agent can find it". The agent can't resolve them. Give paths and names.
 - **Naming a server, tool, skill or config item in plain text without attaching it.** The agent can't reach it. `@` it instead: picking attaches it.
 - **"Ask me if anything is unclear"** in an auto-run step. The rules forbid questions. Tell it what to do instead.
-- **Instructions that contradict the form**, such as "skip this if the report exists" while the skip policy is `never`, or "retry three times" while retries are 0. The form wins.
+- **Instructions that contradict the form**, such as "skip this if the report exists" while the skip policy is `never`, or "retry three times" while **On failure** is `fail`. The form wins.
 - **Relying on a required sub-step to stop the agent.** It won't. Say it in the instructions.
 
 ---

@@ -270,7 +270,7 @@ chat_workspaces (Slack team / M365 tenant) ── bot credentials, endpoint, ten
 | `company_id`, `project_id`, `provider` | where the code may be redeemed, and for which messenger |
 | `trigger_binding_id` (nullable) | when requested from a trigger, the trigger to bind on success |
 | `integration_id` (nullable) | when requested from one install's channel list, the only workspace it works in (decision 24) |
-| `code_digest` | SHA-256 of the code. The code itself is never stored |
+| `code_digest` | HMAC-SHA256 of the normalized code, keyed from the app's secret, so a copy of the database cannot give the code back. The code itself is never stored |
 | `requested_by_id`, `expires_at`, `redeemed_at`, `chat_channel_connection_id` | |
 
 - **Code format.** `aixle-` plus 8 Crockford Base32 characters: 40 bits.

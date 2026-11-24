@@ -1,6 +1,6 @@
 # RFC: Federated identity, SSO, and company-level auth policy
 
-**Status:** Draft
+**Status:** Built 2026-09-28 (#288): stages 0, ORG-POLICY, 1, 2 and 4 (§5). Stage 3, SAML, was dropped (§4.5).
 **Date:** 2026-09-17
 **Scope:** Every way a human proves who they are to this app — multi-identity users, per-company IdP connections, Microsoft Entra and generic OIDC, passkeys/TOTP/magic links, SCIM directory sync, server-side sessions — and every rule a company may set about which of those its members may use.
 **Invariants:** [`ARCHITECTURE-SPINE.md`](../planning-artifacts/architecture/architecture-federated-identity-2026-09-17/ARCHITECTURE-SPINE.md) — the `AD-n` blocks cited throughout this document.
@@ -32,7 +32,7 @@ Together these eliminate the entire commercial CIAM market, plus the AGPL and se
 | Session | `app/controllers/concerns/auth_concern.rb:8-18` | `session[:user_id]` in the encrypted cookie. No server-side record: no "sign out everywhere", no device list, no revocation. |
 | Tenant resolution | `app/controllers/concerns/auth_concern.rb:46-57,110-157` | `session[:current_company_id]`, re-validated against live active memberships **on every request**. |
 | Invitations | `app/controllers/web/invitations_controller.rb`, `app/controllers/concerns/auth_concern.rb:87-106` | Signed 7-day token parked in the session, redeemed after either login path. All three accept call sites run `membership.accept!` before any session exists. |
-| Company creation | `app/controllers/admin/companies_controller.rb:12` | Admin namespace only. There is no self-serve company creation, which is what makes `companies.email_domain` a trustworthy anchor today (§7, AD-17). |
+| Company creation | `app/controllers/admin/companies_controller.rb:12` | Admin namespace only. There is no self-serve company creation, which is what makes `companies.email_domain` a trustworthy anchor today (§7, AD-17). Self-serve creation exists since (`WorkspaceOnboardingForm`), guarded as §7.3 describes. |
 | Schema | `db/schema.rb:326-369,1182-1205` | `users` has one `provider`+`uid` pair, unique composite. `companies.email_domain` is unique and required. No column exists for an Entra tenant, a SAML entityID, or a per-customer connection. |
 
 Five structural blockers follow from that audit, and none of them is archaeological — there is no literal `provider == "google"` comparison anywhere. The coupling is in the schema:
@@ -239,7 +239,7 @@ refused rather than merely hidden.
 
 | Stage | Scope | Estimate |
 |---|---|---|
-| **0. Foundation** ✅ built | `identity_providers`, `user_identities`, server-side `AuthSession` + appending proofs, the port and registry, expand/contract backfill | 3-4 wk |
+| **0. Foundation** ✅ built | `identity_providers`, `user_identities`, server-side `UserSession` + appending proofs, the port and registry, expand/contract backfill | 3-4 wk |
 | **ORG-POLICY** ✅ built | `company_auth_policies`, deployment ceiling, entry gate, step-up, the no-stranding guard, admin UI | 3-4 wk |
 | **1. OIDC** ✅ built | Entra (multi-tenant), generic per-company OIDC with PKCE | 4 wk |
 | **2. Passwordless** ✅ built | Passkeys, TOTP (step-up only), magic links | 4-5 wk |
@@ -248,21 +248,19 @@ refused rather than merely hidden.
 
 Stages 0 and ORG-POLICY are worth doing on their own merits: they fix the missing revocation path and the email-join-key weakness, both of which exist today regardless of whether any SSO ever ships.
 
-`rotp` 6.3.0 is already declared at `Gemfile:185` with zero usages anywhere in `app/` or `lib/` — Stage 2 inherits a vendored, approved TOTP gem rather than adding a dependency.
-
 ### 5.1 As built
 
-Stages 0 and ORG-POLICY are implemented on `artempartos/rusalka`. What exists:
+What stages 0 and ORG-POLICY built:
 
 | Piece | Where |
 |---|---|
-| Schema | `db/migrate/20260917000100..000600` — five tables plus the expand-phase backfill |
-| Models | `IdentityProvider`, `UserIdentity`, `CompanyAuthPolicy`, `AuthSession`, `AuthSessionProof` |
+| Schema | `db/migrate/20260917000100..000600` — three tables (`identity_providers`, `user_identities`, `company_auth_policies`) plus the expand-phase backfill; the session tables come from `20260923130000_create_user_sessions` and `20260925150000_create_user_session_proofs` |
+| Models | `IdentityProvider`, `UserIdentity`, `CompanyAuthPolicy`, `UserSession`, `UserSessionProof` |
 | Port and adapters | `app/services/auth/method.rb`, `methods/password.rb`, `methods/google.rb`, `registry.rb` |
 | Identity and policy | `auth/identity_resolver.rb`, `auth/policy_resolver.rb`, `auth/policy_updater.rb` |
 | Sessions | `auth/session_service.rb`, wired through `AuthConcern` |
 | Entry gate and step-up | `Web::ApplicationController#enforce_company_auth_policy`, `Web::StepUpsController`, `Auth/StepUpPage.tsx` |
-| Company surface | `Web::Company::AuthPoliciesController`, `Web::Company::AuthPoliciesPolicy`, `Company/AuthPolicies/Index.tsx` |
+| Company surface | `Web::Company::AuthPoliciesController`, `Web::Company::AuthPoliciesPolicy`, `Company/Settings/AccessPage.tsx` |
 
 An adversarial review of the diff caught two CRITICAL defects that the green suite did not, both worth carrying forward:
 
@@ -324,12 +322,12 @@ These are requirements, not improvements, and several fix weaknesses that exist 
 
 1. **Email is currently the cross-IdP join key with no `email_verified` check** (`google_omni_auth_service.rb:28`, since deleted). §4.4 replaces it.
 2. **Nothing can revoke a session.** §4.2's server-side records are what make deprovisioning, "sign out everywhere", and device lists possible at all.
-3. **`companies.email_domain` is an unverified trust anchor** — a company claiming a public mail domain would auto-join every user of that provider. It is safe today only because company creation is admin-only. Before self-serve creation is ever introduced, the domain must become a verified claim (DNS TXT with a `verified_at`) and public mail providers must be blocklisted (AD-17). `RESERVED_DOMAINS` on `Company` is not that blocklist: it holds fourteen implausible `.com` names and no public mail provider at all.
+3. **`companies.email_domain` is a claim until it is verified** — a company claiming a public mail domain would auto-join every user of that provider. Companies are created self-serve (`WorkspaceOnboardingForm`), so the two guards AD-17 requires for self-serve creation are in place: the form refuses a public mail domain (`PublicEmailDomains`), and `Auth::DomainAutoJoin` joins nobody to a company until its domain is verified by a DNS TXT record (`Domains::Verification`, `companies.domain_verified_at`). Until then people get in by invitation. `RESERVED_DOMAINS` on `Company` is not that blocklist: it is fifteen generic `.com` names (`admin.com`, `localhost.com` and the like), of which only `mail.com` is a mail service.
 4. **Auto-join answers *which* company; the method answers *whether*.** The domain picks the company, but `Auth::DomainAutoJoin` now declines one that does not accept the provider the person authenticated with. Such a membership could never be entered — the entry gate refuses it on every request — and once active it strands its holder, which makes `Auth::PolicyUpdater` refuse **every** later policy edit by that company's admins. A membership nobody can use is worse than no membership: it reads as access, counts as a member, and freezes the policy screen.
 5. **Copy `Oauth::State`, do not reuse it.** Its signed, 10-minute, single-use, user-pinned, server-side-PKCE shape is verified to be exactly what a login flow needs — but `OauthCredential` deliberately refuses to persist `id_token`, which is the artifact login requires.
 6. **Rate-limit every credential-accepting endpoint** with explicit `rack-attack` rules.
 7. **Magic links are not invitations.** Invitation tokens are 7-day and reusable-until-consumed; a login magic link needs 5-15 minutes, hard single-use, and session-fixation-safe redemption.
-8. **The single-writer rules are enforced mechanically** (AD-15) — a custom `Auth/` rubocop cop, database unique indexes, a Pundit policy — because this repo already enforces doctrine with cops rather than documentation.
+8. **The single-writer rules** (AD-15) are held by the single writers themselves — `Auth::IdentityResolver` is the only code that writes `UserIdentity` — backed by database unique indexes on `(identity_provider_id, subject)` and `(company_id, identity_provider_id)` and by the Pundit policy `Web::Company::AuthPoliciesPolicy` for policy administration. AD-15's custom `Auth/` rubocop cop was not built, so the writer rule itself is kept by review.
 
 ## 8. Open questions
 

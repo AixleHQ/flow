@@ -17,7 +17,7 @@ Instead, an interactive session is **suspended**:
 |---|---|
 | 1 | Interactive `agent_session` sessions can be suspended, Aixle Builder included, and so can interactive workflow steps (§13). `auth_setup` and `tool_setup` never are |
 | 2 | Two triggers: reaching the 23-hour limit, and a **Suspend** button. **Finish** still finishes. A session whose container died is still failed: there is nothing left to save |
-| 3 | Restore creates a **new** session (`restored_from_session_id`). The suspended one becomes `restored` once the new one is running |
+| 3 | Restore creates a **new** session (`restored_from_session_id`). The suspended one becomes `restored` once the new one is `ready` |
 | 4 | Outputs are not turned into assets at suspend. The archive holds the whole `/workspace` apart from `repo/`, `assets/`, secret files and rebuildable directories (§4.1) |
 | 5 | Repositories: the branch and commit are recorded. Unpushed commits go into a `git bundle`, uncommitted changes into a patch, untracked files into a tarball, all inside the archive. Nothing is pushed to the customer's remote |
 | 6 | Assets are restored from the session's own `input_assets`, at their current version |
@@ -51,7 +51,7 @@ ready ──23-hour limit──────────────────�
 
 `Sessions::Suspension.supported?` is true for an `agent_session` in `interactive` mode, owned by a person. A session on an external runner also needs storage that signs uploads (§8).
 
-Today the final state is written by the cleanup activity with `update!`, not through an AASM event (`app/temporal/activities/container/admitted_phase_activity.rb`). `suspended` must be written in the same place, and the AASM events `suspend` / `mark_suspended` / `mark_restored` are added so the model agrees. The scanners that look for dead or stale sessions skip `suspended` and `restored`, which are terminal. `CleanupStaleActivity` gives a `finishing` session with the suspend flag the checkpoint's budget before it calls it stuck.
+Today the final state is written by the cleanup activity with `update!`, not through an AASM event (`app/temporal/activities/container/admitted_phase_activity.rb`). `suspended` is written in the same place, by `Sessions::Suspension.suspended!` with `update!`; the session has no `suspend` event. The AASM events for the moves after it are `mark_restored` (`suspended` → `restored`) and `expire_suspension` (`suspended` → `finished`). The scanners that look for dead or stale sessions skip `suspended` and `restored`, which are terminal. `CleanupStaleActivity` gives a `finishing` session with the suspend flag the checkpoint's budget before it calls it stuck.
 
 ### 3.2 The 23-hour limit
 
@@ -82,20 +82,22 @@ If the checkpoint fails (upload refused, archive over the cap, timeout), the ses
 One `tar.gz` per suspended session (gzip, so the expiry sweep can read it with Ruby's own `Zlib` and `Gem::Package::TarReader`). `Sessions::Checkpoint` runs `app/services/sessions/checkpoint.sh` inside the container (`bash -c <script> aixle-checkpoint <options>`, so the values travel as arguments, never spliced into the script). The script builds the archive and uploads it with a PUT to the URL `Uploads::ContainerTransfer` gives (§8); the manifest is recorded from what it printed. `Sessions::Restore` runs `restore.sh` the same way. Neither script is baked into the agent image, so a fix reaches containers that were already running.
 
 ```
-manifest.json
-workspace/          /workspace, except the paths below
-conversation/       the CLI's conversation files, relative to $HOME
+workspace.tar       /workspace, except the paths below
+conversation.tar    the CLI's conversation files, relative to $HOME
 repos/<key>/        per repository: head.bundle, tracked.patch, untracked.tar
 ```
 
-Left out of `workspace/`:
+The archive holds no manifest: `Sessions::Checkpoint` builds it from what the script printed and stores it
+in `session_checkpoints.manifest` (§4.4).
+
+Left out of `workspace.tar`:
 - `repo/`, which is handled per repository;
 - `assets/`, restored from the session;
 - `.mcp.json` and `.aixle/`, which hold secrets and are provisioned fresh, and `_bmad/`, which is installed again;
 - the agent's context file when it lives in `/workspace` (Cursor's `AGENTS.md`), which the new session writes again;
 - rebuildable directories at any depth: `node_modules`, `.venv`, `venv`, `__pycache__`, `.next`, `.turbo`, `.cache`, `.gradle`, `target`, `dist`, `build` (`Sessions::Checkpoint::REBUILDABLE_DIRS`). The manifest records what was left out.
 
-**Cap.** The cap is 2 GB compressed. If the full archive would exceed it, `workspace/` is dropped and the rest is kept. The conversation and the git work are small and matter most. The manifest records what was dropped and the session page says so.
+**Cap.** The cap is 2 GB compressed. If the full archive would exceed it, `workspace.tar` is dropped and the rest is kept. The conversation and the git work are small and matter most. The manifest records what was dropped and the session page says so.
 
 **Storage.** The archive is stored unmasked: Cursor and Antigravity keep their conversation in SQLite, and masking would corrupt it. It sits under a private prefix with server-side encryption, is read only by the restore path, and is deleted at restore expiry.
 
@@ -140,21 +142,25 @@ If the bundle does not apply, it is left at `/workspace/.aixle-restore/<key>.bun
 
 ### 4.4 The manifest
 
+Stored in `session_checkpoints.manifest` (`Sessions::Checkpoint#manifest`), not in the archive:
+
 ```json
 {
   "version": 1,
-  "session_id": 1234,
   "agent_type": "claude_code",
   "cli_version": "2.1.318",
   "conversation_id": "eb395f2d-…",
-  "suspended_at": "2026-11-20T10:00:00Z",
   "reason": "time_limit | user",
   "repos": [{ "repository_id": 7, "path": "repo/api", "branch": "feature/x", "head_sha": "…",
               "on_remote": false, "dirty": true, "bundle": true, "patch": true, "untracked": true }],
-  "workspace": { "included": true, "excluded": ["node_modules", "…"], "bytes": 12345 },
+  "missing_repos": ["9"],
+  "workspace": { "included": true, "excluded": ["node_modules", "…"] },
   "bytes": 23456
 }
 ```
+
+`missing_repos` lists the repositories whose checkout had no `.git` at suspend. The session itself and its
+`suspended_at` are on the row, not in the manifest.
 
 ## 5. Restore
 
@@ -172,10 +178,10 @@ If the bundle does not apply, it is left at `/workspace/.aixle-restore/<key>.bun
    - linked repositories, assets, tools, skills, MCP servers and config items.
 
    Validation, preflights and admission run as for any session. A resource that has since been archived or detached is left out and listed in the restore notice. A missing agent credential stops the restore with the usual error.
-2. The old row stays `suspended` until the new session reaches `running`, then becomes `restored`. A restore that fails at launch can be tried again.
+2. The old row stays `suspended` until the new session reaches `ready`, then becomes `restored` (`TerminalSession#on_ready` calls `Sessions::Suspension.restored!`). A restore that fails at launch can be tried again.
 3. Provisioning is the usual pipeline, with two changes:
    - Repositories are set up from the manifest (§4.3) instead of a plain clone.
-   - After provisioning and before the CLI starts, the archive is downloaded inside the container from the URL `Uploads::ContainerTransfer` gives (§8), and unpacked: `workspace/` over `/workspace`, `conversation/` into `$HOME`.
+   - After provisioning and before the CLI starts, the archive is downloaded inside the container from the URL `Uploads::ContainerTransfer` gives (§8), and unpacked: `workspace.tar` over `/workspace`, `conversation.tar` into `$HOME`.
 4. The CLI starts with the adapter's resume command (§5.3). A restore notice goes into the context file (§5.4). What the restore did is kept in `metadata.restore` (`resume`, `conversation_id`, `notes`); `Sessions::Restore.launch_command` reads it when the CLI is started.
 
 ### 5.3 Resume command
@@ -205,7 +211,7 @@ The notice tells the agent where the files are. Codex also needs the same OpenAI
 The notice is a section of the context file, not typed into the conversation. It says:
 - which session this continues, and when it was suspended;
 - that running processes are gone, and that packages and files outside `/workspace` are not restored;
-- what was not restored: a dropped `workspace/`, a bundle that did not apply, missing resources, a fresh conversation.
+- what was not restored: a dropped `workspace.tar`, a bundle that did not apply, missing resources, a fresh conversation.
 
 A restored session can itself be suspended and restored again.
 
@@ -216,8 +222,8 @@ A restored session can itself be suspended and restored again.
   - email the owner: which session, why (time limit or their own Suspend), and the date until which it can be restored, with a link;
   - pattern after `AgentCredentialMailer` / `TeamMailer`.
 - **Reminder:** three days before expiry, unless the session was restored.
-- **Sweep:** a daily Temporal cron, alongside `StaleSessionCleanupWorkflow`. It takes each `suspended` session past `restore_expires_at` and:
-  1. turns `workspace/outputs/` from the archive into assets, as a normal finish would have done;
+- **Sweep:** an hourly Temporal cron (`suspended_session_expiry_workflow` at :20, `app/temporal/schedules.yml`), alongside `StaleSessionCleanupWorkflow`. It takes each `suspended` session past `restore_expires_at` and:
+  1. turns `outputs/` inside the archive's `workspace.tar` into assets, as a normal finish would have done;
   2. deletes the archive;
   3. sets the state to `finished` with `metadata.suspend_expired = true`.
 
@@ -293,7 +299,6 @@ Not checked live: the 23-hour limit itself. It is covered by tests of `Sessions:
 - Checkpoints while a session runs, for containers that die. The `session_checkpoints` table leaves room for them.
 - Restoring as another person (handoff) and live sharing. See the research report §4–5.
 - Pinning asset versions at injection.
-- Workflow steps: retry already exists for them.
 - Anything outside `/workspace`: global installs, caches, `/tmp`, running processes.
 
 ## 12. Where the build differs from the proposal

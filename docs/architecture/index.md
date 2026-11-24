@@ -33,10 +33,11 @@ Core pattern: **PhaseActivity → ContainerService → Strategy → Runtime**
 |---------|---------|----------|
 | `DockerRuntime` | docker-api gem; `Docker::Container` | Local development (the default) |
 | `KubernetesRuntime` | kubeclient + websocket; Pods + Services + IngressRoutes | Production |
+| `RunnerRuntime` | Ops queued to the session's external runner machine (`Runners::Operations`) | Sessions on a company's or project's own runner |
 
-Runtime selected via `Settings.container_runtime` (`CONTAINER_RUNTIME`: `kubernetes` or `k8s` selects Kubernetes, anything else Docker).
+`ContainerRuntime.for_session` picks the runtime per session: `RunnerRuntime` for a session on a runner, otherwise the hosted runtime from `Settings.container_runtime` (`CONTAINER_RUNTIME`: `kubernetes` or `k8s` selects Kubernetes, anything else Docker).
 
-Both runtimes' `exec` return `[stdout, stderr, exit_code]`, with stdout and stderr as arrays of strings (Kubernetes splits its output into lines; Docker returns the daemon's chunks). `exec!` is the variant for callers that must tell "the container is gone" from "the command failed": on Kubernetes it raises `ContainerRuntime::ContainerUnreachableError` when the pod cannot be reached, instead of reporting exit code 1; Docker, which cannot tell the two apart, answers as `exec` does.
+The hosted runtimes' `exec` return `[stdout, stderr, exit_code]`, with stdout and stderr as arrays of strings (Kubernetes splits its output into lines; Docker returns the daemon's chunks). `exec!` is the variant for callers that must tell "the container is gone" from "the command failed": it raises `ContainerRuntime::ContainerUnreachableError` instead of reporting exit code 1, on Kubernetes when the pod cannot be reached and on Docker when the daemon does not know the container. `RunnerRuntime#exec!` raises it too when the runner reports the container gone.
 
 ### Agent Adapters
 
@@ -67,23 +68,25 @@ ContainerService merges returned hashes into shared state between phases.
 
 | Workflow | Started by | Does |
 |----------|------------|------|
-| `ContainerWorkflow` (`ContainerWorkflowV2` for sessions admitted through the queue) | A session, auth, or tool launch | The full container lifecycle, with signal support for interactive sessions |
-| `WorkflowExecutionWorkflow` (`…V2` when step sessions are queued) | A workflow run | Walks the run's steps and waits for each step's session |
+| `ContainerWorkflowV2` | Every session launch, agent logins included (`SessionLaunchRelay`, once the admission queue grants it) | The full container lifecycle, with signal support for interactive sessions |
+| `ContainerWorkflow` | A custom tool run (`Tool#execute`) | The tool container's lifecycle |
+| `WorkflowExecutionWorkflowV2` | Every workflow run (`TemporalWorkflowRegistry.start_workflow_execution`) | Walks the run's steps and waits for each step's session |
 | `ScheduledTriggerWorkflow` | A Temporal Schedule per schedule trigger | Fires the trigger binding |
 | Sweeps and syncs | `app/temporal/schedules.yml` | Stale sessions and runs, orphaned resources, token refresh, catalog syncs, and the other periodic jobs listed there |
+
+Nothing starts `WorkflowExecutionWorkflow`; it is `WorkflowExecutionWorkflowV2`'s parent class, as `ContainerWorkflow` is `ContainerWorkflowV2`'s.
 
 ### Error Handling
 
 - [Temporal Error Handling](./temporal-error-handling.md) — retryable vs non-retryable, benign exceptions
 - `TemporalExceptions.wrap(error, retryable:, benign:)` — wraps into `Temporalio::Error::ApplicationError`
-- `PhaseError` (from ContainerService) → non-retryable
-- `Docker::Error::DockerError` → retryable
+- `PhaseError` (from ContainerService) is classified by its `original_error` (`ContainerService::ErrorClassification`: transient → retryable, gone → non-retryable and benign during cleanup, anything else → non-retryable); the admitted launch path never retries a phase. See the [decision table](./temporal-error-handling.md#decision-table-what-to-do-with-an-error).
 
 ## Multi-tenancy
 
-Users belong to companies through `CompanyMembership` (a user can hold several). Polymorphic `scope` (Company or Project): Agent, Tool, Workflow, MCPServer, Skill, Asset, ConfigItem, Repository.
+Users belong to companies through `CompanyMembership` (a user can hold several). Resources carry a polymorphic `scope`, and almost all of them belong to one project: Agent, Skill, ConfigItem, Repository, custom Tool and custom MCPServer accept only `Project`. Workflow is `Project` or `System` (the platform's own). Asset and Folder are `Project` or `Company`, so only assets (and their folders) can be company-wide. Platform code tools and internal MCP servers are platform-owned and offered to every project.
 
-Visibility scopes: `Model.visible_for_project(project)` and `Model.visible_for_company(company)` (plus `for_project`/`for_company` for a single scope). `visible_for_project` is a union of Company-scoped and Project-scoped rows (System-scoped rows excluded); `visible_for_company` returns Company-scoped rows. No name-based override between scopes.
+Visibility scopes: `Model.visible_for_project(project)` is what a picker offers: the project's own rows, plus platform code tools (Tool), internal MCP servers (MCPServer) or the company's assets (Asset). `for_project` returns the project's rows only. `visible_for_company` exists only on Asset (the company's assets) and Tool (platform code tools, for project-less sessions). No name-based override between scopes.
 
 ## Data Model Highlights
 

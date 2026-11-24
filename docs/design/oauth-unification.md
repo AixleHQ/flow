@@ -1,8 +1,14 @@
 # RFC: Unified OAuth for Integrations, MCP Servers, and Agent Credentials
 
-**Status:** Draft
+**Status:** Built 2026-07-10 (#365), phases 1–3 of §6; phase 4 (the MCP proxy) is not built. What runs is described in [oauth-implementation.md](./oauth-implementation.md).
 **Date:** 2026-07-05
 **Scope:** Full OAuth token lifecycle (acquire via browser → store → refresh → deliver → revoke) for third-party providers (Sentry, Railway, …), user-added MCP servers, and agent CLI credentials.
+
+**Where the build departs from this RFC:**
+
+- The authorize endpoint is `POST /oauth/:provider/authorize`, not `GET` (§4.2). MCP connect is `POST /oauth/mcp/:mcp_server_id/connect`; its `GET` only sends the person to the server's page, because a GET must not start a flow.
+- An `oauth_clients` row can belong to one MCP server (`mcp_server_id`, unique when set): a client registered by hand at the provider (`source: manual`), for an authorization server that refuses to let us register, belongs to the server it was entered on, so another tenant's users never authorize into it. Discovered clients keep the `(issuer, client_id)` uniqueness of §4.1, and besides DCR they include CIMD (`source: cimd`), where our hosted `oauth/client-metadata.json` is the `client_id` and nothing is registered.
+- A refresh runs under a lease (`refresh_lease_token` / `refresh_lease_until`, `RefreshLease`), not inside `with_lock` (§4.4, §4.5): the provider call must not run in a database transaction, so the lease is taken and released by conditional updates and only the token write is locked. The lease was added in #309.
 
 ---
 

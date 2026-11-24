@@ -25,7 +25,7 @@ kept for Flow, or use a service account.
 
 ## With an Atlassian account
 
-1. On the project's **Integrations** page choose **Connect → Jira**, keep
+1. On the project's **Integrations** page choose **Connect → Atlassian → Jira**, keep
    **Atlassian account**, and select **Continue to Atlassian**.
 2. Sign in, pick the site, and accept the permissions.
 3. Back in Flow, pick the Jira projects to connect. If the account can reach
@@ -57,7 +57,7 @@ An Atlassian organization admin does this part once:
      `read:project:jira` — for the board's columns
 3. Copy the client ID and secret.
 
-Then in Flow: **Connect → Jira → Service account**, enter the site (for example
+Then in Flow: **Connect → Atlassian → Jira → Service account**, enter the site (for example
 `your-team.atlassian.net`), the client ID and the secret, select **Check**, and
 pick the Jira projects.
 
