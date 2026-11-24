@@ -632,7 +632,9 @@ class TerminalSession < ApplicationRecord
   # `notify` is false for the moves finalize makes: the run is woken once, by
   # Sessions::Lifecycle.slot_released, after the reservation is released (the parent
   # reads "unreleased + terminal" as `finishing`, so waking it earlier would start the
-  # next step before the capacity is back).
+  # next step before the capacity is back). The argument is temporary: #283 removes it,
+  # when the effects move into Sessions::Lifecycle.transition! (also for on_failed and
+  # on_cancelled).
   def on_finished(notify = true)
     assign_usage_totals
     self.finished_at = Time.current
@@ -640,6 +642,7 @@ class TerminalSession < ApplicationRecord
     ActiveRecord.after_all_transactions_commit { notify_workflow_execution_if_step_session } if notify
   end
 
+  # `notify` is temporary, removed by #283 (see on_finished).
   def on_failed(notify = true)
     assign_usage_totals
     self.finished_at = Time.current
@@ -649,6 +652,7 @@ class TerminalSession < ApplicationRecord
 
   # The container is still being torn down (by its own workflow), so it keeps
   # its id; the usage it ran up so far is recorded like any other ending.
+  # `notify` is temporary, removed by #283 (see on_finished).
   def on_cancelled(notify = true)
     assign_usage_totals
     self.finished_at = Time.current
