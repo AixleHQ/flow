@@ -34,6 +34,11 @@ class EntityVersionResource < ApplicationResource
     version.metadata["duplicated_from"]
   end
 
+  typelize :boolean
+  attribute :applied_from_draft do |version|
+    version.metadata.key?("applied_from_draft_id")
+  end
+
   typelize "number[]"
   attribute :disabled_trigger_ids do |version|
     Array(version.metadata["disabled_trigger_ids"])

@@ -1,6 +1,6 @@
 import { arrayMove } from '@dnd-kit/sortable';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Alert, Button, Group, Modal, Text, TextInput, Tooltip } from '@mantine/core';
+import { Alert, Badge, Button, Group, Modal, Text, TextInput, Tooltip } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconArrowLeft, IconDeviceFloppy, IconInfoCircle, IconPlayerPlay } from '@tabler/icons-react';
 import { useCallback, useMemo, useState } from 'react';
@@ -37,6 +37,8 @@ import { BaseResourcesTab } from './BaseResourcesTab';
 import { aggregatePayload, draftStep, draftSubStep, remapSelection, snapshotOf, stepKey } from './builderDraft';
 import classes from './BuilderPage.module.css';
 import { downstreamIds, type IssueFix, isPlainSpecName, sessionLabel, type WorkflowIssue } from './dataFlow';
+import { DraftActions } from './DraftActions';
+import { EditInDraftButton, SaveToLiveModal } from './LiveDraftControls';
 import { availableInputs, buildReferenceCatalog } from './referenceCatalog';
 import { SessionEditorPanel } from './SessionEditorPanel';
 import { SessionTreeNav } from './SessionTreeNav';
@@ -44,6 +46,8 @@ import type { Selection } from './SessionTreeNav';
 import { StepEditorPanel } from './StepEditorPanel';
 import { TriggersTab } from './TriggersTab';
 import { dataFlowKey, useWorkflowIssues } from './useWorkflowIssues';
+import { type DraftOf, type OpenDraft, useLeaveTo } from './workflowDraft';
+import { DraftOfBanner, OpenDraftBanner } from './WorkflowDraftBanners';
 
 type ProjectOrNull = Project | null;
 type AssetSpec = Step['outputAssetSpecs'][number];
@@ -81,6 +85,10 @@ interface Props {
   chatProviders?: ChatProviderOption[];
   /** Data-flow issues of the saved workflow; absent from a server that predates the check. */
   issues?: WorkflowIssue[];
+  draft?: OpenDraft | null;
+  draftOf?: DraftOf | null;
+  /** Enabled triggers and bound board columns that start this workflow. */
+  activeTriggerCount?: number;
 }
 
 interface AggregateResponse {
@@ -115,6 +123,9 @@ const BuilderPage = () => {
     triggerRepositories,
     chatProviders,
     issues: initialIssues,
+    draft: openDraft = null,
+    draftOf = null,
+    activeTriggerCount = 0,
   } = usePage<{ props: Props }>().props as unknown as Props;
   const { canExecute } = useProjectPermissions();
 
@@ -144,13 +155,15 @@ const BuilderPage = () => {
   const [saving, setSaving] = useState(false);
   // The Trackers and Triggers pages link straight to a workflow's triggers.
   const [activeTab, setActiveTab] = useState<string>(() =>
-    new URLSearchParams(window.location.search).get('tab') === 'triggers' ? 'triggers' : 'sessions',
+    !draftOf && new URLSearchParams(window.location.search).get('tab') === 'triggers' ? 'triggers' : 'sessions',
   );
   const [selection, setSelection] = useState<Selection | null>(() =>
     initialSteps.length > 0 ? { mode: 'session', sessionId: initialSteps[0].id } : null,
   );
   const [deleteStepConfirm, setDeleteStepConfirm] = useState<number | null>(null);
   const [runModalOpen, setRunModalOpen] = useState(false);
+  const [savePromptOpen, setSavePromptOpen] = useState(false);
+  const { leaving, leaveTo } = useLeaveTo();
 
   const sortedSteps = useMemo(() => [...steps].sort((a, b) => a.position - b.position), [steps]);
   const dirty = !readOnly && snapshotOf(workflow, steps) !== savedSnapshot;
@@ -381,7 +394,7 @@ const BuilderPage = () => {
       setSaving(false);
     }
   }, [projectId, workflow, sortedSteps, replaceIssues]);
-  useUnsavedChanges({ dirty, saving, onSave: save });
+  useUnsavedChanges({ dirty, saving: saving || leaving, onSave: save });
 
   // Derive selected session and step from selection state
   const selectedSession = useMemo(
@@ -443,6 +456,8 @@ const BuilderPage = () => {
                 : 'This is a company-level workflow. Copy it to your project to customize.'}
           </Alert>
         )}
+        {project && draftOf && <DraftOfBanner projectId={project.id} draftOf={draftOf} />}
+        {project && openDraft && <OpenDraftBanner projectId={project.id} workflowId={workflow.id} draft={openDraft} />}
 
         {/* ===== HEADER (AC3) ===== */}
         <div className={classes.builderHeader}>
@@ -497,13 +512,16 @@ const BuilderPage = () => {
                 onReverted={() => router.visit(window.location.pathname, { preserveState: false })}
               />
             )}
+            {project && !readOnly && !draftOf && !openDraft && (
+              <EditInDraftButton projectId={project.id} workflowId={workflow.id} dirty={dirty} onLeave={leaveTo} />
+            )}
             {project && !readOnly && (
               <Button
                 size="compact-sm"
                 leftSection={<IconDeviceFloppy size={14} />}
                 disabled={!dirty}
                 loading={saving}
-                onClick={() => void save()}
+                onClick={() => (activeTriggerCount > 0 ? setSavePromptOpen(true) : void save())}
               >
                 Save
               </Button>
@@ -538,9 +556,12 @@ const BuilderPage = () => {
                     transition: 'background 0.12s, border-color 0.12s',
                   }}
                 >
-                  <IconPlayerPlay size={12} /> Run
+                  <IconPlayerPlay size={12} /> {draftOf ? 'Test run' : 'Run'}
                 </button>
               </Tooltip>
+            )}
+            {project && !readOnly && draftOf && (
+              <DraftActions projectId={project.id} draftOf={draftOf} dirty={dirty} onLeave={leaveTo} />
             )}
           </div>
 
@@ -587,6 +608,11 @@ const BuilderPage = () => {
                 >
                   {workflow.scopeIndicator}
                 </span>
+                {draftOf && (
+                  <Badge color="yellow" variant="light" size="sm" style={{ flexShrink: 0 }}>
+                    Draft
+                  </Badge>
+                )}
               </div>
               {/* Row 3: editable description */}
               {readOnly ? (
@@ -611,16 +637,18 @@ const BuilderPage = () => {
 
         {/* ===== TAB BAR (AC4) ===== */}
         <div className={classes.builderTabBar}>
-          {(['sessions', 'triggers', 'base-resources'] as const).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              className={`${classes.builderTab} ${activeTab === tab ? classes.builderTabActive : ''}`}
-              onClick={() => setActiveTab(tab)}
-            >
-              {tab === 'sessions' ? 'Sessions' : tab === 'triggers' ? 'Triggers' : 'Base Resources'}
-            </button>
-          ))}
+          {(['sessions', 'triggers', 'base-resources'] as const)
+            .filter((tab) => !(draftOf && tab === 'triggers'))
+            .map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                className={`${classes.builderTab} ${activeTab === tab ? classes.builderTabActive : ''}`}
+                onClick={() => setActiveTab(tab)}
+              >
+                {tab === 'sessions' ? 'Sessions' : tab === 'triggers' ? 'Triggers' : 'Base Resources'}
+              </button>
+            ))}
         </div>
 
         {/* ===== TAB CONTENT ===== */}
@@ -756,13 +784,30 @@ const BuilderPage = () => {
       </Modal>
 
       {project && (
+        <SaveToLiveModal
+          opened={savePromptOpen}
+          onClose={() => setSavePromptOpen(false)}
+          projectId={project.id}
+          workflowId={workflow.id}
+          triggerCount={activeTriggerCount}
+          hasDraft={openDraft !== null}
+          aggregate={() => aggregatePayload(workflow, sortedSteps)}
+          onSaveToLive={() => {
+            setSavePromptOpen(false);
+            void save();
+          }}
+          onLeave={leaveTo}
+        />
+      )}
+
+      {project && (
         <RunWorkflowDrawer
           opened={runModalOpen}
           onClose={() => setRunModalOpen(false)}
           workflows={[
             {
               id: workflow.id,
-              name: workflow.name,
+              name: draftOf ? `${workflow.name} (draft)` : workflow.name,
               runnerId: workflow.runnerId ?? null,
               steps: steps.map((s) => ({
                 id: s.id,

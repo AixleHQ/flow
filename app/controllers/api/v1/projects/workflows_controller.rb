@@ -5,7 +5,7 @@ module Api
     module Projects
       class WorkflowsController < ApplicationController
         def show
-          workflow = Workflow.visible_for_project(current_project).find(params[:id])
+          workflow = Workflow.editable_for_project(current_project).find(params[:id])
           render json: WorkflowResource.new(workflow).to_h
         end
 

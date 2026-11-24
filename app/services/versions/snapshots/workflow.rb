@@ -10,13 +10,13 @@ module Versions
     class Workflow < Base
       FIELDS = %w[name description config runner_id].freeze
       EXCLUDED = %w[id scope_type scope_id project_id company_id published_at published_by_id deleted_at
-                    current_version_number created_at updated_at].freeze
+                    current_version_number created_at updated_at draft_of_id draft_base_version].freeze
       STEP_FIELDS = %w[id name instructions position agent_id preferred_model reasoning_effort required_agent_runtime
                        skip_policy on_failure max_retries bmad_enabled allow_non_interactive input_asset_specs
                        output_asset_specs depends_on_step_ids].freeze
-      STEP_EXCLUDED = %w[workflow_id deleted_at created_at updated_at].freeze
+      STEP_EXCLUDED = %w[workflow_id deleted_at created_at updated_at origin_step_id].freeze
       SUB_STEP_FIELDS = %w[id name instructions position required].freeze
-      SUB_STEP_EXCLUDED = %w[step_id deleted_at created_at updated_at].freeze
+      SUB_STEP_EXCLUDED = %w[step_id deleted_at created_at updated_at origin_sub_step_id].freeze
 
       # Step id lists and the resource model each one names. Ids of rows that no
       # longer exist at all are dropped on restore; archived ones are kept (the
