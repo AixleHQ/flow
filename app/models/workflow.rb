@@ -46,6 +46,9 @@ class Workflow < ApplicationRecord
 
   scope :active, -> { where(deleted_at: nil) }
   scope :not_drafts, -> { where(draft_of_id: nil) }
+  # The workflow and every draft it has had, open or closed: where a draft's test
+  # runs are listed under the workflow they tried out.
+  scope :with_drafts_of, ->(id) { where(id: id).or(where(draft_of_id: id)) }
   scope :published, -> { where.not(published_at: nil) }
   scope :published_in_company, ->(company) { active.published.belonging_to_company(company) }
   scope :system, -> { where(scope_type: "System") }

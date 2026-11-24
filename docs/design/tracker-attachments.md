@@ -1028,6 +1028,7 @@ All five providers were built in one change, from the API documentation, ahead o
 | Linear upload (§4.5) | — | The PUT goes to the host `fileUpload` names, through `SafeHttp`, with Linear's headers and never the credential | The signed host is Linear's choice and not documented |
 | GitHub storage switch (§11.2) | `settings.github_file_storage` | `project_trackers.settings.file_storage` (`repository` or `aixle_link`), switched by **Link files instead** on the tracker's row | Read by the exporter, not the provider, which serves every tracker of the connection |
 | GitHub fallback (§11.3) | Link to the task page | Files over 25 MB, refused by the repository, or with the switch on are attached to the run's task (`source: agent`) and the comment links the board page (`/board?n=<number>`); without a task they are refused with `not_stored` | — |
+| Image markup (§7.3) | A per-file `image?` flag on `tracker_attach_files` | No flag: a file is shown as an image when its content type is `image/*` (or its name has an image extension), and linked otherwise | — |
 | Card badge (§12.1) | "from APP-123" | The attachment row's subtitle starts with `from <key>` (`TaskAssetResource#tracker_issue_key`) | — |
 
 Not built: the per-provider `max_upload_bytes` for YouTrack (its limit is learned from the 413), and

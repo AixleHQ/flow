@@ -308,7 +308,7 @@ class Web::WorkspacesControllerTest < ActionDispatch::IntegrationTest
   test "someone with no company is sent here from anywhere else" do
     sign_in_as(create(:user, password: AuthHelper::TEST_PASSWORD))
 
-    get company_projects_path
+    get "/company/projects"
 
     assert_redirected_to new_workspace_path
   end

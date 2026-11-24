@@ -228,7 +228,7 @@ namespace :api, defaults: { format: :json } do
       end
     end
 
-    namespace :company do
+    scope "company/:company_slug", module: :company, as: :company do
       resources :assets, only: %i[create update destroy] do
         member do
           get :download
@@ -346,6 +346,8 @@ namespace :api, defaults: { format: :json } do
         end
       end
     end
+
+    match "company(/*rest)", to: "/web/unscoped_company_paths#show", via: :all, format: false, as: nil
   end
 end
 
@@ -451,6 +453,8 @@ scope module: :web, defaults: { format: :html } do
   get "templates", to: "templates#index", as: :templates
   get "templates/:namespace/:slug", to: "templates#show", as: :template,
                                     constraints: { namespace: /[a-z0-9-]+/, slug: /[a-z0-9-]+/ }
+  get "templates/:namespace/:slug/install", to: "templates#install", as: :install_template,
+                                            constraints: { namespace: /[a-z0-9-]+/, slug: /[a-z0-9-]+/ }
 
   get "login", to: "sessions#new", as: :login
   post "login", to: "sessions#create"
@@ -530,10 +534,11 @@ scope module: :web, defaults: { format: :html } do
   resource :onboarding, only: %i[show update], controller: "onboarding"
 
   # The organization-visible member profile. Company-scoped like everything
-  # under /company, but deliberately short and person-shaped: it is linked
-  # from every place a colleague's name appears, and "/company/users/12"
-  # would read as an admin screen rather than as that person's page.
-  get "user/:id", to: "company/users#show", as: :user, constraints: { id: /\d+/ }
+  # under /company, but person-shaped: it is linked from every place a
+  # colleague's name appears, and "/company/<slug>/users/12" would read as an
+  # admin screen rather than as that person's page.
+  get "company/:company_slug/user/:id", to: "company/users#show", as: :user, constraints: { id: /\d+/ }
+  get "user/:id", to: "unscoped_company_paths#show", constraints: { id: /\d+/ }
 
   # Slack OAuth callback — one deployment-wide redirect URI registered on the
   # Slack app; the project is carried in the signed `state`, not the path.
@@ -598,12 +603,22 @@ scope module: :web, defaults: { format: :html } do
   # the server's page instead: a GET must not start anything.
   get "oauth/mcp/:mcp_server_id/connect", to: "oauth#mcp_connect_page"
 
+  # A company's pages carry it in the path, /company/<slug>/…, so a link names
+  # its company and every tab stays in its own. Left unscoped is what belongs to
+  # no one company.
   namespace :company do
     post "switch", to: "switch#create", as: :switch
-    post "feedback", to: "feedback#create", as: :feedback
     # Self-removal ("Leave company" on the profile page) — id is the
     # MEMBERSHIP id, and it may belong to any of the user's companies.
     resources :memberships, only: %i[destroy]
+    # GitHub App setup callback: one global endpoint, registered on the App
+    # under this path; the project target is carried in `state`.
+    get "integrations/github_setup", to: "integrations/github_setup#github_setup",
+        as: :integrations_github_setup
+  end
+
+  scope "company/:company_slug", module: :company, as: :company do
+    post "feedback", to: "feedback#create", as: :feedback
     resources :members, only: %i[index create update destroy] do
       post :resend, on: :member
     end
@@ -660,10 +675,7 @@ scope module: :web, defaults: { format: :html } do
     # Directory sync (SCIM). One per company; the token is shown once.
     resource :scim_configuration, only: %i[create destroy]
     # Config items are Project-scoped only — managed under company/projects/:id/config_items.
-    # GitHub App setup callback (single global endpoint; project target carried in `state`).
     # Company-level integration management has been removed — integrations are project-scoped.
-    get "integrations/github_setup", to: "integrations/github_setup#github_setup",
-        as: :integrations_github_setup
     resources :template_installs, only: %i[new create]
     resources :projects, only: %i[index show create destroy] do
       scope module: :projects do
@@ -835,4 +847,8 @@ scope module: :web, defaults: { format: :html } do
       end
     end
   end
+
+  # Paths from before the slug, in links already sent and in pages loaded
+  # before the deploy: each goes on to the same path in its company.
+  match "company(/*rest)", to: "unscoped_company_paths#show", via: :all, format: false, as: nil
 end

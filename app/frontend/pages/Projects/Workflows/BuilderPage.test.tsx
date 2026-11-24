@@ -1374,6 +1374,7 @@ describe('Projects/Workflows/BuilderPage', () => {
       restoredFromNumber: null,
       baseline: false,
       duplicatedFromId: null,
+      appliedFromDraft: false,
       disabledTriggerIds: [],
     });
     answerFetch({
@@ -1629,8 +1630,8 @@ describe('Projects/Workflows/BuilderPage @ references and data-flow issues', () 
 // --- Drafts: a hidden copy edited in the same builder, applied onto the live workflow ---
 
 const DRAFT_ROUTE = 'POST /api/v1/projects/7/workflows/3/draft';
-const LIVE_URL = '/company/projects/7/workflows/3/builder';
-const DRAFT_URL = '/company/projects/7/workflows/3/draft';
+const LIVE_URL = '/company/acme/projects/7/workflows/3/builder';
+const DRAFT_URL = '/company/acme/projects/7/workflows/3/draft';
 
 const liveWithDraft = { id: 30, updatedAt: '2026-11-20T10:00:00Z', updatedBy: 'Ada' };
 const draftOf = (overrides: Record<string, unknown> = {}) => ({
@@ -1647,6 +1648,10 @@ const draftPageProps = (overrides: Record<string, unknown> = {}) =>
 const renameFirstSession = () => userEvent.type(screen.getByRole('textbox', { name: 'Session name' }), '!');
 
 describe('Projects/Workflows/BuilderPage drafts', () => {
+  // The builder is a company page: its links name the company the tab is on.
+  beforeEach(() => window.history.pushState({}, '', LIVE_URL));
+  afterEach(() => window.history.pushState({}, '', '/'));
+
   it('asks before saving a workflow that triggers run, and Save to live saves it', async () => {
     const { bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, { props: projectProps({ activeTriggerCount: 2 }) });
@@ -1768,32 +1773,28 @@ describe('Projects/Workflows/BuilderPage drafts', () => {
 
   it("on a draft's page says what runs where, test-runs the draft and leaves triggers to the live workflow", () => {
     window.history.pushState({}, '', `${DRAFT_URL}?tab=triggers`);
-    try {
-      renderAuthedPage(<BuilderPage />, {
-        props: draftPageProps({ draftOf: draftOf({ currentVersionNumber: 5, baseVersionNumber: 4 }) }),
-      });
+    renderAuthedPage(<BuilderPage />, {
+      props: draftPageProps({ draftOf: draftOf({ currentVersionNumber: 5, baseVersionNumber: 4 }) }),
+    });
 
-      expect(
-        screen.getByText(
-          'Draft of “Release pipeline”. Triggers and board columns keep running the live workflow (v5); runs started here run this draft.',
-        ),
-      ).toBeInTheDocument();
-      expect(
-        screen.getByText(
-          'The live workflow changed after this draft was made (v4 → v5). Applying the draft replaces those changes too.',
-        ),
-      ).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: 'Open live workflow' })).toHaveAttribute('href', LIVE_URL);
-      expect(screen.getByText('Draft')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Test run' })).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Run' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Edit in draft' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Triggers' })).not.toBeInTheDocument();
-      // The Sessions tab opens instead of the Triggers one the link asked for.
-      expect(screen.getByDisplayValue('Draft spec')).toBeInTheDocument();
-    } finally {
-      window.history.pushState({}, '', '/');
-    }
+    expect(
+      screen.getByText(
+        'Draft of “Release pipeline”. Triggers and board columns keep running the live workflow (v5); runs started here run this draft.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'The live workflow changed after this draft was made (v4 → v5). Applying the draft replaces those changes too.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open live workflow' })).toHaveAttribute('href', LIVE_URL);
+    expect(screen.getByText('Draft')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Test run' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Run' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit in draft' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Triggers' })).not.toBeInTheDocument();
+    // The Sessions tab opens instead of the Triggers one the link asked for.
+    expect(screen.getByDisplayValue('Draft spec')).toBeInTheDocument();
   });
 
   it("a test run is started from the draft and is named as the draft's", async () => {

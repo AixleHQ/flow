@@ -12,9 +12,9 @@ Versions are not repeated here: they live in `.ruby-version`, `Gemfile.lock`,
 
 **ORM:** ActiveRecord — primary for all operations.
 
-**Multi-tenancy:** Company → Project hierarchy with a polymorphic `scope` (Company/Project) on scoped resources. All tenant queries filter by `company_id`.
+**Multi-tenancy:** Company → Project hierarchy. Scoped resources carry a polymorphic `scope` and belong to one project, except assets (and their folders), which can also be company-wide, and the platform's own workflows (`System`). All tenant queries filter by `company_id`.
 
-**State machines:** AASM gem, in `app/state_machines/`. Five: `Company`, `CompanyMembership` (membership state + onboarding), `User` (account state), `TerminalSession`, `WorkflowRun`.
+**State machines:** AASM gem, in `app/state_machines/`: `Company`, `CompanyMembership` (membership state + onboarding), `User` (account state), `TerminalSession`, `WorkflowRun`, `Runner` (connection status), `RunnerEnvironment` (one runner machine) and `MarketplaceLicense` (an AWS Marketplace agreement).
 
 **Enums:** `enumerize` gem. Never `ActiveRecord::Enum`.
 
@@ -30,15 +30,15 @@ Versions are not repeated here: they live in `.ruby-version`, `Gemfile.lock`,
 
 ## Authentication & Authorization
 
-**Authentication:** email + password (`has_secure_password`, no Devise), Google OAuth via OmniAuth, and sign-up through an invitation. The Rails cookie store holds the session, and the cookie points at a server-side `UserSession` row, so signing out elsewhere takes effect immediately. No JWT.
+**Authentication:** email + password (`has_secure_password`, no Devise), Google and Microsoft via OmniAuth, per-company OIDC SSO (`openid_connect`), passkeys (`webauthn`), emailed magic links, TOTP as a step-up factor (never a sign-in on its own), and sign-up through an invitation. A company's directory can provision members over SCIM 2.0 (`scimitar`). The Rails cookie store holds the session, and the cookie points at a server-side `UserSession` row, so signing out elsewhere takes effect immediately. No JWT.
 
-**Other principals:** a personal MCP token per user (the `/mcp` endpoint); per-session keys for agent containers (MCP, credential vending, credential write-back, usage ingest); inbound webhooks that verify their own signature or secret (GitHub, GitLab, Azure DevOps, Slack, the generic `/webhooks/in/:slug`); HTTP Basic for `/api-docs` outside development.
+**Other principals:** a personal MCP token per user, and the OAuth access tokens Flow issues as the personal MCP server's authorization server (`/mcp-oauth/*`), both on the `/mcp` endpoint; per-session keys for agent containers (MCP, credential vending, credential write-back, usage ingest); a company's SCIM bearer token (`/scim`); runner credentials on the runner gateway (`/runner/v1/*`); the runner-relay's internal token (`/api/v1/internal/runner_relay/*`); inbound webhooks that verify their own signature or secret (GitHub, GitLab, Bitbucket Forge, Azure DevOps, Slack, Teams, Stripe, the tracker webhooks under `/webhooks/trackers/`, the generic `/webhooks/in/:slug`); HTTP Basic for `/api-docs` outside development.
 
 **Authorization:** Pundit policies. Auto-matched to controllers via `AuthorizationConcern#dynamic_authorize!`. Policy hierarchy mirrors controller namespace hierarchy. `deny_read_only_mutation!` backs the policies up by refusing writes from read-only members.
 
 **Roles:** per company, on `CompanyMembership`: `admin`, `employee`, `viewer` (read-only). The platform super admin is the `super_admin` flag on `User`, seeded by `db/seeds.rb` and managed from `/admin`; super admins hold no memberships.
 
-**Multi-tenancy auth:** a user can belong to several companies. The request's company is the session's active membership (`AuthConcern#current_membership`: the company switcher's choice, then the last company used, then the oldest membership), re-checked against active memberships on every request. Project access (`Project#accessible_by?`): the project's owner, a company admin, or a project collaborator, each with an active membership in the project's company.
+**Multi-tenancy auth:** a user can belong to several companies. Company pages and the company API name their company in the path (`/company/<slug>/…`, `/api/v1/company/<slug>/…`), and that company is the request's company (`AuthConcern#current_membership`); a slug the user has no active membership in is answered 404. Only a path without a slug falls back to the session's last company (the company switcher's choice), then the last company the user used, then the oldest membership. Either way the membership is re-checked against active memberships on every request. Project access (`Project#accessible_by?`): the project's owner, a company admin, or a project collaborator, each with an active membership in the project's company.
 
 ---
 
@@ -54,12 +54,13 @@ Versions are not repeated here: they live in `.ruby-version`, `Gemfile.lock`,
 **Runtimes:**
 - `DockerRuntime` — docker-api gem, local Docker daemon; the default, used for local development
 - `KubernetesRuntime` — kubeclient + websocket, Kubernetes Pods + Services + Traefik IngressRoutes; the production runtime
+- `RunnerRuntime` — a session on an external runner (a company's or project's own machines): each runtime call is an op queued to the session's runner machine. `ContainerRuntime.for_session` picks it for a session with a runner; every other session gets the hosted runtime above
 
 **Phase lifecycle:** `pull_image → create_container → start_container → exec → cleanup` with `before_/after_` hooks.
 
 **Orchestration:** Temporal workflows. `ContainerWorkflow` manages full container lifecycle with signal support for interactive sessions.
 
-**Agent adapters:** Per-runtime credential/config handling in `app/services/agents/`, one per runtime: `ClaudeCodeAdapter`, `CursorCliAdapter`, `CodexAdapter`, `GeminiCliAdapter`, `AntigravityCliAdapter`, `GrokAdapter`, `KiroCliAdapter`. Each defines auth paths, config generation, and where usage comes from (OTLP telemetry, the MITM proxy log, or the CLI's own output).
+**Agent adapters:** Per-runtime credential/config handling in `app/services/agents/`, one per runtime: `ClaudeCodeAdapter`, `CursorCliAdapter`, `CodexAdapter`, `GeminiCliAdapter`, `AntigravityCliAdapter`, `GrokAdapter`, `KiroCliAdapter`, `CopilotCliAdapter`. Each defines auth paths, config generation, and where usage comes from (OTLP telemetry, the MITM proxy log, or the CLI's own output).
 
 ---
 
@@ -79,9 +80,9 @@ Versions are not repeated here: they live in `.ruby-version`, `Gemfile.lock`,
 
 **Case conversion:** snake_case in Ruby; camelCase in TS. Done server-side — incoming params are underscored by `ApplicationController#underscore_params`; outgoing, Alba `transform_keys :lower_camel` plus `DeepKeyCamelizer`, which `config/initializers/inertia.rb` installs as Inertia's `prop_transformer`; Typelizer emits camelCase TS types.
 
-**Real-time:** Inertia Cable signed streams only — no custom ActionCable channels. A page that has authorized its viewer renders the signed stream name as a prop, so only that viewer can subscribe. Models send refresh signals (`broadcasts_to`, which reloads the page's props) or, for the session and run lists, id-only row updates (`session_update` / `run_update`); the list fetches those rows back through its own authorized endpoint (`GET /company/sessions/rows`, `GET /company/projects/:id/sessions/rows`), serialized for that viewer. A broadcast never carries a payload, because one message reaches every subscriber and cannot be redacted per viewer. The cable connection refuses anyone without a live sign-in.
+**Real-time:** Inertia Cable signed streams only — no custom ActionCable channels. A page that has authorized its viewer renders the signed stream name as a prop, so only that viewer can subscribe. Models send refresh signals (`broadcasts_to`, which reloads the page's props) or, for the session and run lists, id-only row updates (`session_update` / `run_update`); the list fetches those rows back through its own authorized endpoint (`GET /company/:company_slug/sessions/rows`, `GET /company/:company_slug/projects/:id/sessions/rows`), serialized for that viewer. A broadcast never carries a payload, because one message reaches every subscriber and cannot be redacted per viewer. The cable connection refuses anyone without a live sign-in.
 
-**Internal endpoints:** `/api/v1/internal/` — the Traefik ForwardAuth check for container terminals (`ws_auth`) and OTLP usage ingestion. No user-facing Pundit; each authenticates its caller itself (see [API reference](../reference/api.md#authentication)).
+**Internal endpoints:** `/api/v1/internal/` — the Traefik ForwardAuth check for container terminals (`ws_auth`), OTLP usage ingestion, and the runner-relay service's calls (`runner_relay/holders`, `runner_relay/checks`). No user-facing Pundit; each authenticates its caller itself (see [API reference](../reference/api.md#authentication)).
 
 ---
 

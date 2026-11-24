@@ -1,10 +1,18 @@
 # Session launch queues and concurrency limits
 
-Date: 2026-09-05. Status: design proposal with implementation underway.
+Date: 2026-09-05. Status: Built 2026-09-05 (#201); decision A1 has since been replaced.
 
 Inspected checkouts: app@32efafaa and aixle-infra@c4bff01. Live cluster configuration and production database records were not inspected.
 
-The current activation and recovery procedure is in [ROLLOUT.md](ROLLOUT.md). Implementation adjustments take precedence over the detailed proposal below: short admission transactions serialize on one policy row; uncertain create/start/exec requires operator-confirmed fencing; activation follows a complete legacy producer/worker drain. Marketplace entitlement APIs are outside this change. An absent ENV always selects project/user fallback queues.
+Where the build departs from the proposal below:
+
+- **A1 is replaced.** There is no installation-wide cap: `SESSION_CONCURRENCY_LIMIT` is read by nothing. The budget is each company's own limit (a `SessionConcurrencyLimit` row with scope `Company`), a ceiling over that company's project queues, and a project limit is a reservation drawn from it (#297, after #278 had made the variable a ceiling over project queues).
+- **Admission is always on** and cannot be paused; there is no activation step and no drain-gated cutover (#325).
+- **The user queue has a fixed size.** A session with a project always joins its project's queue. A session without one, in practice an agent login, joins its user's queue, two at a time (`SessionAdmissionService::AUTH_POOL_LIMIT`), outside any company's limit (#325); there is no user-scoped limit to configure.
+- **A pinned reservation is released automatically** once the workload's absence has been proven for a confirmation window (#286). Operator-confirmed fencing is needed only when that release is switched off.
+- Short admission transactions serialize on one policy row. Marketplace entitlement APIs are outside this change.
+
+Operations are in [ROLLOUT.md](ROLLOUT.md).
 
 ## 1. Proposed solution
 
@@ -97,7 +105,7 @@ These are declaration-based estimates, not measured production limits. Overrides
 | [Run stale scanner](../../../app/temporal/activities/workflow/cleanup_stale_runs_activity.rb) | Age-only 4-hour running/paused threshold |
 | [OutboxRelay](../../../app/services/outbox_relay.rb) and [GateReconciler](../../../app/services/gate_reconciler.rb) | Existing durable delivery and reconciliation patterns with external work after commit |
 | [Orphan sweeper](../../../app/temporal/activities/container/sweep_orphaned_resources_activity.rb) | Route-token ownership, 10-minute sweep and 15-minute age guard; too slow for ordinary slot release |
-| [Production HPA](../../../../aixle-infra/kube/prod/15-hpa.yaml) | Web/MCP: 2-6 replicas; workers: 1-4; process-local counters are insufficient |
+| Production HPA (`kube/prod/15-hpa.yaml` in aixle-infra) | Web/MCP: 2-6 replicas; workers: 1-4; process-local counters are insufficient |
 
 ## 3. Limit selection
 
@@ -294,7 +302,7 @@ Use idempotent endpoint creation and bounded readiness probes, with retry timers
 
 **Assumption A5:** runtime capacity waiting consumes the existing 24-hour container execution budget, with earlier operational alerts. Exhaustion produces an infrastructure error and cleanup. Do not send an admitted agent back to the business queue automatically.
 
-A DB-only queue does not stimulate the cluster autoscaler; admitted unschedulable Pods do. Choose N with node capacity, Pod requests/limits and platform/tool workloads in mind. N does not guarantee available RAM. [Autoscaler manifest](../../../../aixle-infra/kube/prod/14-cluster-autoscaler.yaml)
+A DB-only queue does not stimulate the cluster autoscaler; admitted unschedulable Pods do. Choose N with node capacity, Pod requests/limits and platform/tool workloads in mind. N does not guarantee available RAM. Autoscaler manifest: `kube/prod/14-cluster-autoscaler.yaml` in aixle-infra.
 
 ## 8. Reconciliation and operations
 
@@ -324,7 +332,7 @@ Operational diagnostics should expose queue age/depth, occupied capacity, dispat
 2. Deployment applies migrations and explicitly syncs ENV into DB policy. Existing workloads use envFrom; changing ENV requires process recreation, but worker boots must not overwrite policy. [ConfigMaps](https://kubernetes.io/docs/concepts/configuration/configmap/)
 3. Use an operational admission pause for cutover. Replicas may scale independently of the shared DB cap.
 4. Inventory exact legacy aixle-resource-quota objects using runtime-origin/scope ownership on the Namespace. Quotas themselves lack these labels. Record an audited UID allowlist; changed UIDs require re-review.
-5. Cleanup needs list/delete permissions on an appropriate migration identity. Existing [runtime RBAC](../../../../aixle-infra/kube/prod/06-rbac-runtime.yaml) supplies create/get/update for quotas. Retire unnecessary rights after cleanup.
+5. Cleanup needs list/delete permissions on an appropriate migration identity. Existing runtime RBAC (`kube/prod/06-rbac-runtime.yaml` in aixle-infra) supplies create/get/update for quotas. Retire unnecessary rights after cleanup.
 6. Preserve namespace isolation, network policies, secrets, routing and per-Pod resources. No extra Redis, broker or Terraform resource is needed for admission.
 
 If independent safety quotas remain, document them separately and verify compatibility with N. Do not silently retain old 4000m/8Gi limits as a second business cap.

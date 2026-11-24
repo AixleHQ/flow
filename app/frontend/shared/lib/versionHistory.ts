@@ -9,7 +9,7 @@ export function describeVersion(version: EntityVersion): string {
     case 'created':
       return version.duplicatedFromId ? 'Created as a copy' : 'Created';
     case 'saved':
-      return 'Saved';
+      return version.appliedFromDraft ? 'Applied from draft' : 'Saved';
     case 'reverted':
       return `Reverted to v${version.restoredFromNumber ?? '?'}`;
     case 'archived':

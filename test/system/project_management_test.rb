@@ -13,7 +13,7 @@ class ProjectManagementTest < ApplicationSystemTestCase
   end
 
   test "an authenticated user creates a project" do
-    assert_current_path "/company/projects", wait: 10
+    assert_current_path "/company/#{@company.slug}/projects", wait: 10
     projects = ProjectsPage.new
 
     projects.create_project(name: "Launch Rocket")

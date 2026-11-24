@@ -194,6 +194,11 @@ module PersonalTools
       workflow
     end
 
+    # A draft carries the live workflow's name, so a run of it says so itself.
+    def draft_fields(run)
+      { draft_test: run.workflow&.draft? || false, draft_of_workflow_id: run.workflow&.draft_of_id }
+    end
+
     def find_step!(workflow, id = params[:step_id])
       step = workflow.steps.not_deleted.find_by(id: id)
       raise NotFoundError, "Step #{id} not found in this workflow" unless step

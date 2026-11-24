@@ -64,7 +64,10 @@ module Trackers
     end
 
     def run_url(run)
-      "https://#{Settings.domain}/company/projects/#{run.project_id}/workflow_runs/#{run.id}"
+      path = Rails.application.routes.url_helpers.company_project_workflow_run_path(
+        run.project_id, run.id, company_slug: run.project.company.slug
+      )
+      "https://#{Settings.domain}#{path}"
     end
   end
 end

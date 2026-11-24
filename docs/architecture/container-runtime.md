@@ -1,18 +1,23 @@
 # Container Runtime & Service
 
-This document covers two related but distinct angles of the container execution
-stack:
+**Historical: both halves of this document are design records, kept as written. Neither
+describes the system today.** The current runtimes (Docker in development, Kubernetes in
+production, `RunnerRuntime` for sessions on a company's or project's own runners) and how
+one is picked are in [index.md](./index.md#runtimes-where-to-run); the interface is
+`ContainerRuntime::BaseRuntime` (`app/services/container_runtime/base_runtime.rb`).
 
-1. **The pluggable container runtime** — an abstraction that lets the same
-   Temporal workflows and container strategies run on either Docker or
-   Kubernetes Pods (Epic 14 PoC, targeting local Orbstack Kubernetes).
-2. **The ContainerService refactoring (historical record)** — a phase-based
-   redesign of `ContainerService`, the strategy hierarchy, and the Temporal
-   activities/workflow that unified agent and tool execution.
-
-The runtime abstraction is the forward-looking design. The ContainerService
-refactoring is preserved below as a period snapshot; its naming (notably
-`ToolExecutionStrategy`) is period-accurate and left as written.
+1. **The pluggable container runtime** — the Epic 14 PoC design that introduced the
+   Docker/Kubernetes abstraction, scoped to local Orbstack Kubernetes. Where it differs
+   from the code: the runtime interface reads and writes files with `read_file` /
+   `write_file` (there is no `copy_from`); `ws_auth` admits a viewer the session's
+   container is accessible to (`TerminalSession#container_accessible_by?`; the `tty`,
+   `ide` and `upload` surfaces only its owner), and only while the session is `ready`;
+   run outputs are Shrine-backed assets, not database fields; and it has no
+   `RunnerRuntime`.
+2. **The ContainerService refactoring** — a phase-based redesign of `ContainerService`,
+   the strategy hierarchy, and the Temporal activities/workflow that unified agent and
+   tool execution. Its naming (notably `ToolExecutionStrategy`) is period-accurate and
+   left as written.
 
 ## Table of contents
 
@@ -39,7 +44,7 @@ refactoring is preserved below as a period snapshot; its naming (notably
   - [Acceptance Criteria Coverage](#acceptance-criteria-coverage)
 - [ContainerService Refactoring (historical record)](#containerservice-refactoring-historical-record)
   - [Motivation](#motivation)
-  - [Target Architecture](#target-architecture-refactoring)
+  - [Target Architecture](#target-architecture-1)
   - [Components](#components)
   - [Implementation Order](#implementation-order)
 

@@ -81,6 +81,10 @@ sentry:
 # explicitly only to offer LESS than what is configured.
 auth:
   enabled_kinds: <%= ENV['AUTH_ENABLED_KINDS'] %>
+  # Signed-in browser sessions (UserSession): ended after this many hours unused,
+  # and after this many in all, whatever the use.
+  session_idle_timeout_hours: <%= ENV.fetch('SESSION_IDLE_TIMEOUT_HOURS', 336).to_i %>
+  session_max_age_hours: <%= ENV.fetch('SESSION_MAX_AGE_HOURS', 720).to_i %>
 
 database:
   name: <%= ENV['DB_NAME'] %>
@@ -175,12 +179,6 @@ temporal:
   # decision, not part of fixing the pool arithmetic. RAILS_MAX_THREADS still
   # feeds it where a deployment sets one value for the whole image.
   worker_max_threads: <%= (ENV['TEMPORAL_WORKER_MAX_THREADS'] || ENV['RAILS_MAX_THREADS'] || 5).to_i %>
-
-# Signed-in browser sessions (UserSession): ended after this many hours unused,
-# and after this many in all, whatever the use.
-auth:
-  session_idle_timeout_hours: <%= ENV.fetch('SESSION_IDLE_TIMEOUT_HOURS', 336).to_i %>
-  session_max_age_hours: <%= ENV.fetch('SESSION_MAX_AGE_HOURS', 720).to_i %>
 
 # The Content-Security-Policy (config/initializers/content_security_policy.rb) is
 # only reported until this is true; base-uri, object-src and frame-ancestors are

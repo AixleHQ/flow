@@ -51,6 +51,7 @@ module PersonalTools
       row = payload(execute)["runs"].find { |r| r["id"] == run.id }
 
       assert_equal "Nightly triage", row["workflow_name"]
+      assert_equal [ false, nil ], row.values_at("draft_test", "draft_of_workflow_id")
       assert_equal 400, row["total_tokens"]
       assert_equal 40, row["cost_cents"]
       assert_equal 1, row["steps_completed"]

@@ -352,6 +352,32 @@ class SessionsRunsFeedTest < ActiveSupport::TestCase
     assert_equal [ { id: @workflow.id, name: "Weekly GA report" } ], feed.workflow_options
   end
 
+  # Each draft is its own hidden workflow row, and a workflow has one after another.
+  def draft_test_run(actor)
+    draft = WorkflowDrafts.open!(@workflow, actor: actor)
+    run = create(:workflow_run, workflow: draft, project: @project, user: @user)
+    WorkflowDrafts.discard!(draft, actor: actor)
+    run
+  end
+
+  test "a draft's test runs are listed under the workflow it tried out, as one option, and named as the draft's" do
+    actor = Versions::Actor.ui(@user)
+    live_run = create(:workflow_run, workflow: @workflow, project: @project, user: @user)
+    test_runs = Array.new(2) { draft_test_run(actor) }
+
+    assert_equal [ { id: @workflow.id, name: "Weekly GA report" } ], feed.workflow_options
+    assert_equal [ live_run, *test_runs ].map(&:id).sort,
+                 feed(filters: { workflow_id: @workflow.id }).page(page: 1, limit: 10).entries.map { |e| e.record.id }.sort
+    assert_equal [ "Weekly GA report", "Weekly GA report (draft)" ],
+                 [ live_run, test_runs.first ].map { |run| RunListEntryResource.new(run.reload).to_h["name"] }
+  end
+
+  test "a draft's test run alone still names its workflow among the options" do
+    draft_test_run(Versions::Actor.ui(@user))
+
+    assert_equal [ { id: @workflow.id, name: "Weekly GA report" } ], feed.workflow_options
+  end
+
   test "user_options lists only people who have run something here" do
     standalone
     create(:workflow_run, workflow: @workflow, project: @project, user: @other)

@@ -18,12 +18,12 @@ class AssetUploadTest < ApplicationSystemTestCase
     @user = create(:user, :admin, :onboarding_completed, company: @company,
                                   password: AuthHelper::TEST_PASSWORD)
     LoginPage.new.tap(&:load).sign_in(@user.email, AuthHelper::TEST_PASSWORD)
-    assert_current_path "/company/projects", wait: 10
+    assert_current_path "/company/#{@company.slug}/projects", wait: 10
   end
 
   test "an authenticated user uploads a file and it becomes a company asset" do
     assets = CompanyAssetsPage.new
-    assets.load
+    assets.load(company_slug: @company.slug)
 
     assets.upload(text_fixture.to_s, folder: "docs")
     assets.open_folder("docs")
@@ -43,7 +43,7 @@ class AssetUploadTest < ApplicationSystemTestCase
     path.write("{ not valid json,,,")
 
     assets = CompanyAssetsPage.new
-    assets.load
+    assets.load(company_slug: @company.slug)
     assets.upload(path.to_s)
 
     assert_text path.basename.to_s, wait: 15

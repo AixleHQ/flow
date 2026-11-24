@@ -106,7 +106,7 @@ A member is a candidate when all of these hold:
 2. the member holds a credential for **every runtime the run will need**: each
    step's `required_agent_runtime`, plus the run's `agent_runtime` if one was
    requested. Steps with no pinned runtime resolve from the member's own default
-   (`SessionService`, `app/services/session_service.rb:217`), so they need no more
+   (`SessionService.build_for_workflow_step`), so they need no more
    than one credential of any kind;
 3. each of those credentials is a working login: `active` (not condemned by the
    refresh sweep) and not `unrecoverably_expired?` — the test
@@ -116,7 +116,7 @@ A member is a candidate when all of these hold:
 
 Rule 2 also closes a gap that exists today for single assignees: an assignee with
 some credential, but not the runtime a step pins, gets a nil credential and the step
-dies on the CLI's login error (comment at `app/services/task_service.rb:405`).
+dies on the CLI's login error (comment above `TaskService.can_own_runs_in?`).
 
 ### Strategies
 
@@ -245,7 +245,7 @@ A run without a team behaves as before.
 
 ## Surfaces
 
-- **Project → Teams** (`/company/projects/:id/teams`, the sidebar item after
+- **Project → Teams** (`/company/:company_slug/projects/:id/teams`, the sidebar item after
   Members; `Web::Company::Projects::TeamsController`). One card per team: its
   strategy; its members in order, each with whether they can take a run now
   (Ready, On hold until a date, Login expired, or Can't take runs, the reason on hover); the

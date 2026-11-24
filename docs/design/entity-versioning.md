@@ -399,6 +399,14 @@ The implementation follows this RFC with these differences and specifics:
   and `WorkflowStepSync`, the one writer behind both a workflow revert and the
   builder's Save. Models include `Versioned`; agents, skills and MCP servers
   also `Archivable`.
+- **Write-path names differ from §4.2, §5.1 and §6.1.** The entry point is
+  `Versions.save!(record, actor:, base_version: nil, metadata: {})`. `actor` is a
+  `Versions::Actor` value (`user`, `source`, `session`) built by `Actor.ui`,
+  `Actor.api`, `Actor.system` or `Actor.mcp(user, session:)`, which gives source
+  `builder` when a session is passed and `mcp` otherwise. One class per type,
+  `Versions::Snapshots::<Type>`, both dumps and restores; `Versions::Snapshot`
+  picks it. There is no `Versions::Restore`: a revert calls
+  `Versions::Snapshot.restore!(record, snapshot)`.
 - **Baseline is lazy.** An entity that predates version history gets a
   `created` version with `metadata.baseline = true` (source `system`) from its
   state just before its first change — or at its first launch, when a run

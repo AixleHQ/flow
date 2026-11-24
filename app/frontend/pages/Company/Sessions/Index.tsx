@@ -7,6 +7,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { AuthLayout } from 'layouts/AuthLayout';
 
 import { SessionFeedTable, type SessionFeedRow } from 'shared/resources/sessions/SessionFeedTable';
+import { companySessionsPath } from 'shared/routes';
 import { AGENT_SELECT_OPTIONS } from 'shared/ui/agentRuntimes';
 import {
   DateRangeFilter,
@@ -74,8 +75,6 @@ const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pending' },
 ];
 
-const SESSIONS_URL = '/company/sessions';
-
 const SessionsIndex = ({
   sessions,
   filters,
@@ -99,7 +98,7 @@ const SessionsIndex = ({
       }
       const q = listQueryParams({ ...query, ...nextQuery });
       if (q) merged.q = q;
-      router.get(SESSIONS_URL, merged, { preserveState: true, preserveScroll: true });
+      router.get(companySessionsPath(), merged, { preserveState: true, preserveScroll: true });
     },
     [filters, query],
   );

@@ -1069,19 +1069,19 @@ module Agents
       { status: "unavailable" }
     end
 
+    # platform.claude.com is where the CLI renews its own OAuth grant. Without it the log
+    # showed inference traffic only, and the question the 2026-09-05 incident left open —
+    # whether a container rotated the grant out from under us or it simply aged out — had
+    # no data anywhere. The endpoint, status and timing are the whole point.
+    def mitm_tracked_domains
+      %w[api.anthropic.com platform.claude.com console.anthropic.com]
+    end
+
     # Default environment variables for Claude Code runtime. `callbacks` are the
     # session's callback addresses (ContainerRuntime::CallbackUrls); without an
     # OTLP endpoint (a runner session) the CLI's telemetry stays off.
     def default_env_vars(session, callbacks:)
       {
-        # MITM proxy — intercept Anthropic API traffic
-        "MITM_LOG_PATH" => "/var/log/mitm/http.log",
-        # platform.claude.com is where the CLI renews its own OAuth grant. Without it the
-        # log showed inference traffic only, and the question the 2026-09-05 incident left
-        # open — whether a container rotated the grant out from under us or it simply aged
-        # out — had no data anywhere. Bodies for that host are dropped by the logger; the
-        # endpoint, status and timing are the whole point.
-        "MITM_TRACKED_DOMAINS" => "api.anthropic.com,platform.claude.com,console.anthropic.com",
         # OTLP telemetry
         **telemetry_env(session, callbacks[:otel]),
         # MCP server startup timeout (ms). Default 90s — stdio servers need time for pipx/npx cold start.

@@ -17,6 +17,7 @@ import { useRef, useState } from 'react';
 import { formatFileSize } from 'shared/lib/formatFileSize';
 import { pastedImages } from 'shared/lib/imagePaste';
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
+import { companyFeedbackPath } from 'shared/routes';
 
 type FeedbackKind = 'bug' | 'feature_request' | 'support';
 
@@ -89,7 +90,7 @@ export const FeedbackModal = ({ opened, onClose }: FeedbackModalProps) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     transform((d) => ({ feedback: { ...d, page_url: window.location.href } }));
-    post('/company/feedback', {
+    post(companyFeedbackPath(), {
       preserveScroll: true,
       // A refused message comes back to this page: keep the dialog open with what was typed.
       preserveState: true,

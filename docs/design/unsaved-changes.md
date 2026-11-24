@@ -7,8 +7,10 @@ and the inventory of every form in the frontend it was checked against.
 
 `app/frontend/shared/lib/unsaved-changes/`:
 
-- `useUnsavedChanges({ dirty, opened?, onClose?, onSave? })` registers a form
-  and returns its close handler. A dialog or drawer passes that handler as its
+- `useUnsavedChanges({ dirty, saving, opened?, onClose?, onSave? })` registers a
+  form and returns its close handler. `saving` is required: `true` while a
+  request that saves the form is in flight, `false` for a form with no request
+  of its own. A dialog or drawer passes that handler as its
   `onClose` and to its Cancel button; a page-level form ignores it.
 - `guards.ts` keeps the registry of mounted forms and the one set of listeners
   for every way out: an Inertia visit (`router.on('before')`), browser
@@ -44,8 +46,9 @@ success), or a snapshot taken at mount.
 
 - the form is not dirty, or is closed — a dialog that stays mounted keeps its
   state, so `opened` must be passed;
-- a save is in flight or has just succeeded — pass `dirty: false` while saving,
-  and reset the baseline on success;
+- a save is in flight or has just succeeded — pass `saving: true` while saving
+  (the hook decides; never fold it into `dirty`), and reset the baseline on
+  success;
 - the user chose Cancel and then Discard — the question is the confirmation;
 - the visit stays on the same page: a reload, a partial reload, a filter or tab
   in the query string, a prefetch, or any non-GET visit (a save — sign-out is

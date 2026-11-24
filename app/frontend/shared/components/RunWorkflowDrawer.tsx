@@ -11,6 +11,7 @@ import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { RunnerCredentialNote, RunnerSelect } from 'shared/resources/runners/runnerChoice';
 import { runnerUnusableReason } from 'shared/resources/runners/runnerCopy';
+import { companyProjectWorkflowRunsPath } from 'shared/routes';
 import { NO_AGENT_CREDENTIALS } from 'shared/ui/agentRuntimes';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 import { FormSection, ModeCards, RuntimeTiles, StatusTag } from 'shared/ui/sessions';
@@ -195,7 +196,7 @@ export function RunWorkflowDrawer({
 
     setStarting(true);
     router.post(
-      `/company/projects/${projectId}/workflow_runs`,
+      companyProjectWorkflowRunsPath(projectId),
       {
         workflowRun: {
           workflowId: workflow.id,

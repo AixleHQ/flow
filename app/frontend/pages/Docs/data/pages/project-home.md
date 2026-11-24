@@ -15,8 +15,8 @@ this project doing, and how much agent work went into it?"
 - **Recent Activity** — the latest things people and agents did in this
   project, newest first.
 
-Each block links to the screen that explains it: the board, Sessions & Runs, or
-Analytics.
+Two blocks link onward: **Open Runs** on Workflow Runs opens the project's list
+of workflow runs, and **Open board** on Board Task Distribution opens the board.
 
 ## Settings
 
@@ -26,6 +26,12 @@ Analytics.
   change something, and a *Saved* chip confirms the write.
 - **Artifacts Language** — the language agents write their output in. New
   projects default to English.
+- **Reserved workers** — how many sessions this project can always run at once,
+  one per worker, with nothing else allowed to occupy them. Left empty, the
+  project shares the company's unreserved workers. Only a company admin can
+  change it, and not during the free trial, which runs one worker.
+- **Owner** — the project's owner, with **Transfer** for the owner or a company
+  admin.
 - **Danger Zone** — **Archive** takes a finished project out of the way but
   keeps its history; **Delete** removes it. Both ask for confirmation first,
   and both return you to the projects list when they succeed.

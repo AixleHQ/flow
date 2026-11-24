@@ -41,6 +41,11 @@ module Activities
           tally[outcome.status] += 1
           log(:warn, "tool drift on mcp_server #{server.id} (#{server.name}): #{outcome.drift.except('detected_at')}") if outcome.drifted?
           tally[:auth_detected] += 1 if adopt_auth_requirement(server, outcome)
+        rescue StandardError => e
+          tally[:failed] += 1
+          log(:error, "tool drift scan of mcp_server #{server.id} raised: #{e.class}: #{e.message}")
+          Rails.error.report(e, handled: true, source: "mcp.tool_drift_scan",
+                                context: { mcp_server_id: server.id, error_class: e.class.name })
         end
 
         log(:info, "tool drift scan: #{tally.sort.map { |k, v| "#{k}=#{v}" }.join(' ')}")
@@ -66,8 +71,12 @@ module Activities
       # Catalog installs on a remote transport. Servers without a baseline are
       # included on purpose: they are the ones most likely to be unauthenticated
       # or unreachable, which is exactly what the sweep should find out.
+      #
+      # Archived servers are left out: no agent gets them, and a reinstall of the
+      # same connector takes the archived row's name, so saving the archived row
+      # fails the name check against its live namesake.
       def scope
-        MCPServer.where.not(connector_name: nil).where.not(transport: "stdio")
+        MCPServer.unarchived.where.not(connector_name: nil).where.not(transport: "stdio")
       end
     end
   end

@@ -79,7 +79,7 @@ module Admin
     def impersonate
       audit!(requested_resource, "impersonate_start", "#{true_user.email} impersonating #{requested_resource.email}")
       impersonate_user(requested_resource)
-      redirect_to company_projects_path
+      redirect_to app_home_path
     end
 
     def stop_impersonate

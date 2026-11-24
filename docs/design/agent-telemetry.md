@@ -10,6 +10,13 @@ to `POST /api/v1/internal/usage_statistics`. There each batch must prove its ses
 the `terminal_session_token` resource attribute plus `terminal_session_key`
 (`UsageStatistics::SessionKey`) — before anything is read.
 
+A runner session reaches the same collector through its runner's callback proxy: its OTLP
+endpoint is the proxy's `otel` route on 127.0.0.1 (`Runners::Proxy`, `v1/` logs, metrics
+and traces), which checks no key, so the session key in the batch is the only proof, as for
+a hosted session. A runner session therefore gets the same switches, hooks and full
+telemetry as a hosted one: when its project is exported to Insights, its prompts, replies
+and tool output leave the runner's machine and reach Insights.
+
 Two consumers read the stream:
 
 - **Flow's own usage** (`UsageStatisticsService` → each adapter's `ingest_usage`), which
@@ -24,8 +31,8 @@ Insights for good. Every other session sends only what Flow's own usage reads (�
 ## 1. Switches per runtime
 
 Versions are the pins in `config/agent_runtimes.json`. What a session with full telemetry
-gets; each switch is set only when the session has a collector (a runner session has none
-yet).
+gets; each switch is set only when the session has a collector (every session has one: a
+runner session's is its callback proxy).
 
 | Runtime | Signals | Content switches set | Flow's own usage reads |
 | --- | --- | --- | --- |
@@ -122,8 +129,8 @@ Left out on purpose: Cursor's shell, MCP and file events repeat its generic tool
 whole file; Kiro's file events repeat its write tool. Cursor's `beforeSubmitPrompt`, `stop`
 and `afterAgentResponse` do not fire under `-p`; Flow runs Cursor without it.
 
-A session without full telemetry, or without a collector (a runner session), gets neither
-the hooks file nor the variables.
+A session without full telemetry, or without a collector, gets neither the hooks file nor
+the variables. Every runtime gives a session a collector today, runner sessions included.
 
 ### Checked live (2026-11-13)
 

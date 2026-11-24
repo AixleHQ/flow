@@ -74,8 +74,10 @@ New controllers get `ActionDispatch::IntegrationTest` request tests; do not add 
 - **R7. Time is controlled, not stubbed away.** Use `travel_to`/`freeze_time` for clock logic
   and injectable/config timeouts for waiting loops. Never `stubs(:sleep)`.
 - **R8. Frontend: mock only the module seams** already in `app/frontend/test/setup.ts`
-  (`@inertiajs/react`, `@rails/actioncable`, `@uppy/core` + `@uppy/aws-s3`, and an inert
-  global `fetch`). Props come from typed factories (`app/frontend/test/factories/`).
+  (`@inertiajs/react`, `@rails/actioncable`, `@uppy/core` + `@uppy/aws-s3`, and a global
+  `fetch` that fails the test on any request the test did not answer). Answer the requests a
+  test expects with `answerFetch()` (`app/frontend/test/fetchStub.ts`) or
+  `vi.spyOn(globalThis, 'fetch')`. Props come from typed factories (`app/frontend/test/factories/`).
   Query by role/label/text per RTL priority; no `querySelector`, no snapshots, no
   `vi.mock` of app components. *Lint-enforced part: node-access/container rules
   (`eslint-plugin-testing-library`) and the `toMatchSnapshot` ban; the query priority,
@@ -92,6 +94,7 @@ New controllers get `ActionDispatch::IntegrationTest` request tests; do not add 
 | Azure DevOps | `AzureDevops::{Repository,PullRequest,WorkItem,Build}Service` via `stub_azure_devops!` | `FakeAzureDevops` (`test/support/fakes/fake_azure_devops.rb`) + WebMock contract tests in `test/services/azure_devops/`. `CredentialProvider` and `Client` stay REAL — the authorization chain is usually what is under test |
 | HTTP in general | WebMock global fence (`disable_net_connect!`) | `stub_request` belongs in adapter contract tests only |
 | FE backend | `@inertiajs/react` + `@rails/actioncable` mocks in `setup.ts` | keep the mock surface minimal; don't extend it per-test |
+| FE `fetch` | `answerFetch({ 'METHOD /path': body })` (`app/frontend/test/fetchStub.ts`) or `vi.spyOn(globalThis, 'fetch')` | the default `fetch` in `setup.ts` records every call and fails the test on one it did not answer |
 
 Adding a new external service? Wrap it in an app-owned adapter first, give it a fake here, and
 contract-test the adapter. Don't scatter `stub_request`/vendor stubs through feature tests.

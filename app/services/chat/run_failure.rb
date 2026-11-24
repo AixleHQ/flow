@@ -21,7 +21,9 @@ module Chat
     def url(run)
       return nil if run.project_id.blank?
 
-      path = Rails.application.routes.url_helpers.company_project_workflow_run_path(run.project_id, run.id)
+      path = Rails.application.routes.url_helpers.company_project_workflow_run_path(
+        run.project_id, run.id, company_slug: run.project.company.slug
+      )
       "#{Settings.protocol}://#{Settings.domain}#{path}"
     end
   end

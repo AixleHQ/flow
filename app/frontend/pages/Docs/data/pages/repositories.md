@@ -5,9 +5,10 @@ Two pages that together decide what an agent can touch outside Flow.
 ## Integrations
 
 An **integration** is an account Flow connects to on the team's behalf:
-GitHub, GitLab, Azure DevOps, Jira, Slack and Coder. Connect one from the
-page's **Connect** menu — GitHub through its app or a token, GitLab with a
-token, and so on. Each has its own page, listed on
+GitHub, GitLab, Bitbucket, Azure DevOps, Jira, Linear, YouTrack, Slack,
+Microsoft Teams and Coder. Connect one from the page's **Connect** menu —
+GitHub through its app or a token, GitLab with a token, Jira and Bitbucket
+under **Atlassian**, and so on. Each has its own page, listed on
 [Integrations](/docs/integrations).
 
 The table lists project integrations and company-wide ones together, each with
@@ -17,8 +18,8 @@ inherited from the company. Removing one asks for confirmation.
 ## Repositories
 
 A **repository** is a Git repo agents can read, work in, and push to. Each row
-shows the branch the project works from, and company-wide repositories appear
-in the same table with their scope marked.
+shows the branch the project works from. A repository belongs to the project
+that links it; another project that needs the same repo links it too.
 
 Link the repos a project actually needs — not every repo the company owns. A
 step only reaches the repositories its Resources section lists.

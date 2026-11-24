@@ -50,6 +50,7 @@ class Web::InvitationsController < Web::ApplicationController
     return redirect_to invitation_path(params[:token]) unless safely_accept(membership)
 
     session[:current_company_id] = membership.company_id
+    reset_membership_memoization
     session.delete(:pending_invitation_token)
 
     # The new company becomes current either way. Its onboarding is its own, so
@@ -86,6 +87,7 @@ class Web::InvitationsController < Web::ApplicationController
 
       sign_in(invitee, provider: Auth::LocalCredential.link!(invitee))
       session[:current_company_id] = membership.company_id
+      reset_membership_memoization
       session.delete(:pending_invitation_token)
       membership.reopen_onboarding_if_setup_needed!
       target = membership.reload.onboarding_completed? ? company_projects_path : onboarding_path

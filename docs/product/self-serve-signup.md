@@ -24,10 +24,12 @@ existed.
 worker, and a calculator driven by the visitor's own numbers. It works out how many
 workers their workload needs once they pay; the trial itself runs one.
 
-**`/workspace/new`** asks two things: a workspace name and the work email address
-the workspace will be owned with. It does not ask how many workers: the trial runs
-one, and the company chooses its number once it adds a card. Someone already
-signed in is not asked for an address — theirs is the one they already proved.
+**`/workspace/new`** asks for a workspace name and the work email address the
+workspace will be owned with, and has one checkbox: the creator accepts the Terms
+of Service on the company's behalf and the Terms of Use for themselves. It does
+not ask how many workers: the trial runs one, and the company chooses its number
+once it adds a card. Someone already signed in is not asked for an address —
+theirs is the one they already proved.
 
 **Nothing is written when the form is submitted.** The answers travel in a signed
 link to the address that was typed, and opening that link is what proves the
@@ -45,6 +47,7 @@ the company's unique domain, which is the same answer by a shorter route.
 | --- | --- |
 | A domain that is not the one your address is at | A workspace claims a whole domain; claiming one you have no address at is claiming somebody else's |
 | A domain another workspace already has | One workspace per domain |
+| The Terms checkbox left unticked | The company is bound to the Terms of Service, and its creator to the Terms of Use, before the company exists |
 | A public mail service (`gmail.com`, `outlook.com`, `yandex.ru`, …) | The first person to sign up would take the service, funnel every later visitor from it into their workspace, and lock it away for everyone. See `PublicEmailDomains` |
 
 ### Where the sign-in screen sends people
@@ -189,12 +192,15 @@ billing period, and the worker-minutes used so far in it, with an estimate of wh
 they cost. The estimate is priced the way the invoice is: in packs of 60
 worker-minutes, rounded down.
 
-- **Cancelling** takes effect at the end of the current period. Until then the
-  workspace runs as before, and its usage up to the end date is billed on the final
-  invoice. After it, the workspace stops as it does when the trial ends.
-  Nothing is deleted, admins can still sign in, and a new card restores access.
-  The admin can resume the subscription before the end date. The reason they gave
-  is kept, and every admin gets an email.
+- **Cancelling** takes effect at once. Capacity is billed in arrears, so the rest
+  of the period is nothing the customer has paid for in advance. The subscription
+  ends, the workspace stops as it does when the trial ends, and a final invoice
+  for usage up to the moment of cancelling is issued and charged a few minutes
+  later. Nothing is deleted, admins can still sign in, and a new card restores
+  access once that invoice is paid. The reason they gave is kept, and every
+  admin gets an email. An older cancellation scheduled for the end of a period
+  can still be taken back from the Billing tab (**Keep subscription**) until its
+  date.
 - **A failed payment** stops the workspace at once. The banner and the Billing tab
   offer the open invoice, not a new card, since a second subscription would bill
   the same minutes twice. Paying it starts the workspace again.
@@ -204,7 +210,7 @@ worker-minutes, rounded down.
 | State | Meaning | Runs | Invoiced |
 | --- | --- | --- | --- |
 | `trialing` | On the free trial | One worker | Nothing |
-| `active` | Somebody is paying, including a cancellation not yet due | Its own limit | Everything it is offered |
+| `active` | Somebody is paying, including an older cancellation scheduled for the period's end and not yet due | Its own limit | Everything it is offered |
 | `blocked` | Stopped: trial spent, subscription ended, or a payment failed | Nothing new | Nothing |
 
 A company made in the admin pays the same way a signup does: it starts

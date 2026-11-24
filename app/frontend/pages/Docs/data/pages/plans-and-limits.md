@@ -1,10 +1,12 @@
 # Plans & limits
 
-> **This page is about Aixle Flow hosted by us.** If your company runs Flow on its
-> own servers, nothing here applies — your operator sets the limits and nobody is
-> billed. If you bought Flow through AWS Marketplace, see
+> **This page is about Aixle Flow hosted by us and paid for by card.** If your
+> company runs Flow on its own servers, nothing here applies — your operator sets
+> the limits and nobody is billed. If you bought Flow through AWS Marketplace,
+> hosted by us or installed in your own AWS account, see
 > [AWS Marketplace billing](/docs/aws-marketplace-billing) instead: AWS invoices
-> you, and there is no free trial or card here.
+> you, and there is no free trial or card. Where it is offered, **Pay via AWS
+> Marketplace** on **Settings → Billing** moves a hosted workspace to AWS billing.
 
 ## What you pay for
 
@@ -96,7 +98,8 @@ invoice**. A new card can be added once it is paid.
 | The number of workers | Any **administrator** of the workspace, on Settings → General |
 | Reserving some of them for one project | Any administrator, on that project's settings |
 | Removing the limit entirely | Nobody — a workspace without a limit is one nobody is invoiced for. Ask us |
-| Adding a card, cancelling, paying an unpaid invoice | Any administrator, on Settings → Billing |
+| Adding a card, paying an unpaid invoice | Anyone in the workspace who can make changes (not a viewer), from the banner; administrators also on Settings → Billing |
+| Cancelling | Any administrator, on Settings → Billing |
 
 Raising your limit costs more per hour from the moment you raise it. Lowering it
 costs less from the moment you lower it. Nothing is prorated at the end of a

@@ -31,7 +31,8 @@ class RunListEntryResource < ApplicationResource
 
   typelize :string
   attribute :name do |run|
-    run.workflow&.name.presence || "Workflow run"
+    name = run.workflow&.name.presence || "Workflow run"
+    run.workflow&.draft? ? "#{name} (draft)" : name
   end
 
   typelize :string?

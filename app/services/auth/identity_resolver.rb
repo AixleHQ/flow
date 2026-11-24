@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 module Auth
-  # The ONLY writer of UserIdentity (AD-3, enforced mechanically per AD-15).
+  # The ONLY writer of UserIdentity (AD-3). Nothing but review enforces that; the
+  # unique (identity_provider_id, subject) index is the backstop.
   #
   # Identity is (provider, subject), never email. Email may *promote* an
   # assertion to an existing user only under the rules in #promotable?, and a

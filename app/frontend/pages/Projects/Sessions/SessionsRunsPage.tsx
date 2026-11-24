@@ -19,7 +19,13 @@ import { apiFetch } from 'shared/lib/apiFetch';
 import { type RowChanges, useCableRowUpdates } from 'shared/lib/hooks/useCableRowUpdates';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { costColor, formatCost, formatDuration, formatTokens } from 'shared/lib/sessionFormat';
-import { rowsCompanyProjectSessionsPath, userPath } from 'shared/routes';
+import {
+  companyProjectSessionPath,
+  companyProjectSessionsPath,
+  companyProjectWorkflowRunPath,
+  rowsCompanyProjectSessionsPath,
+  userPath,
+} from 'shared/routes';
 import { AGENT_SELECT_OPTIONS } from 'shared/ui/agentRuntimes';
 import {
   DateRangeFilter,
@@ -243,7 +249,7 @@ const SessionsRunsPage = ({
 
   const orderedEntries = useMemo(() => Array.from(entryMap.values()), [entryMap]);
 
-  const listUrl = `/company/projects/${project.id}/sessions`;
+  const listUrl = companyProjectSessionsPath(project.id);
 
   const sort = parseListSort(query.s);
 
@@ -469,8 +475,8 @@ function EntryRow({
 }) {
   const isRun = entry.kind === 'run';
   const href = isRun
-    ? `/company/projects/${projectId}/workflow_runs/${entry.id}`
-    : `/company/projects/${projectId}/sessions/${entry.id}`;
+    ? companyProjectWorkflowRunPath(projectId, entry.id)
+    : companyProjectSessionPath(projectId, entry.id);
   const openable = isRun || (entry.viewable !== false && OPENABLE_SESSION_STATES.has(entry.state));
   const childSessions = entry.sessions ?? [];
   const finishedAt = isRun ? entry.completedAt : entry.finishedAt;
@@ -579,7 +585,7 @@ function EntryRow({
       {isRun && expanded && childSessions.length > 0 && (
         <div className={classes.subRows}>
           {childSessions.map((child) => {
-            const childHref = `/company/projects/${projectId}/sessions/${child.id}`;
+            const childHref = companyProjectSessionPath(projectId, child.id);
             const childOpenable = OPENABLE_SESSION_STATES.has(child.state);
             return (
               <div

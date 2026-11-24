@@ -8,12 +8,12 @@
  * are not.
  */
 
-/** `228700` → `228.7k`. Zero reads as an em dash, not `0`. */
+import { formatCompactCount } from 'shared/lib/formatCompactCount';
+
+/** `228700` → `228.7k`, `1069700000` → `1.1B`. Zero reads as an em dash, not `0`. */
 export function formatTokens(n: number | null | undefined): string {
   if (!n || n === 0) return '—';
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return String(n);
+  return formatCompactCount(n);
 }
 
 /** Cents → `$4.78`. Zero reads as an em dash. */

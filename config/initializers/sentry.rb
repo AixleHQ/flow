@@ -116,6 +116,8 @@ forwarded_error_sources = {
   },
   # One issue per failure mode, not one per catalog row.
   "skills.catalog_backfill" => ->(context) { [ "skills.catalog_backfill", context[:error_class] ] },
+  # One issue per failure mode, not one per MCP server.
+  "mcp.tool_drift_scan" => ->(context) { [ "mcp.tool_drift_scan", context[:error_class] ] },
   # One issue per misspelled or removed flag, and per stale FEATURE_* variable.
   "feature_flags.unknown_flag" => ->(context) { [ "feature_flags.unknown_flag", context[:flag] ] },
   "feature_flags.undeclared_env" => ->(context) { [ "feature_flags.undeclared_env", context[:variable] ] }

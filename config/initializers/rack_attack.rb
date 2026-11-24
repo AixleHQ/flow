@@ -120,7 +120,7 @@ class Rack::Attack
   end
 
   def self.member_invite?(req)
-    req.post? && (req.path == "/company/members" || req.path.match?(%r{\A/company/members/\d+/resend\z}))
+    req.post? && req.path.match?(%r{\A/company/[^/]+/members(/\d+/resend)?\z})
   end
 
   # Step-up re-verifies the account password inside an ALREADY authenticated

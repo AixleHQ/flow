@@ -23,6 +23,7 @@ import { useState } from 'react';
 import { AuthLayout } from 'layouts/AuthLayout';
 
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
+import { companyTemplateInstallsPath, newCompanyTemplateInstallPath } from 'shared/routes';
 import { PageHeader } from 'shared/ui/PageHeader';
 
 import { KindBadge } from './components/KindBadge';
@@ -127,7 +128,7 @@ const InstallPage = () => {
   const replan = (changes: { projectId?: number | null; resolutions?: Record<string, string> }) => {
     const projectId = changes.projectId === undefined ? selection.projectId : changes.projectId;
     router.get(
-      '/company/template_installs/new',
+      newCompanyTemplateInstallPath(),
       {
         namespace: template.namespace,
         slug: template.slug,
@@ -145,7 +146,7 @@ const InstallPage = () => {
     if (!plan) return;
     setSubmitting(true);
     router.post(
-      '/company/template_installs',
+      companyTemplateInstallsPath(),
       {
         namespace: template.namespace,
         slug: template.slug,

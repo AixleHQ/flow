@@ -13,14 +13,17 @@ agent session in one container.
 
 | Field                            | Description                                                                 |
 | -------------------------------- | --------------------------------------------------------------------------- |
-| `name`                           | Unique within its scope (Company or Project).                                |
+| `name`                           | Unique within its project.                                                   |
 | `description`                    | What the workflow accomplishes.                                              |
 | `config.base_tool_ids`           | Tools always available to every step in this workflow.                       |
 | `config.base_skill_ids`          | Skills always injected into agent context.                                   |
 | `config.base_mcp_server_ids`     | MCP servers always connected.                                                |
 | `config.base_asset_ids`          | Files always pre-loaded into `/workspace/assets/`.                           |
-| `config.inherit_all_project_resources` | If true, all project-level resources merge in additively.              |
-| `execution_mode`                 | `interactive`, `non_interactive`, or `mixed` (per-step).                     |
+| `config.inherit_all_project_resources` | If true, the project's resources merge in additively; its repositories only when no level names one. |
+
+A workflow has no mode of its own. Each run picks its `mode` when it starts:
+**Fully automatic** (`non_interactive`), **Interactive** (`interactive`, approve
+each step) or **Custom** (`mixed`, auto-run chosen per step).
 
 ## Anatomy of a Step
 
@@ -67,6 +70,8 @@ Step A ┤                   ├── Step D (merge)
 A step's starting context summarizes only the steps it depends on, directly or
 through others, each from its latest completed or skipped attempt. In the diagram,
 Step D gets A, B and C; Step B gets only A, never C, which runs beside it.
+For spec-first workflows and the context budget, see
+`docs/user-guide/token-efficient-workflows.md` in the repository.
 
 Aixle Flow uses **Temporal** to orchestrate this — runs survive process
 restarts, retries are durable, and you can attach to a long-running
@@ -97,10 +102,11 @@ WorkflowRun  (pending → running → completed | failed)
 A `WorkflowRun` can be triggered by:
 
 - a column binding (auto or manual),
-- the **Trigger workflow** button on a task,
+- the **Run workflow** button on a task,
 - the workflow's "Run" button outside the board,
-- a schedule, a Slack message, or an inbound webhook,
-- the API (`POST /company/projects/:project_id/workflow_runs`).
+- a schedule, a Slack or Teams message, an inbound webhook, an event in a
+  connected tracker, or a review or comment on a pull request,
+- the API (`POST /company/:company_slug/projects/:project_id/workflow_runs`).
 
 > **info** All of these flow through one event pipeline, and each off-board trigger carries a `subject_policy` deciding whether the run gets a board task. See [Triggers and Gates](/docs/triggers-and-gates) for the full model — including why a CI **gate** is not a trigger.
 
@@ -114,9 +120,9 @@ For a step that should pause for a human:
 
 The API endpoints behind those buttons:
 
-- `POST /company/projects/:id/workflow_runs/:run_id/approve_step`
-- `POST /company/projects/:id/workflow_runs/:run_id/retry_step`
-- `POST /company/projects/:id/workflow_runs/:run_id/skip_step`
+- `POST /company/:company_slug/projects/:id/workflow_runs/:run_id/approve_step`
+- `POST /company/:company_slug/projects/:id/workflow_runs/:run_id/retry_step`
+- `POST /company/:company_slug/projects/:id/workflow_runs/:run_id/skip_step`
 
 ## Assets in and out
 
@@ -177,12 +183,46 @@ are versioned the same way, one version per Save of their form.
   while a run is in progress affects the sessions that have not started yet —
   the run page then says so.
 
+## Changing a workflow that is in use: drafts
+
+A Save goes live at once: every trigger and board column that starts the
+workflow runs the new version from then on. To try a change first, work in a
+**draft** — a copy of the workflow that only you start.
+
+- **Edit in draft** in the builder's header opens one. Saving a workflow that
+  triggers or columns start also asks first: **Save to live**, or **Save as
+  draft** to put your unsaved edits into a new draft instead.
+- The draft opens in the same builder, under the same workflow's address, with a
+  banner saying so. Save it as often as you like; triggers and columns keep
+  running the live version.
+- **Test run** starts the draft like any run. Choose the custom mode in the run
+  drawer to start each step yourself. The run page says it ran the draft and
+  gives the draft's own version numbers (`draft v2`), which are not the live
+  workflow's. In **Sessions & Runs** a draft's test runs are listed under the
+  workflow, named `<workflow> (draft)`.
+- **What will change** compares the draft with the live workflow.
+- **Apply** makes the draft the live workflow, as one new version, and closes
+  the draft. The version history marks that version **Applied from draft**. If
+  someone saved the live workflow after the draft was made, Apply says so first:
+  **Apply anyway** replaces their change too.
+- **Discard draft** closes it and leaves the live workflow as it was.
+
+> **warning** A test run is a real run: its agents push, comment and message with your credentials. The only thing it leaves out is the workflow of a board column it moves a card into, which does not start.
+
+A workflow has at most one draft, shared by everyone who can edit the workflow.
+Triggers belong to the live workflow, so a draft has none. Agents, skills,
+wrappers and connectors are not part of a draft: editing one changes it for the
+live workflow too. Over the personal MCP the same flow is
+`create_workflow_draft`, `get_workflow_draft_diff`, `apply_workflow_draft` and
+`discard_workflow_draft`; `list_workflow_runs` and `get_workflow_run` mark a
+test run of a draft with `draft_test`.
+
 ## Aixle Builder
 
 Building a workflow by hand is rare in practice. The **Aixle Builder**
 is an in-app conversational agent: describe your process in plain
 language, it generates the workflow, steps, instructions, and resource
-links for you. Open it from the project sidebar (Workflows → "Build with AI").
+links for you. Open it from the **Build with AI** card in the project sidebar.
 
 ## Gotchas
 
@@ -198,7 +238,7 @@ links for you. Open it from the project sidebar (Workflows → "Build with AI").
   they cannot read each other's `/workspace/` directly. Use
   `output_asset_specs` to hand artifacts forward.
 - **An automatic step ends only when its agent calls `finish_session` or
-  `fail_session`.** A Kiro agent that ends its turn without either gets a
+  `fail_session`.** A Kiro, Copilot CLI or Antigravity agent that ends its turn without either gets a
   reminder typed into its terminal a minute or two later, up to 3 times. If it
   stops a fourth time, the step fails with a message saying so. Nothing is typed
   while someone has typed into the session's terminal in the last 10 minutes.

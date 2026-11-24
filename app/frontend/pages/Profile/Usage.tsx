@@ -11,7 +11,7 @@ import { formatTokens } from 'shared/lib/formatUsage';
 import { UsageAnalytics } from 'shared/resources/usage/UsageAnalytics';
 import { type SharedProps } from 'shared/ui';
 import { AGENT_RUNTIMES, agentLabel, isAgentType } from 'shared/ui/agentRuntimes';
-import { StatusBadge } from 'shared/ui/StatusBadge';
+import { sessionStatusTone, StatusBadge } from 'shared/ui/StatusBadge';
 
 import { ProfileTabs } from './ProfileTabs';
 
@@ -98,7 +98,7 @@ function SessionsPanel() {
                       </Text>
                     </Table.Td>
                     <Table.Td>
-                      <StatusBadge state={s.state} tone={s.state === 'ready' ? 'running' : undefined} size="sm">
+                      <StatusBadge state={s.state} tone={sessionStatusTone(s.state)} size="sm">
                         {stateConfig.label}
                       </StatusBadge>
                     </Table.Td>

@@ -9,7 +9,7 @@ time without being thrown out of either.
 
 | Method | Who sets it up | Notes |
 | --- | --- | --- |
-| **Password** | the person | Always available |
+| **Password** | the person | Set, changed or reset by the person — see [Your password](#your-password) |
 | **Google** | the operator, once per installation | One OAuth client for everyone |
 | **Microsoft** | the operator, once per installation | Entra ID work/school accounts |
 | **Your own OpenID Connect** | a workspace admin | Okta, Entra, Ping, OneLogin, JumpCloud, Google Workspace — anything that speaks OIDC |
@@ -84,12 +84,24 @@ https://<your Flow host>/auth/oidc/callback
 connection a sign-in belongs to travels in a signed, single-use `state`, never in
 the URL. Adding a second or a tenth connection needs no new URL.
 
+For **Microsoft Entra ID**, the issuer is
+`https://login.microsoftonline.com/<your tenant id>/v2.0`. Entra leaves the
+`email` claim out for an account with no mailbox; Flow then takes the address
+from `upn` or `preferred_username`, which is the UPN for a work account.
+
 ### Verify before you enable
 
 A new connection arrives **switched off**, badged *Not verified yet*, with its
 switch held shut. Press **Verify**: Flow sends you through the connection exactly
 as a member would go, and only a sign-in that actually completed unlocks the
 switch.
+
+The account you sign in with at your provider is linked to **your** Flow
+account — the one that pressed Verify — whatever address the provider sends, and
+signs you in from then on. A provider account that is already linked to someone
+else here is never moved. When the sign-in does not complete, the reason shows at
+the top of the Access screen: an issuer that cannot be reached, a rejected
+secret, a refusal from your provider.
 
 This is deliberate. A typo in an issuer or a secret that was pasted with a
 trailing space is a connection that cannot admit anyone — and if it could be
@@ -103,10 +115,10 @@ There is no button per provider on the sign-in screen, on purpose: one screen
 serves every workspace on the installation, and a row of customer names would
 tell any visitor who your customers are.
 
-Members press **Sign in with your company SSO** and give their address. The
+Members type their address on the sign-in screen and press **Continue**. The
 domain resolves to the workspace, and its connection starts. A workspace with
-several connections shows a choice rather than guessing; a domain with none says
-so instead of failing obscurely.
+several connections shows a choice rather than guessing; a domain with none goes
+on to the sign-in methods its workspace accepts.
 
 ## Being asked to confirm
 
@@ -163,6 +175,35 @@ What it does and does not do:
 **Profile → Security** shows what you hold: the methods you sign in with, your
 passkeys, whether codes are on, and every device signed in. A sign-in you do not
 recognise can be ended from there.
+
+### Your password
+
+A workspace admin who was onboarded with Google, Microsoft or an email link has
+no password. **Profile → Security → Password → Set password** adds one: type it
+twice, no current password needed — you are already signed in. From then on
+**Password** appears under *Sign-in methods*, and a Google or Microsoft link that
+was your only way in can be removed.
+
+With a password set, the same card offers **Change password**, which asks for the
+current one. Passwords need at least 8 characters.
+
+Forgot it? **Forgot password?** on the sign-in screen — or **Forgot your current
+password?** in the change form — emails a link to choose a new one. The link
+works once and expires after an hour, and the screen says the same thing whether
+or not the address has an account. Opening the link only shows the form;
+nothing is spent until you save, so a mail scanner that follows links cannot use
+it up.
+
+Every set, change or reset:
+
+- emails you, so a change you did not make does not go unnoticed;
+- signs you out on every other device — the browser you made the change in stays
+  signed in — and turns off your personal MCP token;
+- is written to the audit log.
+
+The card offers nothing to set when none of your workspaces accepts a password,
+and no reset link is sent for such an account. An administrator acting as you
+cannot set or change your password.
 
 ### Linking a method
 

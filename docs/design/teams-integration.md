@@ -285,7 +285,7 @@ flowchart LR
     U[User @mentions Aixle] --> BC[Bot Connector]
   end
   BC -->|POST activity + JWT| TC[Webhooks::TeamsController]
-  TC --> AUTH[Chat::Teams::ActivityAuthenticator]
+  TC --> AUTH[Teams::ActivityAuthenticator]
   TC -->|installationUpdate / conversationUpdate| REG[chat_conversations]
   TC -->|invoke, phase 2| INV[Chat::Teams::InvokeHandler<br/>synchronous answer]
   TC -->|addressed message| RW[ReceivedWebhook<br/>dedup on conversation+activity id]
@@ -308,7 +308,7 @@ flowchart LR
 |---|---|
 | `Chat::Teams::Config` | The deployment's app id, home tenant, credential and cloud endpoint set, read from `Settings.teams`. The feature is available exactly when a usable credential is configured, with no enable flag (the Azure DevOps rule). |
 | `Chat::Teams::TokenService` | Client-credentials tokens: one Connector token from the home tenant (F3); Graph tokens per customer tenant. Encrypted cache with a refresh skew, in the shape of `AzureDevops::AppTokenService`. The client assertion comes from `Entra::ClientAssertion`, which Azure DevOps and Microsoft sign-in already use (#383). |
-| `Chat::Teams::ActivityAuthenticator` | The checklist in §7.1. The OpenID metadata and JWKS are cached for at most 24 h, and refreshed on an unknown `kid`. |
+| `Teams::ActivityAuthenticator` | The checklist in §7.1. The OpenID metadata and JWKS are cached for at most 24 h, and refreshed on an unknown `kid`. |
 | `Chat::Teams::ConnectorClient` | Send, reply, update, delete, create conversation, get member, get team, list channels. Talks only to `serviceUrl` values recorded from authenticated activities, and only through `SafeHttp` with a cloud host allowlist. Handles 429, 412 and 5xx with bounded retries. |
 | `Chat::Teams::GraphClient` | Thread and chat history under RSC; message attachments and SharePoint/OneDrive files under file access; uploads into a channel's files folder. |
 | `Chat::Teams::Provider` | Normalization (§7.4); rendering (Adaptive Cards); converting Markdown to the text format Teams renders. |
@@ -461,7 +461,7 @@ connection page by company admins, and on SaaS from the docs. The manifest (sche
 {
   "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.30/MicrosoftTeams.schema.json",
   "manifestVersion": "1.30",
-  "id": "<TEAMS_MANIFEST_ID — stable per deployment, never changes>",
+  "id": "<UUIDv5 of the bot's app id — stable while the app id is>",
   "version": "1.0.0",
   "supportsChannelFeatures": "tier1",
   "bots": [{
@@ -548,7 +548,7 @@ organization that removes the app from its catalog simply stops sending activiti
 
 ### 7.1 Endpoint and authentication
 
-`POST /webhooks/teams/activities`. Before anything else is read, `Chat::Teams::ActivityAuthenticator`
+`POST /webhooks/teams/activities`. Before anything else is read, `Teams::ActivityAuthenticator`
 requires all of the following:
 
 1. `Authorization: Bearer <jwt>`, RS256, and a `kid` present in the cached Bot Framework JWKS.
@@ -560,11 +560,11 @@ requires all of the following:
 7. `channelData.tenant.id` (which equals `conversation.tenantId` and the `x-ms-tenant-id` header) is
    bound to an active integration, and is in `allowed_tenant_ids` when that is set.
 
-A failure answers 401 or 403 and logs only the rule that failed. Rule 7 failing is not an error: it takes
+A failure answers 401 and logs only the rule that failed. Rule 7 failing is not an error: it takes
 the path for unbound tenants in §6.2.
 
-In development only, `teams.dev_auth_bypass` accepts the anonymous requests that Microsoft 365 Agents
-Playground sends. The application refuses to boot in production with it set.
+A development-only `teams.dev_auth_bypass` for the anonymous requests Microsoft 365 Agents Playground
+sends is not built (§19): every activity needs a Bot Framework token.
 
 ### 7.2 Routing by activity type
 
@@ -906,7 +906,7 @@ exists, and Microsoft sign-in runs on the certificate (#383).
    once, then 401.
 2. **Outbound is fenced.**
    - Connector calls go only to service URLs recorded from authenticated activities, and only to hosts in
-     the configured cloud's allowlist (`smba.trafficmanager.net`, `smba.infra.gcc.teams.microsoft.com`, …),
+     the configured cloud's allowlist (`smba.trafficmanager.net` for the public cloud, the only one built),
      through `SafeHttp`.
    - Graph and token hosts are fixed per cloud.
    - No URL in a request body, context or tool argument is dialed.
@@ -939,8 +939,7 @@ exists, and Microsoft sign-in runs on the certificate (#383).
 8. **Prompt injection.** A chat message is the requester's input, exactly as with Slack today.
    `ChatContext` labels its provenance. The Store's AI requirements (disclosure, a way to report content)
    are phase-3 work.
-9. **Development bypass.** `dev_auth_bypass` exists only in development. The application refuses to boot
-   in production with it set.
+9. **Development bypass.** Not built (§19): no setting accepts an unauthenticated activity.
 10. **Phase-2 actions.** Invokes that change state (approve a gate, run a workflow from a form) require a
     linked identity (§9) and pass the same authorization as the equivalent web action.
 
@@ -972,6 +971,9 @@ exists, and Microsoft sign-in runs on the certificate (#383).
 
 ## 13. Configuration
 
+The build departs from this block (§19): no `entra.apps`, no `manifest_id`, only the `public` cloud and no
+`dev_auth_bypass`. `docs/reference/configuration.md` lists the variables that exist.
+
 ```yaml
 entra:                                              # the deployment's Entra registrations, by key
   apps:
@@ -997,13 +999,13 @@ teams:
   fallbacks are removed afterwards.
 - **A self-hoster** may define more than one key and point the features at different apps. One app is the
   default, not a requirement.
-- **Teams is offered** exactly when its app has a client id and a credential.
+- **Teams is offered** exactly when its app has a client id, a credential and a home tenant id.
 
 - `private_key` goes through `.to_json`, because YAML folds the newlines of a double-quoted PEM (the Azure
   DevOps trap).
 - The thumbprint is sent as base64url of the raw SHA-1, not hex (`Entra::ClientAssertion` already does
   this).
-- The feature is offered exactly when `app_id` plus a credential is configured.
+- The feature is offered exactly when `app_id`, a credential and a home tenant id (a GUID) are configured.
 
 ## 14. Testing and local development
 
@@ -1026,8 +1028,8 @@ Per `docs/testing.md`:
 - **Phase 0:** the Slack suites are renamed, not rewritten. Where a test pinned `slack.message` or
   `shared_context["slack"]`, a migration test pins the mapping instead.
 - **Frontend:** Vitest for the trigger form and the Teams connection panel, with typed factories.
-- **Local:** Microsoft 365 Agents Playground (npm, winget) posts `msteams` activities to
-  `localhost/webhooks/teams/activities` in anonymous mode (the dev bypass). It needs no tenant or tunnel.
+- **Local:** Microsoft 365 Agents Playground (npm, winget) posts `msteams` activities in anonymous mode,
+  which the endpoint refuses: the dev bypass is not built (§19).
 - **End to end:** a real Microsoft 365 tenant plus a tunnel. The Developer Program sandbox is restricted
   now (F13), so budget a paid test tenant.
 - **Budget for a live run.** The Azure DevOps integration had four defects that a green suite passed,
@@ -1189,8 +1191,8 @@ Built 2026-10-05, stacked on phase 0. Where it departs from the sections above:
 
 | Area | As built | Why |
 |---|---|---|
-| Configuration (§13) | Teams reads its own `TEAMS_*` variables and falls back to Microsoft sign-in's `MICROSOFT_*` app id, key and thumbprint. The shared `entra.apps` block is not built | Moving sign-in and Azure DevOps onto a new block needs the infrastructure to rename variables in step; the fallback gives one app without that |
-| Disconnect (§6.5) | **Remove** deletes the connection and its conversation rows, as Slack's does. Triggers stay; reconnecting runs the approval again, and the registry refills as the app is used or reinstalled | The integrations page has one Remove for every provider; a soft disconnect needs its own state and UI for little gain before customers ask for it |
+| Configuration (§13) | Teams reads its own `TEAMS_*` variables and falls back to Microsoft sign-in's `MICROSOFT_*` app id, key and thumbprint. The shared `entra.apps` block is not built. It is offered only with `TEAMS_HOME_TENANT_ID` set. There is no `TEAMS_MANIFEST_ID`: the manifest id is derived from the bot's app id, so changing the app id publishes a different Teams app. `TEAMS_CLOUD` accepts only `public`; GCC, GCC High and DoD are not built. `dev_auth_bypass` is not built | Moving sign-in and Azure DevOps onto a new block needs the infrastructure to rename variables in step; the fallback gives one app without that |
+| Disconnect (§6.5) | **Remove** deletes the connection, as Slack's does. The conversation rows belong to the workspace and stay; the company's channel connections there are deleted, and its chat triggers listening in them are switched off and lose their channel, so they need a channel again after reconnecting. Reconnecting runs the approval again | The integrations page has one Remove for every provider; a soft disconnect needs its own state and UI for little gain before customers ask for it |
 | Typing indicator (§7.2) | Not sent | The status card's "Accepted" answers within the same job, which is what the indicator was for |
 | Help (§8.4) | Markdown text in Teams, not an Adaptive Card | Same content, fewer moving parts; the card can come with phase 2's interactive cards |
 | Files out to a channel (§8.5) | Uploaded into `Aixle/` and linked in the thread as Markdown links | A link opens the file in Teams; a file card needs a second Graph call for the item's ids |
