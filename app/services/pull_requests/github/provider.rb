@@ -176,7 +176,7 @@ module PullRequests
       # One client per repository: an App connection's token is narrowed to it.
       def client(repository)
         @clients ||= {}
-        @clients[repository.id] ||= Octokit::Client.new(access_token: token_for(repository))
+        @clients[repository.id] ||= Octokit::Client.new(access_token: acting&.token || token_for(repository))
       end
 
       def token_for(repository)
@@ -265,6 +265,8 @@ module PullRequests
       end
 
       def acting_login
+        return acting.login if acting
+
         integration.github_pat? ? integration.github_account_login : "#{Settings.github.app_slug}[bot]"
       end
 

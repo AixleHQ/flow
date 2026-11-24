@@ -22,8 +22,10 @@ module Fakes
     Error = PullRequests::Error
 
     attr_reader :calls
+    # Set by `PullRequests::Provider.for`, as the real adapters take it at construction.
+    attr_writer :acting
 
-    def initialize(integration = nil)
+    def initialize(integration = nil, acting: nil)
       super
       @pull_requests = {}
       @comments = Hash.new { |hash, key| hash[key] = [] }
@@ -86,7 +88,9 @@ module Fakes
 
     def create(repository, source_branch:, target_branch:, title:, description: nil, draft: true)
       record(:create, repository: repository.id, source_branch: source_branch, target_branch: target_branch, title: title)
-      add_pull_request(repository, source_branch: source_branch, target_branch: target_branch, title: title, draft: draft)
+      pull_request = add_pull_request(repository, source_branch: source_branch, target_branch: target_branch,
+                                                  title: title, draft: draft)
+      @pull_requests[[ repository.id, pull_request.number ]] = pull_request.with(author: acting_login)
     end
 
     def update(repository, ref, **attributes)
@@ -111,7 +115,7 @@ module Fakes
       raise Error.new("line is required with file_path", code: "validation_failed") if file_path.present? && line.blank?
 
       number = find!(repository, ref).number
-      comment = Comment.new(id: SecureRandom.random_number(1_000_000), parent_id: reply_to, author: "aixle-bot",
+      comment = Comment.new(id: SecureRandom.random_number(1_000_000), parent_id: reply_to, author: acting_login,
                             body: body, file_path: file_path, line: line, resolved: nil, created_at: Time.current)
       comments_on(repository, number) << comment
       comment
@@ -120,7 +124,7 @@ module Fakes
     def review(repository, ref, verdict:, body: nil)
       record(:review, repository: repository.id, ref: ref, verdict: verdict, body: body)
       find!(repository, ref)
-      Review.new(reviewer: "aixle-bot", verdict: verdict.to_s, submitted_at: Time.current)
+      Review.new(reviewer: acting_login, verdict: verdict.to_s, submitted_at: Time.current)
     end
 
     def merge(repository, ref, expected_head_sha:, strategy: nil, delete_source_branch: false, message: nil)
@@ -156,6 +160,8 @@ module Fakes
 
     private
 
+    def acting_login = acting&.login || "aixle-bot"
+
     def build(repository, number:, source_branch:, target_branch:, title:, state:, draft:, head_sha:, mergeable:)
       PullRequest.new(number: number, url: "#{url_base(repository)}/#{number}", title: title, description: nil,
                       state: state, draft: draft, source_branch: source_branch, target_branch: target_branch,
@@ -168,7 +174,10 @@ module Fakes
         raise(Error.new("No pull request #{ref} in #{repository.full_name}", code: "not_found_or_inaccessible"))
     end
 
+    # Every call to the host needs the caller's token, as the real adapters build their client
+    # on first use: reading it here is when a lazily resolved `acting` mints it, or refuses.
     def record(name, **args)
+      acting&.token
       @calls << Call.new(name: name, args: args)
       error = @failures.delete(name)
       raise error if error
@@ -180,7 +189,8 @@ end
 # pull_request_* tool resolves its provider through.
 module PullRequestsTestHelper
   def stub_pull_requests!(fake = Fakes::FakePullRequests.new)
-    PullRequests::Provider.stubs(:for).returns(fake)
+    PullRequests::Provider.stubs(:for).with { |_integration, **options| fake.acting = options[:acting]; true }
+                          .returns(fake)
     fake
   end
 end

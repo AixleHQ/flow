@@ -95,6 +95,7 @@ class FullyWiredUserScenario
     create(:workflow_run_asset, workflow_run: run, shared_by: @user)
     create(:terminal_session, :agent_session, user: @user, project: @project, state: "finished")
     build_github_identity
+    build_pull_request_operation
 
     asset = create(:asset, scope: @project, created_by: @user, shared_by: @user)
     create(:asset_version, asset: asset, uploaded_by: @user)
@@ -111,6 +112,13 @@ class FullyWiredUserScenario
     UserTokenIssuance.create!(terminal_session: own_session, company: @company, project: @project,
                               acting_for_user: @heir, session_user: @user, tool_name: "github_user_token_for",
                               provider: "github", token: "ghu_heir", target_login: "acme")
+  end
+
+  # A pull-request write made as the user: the ledger row outlives them with the actor cleared.
+  def build_pull_request_operation
+    repository = create(:repository, scope: @project)
+    PullRequestOperation.create!(integration: repository.integration, repository: repository, operation: "create",
+                                 operation_key: "wired-1", request_digest: "digest", acting_user: @user)
   end
 
   def build_company_records

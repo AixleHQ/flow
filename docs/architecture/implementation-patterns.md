@@ -261,6 +261,7 @@ What a model's state, type or columns mean is decided in the model. Other code a
 - **Never** resolve a stored or user-supplied id across every company (`X.find(id)`, `X.find_by(id:)`) → use `TenantScope.owned(X, project:).find_by(id:)`
 - **Never** do IO, call a service or reach a higher layer from a model validation → a validation may read the model's own associations, query for uniqueness and call pure data and rule code (e.g. `Runners::ConfigSchema`); a check that needs an external call belongs in a service or a health check (DESIGN.md §5.1 of agent-runtimes)
 - **Never** skip `# frozen_string_literal: true`
+- **Never** write a migration file by hand or make up its version (`20261123100000`) → generate it with `bin/rails generate migration <Name>` in the `web` container, which stamps the current UTC time to the second. Where the generator can't run, name the file with the full current UTC timestamp (`date -u +%Y%m%d%H%M%S`), never a rounded one. Made-up versions collide across branches: each branch's CI passes, and the merge fails `db:migrate` with `ActiveRecord::DuplicateMigrationVersionError`.
 - **Never** create `before_action :set_resource` → find inline
 - **Never** stub Mocha `.returns` with a block for dynamic fake objects → use `Object.new` + `define_singleton_method`
 - **Never** use global loading states → track loading per request (local state around `apiFetch`)

@@ -11,8 +11,6 @@ module InternalTools
                   "in that comment's thread. Returns JSON: {id, parent_id, author, body, file_path, line, " \
                   "created_at, operation_key}."
       tags :pull_requests
-      inject_when :pull_request_repositories_attached
-      user_attachable false
       requires_integration :pull_requests
       unavailable_message Concerns::PullRequestContext::UNAVAILABLE
       param :repository_id, type: :integer, description: Concerns::PullRequestContext::REPOSITORY_PARAM
@@ -21,16 +19,17 @@ module InternalTools
       param :file_path, type: :string, description: "Repository-relative path, for an inline comment."
       param :line, type: :integer, description: "Line in the new version of `file_path`."
       param :reply_to, type: :string, description: "Id of the comment to reply to."
+      param :user_id, type: :integer, description: Concerns::PullRequestContext::USER_PARAM
       param :operation_key, type: :string, description: Concerns::PullRequestContext::OPERATION_KEY_PARAM
     end
 
     def execute
       pull_request_guard do
-        repository, provider = resolve_target!
+        repository, provider = resolve_target!(as_user: true)
         number = provider.number_of(repository, params[:pull_request])
         payload = { repository_id: repository.id, pull_request: number, body: params[:body],
                     file_path: params[:file_path], line: params[:line], reply_to: params[:reply_to] }.compact
-        with_write(repository, "add_comment", payload, number: number) do
+        with_write(repository, provider, "add_comment", payload, number: number) do
           provider.add_comment(repository, number, body: params[:body], file_path: params[:file_path].presence,
                                                    line: params[:line], reply_to: params[:reply_to].presence)
         end

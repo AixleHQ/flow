@@ -44,14 +44,14 @@ module Gitlab
       [ level.to_i, member_access(token, project["id"], user_id).to_i ].max.nonzero?
     end
 
-    private
-
     # The gem sends `Authorization: Bearer` for a token of 64 characters or more, which
     # a GitLab OAuth token is (a shorter one would go as `PRIVATE-TOKEN`).
     def client(token)
       ::Gitlab.client(endpoint: Host.api_endpoint, private_token: token,
                       httparty: { open_timeout: AppConfig.open_timeout, read_timeout: AppConfig.read_timeout })
     end
+
+    private
 
     def member_access(token, project_id, user_id)
       members = translating(not_found: nil) { client(token).all_members(project_id, user_ids: [ user_id.to_i ]) }

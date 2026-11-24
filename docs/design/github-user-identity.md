@@ -76,6 +76,15 @@ and Railway. The connect flow is the existing `Web::OauthController#authorize` /
 
 GitLab, Bitbucket and Azure DevOps later become further registry entries with their
 own `provider` value. The consent table (§3.1) carries `provider` for the same reason.
+
+**The pull-request write tools use the consent too.** `pull_request_create`,
+`pull_request_update`, `pull_request_add_comment`, `pull_request_review` and
+`pull_request_merge` take an optional `user_id`. With it they run the steps of §4.3
+(membership, connection, consent, fresh token, issuance record) for that member,
+limited to the repository of the call, and make the one call with the member's token, so
+the pull request, comment, review or merge is theirs. The token stays on the server. The
+consent is "in my tasks" when the member is the session's user, otherwise "in tasks that
+aren't mine", as for `github_user_token_for`. See `bitbucket-integration.md` §4.12.
 Nothing in this design is GitHub-specific above the provider entry, the
 `Github::UserTokenService` adapter and the two tools.
 

@@ -16,6 +16,10 @@ governance, community health — carry none.
 ## [1.18.0] - 2026-11-24
 
 ### Added
+- **Integrations**: the `pull_request_*` tools can act as a person. Pass `user_id` to `pull_request_create`,
+  `_update`, `_add_comment`, `_review` or `_merge` and the pull request, comment, review or merge is that
+  member's own, under the same conditions as `github_user_token_for` (a connected account and the consent for
+  the project). Without it the tools act as the connection, as before.
 - **Workflows**: change a workflow that is in use through a draft. **Edit in draft** (or
   **Save as draft** when a Save would go live) opens a copy that you edit and test-run while
   triggers and board columns keep running the live version; **Apply** makes it live as one
@@ -40,6 +44,10 @@ governance, community health — carry none.
   and sets `BITBUCKET_OAUTH_CLIENT_ID` and `BITBUCKET_OAUTH_CLIENT_SECRET`.
 
 ### Changed
+- **Workflows**: the `pull_request_*` tools are a tool group, **Pull requests**, that a workflow or a step can
+  add or remove. Existing workflows keep them through a migration; sessions no longer get them just because
+  they hold a GitHub, GitLab or Bitbucket repository, and the session context no longer tells agents to use
+  them.
 - **Company settings**: a self-hosted installation bought through AWS Marketplace
   reports its usage under the dimension `worker_minute`, the same word as the SaaS
   product, instead of `queue_minute`. Operators: from this version an installation meters

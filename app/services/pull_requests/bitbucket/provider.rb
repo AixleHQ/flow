@@ -93,7 +93,7 @@ module PullRequests
           end
         end
         add_comment(repository, id, body: body) if body.present?
-        Review.new(reviewer: participant&.dig(:user).presence || integration.name, verdict: verdict.to_s,
+        Review.new(reviewer: participant&.dig(:user).presence || acting&.login || integration.name, verdict: verdict.to_s,
                    submitted_at: time(participant&.dig(:participated_on)) || Time.current)
       end
 
@@ -141,7 +141,13 @@ module PullRequests
 
       private
 
-      def api = @api ||= ::Bitbucket::Api.for(integration)
+      def api
+        @api ||= if acting
+          ::Bitbucket::Api.new(::Bitbucket::Credential.new(token: acting.token, kind: :access_token))
+        else
+          ::Bitbucket::Api.for(integration)
+        end
+      end
 
       def address(repository)
         workspace = repository.external_organization_id.presence
