@@ -43,6 +43,9 @@ governance, community health — carry none.
   starts, the Stripe key's Invoices permission, immediate cancellation, the hosted AWS
   Marketplace listing, project-only resources, gates, GitLab trackers, and the pages that
   had drifted from their repository copies (drafts, passwords, runner status, usage limits).
+- **Profile**: connecting Amazon Bedrock through IAM Identity Center keeps the sign-in in
+  progress (the client registration and the tokens) encrypted in the cache. A connect left
+  open across the upgrade has to be started again.
 - **Sessions & Runs**: a running session shows an amber "Running" status in the all-projects
   and project lists, on its page and in Usage. It used to read green, like a finished one.
 - **Analytics**: token counts of a billion or more read as `1.1B` instead of `1069.7M`, and
