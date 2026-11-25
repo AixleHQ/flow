@@ -26,7 +26,7 @@ class WorkspaceOnboardingForm
   attr_reader :user, :company, :marketplace_license
 
   validates :name, presence: true, length: { maximum: 100 }
-  validates :email, presence: true, format: { with: URI::MailTo::EMAIL_REGEXP, message: "is not an email address" }
+  validates :email, presence: true, format: { with: EmailAddress::FORMAT, message: "is not an email address" }
   validates :email_domain, presence: true
   validates :accept_terms, acceptance: { accept: true, message: "must be accepted to create a workspace" },
                            if: -> { LegalDocument.acceptance_required? }
