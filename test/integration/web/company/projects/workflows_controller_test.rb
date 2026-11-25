@@ -207,6 +207,17 @@ class Web::Company::Projects::WorkflowsControllerTest < ActionDispatch::Integrat
     end
   end
 
+  test "a project without an AWS integration offers no AWS roles, even when another project has some" do
+    wf = create(:workflow, scope: @project)
+    other = create(:project, company: @company, owner: @user)
+    create(:aws_oidc_role, integration: create(:integration, :aws_oidc, company: @company, project: other))
+
+    assert_equal [], deferred_prop(builder_company_project_workflow_path(@project, wf),
+                                   component: "Projects/Workflows/BuilderPage", key: "awsOidcRoles")
+    assert_equal [], deferred_prop(company_project_workflows_path(@project),
+                                   component: "Projects/Workflows/WorkflowsPage", key: "awsOidcRoles")
+  end
+
   test "create redirects on success" do
     post company_project_workflows_path(@project), params: { workflow: { name: "Proj WF", description: "D" } }
     assert_response :redirect
