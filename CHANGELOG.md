@@ -15,6 +15,7 @@ governance, community health — carry none.
 
 ### Changed
 - **Tasks**: the task drawer shows the ticket title in its top bar on every tab, truncated with the full title on hover.
+- **Tasks**: a task's Details are read-only until you press Edit, so text can be selected and copied without opening a field. Save applies all changes in one request and Cancel discards them.
 
 ## [1.20.0] - 2026-11-26
 
