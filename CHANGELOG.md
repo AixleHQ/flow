@@ -13,19 +13,13 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
-## [1.18.0] - 2026-11-24
+## [1.19.0] - 2026-11-25
 
 ### Added
 - **Integrations**: the `pull_request_*` tools can act as a person. Pass `user_id` to `pull_request_create`,
   `_update`, `_add_comment`, `_review` or `_merge` and the pull request, comment, review or merge is that
   member's own, under the same conditions as `github_user_token_for` (a connected account and the consent for
   the project). Without it the tools act as the connection, as before.
-- **Workflows**: change a workflow that is in use through a draft. **Edit in draft** (or
-  **Save as draft** when a Save would go live) opens a copy that you edit and test-run while
-  triggers and board columns keep running the live version; **Apply** makes it live as one
-  new version, **Discard draft** drops it. The personal MCP has the same flow:
-  `create_workflow_draft`, `get_workflow_draft_diff`, `apply_workflow_draft`,
-  `discard_workflow_draft`.
 - Runners: an interactive session can run on a runner. The new-session form no longer
   disables runners in interactive mode, and the session page has the terminal, the read-only
   view, the file panel, uploads and the IDE, as for a hosted session. A machine needs
@@ -34,6 +28,24 @@ governance, community health — carry none.
   `linux-arm64` binaries of
   [runner-v0.5.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.5.0) by their
   SHA-256. No minimum runner version: older runners keep working.
+
+### Changed
+- **Workflows**: the `pull_request_*` tools are a tool group, **Pull requests**, that a workflow or a step can
+  add or remove. Existing workflows keep them through a migration; sessions no longer get them just because
+  they hold a GitHub, GitLab or Bitbucket repository, and the session context no longer tells agents to use
+  them.
+- **Companies & projects**: each company in the switcher on the far left is a link, so
+  Cmd/Ctrl+click opens it in a new tab and leaves the current tab where it is.
+
+## [1.18.0] - 2026-11-24
+
+### Added
+- **Workflows**: change a workflow that is in use through a draft. **Edit in draft** (or
+  **Save as draft** when a Save would go live) opens a copy that you edit and test-run while
+  triggers and board columns keep running the live version; **Apply** makes it live as one
+  new version, **Discard draft** drops it. The personal MCP has the same flow:
+  `create_workflow_draft`, `get_workflow_draft_diff`, `apply_workflow_draft`,
+  `discard_workflow_draft`.
 - **Sessions & Runs**: an interactive session can be suspended instead of finished, by its
   owner with **Suspend** or by the 23-hour limit, which used to finish it. Its files, each
   repository's unpushed commits and uncommitted changes, and the agent's conversation are
@@ -52,10 +64,6 @@ governance, community health — carry none.
   and sets `BITBUCKET_OAUTH_CLIENT_ID` and `BITBUCKET_OAUTH_CLIENT_SECRET`.
 
 ### Changed
-- **Workflows**: the `pull_request_*` tools are a tool group, **Pull requests**, that a workflow or a step can
-  add or remove. Existing workflows keep them through a migration; sessions no longer get them just because
-  they hold a GitHub, GitLab or Bitbucket repository, and the session context no longer tells agents to use
-  them.
 - **Company settings**: a self-hosted installation bought through AWS Marketplace
   reports its usage under the dimension `worker_minute`, the same word as the SaaS
   product, instead of `queue_minute`. Operators: from this version an installation meters
@@ -68,8 +76,6 @@ governance, community health — carry none.
   the right company, and two tabs can stay on two companies. Links from before keep
   working and open in the project's company, or in the one you used last. A company's short
   name in the address comes from its email domain (`acme.com` → `acme`).
-- **Companies & projects**: each company in the switcher on the far left is a link, so
-  Cmd/Ctrl+click opens it in a new tab and leaves the current tab where it is.
 - **Admin**: the dashboard opens on the current week, shows Utilization, Average wait and
   p95 wait right after Company, keeps the table's header and Company column in view while
   it scrolls, and folds its explanation into a "How to read this dashboard" section.
@@ -1841,7 +1847,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.18.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.19.0...develop
+[1.19.0]: https://github.com/AixleHQ/flow/compare/v1.18.0...v1.19.0
 [1.18.0]: https://github.com/AixleHQ/flow/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/AixleHQ/flow/compare/v1.16.0...v1.17.0
 [1.16.0]: https://github.com/AixleHQ/flow/compare/v1.15.0...v1.16.0
