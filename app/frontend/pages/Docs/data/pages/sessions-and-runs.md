@@ -13,8 +13,8 @@ Three tabs:
 - **Standalone** — sessions started by hand. Only **New Session** here.
 - **Workflow runs** — runs. Only **Run workflow** here.
 
-Filter by agent, status, type, workflow, the person who started it, or the
-days it started on, or search by name. Click the **Tokens**, **Cost**,
+Filter by agent, status, type, workflow, board task, the person who started
+it, or the days it started on, or search by name. Click the **Tokens**, **Cost**,
 **Duration** or **Started** header to sort by that column — most expensive or
 longest first; click again to flip it. A run sorts by what its sessions add
 up to.

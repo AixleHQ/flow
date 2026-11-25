@@ -151,8 +151,8 @@ container-session diagnostics — the same detail the run page shows.
 `list_sessions` and `list_workflow_runs` filter, sort and page like the
 **Sessions & Runs** list. Sessions filter by company, project, status, kind
 (agent session or workflow step), agent, owner, workflow, prompt text and
-creation dates; runs by workflow, status, who started them, agent, workflow
-name and creation dates. Both sort by date, cost, tokens or duration and return
+creation dates; runs by workflow, board task (`task_number`), status, who
+started them, agent, workflow name and creation dates. Both sort by date, cost, tokens or duration and return
 one page at a time (`limit`, `offset`, with `total` and `has_more`). A run's row
 carries its tokens and cost, summed over its steps, and the board task it was
 started for (`task_number`, `task_title`, as `get_workflow_run` also returns);

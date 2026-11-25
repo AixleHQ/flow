@@ -19,6 +19,7 @@ module PersonalTools
       read_only
       param :project_id, type: :integer, description: "Project id.", required: true
       param :workflow_id, type: :integer, description: "Filter to one workflow id; its drafts' test runs are included."
+      param :task_number, type: :integer, description: "Only runs started for this board task (its #N on the board)."
       param :state, type: :string,
                     description: "The Sessions & Runs status filter (default all). `queued` is a run " \
                                  "waiting for a session slot for one of its steps; `pending` takes paused runs too.",
@@ -49,8 +50,8 @@ module PersonalTools
     private
 
     def filters(state)
-      { workflow_id: params[:workflow_id], user_id: params[:user_id], agent_type: params[:agent_type],
-        search: params[:search], status: (state unless state == "all") }.compact_blank
+      { workflow_id: params[:workflow_id], task_number: params[:task_number], user_id: params[:user_id],
+        agent_type: params[:agent_type], search: params[:search], status: (state unless state == "all") }.compact_blank
     end
 
     def row(run)

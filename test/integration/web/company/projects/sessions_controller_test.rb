@@ -50,11 +50,18 @@ class Web::Company::Projects::SessionsControllerTest < ActionDispatch::Integrati
       assert_equal({ "number" => task.number, "title" => task.title }, rows.fetch(run.id)[:task].stringify_keys)
     end
     assert_nil rows.fetch(loose.id)[:task]
-    assert_equal 1, queries.grep(/FROM "board_tasks"/).size, queries.grep(/FROM "board_tasks"/).inspect
+    per_row = queries.grep(/FROM "board_tasks" WHERE "board_tasks"\."id" = /)
+    assert_empty per_row, per_row.inspect
 
     get rows_company_project_sessions_path(@project, run_ids: [ runs.first.id ])
 
     assert_equal({ "number" => tasks.first.number, "title" => "Fix login 0" }, response.parsed_body["entries"].first["task"])
+
+    get company_project_sessions_path(@project, task_number: tasks.last.number)
+
+    assert_equal [ runs.last.id ], inertia.props[:entries].map { |e| e[:id] }
+    assert_equal tasks.last.number.to_s, inertia.props[:filters][:taskNumber]
+    assert_equal tasks.map(&:number).sort.reverse, inertia.props[:taskOptions].map { |t| t.symbolize_keys[:number] }
   end
 
   test "new renders new session page" do

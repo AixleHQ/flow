@@ -26,6 +26,7 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
       total: result.pagy.count,
       user_options: feed.user_options,
       workflow_options: feed.workflow_options,
+      task_options: feed.task_options,
       # Both create flows are drawers on this page now, so their option lists
       # live here — but only a user who actually opens a drawer pays for them.
       create_options: InertiaRails.optional { create_options },
@@ -106,7 +107,8 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
       agent_type: params[:agent_type].presence,
       status: params[:status].presence,
       user_id: params[:user_id].presence,
-      workflow_id: params[:workflow_id].presence
+      workflow_id: params[:workflow_id].presence,
+      task_number: params[:task_number].presence
     }.compact
   end
 

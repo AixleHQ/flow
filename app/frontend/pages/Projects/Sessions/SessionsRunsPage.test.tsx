@@ -299,6 +299,25 @@ describe('Projects/Sessions/SessionsRunsPage', () => {
     );
   });
 
+  it('narrows the list to the runs of a board task', async () => {
+    renderWith(seed({ taskOptions: [{ number: 12, title: 'Fix the login redirect' }] }));
+
+    await userEvent.click(screen.getByPlaceholderText('Task'));
+    await userEvent.click(await screen.findByRole('option', { name: '#12 Fix the login redirect' }));
+
+    expect(router.get).toHaveBeenLastCalledWith(
+      '/company/projects/7/sessions',
+      { type: 'all', task_number: '12' },
+      expect.anything(),
+    );
+  });
+
+  it('offers no task filter on the Standalone tab', () => {
+    renderWith(seed({ filters: { type: 'solo' }, taskOptions: [{ number: 12, title: 'Fix the login redirect' }] }));
+
+    expect(screen.queryByPlaceholderText('Task')).not.toBeInTheDocument();
+  });
+
   it('offers no workflow filter on the Standalone tab', () => {
     renderWith(seed({ filters: { type: 'solo' }, workflowOptions: [{ id: 12, name: 'Weekly GA report' }] }));
 

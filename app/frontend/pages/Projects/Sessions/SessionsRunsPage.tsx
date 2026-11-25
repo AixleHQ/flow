@@ -69,6 +69,7 @@ interface Filters {
   status?: string;
   userId?: string;
   workflowId?: string;
+  taskNumber?: string;
 }
 
 /** The ransack `q` the list honours: a date range and a sort. */
@@ -86,6 +87,7 @@ export interface SessionsRunsPageProps {
   total: number;
   userOptions: { id: number; name: string }[];
   workflowOptions?: { id: number; name: string }[];
+  taskOptions?: { number: number; title: string }[];
   /** Signed stream the page hands out; it names the sessions and runs that changed. */
   cableStream?: string;
 }
@@ -122,6 +124,7 @@ const OPENABLE_SESSION_STATES = new Set([
 
 const NO_QUERY: ListQuery = {};
 const NO_OPTIONS: { id: number; name: string }[] = [];
+const NO_TASK_OPTIONS: { number: number; title: string }[] = [];
 
 /** Router params for the list's `q`; the default sort stays out of the URL. */
 function listQueryParams({ s, createdFrom, createdUntil }: ListQuery): Record<string, string> | null {
@@ -167,6 +170,7 @@ const SessionsRunsPage = ({
   total,
   userOptions,
   workflowOptions = NO_OPTIONS,
+  taskOptions = NO_TASK_OPTIONS,
   cableStream,
 }: SessionsRunsPageProps) => {
   const { canExecute } = useProjectPermissions();
@@ -288,6 +292,7 @@ const SessionsRunsPage = ({
     filters.status ||
     filters.userId ||
     filters.workflowId ||
+    filters.taskNumber ||
     query.createdFrom
   );
 
@@ -299,6 +304,10 @@ const SessionsRunsPage = ({
   const workflowSelectData = useMemo(
     () => workflowOptions.map((w) => ({ value: String(w.id), label: w.name })),
     [workflowOptions],
+  );
+  const taskSelectData = useMemo(
+    () => taskOptions.map((t) => ({ value: String(t.number), label: `#${t.number} ${t.title}` })),
+    [taskOptions],
   );
 
   return (
@@ -400,6 +409,19 @@ const SessionsRunsPage = ({
             clearable
             searchable
             w={180}
+          />
+        )}
+        {taskSelectData.length > 0 && filters.type !== 'solo' && (
+          <Select
+            placeholder="Task"
+            aria-label="Filter by task"
+            data={taskSelectData}
+            value={filters.taskNumber ?? null}
+            onChange={(v) => navigate({ taskNumber: v ?? undefined })}
+            clearable
+            searchable
+            w={180}
+            comboboxProps={{ width: 360, position: 'bottom-end' }}
           />
         )}
         <DateRangeFilter
