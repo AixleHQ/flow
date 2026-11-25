@@ -992,3 +992,9 @@
     transition: none;
   }
 }
+
+/* Why a user-menu item is disabled, under its label. */
+.menuItemHint {
+  font-size: var(--mantine-font-size-xs);
+  color: var(--app-text-tertiary);
+}

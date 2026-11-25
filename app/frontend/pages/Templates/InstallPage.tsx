@@ -184,7 +184,7 @@ const InstallPage = () => {
         mb={24}
       />
 
-      <Stack gap="lg" maw={860}>
+      <Stack gap="lg" maw={860} data-tour="install-form">
         <Card withBorder padding="lg" radius="md">
           <Stack gap="sm">
             <Title order={2} size="h4">
@@ -337,7 +337,12 @@ const InstallPage = () => {
                 </Text>
               )}
               <Group justify="flex-end">
-                <Button onClick={install} loading={submitting} disabled={!plan.resolved || missingRequired}>
+                <Button
+                  onClick={install}
+                  loading={submitting}
+                  disabled={!plan.resolved || missingRequired}
+                  data-tour="install-submit"
+                >
                   {installLabel()}
                 </Button>
               </Group>

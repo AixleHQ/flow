@@ -48,6 +48,7 @@ export const buildSharedUser = (overrides: Partial<CurrentUser> = {}): CurrentUs
   excludeFromTeams: false,
   dashboardViewer: false,
   needsAgentSetup: false,
+  productTour: null,
   currentRole: 'admin',
   currentCompany: buildSharedCompany(),
   memberships: [buildSharedMembership()],

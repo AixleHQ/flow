@@ -6,6 +6,8 @@ interface TabDef<T extends string> {
   /** Rendered small and mono after the label, e.g. the asset count. */
   count?: number;
   disabled?: boolean;
+  /** Product-tour anchor, rendered as the tab's `data-tour` attribute. */
+  dataTour?: string;
 }
 
 interface TabBarProps<T extends string> {
@@ -38,6 +40,7 @@ export function TabBar<T extends string>({ tabs, value, onChange, inline = false
           disabled={tab.disabled}
           className={tab.value === value ? `${classes.tab} ${classes.active}` : classes.tab}
           onClick={() => onChange(tab.value)}
+          data-tour={tab.dataTour}
         >
           {tab.label}
           {tab.count != null && <span className={classes.count}>{tab.count}</span>}

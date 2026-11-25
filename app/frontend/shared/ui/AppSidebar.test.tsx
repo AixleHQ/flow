@@ -4,7 +4,9 @@ import { router } from '@inertiajs/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { Membership } from '@/types/generated';
-import { buildSharedProps, renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
+import { EXPAND_SIDEBAR_EVENT, ProductTourProvider } from 'shared/lib/productTour';
+import { companyProjectsPath } from 'shared/routes';
+import { act, buildSharedProps, renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
 
 import { AppSidebar } from './AppSidebar';
 import type { SharedProject } from './types';
@@ -293,6 +295,97 @@ describe('AppSidebar', () => {
 
     expect(await screen.findByRole('menuitem', { name: 'Sign Out' })).toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Platform dashboard' })).not.toBeInTheDocument();
+  });
+
+  describe('Start product tour', () => {
+    const tourUser = (overrides: Record<string, unknown> = {}) => ({
+      ...buildUser(),
+      configuredAgents: ['claude_code' as const],
+      productTour: { variant: 'a' as const, aFinished: false, bFinished: false, helloFlowAvailable: true },
+      ...overrides,
+    });
+
+    const renderWithTour = (currentUser: ReturnType<typeof tourUser>, productTour = true) =>
+      renderAuthedPage(
+        <ProductTourProvider initialPage={null} highlighter={{ show: () => {}, clear: () => {} }}>
+          <AppSidebar context="company" projects={[]} />
+        </ProductTourProvider>,
+        { props: { currentUser, features: { productTour } } },
+      );
+
+    it('sits after Send feedback and starts the tour from the projects page', async () => {
+      const user = userEvent.setup();
+      renderWithTour(tourUser());
+
+      await user.click(screen.getByRole('button', { name: /Cassia Vega/ }));
+      const items = await screen.findAllByRole('menuitem');
+      expect(items.map((item) => item.textContent)).toEqual(['My Profile', 'Start product tour', 'Sign Out']);
+
+      await user.click(screen.getByRole('menuitem', { name: 'Start product tour' }));
+
+      expect(router.visit).toHaveBeenCalledWith(companyProjectsPath());
+    });
+
+    it('is disabled and says why while no agent is connected', async () => {
+      const user = userEvent.setup();
+      renderWithTour(tourUser({ configuredAgents: [] }));
+
+      await user.click(screen.getByRole('button', { name: /Cassia Vega/ }));
+
+      expect(await screen.findByRole('menuitem', { name: /Start product tour/ })).toBeDisabled();
+      expect(screen.getByText('Connect an agent first')).toBeInTheDocument();
+    });
+
+    it('is disabled where the starter template is not in the catalog', async () => {
+      const user = userEvent.setup();
+      renderWithTour(
+        tourUser({ productTour: { variant: 'a', aFinished: false, bFinished: false, helloFlowAvailable: false } }),
+      );
+
+      await user.click(screen.getByRole('button', { name: /Cassia Vega/ }));
+
+      expect(await screen.findByRole('menuitem', { name: /Start product tour/ })).toBeDisabled();
+      expect(screen.getByText('The starter template is not available here')).toBeInTheDocument();
+    });
+
+    it('starts the viewer tour for a viewer, who needs neither an agent nor the template', async () => {
+      const user = userEvent.setup();
+      renderWithTour(
+        tourUser({
+          configuredAgents: [],
+          productTour: { variant: 'b', aFinished: false, bFinished: false, helloFlowAvailable: false },
+        }),
+      );
+
+      await user.click(screen.getByRole('button', { name: /Cassia Vega/ }));
+      await user.click(await screen.findByRole('menuitem', { name: 'Start product tour' }));
+
+      expect(router.visit).toHaveBeenCalledWith(companyProjectsPath());
+    });
+
+    it('is not offered while the product tour is off', async () => {
+      const user = userEvent.setup();
+      renderWithTour(tourUser(), false);
+
+      await user.click(screen.getByRole('button', { name: /Cassia Vega/ }));
+
+      expect(await screen.findByRole('menuitem', { name: 'Sign Out' })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: /Start product tour/ })).not.toBeInTheDocument();
+    });
+  });
+
+  it('expands itself and every group when the tour asks', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(<AppSidebar projectId="7" context="project" projects={projects} currentProjectId="7" />);
+    await user.click(screen.getByRole('button', { name: 'Work' }));
+    await user.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent(EXPAND_SIDEBAR_EVENT));
+    });
+
+    expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Tasks' })).toBeInTheDocument();
   });
 
   it('toggles the collapsed state via the collapse button', async () => {

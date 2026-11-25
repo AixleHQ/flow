@@ -164,7 +164,7 @@ const ShowPage = () => {
         {items.length === 0 ? (
           <Text c="var(--app-text-secondary)">Nothing left to set up.</Text>
         ) : (
-          <Card withBorder padding={0} radius="md">
+          <Card withBorder padding={0} radius="md" data-tour="setup-checklist">
             {items.map((item) => (
               <Stack key={item.id} gap={6} p="md" style={{ borderBottom: '1px solid var(--app-border-subtle)' }}>
                 <Group justify="space-between">

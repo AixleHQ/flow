@@ -420,7 +420,7 @@ const SessionsRunsPage = ({
             </Center>
           )}
         >
-          <div className={classes.tableWrap}>
+          <div className={classes.tableWrap} data-tour="sessions-list">
             <div className={classes.table}>
               <div className={classes.thead}>
                 <span />

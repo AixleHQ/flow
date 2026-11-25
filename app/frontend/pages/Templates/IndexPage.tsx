@@ -115,7 +115,13 @@ const IndexPage = () => {
       ) : (
         <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
           {filtered.map((template) => (
-            <Card key={template.identifier} withBorder padding="lg" radius="md">
+            <Card
+              key={template.identifier}
+              withBorder
+              padding="lg"
+              radius="md"
+              data-tour={`template-card:${template.namespace}/${template.slug}`}
+            >
               <Stack gap="xs" h="100%">
                 <Group gap="xs">
                   <KindBadge kind={template.kind} />

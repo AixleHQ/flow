@@ -170,7 +170,7 @@ const IndexPage = () => {
             description={`No projects match "${searchQuery}".`}
           />
         ) : (
-          <Box className={classes.grid}>
+          <Box className={classes.grid} data-tour="projects-list">
             {sortedAndFiltered.map((project) => (
               <ProjectCard
                 key={project.id}

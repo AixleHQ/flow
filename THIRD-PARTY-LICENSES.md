@@ -139,6 +139,7 @@ Ruby-licensed.
 | @xterm/xterm (+ addon-fit, addon-web-links) | 6.0.0 | MIT |
 | date-fns | 4.1.0 | MIT |
 | dayjs | 1.11.20 | MIT |
+| driver.js | 1.10.2 | MIT |
 | lodash | 4.17.21 | MIT |
 | mantine-form-zod-resolver | 1.3.0 | MIT |
 | nanoid | 5.1.5 | MIT |

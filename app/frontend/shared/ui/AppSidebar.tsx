@@ -21,6 +21,7 @@ import {
   IconPlug,
   IconPlugConnected,
   IconRobot,
+  IconRoute,
   IconServer,
   IconSettings,
   IconTemplate,
@@ -35,15 +36,16 @@ import {
   IconUsersGroup,
   IconWand,
 } from '@tabler/icons-react';
-import { Fragment, useCallback, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 
-import type { Membership } from '@/types/generated';
+import type { CurrentUser, Membership } from '@/types/generated';
 
 import { CreateProjectModal } from 'shared/components/CreateProjectModal';
 import { FeedbackModal } from 'shared/components/FeedbackModal';
 import { getInitials } from 'shared/lib/getInitials';
 import { useCompanySlug } from 'shared/lib/hooks/useCompanySlug';
 import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
+import { EXPAND_SIDEBAR_EVENT, useProductTour } from 'shared/lib/productTour';
 import { confirmLeave } from 'shared/lib/unsaved-changes/guards';
 import {
   companyAnalyticsPath,
@@ -120,6 +122,8 @@ interface NavItem {
   icon: React.ReactNode;
   path: string;
   adminOnly?: boolean;
+  /** The product tour's anchor (`data-tour`). */
+  tourId?: string;
 }
 
 interface NavGroup {
@@ -202,7 +206,7 @@ const buildCompanyNavGroups = (): NavGroup[] => [
   {
     label: 'Library',
     items: [
-      { label: 'Templates', icon: <IconTemplate size={18} />, path: templatesPath() },
+      { label: 'Templates', icon: <IconTemplate size={18} />, path: templatesPath(), tourId: 'nav-templates' },
       { label: 'Workflow Catalog', icon: <IconGitMerge size={18} />, path: companyWorkflowCatalogIndexPath() },
     ],
   },
@@ -271,6 +275,7 @@ function AgentSetupNudge({ collapsed }: { collapsed: boolean }) {
           href={profilePath()}
           aria-label={label}
           className={classes.agentNudgeCollapsed}
+          data-tour="agent-nudge"
         >
           <IconAlertTriangle size={16} />
         </UnstyledButton>
@@ -279,7 +284,7 @@ function AgentSetupNudge({ collapsed }: { collapsed: boolean }) {
   }
 
   return (
-    <UnstyledButton component={Link} href={profilePath()} className={classes.agentNudge}>
+    <UnstyledButton component={Link} href={profilePath()} className={classes.agentNudge} data-tour="agent-nudge">
       <IconAlertTriangle size={15} className={classes.agentNudgeIcon} />
       <span className={classes.agentNudgeText}>{label}</span>
     </UnstyledButton>
@@ -384,6 +389,7 @@ function SidebarNav({ groups, collapsed, isAdmin, collapsedGroups, toggleGroup, 
                         onClick={onNavigate}
                         aria-label={item.label}
                         aria-current={isActive ? 'page' : undefined}
+                        data-tour={item.tourId}
                         className={[
                           isOverview ? classes.navOverview : classes.navItem,
                           isOverview ? classes.navOverviewCollapsed : classes.navItemCollapsed,
@@ -402,6 +408,7 @@ function SidebarNav({ groups, collapsed, isAdmin, collapsedGroups, toggleGroup, 
                     href={item.path}
                     onClick={onNavigate}
                     aria-current={isActive ? 'page' : undefined}
+                    data-tour={item.tourId}
                     className={[
                       isOverview ? classes.navOverview : classes.navItem,
                       isActive ? (isOverview ? classes.navOverviewActive : classes.navItemActive) : '',
@@ -649,14 +656,34 @@ function SidebarWorkspaceSwitcher({
 
 // ─── SidebarUserFooter ────────────────────────────────────────────────────────
 
+// Tour B (a viewer's) runs nothing, so nothing can block it. Tour A installs the
+// Hello Flow template and runs it with the member's own agent.
+function productTourBlocker(
+  tour: NonNullable<CurrentUser['productTour']>,
+  connectedAgents: number,
+): string | null {
+  if (tour.variant === 'b') return null;
+  if (!tour.helloFlowAvailable) return 'The starter template is not available here';
+  if (connectedAgents === 0) return 'Connect an agent first';
+  return null;
+}
+
 interface SidebarUserFooterProps {
   userName: string;
   collapsed: boolean;
   feedbackEnabled: boolean;
   dashboardViewer: boolean;
+  /** Absent while the product tour is off; `blockedBy` says why it cannot start yet. */
+  productTour: { start: () => void; blockedBy: string | null } | null;
 }
 
-function SidebarUserFooter({ userName, collapsed, feedbackEnabled, dashboardViewer }: SidebarUserFooterProps) {
+function SidebarUserFooter({
+  userName,
+  collapsed,
+  feedbackEnabled,
+  dashboardViewer,
+  productTour,
+}: SidebarUserFooterProps) {
   const [feedbackOpened, { open: openFeedback, close: closeFeedback }] = useDisclosure(false);
 
   return (
@@ -689,6 +716,16 @@ function SidebarUserFooter({ userName, collapsed, feedbackEnabled, dashboardView
           {feedbackEnabled && (
             <Menu.Item leftSection={<IconMessage size={16} />} onClick={openFeedback}>
               Send feedback
+            </Menu.Item>
+          )}
+          {productTour && (
+            <Menu.Item
+              leftSection={<IconRoute size={16} />}
+              onClick={productTour.start}
+              disabled={productTour.blockedBy !== null}
+            >
+              Start product tour
+              {productTour.blockedBy && <div className={classes.menuItemHint}>{productTour.blockedBy}</div>}
             </Menu.Item>
           )}
           <Menu.Divider />
@@ -745,6 +782,25 @@ function SidebarContent({
       : buildCompanyNavGroups();
 
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => readCollapsedGroups());
+  useEffect(() => {
+    const expandGroups = () => {
+      setCollapsedGroups(new Set());
+      writeCollapsedGroups(new Set());
+    };
+    window.addEventListener(EXPAND_SIDEBAR_EVENT, expandGroups);
+    return () => window.removeEventListener(EXPAND_SIDEBAR_EVENT, expandGroups);
+  }, []);
+
+  const productTourEnabled = useFeatureFlag('productTour');
+  const { start: startProductTour } = useProductTour();
+  const tour = currentUser?.productTour ?? null;
+  const productTour =
+    productTourEnabled && tour
+      ? {
+          start: () => startProductTour(tour.variant),
+          blockedBy: productTourBlocker(tour, currentUser?.configuredAgents.length ?? 0),
+        }
+      : null;
   const toggleGroup = useCallback((label: string) => {
     setCollapsedGroups((prev) => {
       const next = new Set(prev);
@@ -770,7 +826,7 @@ function SidebarContent({
         onExpand={onExpand}
       />
 
-      <ScrollArea className={classes.scrollArea} type="never">
+      <ScrollArea className={classes.scrollArea} type="never" data-tour="sidebar-nav">
         <SidebarNav
           groups={navGroups}
           collapsed={collapsed}
@@ -802,6 +858,7 @@ function SidebarContent({
           collapsed={collapsed}
           feedbackEnabled={settings?.feedbackEnabled ?? false}
           dashboardViewer={currentUser.dashboardViewer}
+          productTour={productTour}
         />
       )}
     </>
@@ -858,6 +915,11 @@ export const AppSidebar = ({
       // localStorage unavailable
     }
   }, []);
+
+  useEffect(() => {
+    window.addEventListener(EXPAND_SIDEBAR_EVENT, onExpand);
+    return () => window.removeEventListener(EXPAND_SIDEBAR_EVENT, onExpand);
+  }, [onExpand]);
 
   if (isMobile) {
     return (

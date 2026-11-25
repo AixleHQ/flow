@@ -354,7 +354,7 @@ const WorkflowRunShowPage = () => {
     if (liveSteps.length === 0) return null;
 
     return (
-      <div className={classes.consoleStack}>
+      <div className={classes.consoleStack} data-tour="run-console">
         {liveSteps.map((step) => (
           <StepConsole
             key={step.id}
@@ -493,7 +493,7 @@ const WorkflowRunShowPage = () => {
               onChange={setTab}
               tabs={[
                 { value: 'sessions', label: 'Sessions', count: run.stepsTotal },
-                { value: 'assets', label: 'Assets', count: assets.length },
+                { value: 'assets', label: 'Assets', count: assets.length, dataTour: 'run-assets-tab' },
               ]}
             />
           }
@@ -675,11 +675,11 @@ const WorkflowRunShowPage = () => {
 
               {isActive && liveSteps.length > 0 ? (
                 <div className={classes.split}>
-                  <div className={classes.list}>{sessionCards}</div>
+                  <div className={classes.list} data-tour="run-sessions">{sessionCards}</div>
                   {renderConsoles()}
                 </div>
               ) : (
-                <div className={classes.list}>{sessionCards}</div>
+                <div className={classes.list} data-tour="run-sessions">{sessionCards}</div>
               )}
             </>
           )}
