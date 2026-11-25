@@ -1,6 +1,6 @@
 # "Add machine": a short instruction
 
-Status: proposed (task #286), revised twice after review (decisions of 2026-11-25). Extends `DESIGN.md` §6.3 (registration), §14.4 (distribution) and the
+Status: proposed (task #286), revised three times after review (decisions of 2026-11-25). Extends `DESIGN.md` §6.3 (registration), §14.4 (distribution) and the
 rows 12a and 12b of §15. It adds no protocol change: the wire, the tokens and the pins stay as they are.
 
 Runners are not released yet (the flag is off on production, and there are no real users). This design therefore
@@ -129,9 +129,9 @@ guide, `PROTOCOL.md`), the systemd unit the `service install` command writes, an
   output says the token is refused.
 - No token in a log line, as `configure` already does.
 
-**Unregister on stop is an explicit setting.** The flag `--unregister-on-stop` and its environment variable
+**Unregister on stop is an explicit setting, and the stop signals are SIGINT, SIGTERM and SIGHUP.** The flag `--unregister-on-stop` and its environment variable
 `AIXLE_RUNNER_UNREGISTER_ON_STOP` (`1` or `0`; the flag wins). **Nothing is inferred** from the mount type,
-from `AutoRemove` or from anything else the runner could inspect. With the setting on, SIGTERM or SIGINT runs the same
+from `AutoRemove` or from anything else the runner could inspect. With the setting on, SIGTERM, SIGINT or SIGHUP runs the same
 code as `unregister` (the platform marks the machine removed), after the sidecar teardown and the removal of the
 session containers (Cleanup, below), before the exit. A failed unregister is logged and does not block the exit.
 Unregister, teardown and exit are written to fit in `docker stop`'s default 10 s before SIGKILL: each step has its own
@@ -144,6 +144,17 @@ slow fake gateway.
 | The "keep" checkboxes | **off** (`-e AIXLE_RUNNER_UNREGISTER_ON_STOP=0`) | A kept registration is meant to survive `docker stop` and `docker start`. |
 | The Linux service | **off** (the binary's default; the unit does not set it) | A service is meant to survive restarts. |
 | An edited command | the operator's | Someone who edits the command (for example to `--restart always`) turns it off themselves. The user guide says how: add `-e AIXLE_RUNNER_UNREGISTER_ON_STOP=0`. |
+
+**Closing the runner's terminal is a normal stop.** This is the operator's terminal on their own machine, where
+the runner runs in the foreground (not the browser). Closing it sends SIGHUP. Runner `0.5.0` was checked on a real
+pty: it dies of SIGHUP with no cleanup (exit 129), in the foreground on a bare machine and under `docker run --rm`
+without `-t` alike (the docker CLI forwards the SIGHUP to the container). Today `runner/cmd/aixle-runner/main.go`
+handles only SIGINT and SIGTERM (`signal.NotifyContext`), so in the default Docker mode a closed terminal leaves a
+registered machine that never answers, plus the sidecar and agent with the anonymous volume. So `--mode machine`
+(on a bare machine and in Docker alike) **treats SIGHUP like SIGINT and SIGTERM**: it tears down the sidecar,
+removes the session containers, unregisters only when unregister-on-stop is on, and exits. The systemd service is
+not affected: it stops the runner with SIGTERM. Closing a browser tab with an interactive session does not reach the
+runner, and nothing changes there.
 
 On SIGKILL or a power loss nothing runs, and the machine shows as not answering until it is Revoked or Deleted on
 the runner page.
@@ -191,9 +202,14 @@ mode 0755). The sidecar mounts that `bin` directory the same way as the session'
 **Where the state directory lives on the machine.** On a bare host the state directory's path is already the
 machine's path: the sidecar binds `<state-dir>/bin`, `<state-dir>/proxy/<session>`, … directly, and the runner
 inspects nothing. In a container the image sets `AIXLE_RUNNER_IN_CONTAINER=1` (§3.1). **Only then** the runner inspects its
-own container (`os.Hostname()` is the container id unless `--hostname` is set), finds the mount whose destination
-is its state directory, and learns **only where that directory lives on the machine**. The inspection chooses no
-behaviour. If the inspect fails, the runner stops at start with the reason.
+own container and learns **only where that directory lives on the machine**. The inspection chooses no behaviour.
+
+**How it finds its own container.** The runner uses `os.Hostname()`, which Docker sets to the container's short id by
+default. It looks that container up and **checks that the container it found is itself**: the found container has the
+same hostname and a mount whose destination is the state directory. If the check fails (for example, the operator
+overrode `--hostname`, or used `--network host`, where the hostname is the machine's), the runner **stops at start**
+with a clear error that says not to override `--hostname` and not to use `--network host`. There is no `/proc` parsing
+and no extra `-e` flag in the command. If the inspect itself fails, the runner stops at start with the reason.
 
 1. **A volume, anonymous or named** (`Type: volume`): the runner takes the volume's name, and the sidecar gets
    **volume mounts with a `Subpath`** (`mount.VolumeOptions.Subpath`, Docker API 1.45, Engine 26.0) of that volume:
@@ -322,12 +338,16 @@ copy-and-compare path.
   - `cli`: `--mode machine` with no credentials and the three variables registers once and runs; with credentials
     and the variables it registers nothing (a fake gateway fails the test on a `register` call); a refused
     token writes no credentials and exits non-zero; no token in any output.
-  - `cli`: SIGTERM and SIGINT with `AIXLE_RUNNER_UNREGISTER_ON_STOP=1` unregister, whatever the mount (an anonymous
-    volume, a named volume, a directory, no `--rm`); with `0` or unset they do not; the flag wins over the variable.
+  - `cli`: each of SIGTERM, SIGINT and SIGHUP with `AIXLE_RUNNER_UNREGISTER_ON_STOP=1` tears down the sidecar, removes the
+    session containers, unregisters and exits, whatever the mount (an anonymous volume, a named volume, a directory,
+    no `--rm`); with `0` or unset each of the three does the same without the unregister; the flag wins over the variable.
     Unregister, teardown and exit finish inside 10 s against a slow fake gateway.
   - `main`: the modes are `machine` and `proxy`; `host` is not accepted; the controller starts from its explicit command.
   - `docker`: the runner copies its binary to `<state-dir>/bin` at start, on a bare host and with `AIXLE_RUNNER_IN_CONTAINER=1`;
     on a bare host it inspects nothing; in a container the inspect only supplies the volume name or the `Source`;
+    the own-container check: a container with the same hostname and a mount at the state directory is accepted;
+    a different hostname (`--hostname` overridden, or `--network host`) or no mount at the state directory stops the start
+    with the error that names both flags;
     sidecar mounts for a volume state, anonymous and named (subpath mounts, `/aixle-bin/aixle-runner`) and for a
     directory (binds under the `Source`, any path); no mount under a volume's `Mountpoint`; `checkBind`.
   - `docker`: cleanup removes only containers labelled with its own key: a normal stop removes the sidecar and agent; a
@@ -385,6 +405,11 @@ Risks and edge cases:
   one. This is the same window `configure` has now.
 - **A subpath of a volume mounts what is there at the time**: the runner creates `bin` at start and the session
   directories before the sidecar (as it does for binds).
+- **The runner cannot find its own container.** With `--hostname` overridden or `--network host`, the hostname is not the
+  container's id, so the lookup finds nothing or another container. The runner checks that the found container has the
+  same hostname and a mount at its state directory, and otherwise stops at start with an error that says not to override
+  `--hostname` and not to use `--network host` (§3.2).
+- **Closing the operator's terminal** sends SIGHUP; the runner treats it as a stop (§3.1). SIGKILL still cannot be handled.
 - **One session at a time.** The sidecars of two sessions on a machine would share the daemon's default network;
   today a machine runs one session, so this does not occur.
 - **Removing a kept volume or directory deletes the credentials**: the machine must be revoked and added again. The guide says so.
