@@ -423,6 +423,9 @@ namespace :admin do
   end
 end
 
+# Staging QA console (StagingConsoleController). Drawn only where web-console is loaded.
+get "staging_console", to: "staging_console#show" if defined?(WebConsole)
+
 scope module: :web, defaults: { format: :html } do
   root "home#show"
   mount OasRails::Engine => "/api-docs"

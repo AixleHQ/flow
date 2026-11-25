@@ -27,6 +27,15 @@ module Aixle
     config.load_defaults 8.1
 
     config.require_master_key = false
+
+    # web-console aborts boot outside development unless this is false, and its
+    # check runs before config/initializers, so it has to be set here. Behind the
+    # staging ingress every request arrives from a proxy address, so the IP
+    # allowlist is opened there; StagingConsoleController gates access instead.
+    if defined?(WebConsole)
+      config.web_console.development_only = false
+      config.web_console.allowed_ips = "0.0.0.0/0" if Rails.env.staging?
+    end
     config.secret_key_base = Settings.rails.secret_key_base
     config.public_file_server.enabled = true
     # A page that does not exist gets the app's own 404 page (ErrorsController).
