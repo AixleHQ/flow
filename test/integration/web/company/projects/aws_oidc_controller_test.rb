@@ -10,7 +10,6 @@ class Web::Company::Projects::AwsOidcControllerTest < ActionDispatch::Integratio
 
   setup do
     setup_project_authz_personas
-    FeatureFlag.find_or_create_by!(key: "aws_oidc").update!(enabled: true)
   end
 
   teardown { teardown_authz }
@@ -38,16 +37,6 @@ class Web::Company::Projects::AwsOidcControllerTest < ActionDispatch::Integratio
       AwsOidcRole.where(name: "prod-diag").delete_all
       post company_project_aws_oidc_roles_path(@project), params: ROLE_PARAMS
     end
-  end
-
-  test "a company without the flag sees nothing" do
-    FeatureFlag.find_by!(key: "aws_oidc").update!(enabled: false)
-    sign_in_as(@admin)
-
-    post connect_company_project_aws_oidc_path(@project)
-
-    assert_response :not_found
-    assert_not Integration.exists?(project: @project, provider: "aws_oidc")
   end
 
   test "disconnecting keeps the issuer and the roles, and connecting again revives them" do
@@ -113,7 +102,6 @@ class Web::Company::Projects::AwsOidcControllerTest < ActionDispatch::Integratio
     get company_project_integrations_path(@project)
 
     props = inertia.props[:awsOidc]
-    assert props[:enabled]
     assert props[:canManage]
     connection = props[:connection]
     assert_equal AwsOidc::Issuer.url(role.integration), connection[:issuerUrl]

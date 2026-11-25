@@ -15,43 +15,35 @@ class AwsOidc::RoleCredentialsTest < ActionDispatch::IntegrationTest
   end
 
   test "an attached role comes back as a bare credential-process document" do
-    with_feature(:aws_oidc, true) do
-      post PATH, headers: headers(role: "prod-diag")
+    post PATH, headers: headers(role: "prod-diag")
 
-      assert_response :ok
-      assert_equal "application/json", response.media_type
-      doc = JSON.parse(response.body)
-      assert_equal 1, doc["Version"]
-      assert doc["AccessKeyId"].start_with?("ASIAFAKE")
-    end
+    assert_response :ok
+    assert_equal "application/json", response.media_type
+    doc = JSON.parse(response.body)
+    assert_equal 1, doc["Version"]
+    assert doc["AccessKeyId"].start_with?("ASIAFAKE")
   end
 
   test "a role the step does not have is forbidden" do
-    with_feature(:aws_oidc, true) do
-      post PATH, headers: headers(role: "someone-elses")
+    post PATH, headers: headers(role: "someone-elses")
 
-      assert_response :forbidden
-      assert_equal({ "error" => "not_entitled" }, JSON.parse(response.body))
-    end
+    assert_response :forbidden
+    assert_equal({ "error" => "not_entitled" }, JSON.parse(response.body))
   end
 
   test "a trust policy refusal is a bad gateway naming the kind of failure" do
     @sts.raise_on = { assume_role_with_web_identity: AwsOidc::TrustPolicyError.new("denied") }
 
-    with_feature(:aws_oidc, true) do
-      post PATH, headers: headers(role: "prod-diag")
+    post PATH, headers: headers(role: "prod-diag")
 
-      assert_response :bad_gateway
-      assert_equal({ "error" => "aws_oidc_trust_policy" }, JSON.parse(response.body))
-    end
+    assert_response :bad_gateway
+    assert_equal({ "error" => "aws_oidc_trust_policy" }, JSON.parse(response.body))
   end
 
   test "the session key is still required" do
-    with_feature(:aws_oidc, true) do
-      post PATH, headers: headers(role: "prod-diag").merge("X-Cloud-Key" => "wrong")
+    post PATH, headers: headers(role: "prod-diag").merge("X-Cloud-Key" => "wrong")
 
-      assert_response :unauthorized
-    end
+    assert_response :unauthorized
     assert_empty @sts.calls
   end
 

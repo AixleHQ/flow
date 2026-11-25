@@ -45,7 +45,6 @@ export interface AwsOidcConnection {
 }
 
 export interface AwsOidcProps {
-  enabled: boolean;
   canManage?: boolean;
   connection?: AwsOidcConnection | null;
 }

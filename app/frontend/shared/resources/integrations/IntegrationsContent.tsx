@@ -131,7 +131,7 @@ interface IntegrationsContentProps {
   teams?: TeamsProps;
   // Absent on the company page. `enabled: false` is a deployment Insights has not registered.
   insights?: InsightsProps;
-  // Absent on the company page. `enabled: false` is a company without the aws_oidc flag.
+  // Absent on the company page.
   awsOidc?: AwsOidcProps;
 }
 
@@ -280,8 +280,7 @@ export const IntegrationsContent = ({
 
   // One AWS OIDC connection per project: offered until there is one, managed from its row after.
   const [awsOidcOpen, setAwsOidcOpen] = useState(false);
-  const awsOidcAvailable =
-    isProjectContext && projectId !== undefined && !!awsOidc?.enabled && !!awsOidc.canManage && !awsOidc.connection;
+  const awsOidcAvailable = isProjectContext && projectId !== undefined && !!awsOidc?.canManage && !awsOidc.connection;
   const handleConnectAwsOidc = useCallback(() => {
     if (projectId !== undefined) connectAwsOidc(projectId, () => setAwsOidcOpen(true));
   }, [projectId]);
@@ -1684,7 +1683,7 @@ export const IntegrationsContent = ({
         </>
       )}
 
-      {awsOidc?.enabled && projectId !== undefined && (
+      {awsOidc && projectId !== undefined && (
         <AwsOidcDialog
           opened={awsOidcOpen}
           onClose={() => setAwsOidcOpen(false)}

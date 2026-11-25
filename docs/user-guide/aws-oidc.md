@@ -6,8 +6,7 @@ a step needs AWS, Flow assumes the role with `AssumeRoleWithWebIdentity` and han
 step credentials that last at most an hour. No long-lived key exists in Flow, in the
 step's container or in your account.
 
-AWS OIDC connects per project. It is behind a feature flag: if **AWS OIDC** is missing
-from the connect menu on the project's **Integrations** page, ask us to turn it on.
+AWS OIDC connects per project, from the project's **Integrations** page.
 
 This page walks through one setup end to end, then covers what a step sees, the
 subjects a trust policy can name, troubleshooting and limits.

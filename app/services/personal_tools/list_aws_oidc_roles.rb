@@ -19,18 +19,12 @@ module PersonalTools
     def execute
       project = find_project!
       authorize!(project, :index?, policy: Web::Company::Projects::AwsOidcPolicy, project: project)
-      return success(project_id: project.id, enabled: false, connected: false, roles: []) unless enabled?(project)
-
       integration = Integration.find_by(project: project, provider: "aws_oidc")
-      success(project_id: project.id, enabled: true, connected: integration&.active? || false,
+      success(project_id: project.id, connected: integration&.active? || false,
               issuer_url: integration && AwsOidc::Issuer.url(integration), roles: roles(integration))
     end
 
     private
-
-    def enabled?(project)
-      Feature.enabled?(:aws_oidc, company: project.company)
-    end
 
     def roles(integration)
       return [] if integration.nil?

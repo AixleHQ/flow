@@ -187,8 +187,6 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
   end
 
   def aws_oidc_role_options
-    return [] unless Feature.enabled?(:aws_oidc, company: current_project.company)
-
     AwsOidcRole.for_project(current_project).order(:name).map { |role| AwsOidcRolePickerResource.new(role).to_h }
   end
 

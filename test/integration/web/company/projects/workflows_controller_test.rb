@@ -191,7 +191,7 @@ class Web::Company::Projects::WorkflowsControllerTest < ActionDispatch::Integrat
     assert_not_includes names, outsider.name
   end
 
-  test "builder and index offer the project's AWS roles only with the aws_oidc flag on" do
+  test "builder and index offer the project's AWS roles and no other project's" do
     wf = create(:workflow, scope: @project)
     role = create(:aws_oidc_role, name: "prod-diag", role_arn: "arn:aws:iam::123456789012:role/prod-diag",
                                   region: "eu-west-1",
@@ -201,15 +201,9 @@ class Web::Company::Projects::WorkflowsControllerTest < ActionDispatch::Integrat
               company_project_workflows_path(@project) => "Projects/Workflows/WorkflowsPage" }
 
     pages.each do |path, component|
-      assert_equal [], deferred_prop(path, component: component, key: "awsOidcRoles")
-    end
-
-    with_feature(:aws_oidc, true, company: @company) do
-      pages.each do |path, component|
-        assert_equal [ { "id" => role.id, "name" => "prod-diag", "roleArn" => "arn:aws:iam::123456789012:role/prod-diag",
-                         "accountId" => "123456789012", "region" => "eu-west-1" } ],
-                     deferred_prop(path, component: component, key: "awsOidcRoles")
-      end
+      assert_equal [ { "id" => role.id, "name" => "prod-diag", "roleArn" => "arn:aws:iam::123456789012:role/prod-diag",
+                       "accountId" => "123456789012", "region" => "eu-west-1" } ],
+                   deferred_prop(path, component: component, key: "awsOidcRoles")
     end
   end
 

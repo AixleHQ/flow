@@ -4,8 +4,6 @@
 # keeps the issuer and the roles and makes the issuer answer 404, so STS refuses every
 # token until it is connected again; removing it is the Integrations page's own Remove.
 class Web::Company::Projects::AwsOidcController < Web::Company::Projects::ApplicationController
-  requires_feature :aws_oidc
-
   def connect
     integration = Integration.find_or_initialize_by(company: current_project.company, project: current_project,
                                                     provider: "aws_oidc")

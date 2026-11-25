@@ -216,7 +216,7 @@ Users connect them in the browser (`get_integration_setup_url`). Azure DevOps,
 their projects (Linear: teams) in as task trackers. `insights` is the company's
 connection to Aixle Insights, made by a company admin with an Insights owner's
 pairing code; each project then chooses to forward its agents' telemetry there.
-`aws_oidc` (behind a feature flag) lets a project's workflow steps assume IAM roles
+`aws_oidc` lets a project's workflow steps assume IAM roles
 in the customer's AWS account with no stored key; a project admin adds the roles,
 and a step gets only the roles attached to it or to its workflow's base list.
 An AWS role is production access: attach only what the step needs.

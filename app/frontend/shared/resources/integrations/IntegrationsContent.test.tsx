@@ -492,9 +492,12 @@ describe('IntegrationsContent', () => {
         { props: settingsProps },
       );
 
-    it('is offered under Connect only with the flag on, and connecting opens it', async () => {
+    it('is offered under Connect only to someone who can manage it, and connecting opens it', async () => {
       const user = userEvent.setup();
-      const { unmount } = renderAwsOidc({ integrations: [], awsOidc: { enabled: false } });
+      const { unmount } = renderAwsOidc({
+        integrations: [],
+        awsOidc: buildAwsOidcProps({ canManage: false, connection: null }),
+      });
 
       await user.click(screen.getAllByRole('button', { name: /Connect/ })[0]);
       expect(await screen.findByRole('menuitem', { name: 'GitHub' })).toBeInTheDocument();

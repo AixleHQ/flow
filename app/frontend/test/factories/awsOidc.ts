@@ -46,7 +46,6 @@ export const buildAwsOidcConnection = (overrides: Partial<AwsOidcConnection> = {
 });
 
 export const buildAwsOidcProps = (overrides: Partial<AwsOidcProps> = {}): AwsOidcProps => ({
-  enabled: true,
   canManage: true,
   connection: buildAwsOidcConnection(),
   ...overrides,
