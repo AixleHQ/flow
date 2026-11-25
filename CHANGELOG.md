@@ -13,6 +13,29 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-11-25
+### Added
+- **Integrations**: the `pull_request_*` tools can act as a person. Pass `user_id` to `pull_request_create`,
+  `_update`, `_add_comment`, `_review` or `_merge` and the pull request, comment, review or merge is that
+  member's own, under the same conditions as `github_user_token_for` (a connected account and the consent for
+  the project). Without it the tools act as the connection, as before.
+- Runners: an interactive session can run on a runner. The new-session form no longer
+  disables runners in interactive mode, and the session page has the terminal, the read-only
+  view, the file panel, uploads and the IDE, as for a hosted session. A machine needs
+  `aixle-runner` 0.5.0 or later for this; on an older one the session starts and its terminal
+  does not open. The platform now recommends 0.5.0 and pins the `linux-amd64` and
+  `linux-arm64` binaries of
+  [runner-v0.5.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.5.0) by their
+  SHA-256. No minimum runner version: older runners keep working.
+
+### Changed
+- **Workflows**: the `pull_request_*` tools are a tool group, **Pull requests**, that a workflow or a step can
+  add or remove. Existing workflows keep them through a migration; sessions no longer get them just because
+  they hold a GitHub, GitLab or Bitbucket repository, and the session context no longer tells agents to use
+  them.
+- **Companies & projects**: each company in the switcher on the far left is a link, so
+  Cmd/Ctrl+click opens it in a new tab and leaves the current tab where it is.
+
 ## [1.18.0] - 2026-11-24
 
 ### Added
@@ -1841,7 +1864,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.18.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.19.0...develop
+[1.19.0]: https://github.com/AixleHQ/flow/compare/v1.18.0...v1.19.0
 [1.18.0]: https://github.com/AixleHQ/flow/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/AixleHQ/flow/compare/v1.16.0...v1.17.0
 [1.16.0]: https://github.com/AixleHQ/flow/compare/v1.15.0...v1.16.0
