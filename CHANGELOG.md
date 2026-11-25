@@ -18,6 +18,7 @@ governance, community health — carry none.
   account with no access key: Flow is an OpenID Connect provider the account trusts, and the step gets
   credentials that last at most an hour through a profile in `~/.aws/config`. Connect it per project, add
   roles, check them with Verify, and attach them to steps in the builder.
+- **Tasks**: a card's Assets tab has a drop zone, and **Upload new** accepts several files, so many files can be attached to a card in one go.
 
 ### Changed
 - **Tasks**: the task drawer shows the ticket title in its top bar on every tab, truncated with the full title on hover.

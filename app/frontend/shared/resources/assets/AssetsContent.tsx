@@ -50,6 +50,7 @@ import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
 import { downloadApiV1CompanyAssetPath, downloadApiV1ProjectAssetPath } from 'shared/routes';
 import { EmptyState } from 'shared/ui/EmptyState';
+import { FileDropZone } from 'shared/ui/FileDropZone';
 import { PageHeader } from 'shared/ui/PageHeader';
 
 import { AssetPreviewModal } from './AssetPreviewModal';
@@ -219,7 +220,6 @@ export function AssetsContent({
   const [uploadFolder, setUploadFolder] = useState('');
   const [uploadFolderError, setUploadFolderError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [historyAsset, setHistoryAsset] = useState<Asset | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -330,11 +330,9 @@ export function AssetsContent({
     });
   }
 
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || !uppyRef.current) return;
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+  const handleFiles = useCallback((files: File[]) => {
+    if (!uppyRef.current) return;
+    for (const file of files) {
       try {
         uppyRef.current.addFile({ name: file.name, type: file.type, data: file });
       } catch {
@@ -343,7 +341,6 @@ export function AssetsContent({
     }
     setIsUploading(true);
     uppyRef.current.upload();
-    e.target.value = '';
   }, []);
 
   const handleSaveUpload = useCallback(async () => {
@@ -848,45 +845,7 @@ export function AssetsContent({
             </>
           ) : (
             <>
-              <Box
-                p="xl"
-                ta="center"
-                style={{
-                  border: '2px dashed var(--app-border-default)',
-                  borderRadius: 'var(--mantine-radius-md)',
-                  cursor: 'pointer',
-                  transition: 'border-color 150ms',
-                }}
-                onClick={() => fileInputRef.current?.click()}
-                onDragOver={(e: React.DragEvent) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }}
-                onDrop={(e: React.DragEvent) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  const files = e.dataTransfer.files;
-                  if (!files || !uppyRef.current) return;
-                  for (let i = 0; i < files.length; i++) {
-                    try {
-                      uppyRef.current.addFile({ name: files[i].name, type: files[i].type, data: files[i] });
-                    } catch {
-                      /* duplicate */
-                    }
-                  }
-                  setIsUploading(true);
-                  uppyRef.current.upload();
-                }}
-              >
-                <IconUpload size={32} color="var(--mantine-color-dimmed)" />
-                <Text fz={14} c="dimmed" mt="sm">
-                  Click to select files or drag &amp; drop
-                </Text>
-                <Text fz={12} c="dimmed">
-                  Max file size: 1 GB &middot; Multiple files supported
-                </Text>
-              </Box>
-              <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={handleFileSelect} />
+              <FileDropZone onFiles={handleFiles} hint="Max file size: 1 GB · Multiple files supported" />
               {isUploading && (
                 <Stack gap="xs">
                   <Text fz={12} c="dimmed">
