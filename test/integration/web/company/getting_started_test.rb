@@ -74,7 +74,7 @@ class Web::Company::GettingStartedTest < ActionDispatch::IntegrationTest
         props[:helloFlowAvailable] == true && props[:hasProjects] == true &&
           props[:helloFlowPath] == "/templates/aixle/hello-flow" &&
           props.dig(:currentUser, :productTour) ==
-            { variant: "a", aFinished: false, bFinished: false, helloFlowAvailable: true }
+            { "variant" => "a", "aFinished" => false, "bFinished" => false, "helloFlowAvailable" => true }
       end
     end
   end
