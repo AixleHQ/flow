@@ -5,7 +5,8 @@ module PersonalTools
     tool do
       display_name "Get Workflow Run"
       description "Return a workflow run with the state of each of its step runs, and the files its steps " \
-                  "wrote to /workspace/outputs (read one with read_asset, source run). A test run of a workflow " \
+                  "wrote to /workspace/outputs (read one with read_asset, source run). A run started for a board " \
+                  "task names it in `task_number` and `task_title`. A test run of a workflow " \
                   "draft has `draft_test` true and `draft_of_workflow_id` naming the live workflow."
       audience :user
       tags :workflows
@@ -25,7 +26,7 @@ module PersonalTools
         { id: sr.id, step: sr.step&.name, state: sr.state,
           started_at: sr.started_at, completed_at: sr.completed_at }
       end
-      success(id: run.id, workflow_id: run.workflow_id, **draft_fields(run), state: run.state,
+      success(id: run.id, workflow_id: run.workflow_id, **draft_fields(run), **task_fields(run), state: run.state,
               source: run.source, retried_from_run_id: run.retried_from_run_id,
               started_at: run.started_at, completed_at: run.completed_at, step_runs: step_runs,
               outputs: outputs(run))

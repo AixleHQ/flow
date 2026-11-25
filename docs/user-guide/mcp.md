@@ -154,7 +154,9 @@ container-session diagnostics — the same detail the run page shows.
 creation dates; runs by workflow, status, who started them, agent, workflow
 name and creation dates. Both sort by date, cost, tokens or duration and return
 one page at a time (`limit`, `offset`, with `total` and `has_more`). A run's row
-carries its tokens and cost, summed over its steps, and `list_sessions` adds
+carries its tokens and cost, summed over its steps, and the board task it was
+started for (`task_number`, `task_title`, as `get_workflow_run` also returns);
+`list_sessions` adds
 `totals` over every matching session. To find which sessions spent the most
 tokens last week, pass `state: "all"`, `created_from` / `created_until` and
 `sort: "total_tokens"`.
