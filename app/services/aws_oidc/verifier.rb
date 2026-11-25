@@ -36,8 +36,8 @@ module AwsOidc
       issuer = Issuer.url(@role.integration)
       case error
       when IssuerUnreachableError
-        "AWS could not fetch Flow's signing keys from #{issuer}. The issuer must be reachable from the " \
-        "internet over HTTPS."
+        "AWS could not get Flow's signing key from #{issuer}. The issuer must be reachable from the " \
+        "internet over HTTPS, and the integration connected."
       when IdentityTokenError
         "AWS rejected the token. Check that account #{@role.account_id} has an IAM OIDC provider for " \
         "#{issuer} with audience #{Token::AUDIENCE}. AWS said: #{error.message}"

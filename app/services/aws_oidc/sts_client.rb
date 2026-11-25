@@ -16,6 +16,8 @@ module AwsOidc
       "ValidationError" => RoleConfigurationError
     }.freeze
 
+    KEY_FETCH_FAILURE = "Couldn't retrieve verification key"
+
     def initialize(region:)
       raise ArgumentError, "region is required" if region.blank?
 
@@ -52,9 +54,13 @@ module AwsOidc
       @unsigned_client ||= ::Aws::STS::Client.new(region: @region, credentials: nil)
     end
 
+    # STS reports an issuer it cannot get a key from (unreachable, 404, no key with the
+    # token's kid) as InvalidIdentityToken, not IDPCommunicationError; only the message
+    # tells them apart (checked against STS on 2026-11-25).
     def translate(error)
       code = error.respond_to?(:code) ? error.code : nil
       klass = ERRORS.fetch(code.to_s, ProviderError)
+      klass = IssuerUnreachableError if code == "InvalidIdentityToken" && error.message.include?(KEY_FETCH_FAILURE)
       klass.new(error.message, aws_code: code)
     end
   end

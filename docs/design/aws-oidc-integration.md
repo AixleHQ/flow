@@ -360,11 +360,14 @@ new issuer.
 
 | STS says | Usual cause | Shown as |
 |---|---|---|
-| `InvalidIdentityToken`, "Couldn't retrieve verification key" | provider created for another URL, issuer unreachable (staging Basic auth, self-hosted behind a VPN) | "AWS could not fetch Flow's signing keys from <issuer>" |
-| `InvalidIdentityToken`, other | no OIDC provider for this issuer in that account; audience missing on the provider | "No OIDC provider for <issuer> with audience sts.amazonaws.com in account <id>" |
-| `AccessDenied` | `sub` does not match the trust policy; `sts:TagSession` missing | "The role's trust policy rejected subject <sub>" plus the TagSession hint |
-| `ValidationError` on duration | `session_duration_seconds` above the role's maximum | "The role allows at most N seconds" |
-| `ExpiredTokenException` | clock skew | logged; the token is re-signed once |
+| `InvalidIdentityToken`, "Couldn't retrieve verification key" | the issuer answers 404 (disconnected, flag off) or is unreachable (staging Basic auth, a self-hosted instance behind a VPN); the provider names another URL; the JWKS has no key with the token's `kid` | `IssuerUnreachableError`: "AWS could not get Flow's signing key from <issuer>" |
+| `InvalidIdentityToken`, "could not be validated" | `iss` is not the provider's URL; no OIDC provider for this issuer in that account; audience missing on the provider | `IdentityTokenError`, naming the account, issuer and audience to check |
+| `AccessDenied` | `sub` does not match the trust policy; tags sent and `sts:TagSession` missing | `TrustPolicyError`, naming the subject and the TagSession requirement |
+| `ValidationError` | `session_duration_seconds` above the role's maximum | `RoleConfigurationError` with AWS's message |
+
+STS does not answer an unreachable issuer with `IDPCommunicationError`: it is
+`InvalidIdentityToken` with the "Couldn't retrieve verification key" message, which
+`AwsOidc::StsClient` tells apart by the message (§12).
 
 In the container, the helper exits non-zero and the SDK reports a generic
 credential error. The reason is in the platform log and on the step run, the same
@@ -402,17 +405,26 @@ way Bedrock failures are surfaced today.
 4. **Document and release**: a portal page under integrations and its
    `docs/user-guide/` copy, a changelog entry, and this document marked built.
 
-## 12. Open questions for the spike
+## 12. What the spike settled
 
-1. Which claims IAM accepts as condition keys for a generic OIDC provider. The design
-   assumes `aud` and `sub` only and puts everything that matters into `sub`.
-2. Whether `CreateOpenIDConnectProvider` still needs a thumbprint for an issuer whose
-   certificate chains to a public CA, and what the console asks for.
-3. An issuer URL with a path (`/oidc/<issuer_key>`): EKS uses one, so it should
-   work. Confirm with ours, including the trailing-slash form STS requests.
-4. How long STS caches the JWKS, which sets how early `next` must be published.
-5. Sessions on a self-hosted runner: does the credential callback reach Rails through
-   the runner's callback proxy as the Bedrock one would?
-6. Claude Code settings env with Bedrock on: confirm which `AWS_*` variables the
-   agent's shell inherits, and whether `[default]` can be written safely in any
-   Bedrock mode.
+Run on 2026-11-25 against a real AWS account, with an issuer that has a path (a public
+HTTPS endpoint serving the discovery document and JWKS under `/oidc/<key>`), an IAM OIDC
+provider and a role whose trust policy checks `aud` and `sub` with `StringLike` patterns
+for `workflow:12:step:*` and the verify subject.
+
+| Question | Answer |
+|---|---|
+| Issuer URL with a path | Works. `CreateOpenIDConnectProvider` accepts it and STS fetches `<issuer>/.well-known/openid-configuration` and the JWKS under it. |
+| Thumbprint | Not needed. The provider was created with no thumbprint; IAM filled one in itself. |
+| `sub` patterns | `workflow:12:step:34` and `verify:integration:3` were accepted; `workflow:13:step:1` and an unlisted `draft:workflow:12:step:34` got `AccessDenied`. |
+| Custom claims as condition keys | Not evaluated. A policy with `<issuer>:flow_project` was accepted, and a token carrying `flow_project=7` was then refused. Everything a policy must match goes in `sub` (§5.3). |
+| Session tags | A token with the tags claim needs `sts:TagSession` in the trust policy (`AccessDenied` without it); a token without tags works either way. |
+| JWKS caching | STS fetches the keys when it verifies: a key published seconds earlier was accepted at once, and once the issuer answered 404, a token signed with a key STS had already used was refused. Disconnecting therefore stops every exchange immediately. `PUBLISH_LEAD` (one day) is kept as a margin, not because STS needs it. |
+| Wrong `iss`, unknown `kid`, unreachable issuer | `InvalidIdentityToken`; the last two with "Couldn't retrieve verification key" (§9). |
+| Expiry | A token 60 seconds past `exp` was still accepted: STS allows some clock skew. The 5-minute lifetime is not exact to the second. |
+
+Still open, for the first deployment: sessions on a self-hosted runner (the credential
+callback goes through the runner's callback proxy as the Bedrock one does, by the same
+route, but has not run on a real runner), and which `AWS_*` variables an agent's shell
+inherits from Claude Code's settings with Bedrock on (the build writes no `[default]`
+profile whenever a Bedrock connection exists, §6.3).

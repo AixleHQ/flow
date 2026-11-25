@@ -62,6 +62,18 @@ module AwsOidc
       end
     end
 
+    test "an issuer STS could not get a key from is unreachable, not a bad token" do
+      stub_request(:post, ENDPOINT).to_return(
+        status: 400, headers: { "Content-Type" => "text/xml" },
+        body: error_response("InvalidIdentityToken", "Couldn't retrieve verification key from your identity provider")
+      )
+
+      assert_raises(IssuerUnreachableError) do
+        StsClient.new(region: "eu-west-1").assume_role_with_web_identity(role_arn: ROLE_ARN, session_name: "s",
+                                                                          token: "jwt", duration_seconds: 900)
+      end
+    end
+
     private
 
     def keywords(klass, name)
@@ -90,10 +102,10 @@ module AwsOidc
       XML
     end
 
-    def error_response(code)
+    def error_response(code, message = "#{code} happened")
       <<~XML
         <ErrorResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
-          <Error><Type>Sender</Type><Code>#{code}</Code><Message>#{code} happened</Message></Error>
+          <Error><Type>Sender</Type><Code>#{code}</Code><Message>#{message}</Message></Error>
           <RequestId>req-2</RequestId>
         </ErrorResponse>
       XML
