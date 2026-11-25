@@ -20,15 +20,12 @@ module Github
       Settings.github.client_id.present? && Settings.github.client_secret.present?
     end
 
-    # Called by the OAuth callback right after the token is stored. A connection
-    # without an identity is useless, but a failed lookup never destroys the credential
-    # (a reconnect would lose a working connection): the stored identity is cleared so the
-    # new token is not paired with the previous account's, and identity_for refetches it.
-    def record_identity!(credential)
-      profile = UserTokenService.new.user(credential.access_token)
-      store_identity!(credential, profile)
+    # Called by the OAuth callback with the new access token, before the credential is
+    # stored: the identity to store with it. A failed lookup fails the connection, so
+    # nothing is stored and a previous credential stays as it was.
+    def fetch_identity(access_token)
+      build_identity(UserTokenService.new.user(access_token))
     rescue UserTokenService::Error
-      credential.update!(metadata: credential.metadata.to_h.except(metadata_key))
       raise Oauth::TokenExchangeError, "github identity unavailable"
     end
 
@@ -49,19 +46,27 @@ module Github
       OauthCredential.latest_github_connection_of(user)
     end
 
+    # Every credential of the person goes, the current client's and any other's. Only a
+    # current one is revoked at GitHub: another client's token cannot be revoked with
+    # this client's credentials.
     def disconnect!(user)
       OauthCredential.github_connections_of(user).each do |credential|
         revoke_grant(credential)
         credential.destroy!
       end
+      OauthCredential.all_connections_of(user, PROVIDER).destroy_all
       ActAsConsent.where(user_id: user.id, provider: PROVIDER).delete_all
     end
 
-    def store_identity!(credential, profile)
-      identity = {
+    def build_identity(profile)
+      {
         "id" => profile[:id], "login" => profile[:login], "name" => profile[:name],
         "avatar_url" => profile[:avatar_url], "fetched_at" => Time.current.iso8601
       }
+    end
+
+    def store_identity!(credential, profile)
+      identity = build_identity(profile)
       credential.update!(metadata: credential.metadata.to_h.merge(metadata_key => identity))
       identity
     end

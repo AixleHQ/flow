@@ -179,6 +179,19 @@ class InternalTools::PullRequestActingAsTest < ActiveSupport::TestCase
       assert_empty @fake.calls
     end
 
+    test "#{host}: a connection made with a retired OAuth client counts as not connected" do
+      connect!(host)
+      consent!(@colleague, in_others_tasks: true)
+      @credential.update!(oauth_client: create(:oauth_client, host, client_id: "retired-client")) unless host == :github
+      @credential.update!(oauth_client: create(:oauth_client, client_id: "Iv1.retired")) if host == :github
+
+      result = run_write(:merge, user_id: @colleague.id)
+
+      assert_match(/Colleague has not connected a #{label} account/, json(result)["message"])
+      assert_empty @fake.calls
+      assert_equal 0, UserTokenIssuance.count
+    end
+
     test "#{host}: an expired connection asks to be renewed" do
       connect!(host)
       consent!(@colleague, in_others_tasks: true)

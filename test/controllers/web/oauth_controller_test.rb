@@ -719,7 +719,19 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     assert_match(/different server/, flash[:alert])
   end
 
-  test "a failed identity fetch on a reconnect keeps the existing credential, its consents and its status" do
+  test "a first GitHub connect whose identity fetch fails stores nothing" do
+    stub_github!(profile: nil)
+    state = build_state(owner: @user, provider: "github", return_to: "/profile/connections")
+
+    assert_no_difference("OauthCredential.count") do
+      get oauth_callback_path, params: { code: "auth-code-1", state: state }
+    end
+
+    assert_equal "Failed to complete connection", flash[:alert]
+    assert_nil OauthCredential.live_github_connection_of(@user)
+  end
+
+  test "a failed identity fetch on a reconnect keeps the existing credential, its identity, its consents and its status" do
     stub_github!(profile: nil)
     existing = create(:oauth_credential, :github_user, owner: @user, access_token: "ghu_old",
                                                        oauth_client: Oauth::Providers.client_for("github"))
@@ -734,8 +746,37 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Failed to complete connection", flash[:alert]
     existing.reload
     assert existing.active?
-    assert_nil existing.metadata["github_user"], "the previous account's identity must not stay next to the new token"
+    assert_equal "ghu_old", existing.access_token
+    assert_equal "octo-user", existing.metadata.dig("github_user", "login")
     assert consent.reload.in_own_tasks
+  end
+
+  test "a GitHub reconnect replaces the token and the identity together" do
+    stub_github!(profile: { id: 999, login: "new-account", name: "New", avatar_url: "https://a.test/999" })
+    existing = create(:oauth_credential, :github_user, owner: @user, access_token: "ghu_old",
+                                                       oauth_client: Oauth::Providers.client_for("github"))
+    state = build_state(owner: @user, provider: "github", return_to: "/profile/connections")
+
+    assert_no_difference("OauthCredential.count") do
+      get oauth_callback_path, params: { code: "auth-code-1", state: state }
+    end
+
+    existing.reload
+    assert_equal "ghu_live", existing.access_token
+    assert_equal "new-account", existing.metadata.dig("github_user", "login")
+  end
+
+  test "a GitHub connect after the client id changed makes a credential of the new client, and the old one stays unlisted" do
+    stub_github!
+    old = create(:oauth_credential, :github_user, owner: @user, oauth_client: create(:oauth_client, client_id: "Iv1.retired"))
+    state = build_state(owner: @user, provider: "github", return_to: "/profile/connections")
+
+    get oauth_callback_path, params: { code: "auth-code-1", state: state }
+
+    current = OauthCredential.live_github_connection_of(@user)
+    assert_not_equal old, current
+    assert_equal "Iv1.cid", current.oauth_client.client_id
+    assert_equal "ghu_live", current.access_token
   end
 
   test "GitHub answering 200 with an error stores nothing" do
@@ -841,7 +882,18 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     assert_nil flash[:alert]
   end
 
-  test "a failed GitLab identity fetch keeps the existing credential and clears its identity" do
+  test "a first GitLab connect whose identity fetch fails stores nothing" do
+    stub_gitlab!(profile: nil)
+    state = build_state(owner: @user, provider: "gitlab", return_to: "/profile/connections")
+
+    assert_no_difference("OauthCredential.count") do
+      get oauth_callback_path, params: { code: "auth-code-1", state: state }
+    end
+
+    assert_equal "Failed to complete connection", flash[:alert]
+  end
+
+  test "a failed GitLab identity fetch on a reconnect keeps the existing credential and its identity" do
     stub_gitlab!(profile: nil)
     existing = create(:oauth_credential, :gitlab_user, owner: @user, access_token: "glo_old",
                                                        oauth_client: Oauth::Providers.client_for("gitlab"))
@@ -853,7 +905,8 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
 
     assert_equal "Failed to complete connection", flash[:alert]
     assert existing.reload.active?
-    assert_nil existing.metadata["gitlab_user"]
+    assert_equal "glo_old", existing.access_token
+    assert_equal "lab-user", existing.metadata.dig("gitlab_user", "username")
   end
 
   test "a GitLab connection cannot belong to a company" do
@@ -928,7 +981,18 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     assert_equal credential, OauthCredential.live_bitbucket_connection_of(@user)
   end
 
-  test "a failed Bitbucket identity fetch keeps the existing credential and clears its identity" do
+  test "a first Bitbucket connect whose identity fetch fails stores nothing" do
+    stub_bitbucket_oauth!(profile: nil)
+    state = build_state(owner: @user, provider: "bitbucket", return_to: "/profile/connections")
+
+    assert_no_difference("OauthCredential.count") do
+      get oauth_callback_path, params: { code: "auth-code-1", state: state }
+    end
+
+    assert_equal "Failed to complete connection", flash[:alert]
+  end
+
+  test "a failed Bitbucket identity fetch on a reconnect keeps the existing credential and its identity" do
     stub_bitbucket_oauth!(profile: nil)
     existing = create(:oauth_credential, :bitbucket_user, owner: @user, access_token: "bb_old",
                                                           oauth_client: Oauth::Providers.client_for("bitbucket"))
@@ -940,7 +1004,8 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
 
     assert_equal "Failed to complete connection", flash[:alert]
     assert existing.reload.active?
-    assert_nil existing.metadata["bitbucket_user"]
+    assert_equal "bb_old", existing.access_token
+    assert_equal "bb-user", existing.metadata.dig("bitbucket_user", "nickname")
   end
 
   test "a Bitbucket connection cannot belong to a company" do

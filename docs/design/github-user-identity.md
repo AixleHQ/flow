@@ -702,6 +702,23 @@ in adapter contract tests.
 | D14 | The tools read the session's user through one private helper, `InternalTools::Base#session_user`, so a search for it finds every reader. Readers outside the tools (container strategies, `SessionService`, resources) keep reading `session.user` directly. | Accepted in Alex's second review, 2026-11-11 |
 | D15 | `workflow_run.user` readers that describe the run, not a session (`WorkflowService` retry and run activity, `Chat::StatusCard`, `PersonalTools::Base`), stay on it. | Accepted in Alex's second review, 2026-11-11 |
 
+### Current client only, and a failed connect stores nothing (#275)
+
+Two rules apply to every provider with a person's own connection (GitHub, GitLab, Bitbucket),
+and they supersede anything above that says otherwise:
+
+- **Only the current client's credentials count.** "Current" is the `OauthClient` with the
+  issuer and client id the deployment is configured with now (`Oauth::Providers.current_client_ref`).
+  `OauthCredential.on_other_client` / `#on_other_client?` own the rule. A credential of another
+  client is not listed, not handed out by the `*_user_token` tools, and not refreshed by the sweep
+  or `Oauth::TokenService.fresh`: it lapses. Disconnect still deletes all of the person's
+  credentials for the provider, and revokes at the provider only those of the current client.
+- **A failed connect stores nothing.** The `after_connect` hook and `record_identity!` are
+  replaced by a `fetch_identity:` hook, called with the new access token before anything is
+  stored. If it fails, the person sees "Failed to complete connection", no credential is created,
+  and on a reconnect the previous credential and its identity are untouched. On success the
+  token and the identity are stored in one save (`upsert_from_token!(identity:)`).
+
 ## 9. Deferred questions
 
 - **Revoking issued tokens when a session ends** (`DELETE /applications/{client_id}/token`).
