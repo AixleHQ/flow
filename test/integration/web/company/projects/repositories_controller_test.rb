@@ -43,6 +43,20 @@ class Web::Company::Projects::RepositoriesControllerTest < ActionDispatch::Integ
     assert_equal "https://github.com/org/proj-repo.git", repo.clone_url
   end
 
+  test "a repository the connection can see but not clone is refused, with what to grant" do
+    integration = create(:integration, company: @company, connected_by: @user)
+    fake = FakeGithub::RepositoryService.new(integration, unreadable: [ "acme/app" ])
+    RepositoryService.stubs(:for).with(integration).returns(fake)
+
+    post company_project_repositories_path(@project), params: {
+      repository: { full_name: "acme/app", source_branch: "main", integration_id: integration.id }
+    }
+
+    assert_redirected_to company_project_repositories_path(@project)
+    assert_nil Repository.find_by(full_name: "acme/app")
+    assert_match(/can see acme\/app but not its contents.*Contents: Read/, Array(session["inertia_errors"][:full_name]).join)
+  end
+
   test "a repository added through a connection takes its visibility from the code host" do
     integration = create(:integration, company: @company, connected_by: @user)
     RepositoryService.stubs(:for).with(integration).returns(FakeGithub::RepositoryService.new(integration))

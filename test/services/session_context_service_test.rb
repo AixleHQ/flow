@@ -1042,6 +1042,16 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_includes downloads.first, "/workspace/assets/docs/spec.md"
   end
 
+  test "inject_repositories forgets clone failures from an earlier provisioning of the session" do
+    session, = github_session("acme/my-app")
+    session.change_jsonb!(:metadata) { |doc| doc["failed_repos"] = [ { "id" => 0, "full_name" => "acme/old", "error" => "x" } ] }
+    Github::TokenService.stubs(:new).returns(FakeGithub::TokenService.new(token: "ghs_test_token"))
+
+    context_service(session, "ctr1", runtime: ContainerRuntime::FakeRuntime.new).send(:inject_repositories)
+
+    assert_not session.reload.metadata.key?("failed_repos")
+  end
+
   test "inject_repositories clones GitHub repositories without the token in any command or remote" do
     session, (repo, *) = github_session("acme/my-app")
     runtime = ContainerRuntime::FakeRuntime.new

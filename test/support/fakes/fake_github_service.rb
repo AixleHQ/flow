@@ -166,11 +166,18 @@ module FakeGithub
     # @param integration recorded for assertions
     # @param repos [Array<Hash>] what #list_available returns (and #find_repo looks up in)
     # @param branches [Array<String>] what #list_branches returns
-    def initialize(integration = nil, repos: DEFAULT_REPOS, branches: DEFAULT_BRANCHES)
+    # @param unreadable [Array<String>] full names #contents_readable? answers false for
+    def initialize(integration = nil, repos: DEFAULT_REPOS, branches: DEFAULT_BRANCHES, unreadable: [])
       @integration = integration
       @repos = repos.map(&:dup)
       @branches = branches.dup
+      @unreadable = unreadable.dup
       @calls = []
+    end
+
+    def contents_readable?(full_name)
+      @calls << { method: :contents_readable?, full_name: full_name }
+      !@unreadable.include?(full_name)
     end
 
     def list_available
