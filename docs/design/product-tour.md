@@ -1,6 +1,6 @@
 # Getting started and the product tour
 
-Built 2026-11-25 behind the `product_tour` release flag (task #51). The starter template it
+Built 2026-11-25 (#879) behind the `product_tour` release flag (task #51). The starter template it
 relies on, `aixle/hello-flow`, is not yet in `AixleHQ/flow-templates`: until the catalog carries
 it, tour A is hidden everywhere and only viewers get a tour.
 
