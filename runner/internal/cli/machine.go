@@ -82,11 +82,14 @@ const (
 	InContainerEnv = "AIXLE_RUNNER_IN_CONTAINER"
 )
 
-// How a stop fits in `docker stop`'s 10 s before SIGKILL: the teardown and the
-// unregister each have their own short deadline.
+// How a stop fits in `docker stop`'s 10 s before SIGKILL: one budget for the
+// whole stop. The teardown has up to teardownTimeout of it, and the unregister
+// gets whatever is left. DELETE /registration commits the unregister first and
+// then fails the session the machine held, which calls Temporal, so its answer
+// can take seconds.
 const (
-	teardownTimeout   = 5 * time.Second
-	unregisterTimeout = 3 * time.Second
+	stopBudget      = 9 * time.Second
+	teardownTimeout = 5 * time.Second
 )
 
 // StopSignals stop a machine runner: SIGINT, SIGTERM, and SIGHUP, which closing
@@ -124,6 +127,22 @@ func SelfUpdateOff(value string) bool {
 // NeedsOperator. A self-update that replaced the binary returns machine.ErrUpdated.
 func RunMachine(ctx context.Context, opts MachineOptions) error {
 	registering := opts.URL != "" && opts.Token != ""
+	if (opts.URL != "") != (opts.Token != "") {
+		// Half of the registration environment: with no credentials to start from,
+		// say which variable is missing, never a value. With credentials all three
+		// are ignored.
+		exists, err := credentials.NewStore(opts.StateDir).Exists()
+		if err != nil {
+			return err
+		}
+		if !exists {
+			missing := RegisterTokenEnv
+			if opts.URL == "" {
+				missing = RegisterURLEnv
+			}
+			return operatorError{fmt.Errorf("%s and %s must be set together to register this machine, and %s is not set", RegisterURLEnv, RegisterTokenEnv, missing)}
+		}
+	}
 	if registering {
 		// A fresh state directory, as `configure` makes it. With credentials in it
 		// already nothing changes.
@@ -427,7 +446,8 @@ func registerOnFirstStart(ctx context.Context, api docker.API, opts MachineOptio
 // next one runs.
 func stopMachine(ctx context.Context, env *docker.Environment, opts MachineOptions) {
 	// ctx is done: the steps run on their own deadlines.
-	base := context.WithoutCancel(ctx)
+	base, budget := context.WithTimeout(context.WithoutCancel(ctx), stopBudget)
+	defer budget()
 	teardown, cancel := context.WithTimeout(base, teardownTimeout)
 	if err := env.Shutdown(teardown); err != nil {
 		opts.Logger.Warn("removing the sidecars and the session containers failed", "error", err)
@@ -440,9 +460,9 @@ func stopMachine(ctx context.Context, env *docker.Environment, opts MachineOptio
 	if out == nil {
 		out = io.Discard
 	}
-	unregister, cancel := context.WithTimeout(base, unregisterTimeout)
-	defer cancel()
-	if err := unregisterLocked(unregister, UnregisterOptions{StateDir: opts.StateDir, HTTPClient: opts.HTTPClient, Out: out}); err != nil {
-		opts.Logger.Warn("unregistering this machine on stop failed", "error", err)
+	if err := unregisterLocked(base, UnregisterOptions{StateDir: opts.StateDir, HTTPClient: opts.HTTPClient, Out: out}); err != nil {
+		// The credentials may be gone with the container (`--rm`), so there may be
+		// nothing left to try again with.
+		opts.Logger.Warn("unregistering this machine on stop failed. If the machine still shows on the platform, remove it there", "error", err)
 	}
 }

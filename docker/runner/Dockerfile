@@ -18,11 +18,11 @@
 FROM alpine:3.22
 ARG TARGETARCH
 COPY --chmod=0755 dist/aixle-runner-linux-${TARGETARCH} /usr/local/bin/aixle-runner
-# Not root by default. Whoever runs the image decides what it may reach: the
-# Kubernetes API for the controller, which the pod spec starts with its own
-# command, or, for a machine runner, the Docker socket, which `docker run
-# --user 0:0` reaches.
-USER 10001:10001
+# Root by default, and no `USER`: a machine runner reaches the Docker socket,
+# which is root on the machine anyway, so a non-root user would protect nothing
+# and would only break the kept directory's `unregister`. The Kubernetes
+# controller, which the pod spec starts with its own command, sets non-root
+# there (`runAsNonRoot: true`, `runAsUser: 10001`).
 # In a container the image tag is the version: the runner does not update itself
 # (DESIGN.md §14.4). Its binary is root-owned, and a container recreated from the
 # image would bring the old binary back anyway.

@@ -4101,9 +4101,9 @@ Alex 2026-11-09): `1.0.0` comes with the extract or the first customer (§14.1).
     data root. SIGINT, SIGTERM and SIGHUP stop the runner: it removes the sidecars and the
     session containers (only those labelled with its own machine key), then unregisters if
     `--unregister-on-stop` or `AIXLE_RUNNER_UNREGISTER_ON_STOP=1` is set, and exits within
-    `docker stop`'s 10 s. The container runs as `--user 0:0`: the image's user 10001 can reach
-    neither the Docker socket nor the machine's directory, and a process with the Docker socket
-    is root on the machine anyway. The image does not update itself (the tag is the version).
+    `docker stop`'s 10 s. The image runs as root by default and no command has `--user 0:0`: a process with the Docker
+    socket is root on the machine anyway, so a non-root user protects nothing. The Kubernetes controller sets
+    non-root in its own pod spec (`runAsNonRoot: true`, `runAsUser: 10001`). The image does not update itself (the tag is the version).
   - **Kubernetes:** the init container and image as in §9.6.
   - **Decided (§6.9.6):** there is no session runner. The proxy sidecar on `manual` and
     `coder` runs the host runner's own binary, bind-mounted, so it is updated with it. On

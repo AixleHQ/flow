@@ -65,7 +65,7 @@ func TestThePublishedImageIsAsTheDesignSaysIt(t *testing.T) {
 			t.Errorf("the image has a shell script: %s", line)
 		}
 	}
-	if user := find("USER"); len(user) != 1 || user[0][0] != "10001:10001" {
-		t.Errorf("USER %v: the controller runs the same image and must not be root by default", user)
+	if user := find("USER"); len(user) != 0 {
+		t.Errorf("USER %v: the image runs as root by default; the controller sets non-root in its pod spec", user)
 	}
 }
