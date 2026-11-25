@@ -505,7 +505,10 @@ describe('Projects/Board/BoardPage', () => {
 
     it('keeps the title in the panel bar on every tab, with the full title on hover', async () => {
       const user = userEvent.setup();
-      renderAuthedPage(<BoardPage />, { props: drawerProps() });
+      // The Runs tab only exists for a task with runs or a workflow-bound column.
+      renderAuthedPage(<BoardPage />, {
+        props: { ...drawerProps(), taskWorkflowRuns: [buildTaskWorkflowRun()] },
+      });
 
       for (const name of [/Details/, /Runs/, /Comments/, /Assets/, /Activity/, /Analytics/]) {
         await user.click(within(screen.getByRole('dialog')).getByRole('tab', { name }));
@@ -524,15 +527,16 @@ describe('Projects/Board/BoardPage', () => {
     });
 
     it('shows the new name from the server after a local rename', async () => {
-      const user = userEvent.setup();
       answerFetch({ 'PATCH /api/v1/projects/7/tasks/1': {} });
       const { rerender } = renderAuthedPage(<BoardPage />, { props: drawerProps() });
       const drawer = within(screen.getByRole('dialog'));
 
-      await user.click(drawer.getAllByText('Wire up authentication')[1]);
-      const input = await drawer.findByDisplayValue('Wire up authentication');
-      await user.clear(input);
-      await user.type(input, 'Local name{Enter}');
+      // Synchronous on purpose: the drawer's focus trap blurs the textarea on the next tick, which
+      // would close the editor before the rename is typed.
+      fireEvent.click(drawer.getAllByText('Wire up authentication')[1]);
+      const input = drawer.getByDisplayValue('Wire up authentication');
+      fireEvent.change(input, { target: { value: 'Local name' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
       await waitFor(() => expect(barTitle()).toHaveTextContent('Local name'));
 
       inertiaState.pageProps = { ...inertiaState.pageProps, ...drawerProps({ title: 'Local name' }) };
@@ -544,15 +548,16 @@ describe('Projects/Board/BoardPage', () => {
     });
 
     it('shows the next task title, not a rename pending on the previous one', async () => {
-      const user = userEvent.setup();
       answerFetch({ 'PATCH /api/v1/projects/7/tasks/1': {} });
       const { rerender } = renderAuthedPage(<BoardPage />, { props: drawerProps() });
       const drawer = within(screen.getByRole('dialog'));
 
-      await user.click(drawer.getAllByText('Wire up authentication')[1]);
-      const input = await drawer.findByDisplayValue('Wire up authentication');
-      await user.clear(input);
-      await user.type(input, 'Local name{Enter}');
+      // Synchronous on purpose: the drawer's focus trap blurs the textarea on the next tick, which
+      // would close the editor before the rename is typed.
+      fireEvent.click(drawer.getAllByText('Wire up authentication')[1]);
+      const input = drawer.getByDisplayValue('Wire up authentication');
+      fireEvent.change(input, { target: { value: 'Local name' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
       await waitFor(() => expect(barTitle()).toHaveTextContent('Local name'));
 
       inertiaState.pageProps = {
