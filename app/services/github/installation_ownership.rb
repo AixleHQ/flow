@@ -1,11 +1,15 @@
 # frozen_string_literal: true
 
 module Github
-  # Proves that the person completing a GitHub App install can see the
-  # installation, through GitHub's user-to-server OAuth ("Request user
-  # authorization (OAuth) during installation" on the App): the setup redirect
-  # then carries a `code`, which is exchanged for that user's token, and
-  # `GET /user/installations` has to list the installation.
+  # Proves that the person connecting a GitHub App installation can see it,
+  # through GitHub's user-to-server OAuth: their `code` is exchanged for their
+  # token, and `GET /user/installations` has to list the installation.
+  #
+  # GitHub puts a code on the setup redirect only for a new installation with
+  # "Request user authorization (OAuth) during installation" on. An update of an
+  # installation that already exists (Configure → Save on GitHub) never carries
+  # one, so GithubSetupController sends a person who arrives without a code
+  # through .authorize_url, which comes back with one.
   #
   # Enforced once the deployment sets GITHUB_APP_VERIFY_INSTALLATION_OWNER and configures
   # the App's client id and secret. The client credentials alone only enable
@@ -14,8 +18,15 @@ module Github
   # only guard, and an installation nobody has connected yet can be connected
   # by whoever forges the setup callback first.
   class InstallationOwnership
+    AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
+
     def self.enforced?
       Settings.github.verify_installation_owner == true && Settings.github.client_id.present? && Settings.github.client_secret.present?
+    end
+
+    # `redirect_uri` has to be one of the App's registered Redirect URIs.
+    def self.authorize_url(redirect_uri:, state:)
+      "#{AUTHORIZE_URL}?#{URI.encode_www_form(client_id: Settings.github.client_id, redirect_uri: redirect_uri, state: state)}"
     end
 
     def initialize(code:)
