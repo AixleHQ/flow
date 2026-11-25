@@ -13,15 +13,16 @@ Three tabs:
 - **Standalone** — sessions started by hand. Only **New Session** here.
 - **Workflow runs** — runs. Only **Run workflow** here.
 
-Filter by agent, status, type, workflow, the person who started it, or the
-days it started on, or search by name. Click the **Tokens**, **Cost**,
+Filter by agent, status, type, workflow, board task, the person who started
+it, or the days it started on, or search by name. Click the **Tokens**, **Cost**,
 **Duration** or **Started** header to sort by that column — most expensive or
 longest first; click again to flip it. A run sorts by what its sessions add
 up to.
 A session from a workflow links back to the run it belongs to; a standalone
 session has nothing to expand. A run that a
 [team](/docs/project-teams) handed out names both:
-*Planner → Anna*.
+*Planner → Anna*. A run started for a board task names the task — *#12 Fix
+the login redirect* — and links to it, here and in the run's header.
 
 Sessions someone kept private show as locked. You can see that they exist and
 what they cost; you cannot read them.

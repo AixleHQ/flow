@@ -26,6 +26,7 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
       total: result.pagy.count,
       user_options: feed.user_options,
       workflow_options: feed.workflow_options,
+      task_options: feed.task_options,
       # Both create flows are drawers on this page now, so their option lists
       # live here — but only a user who actually opens a drawer pays for them.
       create_options: InertiaRails.optional { create_options },
@@ -40,7 +41,7 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
     run_ids = Array(params[:run_ids]).map(&:to_i).uniq.first(ROWS_LIMIT)
     sessions = current_project.terminal_sessions.includes(:user)
                               .where(id: session_ids, session_type: SessionsRunsFeed::TOP_LEVEL_SESSION_TYPES)
-    runs = current_project.workflow_runs.includes(:user, :team, :workflow, step_runs: [ :step, { terminal_session: :user } ])
+    runs = current_project.workflow_runs.includes(:user, :team, :workflow, :board_task, step_runs: [ :step, { terminal_session: :user } ])
                           .where(id: run_ids)
     entries = sessions.map { |s| SessionsRunsFeed::Entry.new(kind: "session", record: s) } +
               runs.map { |r| SessionsRunsFeed::Entry.new(kind: "run", record: r) }
@@ -106,7 +107,8 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
       agent_type: params[:agent_type].presence,
       status: params[:status].presence,
       user_id: params[:user_id].presence,
-      workflow_id: params[:workflow_id].presence
+      workflow_id: params[:workflow_id].presence,
+      task_number: params[:task_number].presence
     }.compact
   end
 
