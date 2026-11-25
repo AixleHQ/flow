@@ -581,6 +581,10 @@ class SessionContextService
   # == Repository Injection ==
 
   def inject_repositories
+    # The session fails on what is listed here (AgentSessionStrategy::RepositoryCloneError),
+    # so a failure from an earlier provisioning of the same session must not stay listed.
+    session.change_jsonb!(:metadata) { |doc| doc.delete("failed_repos") } if session.metadata&.key?("failed_repos")
+
     ids = session.repository_ids
     return if ids.blank?
 

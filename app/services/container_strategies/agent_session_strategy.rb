@@ -28,10 +28,26 @@ module ContainerStrategies
     class ProvisioningError < StandardError
       attr_reader :code, :details
 
-      def initialize(code, details)
+      def initialize(code, details, message: nil)
         @code = code
         @details = details
-        super("Credential preflight failed: #{code}")
+        super(message || "Credential preflight failed: #{code}")
+      end
+    end
+
+    # A repository attached to the session did not clone. Without its checkout the
+    # agent has no git credential helper either, so it would fail later on its own,
+    # with the reason only in its log: the session stops here, git's error on it.
+    class RepositoryCloneError < ProvisioningError
+      def initialize(failed)
+        summary = failed.map { |f| "#{f['full_name']}: #{last_lines(f['error'])}" }.join("; ")
+        super("repository_clone_failed", { repositories: failed }, message: "Repository did not clone. #{summary}")
+      end
+
+      private
+
+      def last_lines(error)
+        error.to_s.lines.map(&:strip).reject(&:empty?).last(2).join(" ")
       end
     end
 
@@ -126,6 +142,8 @@ module ContainerStrategies
         initial_write_error = e
       end
       run_credential_preflight!(adapter, container, cid, initial_write_error: initial_write_error) if credential.present?
+      failed_repos = Array(session.reload.metadata&.dig("failed_repos"))
+      raise RepositoryCloneError.new(failed_repos) if failed_repos.any?
       if session.restored_from_session_id
         Sessions::Restore.new(session: session, container: container, runtime: runtime, adapter: adapter).call
       end

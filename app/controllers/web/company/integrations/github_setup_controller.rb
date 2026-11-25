@@ -21,7 +21,8 @@ class Web::Company::Integrations::GithubSetupController < Web::Company::Applicat
   def github_setup
     payload = Oauth::State.decode(params[:state])
     target_project = resolve_github_setup_project(payload)
-    installation_id = params[:installation_id]
+    signed_installation_id = payload&.dig("context", "installation_id")
+    installation_id = signed_installation_id.presence || params[:installation_id]
 
     if installation_id.blank?
       redirect_to github_setup_redirect_path(target_project)
@@ -49,6 +50,17 @@ class Web::Company::Integrations::GithubSetupController < Web::Company::Applicat
       return
     end
 
+    if Github::InstallationOwnership.enforced? && params[:code].blank?
+      # Back from the authorization without a code (declined): asking again would loop.
+      if signed_installation_id.present?
+        redirect_to github_setup_redirect_path(target_project),
+                    alert: "GitHub did not confirm your access to this installation — connect GitHub again."
+      else
+        redirect_to_github_authorization(target_project, installation_id)
+      end
+      return
+    end
+
     # The project's company, not the session's: a user in two companies may
     # have switched away since starting the install.
     integration = Github::IntegrationService.new(
@@ -67,6 +79,20 @@ class Web::Company::Integrations::GithubSetupController < Web::Company::Applicat
 
   def github_setup_redirect_path(project)
     project ? company_project_integrations_path(project) : company_projects_path
+  end
+
+  # The installation goes into the signed state: GitHub's authorization comes
+  # back here with a code and our state, but not the installation.
+  def redirect_to_github_authorization(project, installation_id)
+    state = Oauth::State.encode(
+      owner_type: "Project", owner_id: project.id, user_id: current_user.id,
+      return_to: company_project_integrations_path(project), code_verifier: nil,
+      provider: "github_setup", context: { "installation_id" => installation_id.to_s }
+    )
+    redirect_uri = company_integrations_github_setup_url(protocol: Settings.protocol, host: Settings.domain)
+    # allow_other_host: github.com, built from deployment Settings — never user-supplied.
+    redirect_to Github::InstallationOwnership.authorize_url(redirect_uri: redirect_uri, state: state),
+                allow_other_host: true
   end
 
   # Resolve the originating project from the verified, signed state payload. Returns

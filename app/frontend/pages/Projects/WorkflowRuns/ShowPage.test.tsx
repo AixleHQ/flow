@@ -224,6 +224,17 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
     expect(screen.queryByText('17m 0s')).not.toBeInTheDocument();
   });
 
+  it('links the board task the run was started for', () => {
+    renderAuthedPage(<ShowPage />, {
+      props: seed({ run: makeRun({ task: { number: 12, title: 'Fix the login redirect' } }) }),
+    });
+
+    expect(screen.getByRole('link', { name: '#12 Fix the login redirect' })).toHaveAttribute(
+      'href',
+      '/company/projects/7/tasks/12',
+    );
+  });
+
   it('says which chat a chat-started run came from, linking back to the message', () => {
     const chatOrigin = {
       provider: 'Microsoft Teams',
