@@ -127,6 +127,22 @@ func SelfUpdateOff(value string) bool {
 // NeedsOperator. A self-update that replaced the binary returns machine.ErrUpdated.
 func RunMachine(ctx context.Context, opts MachineOptions) error {
 	registering := opts.URL != "" && opts.Token != ""
+	if (opts.URL != "") != (opts.Token != "") {
+		// Half of the registration environment: with no credentials to start from,
+		// say which variable is missing, never a value. With credentials all three
+		// are ignored.
+		exists, err := credentials.NewStore(opts.StateDir).Exists()
+		if err != nil {
+			return err
+		}
+		if !exists {
+			missing := RegisterTokenEnv
+			if opts.URL == "" {
+				missing = RegisterURLEnv
+			}
+			return operatorError{fmt.Errorf("%s and %s must be set together to register this machine, and %s is not set", RegisterURLEnv, RegisterTokenEnv, missing)}
+		}
+	}
 	if registering {
 		// A fresh state directory, as `configure` makes it. With credentials in it
 		// already nothing changes.
@@ -171,15 +187,6 @@ func RunMachine(ctx context.Context, opts MachineOptions) error {
 			return err
 		}
 		creds, err = store.Load()
-	}
-	if errors.Is(err, credentials.ErrNotConfigured) && (opts.URL != "") != (opts.Token != "") {
-		// Half of the registration environment on a fresh state directory: say which
-		// variable is missing, never a value. With credentials all three are ignored.
-		missing := RegisterTokenEnv
-		if opts.URL == "" {
-			missing = RegisterURLEnv
-		}
-		return operatorError{fmt.Errorf("%s and %s must be set together to register this machine, and %s is not set", RegisterURLEnv, RegisterTokenEnv, missing)}
 	}
 	if errors.Is(err, credentials.ErrNotConfigured) || errors.Is(err, credentials.ErrInvalid) {
 		// Restarting cannot fix it: only `configure` can.
