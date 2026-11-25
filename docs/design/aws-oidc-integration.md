@@ -1,6 +1,8 @@
 # AWS OIDC: workflow steps assume a customer's IAM role without keys
 
-Proposed 2026-11-25. Not built.
+Built 2026-11-25 (#883). Where the build departs from the proposal, the section says so: lazy key
+rotation (§5.4), vending on the Bedrock endpoint (§6.2), templates without roles (§7.2), disconnect and
+remove (§8).
 
 A workflow step that needs the customer's AWS account today gets there with an IAM
 user's access key stored as a config item. This design makes Flow an OpenID Connect
