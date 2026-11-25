@@ -494,6 +494,23 @@ a spike before the implementation; a result that differs is a follow-up change).
 | D12 | Consent, issuance, masking and impersonation rules are GitHub's, except that `ActAsConsentsController` gets strict input: at least one recognized switch is required, unknown request-body keys are refused, and the switches stay exact JSON booleans. Today it selects recognized keys before validating, so `{}`, a misspelled key or an unknown extra key is accepted and can create a no-op row. Cases for `{}`, misspellings, unknown extras, strings, integers, null and mixed valid/invalid payloads are added for Bitbucket. | github-user-identity.md; implementation-patterns.md strict input |
 | D13 | Calls with the person's token go through `Bitbucket::Api` (on our `Bitbucket::Client`), not a library, because none is in use and `Bitbucket::Api` is the one seam. | implementation-patterns.md "API clients"; testing.md |
 
+### Current client only, and a failed connect stores nothing (#275)
+
+Two rules apply to every provider with a person's own connection (GitHub, GitLab, Bitbucket),
+and they supersede anything above that says otherwise:
+
+- **Only the current client's credentials count.** "Current" is the `OauthClient` with the
+  issuer and client id the deployment is configured with now (`Oauth::Providers.current_client_ref`).
+  `OauthCredential.on_other_client` / `#on_other_client?` own the rule. A credential of another
+  client is not listed, not handed out by the `*_user_token` tools, and not refreshed by the sweep
+  or `Oauth::TokenService.fresh`: it lapses. Disconnect still deletes all of the person's
+  credentials for the provider, and revokes at the provider only those of the current client.
+- **A failed connect stores nothing.** The `after_connect` hook and `record_identity!` are
+  replaced by a `fetch_identity:` hook, called with the new access token before anything is
+  stored. If it fails, the person sees "Failed to complete connection", no credential is created,
+  and on a reconnect the previous credential and its identity are untouched. On success the
+  token and the identity are stored in one save (`upsert_from_token!(identity:)`).
+
 ## 9. Deferred questions
 
 - **Raising the refresh floor** if S2 shows a refresh keeps the old access token valid.

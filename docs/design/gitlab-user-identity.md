@@ -413,6 +413,25 @@ contract tests).
 | D11 | Consent, issuance, masking, disconnect and impersonation rules are GitHub's, unchanged. | `github-user-identity.md` |
 | D12 | The task points to #218 for self-managed; its assessment was not available in the repository, so this design takes only what the code and user guide show (`Gitlab::Host`, `Gitlab::AppConfig`, `SafeHttp`) and defers private-CA trust to it. | Task #238; task #218 (in progress) |
 
+### Current client only, and a failed connect stores nothing (#275)
+
+Two rules apply to every provider with a person's own connection (GitHub, GitLab, Bitbucket),
+and they supersede anything above that says otherwise:
+
+- **Only the current client's credentials count.** "Current" is the `OauthClient` with the
+  issuer and client id the deployment is configured with now (`Oauth::Providers.current_client_ref`).
+  `OauthCredential.on_other_client` / `#on_other_client?` own the rule. A credential of another
+  client is not listed, not handed out by the `*_user_token` tools, and not refreshed by the sweep
+  or `Oauth::TokenService.fresh`: it lapses. Disconnect still deletes all of the person's
+  credentials for the provider, and revokes at the provider only those of the current client.
+  A changed `GITLAB_ENDPOINT` is a change of client too, so D6's other-instance rule is this one
+  (`on_other_gitlab_instance` is gone).
+- **A failed connect stores nothing.** The `after_connect` hook and `record_identity!` are
+  replaced by a `fetch_identity:` hook, called with the new access token before anything is
+  stored. If it fails, the person sees "Failed to complete connection", no credential is created,
+  and on a reconnect the previous credential and its identity are untouched. On success the
+  token and the identity are stored in one save (`upsert_from_token!(identity:)`).
+
 ## 9. Deferred questions
 
 - **Revoking issued tokens at session end.** Revoking the shared stored token would end

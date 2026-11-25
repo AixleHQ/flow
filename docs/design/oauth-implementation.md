@@ -48,8 +48,8 @@ Unique/idempotency key for a credential: `(owner, oauth_client, provider, mcp_se
 `github`, `gitlab` and `bitbucket`. Each entry has its endpoints and scopes in code, or an `endpoints`
 callable (GitLab's follow `GITLAB_ENDPOINT`), and an `oauth_app` callable for the client id and secret
 from `Settings` (through `Gitlab::AppConfig` and `Bitbucket::AppConfig` for those two).
-Optional keys: `owner_types` (GitHub, GitLab and Bitbucket take only a `User`), `after_connect` (records the
-connected identity), `client_auth: :basic` (Bitbucket) and `trust_endpoint_host` (GitLab, whose token call may
+Optional keys: `owner_types` (GitHub, GitLab and Bitbucket take only a `User`), `fetch_identity` (fetches the
+connected identity with the new token, before the credential is stored), `client_auth: :basic` (Bitbucket) and `trust_endpoint_host` (GitLab, whose token call may
 reach a privately resolving host). `client_for` reconciles a `source:static` `OauthClient` row.
 
 **MCP servers** (`app/services/mcp/oauth_discovery_service.rb`) — any pasted URL, per the MCP auth spec:

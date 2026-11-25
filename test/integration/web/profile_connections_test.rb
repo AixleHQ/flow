@@ -6,6 +6,9 @@ class Web::ProfileConnectionsTest < ActionDispatch::IntegrationTest
   setup do
     Settings.github.stubs(:client_id).returns("Iv1.client")
     Settings.github.stubs(:client_secret).returns("client-secret")
+    # Connections count only with the client configured now; the factories use these ids.
+    Settings.gitlab.stubs(:oauth_client_id).returns("lab-cid")
+    Settings.bitbucket.oauth.stubs(:client_id).returns("bb-cid")
     @company = create(:company)
     @user = create(:user, :admin, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
     @project = create(:project, company: @company, owner: @user, name: "Alpha")
