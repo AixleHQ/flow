@@ -1,6 +1,6 @@
 # AWS OIDC: workflow steps assume a customer's IAM role without keys
 
-Built 2026-11-25 (#883). Where the build departs from the proposal, the section says so: lazy key
+Built 2026-11-25 (#884). Where the build departs from the proposal, the section says so: lazy key
 rotation (§5.4), vending on the Bedrock endpoint (§6.2), templates without roles (§7.2), disconnect and
 remove (§8).
 
