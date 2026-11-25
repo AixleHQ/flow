@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -23,7 +24,7 @@ import (
 // The callback proxy's side of `container.start` and `container.stop`
 // (PROTOCOL.md §5.8, §6.2; DESIGN.md §6.9.3): the proxy sidecar, a second
 // container per session that owns the agent's network namespace, and with
-// `network: host` the host runner's own listener instead.
+// `network: host` the machine runner's own listener instead.
 
 // Result error classes of the proxy (PROTOCOL.md §6.2).
 const (
@@ -42,12 +43,14 @@ const (
 	// for the session container.
 	RoleProxy = "proxy"
 	// LabelProxyPort is the port of a `network: host` session's listener, on its
-	// agent container, so that a restarted host runner listens on it again.
+	// agent container, so that a restarted machine runner listens on it again.
 	LabelProxyPort = "aixle.com/proxy-port"
 
-	// SidecarBinary is where the host runner's own binary is mounted in the
-	// sidecar, read-only, as its entrypoint.
-	SidecarBinary = "/aixle-runner"
+	// SidecarBinaryDir is where the directory of the runner's own binary
+	// (`<state-dir>/bin`) is mounted in the sidecar, read-only.
+	SidecarBinaryDir = "/aixle-bin"
+	// SidecarBinary is the runner's binary in it, the sidecar's entrypoint.
+	SidecarBinary = SidecarBinaryDir + "/aixle-runner"
 	// SidecarSocketDir is where the session's socket directory is mounted in
 	// the sidecar, read-only.
 	SidecarSocketDir = "/run/aixle-proxy"
@@ -56,20 +59,20 @@ const (
 	SidecarDialDir = "/run/aixle-dial"
 	// SidecarUser runs the sidecar: nobody, with no capability.
 	SidecarUser = "65534:65534"
-	// SidecarLogTail is how many lines of a sidecar's log the host runner logs
+	// SidecarLogTail is how many lines of a sidecar's log the machine runner logs
 	// when it exits.
 	SidecarLogTail = 50
 	// SidecarLogTimeout bounds reading that tail: the log is a diagnostic, and
-	// a logs endpoint that stalls must not hold up the host runner.
+	// a logs endpoint that stalls must not hold up the machine runner.
 	SidecarLogTimeout = 10 * time.Second
-	// SidecarWaitRetry is the first pause before the host runner watches a
+	// SidecarWaitRetry is the first pause before the machine runner watches a
 	// sidecar again after Docker's wait stream failed; each failure in a row
 	// doubles it, up to SidecarWaitRetryMax.
 	SidecarWaitRetry    = time.Second
 	SidecarWaitRetryMax = 30 * time.Second
 )
 
-// ProxyHost is the host runner's relay (proxy.Host). Nil on an Environment
+// ProxyHost is the machine runner's relay (proxy.Host). Nil on an Environment
 // starts no proxy, as the tests of the other ops do.
 type ProxyHost interface {
 	// OpenSocket serves the session's relay on a Unix socket, and returns the
@@ -107,7 +110,7 @@ func (e *Environment) background() context.Context {
 	return e.Background
 }
 
-// retire records that the host runner itself removes the sidecar, so that its
+// retire records that the machine runner itself removes the sidecar, so that its
 // watcher does not take the exit for a crash.
 func (e *Environment) retire(id string) {
 	e.mu.Lock()
@@ -125,7 +128,7 @@ func (e *Environment) isRetired(id string) bool {
 }
 
 // notVisible says whether a daemon's refusal is that a bind source does not
-// exist, which for the host runner's own files means that the daemon does not
+// exist, which for the machine runner's own files means that the daemon does not
 // see this machine's filesystem.
 func notVisible(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "bind source path does not exist")
@@ -156,7 +159,7 @@ func (e *Environment) openListener(sessionID int64, port int) *protocol.Result {
 }
 
 // startSidecar opens the session's relay socket, then creates and starts the
-// sidecar from the agent image, running the host runner's own binary in proxy
+// sidecar from the agent image, running the machine runner's own binary in proxy
 // mode on 127.0.0.1:port, the payload's `proxy_port`, in the network the
 // payload names. It answers
 // the sidecar's id, which the agent container joins
@@ -173,10 +176,27 @@ func (e *Environment) startSidecar(ctx context.Context, sessionID int64, image s
 	}
 	binary := e.Proxy.Binary()
 	name := e.SidecarName(sessionID)
-	entrypoint := []string{SidecarBinary, "--mode", "proxy", "--socket", SidecarSocketDir + "/relay.sock", "--listen", "127.0.0.1:" + strconv.Itoa(port)}
-	mounts := []mount.Mount{
-		{Type: mount.TypeBind, Source: binary, Target: SidecarBinary, ReadOnly: true},
-		{Type: mount.TypeBind, Source: dir, Target: SidecarSocketDir, ReadOnly: true},
+	// The binary's directory is mounted, not the file, as a volume's subpath is a
+	// directory. It is a directory of the state directory: the runner put a copy of
+	// its binary there at start.
+	sidecarBinary := SidecarBinaryDir + "/" + filepath.Base(binary)
+	entrypoint := []string{sidecarBinary, "--mode", "proxy", "--socket", SidecarSocketDir + "/relay.sock", "--listen", "127.0.0.1:" + strconv.Itoa(port)}
+	state := e.stateLocation()
+	var mounts []mount.Mount
+	add := func(path, target string, readOnly bool) *protocol.Result {
+		m, err := state.Mount(path, target, readOnly)
+		if err != nil {
+			r := protocol.ErrorResult(ClassProxyStartFailed, "mounting "+path+" into the proxy sidecar failed: "+err.Error())
+			return &r
+		}
+		mounts = append(mounts, m)
+		return nil
+	}
+	if r := add(filepath.Dir(binary), SidecarBinaryDir, true); r != nil {
+		return fail(*r)
+	}
+	if r := add(dir, SidecarSocketDir, true); r != nil {
+		return fail(*r)
 	}
 	// The tunnel's second socket, which runs the other way: the sidecar listens, the host
 	// runner dials. The sidecar takes the session's ports on its command line and
@@ -187,7 +207,9 @@ func (e *Environment) startSidecar(ctx context.Context, sessionID int64, image s
 			return fail(protocol.ErrorResult(ClassProxyStartFailed, "creating the tunnel's dial directory failed: "+err.Error()))
 		}
 		entrypoint = append(entrypoint, "--dial-socket", SidecarDialDir+"/"+proxy.DialSocketName, "--dial-ports", joinPorts(tunnelPorts))
-		mounts = append(mounts, mount.Mount{Type: mount.TypeBind, Source: dialDir, Target: SidecarDialDir})
+		if r := add(dialDir, SidecarDialDir, false); r != nil {
+			return fail(*r)
+		}
 	}
 	config := &container.Config{
 		Image:      image,
@@ -251,7 +273,7 @@ func (e *Environment) abandonSidecar(ctx context.Context, sessionID int64, id st
 }
 
 // watchSidecar waits, in the background, for the sidecar to stop. A sidecar
-// the host runner did not remove itself has crashed, and the agent has lost
+// the machine runner did not remove itself has crashed, and the agent has lost
 // its network with it: the agent's container is stopped, so that the session
 // fails through the platform's dead-container path, and the exit is logged
 // with its code and the tail of the sidecar's log (task 8b, decision 10).
@@ -263,7 +285,7 @@ func (e *Environment) abandonSidecar(ctx context.Context, sessionID int64, id st
 // SidecarWaitRetryMax. Only the sidecar's intentional removal or the host
 // runner's stopping ends the watch.
 //
-// A sidecar that is gone without the host runner retiring it (removed by
+// A sidecar that is gone without the machine runner retiring it (removed by
 // `docker rm -f`, say) stops the agent too, logged with exit code -1. That is
 // intended: the agent has lost its network all the same, so it is handled as
 // a sidecar exit (decision 10).
@@ -428,9 +450,9 @@ func (e *Environment) removeSidecar(ctx context.Context, sessionID int64) error 
 }
 
 // Resume serves the relays of the sessions that run on the environment again,
-// after a restart of the host runner: the containers belong to the daemon and
-// kept running, but the relay was the host runner's. A sidecar that exited
-// while the host runner was down is handled as a crash. A relay or a
+// after a restart of the machine runner: the containers belong to the daemon and
+// kept running, but the relay was the machine runner's. A sidecar that exited
+// while the machine runner was down is handled as a crash. A relay or a
 // `network: host` listener that cannot be served again leaves its agent with
 // no callback, so the agent's container is stopped and the session fails
 // through the dead-container path, as when a sidecar exits; nothing retries.

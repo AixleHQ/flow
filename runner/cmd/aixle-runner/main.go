@@ -13,11 +13,10 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/aixlehq/aixle-runner/internal/cli"
 	"github.com/aixlehq/aixle-runner/internal/docker"
-	"github.com/aixlehq/aixle-runner/internal/host"
+	"github.com/aixlehq/aixle-runner/internal/machine"
 	"github.com/aixlehq/aixle-runner/internal/preflight"
 	"github.com/aixlehq/aixle-runner/internal/proxy"
 	"github.com/aixlehq/aixle-runner/internal/service"
@@ -28,12 +27,19 @@ const usage = `Usage:
   aixle-runner configure --url <platform> --token <registration token> --name <name> [--no-auto-update] [--state-dir <dir>]
   aixle-runner unregister [--state-dir <dir>]
   aixle-runner service install | uninstall | start | stop
-  aixle-runner --mode host [--state-dir <dir>]
+  aixle-runner --mode machine [--state-dir <dir>] [--unregister-on-stop]
   aixle-runner --mode proxy --socket <path> --listen <address> [--dial-socket <path> --dial-ports <p,p,…>]
   aixle-runner version
 
---mode proxy is the callback proxy's sidecar, which the host runner starts next
+--mode proxy is the callback proxy's sidecar, which the machine runner starts next
 to a session's agent container; it is not run by hand.
+
+--mode machine registers the machine on its first start, when the state directory
+has no credentials yet, from AIXLE_RUNNER_URL, AIXLE_RUNNER_TOKEN and
+AIXLE_RUNNER_NAME (the machine's hostname if unset). Once it has credentials the
+three are ignored. SIGINT, SIGTERM and SIGHUP stop it: it removes the sessions'
+sidecars and containers, then unregisters the machine if --unregister-on-stop or
+AIXLE_RUNNER_UNREGISTER_ON_STOP=1 is set (the flag wins), and exits.
 
 service install copies this binary to /var/lib/aixle-runner/bin/aixle-runner,
 owned by the service's own user, and the service runs that copy. The runner
@@ -44,7 +50,7 @@ never updates itself, and configure run with it registers as --no-auto-update.
 `
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), cli.StopSignals...)
 	code := run(ctx, os.Args[1:], os.Stdout, os.Stderr)
 	stop()
 	os.Exit(code)
@@ -75,7 +81,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		fmt.Fprint(stdout, usage)
 		return 0
 	default:
-		err = hostMode(ctx, args, stderr)
+		err = machineMode(ctx, args, stdout, stderr)
 	}
 
 	switch {
@@ -84,7 +90,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	case errors.Is(err, errUsage):
 		fmt.Fprint(stderr, usage)
 		return 2
-	case errors.Is(err, host.ErrUpdated):
+	case errors.Is(err, machine.ErrUpdated):
 		// The new binary is in place: systemd starts it (Restart=always).
 		fmt.Fprintln(stderr, "aixle-runner:", err)
 		return service.ExitUpdated
@@ -97,6 +103,9 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 }
 
 var errUsage = errors.New("usage")
+
+// runMachine is replaced in tests.
+var runMachine = cli.RunMachine
 
 func newFlags(name string, stderr io.Writer) (*flag.FlagSet, *string) {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
@@ -172,25 +181,33 @@ func serviceCommand(ctx context.Context, args []string, stderr io.Writer) error 
 	return errUsage
 }
 
-func hostMode(ctx context.Context, args []string, stderr io.Writer) error {
+func machineMode(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	fs, stateDir := newFlags("aixle-runner", stderr)
-	mode := fs.String("mode", "", "the runner's mode: host, or proxy for the callback proxy's sidecar")
-	socket := fs.String("socket", "", "proxy mode: the host runner's relay socket")
+	mode := fs.String("mode", "", "the runner's mode: machine, or proxy for the callback proxy's sidecar")
+	unregisterDefault, envErr := cli.BoolEnv(cli.UnregisterOnStopEnv, os.Getenv(cli.UnregisterOnStopEnv))
+	unregisterOnStop := fs.Bool("unregister-on-stop", unregisterDefault, "machine mode: unregister the machine when the runner is stopped ("+cli.UnregisterOnStopEnv+"=1)")
+	socket := fs.String("socket", "", "proxy mode: the machine runner's relay socket")
 	listen := fs.String("listen", "", "proxy mode: the address the agent calls")
-	dialSocket := fs.String("dial-socket", "", "proxy mode: the socket the host runner dials the tunnel's ports through")
+	dialSocket := fs.String("dial-socket", "", "proxy mode: the socket the machine runner dials the tunnel's ports through")
 	dialPorts := fs.String("dial-ports", "", "proxy mode: the ports the dial socket may reach, comma separated")
 	if err := parse(fs, args); err != nil {
 		return err
 	}
 	logger := slog.New(slog.NewTextHandler(stderr, nil))
 	switch *mode {
-	case "host":
+	case "machine":
 		if *socket != "" || *listen != "" || *dialSocket != "" || *dialPorts != "" {
 			return errUsage
 		}
-		return cli.RunHost(ctx, cli.HostOptions{StateDir: *stateDir, Logger: logger,
+		inContainer, err := cli.BoolEnv(cli.InContainerEnv, os.Getenv(cli.InContainerEnv))
+		if envErr != nil || err != nil {
+			return errors.Join(envErr, err)
+		}
+		return runMachine(ctx, cli.MachineOptions{StateDir: *stateDir, Logger: logger,
 			NoSelfUpdate: cli.SelfUpdateOff(os.Getenv(cli.NoSelfUpdateEnv)),
-			TunnelURL:    os.Getenv(cli.TunnelURLEnv)})
+			TunnelURL:    os.Getenv(cli.TunnelURLEnv),
+			URL:          os.Getenv(cli.RegisterURLEnv), Token: os.Getenv(cli.RegisterTokenEnv), Name: os.Getenv(cli.RegisterNameEnv),
+			UnregisterOnStop: *unregisterOnStop, InContainer: inContainer, Out: stdout})
 	case "proxy":
 		if *socket == "" || *listen == "" {
 			return errUsage

@@ -8,9 +8,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+
+	"github.com/aixlehq/aixle-runner/internal/fsutil"
 )
 
-// ErrLocked means another process holds the state directory: a host runner, or a
+// ErrLocked means another process holds the state directory: a machine runner, or a
 // `configure` or `unregister` in progress.
 var ErrLocked = errors.New("another aixle-runner process holds the state directory")
 
@@ -86,4 +89,42 @@ func Restrict(dir string) error {
 			dir, mode, Mode, err, Mode, Mode, dir)
 	}
 	return nil
+}
+
+// BinaryName is the runner's own binary in BinDir.
+const BinaryName = "aixle-runner"
+
+// BinPath is where the runner keeps a copy of its own binary, in the state
+// directory: `<state-dir>/bin/aixle-runner`. The callback proxy's sidecar mounts
+// that directory (docs/design/agent-runtimes/add-machine.md §3.2), on a bare
+// machine and in a container alike.
+func BinPath(dir string) string {
+	return filepath.Join(dir, "bin", BinaryName)
+}
+
+// InstallBinary copies the running binary, src, to BinPath(dir) at start, with
+// mode 0755: written to a temporary name and renamed, so a sidecar that runs the
+// old file keeps it. A binary that is that file already is left as it is. It
+// returns the path.
+func InstallBinary(dir, src string) (string, error) {
+	dst := BinPath(dir)
+	if a, err := os.Stat(src); err == nil {
+		if b, err := os.Stat(dst); err == nil && os.SameFile(a, b) {
+			return dst, nil
+		}
+	}
+	in, err := os.Open(src)
+	if err != nil {
+		return "", fmt.Errorf("opening the runner's binary %s: %w", src, err)
+	}
+	defer in.Close()
+	if err := fsutil.CopyFileAtomic(in, dst, 0o755, nil); err != nil {
+		return "", fmt.Errorf("copying the runner's binary to %s: %w", dst, err)
+	}
+	// A directory that already existed may have a narrower mode: the sidecar runs
+	// as nobody and must reach the binary.
+	if err := os.Chmod(filepath.Dir(dst), 0o755); err != nil {
+		return "", fmt.Errorf("making %s readable: %w", filepath.Dir(dst), err)
+	}
+	return dst, nil
 }

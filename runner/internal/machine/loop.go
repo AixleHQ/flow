@@ -1,9 +1,9 @@
-// Package host is `aixle-runner --mode host`: the ops loop of a machine's host
+// Package machine is `aixle-runner --mode machine`: the ops loop of a machine's host
 // runner (DESIGN.md §6.4, §6.7, §6.8). It long-polls the machine's ops one poll at
 // a time, runs each op at most once through the journal, and posts each result
 // until the gateway accepts it. An answer without ops may offer an update, which
 // the loop hands to its Updater (DESIGN.md §14.4).
-package host
+package machine
 
 import (
 	"context"
@@ -60,7 +60,7 @@ type Updater interface {
 // and its supervisor (systemd) starts the new binary.
 var ErrUpdated = errors.New("aixle-runner was updated and restarts on the new version")
 
-// Loop is the host runner's ops loop.
+// Loop is the machine runner's ops loop.
 type Loop struct {
 	Gateway  Gateway
 	Tokens   *tokens.Source

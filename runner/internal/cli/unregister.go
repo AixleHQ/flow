@@ -21,14 +21,19 @@ type UnregisterOptions struct {
 }
 
 // Unregister removes the machine from its runner (DELETE /registration) and then
-// deletes the local credentials and journal. It refuses while a host runner runs.
+// deletes the local credentials and journal. It refuses while a machine runner runs.
 func Unregister(ctx context.Context, opts UnregisterOptions) error {
 	lock, err := lockForCommand(opts.StateDir, "unregister")
 	if err != nil {
 		return err
 	}
 	defer lock.Release()
+	return unregisterLocked(ctx, opts)
+}
 
+// unregisterLocked is Unregister for a caller that holds the state directory's
+// lock: the machine runner, which unregisters itself when it stops.
+func unregisterLocked(ctx context.Context, opts UnregisterOptions) error {
 	store := credentials.NewStore(opts.StateDir)
 	creds, err := store.Load()
 	if err != nil {

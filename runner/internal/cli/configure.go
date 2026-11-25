@@ -45,11 +45,14 @@ type ConfigureOptions struct {
 	// os.Geteuid.
 	LookupUser func(name string) (*user.User, error)
 	Geteuid    func() int
+	// lockHeld says the caller holds the state directory's lock already: the
+	// machine runner, which registers on its first start.
+	lockHeld bool
 }
 
 // Configure runs the preflight, registers the machine and stores its credentials.
 // A failed preflight registers nothing, and neither does a state directory that
-// cannot be written or is held by a running host runner.
+// cannot be written or is held by a running machine runner.
 func Configure(ctx context.Context, opts ConfigureOptions) error {
 	name := strings.TrimSpace(opts.Name)
 	switch {
@@ -77,12 +80,14 @@ func Configure(ctx context.Context, opts ConfigureOptions) error {
 	if err != nil {
 		return fmt.Errorf("configure cannot tell who must own the credentials, so it registered nothing and the registration token is not spent: %w", err)
 	}
-	lock, err := lockForCommand(opts.StateDir, "configure")
-	if err != nil {
-		return err
+	if !opts.lockHeld {
+		lock, err := lockForCommand(opts.StateDir, "configure")
+		if err != nil {
+			return err
+		}
+		defer lock.Release()
 	}
-	defer lock.Release()
-	// Asked again under the lock, which a running host runner would have held.
+	// Asked again under the lock, which a running machine runner would have held.
 	exists, err := store.Exists()
 	if err != nil {
 		return fmt.Errorf("configure cannot tell whether this machine is registered already, so it registered nothing: %w", err)
@@ -92,10 +97,15 @@ func Configure(ctx context.Context, opts ConfigureOptions) error {
 	}
 
 	fmt.Fprintln(opts.Out, "Checking this machine...")
+	// The free space is measured where the runner keeps its state, for information.
+	opts.Preflight.StateDir = opts.StateDir
 	report, err := preflight.Run(ctx, opts.Preflight)
 	if err != nil {
 		return fmt.Errorf("the machine did not pass the preflight, so it was not registered:\n  - %s",
 			strings.ReplaceAll(err.Error(), "\n", "\n  - "))
+	}
+	for _, note := range report.Notes {
+		fmt.Fprintln(opts.Out, note)
 	}
 
 	// A journal without credentials belongs to an environment that is gone, for
