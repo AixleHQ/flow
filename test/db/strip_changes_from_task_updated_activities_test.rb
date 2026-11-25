@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
-require Rails.root.join("db/migrate/20261125120000_strip_changes_from_task_updated_activities")
+require Rails.root.join("db/migrate/20261125121055_strip_changes_from_task_updated_activities")
 
 class StripChangesFromTaskUpdatedActivitiesTest < ActiveSupport::TestCase
   test "removes the changes key from task_updated rows and keeps other metadata" do
