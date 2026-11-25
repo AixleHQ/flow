@@ -23,6 +23,9 @@ module PersonalTools
     def execute
       project = find_project!
       authorize!(project, :create?, policy: Web::Company::Projects::RepositoriesPolicy, project: project)
+      refusal = clone_refusal(project)
+      return error(refusal) if refusal
+
       repo = Repository.create!(attributes_for(project))
       Repositories::CiWebhook.register(repo)
       success(id: repo.id, full_name: repo.full_name, source_branch: repo.source_branch,
@@ -45,6 +48,13 @@ module PersonalTools
       attributes[:source_branch] = params["source_branch"] if params["source_branch"].present?
       attributes[:purpose] = params["purpose"] if params["purpose"].present?
       attributes.merge(scope: project)
+    end
+
+    def clone_refusal(project)
+      return nil if params["public_url"].present? || params["integration_id"].blank?
+
+      integration = Integration.visible_for_project(project).find_by(id: params["integration_id"])
+      Repositories::CloneAccess.refusal(integration, params["full_name"])
     end
 
     def bitbucket_integration(project)

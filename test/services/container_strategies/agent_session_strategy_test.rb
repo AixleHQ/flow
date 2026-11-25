@@ -202,6 +202,30 @@ module ContainerStrategies
       strategy.before_exec(container_id: "container_ref")
     end
 
+    test "before_exec stops the session when an attached repository did not clone, with git's error" do
+      @session.change_jsonb!(:metadata) do |doc|
+        doc["failed_repos"] = [ { "id" => 1, "full_name" => "acme/kb",
+                                  "error" => "git clone exited with 128: Cloning into '/workspace/repo/kb'...\n" \
+                                             "remote: Write access to repository not granted.\n" \
+                                             "fatal: unable to access 'https://github.com/acme/kb.git/': The requested URL returned error: 403\n" } ]
+      end
+      SessionContextService.stubs(:assemble_session_context)
+
+      error = assert_raises(AgentSessionStrategy::RepositoryCloneError) { run_before_exec(build_strategy) }
+
+      assert_equal "repository_clone_failed", error.code
+      assert_equal "Repository did not clone. acme/kb: remote: Write access to repository not granted. " \
+                   "fatal: unable to access 'https://github.com/acme/kb.git/': The requested URL returned error: 403",
+                   error.message
+      assert_equal [ "acme/kb" ], error.details[:repositories].map { |r| r["full_name"] }
+    end
+
+    test "before_exec starts the session when every attached repository cloned" do
+      SessionContextService.stubs(:assemble_session_context)
+
+      assert_nothing_raised { run_before_exec(build_strategy) }
+    end
+
     # A session runs about as long as the token lives, so one handed a token with
     # minutes left dies halfway through on an opaque 401. The sweep only tops up in
     # the last stretch of a token's life — the launch has to check for itself.
