@@ -652,10 +652,15 @@ in adapter contract tests.
   expiration is on under **Optional Features → User-to-server token expiration → Opt-in**.
   The installation check is a separate opt-in (`GITHUB_APP_VERIFY_INSTALLATION_OWNER`,
   off by default): the client credentials alone enable only connecting accounts. With
-  the check on, "Request user authorization (OAuth) during installation" is on, and
-  `/company/integrations/github_setup` must be the **first** Redirect URI, because GitHub
-  then makes the Setup URL unavailable and sends installs to the first one. Staging and
-  aixle.com leave the check off, so installing through the Setup URL keeps working.
+  the check on, `/company/integrations/github_setup` must be one of the Redirect URIs.
+  *Changed 2026-11-25:* GitHub sends no `code` when an existing installation is
+  configured (`setup_action=update`), even with "Request user authorization (OAuth)
+  during installation" on, so a second company could never connect an organization
+  that already had the App. The setup callback now sends a person who arrives without
+  a code through GitHub's authorization of the App (redirect back to
+  `/company/integrations/github_setup`, installation id in the signed state) and checks
+  the code it returns. "Request user authorization (OAuth) during installation" is no
+  longer needed. Staging and aixle.com leave the check off.
 - **R4. Refresh-token rotation.** GitHub refresh tokens are single use. `RefreshLease`
   and the "only mark an error if the stored refresh token was the one sent" rule in
   `refresh_leased!` already handle concurrent refreshes.

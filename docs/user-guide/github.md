@@ -446,7 +446,9 @@ the operator registers one GitHub App for the whole deployment:
 
 1. **Setup URL:** `https://<your domain>/company/integrations/github_setup`.
    Every installation returns there, whichever project started it; the project
-   travels in a signed `state`.
+   travels in a signed `state`. Turn on **Redirect on update** as well: an
+   account that already has the app is connected through **Configure** on
+   GitHub, and without it GitHub does not send the person back.
 2. **Webhook:** active, URL `https://<your domain>/webhooks/github`, with a
    secret.
 3. **Repository permissions:** Contents read & write, Pull requests read & write,
@@ -521,19 +523,23 @@ To check the person instead, this is a separate opt-in:
 
 1. Set `GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET` from the app's
    **Credentials** tab.
-2. Turn on **Request user authorization (OAuth) during installation** on the app,
-   and make `https://<your domain>/company/integrations/github_setup` the
-   **first** Redirect URI. With this on, GitHub makes the Setup URL unavailable
-   and sends installations to the first Redirect URI. (Keep `/oauth/callback`
-   listed as well if people connect their own accounts.)
+2. Add `https://<your domain>/company/integrations/github_setup` to the app's
+   **Redirect URIs**. Keep `/oauth/callback` listed as well if people connect
+   their own accounts.
 3. Set `GITHUB_APP_VERIFY_INSTALLATION_OWNER=true`.
 
-A new installation then connects only for a GitHub user who can see it, and one
-organization can be connected from several companies.
+An installation then connects only for a GitHub user who can see it, and one
+organization can be connected from several companies. After installing or
+configuring the app on GitHub, the person is asked to authorize it, the first
+time only, and Flow checks with GitHub that they can see the installation. This
+is also how a second company connects an organization that already has the app:
+**Configure** on GitHub, save, authorize.
 
-Turn the three on together. With the setting on and the authorization off,
-GitHub sends no code back, and every new installation is refused. The client
-credentials alone never turn the check on.
+Add the Redirect URI before turning the setting on: without it GitHub refuses
+the authorization, and no installation connects. The client credentials alone
+never turn the check on. **Request user authorization (OAuth) during
+installation** is not needed; with it on, a new installation skips the separate
+authorization step.
 
 ## Limits
 
