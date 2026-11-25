@@ -1783,6 +1783,21 @@ export function companyFeedbackPath(options?: object): string {
   return "/" + "company" + $companySegment(options) + "/" + "feedback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_slug","format"]);
 }
 
+/** /company/:company_slug/getting_started(.:format) */
+export function companyGettingStartedPath(options?: object): string {
+  return "/" + "company" + $companySegment(options) + "/" + "getting_started" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_slug","format"]);
+}
+
+/** /company/:company_slug/getting_started/build_with_ai(.:format) */
+export function companyGettingStartedBuildWithAiPath(options?: object): string {
+  return "/" + "company" + $companySegment(options) + "/" + "getting_started" + "/" + "build_with_ai" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_slug","format"]);
+}
+
+/** /company/:company_slug/product_tour(.:format) */
+export function companyProductTourPath(options?: object): string {
+  return "/" + "company" + $companySegment(options) + "/" + "product_tour" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_slug","format"]);
+}
+
 /** /company/:company_slug/members/:id/resend(.:format) */
 export function resendCompanyMemberPath(id: ScalarType, options?: object): string {
   return "/" + "company" + $companySegment(options) + "/" + "members" + "/" + id + "/" + "resend" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_slug","id","format"]);
@@ -2001,6 +2016,11 @@ export function companyProjectWorkflowsPath(project_id: ScalarType, options?: ob
 /** /company/:company_slug/projects/:project_id/workflows/:id(.:format) */
 export function companyProjectWorkflowPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "company" + $companySegment(options) + "/" + "projects" + "/" + project_id + "/" + "workflows" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_slug","project_id","id","format"]);
+}
+
+/** /company/:company_slug/projects/:project_id/workflow_runs/:id/status(.:format) */
+export function statusCompanyProjectWorkflowRunPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + $companySegment(options) + "/" + "projects" + "/" + project_id + "/" + "workflow_runs" + "/" + id + "/" + "status" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_slug","project_id","id","format"]);
 }
 
 /** /company/:company_slug/projects/:project_id/workflow_runs/:id/cancel(.:format) */
