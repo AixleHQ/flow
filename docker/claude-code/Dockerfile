@@ -96,10 +96,6 @@ COPY base/watcher/package.json ./
 RUN npm install --production && npm cache clean --force
 COPY base/watcher/index.js ./
 
-# AWS SDK credential_process helper — the container's only route to cloud credentials.
-COPY base/cloud/aixle-aws-creds /usr/local/bin/aixle-aws-creds
-RUN chmod +x /usr/local/bin/aixle-aws-creds
-
 COPY base/auth-check/index.js /opt/auth-check/index.js
 COPY base/logger/ /opt/mitm/
 RUN chmod +x /opt/mitm/*.sh

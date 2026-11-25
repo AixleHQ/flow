@@ -6,6 +6,7 @@ import { notifications } from '@mantine/notifications';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildAssetPicker } from 'test/factories/assetPicker';
+import { buildAwsOidcRolePicker } from 'test/factories/awsOidc';
 import { buildRunnerSummary } from 'test/factories/runner';
 import { answerFetch, jsonResponse } from 'test/fetchStub';
 import { visitHeld } from 'test/inertiaVisit';
@@ -105,6 +106,7 @@ const CONFIG_FIELDS: Record<string, string> = {
   base_asset_ids: 'baseAssetIds',
   base_repository_ids: 'baseRepositoryIds',
   base_config_item_ids: 'baseConfigItemIds',
+  base_aws_oidc_role_ids: 'baseAwsOidcRoleIds',
 };
 
 function savedState({ aggregate }: SaveBody, workflow: ReturnType<typeof makeWorkflow>) {
@@ -448,6 +450,27 @@ describe('Projects/Workflows/BuilderPage', () => {
     const aggregate = await save(bodies);
 
     expect(aggregate.steps[0].configItemIds).toEqual([11]);
+  });
+
+  it('offers AWS roles on a session only when the project has some, and sends the picked one on Save', async () => {
+    const { unmount } = renderAuthedPage(<BuilderPage />, { props: projectProps() });
+    expect(screen.getByRole('combobox', { name: /secrets and variables/i })).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'AWS roles' })).not.toBeInTheDocument();
+    unmount();
+
+    const { bodies } = answerSave();
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1 })],
+        awsOidcRoles: [buildAwsOidcRolePicker({ id: 31, name: 'prod-diagnose' })],
+      }),
+    });
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'AWS roles' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'prod-diagnose (123456789012)' }));
+    const aggregate = await save(bodies);
+
+    expect(aggregate.steps[0].awsOidcRoleIds).toEqual([31]);
   });
 
   it('renders drag handles for sessions in the tree nav', () => {
@@ -878,6 +901,22 @@ describe('Projects/Workflows/BuilderPage', () => {
 
     expect(await screen.findByPlaceholderText('Select repositories…')).toBeEnabled();
     expect(screen.getByPlaceholderText('Select tools…')).toBeDisabled();
+  });
+
+  // "Inherit all" never attaches a role, so the role picker stays usable while it is on.
+  it('a base AWS role is sent in base_aws_oidc_role_ids on Save, with "inherit all" on', async () => {
+    const workflow = makeWorkflow({ inheritAllProjectResources: true });
+    const { bodies } = answerSave(workflow);
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({ workflow, awsOidcRoles: [buildAwsOidcRolePicker({ id: 31, name: 'prod-diagnose' })] }),
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /Base Resources/ }));
+    await userEvent.click(await screen.findByRole('combobox', { name: 'AWS roles' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'prod-diagnose (123456789012)' }));
+    const aggregate = await save(bodies);
+
+    expect(aggregate.config.base_aws_oidc_role_ids).toEqual([31]);
   });
 
   it('a repository selected on a session is sent in the step repositoryIds on Save', async () => {

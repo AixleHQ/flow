@@ -322,4 +322,35 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
 
     assert_equal "Use {{asset:#{@project_asset.id}}}.", copy.steps.not_deleted.find_by!(name: "Second").instructions
   end
+
+  test "a copy inside the same project keeps its AWS roles" do
+    role = attach_aws_oidc_role
+
+    copy = WorkflowDuplicator.new(@source, target_scope: @source_project).duplicate!
+
+    assert_equal [ role.id ], copy.base_aws_oidc_role_ids
+    assert_equal [ role.id ], copy.steps.not_deleted.find_by!(name: "First").aws_oidc_role_ids
+  end
+
+  test "a copy into another project drops AWS roles, even one named the same there, and reports them" do
+    attach_aws_oidc_role
+    create(:aws_oidc_role, name: "prod-diag", integration: create(:integration, :aws_oidc, company: @company, project: @project))
+
+    duplicator = WorkflowDuplicator.new(@source, target_scope: @project)
+    copy = duplicator.duplicate!
+
+    assert_empty copy.base_aws_oidc_role_ids
+    assert_empty copy.steps.not_deleted.find_by!(name: "First").aws_oidc_role_ids
+    assert(duplicator.summary[:needs_setup].any? { |m| m.match?(/AWS roles are not copied.*prod-diag/) })
+  end
+
+  private
+
+  def attach_aws_oidc_role
+    integration = create(:integration, :aws_oidc, company: @company, project: @source_project)
+    create(:aws_oidc_role, name: "prod-diag", integration: integration).tap do |role|
+      @step1.update!(aws_oidc_role_ids: [ role.id ])
+      @source.merge_config!("base_aws_oidc_role_ids" => [ role.id ])
+    end
+  end
 end

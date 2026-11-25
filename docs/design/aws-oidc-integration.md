@@ -213,14 +213,17 @@ A trust policy for one workflow, as the integration page would generate it:
 - One key set per instance, shared by every issuer; only the `iss` string differs.
   Per-integration keys would add key management without adding isolation: the key
   is held in the same database either way.
-- Table `oidc_signing_keys`: `kid`, `private_key` (encrypted with `Encryptable`),
-  `public_jwk`, `state` (`next`, `current`, `retired`), `activated_at`,
-  `retired_at`.
+- Table `oidc_signing_keys`: `kid`, `encrypted_private_key` (`Encryptable`, under the
+  existing `integrations_key`), `public_jwk`, `state` (`next`, `current`, `retired`),
+  `activated_at`, `retired_at`.
 - JWKS publishes `next` and `current` (and `retired` keys until the last token
   signed with them has expired, which with a 5-minute token is minutes).
-- Rotation: a scheduled job promotes `next` to `current`, creates a new `next` and
-  retires the old key. `next` is published at least a day before it signs anything,
-  so a JWKS cached by AWS already contains it.
+- Rotation happens when a token is signed, not on a schedule (`AwsOidc::SigningKeys`):
+  when the current key is 30 days old and `next` has been published for at least a
+  day, `next` becomes current, a new `next` is created and the old key is retired, all
+  under an advisory lock. A key matters only while tokens are signed with it, so a
+  scheduler would add a moving part and nothing else. `next` is published from the
+  moment it exists, so a JWKS cached by AWS already contains it when it starts signing.
 - The first key is created on first use; there is no operator setting to fill in.
 
 ## 6. Delivering credentials into the container
@@ -245,8 +248,10 @@ Bedrock through Identity Center already works this way
   copies it; every runtime's image needs it. It gains `--role <name>`. In that mode it
   makes one attempt and fails fast: the 100-second wait loop exists for Claude Code's
   Bedrock wizard, which no role call involves.
-- **A vending action for roles**, next to the Bedrock one and behind the same session
-  key: `POST /cloud/aws_oidc/credentials` with the role name. It refuses unless the
+- **Vending for roles on the Bedrock endpoint**, behind the same session key:
+  `POST /cloud/aws/credentials` with the role name in the `X-Aixle-Aws-Role` header. A
+  header rather than a new path, because the runner's callback proxy forwards this
+  route with no path below it, so runner sessions need no proxy change. It refuses unless the
   session is active, is a workflow step's session, and the role is in the step's
   resolved set (§7.2). It then signs the token, calls STS, arms log redaction and
   records the issuance (§7.3) before returning anything.
@@ -308,9 +313,12 @@ region = eu-west-1
   the step's, additive like tools and config items. Unlike them,
   `inherit_all_project_resources` does **not** add the project's roles: production
   access is always a named pick.
-- The duplicator, the version snapshots (`Versions::Snapshots`) and the template
-  exporter learn the column. A template carries a role by name only, never its ARN;
-  installing it asks for a role of that name in the target project.
+- The duplicator and the version snapshots (`Versions::Snapshots`) learn the column. A
+  duplicate inside the project keeps its roles; a duplicate into another project drops
+  them, since roles are one project's production access.
+- A template never carries roles: the exporter leaves them out and the installer
+  ignores them. An ARN belongs to one account, and a role name means nothing in
+  another project; after installing, the project attaches its own roles.
 
 ### 7.3 Audit
 
@@ -324,8 +332,8 @@ Tuesday" from the Flow side; CloudTrail answers it from the AWS side.
 
 Under Project Settings → Integrations, only with the `aws_oidc` flag on:
 
-1. **Trust.** Issuer URL and audience, with copy buttons; Terraform and
-   CloudFormation snippets for the OIDC provider.
+1. **Trust.** Issuer URL and audience, with copy buttons. (Terraform and CloudFormation
+   snippets are left for later.)
 2. **Roles.** Name, ARN, region, session duration. For each role, the generated trust
    policy, with a workflow picker that fills in the `sub` patterns and a checkbox
    for the draft pattern.
@@ -337,7 +345,14 @@ Under Project Settings → Integrations, only with the `aws_oidc` flag on:
 4. **Activity.** Recent issuances: when, role, workflow and step, run, user.
 
 In the workflow builder, a step's resources get an **AWS roles** picker, shown only
-when the project has an active AWS OIDC integration. Mockups to follow.
+when the project has an active AWS OIDC integration.
+
+The integration and its roles are managed by the project's owner or a company admin
+(`Web::Company::Projects::AwsOidcPolicy`). **Disconnect** sets the integration inactive
+and keeps the issuer key and the roles, so the issuer answers 404 and AWS refuses every
+token until it is connected again, with the same issuer. **Remove** on the Integrations
+page deletes the integration, its roles and their attachments; connecting again makes a
+new issuer.
 
 ## 9. Failures
 

@@ -13,11 +13,17 @@
 # Failures are logged here on purpose. The helper's own stderr is discarded by every
 # SDK, so this log is the only place a broken connection is visible.
 class CloudCredentialsController < ActionController::API
+  # Set by `aixle-aws-creds --role <name>`: an AWS OIDC role of the session's step rather
+  # than the company's Bedrock connection. A header and not a path, because the runner's
+  # callback proxy forwards this route with no path below it.
+  ROLE_HEADER = "X-Aixle-Aws-Role"
+
   def create
     session = TerminalSession.find_by(id: request.headers["X-Session-Id"])
     return unauthorized unless session&.active?
     return unauthorized unless CloudAuth::SessionKey.valid?(session, request.headers[CloudAuth::SessionKey::HEADER])
     return unauthorized unless session.owner_entitled?
+    return vend_aws_oidc_role(session) if request.headers[ROLE_HEADER].present?
 
     # An auth session must start with nothing connected. Vending a connection made earlier
     # would silently log the user in to the account they are trying to change, and the
@@ -50,6 +56,15 @@ class CloudCredentialsController < ActionController::API
   end
 
   private
+
+  def vend_aws_oidc_role(session)
+    vendor = AwsOidc::CredentialVendor.new(session: session, role_name: request.headers[ROLE_HEADER])
+    render plain: vendor.to_credential_process_json, content_type: "application/json"
+  rescue AwsOidc::NotEntitledError => e
+    fail_with(session, :forbidden, "not_entitled", e)
+  rescue AwsOidc::Error => e
+    fail_with(session, :bad_gateway, "aws_oidc_#{e.class.name.demodulize.underscore.delete_suffix('_error')}", e)
+  end
 
   def unauthorized
     render json: { error: "unauthorized" }, status: :unauthorized

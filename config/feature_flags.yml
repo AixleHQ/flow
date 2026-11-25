@@ -38,3 +38,13 @@ external_runners:
   client: true
   introduced: 2026-10-26
   remove_by: 2027-06-30    # a review checkpoint, not a planned removal date (docs/design/agent-runtimes/DESIGN.md §12.1)
+
+aws_oidc:
+  description: AWS OIDC integration — workflow steps assume an IAM role in the customer's AWS account with no long-lived key.
+  owner: "@AixleHQ/platform"
+  kind: release
+  scope: company
+  default: false
+  client: true
+  introduced: 2026-11-25
+  remove_by: 2027-06-30    # a review checkpoint, not a planned removal date (docs/design/aws-oidc-integration.md §11)

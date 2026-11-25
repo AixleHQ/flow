@@ -11,6 +11,12 @@ mount ActionCable.server => "/cable"
 # rather than a user session — see CloudAuth::SessionKey.
 post "/cloud/aws/credentials", to: "cloud_credentials#create"
 
+# The OpenID Connect issuer of each AWS OIDC integration (docs/design/aws-oidc-integration.md §5.1),
+# fetched by AWS STS without credentials.
+get "/oidc/:issuer_key/.well-known/openid-configuration", to: "aws_oidc/issuer#discovery", format: false,
+                                                        as: :aws_oidc_discovery
+get "/oidc/:issuer_key/jwks", to: "aws_oidc/issuer#jwks", format: false, as: :aws_oidc_jwks
+
 # Git credential vending for Azure DevOps repositories, posted to by the
 # in-container `git-credential-aixle-azure` helper. Authenticated by a derived
 # per-session key (AzureDevops::GitSessionKey), NOT by the session's mcp_key —
@@ -769,6 +775,14 @@ scope module: :web, defaults: { format: :html } do
           post :rotate
           delete :disconnect
           get :projects
+        end
+        # AWS OIDC: the project's issuer and the IAM roles its workflow steps may assume.
+        resource :aws_oidc, only: [], controller: "aws_oidc" do
+          post :connect
+          delete :disconnect
+          resources :roles, only: %i[create update destroy], controller: "aws_oidc_roles" do
+            post :verify, on: :member
+          end
         end
         resources :agents, only: %i[index create update destroy]
         # The project's runners and the company's; only the project's own are

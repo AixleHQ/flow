@@ -111,6 +111,7 @@ class ActiveSupport::TestCase
   include YoutrackTestHelper
   include GithubProjectsTestHelper
   include InsightsTestHelper
+  include AwsOidcTestHelper
   include FeatureFlagsHelper
   include TemporalActivityHelper
   include TemporalWorkflowHelper
