@@ -20,7 +20,7 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
 
     render inertia: "Projects/Sessions/SessionsRunsPage", props: {
       project: project_props,
-      entries: InertiaRails.scroll(result.pagy) { result.entries.map { |entry| serialize_entry(entry) } },
+      entries: InertiaRails.scroll(result.pagy) { serialize_entries(result.entries) },
       filters: feed_filters.merge(type: list_type),
       query: list_query.merge(s: feed.sort.to_s),
       total: result.pagy.count,
@@ -40,12 +40,12 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
     run_ids = Array(params[:run_ids]).map(&:to_i).uniq.first(ROWS_LIMIT)
     sessions = current_project.terminal_sessions.includes(:user)
                               .where(id: session_ids, session_type: SessionsRunsFeed::TOP_LEVEL_SESSION_TYPES)
-    runs = current_project.workflow_runs.includes(:user, :team, :workflow, :board_task, step_runs: [ :step, { terminal_session: :user } ])
+    runs = current_project.workflow_runs.includes(:user, :team, :workflow, step_runs: [ :step, { terminal_session: :user } ])
                           .where(id: run_ids)
     entries = sessions.map { |s| SessionsRunsFeed::Entry.new(kind: "session", record: s) } +
               runs.map { |r| SessionsRunsFeed::Entry.new(kind: "run", record: r) }
 
-    render json: { entries: entries.map { |entry| serialize_entry(entry) } }
+    render json: { entries: serialize_entries(entries) }
   end
 
   def new
@@ -86,6 +86,14 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
       step_position: step_run.step&.position,
       steps_total: run.step_runs_count
     }
+  end
+
+  # The feed is shared with the personal MCP's list_workflow_runs, which has no
+  # use for a run's task, so the row's task is loaded here rather than there.
+  def serialize_entries(entries)
+    runs = entries.select { |entry| entry.kind == "run" }.map(&:record)
+    ActiveRecord::Associations::Preloader.new(records: runs, associations: :board_task).call
+    entries.map { |entry| serialize_entry(entry) }
   end
 
   def serialize_entry(entry)
