@@ -41,10 +41,12 @@ principal goes from that IAM user to the OIDC provider, and the user is deleted.
    GitLab CI (`id_tokens`), Terraform Cloud dynamic credentials and EKS (IRSA) use.
    No Flow-owned AWS account takes part, so it works the same on a self-hosted
    instance.
-2. **A separate integration, AWS OIDC, at project level.** Provider `aws_oidc` on
-   `Integration`, listed under Project Settings → Integrations. Named for the
-   mechanism, not for AWS as a whole: other AWS integrations may follow. The
-   proposal put it behind an `aws_oidc` feature flag; it shipped without one
+2. **A separate integration at project level, shown as "AWS".** Provider `aws_oidc` on
+   `Integration`, listed under Project Settings → Integrations. The proposal named it
+   "AWS OIDC" in the UI, after the mechanism, in case other AWS integrations follow;
+   it shipped as plain "AWS" (decided 2026-11-26) until a second one exists. The
+   provider key, the code (`AwsOidc::`), the tables and the `/oidc/` issuer path keep
+   the mechanism's name. The proposal put it behind an `aws_oidc` feature flag; it shipped without one
    (decided 2026-11-25, after the staging check in §12): nothing changes for a
    project until someone connects it.
 3. **One issuer per integration.** `https://<host>/oidc/<issuer_key>`, a random key
@@ -195,7 +197,11 @@ names the Flow session.
   added in the draft has none and uses `draft:workflow:<source id>:step:new-<draft step id>`.
 - **The project is not in `sub`.** The issuer already identifies it.
 
-A trust policy for one workflow, as the integration page would generate it:
+The integration page generates `workflow:*`, every workflow of the project, plus the
+verify subject: the issuer already names the project, and the builder's attachment
+decides which steps get the role, so naming workflows in AWS is a second lock an AWS
+administrator may add, not a requirement (decided 2026-11-26). Narrowed to one workflow,
+it looks like this:
 
 ```json
 {
@@ -339,8 +345,8 @@ Under Project Settings → Integrations:
 1. **Trust.** Issuer URL and audience, with copy buttons. (Terraform and CloudFormation
    snippets are left for later.)
 2. **Roles.** Name, ARN, region, session duration. For each role, the generated trust
-   policy, with a workflow picker that fills in the `sub` patterns and a checkbox
-   for the draft pattern.
+   policy: `workflow:*` by default, picked workflows' `sub` patterns with **Only specific
+   workflows**, and a checkbox for the draft pattern.
 3. **Verify** (per role). Signs a token with `sub` = `verify:integration:<id>`, calls
    `AssumeRoleWithWebIdentity` and then `sts:GetCallerIdentity`, and shows the
    assumed-role ARN. The credentials are dropped after that call and never shown.

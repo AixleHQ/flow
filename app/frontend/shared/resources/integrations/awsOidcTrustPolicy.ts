@@ -5,6 +5,7 @@ export interface TrustPolicyInput {
   issuerUrl: string;
   audience: string;
   verifySubject: string;
+  /** Empty trusts every workflow of the project: the issuer already names the project. */
   workflowIds: number[];
   allowDrafts: boolean;
   /** `aws` unless the role lives in another partition (`aws-cn`, `aws-us-gov`). */
@@ -26,11 +27,8 @@ export function subjectPatterns({
   verifySubject,
 }: Pick<TrustPolicyInput, 'workflowIds' | 'allowDrafts' | 'verifySubject'>): string[] {
   const ids = [...new Set(workflowIds)];
-  return [
-    ...ids.map((id) => `workflow:${id}:step:*`),
-    ...(allowDrafts ? ids.map((id) => `draft:workflow:${id}:step:*`) : []),
-    verifySubject,
-  ];
+  const workflows = ids.length ? ids.map((id) => `workflow:${id}:step:*`) : ['workflow:*'];
+  return [...workflows, ...(allowDrafts ? workflows.map((pattern) => `draft:${pattern}`) : []), verifySubject];
 }
 
 export function trustPolicy(input: TrustPolicyInput) {

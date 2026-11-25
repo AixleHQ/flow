@@ -5,7 +5,7 @@ import analytics from './analytics.md?raw';
 import apiGuide from './api-guide.md?raw';
 import assets from './assets.md?raw';
 import awsMarketplaceBilling from './aws-marketplace-billing.md?raw';
-import awsOidc from './aws-oidc.md?raw';
+import aws from './aws.md?raw';
 import azureDevops from './azure-devops.md?raw';
 import bitbucket from './bitbucket.md?raw';
 import board from './board.md?raw';
@@ -368,11 +368,11 @@ export const DOC_PAGES: Record<string, DocPage & { toc: TocItem[] }> = {
     content: coder,
     toc: extractToc(coder),
   },
-  'aws-oidc': {
-    title: 'AWS OIDC',
+  aws: {
+    title: 'AWS',
     section: 'User guide',
-    content: awsOidc,
-    toc: extractToc(awsOidc),
+    content: aws,
+    toc: extractToc(aws),
   },
   configuration: {
     title: 'Configuration',

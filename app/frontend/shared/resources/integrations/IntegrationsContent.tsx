@@ -147,7 +147,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   linear: 'Linear',
   youtrack: 'YouTrack',
   insights: 'Aixle Insights',
-  aws_oidc: 'AWS OIDC',
+  aws_oidc: 'AWS',
 };
 
 const CHAT_PROVIDERS = ['slack', 'teams'];
@@ -700,7 +700,7 @@ export const IntegrationsContent = ({
                 )}
                 {awsOidcAvailable && (
                   <Menu.Item leftSection={<IconBrandAws size={16} />} onClick={handleConnectAwsOidc}>
-                    AWS OIDC
+                    AWS
                   </Menu.Item>
                 )}
               </Menu.Dropdown>
@@ -845,7 +845,7 @@ export const IntegrationsContent = ({
                     )}
                     {awsOidcAvailable && (
                       <Button variant="outline" leftSection={<IconBrandAws size={16} />} onClick={handleConnectAwsOidc}>
-                        AWS OIDC
+                        AWS
                       </Button>
                     )}
                   </Group>
@@ -1195,7 +1195,7 @@ export const IntegrationsContent = ({
                         {integration.provider === 'aws_oidc' && awsOidc?.connection && projectId != null && (
                           <>
                             <Button
-                              aria-label="Manage AWS OIDC"
+                              aria-label="Manage AWS"
                               size="compact-xs"
                               variant="light"
                               leftSection={<IconSettings size={12} />}
@@ -1206,7 +1206,7 @@ export const IntegrationsContent = ({
                             {awsOidc.canManage && awsOidc.connection.status === 'active' && (
                               <Tooltip label="Disconnect">
                                 <ActionIcon
-                                  aria-label="Disconnect AWS OIDC"
+                                  aria-label="Disconnect AWS"
                                   variant="subtle"
                                   size="sm"
                                   onClick={() => confirmAwsOidcDisconnect(projectId)}
@@ -1218,7 +1218,7 @@ export const IntegrationsContent = ({
                             {awsOidc.canManage && awsOidc.connection.status !== 'active' && (
                               <Tooltip label="Reconnect">
                                 <ActionIcon
-                                  aria-label="Reconnect AWS OIDC"
+                                  aria-label="Reconnect AWS"
                                   variant="subtle"
                                   size="sm"
                                   onClick={() => connectAwsOidc(projectId)}

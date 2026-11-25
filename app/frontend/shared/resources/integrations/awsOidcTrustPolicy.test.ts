@@ -49,7 +49,15 @@ describe('awsOidcTrustPolicy', () => {
       'draft:workflow:14:step:*',
       'verify:integration:9',
     ]);
-    expect(subjectPatterns({ ...input, workflowIds: [], allowDrafts: true })).toEqual(['verify:integration:9']);
+  });
+
+  it("trusts every workflow of the project when none is named, the issuer being the project's own", () => {
+    expect(subjectPatterns({ ...input, workflowIds: [] })).toEqual(['workflow:*', 'verify:integration:9']);
+    expect(subjectPatterns({ ...input, workflowIds: [], allowDrafts: true })).toEqual([
+      'workflow:*',
+      'draft:workflow:*',
+      'verify:integration:9',
+    ]);
   });
 
   it("uses the role's partition in the provider ARN", () => {

@@ -47,7 +47,7 @@ module AwsOidc
                         .find_by(name: role_name)
       raise NotEntitledError, "AWS role #{role_name.inspect} is not attached to this step" if role.nil?
 
-      raise NotEntitledError, "the project's AWS OIDC integration is not connected" unless role.integration.active?
+      raise NotEntitledError, "the project's AWS integration is not connected" unless role.integration.active?
 
       role
     end

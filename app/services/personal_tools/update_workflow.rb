@@ -32,7 +32,7 @@ module PersonalTools
                          "get_workflow first.",
             items: { type: "integer" }
       param :base_aws_oidc_role_ids, type: :array,
-            description: "AWS role ids (list_aws_oidc_roles) from the project's AWS OIDC integration every step of this workflow " \
+            description: "AWS role ids (list_aws_oidc_roles) from the project's AWS integration every step of this workflow " \
                          "may assume. An AWS role is production access: attach only what every step needs, " \
                          "and put a role only one step uses on that step. Replaces the whole list — read " \
                          "the current value with get_workflow first.",

@@ -34,6 +34,6 @@ class AwsOidcRole < ApplicationRecord
   private
 
   def integration_is_aws_oidc
-    errors.add(:integration, "must be an AWS OIDC integration") unless integration&.aws_oidc?
+    errors.add(:integration, "must be an AWS integration") unless integration&.aws_oidc?
   end
 end

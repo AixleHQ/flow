@@ -70,7 +70,7 @@ export const connectAwsOidc = (projectId: number, onConnected?: () => void) =>
 
 export const confirmAwsOidcDisconnect = (projectId: number) =>
   modals.openConfirmModal({
-    title: 'Disconnect AWS OIDC',
+    title: 'Disconnect AWS',
     children: (
       <Text size="sm">
         AWS refuses every token from this project until you reconnect, so steps that use these roles fail. The roles

@@ -11,6 +11,7 @@ export function AwsOidcTrustPolicyPanel({ connection }: { connection: AwsOidcCon
   const { roles, workflows } = connection;
   const [roleKey, setRoleKey] = useState(() => (roles[0] ? String(roles[0].id) : NEW_ROLE));
   const [accountId, setAccountId] = useState('');
+  const [limit, setLimit] = useState(false);
   const [workflowIds, setWorkflowIds] = useState<string[]>([]);
   const [allowDrafts, setAllowDrafts] = useState(false);
 
@@ -22,7 +23,7 @@ export function AwsOidcTrustPolicyPanel({ connection }: { connection: AwsOidcCon
         issuerUrl: connection.issuerUrl,
         audience: connection.audience,
         verifySubject: connection.verifySubject,
-        workflowIds: workflowIds.map(Number),
+        workflowIds: limit ? workflowIds.map(Number) : [],
         allowDrafts,
         partition: role ? arnPartition(role.roleArn) : undefined,
       })
@@ -31,8 +32,8 @@ export function AwsOidcTrustPolicyPanel({ connection }: { connection: AwsOidcCon
   return (
     <Stack gap="sm">
       <Text size="sm" c="dimmed">
-        Paste this as the role&apos;s trust policy in AWS. Steps of the workflows you pick can assume the role, and so
-        can Verify.
+        Paste this as the role&apos;s trust policy in AWS. It trusts this project&apos;s workflows and Verify; which
+        steps get the role is decided by attaching it in the workflow builder.
       </Text>
       <Group grow align="flex-start">
         <Select
@@ -55,18 +56,26 @@ export function AwsOidcTrustPolicyPanel({ connection }: { connection: AwsOidcCon
           />
         )}
       </Group>
-      <MultiSelect
-        label="Workflows"
-        placeholder={workflowIds.length ? undefined : 'Pick the workflows whose steps use this role'}
-        data={workflows.map((w) => ({ value: String(w.id), label: w.name }))}
-        value={workflowIds}
-        onChange={setWorkflowIds}
-        searchable
-        nothingFoundMessage="No workflows"
+      <Checkbox
+        label="Only specific workflows"
+        description="Have AWS check the workflow too, if your AWS admin wants that second lock."
+        checked={limit}
+        onChange={(e) => setLimit(e.currentTarget.checked)}
       />
+      {limit && (
+        <MultiSelect
+          label="Workflows"
+          placeholder={workflowIds.length ? undefined : 'Pick the workflows whose steps use this role'}
+          data={workflows.map((w) => ({ value: String(w.id), label: w.name }))}
+          value={workflowIds}
+          onChange={setWorkflowIds}
+          searchable
+          nothingFoundMessage="No workflows"
+        />
+      )}
       <Checkbox
         label="Allow draft test runs"
-        description="Test runs of these workflows' unsaved drafts can assume the role too."
+        description="Test runs of unsaved workflow drafts can assume the role too."
         checked={allowDrafts}
         onChange={(e) => setAllowDrafts(e.currentTarget.checked)}
       />

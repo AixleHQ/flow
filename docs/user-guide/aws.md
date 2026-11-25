@@ -1,12 +1,12 @@
-# AWS OIDC
+# AWS
 
-AWS OIDC lets a workflow step use an IAM role in your AWS account without an access
+The AWS integration lets a workflow step use an IAM role in your AWS account without an access
 key. Flow acts as an OpenID Connect identity provider that your account trusts. When
 a step needs AWS, Flow assumes the role with `AssumeRoleWithWebIdentity` and hands the
 step credentials that last at most an hour. No long-lived key exists in Flow, in the
 step's container or in your account.
 
-AWS OIDC connects per project, from the project's **Integrations** page.
+It connects per project, from the project's **Integrations** page.
 
 This page walks through one setup end to end, then covers what a step sees, the
 subjects a trust policy can name, troubleshooting and limits.
@@ -40,10 +40,10 @@ step, and the role's trust policy allows the step's subject.
 
 ## Walkthrough
 
-### 1. Connect AWS OIDC
+### 1. Connect AWS
 
-On the project's **Integrations** page, choose **Connect → AWS OIDC**. Flow creates the
-project's issuer and opens the AWS OIDC dialog. **Manage** on the integration's row
+On the project's **Integrations** page, choose **Connect → AWS**. Flow creates the
+project's issuer and opens the AWS dialog. **Manage** on the integration's row
 opens it again later. Copy two values from it:
 
 | Value | Example |
@@ -130,7 +130,7 @@ default trusts every subject of the issuer and lacks `sts:TagSession`.
 
 ### 4. Add the role in Flow and set its trust policy
 
-In the AWS OIDC dialog, choose **Add role** and enter:
+In the AWS dialog, choose **Add role** and enter:
 
 | Field | Meaning |
 |---|---|
@@ -139,9 +139,11 @@ In the AWS OIDC dialog, choose **Add role** and enter:
 | Region | The default region written into the profile |
 | Session duration | 900 to 3600 seconds, and no more than the role's own maximum |
 
-Under **Trust policy**, pick the role and the workflows that may use it, and tick
-**Allow draft test runs** if test runs of their drafts may use it too. **Copy policy**
-and paste it as the role's trust policy in AWS. For one workflow it looks like this:
+Under **Trust policy**, pick the role. The policy trusts every workflow of this project and
+the dialog's Verify; which steps actually get the role is decided by attaching it in the
+builder (step 6). Tick **Allow draft test runs** if test runs of unsaved drafts may use it
+too, and **Only specific workflows** if your AWS admin wants AWS to check the workflow as
+well. **Copy policy** and paste it as the role's trust policy in AWS:
 
 ```json
 {
@@ -153,7 +155,7 @@ and paste it as the role's trust policy in AWS. For one workflow it looks like t
     "Condition": {
       "StringEquals": { "flow.example.com/oidc/9fK2...:aud": "sts.amazonaws.com" },
       "StringLike": {
-        "flow.example.com/oidc/9fK2...:sub": ["workflow:12:step:*", "verify:integration:3"]
+        "flow.example.com/oidc/9fK2...:sub": ["workflow:*", "verify:integration:3"]
       }
     }
   }]
@@ -240,8 +242,10 @@ and nothing else.
 | A test run of a draft | `draft:workflow:<workflow id>:step:<step id>` |
 | The dialog's **Verify** | `verify:integration:<integration id>` |
 
-Ids never change when something is renamed. `workflow:12:step:*` allows every step of
-workflow 12; `workflow:12:step:34` only that step. A draft uses the ids of the workflow
+Ids never change when something is renamed. The generated policy allows `workflow:*`,
+every workflow of the project; with **Only specific workflows** it lists
+`workflow:12:step:*` for each one picked, and a hand-written policy can go down to one step,
+`workflow:12:step:34`. A draft uses the ids of the workflow
 and step it was copied from, behind `draft:`, so unsaved changes reach the role only if
 the policy names drafts too. A step added in a draft has no source step and appears as
 `step:new-<id>`.
@@ -277,5 +281,5 @@ the policy names drafts too. A step added in a draft has no source step and appe
 
 ## See also
 
-- [Integrations](/docs/integrations)
-- [Workflows](/docs/workflows)
+- [Integrations](integrations.md)
+- [Workflows](workflows.md)

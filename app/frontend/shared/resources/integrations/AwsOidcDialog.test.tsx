@@ -20,7 +20,7 @@ const VERIFY_ROUTE = 'POST /company/projects/3/aws_oidc/roles/1/verify';
 
 const openDialog = async (awsOidc: AwsOidcProps = buildAwsOidcProps()) => {
   renderPage(<AwsOidcDialog opened onClose={vi.fn()} projectId={3} awsOidc={awsOidc} />);
-  return screen.findByRole('dialog', { name: 'AWS OIDC' });
+  return screen.findByRole('dialog', { name: 'AWS' });
 };
 
 describe('AwsOidcDialog', () => {
@@ -141,9 +141,17 @@ describe('AwsOidcDialog', () => {
     expect(router.delete).toHaveBeenCalledWith('/company/projects/3/aws_oidc/roles/1', { preserveScroll: true });
   });
 
-  it("generates the role's trust policy for the picked workflows", async () => {
+  it('generates a trust policy for every workflow of the project, and for picked ones when asked', async () => {
     const dialog = await openDialog();
+    const subjects = () =>
+      JSON.parse(within(dialog).getByLabelText('Trust policy').textContent ?? '').Statement[0].Condition.StringLike[
+        'flow.example.com/oidc/9fK2abc:sub'
+      ];
 
+    expect(subjects()).toEqual(['workflow:*', 'verify:integration:9']);
+    expect(within(dialog).queryByRole('combobox', { name: 'Workflows' })).not.toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: /Only specific workflows/ }));
     await userEvent.click(within(dialog).getByRole('combobox', { name: 'Workflows' }));
     await userEvent.click(await screen.findByRole('option', { name: 'Prod diagnosis' }));
     await userEvent.click(within(dialog).getByRole('checkbox', { name: /Allow draft test runs/ }));

@@ -6,7 +6,7 @@ module PersonalTools
   class ListAwsOidcRoles < Base
     tool do
       display_name "List AWS Roles"
-      description "List the IAM roles of a project's AWS OIDC integration: the ids a workflow or a step " \
+      description "List the IAM roles of a project's AWS integration: the ids a workflow or a step " \
                   "attaches with aws_oidc_role_ids / base_aws_oidc_role_ids, each a profile the step's " \
                   "~/.aws/config gets. Says whether the integration is connected. Roles are added on the " \
                   "project's Integrations page, not here."
