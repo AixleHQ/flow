@@ -18,6 +18,8 @@ governance, community health — carry none.
 
 ### Fixed
 - **Integrations**: a GitHub, GitLab or Bitbucket connect whose account lookup fails stores nothing, and a failed reconnect keeps the connection that worked.
+- **Integrations**: with `GITHUB_APP_VERIFY_INSTALLATION_OWNER` on, a company can connect a GitHub organization that already has the app installed for another company: after **Configure** on GitHub, Flow asks the person to authorize the app and checks that they can see the installation. Operators add `https://<domain>/company/integrations/github_setup` to the app's Redirect URIs before turning the setting on; "Request user authorization (OAuth) during installation" is no longer needed.
+- **Admin**: moving a project whose GitHub installation the source company still uses elsewhere now says the target company cannot connect that installation again while the source keeps it.
 
 ## [1.19.0] - 2026-11-25
 
