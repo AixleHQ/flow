@@ -13,6 +13,8 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+## [1.20.0] - 2026-11-26
+
 ### Added
 - **Integrations**: AWS. A workflow step can assume an IAM role in your AWS
   account with no access key: Flow is an OpenID Connect provider the account trusts, and the step gets
@@ -1869,7 +1871,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.19.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.20.0...develop
+[1.20.0]: https://github.com/AixleHQ/flow/compare/v1.19.0...v1.20.0
 [1.19.0]: https://github.com/AixleHQ/flow/compare/v1.18.0...v1.19.0
 [1.18.0]: https://github.com/AixleHQ/flow/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/AixleHQ/flow/compare/v1.16.0...v1.17.0
