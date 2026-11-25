@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -204,6 +205,39 @@ func TestAMachineRunnerWithoutCredentialsOrTokenStillNeedsAnOperator(t *testing.
 	}
 }
 
+// One of the two is a typo or a dropped variable: the error names the missing
+// one, never a value.
+func TestAHalfSetRegistrationEnvironmentNamesTheMissingVariable(t *testing.T) {
+	for _, tc := range []struct{ name, url, token, missing, secret string }{
+		{"no token", "https://flow.example", "", RegisterTokenEnv, "https://flow.example"},
+		{"no url", "", "arreg_secret", RegisterURLEnv, "arreg_secret"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := filepath.Join(t.TempDir(), "state")
+			err := RunMachine(context.Background(), MachineOptions{StateDir: dir, Docker: newSessionDocker(), Logger: quiet, URL: tc.url, Token: tc.token})
+			if err == nil || !NeedsOperator(err) {
+				t.Fatalf("got %v", err)
+			}
+			if !strings.Contains(err.Error(), tc.missing+" is not set") || strings.Contains(err.Error(), tc.secret) {
+				t.Fatalf("got %v", err)
+			}
+		})
+	}
+}
+
+// With credentials all three variables are ignored, a half-set one too.
+func TestAHalfSetRegistrationEnvironmentIsIgnoredOnceCredentialsExist(t *testing.T) {
+	p, url := newPlatform(t, map[string][]answer{"GET /runner/v1/ops": {{200, map[string]any{"ops": []any{}}}}})
+	dir := t.TempDir()
+	storeMachineCreds(t, dir, url)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	stopOnFirstPoll(p, cancel)
+	if err := RunMachine(ctx, MachineOptions{StateDir: dir, Docker: newSessionDocker(), Logger: quiet, URL: "https://other.example", Out: io.Discard}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // Each stop signal tears the machine down. Where the signal is delivered, the
 // runner sees what the process sees, so the test sends the real one.
 func TestEachStopSignalRemovesTheSessionContainersAndUnregistersOnlyWhenAsked(t *testing.T) {
@@ -291,7 +325,7 @@ func TestAStopWithAGatewayThatNeverAnswersFinishesInsideDockerStopsTimeout(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	if took := time.Since(started); took > 8*time.Second {
+	if took := time.Since(started); took > 9500*time.Millisecond {
 		t.Fatalf("the stop took %v", took)
 	}
 	mu.Lock()
@@ -302,6 +336,80 @@ func TestAStopWithAGatewayThatNeverAnswersFinishesInsideDockerStopsTimeout(t *te
 	// The unregister failed, so the credentials stay, to be tried again.
 	if !credsExist(t, dir) {
 		t.Fatal("the credentials were deleted though the platform never answered")
+	}
+}
+
+// The platform commits the unregister, then fails the session the machine held,
+// which calls Temporal: the answer can come after the old 3 s deadline. A stop
+// waits for it inside its one budget, and logs no failure.
+func TestAStopWaitsForAnUnregisterThatAnswersAfterThreeSeconds(t *testing.T) {
+	ok := &platform{answers: map[string][]answer{
+		"POST /runner/v1/check-in": {checkedIn()},
+		"GET /runner/v1/ops":       {{200, map[string]any{"ops": []any{}}}},
+	}}
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			time.Sleep(4 * time.Second)
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		ok.ServeHTTP(w, r)
+	}))
+	t.Cleanup(s.Close)
+	dir := t.TempDir()
+	storeMachineCreds(t, dir, s.URL)
+	ctx, cancel := context.WithCancel(context.Background())
+	stopOnFirstPoll(ok, cancel)
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+
+	if err := RunMachine(ctx, MachineOptions{StateDir: dir, Docker: newSessionDocker(), Logger: logger, UnregisterOnStop: true, Out: io.Discard}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(logs.String(), "failed") {
+		t.Fatalf("a failure was logged: %s", logs.String())
+	}
+	if credsExist(t, dir) {
+		t.Fatal("the credentials stay though the platform unregistered the machine")
+	}
+}
+
+// A failed unregister on stop does not say the credentials were kept: with `--rm`
+// they go with the container. The `unregister` command keeps its text.
+func TestAFailedUnregisterOnStopSaysToRemoveTheMachineOnThePlatform(t *testing.T) {
+	p, url := newPlatform(t, map[string][]answer{
+		"GET /runner/v1/ops":             {{200, map[string]any{"ops": []any{}}}},
+		"DELETE /runner/v1/registration": {{500, nil}},
+	})
+	dir := t.TempDir()
+	storeMachineCreds(t, dir, url)
+	ctx, cancel := context.WithCancel(context.Background())
+	stopOnFirstPoll(p, cancel)
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+
+	if err := RunMachine(ctx, MachineOptions{StateDir: dir, Docker: newSessionDocker(), Logger: logger, UnregisterOnStop: true, Out: io.Discard}); err != nil {
+		t.Fatal(err)
+	}
+	line := logs.String()
+	if !strings.Contains(line, "unregistering this machine on stop failed") || !strings.Contains(line, "remove it there") {
+		t.Fatalf("log: %s", line)
+	}
+	if strings.Contains(line, "credentials were kept") {
+		t.Fatalf("a stop must not say the credentials were kept: %s", line)
+	}
+}
+
+func TestTheUnregisterCommandKeepsItsTextWhenTheCallFails(t *testing.T) {
+	_, url := newPlatform(t, map[string][]answer{"DELETE /runner/v1/registration": {{500, nil}}})
+	dir := t.TempDir()
+	storeMachineCreds(t, dir, url)
+	err := Unregister(context.Background(), UnregisterOptions{StateDir: dir, Out: io.Discard})
+	if err == nil || !strings.Contains(err.Error(), "the credentials were kept so it can be tried again") {
+		t.Fatalf("got %v", err)
+	}
+	if !credsExist(t, dir) {
+		t.Fatal("the credentials were deleted")
 	}
 }
 

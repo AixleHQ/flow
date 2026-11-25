@@ -42,7 +42,7 @@ Alternatives rejected:
 Docker tab (default). No `sudo`, no `RUNNER_DIR`, no platform or host choice, and no `-v` for the runner's state:
 
 ```sh
-docker run --rm --name aixle-runner --user 0:0 \
+docker run --rm --name aixle-runner \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -e AIXLE_RUNNER_URL='<gateway url>' -e AIXLE_RUNNER_TOKEN='<token>' -e AIXLE_RUNNER_NAME='<name>' \
   'ghcr.io/aixlehq/aixle-runner:<version>'
@@ -122,6 +122,10 @@ guide, `PROTOCOL.md`), the systemd unit the `service install` command writes, an
 - **With credentials present the three variables are ignored.** A restart of the container or the
   machine never needs the token, and `docker start` of a registered container leaves the token spent. This
   is a test (§5), because it is the first guarantee of the task.
+- **A half-set environment is refused.** With no credentials in the state directory and only one of
+  `AIXLE_RUNNER_URL` and `AIXLE_RUNNER_TOKEN` set, the runner stops with an operator error that names the missing
+  variable, never a value. It does not fall back to the generic "run `configure`" error, which points the person who
+  typed `-e AIXLE_RUNNER_URL=...` at the wrong thing. With credentials, all three are still ignored.
 - The preflight failure message of `configure` is what the operator sees in the command's output (or
   `docker logs aixle-runner`). A refused or expired token exits non-zero without writing credentials; with
   `--rm` the container is gone, and with `--restart unless-stopped` Docker retries with its own back-off and the
@@ -134,9 +138,14 @@ guide, `PROTOCOL.md`), the systemd unit the `service install` command writes, an
 from `AutoRemove` or from anything else the runner could inspect. With the setting on, SIGTERM, SIGINT or SIGHUP runs the same
 code as `unregister` (the platform marks the machine removed), after the sidecar teardown and the removal of the
 session containers (Cleanup, below), before the exit. A failed unregister is logged and does not block the exit.
-Unregister, teardown and exit are written to fit in `docker stop`'s default 10 s before SIGKILL: each step has its own
-short deadline (the unregister call a few seconds, the teardown the rest), and the test of §5 runs them against a
-slow fake gateway.
+Unregister, teardown and exit are written to fit in `docker stop`'s default 10 s before SIGKILL, with one stop
+budget of about 9 s: the teardown has up to 5 s of it, and the unregister gets what is left. The unregister needs
+more than a few seconds at times: `DELETE /registration` commits the unregister first and then, in the same
+request, fails the session the machine held, which calls Temporal. The test of §5 runs the stop against a slow fake
+gateway and against one that never answers.
+A failed unregister on stop says that unregistering failed and that, if the machine still shows on the platform, it
+is to be removed there. It does not say the credentials were kept: with the default `--rm` they go with the
+container. The `unregister` command keeps its own text.
 
 | Where | Setting | Why |
 | --- | --- | --- |
@@ -185,8 +194,11 @@ Image, `docker/runner/Dockerfile`:
   controller's mode), so it does not use the image's `CMD`. The controller ignores `AIXLE_RUNNER_IN_CONTAINER` and
   `AIXLE_RUNNER_UNREGISTER_ON_STOP`, which only the machine mode reads. The pod's unused empty volume for the declared
   `VOLUME` is removed by Kubernetes with the pod.
-- `USER 10001` stays: the controller runs the same image and must not be root by default. That is why
-  `--user 0:0` stays in the command.
+- **The image runs as root by default, and no command has `--user 0:0`.** Access to the Docker socket is root on the
+  machine anyway, so a non-root user in the runner's container protects nothing, and `--user 0:0` only raises
+  questions for the person who runs the command. A non-root image user also broke the kept directory's `unregister`
+  form (`permission denied`). The future Kubernetes controller sets non-root in its own pod spec
+  (`runAsNonRoot: true`, `runAsUser: 10001`).
 
 ### 3.2 Runner: the sidecar's mounts through official Docker APIs only
 
@@ -341,7 +353,10 @@ copy-and-compare path.
   - `cli`: each of SIGTERM, SIGINT and SIGHUP with `AIXLE_RUNNER_UNREGISTER_ON_STOP=1` tears down the sidecar, removes the
     session containers, unregisters and exits, whatever the mount (an anonymous volume, a named volume, a directory,
     no `--rm`); with `0` or unset each of the three does the same without the unregister; the flag wins over the variable.
-    Unregister, teardown and exit finish inside 10 s against a slow fake gateway.
+    Unregister, teardown and exit finish inside 10 s against a fake gateway that never answers; an unregister that
+    answers after 4 s (past the old 3 s deadline) succeeds on stop with no failure line, and one that fails logs the
+    line that says to remove the machine on the platform. A half-set registration environment names the missing
+    variable.
   - `main`: the modes are `machine` and `proxy`; `host` is not accepted; the controller starts from its explicit command.
   - `docker`: the runner copies its binary to `<state-dir>/bin` at start, on a bare host and with `AIXLE_RUNNER_IN_CONTAINER=1`;
     on a bare host it inspects nothing; in a container the inspect only supplies the volume name or the `Source`;
