@@ -13,6 +13,9 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Sessions & Runs**: a workflow run started for a board task names that task in the Sessions & Runs list and in the run's header, with a link to the task.
+
 ### Changed
 - **Integrations**: for GitHub, GitLab and Bitbucket, only connections made with the OAuth client the deployment is configured with now count. After an operator changes a provider's client id (or GitLab's endpoint), connections made with the previous client are no longer shown, handed to agents or refreshed, and people connect again (docs/operations/rotating-oauth-clients.md).
 

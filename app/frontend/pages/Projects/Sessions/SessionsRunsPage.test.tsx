@@ -192,6 +192,25 @@ describe('Projects/Sessions/SessionsRunsPage', () => {
     expect(screen.getByRole('link', { name: 'Anna Lee' })).toHaveAttribute('href', '/company/user/3');
   });
 
+  it('links a run to the board task it was started for', () => {
+    renderWith(
+      seed({
+        entries: [buildRunEntry({ task: { number: 12, title: 'Fix the login redirect' }, sessions: [] })],
+      }),
+    );
+
+    expect(screen.getByRole('link', { name: 'Task #12 Fix the login redirect' })).toHaveAttribute(
+      'href',
+      '/company/projects/7/tasks/12',
+    );
+  });
+
+  it('names no task for a run started outside the board', () => {
+    renderWith(seed({ entries: [buildRunEntry({ task: null, sessions: [] })] }));
+
+    expect(screen.queryByRole('link', { name: /^Task #/ })).not.toBeInTheDocument();
+  });
+
   it('navigates with the chosen type when a type tab is clicked', async () => {
     renderWith(seed());
 

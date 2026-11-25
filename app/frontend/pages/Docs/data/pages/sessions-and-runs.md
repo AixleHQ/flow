@@ -21,7 +21,8 @@ up to.
 A session from a workflow links back to the run it belongs to; a standalone
 session has nothing to expand. A run that a
 [team](/docs/project-teams) handed out names both:
-*Planner → Anna*.
+*Planner → Anna*. A run started for a board task names the task — *#12 Fix
+the login redirect* — and links to it, here and in the run's header.
 
 Sessions someone kept private show as locked. You can see that they exist and
 what they cost; you cannot read them.

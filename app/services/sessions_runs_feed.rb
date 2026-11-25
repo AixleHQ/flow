@@ -209,7 +209,7 @@ class SessionsRunsFeed
 
     sessions = TerminalSession.where(id: session_ids).includes(:user, :project).index_by(&:id)
     runs = WorkflowRun.where(id: run_ids)
-                      .includes(:user, :team, :workflow, step_runs: [ :step, { terminal_session: :user } ])
+                      .includes(:user, :team, :workflow, :board_task, step_runs: [ :step, { terminal_session: :user } ])
                       .index_by(&:id)
 
     rows.filter_map do |row|

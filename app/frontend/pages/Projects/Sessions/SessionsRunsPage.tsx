@@ -2,6 +2,7 @@ import { Head, InfiniteScroll, Link, router } from '@inertiajs/react';
 import { Button, Center, Loader, Select, TextInput, Tooltip } from '@mantine/core';
 import { useDebouncedCallback } from '@mantine/hooks';
 import {
+  IconCheckbox,
   IconChevronRight,
   IconExternalLink,
   IconLock,
@@ -22,6 +23,7 @@ import { costColor, formatCost, formatDuration, formatTokens } from 'shared/lib/
 import {
   companyProjectSessionPath,
   companyProjectSessionsPath,
+  companyProjectTaskPath,
   companyProjectWorkflowRunPath,
   rowsCompanyProjectSessionsPath,
   userPath,
@@ -482,6 +484,7 @@ function EntryRow({
   const finishedAt = isRun ? entry.completedAt : entry.finishedAt;
   const executionStartedAt = isRun ? entry.executionStartedAt : entry.startedAt;
   const teamName = 'teamName' in entry ? entry.teamName : null;
+  const task = 'task' in entry ? entry.task : null;
 
   return (
     <>
@@ -527,6 +530,21 @@ function EntryRow({
               <>
                 <span className={classes.nameSubSep}>·</span>
                 {entry.stepsCompleted}/{entry.stepsTotal} steps
+              </>
+            )}
+            {task && (
+              <>
+                <span className={classes.nameSubSep}>·</span>
+                <Link
+                  href={companyProjectTaskPath(projectId, task.number)}
+                  className={classes.taskLink}
+                  aria-label={`Task #${task.number} ${task.title}`}
+                  title={`#${task.number} ${task.title}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <IconCheckbox size={12} aria-hidden />#{task.number}
+                  <span className={classes.taskTitle}>{task.title}</span>
+                </Link>
               </>
             )}
           </div>

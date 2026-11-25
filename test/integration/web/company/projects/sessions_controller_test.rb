@@ -29,6 +29,34 @@ class Web::Company::Projects::SessionsControllerTest < ActionDispatch::Integrati
     assert_equal [ { id: workflow.id, name: "Weekly GA report" } ], inertia.props[:workflowOptions].map(&:symbolize_keys)
   end
 
+  test "a run started for a board task names it in its row, on the page and on a live refresh" do
+    workflow = create(:workflow, scope: @project)
+    board = create(:board, project: @project)
+    column = create(:board_column, board: board)
+    tasks = Array.new(2) { |i| create(:board_task, board: board, board_column: column, title: "Fix login #{i}") }
+    runs = tasks.map { |task| create(:workflow_run, workflow: workflow, project: @project, user: @user, board_task: task) }
+    loose = create(:workflow_run, workflow: workflow, project: @project, user: @user)
+
+    queries = []
+    subscriber = ActiveSupport::Notifications.subscribe("sql.active_record") { |*, payload| queries << payload[:sql] }
+    begin
+      get company_project_sessions_path(@project)
+    ensure
+      ActiveSupport::Notifications.unsubscribe(subscriber)
+    end
+
+    rows = inertia.props[:entries].index_by { |e| e[:id] }
+    tasks.zip(runs).each do |task, run|
+      assert_equal({ "number" => task.number, "title" => task.title }, rows.fetch(run.id)[:task].stringify_keys)
+    end
+    assert_nil rows.fetch(loose.id)[:task]
+    assert_equal 1, queries.grep(/FROM "board_tasks"/).size, queries.grep(/FROM "board_tasks"/).inspect
+
+    get rows_company_project_sessions_path(@project, run_ids: [ runs.first.id ])
+
+    assert_equal({ "number" => tasks.first.number, "title" => "Fix login 0" }, response.parsed_body["entries"].first["task"])
+  end
+
   test "new renders new session page" do
     get new_company_project_session_path(@project)
     assert_inertia_page "Projects/Sessions/NewPage"
