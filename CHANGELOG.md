@@ -14,6 +14,10 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
+- **Integrations**: AWS. A workflow step can assume an IAM role in your AWS
+  account with no access key: Flow is an OpenID Connect provider the account trusts, and the step gets
+  credentials that last at most an hour through a profile in `~/.aws/config`. Connect it per project, add
+  roles, check them with Verify, and attach them to steps in the builder.
 - **Sessions & Runs**: a workflow run started for a board task names that task in the Sessions & Runs list and in the run's header, with a link to the task, and the list filters by task. Over MCP, `list_workflow_runs` and `get_workflow_run` return it as `task_number` and `task_title`, and `list_workflow_runs` filters by `task_number`.
 
 ### Changed

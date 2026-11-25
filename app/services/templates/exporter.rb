@@ -135,6 +135,7 @@ module Templates
 
     def export_steps(workflow)
       steps = workflow.steps.not_deleted.includes(:resource_links).order(:position).to_a
+      note_aws_oidc_roles(workflow, steps)
       step_keys = steps.to_h { |step| [ step.id, key_for("steps:#{workflow.id}", step.id, step.name) ] }
       steps.map do |step|
         where = "workflow #{workflow.name} step #{step.name}"
@@ -158,6 +159,15 @@ module Templates
         end
         entry.reject { |_, v| v.nil? || v == [] || v == "" }
       end
+    end
+
+    # A role's ARN names one customer's AWS account, so a package carries no roles
+    # at all, not even by name.
+    def note_aws_oidc_roles(workflow, steps)
+      return if workflow.base_aws_oidc_role_ids.empty? && steps.all? { |step| step.aws_oidc_role_ids.empty? }
+
+      @notes << "Workflow #{workflow.name} uses AWS roles, which are not exported: attach the installing " \
+                "project's own roles after installing it."
     end
 
     # References name rows by id; a package names them by key, which the

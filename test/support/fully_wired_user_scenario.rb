@@ -24,6 +24,7 @@ class FullyWiredUserScenario
     build_board
     build_workflow
     build_company_records
+    build_aws_oidc
     self
   end
 
@@ -112,6 +113,18 @@ class FullyWiredUserScenario
     UserTokenIssuance.create!(terminal_session: own_session, company: @company, project: @project,
                               acting_for_user: @heir, session_user: @user, tool_name: "github_user_token_for",
                               provider: "github", token: "ghu_heir", target_login: "acme")
+  end
+
+  # An AWS role the user added and an exchange made for them in someone else's session: both
+  # outlive the user with the reference cleared.
+  def build_aws_oidc
+    integration = create(:integration, :aws_oidc, company: @company, project: @project)
+    role = create(:aws_oidc_role, integration: integration, created_by: @user)
+    session = create(:terminal_session, :agent_session, user: @heir, project: @project, state: "finished")
+    AwsOidcCredentialIssuance.create!(aws_oidc_role: role, project: @project, terminal_session: session, user: @user,
+                                      role_name: role.name, role_arn: role.role_arn, subject: "workflow:1:step:1",
+                                      jti: SecureRandom.uuid, access_key_id: "ASIAWIRED", expires_at: 1.hour.from_now,
+                                      secrets: { secret_access_key: "s", session_token: "t" })
   end
 
   # A pull-request write made as the user: the ledger row outlives them with the actor cleared.

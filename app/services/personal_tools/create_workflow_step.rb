@@ -71,6 +71,12 @@ module PersonalTools
                          "instructions. Replaces the whole list — read the current value with " \
                          "get_workflow_step first.",
             items: { type: "integer" }
+      param :aws_oidc_role_ids, type: :array,
+            description: "AWS role ids (list_aws_oidc_roles) from the project's AWS integration this step may assume, each " \
+                         "a named profile in the step's ~/.aws/config. An AWS role is production access: " \
+                         "attach only the roles this step needs. Replaces the whole list — read the " \
+                         "current value with get_workflow_step first.",
+            items: { type: "integer" }
       param :depends_on_step_ids, type: :array,
             description: "Step ids this step depends on; they must already exist. " \
                          "The /workspace/outputs files of these steps, and of every step they run after, are copied " \
@@ -84,7 +90,7 @@ module PersonalTools
 
     OPTIONAL = %i[required_agent_runtime preferred_model reasoning_effort tool_ids skill_ids mcp_server_ids
                 repository_ids asset_ids input_asset_specs output_asset_specs on_failure max_retries skip_policy
-                config_item_ids depends_on_step_ids bmad_enabled allow_non_interactive].freeze
+                config_item_ids aws_oidc_role_ids depends_on_step_ids bmad_enabled allow_non_interactive].freeze
 
     def execute
       project = find_project!
@@ -105,7 +111,7 @@ module PersonalTools
               repository_ids: step.repository_ids, asset_ids: step.asset_ids,
               input_asset_specs: step.input_asset_specs, output_asset_specs: step.output_asset_specs,
               on_failure: step.on_failure.to_s, max_retries: step.max_retries, skip_policy: step.skip_policy.to_s,
-              config_item_ids: step.config_item_ids,
+              config_item_ids: step.config_item_ids, aws_oidc_role_ids: step.aws_oidc_role_ids,
               depends_on_step_ids: step.depends_on_step_ids, bmad_enabled: step.bmad_enabled,
               allow_non_interactive: step.allow_non_interactive,
               required_agent_runtime: step.required_agent_runtime, preferred_model: step.preferred_model,

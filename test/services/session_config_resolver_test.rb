@@ -474,6 +474,32 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
     assert_equal [ base.id, step_item.id ].sort, breakdown[:resolved].sort
   end
 
+  # === AWS roles: workflow base + step, never inherited ===
+
+  test "workflow session merges workflow base and step AWS roles, and inherit_all adds none" do
+    integration = create(:integration, :aws_oidc, company: @company, project: @project)
+    base = create(:aws_oidc_role, integration: integration)
+    step_role = create(:aws_oidc_role, integration: integration)
+    create(:aws_oidc_role, integration: integration)
+    session = build_workflow_session(
+      workflow_config: { "inherit_all_project_resources" => true, "base_aws_oidc_role_ids" => [ base.id ] },
+      step_aws_oidc_role_ids: [ step_role.id ]
+    )
+
+    assert_equal [ base.id, step_role.id ], SessionConfigResolver.resolve(session)[:aws_oidc_role_ids]
+    breakdown = SessionConfigResolver.resolve_with_breakdown(session)[:aws_oidc_roles]
+    assert_equal [ base.id ], breakdown[:from_workflow_base]
+    assert_equal [ step_role.id ], breakdown[:from_step]
+    assert_empty breakdown[:from_project_inherit_all]
+  end
+
+  test "a standalone session has no AWS roles" do
+    create(:aws_oidc_role, integration: create(:integration, :aws_oidc, company: @company, project: @project))
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+
+    assert_empty SessionConfigResolver.resolve(session)[:aws_oidc_role_ids]
+  end
+
   # === Story 29.5: Step required_agent_runtime ===
 
   test "step required_agent_runtime overrides everything" do
@@ -797,6 +823,7 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
                              board_task: nil, workflow_config: {},
                              step_required_agent_runtime: nil,
                              step_config_item_ids: [],
+                             step_aws_oidc_role_ids: [],
                              step_bmad_enabled: false)
     # Scoped to @project, the same project the run and the session belong to —
     # config item attachments are validated against the workflow's own project,
@@ -811,7 +838,8 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
     step = create(:step, workflow: workflow, agent: step_agent, config_item_ids: step_config_item_ids,
       required_agent_runtime: step_required_agent_runtime, bmad_enabled: step_bmad_enabled)
     { tool_id: step_tool_ids, skill_id: step_skill_ids, mcp_server_id: step_mcp_server_ids,
-      asset_id: step_asset_ids, repository_id: step_repository_ids }.each do |column, ids|
+      asset_id: step_asset_ids, repository_id: step_repository_ids,
+      aws_oidc_role_id: step_aws_oidc_role_ids }.each do |column, ids|
       StepResourceLink.replace!(step, column, ids)
     end
     workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user,

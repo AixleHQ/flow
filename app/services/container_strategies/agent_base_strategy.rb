@@ -153,6 +153,7 @@ module ContainerStrategies
       env_vars.merge!(AzureDevops::SessionGitSetup.container_env(session, url: callbacks[:azure_git_credentials]))
       env_vars.merge!(GitCredentials::SessionGitSetup.container_env(session, url: callbacks[:git_credentials]))
       env_vars.merge!(GitCredentials::SessionGitSetup.identity_env)
+      env_vars.merge!(AwsOidc::SessionSetup.container_env(session, url: callbacks[:cloud_credentials]))
 
       env_vars.merge!(agent_service.adapter.mitm_env)
       env_vars.merge!(agent_service.adapter.default_env_vars(session, callbacks: callbacks))

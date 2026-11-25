@@ -15,6 +15,7 @@ class SessionContextConstructor
     ContextBuilders::Tools,
     ContextBuilders::Resources,
     ContextBuilders::ConfigItems,
+    ContextBuilders::AwsProfiles,
     ContextBuilders::BmadMethod,
     ContextBuilders::OutputRules,
     # Last on purpose: ties in the renderer's sort are broken by this order, so

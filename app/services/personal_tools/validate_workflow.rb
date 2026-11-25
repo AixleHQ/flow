@@ -5,8 +5,8 @@ module PersonalTools
     tool do
       display_name "Validate Workflow"
       description "Check a workflow before it runs: every step has instructions, linked agents, " \
-                  "tools, skills, MCP servers, assets, repositories and config items exist and are " \
-                  "enabled in this project, dependencies form no cycle, every step allows " \
+                  "tools, skills, MCP servers, assets, repositories, config items and AWS roles exist " \
+                  "and are enabled in this project, dependencies form no cycle, every step allows " \
                   "non-interactive runs when a trigger launches the workflow unattended, every " \
                   "@ reference ({{asset:…}}, {{output:…}}, {{step:…}}, {{mcp:…}}, {{tool:…}}, {{skill:…}}, " \
                   "{{config_item:…}}) resolves and is attached or " \
@@ -25,7 +25,8 @@ module PersonalTools
       mcp_server_ids: ->(project) { MCPServer.visible_for_project(project) },
       asset_ids: ->(project) { Asset.visible_for_project(project) },
       repository_ids: ->(project) { Repository.visible_for_project(project) },
-      config_item_ids: ->(project) { ConfigItem.visible_for_project(project) }
+      config_item_ids: ->(project) { ConfigItem.visible_for_project(project) },
+      aws_oidc_role_ids: ->(project) { AwsOidcRole.for_project(project).where(integrations: { status: "active" }) }
     }.freeze
 
     def execute

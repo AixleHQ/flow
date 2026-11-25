@@ -18,6 +18,18 @@ set -euo pipefail
 : "${AIXLE_CLOUD_KEY:?not set — this session has no cloud connection}"
 : "${SESSION_ID:?not set}"
 
+# `--role <name>`: an AWS OIDC role attached to this workflow step
+# (docs/design/aws-oidc-integration.md §6). One attempt and fail fast — the wait below
+# exists for Claude Code's Bedrock wizard, which no role call involves.
+if [ "${1:-}" = "--role" ]; then
+  : "${2:?usage: aixle-aws-creds --role <name>}"
+  exec curl -fsS --max-time 30 -X POST \
+    -H "X-Session-Id: ${SESSION_ID}" \
+    -H "X-Cloud-Key: ${AIXLE_CLOUD_KEY}" \
+    -H "X-Aixle-Aws-Role: ${2}" \
+    "${AIXLE_CLOUD_CREDENTIALS_URL}"
+fi
+
 # A 409 means the user has no cloud connection yet. Inside an auth container that is the
 # expected first answer: asking is what tells the platform to show the connect step in the
 # browser, and the user then completes it while we wait here. Waiting rather than failing

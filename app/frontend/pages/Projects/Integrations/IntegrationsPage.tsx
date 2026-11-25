@@ -5,6 +5,7 @@ import type { Integration, Project } from '@/types/generated';
 import type { AzureDevopsProps } from 'shared/resources/integrations/AzureDevopsConnectModal';
 import type { GithubProps } from 'shared/resources/integrations/GithubConnectModal';
 import {
+  type AwsOidcProps,
   type BitbucketProps,
   type InsightsProps,
   IntegrationsContent,
@@ -31,6 +32,7 @@ interface Props {
   slack?: SlackProps;
   teams?: TeamsProps;
   insights?: InsightsProps;
+  awsOidc?: AwsOidcProps;
 }
 
 const IntegrationsPage = () => {
@@ -47,6 +49,7 @@ const IntegrationsPage = () => {
     slack,
     teams,
     insights,
+    awsOidc,
   } = usePage<{
     props: Props;
   }>().props as unknown as Props;
@@ -69,6 +72,7 @@ const IntegrationsPage = () => {
         slack={slack}
         teams={teams}
         insights={insights}
+        awsOidc={awsOidc}
       />
     </>
   );

@@ -5,7 +5,8 @@ module PersonalTools
     tool do
       display_name "Update Workflow Step"
       description "Update a workflow step's fields (name, instructions, agent, runtime, preferred model, " \
-                  "reasoning effort, tools, skills, deps, BMAD, repositories, assets, input and output file specs, " \
+                  "reasoning effort, tools, skills, config items, AWS roles, deps, BMAD, repositories, assets, " \
+                  "input and output file specs, " \
                   "failure action, retry count, skip policy). " \
                   "Read the step with get_workflow_step first — every id list here replaces the current one."
       audience :user
@@ -76,6 +77,12 @@ module PersonalTools
                          "instructions. Replaces the whole list — read the current value with " \
                          "get_workflow_step first.",
             items: { type: "integer" }
+      param :aws_oidc_role_ids, type: :array,
+            description: "AWS role ids (list_aws_oidc_roles) from the project's AWS integration this step may assume, each " \
+                         "a named profile in the step's ~/.aws/config. An AWS role is production access: " \
+                         "attach only the roles this step needs. Replaces the whole list — read the " \
+                         "current value with get_workflow_step first.",
+            items: { type: "integer" }
       param :depends_on_step_ids, type: :array,
             description: "Step ids this step depends on. " \
                          "The /workspace/outputs files of these steps, and of every step they run after, are copied " \
@@ -90,7 +97,7 @@ module PersonalTools
     UPDATABLE = %i[
       name instructions agent_id required_agent_runtime preferred_model reasoning_effort tool_ids skill_ids
       mcp_server_ids repository_ids asset_ids input_asset_specs output_asset_specs on_failure max_retries skip_policy
-      config_item_ids depends_on_step_ids bmad_enabled allow_non_interactive
+      config_item_ids aws_oidc_role_ids depends_on_step_ids bmad_enabled allow_non_interactive
     ].freeze
 
     def execute
