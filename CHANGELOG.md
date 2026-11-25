@@ -13,6 +13,14 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Sign-in & onboarding**: behind the `product_tour` flag, new members land on a Getting started page after
+  onboarding (connect an agent, take the product tour, browse templates, build with AI or set up Personal
+  MCP) until they finish or skip their tour. The tour installs the Hello Flow starter template and runs its
+  workflow step by step; viewers get a short tour of projects, the board and Sessions & Runs. **Start product
+  tour** in the user menu starts it again. Members who finished onboarding before this release count as
+  having seen the tour.
+
 ## [1.19.0] - 2026-11-25
 
 ### Added
