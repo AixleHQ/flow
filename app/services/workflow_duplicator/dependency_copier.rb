@@ -27,6 +27,7 @@ class WorkflowDuplicator
       @actor = actor
       @not_copied = {
         config_items: [],   # config_item:NAME refs the workflow relies on
+        aws_oidc_roles: [], # names of the source project's AWS roles the copy dropped
         gated_tools: [],    # copied tools hidden until an integration is connected
         assets: false,      # assets intentionally not copied
         repositories: false, # repositories intentionally not copied
@@ -65,6 +66,20 @@ class WorkflowDuplicator
       map_ids(ids) { |id| resolve_config_item_by_name(id) }
     end
 
+    # An AWS role is production access to one customer account, granted to one
+    # project's integration, so it stays only on a copy inside that project. It is
+    # never matched by name elsewhere: a same-named role in another project can
+    # point at another account.
+    def map_aws_oidc_role_ids(ids)
+      return [] if ids.blank?
+      return ids if within_source_project?
+
+      if @source.scope_type == "Project"
+        @not_copied[:aws_oidc_roles].concat(AwsOidcRole.for_project(@source.scope).where(id: ids).pluck(:name))
+      end
+      []
+    end
+
     # Human-readable summary of what was NOT copied / needs setup. Returns nil
     # when nothing needs attention, so callers can conditionally surface it.
     def summary
@@ -74,6 +89,11 @@ class WorkflowDuplicator
       if @not_copied[:config_items].any?
         names = @not_copied[:config_items].uniq.sort.join(", ")
         messages << "Secrets/config are not copied — add these config items in the project: #{names}."
+      end
+
+      if @not_copied[:aws_oidc_roles].any?
+        names = @not_copied[:aws_oidc_roles].uniq.sort.join(", ")
+        messages << "AWS roles are not copied — attach this project's AWS roles where the copy needs them: #{names}."
       end
 
       if @not_copied[:gated_tools].any?
@@ -248,6 +268,10 @@ class WorkflowDuplicator
     def source_owned(klass)
       source_project = @source.scope if @source.respond_to?(:scope_type) && @source.scope_type == "Project"
       TenantScope.owned(klass, project: source_project)
+    end
+
+    def within_source_project?
+      @project.present? && @source.scope_type == "Project" && @source.scope_id == @project.id
     end
 
     def project_local?(resource)

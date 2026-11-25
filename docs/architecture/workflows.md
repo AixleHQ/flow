@@ -139,7 +139,7 @@ class Workflow < ApplicationRecord
   # description: text
   has_many :base_resource_links, class_name: 'WorkflowResourceLink'
   # base_tool_ids / base_skill_ids / base_mcp_server_ids / base_asset_ids /
-  #   base_repository_ids / base_config_item_ids: read and written as id lists,
+  #   base_repository_ids / base_config_item_ids / base_aws_oidc_role_ids: read and written as id lists,
   #   stored as WorkflowResourceLink rows (one resource per row, with a position)
   # config: jsonb (inherit_all_project_resources; the builder and API send the
   #   base_* lists inside it, and Workflow#config= moves them to the links)
@@ -188,7 +188,7 @@ class Step < ApplicationRecord
   # preferred_model: string (optional model override, e.g. "claude-sonnet-4")
   # required_agent_runtime: string (optional — one of Step::SUPPORTED_AGENT_RUNTIMES)
   # bmad_enabled: boolean (default: false — inject BMAD-method context)
-  # tool_ids / mcp_server_ids / skill_ids / asset_ids / config_item_ids: id lists stored as
+  # tool_ids / mcp_server_ids / skill_ids / asset_ids / config_item_ids / aws_oidc_role_ids: id lists stored as
   #   StepResourceLink rows (has_many :resource_links; one resource per row, with a position)
   # repository_ids: the same, repositories cloned for this step, merged with the workflow's base_repository_ids
   # deleted_at: datetime (soft delete — steps with runs are soft-deleted, not destroyed)

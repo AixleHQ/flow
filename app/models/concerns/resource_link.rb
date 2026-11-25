@@ -8,7 +8,8 @@ module ResourceLink
 
   COLUMNS = {
     tool_ids: :tool_id, skill_ids: :skill_id, mcp_server_ids: :mcp_server_id,
-    asset_ids: :asset_id, repository_ids: :repository_id, config_item_ids: :config_item_id
+    asset_ids: :asset_id, repository_ids: :repository_id, config_item_ids: :config_item_id,
+    aws_oidc_role_ids: :aws_oidc_role_id
   }.freeze
 
   def self.ids(list) = Array(list).compact_blank.map(&:to_i).select(&:positive?).uniq
@@ -20,6 +21,7 @@ module ResourceLink
     belongs_to :asset, optional: true
     belongs_to :repository, optional: true
     belongs_to :config_item, optional: true
+    belongs_to :aws_oidc_role, optional: true
   end
 
   class_methods do

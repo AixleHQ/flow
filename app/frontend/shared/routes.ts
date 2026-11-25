@@ -98,6 +98,16 @@ export function cloudAwsCredentialsPath(options?: object): string {
   return "/" + "cloud" + "/" + "aws" + "/" + "credentials" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /oidc/:issuer_key/.well-known/openid-configuration */
+export function awsOidcDiscoveryPath(issuer_key: ScalarType, options?: object): string {
+  return "/" + "oidc" + "/" + issuer_key + "/" + "." + "well-known" + "/" + "openid-configuration" + $buildOptions(options, ["issuer_key"]);
+}
+
+/** /oidc/:issuer_key/jwks */
+export function awsOidcJwksPath(issuer_key: ScalarType, options?: object): string {
+  return "/" + "oidc" + "/" + issuer_key + "/" + "jwks" + $buildOptions(options, ["issuer_key"]);
+}
+
 /** /azure/git/credentials(.:format) */
 export function azureGitCredentialsPath(options?: object): string {
   return "/" + "azure" + "/" + "git" + "/" + "credentials" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -2251,6 +2261,31 @@ export function projectsCompanyProjectInsightsPath(project_id: ScalarType, optio
 /** /company/:company_slug/projects/:project_id/insights(.:format) */
 export function companyProjectInsightsPath(project_id: ScalarType, options?: object): string {
   return "/" + "company" + $companySegment(options) + "/" + "projects" + "/" + project_id + "/" + "insights" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_slug","project_id","format"]);
+}
+
+/** /company/:company_slug/projects/:project_id/aws_oidc/connect(.:format) */
+export function connectCompanyProjectAwsOidcPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + $companySegment(options) + "/" + "projects" + "/" + project_id + "/" + "aws_oidc" + "/" + "connect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_slug","project_id","format"]);
+}
+
+/** /company/:company_slug/projects/:project_id/aws_oidc/disconnect(.:format) */
+export function disconnectCompanyProjectAwsOidcPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + $companySegment(options) + "/" + "projects" + "/" + project_id + "/" + "aws_oidc" + "/" + "disconnect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_slug","project_id","format"]);
+}
+
+/** /company/:company_slug/projects/:project_id/aws_oidc/roles/:id/verify(.:format) */
+export function verifyCompanyProjectAwsOidcRolePath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + $companySegment(options) + "/" + "projects" + "/" + project_id + "/" + "aws_oidc" + "/" + "roles" + "/" + id + "/" + "verify" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_slug","project_id","id","format"]);
+}
+
+/** /company/:company_slug/projects/:project_id/aws_oidc/roles(.:format) */
+export function companyProjectAwsOidcRolesPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + $companySegment(options) + "/" + "projects" + "/" + project_id + "/" + "aws_oidc" + "/" + "roles" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_slug","project_id","format"]);
+}
+
+/** /company/:company_slug/projects/:project_id/aws_oidc/roles/:id(.:format) */
+export function companyProjectAwsOidcRolePath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + $companySegment(options) + "/" + "projects" + "/" + project_id + "/" + "aws_oidc" + "/" + "roles" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_slug","project_id","id","format"]);
 }
 
 /** /company/:company_slug/projects/:project_id/agents(.:format) */

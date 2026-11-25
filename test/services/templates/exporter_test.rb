@@ -138,6 +138,23 @@ class Templates::ExporterTest < ActiveSupport::TestCase
     assert(result.notes.any? { |note| note.include?("inherited every project resource") })
   end
 
+  test "AWS roles are left out of the package, which installs with none" do
+    workflow = @source.workflows.sole
+    role = create(:aws_oidc_role, name: "prod-diag", role_arn: "arn:aws:iam::210987654321:role/prod-diag",
+                                  integration: create(:integration, :aws_oidc, company: @company, project: @source))
+    workflow.steps.order(:position).first.update!(aws_oidc_role_ids: [ role.id ])
+    workflow.merge_config!("base_aws_oidc_role_ids" => [ role.id ])
+
+    result = export
+
+    assert_not_includes result.template_yaml, "prod-diag"
+    assert_not_includes result.template_yaml, "210987654321"
+    assert_match(/uses AWS roles, which are not exported/, result.notes.join)
+    copy = install(result.package).project.workflows.sole
+    assert_empty copy.base_aws_oidc_role_ids
+    assert(copy.steps.all? { |step| step.aws_oidc_role_ids.empty? })
+  end
+
   test "a single agent exports on its own as an agent template" do
     agent = @source.agents.find_by!(name: "architect")
 

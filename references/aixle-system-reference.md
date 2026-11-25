@@ -67,6 +67,7 @@ the provider never reported (stale stops blocking). Step agents open gates with
 | `base_asset_ids` | files every step gets |
 | `base_repository_ids` | repositories every step gets |
 | `base_config_item_ids` | secrets/variables every step may read |
+| `base_aws_oidc_role_ids` | AWS roles every step may assume (the project's `aws_oidc` integration) |
 | `inherit_all_project_resources` | fall back to every project tool, skill, MCP server and repository |
 
 Unknown config keys are rejected.
@@ -87,6 +88,7 @@ Unknown config keys are rejected.
 | `asset_ids` | files for this step |
 | `repository_ids` | repositories cloned for this step |
 | `config_item_ids` | secrets/variables this step may read |
+| `aws_oidc_role_ids` | AWS roles this step may assume (the project's `aws_oidc` integration) |
 | `preferred_model` | model id override |
 | `reasoning_effort` | reasoning-effort level for the step's CLI (`low`, `medium`, `high`, …); unset is the CLI's default. Needs an explicit `required_agent_runtime` and `preferred_model` (a level without either is refused; clear it with them), and only a level that runtime takes for that model is accepted |
 | `required_agent_runtime` | pin to one runtime (see §5) |
@@ -208,12 +210,18 @@ Bitbucket repository get the `pull_request_*` tools. Fields:
 **Config items**: `secret` (stored encrypted) or `variable`. Values are entered
 by users in the UI and never returned by any tool.
 
-**Integrations**: `github`, `gitlab`, `bitbucket`, `slack`, `teams`, `azure_devops`, `jira`, `coder`, `linear`, `youtrack`, `insights`.
+**Integrations**: `github`, `gitlab`, `bitbucket`, `slack`, `teams`, `azure_devops`, `jira`, `coder`, `linear`, `youtrack`, `insights`, `aws_oidc`.
 Users connect them in the browser (`get_integration_setup_url`). Azure DevOps,
 `jira`, `linear` and `youtrack` connections, GitHub Projects and GitLab issues map
 their projects (Linear: teams) in as task trackers. `insights` is the company's
 connection to Aixle Insights, made by a company admin with an Insights owner's
 pairing code; each project then chooses to forward its agents' telemetry there.
+`aws_oidc` (behind a feature flag) lets a project's workflow steps assume IAM roles
+in the customer's AWS account with no stored key; a project admin adds the roles,
+and a step gets only the roles attached to it or to its workflow's base list.
+An AWS role is production access: attach only what the step needs.
+`inherit_all_project_resources` never adds roles, and duplicating a workflow into
+another project or exporting it as a template drops them.
 
 **Assets**: project or company files. Board-task attachments are separate
 files that live on the task.
@@ -248,6 +256,11 @@ by a tracker event gets them without attaching.
 
 **Secrets**: the step reads its config items with `get_config_item`; MCP
 credentials are resolved from config items at launch.
+
+**AWS roles**: each role attached to the step or to the workflow's base list is a
+named profile in `~/.aws/config`, holding credentials of an hour at most that the
+platform fetches when the AWS SDK or CLI first asks for them. Pass `--profile <name>` or
+`AWS_PROFILE=<name>`.
 
 **Context**: the platform writes the agent's instructions file (CLAUDE.md,
 AGENTS.md, GEMINI.md, … per runtime) with: the agent persona, session and

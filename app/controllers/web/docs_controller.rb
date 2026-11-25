@@ -40,6 +40,7 @@ class Web::DocsController < Web::ApplicationController
              people-and-access project-teams signing-in secrets templates analytics company-workspace examples
              user-guide prompt-guide quick-start agents runtimes runners tools mcp board workflows
              triggers-and-gates integrations github gitlab bitbucket azure-devops jira linear youtrack trackers slack teams coder
+             aws-oidc
              configuration configuring-sso reference cli-ref
              api-guide config-schema user-guide-outline changelog-product-areas].freeze
 

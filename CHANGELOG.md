@@ -13,6 +13,12 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Integrations**: AWS OIDC, behind the `aws_oidc` flag. A workflow step can assume an IAM role in your AWS
+  account with no access key: Flow is an OpenID Connect provider the account trusts, and the step gets
+  credentials that last at most an hour through a profile in `~/.aws/config`. Connect it per project, add
+  roles, check them with Verify, and attach them to steps in the builder.
+
 ### Changed
 - **Integrations**: for GitHub, GitLab and Bitbucket, only connections made with the OAuth client the deployment is configured with now count. After an operator changes a provider's client id (or GitLab's endpoint), connections made with the previous client are no longer shown, handed to agents or refreshed, and people connect again (docs/operations/rotating-oauth-clients.md).
 

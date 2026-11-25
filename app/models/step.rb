@@ -136,7 +136,7 @@ class Step < ApplicationRecord
 
   STEP_RESOURCES = {
     tool_ids: :tools, skill_ids: :skills, mcp_server_ids: :mcp_servers,
-    asset_ids: :assets, repository_ids: :repositories
+    asset_ids: :assets, repository_ids: :repositories, aws_oidc_role_ids: :aws_oidc_roles
   }.freeze
 
   def resource_ids_belong_to_project

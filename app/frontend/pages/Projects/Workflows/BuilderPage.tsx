@@ -6,6 +6,7 @@ import { IconArrowLeft, IconDeviceFloppy, IconInfoCircle, IconPlayerPlay } from 
 import { useCallback, useMemo, useState } from 'react';
 
 import type {
+  AwsOidcRolePicker,
   ConfigItemPicker,
   MCPServerPicker,
   Picker,
@@ -73,6 +74,8 @@ interface Props {
   assets?: AssetPickerItem[];
   repositories?: Picker[];
   configItems?: ConfigItemPicker[];
+  /** Roles of the project's AWS OIDC integration; empty without one or without the flag. */
+  awsOidcRoles?: AwsOidcRolePicker[];
   agentModels?: AgentModelsEntry[];
   runners?: RunnerSummary[];
   readOnly: boolean;
@@ -113,6 +116,7 @@ const BuilderPage = () => {
     assets: rawAssets,
     repositories: rawRepositories,
     configItems: rawConfigItems,
+    awsOidcRoles: rawAwsOidcRoles,
     agentModels: rawAgentModels,
     runners: rawRunners,
     readOnly,
@@ -138,6 +142,7 @@ const BuilderPage = () => {
   const assets = useMemo(() => rawAssets ?? [], [rawAssets]);
   const configItems = useMemo(() => rawConfigItems ?? [], [rawConfigItems]);
   const repositories = rawRepositories ?? [];
+  const awsOidcRoles = rawAwsOidcRoles ?? [];
   const agentModels = rawAgentModels ?? [];
   const runners = rawRunners ?? [];
   const catalogLoading = [rawAssets, rawMcpServers, rawTools, rawSkills, rawConfigItems].some((p) => p === undefined);
@@ -688,6 +693,7 @@ const BuilderPage = () => {
                       assets={assets}
                       repositories={repositories}
                       configItems={configItems}
+                      awsOidcRoles={awsOidcRoles}
                       agentModels={agentModels}
                       readOnly={readOnly}
                       onFieldChange={(field, value) => updateStepField(selectedSession.id, field, value)}
@@ -754,6 +760,7 @@ const BuilderPage = () => {
               assets={assets}
               repositories={repositories}
               configItems={configItems}
+              awsOidcRoles={awsOidcRoles}
               runners={runners}
               readOnly={readOnly}
               onWorkflowChange={updateWorkflowField}

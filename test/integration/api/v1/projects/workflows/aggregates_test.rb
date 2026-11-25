@@ -149,6 +149,31 @@ class Api::V1::Projects::Workflows::AggregatesTest < ActionDispatch::Integration
     assert @test.reload.deleted?
   end
 
+  test "a save attaches the project's AWS roles to a step and to the base list" do
+    role = create(:aws_oidc_role, integration: create(:integration, :aws_oidc, company: @company, project: @project))
+
+    save([ { id: @build.id, name: "Build", awsOidcRoleIds: [ role.id ] }, { id: @test.id, name: "Test" } ],
+         config: { baseAwsOidcRoleIds: [ role.id ] })
+
+    assert_response :success
+    assert_equal [ role.id ], @build.reload.aws_oidc_role_ids
+    assert_equal [ role.id ], @workflow.reload.base_aws_oidc_role_ids
+    assert_equal [ role.id ], response.parsed_body["steps"].find { |s| s["id"] == @build.id }["awsOidcRoleIds"]
+    assert_equal [ role.id ], response.parsed_body.dig("workflow", "baseAwsOidcRoleIds")
+  end
+
+  test "a save naming another project's AWS role is refused" do
+    # The refusal comes from the first step's save, before the sub-steps the sync
+    # preloads are read, which Bullet would report as an unused eager load.
+    Bullet.enable = false
+    save([ { id: @build.id, name: "Build", awsOidcRoleIds: [ create(:aws_oidc_role).id ] }, { id: @test.id, name: "Test" } ])
+
+    assert_response :unprocessable_entity
+    assert_empty @build.reload.aws_oidc_role_ids
+  ensure
+    Bullet.enable = true
+  end
+
   test "a reference to a step created in the same save is stored with that step's id" do
     save([
       { id: @build.id, name: "Build", output_asset_specs: [ { name: "dist.md", required: true } ] },

@@ -159,6 +159,10 @@ class SessionContextService
       end
     end
 
+    # Step 1b: AWS OIDC role profiles, unless the agent's own ~/.aws/config (written in
+    # step 1) already carries them
+    measure_step("aws_oidc_config") { inject_aws_oidc_config(credential) }
+
     # Step 2: Config files
     measure_step("config_files") { inject_config_files }
     context_log.record(:config_files, session.config_files.keys)
@@ -209,8 +213,23 @@ class SessionContextService
     # adapters that write one into a config file then write none.
     otel_endpoint = runtime.callback_url(:otel, session)
     { enabled_mcp_servers: mcp_server_names, model: resolve_session_model(credential), mode: session.mode,
-      reasoning_effort: session.reasoning_effort }.compact
+      reasoning_effort: session.reasoning_effort,
+      aws_oidc_config: AwsOidc::SessionSetup.config_file(AwsOidc::SessionSetup.roles(session), default: false) }.compact
       .merge(otel_endpoint: otel_endpoint, full_telemetry: otel_endpoint.present? && session.full_telemetry?)
+  end
+
+  # One writer for ~/.aws/config (docs/design/aws-oidc-integration.md §6.3): an adapter
+  # that writes the file itself has the role profiles appended through workflow_config.
+  def inject_aws_oidc_config(credential)
+    roles = AwsOidc::SessionSetup.roles(session)
+    return if roles.empty?
+
+    adapter = agent_adapter
+    data = credential&.config_data || {}
+    return if adapter.writes_aws_config?(data)
+
+    content = AwsOidc::SessionSetup.config_file(roles, default: !adapter.sets_aws_env?(data))
+    write_file("#{adapter.home_dir}/.aws/config", content, adapter.container_uid)
   end
 
   # == Story 9.2: Config File Injection ==

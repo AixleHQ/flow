@@ -9,7 +9,8 @@ class Integration < ApplicationRecord
 
   CONNECTABLE_PROVIDERS = %w[github gitlab bitbucket coder slack azure_devops jira linear youtrack].freeze
 
-  enumerize :provider, in: %i[github gitlab bitbucket linear coder slack teams azure_devops jira youtrack insights], predicates: true
+  enumerize :provider, in: %i[github gitlab bitbucket linear coder slack teams azure_devops jira youtrack insights aws_oidc],
+                      predicates: true
   enumerize :status, in: %i[active inactive error], default: :inactive, predicates: true, scope: true
 
   belongs_to :company
@@ -26,6 +27,7 @@ class Integration < ApplicationRecord
   # before the dependents below, so the refusal comes before they are destroyed.
   has_many :runners, dependent: :restrict_with_error
   has_many :repositories, dependent: :destroy
+  has_many :aws_oidc_roles, dependent: :destroy
   # Each GitLab repository has a hook in GitLab that would outlive it. Collected
   # before the repositories go, removed once the removal has committed.
   before_destroy :collect_ci_webhook_repositories, prepend: true, if: :gitlab?
@@ -68,6 +70,8 @@ class Integration < ApplicationRecord
   validate :project_belongs_to_same_company, if: -> { project_id.present? }
   validate :azure_devops_connection_is_scoped, if: :azure_devops?
   validate :bitbucket_connection_is_scoped, if: :bitbucket?
+  validate :aws_oidc_connection_is_scoped, if: :aws_oidc?
+  before_validation :assign_aws_oidc_issuer_key, on: :create, if: :aws_oidc?
   before_validation :record_github_installation_id, if: :github?
   validate :github_installation_held_by_this_company, if: -> { github_installation_id.present? && active? }
 
@@ -278,6 +282,12 @@ class Integration < ApplicationRecord
     settings.to_h["pull_request_merge"] != false
   end
 
+  # ----- AWS OIDC accessors -----
+
+  def aws_oidc_issuer_key
+    settings&.dig("issuer_key")
+  end
+
   # ----- Coder accessors -----
 
   def coder_url
@@ -337,6 +347,19 @@ class Integration < ApplicationRecord
   end
 
   private
+
+  # One AWS OIDC integration per project, and never company-wide: its issuer names
+  # one project (docs/design/aws-oidc-integration.md §5.1).
+  def aws_oidc_connection_is_scoped
+    return errors.add(:project, "is required for an AWS OIDC integration") if project_id.nil?
+
+    taken = Integration.where(provider: :aws_oidc, project_id: project_id).where.not(id: id).exists?
+    errors.add(:provider, "AWS OIDC is already connected for this project") if taken
+  end
+
+  def assign_aws_oidc_issuer_key
+    self.settings = (settings || {}).merge("issuer_key" => SecureRandom.alphanumeric(32))
+  end
 
   # One installation belongs to one company unless the deployment proves who
   # connects it. Every customer installs the same deployment-wide App, and the

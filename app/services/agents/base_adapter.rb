@@ -108,6 +108,15 @@ module Agents
       raise NotImplementedError, "#{self.class} must implement #generate_config"
     end
 
+    # Whether config_files writes ~/.aws/config itself for these credentials. When it
+    # does, the session's AWS OIDC role profiles arrive in workflow_config[:aws_oidc_config]
+    # and go into that file, rather than a second writer replacing it.
+    def writes_aws_config?(_credentials) = false
+
+    # Whether the agent's own settings put AWS_* variables into its environment. The
+    # agent's shell inherits them, and they would shadow a [default] profile.
+    def sets_aws_env?(_credentials) = false
+
     # List of config files to write to container (path => content)
     # Override if agent needs multiple config files
     # @param credentials [Hash] stored credentials from database
