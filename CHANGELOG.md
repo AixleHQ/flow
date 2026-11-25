@@ -14,9 +14,11 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Changed
+- **Tasks**: the task drawer shows the ticket title in its top bar on every tab, truncated with the full title on hover.
 - **Integrations**: for GitHub, GitLab and Bitbucket, only connections made with the OAuth client the deployment is configured with now count. After an operator changes a provider's client id (or GitLab's endpoint), connections made with the previous client are no longer shown, handed to agents or refreshed, and people connect again (docs/operations/rotating-oauth-clients.md).
 
 ### Fixed
+- **Tasks**: after a ticket is renamed or a different ticket is opened in the drawer, the title and description show the current values instead of the last edit made there.
 - **Integrations**: a GitHub, GitLab or Bitbucket connect whose account lookup fails stores nothing, and a failed reconnect keeps the connection that worked.
 
 ## [1.19.0] - 2026-11-25
