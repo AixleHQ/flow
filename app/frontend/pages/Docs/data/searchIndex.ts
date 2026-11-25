@@ -286,7 +286,7 @@ export const SEARCH_INDEX: SearchResult[] = [
     slug: 'aws-oidc',
     title: 'AWS OIDC',
     section: 'User guide',
-    desc: 'Let workflow steps assume an IAM role in your AWS account with no access key: the issuer, the IAM provider and trust policy, subjects, Verify, the profiles a step sees, and disconnecting.',
+    desc: 'Let workflow steps assume an IAM role in your AWS account with no access key: a walkthrough from connecting to a first run (console, CLI and Terraform), the trust and permission policies, Verify, what a step sees, subjects and troubleshooting.',
   },
   {
     slug: 'configuration',
