@@ -45,7 +45,7 @@ Open a card and the detail drawer has tabs:
   jump into the session.
 - **Comments** — the conversation. Agents comment here too, so you can filter
   by author type to read only what people wrote, or only what agents produced.
-- **Assets** — files attached to the card, with **Upload new** to add one.
+- **Assets** — files attached to the card. Drop several files on the drop zone, or use **Upload new** and select several files, to attach them all at once.
 - **Activity** — what people and agents did on this card, newest first.
 - **Analytics** — what this single card has cost: run time, tokens, spend.
 

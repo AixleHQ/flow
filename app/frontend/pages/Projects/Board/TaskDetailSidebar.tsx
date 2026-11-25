@@ -20,6 +20,7 @@ import {
   Tooltip,
   UnstyledButton,
 } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import {
   IconAlertCircle,
   IconArchive,
@@ -95,6 +96,7 @@ import {
   companyProjectTaskPath,
 } from 'shared/routes';
 import { CHART_SERIES } from 'shared/theme/chartPalette';
+import { FileDropZone } from 'shared/ui/FileDropZone';
 import { MarkdownLink } from 'shared/ui/MarkdownLink';
 
 import { ActivityAvatar } from './ActivityAvatar';
@@ -185,15 +187,35 @@ async function deleteTaskComment(projectId: number, taskId: number, commentId: n
   return deleted;
 }
 
-async function uploadTaskAsset(projectId: number, taskId: number, file: File) {
+const ASSET_UPLOAD_CONCURRENCY = 3;
+
+async function postTaskAsset(projectId: number, taskId: number, file: File) {
   const formData = new FormData();
   formData.append('task_asset[name]', file.name);
   formData.append('task_asset[file]', file);
-  const saved = await apiMutate(apiV1ProjectTaskAssetsPath(projectId, taskId), {
+  return apiMutate(apiV1ProjectTaskAssetsPath(projectId, taskId), {
     method: 'POST',
     body: formData,
   });
-  if (saved) router.reload({ only: ['task_assets', 'task_activities'] });
+}
+
+async function uploadTaskAssets(projectId: number, taskId: number, files: File[], onProgress: (done: number) => void) {
+  let next = 0;
+  let done = 0;
+  let failed = 0;
+  const worker = async () => {
+    while (next < files.length) {
+      const file = files[next++];
+      if (!(await postTaskAsset(projectId, taskId, file))) failed += 1;
+      done += 1;
+      onProgress(done);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(ASSET_UPLOAD_CONCURRENCY, files.length) }, worker));
+  if (failed > 0 && files.length > 1) {
+    notifications.show({ color: 'red', message: `${failed} of ${files.length} files failed to upload` });
+  }
+  router.reload({ only: ['task_assets', 'task_activities'] });
 }
 
 async function deleteTaskAsset(projectId: number, taskId: number, assetId: number) {
@@ -309,6 +331,9 @@ export function TaskDetailSidebar({
   const [deletingGateId, setDeletingGateId] = useState<number | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [assetUploadTotal, setAssetUploadTotal] = useState(0);
+  const [assetUploadDone, setAssetUploadDone] = useState(0);
+  const isUploadingAssets = assetUploadTotal > 0;
 
   // Only comment drafts are at stake: the title and description save on blur, which a click on
   // the X or the overlay triggers before the close, and Escape in them means "cancel this edit".
@@ -534,14 +559,27 @@ export function TaskDetailSidebar({
     [projectId, task],
   );
 
+  const handleAssetFiles = useCallback(
+    async (files: File[]) => {
+      if (!task || files.length === 0 || assetUploadTotal > 0) return;
+      setAssetUploadDone(0);
+      setAssetUploadTotal(files.length);
+      try {
+        await uploadTaskAssets(projectId, task.id, files, setAssetUploadDone);
+      } finally {
+        setAssetUploadTotal(0);
+      }
+    },
+    [projectId, task, assetUploadTotal],
+  );
+
   const handleUploadAsset = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file || !task) return;
-      await uploadTaskAsset(projectId, task.id, file);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      const files = Array.from(e.target.files ?? []);
+      e.target.value = '';
+      await handleAssetFiles(files);
     },
-    [projectId, task],
+    [handleAssetFiles],
   );
 
   const handleDeleteAsset = useCallback(
@@ -1673,11 +1711,20 @@ export function TaskDetailSidebar({
             </Box>
             {canExecute && (
               <>
-                <input ref={fileInputRef} type="file" hidden onChange={handleUploadAsset} />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  hidden
+                  aria-label="Upload files"
+                  onChange={handleUploadAsset}
+                />
                 <Button
                   size="compact-sm"
                   leftSection={<IconCloudUpload size={13} />}
                   onClick={() => fileInputRef.current?.click()}
+                  loading={isUploadingAssets}
+                  disabled={isUploadingAssets}
                   styles={{
                     root: {
                       background: 'transparent',
@@ -1693,6 +1740,20 @@ export function TaskDetailSidebar({
               </>
             )}
           </Box>
+
+          {canExecute && (
+            <Box mb="md">
+              <FileDropZone
+                onFiles={handleAssetFiles}
+                disabled={isUploadingAssets}
+                hint={
+                  isUploadingAssets
+                    ? `Uploading ${assetUploadDone} of ${assetUploadTotal}`
+                    : 'Max file size: 1 GB · Multiple files supported'
+                }
+              />
+            </Box>
+          )}
 
           {/* Asset list */}
           {(taskAssets ?? []).length === 0 ? (

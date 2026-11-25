@@ -13,6 +13,9 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Added
+- **Tasks**: a card's Assets tab has a drop zone, and **Upload new** accepts several files, so many files can be attached to a card in one go.
+
 ### Changed
 - **Integrations**: for GitHub, GitLab and Bitbucket, only connections made with the OAuth client the deployment is configured with now count. After an operator changes a provider's client id (or GitLab's endpoint), connections made with the previous client are no longer shown, handed to agents or refreshed, and people connect again (docs/operations/rotating-oauth-clients.md).
 
