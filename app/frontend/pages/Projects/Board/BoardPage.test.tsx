@@ -12,6 +12,7 @@ import { buildTaskComment } from 'test/factories/taskComment';
 import { buildTaskStatistics } from 'test/factories/taskStatistics';
 import { buildTaskWorkflowRun } from 'test/factories/taskWorkflowRun';
 import { answerFetch } from 'test/fetchStub';
+import { inertiaState } from 'test/inertiaMock';
 import { act, cleanup, fireEvent, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 import type BoardTask from 'types/generated/BoardTask';
 import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
@@ -482,13 +483,91 @@ describe('Projects/Board/BoardPage', () => {
     // The title also renders on the board card, so scope to the drawer dialog.
     const drawer = within(screen.getByRole('dialog'));
     // The drawer header shows the title, its ID, plus type and priority badges.
-    expect(drawer.getByText('Wire up authentication')).toBeInTheDocument();
+    expect(drawer.getAllByText('Wire up authentication')).toHaveLength(2);
     expect(drawer.getByText('#1')).toBeInTheDocument();
     expect(drawer.getByText('bug')).toBeInTheDocument();
     expect(drawer.getByText('high')).toBeInTheDocument();
     // Details tab is selected by default and shows the section labels.
     expect(drawer.getByText(/properties/i)).toBeInTheDocument();
     expect(drawer.getByText('Created')).toBeInTheDocument();
+  });
+
+  describe('panel bar title', () => {
+    const drawerProps = (task: Partial<BoardTask> = {}) => ({
+      ...populatedProps,
+      selectedTask: makeTask({ id: 1, number: 11, title: 'Wire up authentication', boardColumnId: 100, ...task }),
+      taskComments: [],
+      taskAssets: [],
+      taskActivities: [],
+      taskWorkflowRuns: [],
+    });
+    const barTitle = () => within(screen.getByRole('dialog')).getByTestId('panel-bar-title');
+
+    it('keeps the title in the panel bar on every tab, with the full title on hover', async () => {
+      const user = userEvent.setup();
+      // The Runs tab only exists for a task with runs or a workflow-bound column.
+      renderAuthedPage(<BoardPage />, {
+        props: { ...drawerProps(), taskWorkflowRuns: [buildTaskWorkflowRun()] },
+      });
+
+      for (const name of [/Details/, /Runs/, /Comments/, /Assets/, /Activity/, /Analytics/]) {
+        await user.click(within(screen.getByRole('dialog')).getByRole('tab', { name }));
+        expect(barTitle()).toHaveTextContent('Wire up authentication');
+        expect(barTitle()).toHaveAttribute('title', 'Wire up authentication');
+      }
+    });
+
+    it('shows a rename that arrives from the server', () => {
+      const { rerender } = renderAuthedPage(<BoardPage />, { props: drawerProps() });
+
+      inertiaState.pageProps = { ...inertiaState.pageProps, ...drawerProps({ title: 'Wire up SSO' }) };
+      rerender(<BoardPage />);
+
+      expect(barTitle()).toHaveTextContent('Wire up SSO');
+    });
+
+    it('shows the new name from the server after a local rename', async () => {
+      answerFetch({ 'PATCH /api/v1/projects/7/tasks/1': {} });
+      const { rerender } = renderAuthedPage(<BoardPage />, { props: drawerProps() });
+      const drawer = within(screen.getByRole('dialog'));
+
+      // Synchronous on purpose: the drawer's focus trap blurs the textarea on the next tick, which
+      // would close the editor before the rename is typed.
+      fireEvent.click(drawer.getAllByText('Wire up authentication')[1]);
+      const input = drawer.getByDisplayValue('Wire up authentication');
+      fireEvent.change(input, { target: { value: 'Local name' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      await waitFor(() => expect(barTitle()).toHaveTextContent('Local name'));
+
+      inertiaState.pageProps = { ...inertiaState.pageProps, ...drawerProps({ title: 'Local name' }) };
+      rerender(<BoardPage />);
+      inertiaState.pageProps = { ...inertiaState.pageProps, ...drawerProps({ title: 'Renamed elsewhere' }) };
+      rerender(<BoardPage />);
+
+      expect(barTitle()).toHaveTextContent('Renamed elsewhere');
+    });
+
+    it('shows the next task title, not a rename pending on the previous one', async () => {
+      answerFetch({ 'PATCH /api/v1/projects/7/tasks/1': {} });
+      const { rerender } = renderAuthedPage(<BoardPage />, { props: drawerProps() });
+      const drawer = within(screen.getByRole('dialog'));
+
+      // Synchronous on purpose: the drawer's focus trap blurs the textarea on the next tick, which
+      // would close the editor before the rename is typed.
+      fireEvent.click(drawer.getAllByText('Wire up authentication')[1]);
+      const input = drawer.getByDisplayValue('Wire up authentication');
+      fireEvent.change(input, { target: { value: 'Local name' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      await waitFor(() => expect(barTitle()).toHaveTextContent('Local name'));
+
+      inertiaState.pageProps = {
+        ...inertiaState.pageProps,
+        ...drawerProps({ id: 2, number: 12, title: 'Render dashboard charts', boardColumnId: 200 }),
+      };
+      rerender(<BoardPage />);
+
+      expect(barTitle()).toHaveTextContent('Render dashboard charts');
+    });
   });
 
   it('copies a link to the task page', async () => {

@@ -20,9 +20,11 @@ governance, community health — carry none.
   roles, check them with Verify, and attach them to steps in the builder.
 
 ### Changed
+- **Tasks**: the task drawer shows the ticket title in its top bar on every tab, truncated with the full title on hover.
 - **Integrations**: for GitHub, GitLab and Bitbucket, only connections made with the OAuth client the deployment is configured with now count. After an operator changes a provider's client id (or GitLab's endpoint), connections made with the previous client are no longer shown, handed to agents or refreshed, and people connect again (docs/operations/rotating-oauth-clients.md).
 
 ### Fixed
+- **Tasks**: after a ticket is renamed or a different ticket is opened in the drawer, the title and description show the current values instead of the last edit made there.
 - **Integrations**: a GitHub, GitLab or Bitbucket connect whose account lookup fails stores nothing, and a failed reconnect keeps the connection that worked.
 - **Integrations**: with `GITHUB_APP_VERIFY_INSTALLATION_OWNER` on, a company can connect a GitHub organization that already has the app installed for another company: after **Configure** on GitHub, Flow asks the person to authorize the app and checks that they can see the installation. Operators add `https://<domain>/company/integrations/github_setup` to the app's Redirect URIs before turning the setting on; "Request user authorization (OAuth) during installation" is no longer needed.
 - **Admin**: moving a project whose GitHub installation the source company still uses elsewhere now says the target company cannot connect that installation again while the source keeps it.
