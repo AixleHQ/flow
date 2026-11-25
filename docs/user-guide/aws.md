@@ -243,7 +243,9 @@ and nothing else.
 | The dialog's **Verify** | `verify:integration:<integration id>` |
 
 Ids never change when something is renamed. The generated policy allows `workflow:*`,
-every workflow of the project; with **Only specific workflows** it lists
+every workflow of the project, and never another project's: the condition is on this
+project's issuer, and a token from another project carries another issuer, which this
+provider does not accept. With **Only specific workflows** it lists
 `workflow:12:step:*` for each one picked, and a hand-written policy can go down to one step,
 `workflow:12:step:34`. A draft uses the ids of the workflow
 and step it was copied from, behind `draft:`, so unsaved changes reach the role only if
