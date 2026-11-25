@@ -102,6 +102,10 @@ workflow to give it to every step. A role reaches a step only this way: **Inheri
 project resources** does not include roles, and a session started by hand never has
 one.
 
+Over the personal MCP server, `list_aws_oidc_roles` lists a project's roles with their
+ids, and `create_workflow_step`, `update_workflow_step` and `update_workflow` attach them
+(`aws_oidc_role_ids`, `base_aws_oidc_role_ids`).
+
 ## What the step sees
 
 The step's container gets one profile per role in `~/.aws/config`:

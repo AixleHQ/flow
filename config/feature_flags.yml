@@ -47,4 +47,4 @@ aws_oidc:
   default: false
   client: true
   introduced: 2026-11-25
-  remove_by: 2027-06-30    # a review checkpoint, not a planned removal date (docs/design/aws-oidc-integration.md §11)
+  remove_by: 2027-09-30    # a review checkpoint, not a planned removal date (docs/design/aws-oidc-integration.md §11)
