@@ -19,6 +19,11 @@ export function waitForTarget(key: string, timeoutMs: number): Promise<Element |
       if (element) done(element);
     });
     const timer = window.setTimeout(() => done(null), timeoutMs);
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-tour'] });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['data-tour'],
+    });
   });
 }

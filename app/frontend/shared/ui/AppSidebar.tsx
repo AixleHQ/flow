@@ -658,10 +658,7 @@ function SidebarWorkspaceSwitcher({
 
 // Tour B (a viewer's) runs nothing, so nothing can block it. Tour A installs the
 // Hello Flow template and runs it with the member's own agent.
-function productTourBlocker(
-  tour: NonNullable<CurrentUser['productTour']>,
-  connectedAgents: number,
-): string | null {
+function productTourBlocker(tour: NonNullable<CurrentUser['productTour']>, connectedAgents: number): string | null {
   if (tour.variant === 'b') return null;
   if (!tour.helloFlowAvailable) return 'The starter template is not available here';
   if (connectedAgents === 0) return 'Connect an agent first';

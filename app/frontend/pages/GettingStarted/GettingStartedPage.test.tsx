@@ -3,11 +3,16 @@ import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
 import type { CurrentUser } from '@/types/generated';
+import { buildSharedPermissions, buildSharedUser } from 'test/factories/sharedProps';
+import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
 
 import { ProductTourProvider } from 'shared/lib/productTour';
-import { companyGettingStartedBuildWithAiPath, companyProjectsPath, mcpProfilePath, templatesPath } from 'shared/routes';
-import { buildSharedPermissions, buildSharedUser } from 'test/factories/sharedProps';
-import { renderAuthedPage, screen, userEvent } from 'test/renderPage';
+import {
+  companyGettingStartedBuildWithAiPath,
+  companyProjectsPath,
+  mcpProfilePath,
+  templatesPath,
+} from 'shared/routes';
 
 import GettingStartedPage from './GettingStartedPage';
 
@@ -66,7 +71,8 @@ describe('GettingStarted/GettingStartedPage', () => {
   it('builds with AI through the server, which picks or creates the project', async () => {
     renderGettingStarted();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Build with AI' }));
+    const buildYourOwn = screen.getByRole('region', { name: 'Build your own' });
+    await userEvent.click(within(buildYourOwn).getByRole('button', { name: 'Build with AI' }));
 
     expect(router.post).toHaveBeenCalledWith(companyGettingStartedBuildWithAiPath());
   });

@@ -2,6 +2,9 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { answerFetch } from 'test/fetchStub';
+import { act, renderPage, screen, userEvent, waitFor } from 'test/renderPage';
+
 import {
   companyProductTourPath,
   companyProjectBoardPath,
@@ -9,8 +12,6 @@ import {
   companyProjectsPath,
   statusCompanyProjectWorkflowRunPath,
 } from 'shared/routes';
-import { answerFetch } from 'test/fetchStub';
-import { act, renderPage, screen, userEvent, waitFor } from 'test/renderPage';
 
 import type { Highlight } from './highlighter';
 import { ProductTourProvider, type TourPage, useProductTour } from './ProductTourProvider';
@@ -145,11 +146,11 @@ describe('ProductTourProvider', () => {
 
   it('picks the tour up after a click that loads a whole new page', async () => {
     storeTour({ stepId: 'a4' });
-    const first = renderTour(tourPage('Templates/ShowPage'), ['template-install']);
+    const { unmount } = renderTour(tourPage('Templates/ShowPage'), ['template-install']);
     await waitFor(() => expect(lastShown()?.title).toBe('Install it'));
 
     await userEvent.click(screen.getByRole('button', { name: 'template-install' }));
-    first.unmount();
+    unmount();
     renderTour(tourPage('Templates/InstallPage'), ['install-form', 'install-submit']);
 
     await waitFor(() => expect(lastShown()?.title).toBe('A new project'));
@@ -195,7 +196,11 @@ describe('ProductTourProvider', () => {
     renderTour(tourPage('Templates/ShowPage'), ['template-parts']);
     await waitFor(() => expect(lastShown()?.title).toBe('What a project is made of'));
 
-    act(() => lastShown()?.actions.find((action) => action.label === 'Skip tour')?.onClick());
+    act(() =>
+      lastShown()
+        ?.actions.find((action) => action.label === 'Skip tour')
+        ?.onClick(),
+    );
 
     expect(highlighter.clear).toHaveBeenCalled();
     expect(storedTour()).toBeUndefined();
@@ -216,9 +221,7 @@ describe('ProductTourProvider', () => {
       },
     });
     storeTour({ stepId: 'a13', projectId: 5, runId: 9 });
-    renderTour(tourPage('Projects/WorkflowRuns/ShowPage', { project: { id: 5 }, run: { id: 9 } }), [
-      'run-assets-tab',
-    ]);
+    renderTour(tourPage('Projects/WorkflowRuns/ShowPage', { project: { id: 5 }, run: { id: 9 } }), ['run-assets-tab']);
 
     await waitFor(() => expect(lastShown()?.description).toMatch(/It takes ~1–2 min/));
     act(() => lastShown()?.primary?.onClick());
@@ -260,7 +263,11 @@ describe('ProductTourProvider', () => {
     renderTour(tourPage('Projects/IndexPage', { projects: [] }));
     await waitFor(() => expect(lastShown()?.title).toBe('Projects'));
 
-    act(() => lastShown()?.actions.find((action) => action.label === 'Skip this step')?.onClick());
+    act(() =>
+      lastShown()
+        ?.actions.find((action) => action.label === 'Skip this step')
+        ?.onClick(),
+    );
 
     await waitFor(() => expect(lastShown()?.description).toMatch(/Ask an admin to give you edit access/));
   });

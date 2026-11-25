@@ -45,6 +45,7 @@ const buildProfile = (overrides: Partial<CurrentUser> = {}): CurrentUser => ({
   currentRole: 'admin',
   currentCompany: acmeCompany,
   memberships: [{ id: 5, role: 'admin', state: 'active', company: acmeCompany }],
+  productTour: null,
   ...overrides,
 });
 

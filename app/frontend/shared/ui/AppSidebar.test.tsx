@@ -4,9 +4,10 @@ import { router } from '@inertiajs/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { Membership } from '@/types/generated';
+import { act, buildSharedProps, renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
+
 import { EXPAND_SIDEBAR_EVENT, ProductTourProvider } from 'shared/lib/productTour';
 import { companyProjectsPath } from 'shared/routes';
-import { act, buildSharedProps, renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
 
 import { AppSidebar } from './AppSidebar';
 import type { SharedProject } from './types';

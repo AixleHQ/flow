@@ -263,13 +263,10 @@ export function ProductTourProvider({
         const nextPage = nextId ? findStep(tour.variant, nextId)?.page : null;
         // Skipping only helps when the next step can be reached from here without the click.
         const canSkip = step.advance !== 'click' || nextPage === 'any' || nextPage === component;
-        show(
-          { title: step.title, description: stepBody(step, ctx), interactive: false },
-          [
-            { label: 'End tour', onClick: () => finish(tour.variant) },
-            ...(canSkip ? [{ label: 'Skip this step', onClick: () => advance(step, tour, ctx) }] : []),
-          ],
-        );
+        show({ title: step.title, description: stepBody(step, ctx), interactive: false }, [
+          { label: 'End tour', onClick: () => finish(tour.variant) },
+          ...(canSkip ? [{ label: 'Skip this step', onClick: () => advance(step, tour, ctx) }] : []),
+        ]);
         return;
       }
 
@@ -317,17 +314,7 @@ export function ProductTourProvider({
       cancelled = true;
       removeClickListener?.();
     };
-  }, [
-    tour,
-    component,
-    enabled,
-    memberHasAgent,
-    memberFirstProjectId,
-    targetTimeoutMs,
-    highlighter,
-    finish,
-    advance,
-  ]);
+  }, [tour, component, enabled, memberHasAgent, memberFirstProjectId, targetTimeoutMs, highlighter, finish, advance]);
 
   const openRunResult = useCallback((run: WatchedRun) => {
     notifications.hide(`product-tour-run-${run.runId}`);

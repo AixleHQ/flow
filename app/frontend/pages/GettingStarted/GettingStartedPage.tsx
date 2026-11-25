@@ -1,9 +1,10 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Anchor, Badge, Button, Card, Group, SimpleGrid, Stack, Text, ThemeIcon } from '@mantine/core';
 import { IconPlugConnected, IconRoute, IconTemplate, IconWand } from '@tabler/icons-react';
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
+
 import { useCanWrite } from 'shared/lib/hooks/useCanWrite';
 import { useProductTour } from 'shared/lib/productTour';
 import { companyGettingStartedBuildWithAiPath, mcpProfilePath, profilePath, templatesPath } from 'shared/routes';
@@ -27,15 +28,17 @@ interface StepCardProps {
 }
 
 function StepCard({ icon, title, description, status, children }: StepCardProps) {
+  const titleId = useId();
+
   return (
-    <Card withBorder padding="lg" radius="md" className={classes.card}>
+    <Card component="section" aria-labelledby={titleId} withBorder padding="lg" radius="md" className={classes.card}>
       <Stack gap="sm" h="100%">
         <Group justify="space-between" wrap="nowrap">
           <Group gap="sm" wrap="nowrap">
             <ThemeIcon variant="light" size="lg" radius="md">
               {icon}
             </ThemeIcon>
-            <Text component="h2" fw={600} size="md">
+            <Text component="h2" id={titleId} fw={600} size="md">
               {title}
             </Text>
           </Group>

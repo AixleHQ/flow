@@ -675,11 +675,15 @@ const WorkflowRunShowPage = () => {
 
               {isActive && liveSteps.length > 0 ? (
                 <div className={classes.split}>
-                  <div className={classes.list} data-tour="run-sessions">{sessionCards}</div>
+                  <div className={classes.list} data-tour="run-sessions">
+                    {sessionCards}
+                  </div>
                   {renderConsoles()}
                 </div>
               ) : (
-                <div className={classes.list} data-tour="run-sessions">{sessionCards}</div>
+                <div className={classes.list} data-tour="run-sessions">
+                  {sessionCards}
+                </div>
               )}
             </>
           )}
