@@ -67,7 +67,7 @@ type Uploader interface {
 // after these pauses, so a blip does not cost the output.
 var uploadRetryPauses = []time.Duration{500 * time.Millisecond, 2 * time.Second}
 
-// HTTPUploader is the Uploader of the host runner: one PUT with the exact
+// HTTPUploader is the Uploader of the machine runner: one PUT with the exact
 // Content-Length, no other credential than the URL's own signature, and no
 // redirect followed.
 type HTTPUploader struct {

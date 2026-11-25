@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/aixlehq/aixle-runner/internal/credentials"
-	"github.com/aixlehq/aixle-runner/internal/host"
 	"github.com/aixlehq/aixle-runner/internal/journal"
+	"github.com/aixlehq/aixle-runner/internal/machine"
 	"github.com/aixlehq/aixle-runner/internal/protocol"
 	"github.com/aixlehq/aixle-runner/internal/tokens"
 )
@@ -85,19 +85,19 @@ func (nopRefresher) Refresh(context.Context, string) (protocol.TokenPair, error)
 	return protocol.TokenPair{}, nil
 }
 
-// hostRunner is one start of the host runner on a state directory, with the
+// hostRunner is one start of the machine runner on a state directory, with the
 // handlers it registers in production.
-func hostRunner(t *testing.T, stateDir string, env *Environment, gw *opsGateway) *host.Loop {
+func hostRunner(t *testing.T, stateDir string, env *Environment, gw *opsGateway) *machine.Loop {
 	t.Helper()
 	j, err := journal.Open(stateDir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	handlers := map[string]host.Handler{}
+	handlers := map[string]machine.Handler{}
 	for name, h := range env.Handlers() {
 		handlers[name] = h
 	}
-	return &host.Loop{
+	return &machine.Loop{
 		Gateway: gw,
 		Tokens: tokens.NewSource(nopStore{}, nopRefresher{}, credentials.Credentials{TokenPair: protocol.TokenPair{
 			AccessToken: "aracc_x", AccessTokenExpiresAt: time.Now().Add(time.Hour),
@@ -124,7 +124,7 @@ func TestAHostRunnerRestartDoesNotStopTheAgent(t *testing.T) {
 	gw.add(1, "container.start", startPayload(nil))
 	gw.add(2, "exec", map[string]any{"cmd": []string{"sleep", "30"}})
 
-	// The first host runner starts the container and is stopped during the exec,
+	// The first machine runner starts the container and is stopped during the exec,
 	// as `systemctl restart aixle-runner` stops it.
 	first := hostRunner(t, h.state, h.env, gw)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -149,7 +149,7 @@ func TestAHostRunnerRestartDoesNotStopTheAgent(t *testing.T) {
 		t.Fatalf("the cut-off exec was answered %#v", r)
 	}
 
-	// The restarted host runner keeps nothing in memory: it finds the container
+	// The restarted machine runner keeps nothing in memory: it finds the container
 	// by its labels, answers the cut-off exec `interrupted` without running it
 	// again, and runs the next one.
 	gw.add(3, "exec", map[string]any{"cmd": []string{"echo", "after"}})
@@ -165,7 +165,7 @@ func TestAHostRunnerRestartDoesNotStopTheAgent(t *testing.T) {
 	if r, posts := gw.result(1); posts != 1 || r.Status != protocol.StatusOK {
 		t.Fatalf("container.start: %d posts, %#v", posts, r)
 	}
-	if r, posts := gw.result(2); posts != 1 || r.Error == nil || r.Error.Class != host.ClassInterrupted {
+	if r, posts := gw.result(2); posts != 1 || r.Error == nil || r.Error.Class != machine.ClassInterrupted {
 		t.Fatalf("the cut-off exec: %d posts, %#v", posts, r)
 	}
 	if r, posts := gw.result(3); posts != 1 || r.Status != protocol.StatusOK || *r.Stdout != "after the restart\n" {
@@ -233,7 +233,7 @@ func TestAResultOverTheGatewaysBodyCapIsAnsweredResultTooLarge(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, posts := gw.result(1)
-	if posts != 1 || r.Error == nil || r.Error.Class != host.ClassResultTooLarge || r.Data != nil {
+	if posts != 1 || r.Error == nil || r.Error.Class != machine.ClassResultTooLarge || r.Data != nil {
 		t.Fatalf("batch: %d posts, %#v", posts, r)
 	}
 	if !strings.Contains(r.Error.Message, "batch's result is") || !strings.Contains(r.Error.Message, "2 steps, of which 2 ran") {

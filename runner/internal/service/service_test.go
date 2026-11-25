@@ -130,7 +130,7 @@ func TestInstallCreatesTheUserAndTheUnit(t *testing.T) {
 	for _, line := range []string{
 		"User=aixle-runner",
 		"SupplementaryGroups=docker",
-		"ExecStart=" + m.Binary + " --mode host --state-dir " + m.StateDir,
+		"ExecStart=" + m.Binary + " --mode machine --state-dir " + m.StateDir,
 		"Restart=always",
 		"RestartPreventExitStatus=3",
 		"WantedBy=multi-user.target",
@@ -222,7 +222,7 @@ func TestNewManagerRunsTheFixedPathWhereverTheBinaryRunsFrom(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(unit), "ExecStart=/var/lib/aixle-runner/bin/aixle-runner --mode host --state-dir /var/lib/aixle-runner\n") {
+	if !strings.Contains(string(unit), "ExecStart=/var/lib/aixle-runner/bin/aixle-runner --mode machine --state-dir /var/lib/aixle-runner\n") {
 		t.Fatalf("unit:\n%s", unit)
 	}
 	// It copies from the executing file, not from a path.

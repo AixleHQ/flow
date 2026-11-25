@@ -82,7 +82,7 @@ func (e *Environment) tunnelDialer(sessionID int64, hostNetwork bool, sidecar st
 	return e.dialerFor(sessionID, hostNetwork)
 }
 
-// dialerFor picks how a session's ports are reached: the host runner's own loopback on
+// dialerFor picks how a session's ports are reached: the machine runner's own loopback on
 // the host network, the sidecar's dial socket on the bridge network. It is nil on the
 // bridge network when there is no proxy host or its dial directory is not usable. Both
 // the start of a session and the restore after a restart of the runner choose here.

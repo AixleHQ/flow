@@ -101,7 +101,7 @@ func checkedIn() answer {
 	}}
 }
 
-// newPlatform serves the answers it is given. A host runner checks in after it
+// newPlatform serves the answers it is given. A machine runner checks in after it
 // starts (PROTOCOL.md §5.9), so unless a test scripts the check-in, the platform
 // takes it.
 func newPlatform(t *testing.T, answers map[string][]answer) (*platform, string) {
@@ -370,7 +370,7 @@ func TestUnregisterOfAnUnconfiguredMachine(t *testing.T) {
 	}
 }
 
-// hostDocker is the Docker of a host runner that is given no op to run, on a
+// hostDocker is the Docker of a machine runner that is given no op to run, on a
 // machine with no container of the environment to serve a proxy for again.
 type hostDocker struct{ docker.API }
 
@@ -387,14 +387,14 @@ func (hostDocker) ContainerList(context.Context, client.ContainerListOptions) (c
 }
 
 // unlistableDocker is the Docker of a machine whose daemon cannot list the
-// environment's containers when the host runner starts.
+// environment's containers when the machine runner starts.
 type unlistableDocker struct{ hostDocker }
 
 func (unlistableDocker) ContainerList(context.Context, client.ContainerListOptions) (client.ContainerListResult, error) {
 	return client.ContainerListResult{}, errors.New("Cannot connect to the Docker daemon")
 }
 
-// A host runner that cannot list the environment's containers has served no
+// A machine runner that cannot list the environment's containers has served no
 // running session's proxy again, and nothing would try later: it checks in
 // first, so that the platform hears of the machine, then waits for Docker with a
 // backoff instead of exiting (a restart loop of the service manager tells the
@@ -413,7 +413,7 @@ func TestAHostRunnerThatCannotResumeItsSessionsChecksInAndWaitsBeforePolling(t *
 		}
 		return ctx.Err()
 	}
-	err := RunHost(ctx, HostOptions{StateDir: dir, Docker: unlistableDocker{}, Sleep: sleep, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	err := RunMachine(ctx, MachineOptions{StateDir: dir, Docker: unlistableDocker{}, Sleep: sleep, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	if err != nil {
 		t.Fatalf("a runner waiting for Docker is stopped, not failed: %v", err)
 	}
@@ -423,7 +423,7 @@ func TestAHostRunnerThatCannotResumeItsSessionsChecksInAndWaitsBeforePolling(t *
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if len(p.requests) != 1 || p.requests[0].method != http.MethodPost || p.requests[0].path != "/runner/v1/check-in" {
-		t.Fatalf("the host runner checks in once and does not poll: %v", p.requests)
+		t.Fatalf("the machine runner checks in once and does not poll: %v", p.requests)
 	}
 }
 
@@ -447,7 +447,7 @@ func TestAHostRunnerWithDockerDownChecksInWithTheFailureAndAgainWhenDockerIsBack
 		api.up = true
 		return ctx.Err()
 	}
-	if err := RunHost(ctx, HostOptions{StateDir: dir, Docker: api, Sleep: sleep, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}); err != nil {
+	if err := RunMachine(ctx, MachineOptions{StateDir: dir, Docker: api, Sleep: sleep, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}); err != nil {
 		t.Fatal(err)
 	}
 	p.mu.Lock()
@@ -485,7 +485,7 @@ func (d *recoveringDocker) ContainerList(ctx context.Context, o client.Container
 	return d.hostDocker.ContainerList(ctx, o)
 }
 
-// The relay's sockets are 0666 below the state directory, so the host runner
+// The relay's sockets are 0666 below the state directory, so the machine runner
 // narrows a wider state directory to 0700 when it starts.
 func TestAHostRunnerNarrowsAWiderStateDirectory(t *testing.T) {
 	_, url := newPlatform(t, map[string][]answer{})
@@ -496,7 +496,7 @@ func TestAHostRunnerNarrowsAWiderStateDirectory(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_ = RunHost(ctx, HostOptions{StateDir: dir, Docker: unlistableDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	_ = RunMachine(ctx, MachineOptions{StateDir: dir, Docker: unlistableDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	info, err := os.Stat(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -506,7 +506,7 @@ func TestAHostRunnerNarrowsAWiderStateDirectory(t *testing.T) {
 	}
 }
 
-// A state directory the host runner cannot narrow stops it until an operator
+// A state directory the machine runner cannot narrow stops it until an operator
 // acts, with an error that names the directory and its mode, before it serves
 // any relay or polls.
 func TestAHostRunnerThatCannotNarrowItsStateDirectoryNeedsAnOperator(t *testing.T) {
@@ -517,14 +517,14 @@ func TestAHostRunnerThatCannotNarrowItsStateDirectoryNeedsAnOperator(t *testing.
 		return fmt.Errorf("the state directory %s is mode 0755, and the runner could not narrow it to 0700: %w", dir, fs.ErrPermission)
 	}
 	t.Cleanup(func() { restrictStateDir = statedir.Restrict })
-	err := RunHost(context.Background(), HostOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	err := RunMachine(context.Background(), MachineOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	if err == nil || !NeedsOperator(err) || !strings.Contains(err.Error(), dir) || !strings.Contains(err.Error(), "0755") {
 		t.Fatalf("got %v", err)
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if len(p.requests) != 0 {
-		t.Fatalf("the host runner called the platform: %v", p.requests)
+		t.Fatalf("the machine runner called the platform: %v", p.requests)
 	}
 }
 
@@ -558,7 +558,7 @@ func TestConfigureDeletesTheJournalOfAPreviousRegistration(t *testing.T) {
 		}
 	}
 	p.mu.Unlock()
-	err = RunHost(ctx, HostOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	err = RunMachine(ctx, MachineOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -649,8 +649,8 @@ func TestASecondHostRunnerRefusesAtOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer lock.Release()
-	err = RunHost(context.Background(), HostOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
-	if err == nil || !strings.Contains(err.Error(), "only one host runner") {
+	err = RunMachine(context.Background(), MachineOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	if err == nil || !strings.Contains(err.Error(), "only one machine runner") {
 		t.Fatalf("got %v", err)
 	}
 	// systemd may restart the unit: the other process can be gone by then.
@@ -671,7 +671,7 @@ func TestAHostRunnerWithoutUsableCredentialsNeedsAnOperator(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, dir := range []string{missing, empty, corrupt, incomplete} {
-		err := RunHost(context.Background(), HostOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+		err := RunMachine(context.Background(), MachineOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 		if err == nil || !NeedsOperator(err) {
 			t.Errorf("%s: got %v", dir, err)
 		}
@@ -690,7 +690,7 @@ func TestAHostRunnerWithACorruptJournalNeedsAnOperator(t *testing.T) {
 	dir := t.TempDir()
 	storeCreds(t, dir, url)
 	corruptJournal(t, dir)
-	err := RunHost(context.Background(), HostOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	err := RunMachine(context.Background(), MachineOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	if err == nil || !NeedsOperator(err) || !errors.Is(err, journal.ErrInvalid) {
 		t.Fatalf("got %v", err)
 	}
@@ -777,7 +777,7 @@ func TestSelfUpdateOffReadsABoolean(t *testing.T) {
 }
 
 // The published image sets AIXLE_RUNNER_NO_SELF_UPDATE (docker/runner/Dockerfile):
-// a host runner started from it reports self-update as off, whatever its
+// a machine runner started from it reports self-update as off, whatever its
 // credentials say.
 func TestAHostRunnerWithNoSelfUpdateStartsWithSelfUpdateOff(t *testing.T) {
 	for _, noSelfUpdate := range []bool{false, true} {
@@ -787,7 +787,7 @@ func TestAHostRunnerWithNoSelfUpdateStartsWithSelfUpdateOff(t *testing.T) {
 		var logs bytes.Buffer
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		_ = RunHost(ctx, HostOptions{StateDir: dir, Docker: hostDocker{}, NoSelfUpdate: noSelfUpdate,
+		_ = RunMachine(ctx, MachineOptions{StateDir: dir, Docker: hostDocker{}, NoSelfUpdate: noSelfUpdate,
 			Logger: slog.New(slog.NewTextHandler(&logs, nil))})
 		want := fmt.Sprintf("auto_update=%v", !noSelfUpdate)
 		if !strings.Contains(logs.String(), want) {
@@ -796,7 +796,7 @@ func TestAHostRunnerWithNoSelfUpdateStartsWithSelfUpdateOff(t *testing.T) {
 	}
 }
 
-// A host runner checks in after it starts, before it takes an op, with the
+// A machine runner checks in after it starts, before it takes an op, with the
 // machine's os, arch and facts, and the version it runs in the header
 // (PROTOCOL.md §5.9).
 func TestAHostRunnerChecksInBeforeItPolls(t *testing.T) {
@@ -813,7 +813,7 @@ func TestAHostRunnerChecksInBeforeItPolls(t *testing.T) {
 	}
 	p.mu.Unlock()
 
-	if err := RunHost(ctx, HostOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}); err != nil {
+	if err := RunMachine(ctx, MachineOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -831,7 +831,7 @@ func TestAHostRunnerChecksInBeforeItPolls(t *testing.T) {
 
 // A machine that no longer passes the preflight still checks in, and says why.
 func TestACheckInReportOfAMachineThatFailsThePreflightCarriesTheFailure(t *testing.T) {
-	report := checkInReport(context.Background(), unlistableDocker{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	report := checkInReport(context.Background(), unlistableDocker{}, "", slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	if report.OS != runtime.GOOS || report.Arch != runtime.GOARCH {
 		t.Errorf("report %+v", report)
@@ -845,7 +845,7 @@ func TestACheckInReportOfAMachineThatFailsThePreflightCarriesTheFailure(t *testi
 		t.Errorf("facts %+v", report.Facts)
 	}
 
-	down := checkInReport(context.Background(), brokenDocker{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	down := checkInReport(context.Background(), brokenDocker{}, "", slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if msg, _ := down.Facts["preflight_error"].(string); !strings.Contains(msg, "not reachable") {
 		t.Errorf("facts %+v", down.Facts)
 	}
@@ -882,7 +882,7 @@ func TestAHostRunnerTakesTheUpdateOfItsCheckIn(t *testing.T) {
 	}
 	p.mu.Unlock()
 
-	_ = RunHost(ctx, HostOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	_ = RunMachine(ctx, MachineOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -905,7 +905,7 @@ func TestAHostRunnerBelowTheMinimumStopsAtCheckIn(t *testing.T) {
 	dir := t.TempDir()
 	storeCreds(t, dir, url)
 
-	err := RunHost(context.Background(), HostOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	err := RunMachine(context.Background(), MachineOptions{StateDir: dir, Docker: hostDocker{}, Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
 
 	if err == nil || !NeedsOperator(err) || !strings.Contains(err.Error(), "update aixle-runner") {
 		t.Fatalf("got %v", err)
