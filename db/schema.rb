@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_24_112933) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_25_100001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -674,6 +674,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_24_112933) do
     t.string "onboarding_state", default: "step1", null: false
     t.string "position"
     t.string "preferred_agent_language", default: "en"
+    t.datetime "product_tour_a_finished_at"
+    t.datetime "product_tour_b_finished_at"
     t.datetime "reminded_at"
     t.string "role", default: "employee", null: false
     t.text "selected_agents", default: [], array: true

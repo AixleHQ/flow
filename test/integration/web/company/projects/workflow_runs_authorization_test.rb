@@ -50,6 +50,10 @@ class Web::Company::Projects::WorkflowRunsAuthorizationTest < ActionDispatch::In
     assert_project_read { get company_project_workflow_run_path(@project, @run) }
   end
 
+  test "status is a project read" do
+    assert_project_read { get status_company_project_workflow_run_path(@project, @run) }
+  end
+
   # Missing workflow_id => allowed roles reach a RecordNotFound (404) before
   # WorkflowService.start (and thus before Temporal); viewer is still denied.
   test "create is a project write (allowed roles reach a 404 guard before Temporal)" do

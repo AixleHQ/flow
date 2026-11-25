@@ -650,4 +650,54 @@ class CompanyMembershipTest < ActiveSupport::TestCase
     assert_not_includes @company.company_memberships.not_active, active
     assert_includes @company.company_memberships.not_active, invited
   end
+
+  # === product tour (docs/design/product-tour.md) ===
+
+  test "getting started is pending once onboarding is done and until the role's tour is finished" do
+    employee = create(:company_membership, user: create(:user), company: @company)
+    assert_not employee.getting_started_pending?
+
+    employee.update!(onboarding_state: "completed", onboarding_completed_at: Time.current)
+    assert employee.getting_started_pending?
+    assert_equal "a", employee.product_tour_variant
+
+    employee.finish_product_tour!("b")
+    assert employee.reload.getting_started_pending?
+
+    employee.finish_product_tour!("a")
+    assert_not employee.reload.getting_started_pending?
+  end
+
+  test "a viewer's getting started is pending until tour B is finished" do
+    viewer = onboarded_viewer
+
+    assert_equal "b", viewer.product_tour_variant
+    assert viewer.getting_started_pending?
+
+    viewer.finish_product_tour!("b")
+    assert_not viewer.reload.getting_started_pending?
+  end
+
+  test "a viewer who finished tour B and is promoted gets getting started again once onboarded" do
+    membership = onboarded_viewer(product_tour_b_finished_at: 1.hour.ago)
+    create(:agent_credential, user: membership.user, company: @company)
+    membership.update!(role: "employee")
+    assert_not membership.getting_started_pending?, "still in onboarding"
+
+    membership.update!(onboarding_state: "completed", onboarding_completed_at: Time.current)
+
+    assert membership.getting_started_pending?
+    assert_equal "a", membership.product_tour_variant
+  end
+
+  test "finishing a tour twice keeps the first time, and an unknown tour is refused" do
+    membership = onboarded_viewer
+    travel_to(2.days.ago) { membership.finish_product_tour!("b") }
+    first = membership.reload.product_tour_b_finished_at
+
+    membership.finish_product_tour!("b")
+
+    assert_equal first, membership.reload.product_tour_b_finished_at
+    assert_raises(ArgumentError) { membership.finish_product_tour!("c") }
+  end
 end

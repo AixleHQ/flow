@@ -26,6 +26,26 @@ class Web::Company::Projects::WorkflowRunsControllerTest < ActionDispatch::Integ
     assert_inertia_page "Projects/WorkflowRuns/ShowPage"
   end
 
+  test "status tells whether the run has ended" do
+    running = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user)
+    completed = create(:workflow_run, :completed, workflow: @workflow, project: @project, user: @user)
+
+    get status_company_project_workflow_run_path(@project, running)
+    assert_response :success
+    assert_equal({ "id" => running.id, "state" => "running", "finished" => false }, response.parsed_body)
+
+    get status_company_project_workflow_run_path(@project, completed)
+    assert_equal({ "id" => completed.id, "state" => "completed", "finished" => true }, response.parsed_body)
+  end
+
+  test "status does not answer for a run of another project" do
+    other_project = create(:project, company: @company, owner: @user)
+    run = create(:workflow_run, workflow: @workflow, project: @project, user: @user)
+
+    get status_company_project_workflow_run_path(other_project, run)
+    assert_response :not_found
+  end
+
   test "create redirects on success" do
     create(:step, workflow: @workflow, position: 1, allow_non_interactive: true)
     mock_workflow_execution_start
