@@ -210,7 +210,8 @@ module ProjectMove
       elsif integration.azure_devops_installation_id.present?
         "Its Azure DevOps installation, and the tenant consent behind it, belong to #{source.name}."
       elsif github_installation_held_elsewhere?(integration)
-        "Its GitHub installation is also connected to #{source.name}, and one installation serves one company."
+        "Its GitHub installation is also connected to #{source.name}, and one installation serves one company: " \
+          "#{target.name} cannot connect it again while #{source.name} keeps it."
       end
     end
 
