@@ -1,6 +1,6 @@
 # Tool Attachment: a session gets only the tools attached to it
 
-**Status:** Design (task #290), updated with the decisions of 2026-11-26
+**Status:** Design (task #290), updated with the decisions of 2026-11-26 (no feature flag, one migration, templates pull request)
 **Scope:** Which tools a session is served, and how the platform stops granting tools that nobody attached.
 
 ## 1. Overview
@@ -25,8 +25,8 @@ Tools served without an attachment today:
 
 This design:
 1. fixes the **plumbing list**, the only tools that stay automatic;
-2. removes every other grant, including the fallback, behind the company flag `attached_tools_only` (§2.5);
-3. migrates existing workflows so each keeps the tools it uses, attached explicitly;
+2. removes every other grant, including the fallback, unconditionally (no feature flag, §2.5);
+3. migrates existing workflows with one data migration, so each step keeps every tool the old rules served, attached explicitly;
 4. makes every formerly injected tool attachable in the pickers, the API and the MCP tools;
 5. adds a test that fails when a non-plumbing tool reaches a session that did not attach it.
 
@@ -55,17 +55,15 @@ The `inject_when` DSL and `Tools::InjectionRules` stay. The plumbing decision is
 
 Rules after the change:
 
-| Rule | Status | Tools |
-|---|---|---|
-| `any_session` (new, always true) | plumbing | `finish_session`, `fail_session`, `list_sub_steps`, `mark_sub_step` |
-| `container_tools_present` | plumbing | `read_tool_result` |
-| `config_items_attached` | plumbing | `get_config_item` |
-| `workflow_step_session`, `coder_integration_connected`, `azure_integration_connected`, `azure_repositories_attached`, `tracker_run`, `github_repositories_attached` | **legacy** (§2.5) | the grants this task removes |
-| `non_interactive_session` | deleted | replaced by `any_session` on `finish_session`, `fail_session` |
+| Rule | Tools |
+|---|---|
+| `any_session` (new, always true) | `finish_session`, `fail_session`, `list_sub_steps`, `mark_sub_step` |
+| `container_tools_present` | `read_tool_result` |
+| `config_items_attached` | `get_config_item` |
 
-`TerminalSession#available_tools` becomes: attached tools (tenant-owned, enabled, not deleted) plus tools whose rules match. The `Tool.for_project(project)` fallback (`base.none?(&:db_source?)`) is **legacy** too (§2.5).
+Deleted in this change, with their `inject_when` lines: `workflow_step_session`, `coder_integration_connected`, `azure_integration_connected`, `azure_repositories_attached`, `tracker_run`, `github_repositories_attached`, `non_interactive_session`. There is no legacy set and no flag.
 
-When the flag is on for the session's company, `Definition#inject?` ignores legacy rules. When the flag is gone, the legacy rules, their `inject_when` lines and the fallback are deleted.
+`TerminalSession#available_tools` becomes: attached tools (tenant-owned, enabled, not deleted) plus tools whose rules match. The `Tool.for_project(project)` fallback (`base.none?(&:db_source?)`) is deleted, and the method comment says so.
 
 Alternatives considered:
 - **A per-tool `plumbing true` flag replacing `inject_when`.** Rejected: the conditions differ per tool (container tools present, config items attached), so the predicates would move without being removed.
@@ -85,41 +83,11 @@ Alternatives considered:
 
 A workflow with `inherit_all_project_resources` already gets every `Tool.visible_for_project` tool (`SessionConfigResolver#project_tool_ids`). This is a workflow-level opt-in shown in the builder, so it counts as an attachment by the workflow, and this design leaves it unchanged (D5, accepted). The migration skips those workflows' platform links: they already reach every attachable tool (§5.2).
 
-Also `refresh_github_token` becomes attachable, so it joins that set.
+`refresh_github_token` becomes attachable, so it joins that set.
 
-### 2.5 Feature flag `attached_tools_only`
+### 2.5 No feature flag
 
-Alex asked to put the new behavior behind a platform flag if it can be isolated (`docs/architecture/feature-flags.md`). It can: the whole behavior change is **two read points**.
-
-1. `Tools::Definition#inject?` skips the legacy rules (list in §2.2) when the flag is on.
-2. `TerminalSession#available_tools` skips the custom-tool fallback when the flag is on.
-
-Both read `Feature.enabled?(:attached_tools_only, company: ctx.company)`, with a literal key. `ctx.company` is `SessionCompany.company_for(session)`, and `nil` is legal for a company-scoped flag, so project-less sessions read the global value. A legacy rule is named in one frozen set, `Tools::InjectionRules::LEGACY`, so the flag check is in one place and removing the flag deletes that set with the rules in it. Only four tool files change their `inject_when` line (`finish_session`, `fail_session`, `list_sub_steps`, `mark_sub_step`); the 60 other tool files keep theirs untouched until the flag is removed.
-
-Declaration in `config/feature_flags.yml`:
-
-```yaml
-attached_tools_only:
-  description: A session gets only the tools attached to it, plus the plumbing tools. Integrations, repositories and tracker runs no longer grant tools, and the custom-tool fallback is off.
-  owner: "@AixleHQ/platform"
-  kind: release
-  scope: company
-  default: false
-  client: false
-  introduced: 2026-11-26
-  remove_by: 2027-03-31
-```
-
-Company scope lets the platform turn it on per company with an override (`/admin/feature_flags`), starting with an internal company. `client: false`: no frontend code reads it. The default turns to `true` and the flag is removed once every company has been switched.
-
-**What stays unconditional** (independent of the flag, because each is additive or one-time):
-- the data migration and the backfill task (§5);
-- the Azure tools being attachable and visible in the picker, and `refresh_github_token` being attachable;
-- `finish_session`, `fail_session` served to interactive sessions, and the two sub-step tools served to every session. They only add tools and only to the sessions that already could end or step;
-- the attach-explicitly wording of the builder, MCP and in-app docs (§8). It is true in both modes, since attaching a tool is harmless when it would have been injected anyway;
-- the guard test's flag-on half (§6).
-
-**What the flag does not cover.** A flag-off company keeps today's behavior for every legacy grant, including the leak this task was opened for. That is the price of a safe rollout. The security fix is complete only when the flag is on everywhere; the `remove_by` date and the rollout steps in §7 track that.
+Alex decided (comment 115244) that the new behavior is unconditional. The earlier draft's `attached_tools_only` flag, `InjectionRules::LEGACY`, the two flag read points and the per-company backfill are not part of this design. The legacy rules, their `inject_when` lines and the fallback are deleted in this change, not in a follow-up. The safety for existing workflows comes from the migration (§5), which must run before the new code serves, and from the templates pull request (§5.2), which must be merged before the release.
 
 ## 3. Data Model Changes
 
@@ -128,20 +96,15 @@ No schema change. One data migration (§5). Tool rows already exist for every co
 ## 4. API / Interface Changes
 
 - No new endpoints and no new parameters.
-- Behavior with the flag on: MCP `tools/list` and `tools/call` for a session serve only attached tools plus plumbing. A `tools/call` on a tool that is not attached is "not entitled" (existing `Tools::MCPRequestHandler` path).
+- Behavior: MCP `tools/list` and `tools/call` for a session serve only attached tools plus plumbing. A `tools/call` on a tool that is not attached is "not entitled" (existing `Tools::MCPRequestHandler` path).
 - Azure tools become visible in `GET`/MCP tool catalogs and accepted in `tool_ids`. `refresh_github_token` becomes visible and accepted too.
-- Release note: with the flag on, workflows created through the builder, the API, the MCP tools or a template install must attach their tools.
+- Release note: workflows created through the builder, the API, the MCP tools or a template install must attach their tools. Sessions running at deploy lose injected tools (§9).
 
 ## 5. Migration of existing data
 
 Existing workflows must keep working after the release (hard requirement, Alex 2026-11-26). Everything an old rule served to a step becomes an explicit attachment on that step, visible in the builder and removable there (D4).
 
-Logic lives in `Tools::LegacyInjection::Backfill` (app service, scoped by an optional company). Two entry points:
-
-- **Migration** `db/migrate/<ts>_attach_formerly_injected_tools.rb`, for all companies. Follow `20261124112933_attach_pull_request_tools_to_workflows.rb`: self-contained inline models (`workflows`, `steps`, `workflow_resource_links`, `step_resource_links`), no dependency on app classes, `down` a documented no-op. An extra link is harmless to the old code, so it can run before the new code serves.
-- **Rake task** `tools:attach_formerly_injected[company_id]`, which runs the service for one company. The operator runs it **right before switching that company's flag on**, so a workflow created after the migration and relying on injection is covered too. It is idempotent.
-
-A test (§6.7) runs the service and the migration on the same fixtures and asserts the same links, because the migration holds an inline copy.
+**One migration**, `db/migrate/<ts>_attach_formerly_injected_tools.rb`, for all companies. It follows `20261124112933_attach_pull_request_tools_to_workflows.rb`: self-contained inline models (`workflows`, `steps`, `workflow_resource_links`, `step_resource_links`, plus read-only models for the integration, repository and trigger-binding tables it reads), no app classes, a documented no-op `down`. It runs in the deploy's migrate phase, before the new code serves: an extra link is harmless to the old code, so the old pods keep working while it runs. There is no service object and no rake task (D10 of the previous draft is dropped). The migration is idempotent.
 
 ### 5.1 Rule
 
@@ -165,54 +128,61 @@ Not migrated, because still plumbing: `finish_session`, `fail_session`, `list_su
 
 **Idempotent.** A link that exists is not added again. Tools with no `tools` row (`source = 'code'`) are skipped, as in the precedent.
 
-**Output.** One summary line per run: counts of links added per tool name and number of workflows touched. No workflow, project or customer names.
+**Output.** One summary line per run: counts of links added per tool name and number of workflows touched. No workflow, project or customer names. The migration keeps its own copy of the old predicates (they are deleted from the app), which is why it is tested against a test-only oracle (§6.7).
 
 ### 5.2 Templates and workflows created through API / MCP
 
 - **Installed templates and workflows made through the API, builder or MCP tools** are rows in `workflows`/`steps` by the time the migration runs, so §5.1 covers them.
-- **Catalog templates** (`catalog_templates.definition`, synced from the separate templates repository by `Templates::CatalogSync`) are package files naming tools by `platform:` key (`Templates::Installer#create_tools`). Packages written for injection list no platform tools. A **separate task in the templates repository** adds `platform` tool entries to the packages whose steps use board, chat, Coder, tracker, asset or Azure tools (D6). It ships **before** this change's flag is switched on for any company. A package that lists platform tools works on the current platform too, so the order is safe. A template installed from the catalog before then is a workflow row and is covered by §5.1.
-- Add to `Templates::RepositoryValidator` a **warning** (not an error) when a step's text names a platform tool the step does not list. The check is a case-insensitive match of tool names and `{{tool:<id>}}` references in step, sub-step and agent instructions.
+- **Catalog templates** are package files in `AixleHQ/flow-templates` (`templates/aixle/<slug>/template.yaml`), which `Templates::RepositoryClient` syncs from `main` into every installation, and `Templates::CatalogSync` turns into `catalog_templates.definition`. A package names platform tools in a top-level `tools:` list (`key`, `platform`) and in each step's `tools:` list. A template installed after the release that lists no platform tools would install a workflow with no tools, because the migration has run already.
+- **The templates change is a second pull request in this task** (D6, Alex 2026-11-26, comment 115147), opened by the implementation developer against `AixleHQ/flow-templates` `main`. Scope:
+  - For each of the six packages (`cve-scan-daily`, `dev-pipeline`, `ga4-weekly-report`, `hello-flow`, `prd-discovery`, `security-audit`), compare every step's text, sub-step text and agent instructions with its `tools:` list. Add a top-level `platform` entry and a step-level reference for each board, chat, Coder, tracker, asset or Azure tool the step uses and does not list. Do not add a tool the step does not use. Most packages already list board and asset tools; `ga4-weekly-report` and `prd-discovery` list only one or two, so expect gaps there.
+  - Increase each changed package's `version` by one (`CONTRIBUTING.md` rule 4) and run `bin/validate`.
+  - **Flow version check.** `Templates::Planner#resolve_platform_tools!` looks platform tools up by name among the code tools, with no integration check, so a package that lists Coder tools still installs where Coder is not connected. A package that names a tool that an older supported Flow version lacks becomes `NotInstallable` there. The template format has no required-Flow-version field, so the developer checks that every name added exists in `Tools::Registry` on the oldest supported release, and does not add a tool introduced after it. All tool names in the task's list exist today, so no new name is expected to fail.
+- **Two pull requests.** The task description lists both, one line each: `**Pull request:** <flow url>` and `**Pull request (templates):** <flow-templates url>`. Code Review, Fix Tests and Fix Review cover both.
+- **Merge order.** `flow-templates` has no staging branch, and a merge to `main` is a release of the catalog to every installation, production included. Staging Deployment never merges the templates pull request. Release merges it **before** the flow pull request. Merging it earlier is safe: a package that lists platform tools works on the current platform too.
+- Add to `Templates::RepositoryValidator` (flow) a **warning** (not an error) when a step's text names a platform tool the step does not list. The check is a case-insensitive match of tool names and `{{tool:<id>}}` references in step, sub-step and agent instructions. This is in the flow pull request.
 
 ## 6. Testing Approach
 
-Tests follow `docs/testing.md`; model and service tests under `test/`, one frontend test. Use the existing feature-flag test helper (see `test/models/feature_flag_test.rb` and the helpers it uses) to switch the flag per company.
+Tests follow `docs/testing.md`; model and service tests under `test/`, one frontend test. There is no flag, so no test switches a mode.
 
 1. **The guard (new, `test/services/tools/plumbing_test.rb`).**
-   - Static: the names of the definitions in `Tools::Registry.definitions` that have at least one non-legacy rule are exactly `finish_session`, `fail_session`, `list_sub_steps`, `mark_sub_step`, `read_tool_result`, `get_config_item`. Every tool outside that list has only legacy rules or none.
-   - Dynamic, **flag on**, in a project with every integration connected (Coder, Azure DevOps, Slack, Teams, GitHub, a usable tracker), a tracker-started run, an attached Azure repository, an attached GitHub repository, an attached config item and an attached container tool: for a workflow-step session, a non-interactive agent session and an interactive agent session that attach nothing else, `available_tools` names are a subset of the six plumbing names. For a session that attaches nothing, no conditional plumbing applies, so the set is the four unconditional ones. This is the test that fails when a rule grants a tool.
+   - Static: the names of the definitions in `Tools::Registry.definitions` that have any `inject_when` rule are exactly `finish_session`, `fail_session`, `list_sub_steps`, `mark_sub_step`, `read_tool_result`, `get_config_item`.
+   - Dynamic, in a project with every integration connected (Coder, Azure DevOps, Slack, Teams, GitHub, a usable tracker), a tracker-started run, an attached Azure repository, an attached GitHub repository and custom tools in the project: for a workflow-step session, a non-interactive agent session and an interactive agent session that attach nothing, `available_tools` is exactly the four unconditional plumbing names. With a config item attached it adds `get_config_item`, with a container tool `read_tool_result`, and nothing else. This is the acceptance test, and it fails when a rule grants a tool.
    - A session that attaches tool X gets X and no other non-plumbing tool.
-   - **Flag off**: the same fixtures still serve the legacy tools (the flag is the only switch).
-2. **`DefinitionDSLTest` / `InjectionRules`:** every rule in `InjectionRules::LEGACY` exists in `RULES`.
-3. **Rewrite** `TerminalSessionAvailableToolsTest`: each case asserting injection (`board_*`/`chat_post_message` for workflow steps, Coder, Azure, tracker run, `refresh_github_token`, the custom-tool fallback) runs in both modes: injected with the flag off, not served without an attachment and served with one when the flag is on. Keep the plumbing cases (`finish_session`/`fail_session` now in interactive sessions too, `get_config_item`, `read_tool_result`).
+2. **`DefinitionDSLTest` / `InjectionRules`:** the deleted rules are gone from `RULES`; each remaining rule has a test.
+3. **Rewrite** `TerminalSessionAvailableToolsTest`: each case that asserted injection (`board_*`/`chat_post_message` for workflow steps, Coder, Azure, tracker run, `refresh_github_token`, the custom-tool fallback) now asserts the tool is not served without an attachment and is served with one. Keep the plumbing cases (`finish_session`/`fail_session` now in interactive sessions too, `get_config_item`, `read_tool_result`).
 4. **Rewrite** `Tools::RegistryTest` (`injectable covers…`; `grouping axes` counts; "Azure tools must not be offered in the picker" becomes the opposite, 17 attachable tools) and `TagCatalogTest`/`PickerGroupsTest` (Azure DevOps group visible). Add `user_attachable` for `refresh_github_token`.
 5. **Handlers:** `finish_session`/`fail_session` tests drop the "only non-interactive" refusal case and cover an interactive session.
-6. **MCP:** `McpControllerTest` / `Tools::MCPRequestHandler`, flag on: `tools/list` of a Coder-connected project's session without attached Coder tools lists no `coder_*`; `tools/call coder_ssh_exec` is refused as not entitled.
-7. **Migration (acceptance proof).** `test/migrations/` if the suite has the convention, else a service test of `Tools::LegacyInjection::Backfill` plus a test that the migration's inline copy yields the same links.
-   - **Equivalence test.** On fixtures covering each row of §5.1 (a workflow with a Coder integration, one with Azure repository, one tracker-bound, one with a GitHub repository, one with no custom tool, one with a custom tool attached, one under `inherit_all_project_resources`), compute `available_tools` names for each step session with the flag **off** before the backfill, then with the flag **on** after it. The sets are equal. This is the proof that existing workflows keep working.
-   - A step that is not reachable gets nothing; a System workflow is untouched; running twice adds no duplicate link; a company-scoped run touches only that company.
-8. **Existing tests that rely on injection** (`get_config_item_test`, `pull_request_tools_test`, `internal_tools/*_test`, `personal_mcp_test`, `integration/mcp_controller_test`): they keep passing with the flag off (default). Where a test is about the new rule, turn the flag on and attach the tool in setup. Find them with `rg "session_type: \"workflow_step\"|available_tools"` under `test/`.
-9. **Feature flag registry:** `test/config/feature_flags_registry_test.rb` already validates the new entry.
-10. **Frontend:** `ToolPicker.test.tsx`: the Azure DevOps section renders when the project has the connection.
+6. **MCP:** `McpControllerTest` / `Tools::MCPRequestHandler`: `tools/list` of a Coder-connected project's session without attached Coder tools lists no `coder_*`; `tools/call coder_ssh_exec` is refused as not entitled.
+7. **Migration (acceptance proof).** `test/migrations/` if the suite has the convention, else a test that loads the migration class and runs `up`.
+   - **Equivalence test.** A test-only oracle (`test/support/legacy_injection_oracle.rb`) encodes the old rules and the fallback as they were before this change. On fixtures covering each row of §5.1 (a workflow with a Coder integration, one with an Azure repository, one tracker-bound, one with a GitHub repository, one with no custom tool, one with a custom tool attached, one under `inherit_all_project_resources`), the oracle computes the tool names each step session would have been served. After `up`, the new `available_tools` names of the same step sessions equal that set. This is the proof that existing workflows keep working.
+   - A step that is not reachable gets nothing; a System workflow is untouched; running twice adds no duplicate link.
+8. **Existing tests that rely on injection** (`get_config_item_test`, `pull_request_tools_test`, `internal_tools/*_test`, `personal_mcp_test`, `integration/mcp_controller_test`): update them to attach the tool in setup. Find them with `rg "session_type: \"workflow_step\"|available_tools"` under `test/`.
+9. **Frontend:** `ToolPicker.test.tsx`: the Azure DevOps section renders when the project has the connection.
+10. **Templates repository:** `bin/validate` passes for every changed package.
 
 ## 7. Implementation Steps
 
-1. Declare `attached_tools_only` in `config/feature_flags.yml`; update `docs/architecture/feature-flags.md` only if it lists flags (it does not today).
-2. Rules: add `any_session`, add `InjectionRules::LEGACY`, delete `non_interactive_session`; switch the four tools' `inject_when` lines (`app/services/tools/injection_rules.rb`, `app/services/internal_tools/{finish_session,fail_session,list_sub_steps,mark_sub_step}.rb`).
-3. `Tools::Definition#inject?` skips legacy rules when the flag is on for `ctx.company`; `TerminalSession#available_tools` skips the fallback likewise; update the method comment.
-4. `finish_session` / `fail_session`: drop the interactive refusal and fix descriptions.
-5. Azure tools and `refresh_github_token`: `user_attachable` on; `TagCatalog` Azure entry visible with a new comment (§2.3).
-6. `Tools::LegacyInjection::Backfill`, the migration, the rake task (§5).
+Flow pull request:
+1. Rules: add `any_session`, delete the seven rules in §2.2 and their `inject_when` lines in all tool files; switch `finish_session`, `fail_session`, `list_sub_steps`, `mark_sub_step` to `any_session` (`app/services/tools/injection_rules.rb`, `app/services/internal_tools/*.rb`, the tool classes of the removed rules).
+2. `TerminalSession#available_tools`: delete the fallback; update the method comment.
+3. `finish_session` / `fail_session`: drop the interactive refusal and fix descriptions.
+4. Azure tools and `refresh_github_token`: `user_attachable` on; `TagCatalog` Azure entry visible with a new comment (§2.3).
+5. The migration (§5).
+6. `Templates::RepositoryValidator` warning (§5.2).
 7. Tests (§6).
 8. Builder and MCP guide text (`context_builders/aixle_builder.rb`, `tools/personal_mcp_guides.rb`, `personal_tools/list_project_tools.rb`): attach every tool the workflow needs.
 9. Docs (§8), `CHANGELOG.md` entry and release note.
-10. Templates repository task (§5.2).
 
-**Rollout** (operator, outside the code): deploy with the flag off and the migration run; the templates-repository change ships; per company, run the rake task, then turn the flag on with a reason; when every company is on, flip the default, then delete the flag, the legacy rules and the fallback in a follow-up PR.
+Templates pull request (§5.2), opened in the same task.
+
+**Release order:** merge the templates pull request; deploy flow (the migration runs in the migrate phase before the new code serves).
 
 ## 8. Docs to change
 
 - `docs/design/tool-execution.md`: §9 "Adding a New Tool" says what `inject_when` is for (plumbing only) and links this document.
-- `docs/project/context.md`: the **Workflow Tool** glossary row and the "Auto-injected internal tools" and "Integration-gated tools" bullets (lines ~459–469): only plumbing is automatic; `requires_integration` only hides a tool until the integration exists. Say that the legacy grants remain only for companies without `attached_tools_only`.
+- `docs/project/context.md`: the **Workflow Tool** glossary row and the "Auto-injected internal tools" and "Integration-gated tools" bullets (lines ~459–469): only plumbing is automatic; `requires_integration` only hides a tool until the integration exists. 
 - `docs/architecture/workflows.md`: internal tools section (~727–745) and the `share_asset` mention (~1041).
 - `docs/user-guide/mcp.md` line 25 (progress tools stay automatic; board tools do not), `docs/user-guide/workflows.md` (attach tools to steps).
 - Integration designs that rely on injection, each gets a note pointing here: `azure-devops-integration.md` (§ "injected, not picked", ~368–381), `task-tracker-integrations.md` §7.3, `teams-integration.md` (~772). `github-user-identity.md` D8 needs no change.
@@ -220,17 +190,17 @@ Tests follow `docs/testing.md`; model and service tests under `test/`, one front
 
 ## 9. Edge Cases & Risks
 
-- **Sessions in flight at deploy.** A workflow step session copies its resolved tools into `session.tools` at creation. With the flag, a flip for a company drops injected tools from that company's running sessions. Accepted (Alex), with no compatibility layer. Operators switch a company outside its active runs.
-- **Workflows created between the migration and the flip.** They rely on injection until the flip. The rake task before the flip covers them (§5).
+- **Sessions in flight at deploy.** Running sessions lose the injected tools once the new code serves them (the implementation checks whether a session's tool list is fixed at creation or resolved per call, and states the result in the pull request). Accepted (Alex, D8), with no compatibility layer.
+- **Window between the migration and the new code.** A workflow created by an old pod in that window relies on injection and gets no links. The window is the length of a rolling deploy. Accepted, no mitigation; the builder shows the missing tools and they can be attached.
+- **Catalog installs before the templates merge.** If the flow release went first, a template installed afterwards that lists no platform tools would have no tools. The release order (templates first) prevents it.
 - **Over-grant by migration.** Attaching everything the old rules served gives each step more tools than it may use. That is today's access, now explicit, visible and removable in the builder (D4). It is not a regression.
-- **Standalone sessions** (personal, API) carry their tool list in the creation request and persist no template, so nothing is migrated for them. People who relied on injection attach tools in the session form once the flag is on.
-- **Flag-off companies keep the leak.** See §2.5. The rollout plan and `remove_by` track it.
+- **Standalone sessions** (personal, API) carry their tool list in the creation request and persist no template, so nothing is migrated for them. People who relied on injection attach tools in the session form.
 - **Tool without a shadow row.** The migration skips tools with no `tools` row; the reconciler creates rows at boot and on first use, so a fresh install has nothing to migrate.
-- **Rolling deploy.** Old pods run the injection rules; new pods run them with the flag off by default. The migration only adds links, so both behave correctly.
-- **Chat reply path.** A chat-triggered run answers through `chat_post_message`. The migration attaches `chat_*` to every reachable step, so the reply path survives the flip.
+- **Chat reply path.** A chat-triggered run answers through `chat_post_message`. The migration attaches `chat_*` to every reachable step, so the reply path survives.
 - **Interactive `finish_session`.** An agent can now end an interactive session by itself. This is the requested behavior; verify the session-end path in §2.1.
 - **`inherit_all_project_resources`** remains an ambient grant of every attachable platform tool (D5).
-- **Security regression.** The §6.1 dynamic test with the flag on is the control: a rule that serves a non-plumbing tool fails CI.
+- **Templates repository rule "one template per pull request".** `CONTRIBUTING.md` asks for one template per pull request; this task changes up to six packages in one, as Alex decided. Maintainers may ask to split it.
+- **Security regression.** The §6.1 dynamic test is the control: a rule that serves a non-plumbing tool fails CI.
 
 ## 10. Decisions & Assumptions
 
@@ -241,15 +211,14 @@ Tests follow `docs/testing.md`; model and service tests under `test/`, one front
 | D3 | Azure tools become attachable and visible; picker section gated by `requires_integration`. | Task: "The Azure tools are hidden from the picker today" |
 | D4 | Migration attaches every tool the old rules would have served to the step (reachability only), including the custom-tool fallback. Granularity is the step. | Alex, comment 115079 |
 | D5 | `inherit_all_project_resources` is an explicit workflow-level attachment and is unchanged. | Alex, comment 115079 |
-| D6 | Catalog template packages are fixed in the templates repository before the flag is switched on; the `Templates::RepositoryValidator` warning stays. | Alex, comment 115079 |
+| D6 | The catalog templates change is a pull request in this task against `flow-templates`, merged by Release before the flow pull request. The validator warning stays. | Alex, comments 115079 and 115147 |
 | D7 | No production identifiers appear in this document, the migration output or the PR. | Alex, comment of 2026-11-25 |
-| D8 | Sessions running at deploy lose injected tools when the flag flips; no compatibility layer. | Alex, comment 115079 |
-| D9 | New behavior is behind company-scoped release flag `attached_tools_only`, default off, two read points. The migration, attachability, interactive `finish_session` and the sub-step tools are unconditional. | Alex, comment 115133; isolation assessed in §2.5 |
-| D10 | A per-company backfill rake task runs before each flip. | Assumption: closes the gap between the migration and the flip |
+| D8 | Sessions running at deploy lose injected tools; no compatibility layer. | Alex, comment 115079 |
+| D9 | No feature flag: the new behavior is unconditional, and the legacy rules and fallback are deleted in this change. | Alex, comment 115244 (replaces 115133) |
+| D10 | One migration at deploy attaches the formerly injected tools; no rake task and no backfill service. | Alex, comment 115244 |
 
 ## 11. Deferred Questions
 
 - **Should `inherit_all_project_resources` stop covering platform tools?** It is the last ambient path. Narrowing it needs its own migration and a product decision on what "inherit all" means. Deferred to a follow-up task.
 - **A recorded call log for app tools** would let a later cleanup trim the migrated grants to what is used. Out of scope.
 - **Per-tool permission levels** (read versus write board tools in the picker). Not asked for.
-- **Updating the catalog template packages** (§5.2) is a task in the templates repository.
