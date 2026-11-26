@@ -258,6 +258,26 @@ describe('Projects/Board/BoardPage', () => {
     expect(within(dialog).getByRole('button', { name: 'Create task' })).toBeInTheDocument();
   });
 
+  it('leaves the "n" and "/" hotkeys to an open task drawer, even with focus outside a field', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        selectedTask: makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100 }),
+        taskComments: [],
+        taskAssets: [],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+      },
+    });
+    await screen.findByRole('dialog');
+
+    fireEvent.keyDown(document.body, { key: 'n' });
+    fireEvent.keyDown(document.body, { key: '/' });
+
+    expect(screen.queryByRole('dialog', { name: 'Create task' })).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Search tasks')).not.toHaveFocus();
+  });
+
   // --- task card rendering branches ---
 
   it('renders the task-type badge, tags (with overflow) and comment count on a card', () => {
