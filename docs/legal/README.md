@@ -1,6 +1,6 @@
 # Legal documents
 
-The hosted product (`Deployment.saas?`) publishes three documents under `/legal`. A
+The hosted product (`Deployment.saas?`) publishes four documents under `/legal`. A
 self-hosted or AWS Marketplace installation publishes none of them: `/legal/*` answers
 404 there, and nobody is asked to accept anything.
 
@@ -9,8 +9,13 @@ self-hosted or AWS Marketplace installation publishes none of them: `/legal/*` a
 | Terms of Service (Aixle Standard Terms and Conditions, with the SLA, DPA and BAA as Exhibits A–C) | `/legal/terms_of_service` | `app/views/web/legal/terms_of_service.html.erb` | A company's representative, for the company: the person creating a workspace ticks the box on `/workspace/new`; for a company created any other way, or after a new version, the next admin to enter it |
 | Terms of Use | `/legal/terms_of_use` | `app/views/web/legal/terms_of_use.html.erb` | Every user, for themselves: on the workspace form when they create one, otherwise on their first sign-in, and again after a new version |
 | Privacy Policy | `/legal/privacy_policy` | `app/views/web/legal/privacy_policy.html.erb` | Nobody — it is a notice, not an agreement |
+| Subprocessors | `/legal/subprocessors` | `app/views/web/legal/subprocessors.html.erb` | Nobody — it is a notice, not an agreement |
 
-`/legal` lists them. The old `/privacy-policy` and `/terms-of-service` addresses redirect.
+`/legal` lists them. The Subprocessors page is the list Section 7.3 of the Data Processing
+Addendum points to, and where a new subprocessor is announced (15 days' notice): a vendor
+change updates the view and bumps its `version`, as below.
+
+The old `/privacy-policy` and `/terms-of-service` addresses redirect.
 
 ## How acceptance works
 

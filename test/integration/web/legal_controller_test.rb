@@ -15,6 +15,7 @@ class Web::LegalControllerTest < ActionDispatch::IntegrationTest
     {
       legal_terms_of_service_path => "Aixle Standard Terms and Conditions",
       legal_terms_of_use_path => "Aixle User Terms of Use",
+      legal_subprocessors_path => "Subprocessors",
       legal_privacy_policy_path => "Privacy Policy"
     }.each do |path, heading|
       get path
@@ -42,6 +43,22 @@ class Web::LegalControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_select ".legal-documents a", LegalDocument::ALL.size
+    assert_select ".legal-documents a[href='#{legal_subprocessors_path}']", "Subprocessors"
+  end
+
+  test "a signed-out visitor can read the list of subprocessors" do
+    with_mode(Deployment::SAAS)
+
+    get legal_subprocessors_path
+
+    assert_response :success
+    assert_select "table tr", 5
+    [ "Amazon Web Services, Inc.", "Stripe, Inc.", "Functional Software, Inc. (Sentry)",
+      "Slack Technologies, LLC" ].each do |subprocessor|
+      assert_select "td", subprocessor
+    end
+    assert_select ".legal-meta", /Last updated #{LegalDocument::SUBPROCESSORS.updated_on.strftime("%B %-d, %Y")}/
+    assert_select "a[href='#{legal_terms_of_service_path(anchor: "dpa-7-4")}']", "DPA §7.4"
   end
 
   test "the Terms of Service point at the documents where they are published" do
@@ -51,6 +68,7 @@ class Web::LegalControllerTest < ActionDispatch::IntegrationTest
 
     assert_select "a[href='https://flow.aixle.com/legal/terms_of_use']"
     assert_select "a[href='https://flow.aixle.com/legal/terms_of_service']"
+    assert_select "a[href='https://flow.aixle.com#{legal_subprocessors_path}']"
     assert_select "#exhibit-b", /Data Processing Addendum/
     assert_select "#exhibit-c", /Business Associate Agreement/
   end
@@ -62,16 +80,19 @@ class Web::LegalControllerTest < ActionDispatch::IntegrationTest
                                                     password: AuthHelper::TEST_PASSWORD,
                                                     password_confirmation: AuthHelper::TEST_PASSWORD))
 
-    get legal_terms_of_use_path
+    [ legal_terms_of_use_path, legal_subprocessors_path ].each do |path|
+      get path
 
-    assert_response :success
+      assert_response :success
+    end
   end
 
   test "an installation we do not host publishes none of them" do
     [ Deployment::SELF_HOSTED, Deployment::AWS_MARKETPLACE ].each do |mode|
       with_mode(mode)
 
-      [ legal_path, legal_terms_of_service_path, legal_terms_of_use_path, legal_privacy_policy_path ].each do |path|
+      [ legal_path, legal_terms_of_service_path, legal_terms_of_use_path, legal_privacy_policy_path,
+        legal_subprocessors_path ].each do |path|
         get path
 
         assert_response :not_found, "#{path} in #{mode}"

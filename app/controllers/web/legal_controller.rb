@@ -17,6 +17,7 @@ class Web::LegalController < Web::ApplicationController
   end
 
   def privacy_policy = show(LegalDocument::PRIVACY_POLICY)
+  def subprocessors = show(LegalDocument::SUBPROCESSORS)
   def terms_of_service = show(LegalDocument::TERMS_OF_SERVICE)
   def terms_of_use = show(LegalDocument::TERMS_OF_USE)
 

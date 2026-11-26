@@ -490,6 +490,7 @@ scope module: :web, defaults: { format: :html } do
   scope "legal", controller: "legal", as: "legal" do
     get "/", action: :index
     get "privacy_policy", action: :privacy_policy
+    get "subprocessors", action: :subprocessors
     get "terms_of_service", action: :terms_of_service
     get "terms_of_use", action: :terms_of_use
   end
