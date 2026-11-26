@@ -10,10 +10,17 @@ interface FileDropZoneProps {
 
 export function FileDropZone({ onFiles, hint, disabled = false }: FileDropZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const openPicker = () => {
+    if (!disabled) inputRef.current?.click();
+  };
 
   return (
     <>
       <Box
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        aria-disabled={disabled}
+        className="mantine-focus-auto"
         p="xl"
         ta="center"
         style={{
@@ -23,8 +30,11 @@ export function FileDropZone({ onFiles, hint, disabled = false }: FileDropZonePr
           opacity: disabled ? 0.6 : 1,
           transition: 'border-color 150ms',
         }}
-        onClick={() => {
-          if (!disabled) inputRef.current?.click();
+        onClick={openPicker}
+        onKeyDown={(e: React.KeyboardEvent) => {
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          e.preventDefault();
+          openPicker();
         }}
         onDragOver={(e: React.DragEvent) => {
           e.preventDefault();
