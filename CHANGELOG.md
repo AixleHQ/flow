@@ -24,6 +24,7 @@ governance, community health — carry none.
 - **Tasks**: the **Upload new** button in a card's Assets tab. The drop zone remains: drop files on it, or click it to select several files.
 
 ### Fixed
+- **Assets**: the file drop zone, in the Assets upload dialog and on a card's Assets tab, can be reached with Tab and opens the file picker with Enter or Space.
 - **Tasks**: pressing `n` or `/` while a task's drawer is open, with the cursor outside a field, no longer opens Create task over it or jumps to the board search.
 
 ## [1.20.0] - 2026-11-26
