@@ -46,12 +46,21 @@ class LegalDocument
       version: "2026-11-02",
       accepted_by: :nobody,
       summary: "What personal information Aixle Flow collects, why, who receives it, and the choices you have."
+    ),
+    new(
+      key: "subprocessors",
+      title: "Subprocessors",
+      version: "2026-11-26",
+      accepted_by: :nobody,
+      summary: "The service providers that may receive Client personal information from us, " \
+               "what each one does and where it processes it (Section 7 of the Data Processing Addendum)."
     )
   ].freeze
 
   TERMS_OF_SERVICE = ALL.find { |document| document.key == "terms_of_service" }
   TERMS_OF_USE = ALL.find { |document| document.key == "terms_of_use" }
   PRIVACY_POLICY = ALL.find { |document| document.key == "privacy_policy" }
+  SUBPROCESSORS = ALL.find { |document| document.key == "subprocessors" }
 
   class << self
     def find(key) = ALL.find { |document| document.key == key.to_s }

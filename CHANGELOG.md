@@ -14,6 +14,7 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
+- **Sign-in & onboarding**: the hosted product publishes its list of subprocessors at `/legal/subprocessors`, the page Section 7.3 of the Data Processing Addendum points to. It is public, listed on `/legal` and linked from the legal pages' footer.
 - **Tasks**: a card's Assets tab has a drop zone that takes several files at once, dropped or picked, so many files can be attached to a card in one go.
 
 ### Changed

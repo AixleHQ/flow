@@ -1,0 +1,16 @@
+<%= render "header", document: @document, heading: "Subprocessors" %>
+
+<p>This is the list of subprocessors that Section 7.3 of the <a href="<%= legal_terms_of_service_path(anchor: "dpa-7-3") %>">Data Processing Addendum</a> refers to: the service providers that may receive Client Personal Information from Dualboot Partners, LLC in providing Aixle Flow, what each one does, and where it processes that information.</p>
+<p>Before a new subprocessor begins processing Personal Information, we announce it on this page as Section 7.3 of the Data Processing Addendum describes.</p>
+
+<div class="legal-table"><table>
+<thead><tr><th>Subprocessor</th><th>Purpose</th><th>Location</th></tr></thead>
+<tbody>
+<tr><td>Amazon Web Services, Inc.</td><td>Hosting, database, file storage, transactional email, DNS</td><td>United States (us-east-1; backup copies in us-east-2)</td></tr>
+<tr><td>Stripe, Inc.</td><td>Card payment processing</td><td>United States</td></tr>
+<tr><td>Functional Software, Inc. (Sentry)</td><td>Error monitoring</td><td>United States</td></tr>
+<tr><td>Slack Technologies, LLC</td><td>Internal notifications to our support team (in-app feedback messages, new-workspace alerts)</td><td>United States</td></tr>
+</tbody>
+</table></div>
+
+<p>AI providers, code hosts and other services that a customer connects under its own accounts (for example Anthropic, OpenAI, AWS Bedrock, GitHub, Azure DevOps, Microsoft Teams) are client-directed services, not our subprocessors (<a href="<%= legal_terms_of_service_path(anchor: "dpa-7-4") %>">DPA §7.4</a>).</p>
