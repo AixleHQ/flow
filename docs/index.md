@@ -29,6 +29,7 @@ a document is added, removed, or moved here, update this index in the same chang
 
 ## System Design
 
+- **[design/session-integrations.md](./design/session-integrations.md)** — Integrations chosen per session (task #295): several integrations of one provider in a scope (Coder first), attached explicitly to workflows, steps and interactive sessions through resource links and a `session_integrations` table, named by `integration_id` in tools, and listed to the agent; what changes per provider, the behaviour-preserving backfill, and the order of tasks
 - **[design/tool-execution.md](./design/tool-execution.md)** — Tool execution strategy framework
 - **[design/meta-workflow.md](./design/meta-workflow.md)** — Aixle Builder: the original meta-workflow design, with a note on what ships (an interactive session served the personal MCP tools pinned to its project) and how its tools are authorized
 - **[design/agent-telemetry.md](./design/agent-telemetry.md)** — What each agent runtime sends to the platform's OpenTelemetry collector: every signal and content switch a session with full telemetry gets per CLI, what Flow's own usage reads, Grok's session headers, the lifecycle hooks that forward Kiro, Cursor and Antigravity events (with what was checked live), and the switch, on for projects exported to Aixle Insights
