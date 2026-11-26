@@ -10,7 +10,7 @@ class SelfHostedFontFilesTest < ActiveSupport::TestCase
 
   test "no view, frontend file or static page loads a font from Google" do
     files = Dir[Rails.root.join("{app/views,app/frontend}/**/*").to_s] + Dir[Rails.public_path.join("*.html").to_s]
-    offenders = files.select { |path| File.file?(path) && File.read(path).match?(/fonts\.(googleapis|gstatic)\.com/) }
+    offenders = files.select { |path| File.file?(path) && File.binread(path).match?(/fonts\.(googleapis|gstatic)\.com/) }
 
     assert_empty offenders.map { |path| Pathname(path).relative_path_from(Rails.root).to_s }
   end
