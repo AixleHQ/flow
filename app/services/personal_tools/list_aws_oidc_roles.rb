@@ -6,7 +6,7 @@ module PersonalTools
   class ListAwsOidcRoles < Base
     tool do
       display_name "List AWS Roles"
-      description "List the IAM roles of a project's AWS OIDC integration: the ids a workflow or a step " \
+      description "List the IAM roles of a project's AWS integration: the ids a workflow or a step " \
                   "attaches with aws_oidc_role_ids / base_aws_oidc_role_ids, each a profile the step's " \
                   "~/.aws/config gets. Says whether the integration is connected. Roles are added on the " \
                   "project's Integrations page, not here."
@@ -19,18 +19,12 @@ module PersonalTools
     def execute
       project = find_project!
       authorize!(project, :index?, policy: Web::Company::Projects::AwsOidcPolicy, project: project)
-      return success(project_id: project.id, enabled: false, connected: false, roles: []) unless enabled?(project)
-
       integration = Integration.find_by(project: project, provider: "aws_oidc")
-      success(project_id: project.id, enabled: true, connected: integration&.active? || false,
+      success(project_id: project.id, connected: integration&.active? || false,
               issuer_url: integration && AwsOidc::Issuer.url(integration), roles: roles(integration))
     end
 
     private
-
-    def enabled?(project)
-      Feature.enabled?(:aws_oidc, company: project.company)
-    end
 
     def roles(integration)
       return [] if integration.nil?

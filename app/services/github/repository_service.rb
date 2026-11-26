@@ -40,6 +40,23 @@ module Github
       nil
     end
 
+    # Whether the connection can read the repository's files, which a clone needs. A
+    # fine-grained token with only Metadata sees the repository (find_repo answers)
+    # and still gets a 403 from git. nil when GitHub could not be asked.
+    def contents_readable?(full_name)
+      client.commits(full_name, per_page: 1)
+      true
+    rescue Octokit::Conflict
+      true # an empty repository: there is nothing to read yet, and nothing was refused
+    rescue Octokit::Error => e
+      # TooManyRequests is a Forbidden too: a rate limit says nothing about access.
+      refused = e.is_a?(Octokit::NotFound) || (e.is_a?(Octokit::Forbidden) && !e.is_a?(Octokit::TooManyRequests))
+      return false if refused
+
+      Rails.logger.warn("[Github::RepositoryService] Could not check access to #{full_name}: #{e.message}")
+      nil
+    end
+
     def list_branches(full_name)
       paged { |c| c.branches(full_name, per_page: 100) }.map(&:name)
     rescue Octokit::Error => e

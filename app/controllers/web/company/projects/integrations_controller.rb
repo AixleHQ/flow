@@ -433,11 +433,8 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   # Everything the AWS OIDC dialog needs to generate a trust policy and show what used it
   # (docs/design/aws-oidc-integration.md §8). Nothing in it is a secret.
   def aws_oidc_props
-    return { enabled: false } unless Feature.enabled?(:aws_oidc, company: current_project.company)
-
     connection = Integration.find_by(project: current_project, provider: "aws_oidc")
     {
-      enabled: true,
       can_manage: Web::Company::Projects::AwsOidcPolicy.new(policy_context, current_project).manage?,
       connection: connection && aws_oidc_connection_props(connection)
     }

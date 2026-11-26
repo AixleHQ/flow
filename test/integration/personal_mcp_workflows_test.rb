@@ -543,6 +543,20 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     assert_match(/has no open draft/, text(missing))
   end
 
+  test "list_workflow_runs and get_workflow_run name the board task a run was started for" do
+    board = create(:board, project: @project)
+    task = create(:board_task, board: board, board_column: create(:board_column, board: board), title: "Fix login")
+    for_task = create(:workflow_run, workflow: @workflow, project: @project, user: @user, board_task: task)
+    loose = create(:workflow_run, workflow: @workflow, project: @project, user: @user)
+
+    rows = payload(call_tool("list_workflow_runs", { project_id: @project.id }))["runs"].index_by { |r| r["id"] }
+    shown = payload(call_tool("get_workflow_run", { project_id: @project.id, run_id: for_task.id }))
+
+    assert_equal [ task.number, "Fix login" ], rows.fetch(for_task.id).values_at("task_number", "task_title")
+    assert_equal [ task.number, "Fix login" ], shown.values_at("task_number", "task_title")
+    assert_equal [ nil, nil ], rows.fetch(loose.id).values_at("task_number", "task_title")
+  end
+
   test "trigger_workflow starts a run and list/get_workflow_run report it" do
     run_obj = @workflow.runs.create!(project: @project, user: @user, state: "pending")
     WorkflowService.stubs(:start).returns(run_obj)

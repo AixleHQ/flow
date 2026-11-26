@@ -10,8 +10,8 @@ identity provider that the customer's AWS account trusts, so a step assumes an I
 role through `AssumeRoleWithWebIdentity` and holds only one-hour credentials. No
 long-lived key exists on either side.
 
-It ships as a separate, project-level integration called **AWS OIDC**, behind a
-feature flag, and changes nothing for a project or a step that does not use it.
+It ships as a separate, project-level integration called **AWS OIDC**, and changes
+nothing for a project or a step that does not use it.
 
 ## 1. The problem
 
@@ -41,10 +41,14 @@ principal goes from that IAM user to the OIDC provider, and the user is deleted.
    GitLab CI (`id_tokens`), Terraform Cloud dynamic credentials and EKS (IRSA) use.
    No Flow-owned AWS account takes part, so it works the same on a self-hosted
    instance.
-2. **A separate integration, AWS OIDC, at project level.** Provider `aws_oidc` on
-   `Integration`, listed under Project Settings → Integrations, gated by the
-   `aws_oidc` feature flag. Named for the mechanism, not for AWS as a whole: other
-   AWS integrations may follow.
+2. **A separate integration at project level, shown as "AWS".** Provider `aws_oidc` on
+   `Integration`, listed under Project Settings → Integrations. The proposal named it
+   "AWS OIDC" in the UI, after the mechanism, in case other AWS integrations follow;
+   it shipped as plain "AWS" (decided 2026-11-26) until a second one exists. The
+   provider key, the code (`AwsOidc::`), the tables and the `/oidc/` issuer path keep
+   the mechanism's name. The proposal put it behind an `aws_oidc` feature flag; it shipped without one
+   (decided 2026-11-25, after the staging check in §12): nothing changes for a
+   project until someone connects it.
 3. **One issuer per integration.** `https://<host>/oidc/<issuer_key>`, a random key
    generated on connect, the way EKS gives each cluster its own issuer. The IAM
    OIDC provider in the customer's account is then bound to this one project's
@@ -135,8 +139,8 @@ and again before they expire. Nothing on Flow's side runs ahead of that.
   `issuer`, `jwks_uri` (`/oidc/<issuer_key>/jwks`), `response_types_supported`
   (`["id_token"]`), `subject_types_supported` (`["public"]`),
   `id_token_signing_alg_values_supported` (`["RS256"]`) and `claims_supported`.
-- **Visibility:** both endpoints answer 404 unless the integration is active and
-  the `aws_oidc` flag is on for its company. Disconnecting the integration
+- **Visibility:** both endpoints answer 404 unless the integration is active.
+  Disconnecting the integration
   therefore makes STS refuse every token for it: a kill switch that takes effect on
   the AWS side, not only in Flow.
 - **Why one issuer per integration.** With one instance-wide issuer, a trust policy
@@ -193,7 +197,11 @@ names the Flow session.
   added in the draft has none and uses `draft:workflow:<source id>:step:new-<draft step id>`.
 - **The project is not in `sub`.** The issuer already identifies it.
 
-A trust policy for one workflow, as the integration page would generate it:
+The integration page generates `workflow:*`, every workflow of the project, plus the
+verify subject: the issuer already names the project, and the builder's attachment
+decides which steps get the role, so naming workflows in AWS is a second lock an AWS
+administrator may add, not a requirement (decided 2026-11-26). Narrowed to one workflow,
+it looks like this:
 
 ```json
 {
@@ -332,13 +340,13 @@ Tuesday" from the Flow side; CloudTrail answers it from the AWS side.
 
 ## 8. The integration page
 
-Under Project Settings → Integrations, only with the `aws_oidc` flag on:
+Under Project Settings → Integrations:
 
 1. **Trust.** Issuer URL and audience, with copy buttons. (Terraform and CloudFormation
    snippets are left for later.)
 2. **Roles.** Name, ARN, region, session duration. For each role, the generated trust
-   policy, with a workflow picker that fills in the `sub` patterns and a checkbox
-   for the draft pattern.
+   policy: `workflow:*` by default, picked workflows' `sub` patterns with **Only specific
+   workflows**, and a checkbox for the draft pattern.
 3. **Verify** (per role). Signs a token with `sub` = `verify:integration:<id>`, calls
    `AssumeRoleWithWebIdentity` and then `sts:GetCallerIdentity`, and shows the
    assumed-role ARN. The credentials are dropped after that call and never shown.
@@ -360,7 +368,7 @@ new issuer.
 
 | STS says | Usual cause | Shown as |
 |---|---|---|
-| `InvalidIdentityToken`, "Couldn't retrieve verification key" | the issuer answers 404 (disconnected, flag off) or is unreachable (staging Basic auth, a self-hosted instance behind a VPN); the provider names another URL; the JWKS has no key with the token's `kid` | `IssuerUnreachableError`: "AWS could not get Flow's signing key from <issuer>" |
+| `InvalidIdentityToken`, "Couldn't retrieve verification key" | the issuer answers 404 (disconnected) or is unreachable (staging Basic auth, a self-hosted instance behind a VPN); the provider names another URL; the JWKS has no key with the token's `kid` | `IssuerUnreachableError`: "AWS could not get Flow's signing key from <issuer>" |
 | `InvalidIdentityToken`, "could not be validated" | `iss` is not the provider's URL; no OIDC provider for this issuer in that account; audience missing on the provider | `IdentityTokenError`, naming the account, issuer and audience to check |
 | `AccessDenied` | `sub` does not match the trust policy; tags sent and `sts:TagSession` missing | `TrustPolicyError`, naming the subject and the TagSession requirement |
 | `ValidationError` | `session_duration_seconds` above the role's maximum | `RoleConfigurationError` with AWS's message |
@@ -398,8 +406,7 @@ way Bedrock failures are surfaced today.
 ## 11. Rollout
 
 1. **Spike** against a real AWS account, settling the points in §12.
-2. **Build** behind `aws_oidc` (`config/feature_flags.yml`: `kind: release`,
-   `scope: company`, `default: false`, `client: true`).
+2. **Build.** Without a feature flag in the end (§2, decision 2).
 3. **Early access** for the team in §1, which asked to try it. Their role then only
    needs its trust principal changed.
 4. **Document and release**: a portal page under integrations and its
@@ -422,6 +429,12 @@ for `workflow:12:step:*` and the verify subject.
 | JWKS caching | STS fetches the keys when it verifies: a key published seconds earlier was accepted at once, and once the issuer answered 404, a token signed with a key STS had already used was refused. Disconnecting therefore stops every exchange immediately. `PUBLISH_LEAD` (one day) is kept as a margin, not because STS needs it. |
 | Wrong `iss`, unknown `kid`, unreachable issuer | `InvalidIdentityToken`; the last two with "Couldn't retrieve verification key" (§9). |
 | Expiry | A token 60 seconds past `exp` was still accepted: STS allows some clock skew. The 5-minute lifetime is not exact to the second. |
+
+End to end on staging, the same day: STS fetched an integration's JWKS through the public
+route aixle-infra#170 opened past the basic-auth prompt, Verify assumed the role, and a real
+Claude Code workflow step, in an image built from this change, listed its profiles and ran
+`aws sts get-caller-identity --profile <role>`, which answered with
+`assumed-role/<role>/flow-session-<id>`.
 
 Still open, for the first deployment: sessions on a self-hosted runner (the credential
 callback goes through the runner's callback proxy as the Bedrock one does, by the same

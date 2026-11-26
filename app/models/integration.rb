@@ -351,10 +351,10 @@ class Integration < ApplicationRecord
   # One AWS OIDC integration per project, and never company-wide: its issuer names
   # one project (docs/design/aws-oidc-integration.md §5.1).
   def aws_oidc_connection_is_scoped
-    return errors.add(:project, "is required for an AWS OIDC integration") if project_id.nil?
+    return errors.add(:project, "is required for an AWS integration") if project_id.nil?
 
     taken = Integration.where(provider: :aws_oidc, project_id: project_id).where.not(id: id).exists?
-    errors.add(:provider, "AWS OIDC is already connected for this project") if taken
+    errors.add(:provider, "AWS is already connected for this project") if taken
   end
 
   def assign_aws_oidc_issuer_key

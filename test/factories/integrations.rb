@@ -278,7 +278,7 @@ FactoryBot.define do
     trait :aws_oidc do
       provider { :aws_oidc }
       status { :active }
-      name { "AWS OIDC" }
+      name { "AWS" }
       project { association(:project, company: company, owner: association(:user, company: company)) }
     end
 

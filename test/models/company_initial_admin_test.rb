@@ -19,6 +19,13 @@ class CompanyInitialAdminTest < ActiveSupport::TestCase
     assert company.valid?, company.errors.full_messages.to_sentence
   end
 
+  test "a new company's initial admin needs a dotted domain" do
+    company = build(:company, initial_admin_email: "x@2005")
+
+    assert_not company.valid?
+    assert_equal [ "is invalid" ], company.errors[:initial_admin_email]
+  end
+
   test "a company without an initial admin, or one already saved, is not checked" do
     assert build(:company).valid?
 

@@ -74,7 +74,7 @@ interface Props {
   assets?: AssetPickerItem[];
   repositories?: Picker[];
   configItems?: ConfigItemPicker[];
-  /** Roles of the project's AWS OIDC integration; empty without one or without the flag. */
+  /** Roles of the project's AWS integration; empty without one. */
   awsOidcRoles?: AwsOidcRolePicker[];
   agentModels?: AgentModelsEntry[];
   runners?: RunnerSummary[];

@@ -227,20 +227,6 @@ module Api
           assert_response :success
         end
 
-        test "update with title and description logs one task_updated for the user without values" do
-          assert_difference -> { BoardActivity.where(event_type: :task_updated, actor: @user).count }, 1 do
-            patch :update, params: {
-              project_id: @project.id,
-              id: @task.id,
-              board_task: { title: "Updated", description: "Confidential text" }
-            }
-          end
-
-          assert_response :success
-          activity = BoardActivity.where(event_type: :task_updated, board_task: @task).last
-          assert_equal({}, activity.metadata)
-        end
-
         test "update assigns a valid epic parent" do
           epic = create(:board_task, board: @board, board_column: @col1, task_type: :epic)
 

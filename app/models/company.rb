@@ -505,7 +505,7 @@ class Company < ApplicationRecord
   # company nobody can get into.
   def initial_admin_invitable
     email = initial_admin_email.strip.downcase
-    if !email.match?(URI::MailTo::EMAIL_REGEXP)
+    if !email.match?(EmailAddress::FORMAT)
       errors.add(:initial_admin_email, :invalid)
     elsif User.exists?(email: email, super_admin: true)
       errors.add(:initial_admin_email, "belongs to a platform administrator, who cannot be a member of a company")

@@ -15,12 +15,8 @@ module AwsOidc
       ids = SessionConfigResolver.new(session).resolve_aws_oidc_role_ids
       return [] if ids.empty?
 
-      AwsOidcRole.for_project(session.project).where(id: ids).includes(integration: :company).order(:name)
-                 .select { |role| usable?(role) }
-    end
-
-    def usable?(role)
-      role.integration.active? && Feature.enabled?(:aws_oidc, company: role.integration.company)
+      AwsOidcRole.for_project(session.project).where(id: ids).includes(:integration).order(:name)
+                 .select { |role| role.integration.active? }
     end
 
     # Same variables and key as the Bedrock helper: one helper serves both, and a session

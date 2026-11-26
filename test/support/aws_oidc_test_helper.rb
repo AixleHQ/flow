@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# Builds the world an AWS OIDC exchange needs: a connected integration with the flag on,
-# a role, and a running workflow step session that has the role attached.
+# Builds the world an AWS OIDC exchange needs: a connected integration, a role, and a
+# running workflow step session that has the role attached.
 module AwsOidcTestHelper
   def aws_oidc_step_session(role_name: "prod-diag", attach: true)
     company = create(:company)

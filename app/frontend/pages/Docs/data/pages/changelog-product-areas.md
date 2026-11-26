@@ -60,7 +60,7 @@ they name a flow users would recognize.
 | **Connectors** | External tool servers agents can call, from a catalog or added by hand |
 | **Repositories** | Linked Git repos the agent can work in and push to |
 | **Trackers** | Task trackers the project works with — GitHub Projects, GitLab issues, Azure Boards, Jira, Linear, YouTrack — primary or read-only, mapped to board columns |
-| **Integrations** | Connected accounts: GitHub, GitLab, Bitbucket, Azure DevOps, Jira, Linear, YouTrack, Slack, Microsoft Teams, Coder, AWS OIDC |
+| **Integrations** | Connected accounts: GitHub, GitLab, Bitbucket, Azure DevOps, Jira, Linear, YouTrack, Slack, Microsoft Teams, Coder, AWS |
 
 ### Project — Admin
 

@@ -903,6 +903,15 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(screen.getByPlaceholderText('Select tools…')).toBeDisabled();
   });
 
+  it('offers no base AWS roles when the project has none', async () => {
+    renderAuthedPage(<BuilderPage />, { props: projectProps({ workflow: makeWorkflow(), awsOidcRoles: [] }) });
+
+    await userEvent.click(screen.getByRole('button', { name: /Base Resources/ }));
+
+    expect(await screen.findByRole('combobox', { name: 'Tools' })).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'AWS roles' })).not.toBeInTheDocument();
+  });
+
   // "Inherit all" never attaches a role, so the role picker stays usable while it is on.
   it('a base AWS role is sent in base_aws_oidc_role_ids on Save, with "inherit all" on', async () => {
     const workflow = makeWorkflow({ inheritAllProjectResources: true });

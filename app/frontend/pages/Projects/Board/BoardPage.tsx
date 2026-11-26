@@ -604,6 +604,10 @@ const BoardPage = () => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement)?.isContentEditable)
         return;
+      // An open dialog owns the keyboard even when focus is not in a field: it falls to the body when
+      // the button it was on unmounts (the tag editor's "+ Add"), and the rest of a tag typed into a
+      // task's edit would otherwise open Create task over it.
+      if ((e.key === 'n' || e.key === '/') && document.querySelector('[role="dialog"][aria-modal="true"]')) return;
 
       if (e.key === 'n' && !e.ctrlKey && !e.metaKey) {
         if (!canExecute) return;

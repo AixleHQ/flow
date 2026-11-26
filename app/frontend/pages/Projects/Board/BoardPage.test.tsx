@@ -258,6 +258,26 @@ describe('Projects/Board/BoardPage', () => {
     expect(within(dialog).getByRole('button', { name: 'Create task' })).toBeInTheDocument();
   });
 
+  it('leaves the "n" and "/" hotkeys to an open task drawer, even with focus outside a field', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        selectedTask: makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100 }),
+        taskComments: [],
+        taskAssets: [],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+      },
+    });
+    await screen.findByRole('dialog');
+
+    fireEvent.keyDown(document.body, { key: 'n' });
+    fireEvent.keyDown(document.body, { key: '/' });
+
+    expect(screen.queryByRole('dialog', { name: 'Create task' })).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Search tasks')).not.toHaveFocus();
+  });
+
   // --- task card rendering branches ---
 
   it('renders the task-type badge, tags (with overflow) and comment count on a card', () => {
@@ -520,7 +540,10 @@ describe('Projects/Board/BoardPage', () => {
     it('shows a rename that arrives from the server', () => {
       const { rerender } = renderAuthedPage(<BoardPage />, { props: drawerProps() });
 
-      inertiaState.pageProps = { ...inertiaState.pageProps, ...drawerProps({ title: 'Wire up SSO' }) };
+      inertiaState.pageProps = {
+        ...inertiaState.pageProps,
+        ...drawerProps({ title: 'Wire up SSO', updatedAt: '2026-06-25T00:01:00Z' }),
+      };
       rerender(<BoardPage />);
 
       expect(barTitle()).toHaveTextContent('Wire up SSO');
@@ -531,17 +554,22 @@ describe('Projects/Board/BoardPage', () => {
       const { rerender } = renderAuthedPage(<BoardPage />, { props: drawerProps() });
       const drawer = within(screen.getByRole('dialog'));
 
-      // Synchronous on purpose: the drawer's focus trap blurs the textarea on the next tick, which
-      // would close the editor before the rename is typed.
-      fireEvent.click(drawer.getAllByText('Wire up authentication')[1]);
-      const input = drawer.getByDisplayValue('Wire up authentication');
-      fireEvent.change(input, { target: { value: 'Local name' } });
-      fireEvent.keyDown(input, { key: 'Enter' });
+      await userEvent.click(drawer.getByRole('button', { name: 'Edit' }));
+      const input = drawer.getByRole('textbox', { name: 'Title' });
+      await userEvent.clear(input);
+      await userEvent.type(input, 'Local name');
+      await userEvent.click(drawer.getByRole('button', { name: 'Save' }));
       await waitFor(() => expect(barTitle()).toHaveTextContent('Local name'));
 
-      inertiaState.pageProps = { ...inertiaState.pageProps, ...drawerProps({ title: 'Local name' }) };
+      inertiaState.pageProps = {
+        ...inertiaState.pageProps,
+        ...drawerProps({ title: 'Local name', updatedAt: '2026-06-25T00:01:00Z' }),
+      };
       rerender(<BoardPage />);
-      inertiaState.pageProps = { ...inertiaState.pageProps, ...drawerProps({ title: 'Renamed elsewhere' }) };
+      inertiaState.pageProps = {
+        ...inertiaState.pageProps,
+        ...drawerProps({ title: 'Renamed elsewhere', updatedAt: '2026-06-25T00:02:00Z' }),
+      };
       rerender(<BoardPage />);
 
       expect(barTitle()).toHaveTextContent('Renamed elsewhere');
@@ -552,17 +580,22 @@ describe('Projects/Board/BoardPage', () => {
       const { rerender } = renderAuthedPage(<BoardPage />, { props: drawerProps() });
       const drawer = within(screen.getByRole('dialog'));
 
-      // Synchronous on purpose: the drawer's focus trap blurs the textarea on the next tick, which
-      // would close the editor before the rename is typed.
-      fireEvent.click(drawer.getAllByText('Wire up authentication')[1]);
-      const input = drawer.getByDisplayValue('Wire up authentication');
-      fireEvent.change(input, { target: { value: 'Local name' } });
-      fireEvent.keyDown(input, { key: 'Enter' });
+      await userEvent.click(drawer.getByRole('button', { name: 'Edit' }));
+      const input = drawer.getByRole('textbox', { name: 'Title' });
+      await userEvent.clear(input);
+      await userEvent.type(input, 'Local name');
+      await userEvent.click(drawer.getByRole('button', { name: 'Save' }));
       await waitFor(() => expect(barTitle()).toHaveTextContent('Local name'));
 
       inertiaState.pageProps = {
         ...inertiaState.pageProps,
-        ...drawerProps({ id: 2, number: 12, title: 'Render dashboard charts', boardColumnId: 200 }),
+        ...drawerProps({
+          id: 2,
+          number: 12,
+          title: 'Render dashboard charts',
+          boardColumnId: 200,
+          updatedAt: '2026-06-24T00:00:00Z',
+        }),
       };
       rerender(<BoardPage />);
 
@@ -860,16 +893,19 @@ describe('Projects/Board/BoardPage', () => {
   });
 
   describe('task details edit mode', () => {
+    const detailsTask = (task: Partial<BoardTask> = {}) =>
+      makeTask({
+        id: 1,
+        title: 'Wire up authentication',
+        boardColumnId: 100,
+        description: 'Editable description text',
+        ...task,
+      });
     const renderDetails = (props: Record<string, unknown> = {}) =>
       renderAuthedPage(<BoardPage />, {
         props: {
           ...populatedProps,
-          selectedTask: makeTask({
-            id: 1,
-            title: 'Wire up authentication',
-            boardColumnId: 100,
-            description: 'Editable description text',
-          }),
+          selectedTask: detailsTask(),
           taskComments: [],
           taskAssets: [],
           taskActivities: [],
@@ -887,8 +923,10 @@ describe('Projects/Board/BoardPage', () => {
       const drawer = within(screen.getByRole('dialog'));
       await userEvent.click(drawer.getByText('Editable description text'));
       await userEvent.dblClick(drawer.getByText('Editable description text'));
-      await userEvent.click(drawer.getByText('Wire up authentication'));
-      await userEvent.dblClick(drawer.getByText('Wire up authentication'));
+      for (const title of drawer.getAllByText('Wire up authentication')) {
+        await userEvent.click(title);
+        await userEvent.dblClick(title);
+      }
 
       expect(drawer.queryByRole('textbox', { name: 'Description' })).not.toBeInTheDocument();
       expect(drawer.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument();
@@ -924,7 +962,7 @@ describe('Projects/Board/BoardPage', () => {
       expect(url).toBe('/api/v1/projects/7/tasks/1');
       expect(JSON.parse((init as RequestInit).body as string)).toEqual({ boardTask: { title: 'Renamed task' } });
       await waitFor(() => expect(drawer.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument());
-      expect(drawer.getByText('Renamed task')).toBeInTheDocument();
+      expect(drawer.getAllByText('Renamed task')).toHaveLength(2);
       expect(drawer.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
     });
 
@@ -966,6 +1004,57 @@ describe('Projects/Board/BoardPage', () => {
 
       await waitFor(() => expect(drawer.getByRole('button', { name: 'Save' })).toBeEnabled());
       expect(drawer.getByRole('textbox', { name: 'Description' })).toHaveValue('Editable description text more');
+    });
+
+    it('shows a change made elsewhere during the edit and does not send it back on Save', async () => {
+      const fetchSpy = answerFetch({ 'PATCH /api/v1/projects/7/tasks/1': {} });
+      const { rerender } = renderDetails({ selectedTask: detailsTask({ tags: ['frontend'] }) });
+
+      const drawer = within(screen.getByRole('dialog'));
+      await userEvent.click(drawer.getByRole('button', { name: 'Edit' }));
+      inertiaState.pageProps = {
+        ...inertiaState.pageProps,
+        selectedTask: detailsTask({ tags: ['frontend', 'TD succeeded'], updatedAt: '2026-06-25T00:01:00Z' }),
+      };
+      rerender(<BoardPage />);
+      expect(drawer.getByText('TD succeeded')).toBeInTheDocument();
+
+      const title = drawer.getByRole('textbox', { name: 'Title' });
+      await userEvent.clear(title);
+      await userEvent.type(title, 'Renamed task');
+      await userEvent.click(drawer.getByRole('button', { name: 'Save' }));
+
+      await waitFor(() => expect(patchCalls(fetchSpy)).toHaveLength(1));
+      const [, init] = patchCalls(fetchSpy)[0];
+      expect(JSON.parse((init as RequestInit).body as string)).toEqual({ boardTask: { title: 'Renamed task' } });
+    });
+
+    it('cancels the edit on Escape in a text field, without asking to discard it', async () => {
+      const fetchSpy = answerFetch({});
+      renderDetails();
+
+      const drawer = within(screen.getByRole('dialog'));
+      await userEvent.click(drawer.getByRole('button', { name: 'Edit' }));
+      await userEvent.type(drawer.getByRole('textbox', { name: 'Title' }), ' v2');
+      await userEvent.keyboard('{Escape}');
+
+      expect(drawer.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument();
+      expect(screen.queryByText('Discard unsaved changes?')).not.toBeInTheDocument();
+      expect(drawer.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it('keeps the draft when Escape closes a dropdown', async () => {
+      renderDetails();
+
+      const drawer = within(screen.getByRole('dialog'));
+      await userEvent.click(drawer.getByRole('button', { name: 'Edit' }));
+      await userEvent.type(drawer.getByRole('textbox', { name: 'Title' }), ' v2');
+      await userEvent.click(drawer.getByRole('combobox', { name: 'Priority' }));
+      expect(await screen.findByRole('option', { name: 'Critical' })).toBeInTheDocument();
+      await userEvent.keyboard('{Escape}');
+
+      expect(drawer.getByRole('textbox', { name: 'Title' })).toHaveValue('Wire up authentication v2');
     });
 
     it('hides Edit from users who cannot execute', () => {

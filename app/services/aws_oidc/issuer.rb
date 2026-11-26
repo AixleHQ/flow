@@ -29,17 +29,12 @@ module AwsOidc
       }
     end
 
-    # Answers only while the integration is connected and its company has the flag:
-    # disconnecting is then a kill switch STS enforces, not just Flow.
+    # Answers only while the integration is connected: disconnecting is then a kill
+    # switch STS enforces, not just Flow.
     def find_active(issuer_key)
       return nil if issuer_key.blank?
 
-      integration = Integration.where(provider: :aws_oidc, status: :active)
-                               .find_by("settings->>'issuer_key' = ?", issuer_key)
-      return nil if integration.nil?
-      return nil unless Feature.enabled?(:aws_oidc, company: integration.company)
-
-      integration
+      Integration.where(provider: :aws_oidc, status: :active).find_by("settings->>'issuer_key' = ?", issuer_key)
     end
   end
 end

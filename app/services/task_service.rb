@@ -41,7 +41,7 @@ class TaskService
 
       return task unless task.save
 
-      record_activity(task.board, :task_updated, actor, task: task) if changes.any?
+      record_activity(task.board, :task_updated, actor, task: task, metadata: { changes: changes }) if changes.any?
       return task if to_column.nil?
 
       move(task: task, to_column: to_column, actor: actor)

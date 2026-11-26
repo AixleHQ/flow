@@ -191,7 +191,7 @@ class Web::Company::Projects::WorkflowsControllerTest < ActionDispatch::Integrat
     assert_not_includes names, outsider.name
   end
 
-  test "builder and index offer the project's AWS roles only with the aws_oidc flag on" do
+  test "builder and index offer the project's AWS roles and no other project's" do
     wf = create(:workflow, scope: @project)
     role = create(:aws_oidc_role, name: "prod-diag", role_arn: "arn:aws:iam::123456789012:role/prod-diag",
                                   region: "eu-west-1",
@@ -201,16 +201,21 @@ class Web::Company::Projects::WorkflowsControllerTest < ActionDispatch::Integrat
               company_project_workflows_path(@project) => "Projects/Workflows/WorkflowsPage" }
 
     pages.each do |path, component|
-      assert_equal [], deferred_prop(path, component: component, key: "awsOidcRoles")
+      assert_equal [ { "id" => role.id, "name" => "prod-diag", "roleArn" => "arn:aws:iam::123456789012:role/prod-diag",
+                       "accountId" => "123456789012", "region" => "eu-west-1" } ],
+                   deferred_prop(path, component: component, key: "awsOidcRoles")
     end
+  end
 
-    with_feature(:aws_oidc, true, company: @company) do
-      pages.each do |path, component|
-        assert_equal [ { "id" => role.id, "name" => "prod-diag", "roleArn" => "arn:aws:iam::123456789012:role/prod-diag",
-                         "accountId" => "123456789012", "region" => "eu-west-1" } ],
-                     deferred_prop(path, component: component, key: "awsOidcRoles")
-      end
-    end
+  test "a project without an AWS integration offers no AWS roles, even when another project has some" do
+    wf = create(:workflow, scope: @project)
+    other = create(:project, company: @company, owner: @user)
+    create(:aws_oidc_role, integration: create(:integration, :aws_oidc, company: @company, project: other))
+
+    assert_equal [], deferred_prop(builder_company_project_workflow_path(@project, wf),
+                                   component: "Projects/Workflows/BuilderPage", key: "awsOidcRoles")
+    assert_equal [], deferred_prop(company_project_workflows_path(@project),
+                                   component: "Projects/Workflows/WorkflowsPage", key: "awsOidcRoles")
   end
 
   test "create redirects on success" do

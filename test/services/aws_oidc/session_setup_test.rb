@@ -13,21 +13,19 @@ module AwsOidc
     end
 
     test "a step with a role gets the vending env; a session without one gets none" do
-      with_feature(:aws_oidc, true) do
-        env = SessionSetup.container_env(@session, url: "http://platform/cloud/aws/credentials")
+      env = SessionSetup.container_env(@session, url: "http://platform/cloud/aws/credentials")
 
-        assert_equal "http://platform/cloud/aws/credentials", env["AIXLE_CLOUD_CREDENTIALS_URL"]
-        assert_equal CloudAuth::SessionKey.generate(@session), env["AIXLE_CLOUD_KEY"]
+      assert_equal "http://platform/cloud/aws/credentials", env["AIXLE_CLOUD_CREDENTIALS_URL"]
+      assert_equal CloudAuth::SessionKey.generate(@session), env["AIXLE_CLOUD_KEY"]
 
-        bare = create(:terminal_session, :running, user: @world[:user], project: @world[:project])
-        assert_empty SessionSetup.container_env(bare, url: "http://platform/cloud/aws/credentials")
-      end
+      bare = create(:terminal_session, :running, user: @world[:user], project: @world[:project])
+      assert_empty SessionSetup.container_env(bare, url: "http://platform/cloud/aws/credentials")
     end
 
-    test "nothing is delivered while the flag is off" do
-      with_feature(:aws_oidc, false) do
-        assert_empty SessionSetup.roles(@session)
-      end
+    test "nothing is delivered while the integration is disconnected" do
+      @world[:integration].update!(status: "inactive")
+
+      assert_empty SessionSetup.roles(@session)
     end
 
     test "one role with nothing else claiming the default chain is also the default profile" do
@@ -56,9 +54,7 @@ module AwsOidc
       runtime = ContainerRuntime::FakeRuntime.new(agent_type: "claude_code")
       credential = create(:agent_credential, user: @world[:user], company: @world[:company], agent_type: "claude_code")
 
-      with_feature(:aws_oidc, true) do
-        SessionContextService.new("ctr1", @session, runtime: runtime).assemble(credential: credential)
-      end
+      SessionContextService.new("ctr1", @session, runtime: runtime).assemble(credential: credential)
 
       config = runtime.fs["/home/claude/.aws/config"]
       assert_includes config, "[default]"
@@ -75,9 +71,7 @@ module AwsOidc
                                                "credential_process" => "/usr/local/bin/aixle-aws-creds"
                                              } })
 
-      with_feature(:aws_oidc, true) do
-        SessionContextService.new("ctr1", @session, runtime: runtime).assemble(credential: credential)
-      end
+      SessionContextService.new("ctr1", @session, runtime: runtime).assemble(credential: credential)
 
       config = runtime.fs["/home/claude/.aws/config"]
       assert_includes config, "[profile aixle-bedrock]"

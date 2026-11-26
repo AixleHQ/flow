@@ -123,7 +123,7 @@ function RolesSection({ projectId, connection, canManage }: RolesProps) {
                 const verification = verifications[role.id];
                 return [
                   <Table.Tr key={role.id}>
-                    <Table.Td>
+                    <Table.Td style={{ whiteSpace: 'nowrap' }}>
                       <Text size="sm" fw={500}>
                         {role.name}
                       </Text>
@@ -133,10 +133,10 @@ function RolesSection({ projectId, connection, canManage }: RolesProps) {
                         {role.roleArn}
                       </Text>
                     </Table.Td>
-                    <Table.Td>
+                    <Table.Td style={{ whiteSpace: 'nowrap' }}>
                       <Text size="sm">{role.region}</Text>
                     </Table.Td>
-                    <Table.Td>
+                    <Table.Td style={{ whiteSpace: 'nowrap' }}>
                       <Text size="sm">{minutes(role.sessionDurationSeconds)}</Text>
                     </Table.Td>
                     {canManage && (
@@ -276,7 +276,7 @@ export function AwsOidcDialog({ opened, onClose, projectId, awsOidc }: Props) {
   const canManage = !!awsOidc.canManage;
 
   return (
-    <Modal opened={opened && !!connection} onClose={onClose} title="AWS OIDC" size="xl">
+    <Modal opened={opened && !!connection} onClose={onClose} title="AWS" size="xl">
       {connection && (
         <Stack gap="lg">
           {connection.status !== 'active' && (

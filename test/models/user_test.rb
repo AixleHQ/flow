@@ -20,6 +20,18 @@ class UserTest < ActiveSupport::TestCase
     assert user.reload.valid?
   end
 
+  test "an email whose domain has no dot is invalid" do
+    user = build(:user, email: "x@2005")
+    assert_not user.valid?
+    assert_includes user.errors[:email], "is invalid"
+  end
+
+  test "a malformed email reports a single error" do
+    user = build(:user, email: "foo")
+    assert_not user.valid?
+    assert_equal [ "is invalid" ], user.errors[:email]
+  end
+
   test "user is valid with zero memberships" do
     user = build(:user)
     assert user.valid?

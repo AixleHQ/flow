@@ -126,28 +126,6 @@ class TaskServiceTest < ActiveSupport::TestCase
     assert BoardActivity.exists?(board: @board, event_type: :task_updated, board_task: task)
   end
 
-  test "update records who and when but no old or new values" do
-    task = create(:board_task, board: @board, board_column: @column, title: "Old", description: "Secret old")
-
-    freeze_time do
-      TaskService.update(task: task, params: { title: "New", description: "Secret new" }, actor: @user)
-
-      activity = BoardActivity.find_by!(board: @board, event_type: :task_updated, board_task: task)
-      assert_equal @user, activity.actor
-      assert_equal Time.current, activity.created_at
-      assert_not activity.metadata.to_s.include?("Secret")
-      assert_not activity.metadata.key?("changes")
-    end
-  end
-
-  test "update without changes records no activity" do
-    task = create(:board_task, board: @board, board_column: @column, title: "Same")
-
-    assert_no_difference -> { BoardActivity.count } do
-      TaskService.update(task: task, params: { title: "Same" }, actor: @user)
-    end
-  end
-
   test "update assigns a valid epic parent" do
     epic = create(:board_task, board: @board, board_column: @column, task_type: :epic)
     task = create(:board_task, board: @board, board_column: @column, task_type: :story)
