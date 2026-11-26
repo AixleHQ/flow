@@ -20,6 +20,7 @@ import {
   Tooltip,
   UnstyledButton,
 } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import {
   IconAlertCircle,
   IconArchive,
@@ -73,7 +74,7 @@ import type TaskComment from 'types/generated/TaskComment';
 import type TaskStatistics from 'types/generated/TaskStatistics';
 import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 
-import { apiMutate } from 'shared/lib/apiFetch';
+import { ApiError, apiMutate, apiRequest } from 'shared/lib/apiFetch';
 import { formatDateTime, formatDateTimeShort } from 'shared/lib/formatDate';
 import { useLocalStorage } from 'shared/lib/hooks/useLocalStorage';
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
@@ -95,6 +96,7 @@ import {
   companyProjectTaskPath,
 } from 'shared/routes';
 import { CHART_SERIES } from 'shared/theme/chartPalette';
+import { FileDropZone } from 'shared/ui/FileDropZone';
 import { MarkdownLink } from 'shared/ui/MarkdownLink';
 
 import {
@@ -237,15 +239,52 @@ async function deleteTaskComment(projectId: number, taskId: number, commentId: n
   return deleted;
 }
 
-async function uploadTaskAsset(projectId: number, taskId: number, file: File) {
+const ASSET_UPLOAD_CONCURRENCY = 3;
+const LISTED_UPLOAD_FAILURES = 5;
+
+/** Resolves with why the file was refused, or null once it is attached. */
+async function postTaskAsset(projectId: number, taskId: number, file: File): Promise<string | null> {
   const formData = new FormData();
   formData.append('task_asset[name]', file.name);
   formData.append('task_asset[file]', file);
-  const saved = await apiMutate(apiV1ProjectTaskAssetsPath(projectId, taskId), {
-    method: 'POST',
-    body: formData,
-  });
-  if (saved) router.reload({ only: ['task_assets', 'task_activities'] });
+  try {
+    await apiRequest(apiV1ProjectTaskAssetsPath(projectId, taskId), { method: 'POST', body: formData });
+    return null;
+  } catch (error) {
+    return error instanceof ApiError ? error.message : 'The upload failed';
+  }
+}
+
+async function uploadTaskAssets(projectId: number, taskId: number, files: File[], onProgress: (done: number) => void) {
+  let next = 0;
+  let done = 0;
+  const failures: string[] = [];
+  const worker = async () => {
+    while (next < files.length) {
+      const file = files[next++];
+      const reason = await postTaskAsset(projectId, taskId, file);
+      if (reason) failures.push(`${file.name}: ${reason}`);
+      done += 1;
+      onProgress(done);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(ASSET_UPLOAD_CONCURRENCY, files.length) }, worker));
+  if (failures.length > 0) {
+    const hidden = failures.length - LISTED_UPLOAD_FAILURES;
+    notifications.show({
+      color: 'red',
+      title: files.length > 1 ? `${failures.length} of ${files.length} files failed to upload` : undefined,
+      message: (
+        <>
+          {failures.slice(0, LISTED_UPLOAD_FAILURES).map((failure, index) => (
+            <div key={`${index}:${failure}`}>{failure}</div>
+          ))}
+          {hidden > 0 && <div>and {hidden} more</div>}
+        </>
+      ),
+    });
+  }
+  router.reload({ only: ['task_assets', 'task_activities'] });
 }
 
 async function deleteTaskAsset(projectId: number, taskId: number, assetId: number) {
@@ -362,6 +401,9 @@ export function TaskDetailSidebar({
   const [deletingGateId, setDeletingGateId] = useState<number | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [assetUploadTotal, setAssetUploadTotal] = useState(0);
+  const [assetUploadDone, setAssetUploadDone] = useState(0);
+  const isUploadingAssets = assetUploadTotal > 0;
 
   // Comment drafts and the card's edit-mode draft are at stake; nothing in edit mode saves before Save.
   const editedComment = comments.find((c) => c.id === editingCommentId);
@@ -567,14 +609,27 @@ export function TaskDetailSidebar({
     [projectId, task],
   );
 
+  const handleAssetFiles = useCallback(
+    async (files: File[]) => {
+      if (!task || files.length === 0 || assetUploadTotal > 0) return;
+      setAssetUploadDone(0);
+      setAssetUploadTotal(files.length);
+      try {
+        await uploadTaskAssets(projectId, task.id, files, setAssetUploadDone);
+      } finally {
+        setAssetUploadTotal(0);
+      }
+    },
+    [projectId, task, assetUploadTotal],
+  );
+
   const handleUploadAsset = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file || !task) return;
-      await uploadTaskAsset(projectId, task.id, file);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      const files = Array.from(e.target.files ?? []);
+      e.target.value = '';
+      await handleAssetFiles(files);
     },
-    [projectId, task],
+    [handleAssetFiles],
   );
 
   const handleDeleteAsset = useCallback(
@@ -1719,11 +1774,20 @@ export function TaskDetailSidebar({
             </Box>
             {canExecute && (
               <>
-                <input ref={fileInputRef} type="file" hidden onChange={handleUploadAsset} />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  hidden
+                  aria-label="Upload files"
+                  onChange={handleUploadAsset}
+                />
                 <Button
                   size="compact-sm"
                   leftSection={<IconCloudUpload size={13} />}
                   onClick={() => fileInputRef.current?.click()}
+                  loading={isUploadingAssets}
+                  disabled={isUploadingAssets}
                   styles={{
                     root: {
                       background: 'transparent',
@@ -1739,6 +1803,20 @@ export function TaskDetailSidebar({
               </>
             )}
           </Box>
+
+          {canExecute && (
+            <Box mb="md">
+              <FileDropZone
+                onFiles={handleAssetFiles}
+                disabled={isUploadingAssets}
+                hint={
+                  isUploadingAssets
+                    ? `Uploading ${assetUploadDone} of ${assetUploadTotal}`
+                    : 'Max file size: 1 GB · Multiple files supported'
+                }
+              />
+            </Box>
+          )}
 
           {/* Asset list */}
           {(taskAssets ?? []).length === 0 ? (
