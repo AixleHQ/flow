@@ -57,7 +57,8 @@ module Sessions
     def self.secret_values_for(session)
       return [] if session.nil?
 
-      config_item_secrets(session) + UserTokenIssuance.token_values_for(session)
+      config_item_secrets(session) + UserTokenIssuance.token_values_for(session) +
+        AwsOidcCredentialIssuance.secret_values_for(session)
     rescue StandardError => e
       # A redactor that raises would take the whole log-collection step with it
       # and lose the log entirely. Failing closed here means "no redaction", so

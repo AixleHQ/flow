@@ -28,7 +28,7 @@ class Workflow < ApplicationRecord
 
   ALLOWED_CONFIG_KEYS = %w[
     base_tool_ids base_skill_ids base_mcp_server_ids
-    base_asset_ids base_repository_ids base_config_item_ids
+    base_asset_ids base_repository_ids base_config_item_ids base_aws_oidc_role_ids
     inherit_all_project_resources
   ].freeze
 
@@ -255,7 +255,8 @@ class Workflow < ApplicationRecord
   # base config items at all.
   BASE_RESOURCES = {
     "base_tool_ids" => :tools, "base_skill_ids" => :skills, "base_mcp_server_ids" => :mcp_servers,
-    "base_asset_ids" => :assets, "base_repository_ids" => :repositories
+    "base_asset_ids" => :assets, "base_repository_ids" => :repositories,
+    "base_aws_oidc_role_ids" => :aws_oidc_roles
   }.freeze
 
   def base_resource_ids_belong_to_project

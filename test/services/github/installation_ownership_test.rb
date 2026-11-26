@@ -39,6 +39,15 @@ module Github
       assert_not InstallationOwnership.enforced?
     end
 
+    test "sends a person to GitHub's authorization of the App, which returns to the redirect URI with the state" do
+      url = URI(InstallationOwnership.authorize_url(redirect_uri: "https://flow.example.com/company/integrations/github_setup",
+                                                    state: "signed+state=="))
+
+      assert_equal "https://github.com/login/oauth/authorize", "#{url.scheme}://#{url.host}#{url.path}"
+      assert_equal({ "client_id" => "Iv1.client", "redirect_uri" => "https://flow.example.com/company/integrations/github_setup",
+                     "state" => "signed+state==" }, Rack::Utils.parse_query(url.query))
+    end
+
     test "confirms an installation the installing user can see" do
       stub_code_exchange
       stub_user_installations([ 111, 222 ])

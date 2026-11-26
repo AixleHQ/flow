@@ -45,7 +45,7 @@ module Oauth
         scopes: "",
         oauth_app: -> { app_from_settings(:github) },
         owner_types: %w[User],
-        after_connect: ->(credential) { Github::UserConnection.record_identity!(credential) }
+        fetch_identity: ->(access_token) { Github::UserConnection.fetch_identity(access_token) }
       },
       # A person's own GitLab account, through the deployment's GitLab OAuth app
       # (docs/design/gitlab-user-identity.md §2.2). The endpoints and the issuer follow
@@ -60,7 +60,7 @@ module Oauth
           { client_id: Gitlab::AppConfig.oauth_client_id, client_secret: Gitlab::AppConfig.oauth_client_secret }
         },
         owner_types: %w[User],
-        after_connect: ->(credential) { Gitlab::UserConnection.record_identity!(credential) },
+        fetch_identity: ->(access_token) { Gitlab::UserConnection.fetch_identity(access_token) },
         trust_endpoint_host: true
       },
       # A person's own Bitbucket Cloud account, through the deployment's OAuth client
@@ -78,7 +78,7 @@ module Oauth
         },
         owner_types: %w[User],
         client_auth: :basic,
-        after_connect: ->(credential) { Bitbucket::UserConnection.record_identity!(credential) }
+        fetch_identity: ->(access_token) { Bitbucket::UserConnection.fetch_identity(access_token) }
       }
     }.freeze
 
@@ -128,13 +128,25 @@ module Oauth
       allowed.nil? || allowed.include?(owner.class.name)
     end
 
-    # Runs the provider's hook, if it has one, once a credential is stored. The hook
-    # may raise Oauth::TokenExchangeError to fail the connection.
-    def after_connect(provider, credential)
-      hook = REGISTRY.dig(provider.to_s, :after_connect)
+    # The account's identity for a person's own connection, fetched with the new access
+    # token BEFORE the credential is stored: { metadata_key => identity }, to be stored
+    # with the token in one save. nil for a provider with no such hook (Sentry, Railway,
+    # MCP servers). Raises Oauth::TokenExchangeError when the identity cannot be fetched,
+    # which fails the connection with nothing stored and the previous credential untouched.
+    def fetch_identity(provider, access_token)
+      hook = REGISTRY.dig(provider.to_s, :fetch_identity)
       return unless hook
 
-      hook.call(credential)
+      { OauthCredential::IDENTITY_FIELDS.fetch(provider.to_s).fetch(:metadata_key) => hook.call(access_token) }
+    end
+
+    # The issuer and client id the deployment is configured with now for a static
+    # provider, or nil when it has no client id. Reads the settings only: it creates no
+    # OauthClient row (#client_for does).
+    def current_client_ref(provider)
+      cfg = config(provider)
+      client_id = cfg.fetch(:oauth_app).call[:client_id].presence
+      client_id && { issuer: cfg[:issuer], client_id: client_id }
     end
 
     # Reconcile and return the OauthClient for a static provider.

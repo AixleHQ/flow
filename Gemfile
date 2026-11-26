@@ -188,23 +188,23 @@ group :test do
   gem "site_prism"
 end
 
-gem "shrine", "~> 3.10"
+gem "shrine", "~> 3.11"
 # Content types, for Shrine's determine_mime_type analyzer and the code that labels
 # session logs and step outputs. Nothing else requires it: the app does not load
 # Active Storage, which would.
 gem "marcel", "~> 1.0"
-gem "aws-sdk-s3", "~> 1.242"
+gem "aws-sdk-s3", "~> 1.245"
 
 # Bedrock runtime, for the cloud-connection health check: the only way to tell a user
 # their permission set cannot actually invoke a model is to try. Claude Code hides
 # Bedrock errors, so without this the failure surfaces as an agent that never answers.
 # (STS, SSO and SSO-OIDC clients already ship inside aws-sdk-core.)
-gem "aws-sdk-bedrockruntime", "~> 1.95"
+gem "aws-sdk-bedrockruntime", "~> 1.98"
 
 # Bedrock control plane, for listing the inference profiles an account can actually invoke.
 # That list is the only truthful model catalogue for a Bedrock connection — it includes the
 # account's own application inference profiles, which is what enterprise deployments pin.
-gem "aws-sdk-bedrock", "~> 1.105"
+gem "aws-sdk-bedrock", "~> 1.108"
 
 # AWS Marketplace metering. Only an installation bought through Marketplace ever
 # calls it, and only from the pod whose service account carries the role.

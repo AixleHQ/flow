@@ -345,6 +345,33 @@ class SessionsRunsFeedTest < ActiveSupport::TestCase
     assert_equal [ [ "run", run.id ] ], kinds_and_ids(page)
   end
 
+  def board_tasks(count)
+    board = create(:board, project: @project)
+    column = create(:board_column, board: board)
+    Array.new(count) { |i| create(:board_task, board: board, board_column: column, title: "Task #{i}") }
+  end
+
+  test "task filter keeps the runs started for that task and drops standalone sessions" do
+    standalone
+    task, other = board_tasks(2)
+    run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, board_task: task)
+    create(:workflow_run, workflow: @workflow, project: @project, user: @user, board_task: other)
+    create(:workflow_run, workflow: @workflow, project: @project, user: @user)
+
+    page = feed(filters: { task_number: task.number.to_s }).page(page: 1, limit: 10)
+
+    assert_equal [ [ "run", run.id ] ], kinds_and_ids(page)
+  end
+
+  test "task_options lists only tasks this project has runs for, newest first" do
+    first, second, _idle = board_tasks(3)
+    create(:workflow_run, workflow: @workflow, project: @project, user: @user, board_task: first)
+    create_list(:workflow_run, 2, workflow: @workflow, project: @project, user: @user, board_task: second)
+
+    assert_equal [ { number: second.number, title: "Task 1" }, { number: first.number, title: "Task 0" } ],
+                 feed.task_options
+  end
+
   test "workflow_options lists only workflows this project has run" do
     create(:workflow, scope: @project, name: "Never run")
     create(:workflow_run, workflow: @workflow, project: @project, user: @user)

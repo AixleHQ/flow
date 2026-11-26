@@ -91,6 +91,20 @@ module PersonalTools
       assert_equal [ mine.id ], ids(execute(created_from: "2026-11-16", created_until: "2026-11-22"))
     end
 
+    test "task_number narrows the listing to the runs started for that board task" do
+      board = create(:board, project: @project)
+      column = create(:board_column, board: board)
+      task, other = create_list(:board_task, 2, board: board, board_column: column)
+      for_task = run_with_step(board_task: task)
+      run_with_step(board_task: other)
+      run_with_step
+
+      listed = payload(execute(task_number: task.number))["runs"]
+
+      assert_equal [ [ for_task.id, task.number, task.title ] ],
+                   listed.map { |r| r.values_at("id", "task_number", "task_title") }
+    end
+
     test "an unknown state or sort, and an unreadable day, are refused" do
       assert_match(/queued, running, completed, failed, cancelled, pending, all/, execute(state: "done")[:stderr])
       assert_match(/created_at, cost_cents/, execute(sort: "name")[:stderr])

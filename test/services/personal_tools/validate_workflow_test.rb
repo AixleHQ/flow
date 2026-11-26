@@ -42,6 +42,19 @@ module PersonalTools
       assert validate["warnings"].any? { |w| w.include?("no agent") }
     end
 
+    test "reports an AWS role whose integration is no longer active" do
+      integration = create(:integration, :aws_oidc, company: @company, project: @project)
+      role = create(:aws_oidc_role, integration: integration)
+      create(:step, workflow: @workflow, name: "Diagnose", instructions: "Read the logs", aws_oidc_role_ids: [ role.id ])
+
+      assert_empty validate["errors"]
+
+      integration.update!(status: :inactive)
+
+      assert_includes validate["errors"],
+                      "Step 'Diagnose' links aws oidc role #{role.id}, which is missing, disabled or not in this project"
+    end
+
     # The trigger is saved first: a step whose auto-run goes off later is what
     # the save-time rule on the trigger cannot catch.
     test "an unattended trigger requires every step to allow non-interactive runs" do

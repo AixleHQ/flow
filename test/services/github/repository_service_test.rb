@@ -92,6 +92,22 @@ module Github
       assert_equal false, result[:is_private] # rubocop:disable Minitest/RefuteFalse
     end
 
+    # A clone needs Contents. A fine-grained token with only Metadata still sees the
+    # repository, so the check reads its history: 409 is an empty repository.
+    { 200 => true, 409 => true, 403 => false, 404 => false, 429 => nil, 500 => nil }.each do |status, expected|
+      test "contents_readable? is #{expected.inspect} when GitHub answers #{status} to the history" do
+        body = status == 200 ? [].to_json : { message: "status #{status}" }.to_json
+        stub_request(:get, "https://api.github.com/repos/org/app/commits?per_page=1")
+          .to_return(status: status, headers: { "Content-Type" => "application/json" }, body: body)
+
+        if expected.nil?
+          assert_nil Github::RepositoryService.new(@integration).contents_readable?("org/app")
+        else
+          assert_equal expected, Github::RepositoryService.new(@integration).contents_readable?("org/app")
+        end
+      end
+    end
+
     test "find_repo returns nil when the repo is not found" do
       stub_request(:get, "https://api.github.com/repos/org/nonexistent")
         .to_return(

@@ -19,7 +19,8 @@ module ProjectOwnedReferences
            .or(Asset.where(scope_type: "Company", scope_id: project.company_id))
     },
     repositories: ->(project) { Repository.for_project(project) },
-    config_items: ->(project) { ConfigItem.for_project(project) }
+    config_items: ->(project) { ConfigItem.for_project(project) },
+    aws_oidc_roles: ->(project) { AwsOidcRole.for_project(project) }
   }.freeze
 
   # `lenient:` passes an id whose row is gone, as TenantScope.foreign_existing_ids

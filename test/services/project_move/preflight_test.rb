@@ -90,4 +90,31 @@ class ProjectMove::PreflightRunnersTest < ActiveSupport::TestCase
     assert preflight.movable?, preflight.blockers.to_sentence
     assert_equal({ "runs" => 1, "sessions" => 1 }, preflight.to_h["cleared_runner_references"])
   end
+
+  test "a GitHub installation the source still holds elsewhere is switched off, and the target cannot take it" do
+    connection = github_app_connection("4242", company: @s.source, project: @s.project)
+    github_app_connection("4242", company: @s.source)
+
+    reason = ProjectMove::Preflight.new(project: @s.project, target: @s.target).deactivated_integrations.to_h[connection]
+
+    assert_includes reason, "#{@s.target.name} cannot connect it again while #{@s.source.name} keeps it."
+  end
+
+  test "with installation owners verified, a GitHub installation can serve both companies and stays connected" do
+    connection = github_app_connection("4242", company: @s.source, project: @s.project)
+    github_app_connection("4242", company: @s.source)
+    Github::InstallationOwnership.stubs(:enforced?).returns(true)
+
+    preflight = ProjectMove::Preflight.new(project: @s.project, target: @s.target)
+
+    assert_not_includes preflight.deactivated_integrations.to_h, connection
+  end
+
+  private
+
+  def github_app_connection(installation_id, **attributes)
+    integration = build(:integration, :github, :active, **attributes)
+    integration.credentials_data = { installation_id: installation_id }
+    integration.tap(&:save!)
+  end
 end

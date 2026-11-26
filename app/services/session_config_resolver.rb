@@ -24,6 +24,7 @@ class SessionConfigResolver
       skill_ids: resolve_skill_ids,
       mcp_server_ids: resolve_mcp_server_ids,
       config_item_ids: resolve_config_item_ids,
+      aws_oidc_role_ids: resolve_aws_oidc_role_ids,
       repository_ids: resolve_repository_ids,
       input_asset_ids: resolve_input_asset_ids,
       mode: resolve_mode,
@@ -41,6 +42,7 @@ class SessionConfigResolver
       skills: build_resource_breakdown(:skill_ids),
       mcp_servers: build_resource_breakdown(:mcp_server_ids),
       config_items: config_item_breakdown,
+      aws_oidc_roles: aws_oidc_role_breakdown,
       input_assets: build_input_asset_breakdown,
       repositories: build_repository_breakdown,
       mode: resolve_mode,
@@ -72,6 +74,15 @@ class SessionConfigResolver
   # through the server, so it is audited, redacted and listed like any other.
   def resolve_config_item_ids
     (attached_config_item_ids + mcp_referenced_config_item_ids).uniq
+  end
+
+  # Workflow steps only, and only by an explicit pick: `inherit_all_project_resources`
+  # does not reach roles, because a role is production access
+  # (docs/design/aws-oidc-integration.md §3, §7.2).
+  def resolve_aws_oidc_role_ids
+    return [] if standalone_session?
+
+    ((workflow&.base_aws_oidc_role_ids || []) + (step&.aws_oidc_role_ids || [])).uniq
   end
 
   def mcp_referenced_config_item_ids
@@ -241,6 +252,15 @@ class SessionConfigResolver
   end
 
   # --- Breakdown helpers for traceability ---
+
+  def aws_oidc_role_breakdown
+    return { from_session_direct: [], resolved: [] } if standalone_session?
+
+    from_base = workflow&.base_aws_oidc_role_ids || []
+    from_step = step&.aws_oidc_role_ids || []
+    { from_project_inherit_all: [], from_workflow_base: from_base, from_step: from_step,
+      resolved: (from_base + from_step).uniq }
+  end
 
   def resolve_agent_runtime_source
     return "session_direct" if standalone_session?

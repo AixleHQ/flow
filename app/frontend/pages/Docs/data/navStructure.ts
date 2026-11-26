@@ -71,6 +71,7 @@ export const NAV_STRUCTURE: NavSection[] = [
       { slug: 'slack', label: 'Slack' },
       { slug: 'teams', label: 'Microsoft Teams' },
       { slug: 'coder', label: 'Coder' },
+      { slug: 'aws', label: 'AWS' },
       { slug: 'configuration', label: 'Configuration' },
       { slug: 'configuring-sso', label: 'Configuring sign-in methods' },
     ],

@@ -1,4 +1,4 @@
-// Package docker is the host runner's use of the Docker Engine API, through the
+// Package docker is the machine runner's use of the Docker Engine API, through the
 // official Go SDK (github.com/moby/moby/client): the preflight's daemon checks,
 // the agent container and its image (`container.start` / `container.stop`), the
 // callback proxy's sidecar next to it, the session ops run against it, and

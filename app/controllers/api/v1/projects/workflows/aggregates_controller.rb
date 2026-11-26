@@ -15,7 +15,7 @@ module Api
             { input_asset_specs: %i[name asset_type required],
               output_asset_specs: %i[name asset_type required name_pattern],
               tool_ids: [], mcp_server_ids: [], skill_ids: [], asset_ids: [], repository_ids: [],
-              config_item_ids: [], depends_on_step_ids: [],
+              config_item_ids: [], aws_oidc_role_ids: [], depends_on_step_ids: [],
               sub_steps: %i[id name instructions required] }
           ].freeze
 

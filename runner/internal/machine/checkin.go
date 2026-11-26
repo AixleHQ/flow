@@ -1,4 +1,4 @@
-package host
+package machine
 
 import (
 	"context"
@@ -19,7 +19,7 @@ type CheckInGateway interface {
 // logs it and starts its ops loop without one.
 const DefaultCheckInAttempts = 5
 
-// Checker is the host runner's check-in after a start (PROTOCOL.md §5.9): the
+// Checker is the machine runner's check-in after a start (PROTOCOL.md §5.9): the
 // machine's os, arch and facts, and, in the request's X-Aixle-Runner-Version, the
 // version it runs now, which a machine that updated itself has moved on from the
 // one it registered with.

@@ -325,7 +325,7 @@ func TestResumeServesARunningSessionsPortsAgain(t *testing.T) {
 	sidecarDial(t, p, ports)
 	h.start(h.env, map[string]any{"tunnel": tunnelPayload(ports)})
 
-	// A restarted host runner: nothing is served until Resume, and the same daemon runs on.
+	// A restarted machine runner: nothing is served until Resume, and the same daemon runs on.
 	restarted := &tunnel.Serving{}
 	h.env.Tunnel = restarted
 	h.env.Proxy = p

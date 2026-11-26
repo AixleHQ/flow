@@ -56,7 +56,7 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
       recent_activities: InertiaRails.defer {
         board.board_activities.includes(:actor, :board_task)
              .order(created_at: :desc).limit(20)
-             .map { |a| BoardActivityResource.new(a).to_h }
+             .map { |a| BoardActivityResource.new(a, params: { without_changes: true }).to_h }
       },
       **task_detail_props(task)
     }

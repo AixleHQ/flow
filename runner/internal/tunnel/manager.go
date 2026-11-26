@@ -1,4 +1,4 @@
-// Package tunnel is the host runner's end of the interactive tunnel
+// Package tunnel is the machine runner's end of the interactive tunnel
 // (docs/design/agent-runtimes/runner-relay.md §3; runner/protocol/PROTOCOL.md §8): it
 // keeps one WebSocket to the platform's runner-relay while the machine holds a
 // session. The frames and the multiplexer are runner/protocol/tunnel's.

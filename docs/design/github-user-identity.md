@@ -652,10 +652,15 @@ in adapter contract tests.
   expiration is on under **Optional Features → User-to-server token expiration → Opt-in**.
   The installation check is a separate opt-in (`GITHUB_APP_VERIFY_INSTALLATION_OWNER`,
   off by default): the client credentials alone enable only connecting accounts. With
-  the check on, "Request user authorization (OAuth) during installation" is on, and
-  `/company/integrations/github_setup` must be the **first** Redirect URI, because GitHub
-  then makes the Setup URL unavailable and sends installs to the first one. Staging and
-  aixle.com leave the check off, so installing through the Setup URL keeps working.
+  the check on, `/company/integrations/github_setup` must be one of the Redirect URIs.
+  *Changed 2026-11-25:* GitHub sends no `code` when an existing installation is
+  configured (`setup_action=update`), even with "Request user authorization (OAuth)
+  during installation" on, so a second company could never connect an organization
+  that already had the App. The setup callback now sends a person who arrives without
+  a code through GitHub's authorization of the App (redirect back to
+  `/company/integrations/github_setup`, installation id in the signed state) and checks
+  the code it returns. "Request user authorization (OAuth) during installation" is no
+  longer needed. Staging and aixle.com leave the check off.
 - **R4. Refresh-token rotation.** GitHub refresh tokens are single use. `RefreshLease`
   and the "only mark an error if the stored refresh token was the one sent" rule in
   `refresh_leased!` already handle concurrent refreshes.
@@ -701,6 +706,23 @@ in adapter contract tests.
 | D12 | The platform does not set the commit identity, sign-off or `gh` credentials for the session. It returns the identity, and the instructions apply it. | Task: "a workflow's instructions decide how to use it" |
 | D14 | The tools read the session's user through one private helper, `InternalTools::Base#session_user`, so a search for it finds every reader. Readers outside the tools (container strategies, `SessionService`, resources) keep reading `session.user` directly. | Accepted in Alex's second review, 2026-11-11 |
 | D15 | `workflow_run.user` readers that describe the run, not a session (`WorkflowService` retry and run activity, `Chat::StatusCard`, `PersonalTools::Base`), stay on it. | Accepted in Alex's second review, 2026-11-11 |
+
+### Current client only, and a failed connect stores nothing (#275)
+
+Two rules apply to every provider with a person's own connection (GitHub, GitLab, Bitbucket),
+and they supersede anything above that says otherwise:
+
+- **Only the current client's credentials count.** "Current" is the `OauthClient` with the
+  issuer and client id the deployment is configured with now (`Oauth::Providers.current_client_ref`).
+  `OauthCredential.on_other_client` / `#on_other_client?` own the rule. A credential of another
+  client is not listed, not handed out by the `*_user_token` tools, and not refreshed by the sweep
+  or `Oauth::TokenService.fresh`: it lapses. Disconnect still deletes all of the person's
+  credentials for the provider, and revokes at the provider only those of the current client.
+- **A failed connect stores nothing.** The `after_connect` hook and `record_identity!` are
+  replaced by a `fetch_identity:` hook, called with the new access token before anything is
+  stored. If it fails, the person sees "Failed to complete connection", no credential is created,
+  and on a reconnect the previous credential and its identity are untouched. On success the
+  token and the identity are stored in one save (`upsert_from_token!(identity:)`).
 
 ## 9. Deferred questions
 

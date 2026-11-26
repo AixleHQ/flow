@@ -21,6 +21,42 @@ governance, community health — carry none.
   Researching and follows the run to the one-page profile. Viewers get a short tour of projects, the board
   and Sessions & Runs. **Start product tour** in the user menu starts it again. Members who finished
   onboarding before this release count as having seen the tour.
+- **Tasks**: a card's Assets tab has a drop zone that takes several files at once, dropped or picked, so many files can be attached to a card in one go.
+
+### Changed
+- **Tasks**: the task drawer shows the ticket title in its top bar on every tab, truncated with the full title on hover.
+- **Tasks**: a task's Details are read-only until you press Edit, so text can be selected and copied without opening a field. Save applies all changes in one request and Cancel discards them. In Activity, an edit names the fields it changed, and **Show changes** opens their old and new values.
+
+### Removed
+- **Tasks**: the **Upload new** button in a card's Assets tab. The drop zone remains: drop files on it, or click it to select several files.
+
+### Fixed
+- **Assets**: the file drop zone, in the Assets upload dialog and on a card's Assets tab, can be reached with Tab and opens the file picker with Enter or Space.
+- **Tasks**: pressing `n` or `/` while a task's drawer is open, with the cursor outside a field, no longer opens Create task over it or jumps to the board search.
+
+## [1.20.0] - 2026-11-26
+
+### Added
+- **Integrations**: AWS. A workflow step can assume an IAM role in your AWS
+  account with no access key: Flow is an OpenID Connect provider the account trusts, and the step gets
+  credentials that last at most an hour through a profile in `~/.aws/config`. Connect it per project, add
+  roles, check them with Verify, and attach them to steps in the builder.
+- **Sessions & Runs**: a workflow run started for a board task names that task in the Sessions & Runs list and in the run's header, with a link to the task, and the list filters by task. Over MCP, `list_workflow_runs` and `get_workflow_run` return it as `task_number` and `task_title`, and `list_workflow_runs` filters by `task_number`.
+
+### Changed
+- **Integrations**: for GitHub, GitLab and Bitbucket, only connections made with the OAuth client the deployment is configured with now count. After an operator changes a provider's client id (or GitLab's endpoint), connections made with the previous client are no longer shown, handed to agents or refreshed, and people connect again (docs/operations/rotating-oauth-clients.md).
+
+### Fixed
+- **Repositories**: a session whose attached repository does not clone now fails before its agent starts,
+  with git's error on the session and its run, instead of starting without the repository. Adding a GitHub
+  repository through a token that can see it but not read its contents is refused with what to grant, and an
+  empty repository is checked out empty instead of failing the clone.
+- **Integrations**: a GitHub, GitLab or Bitbucket connect whose account lookup fails stores nothing, and a failed reconnect keeps the connection that worked.
+- **Integrations**: with `GITHUB_APP_VERIFY_INSTALLATION_OWNER` on, a company can connect a GitHub organization that already has the app installed for another company: after **Configure** on GitHub, Flow asks the person to authorize the app and checks that they can see the installation. Operators add `https://<domain>/company/integrations/github_setup` to the app's Redirect URIs before turning the setting on; "Request user authorization (OAuth) during installation" is no longer needed.
+- **Admin**: moving a project whose GitHub installation the source company still uses elsewhere now says the target company cannot connect that installation again while the source keeps it.
+- **Sign-in & onboarding**: an email address without a dotted domain (like name@2005) is
+  refused when a workspace is created or a person is invited, instead of being accepted and
+  the email never arriving.
 
 ## [1.19.0] - 2026-11-25
 
@@ -1856,7 +1892,8 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.19.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.20.0...develop
+[1.20.0]: https://github.com/AixleHQ/flow/compare/v1.19.0...v1.20.0
 [1.19.0]: https://github.com/AixleHQ/flow/compare/v1.18.0...v1.19.0
 [1.18.0]: https://github.com/AixleHQ/flow/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/AixleHQ/flow/compare/v1.16.0...v1.17.0

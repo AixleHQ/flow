@@ -40,6 +40,19 @@ class PersonalMCPProjectConfigTest < ActionDispatch::IntegrationTest
     assert_not ConfigItem.exists?(id)
   end
 
+  test "a repository the connection can see but not clone is refused" do
+    integration = create(:integration, company: @company, project: @project, provider: :github,
+                                       status: :active, connected_by: @user)
+    RepositoryService.stubs(:for).returns(FakeGithub::RepositoryService.new(integration, unreadable: [ "org/kb" ]))
+
+    body = call_tool("create_repository", { project_id: @project.id, full_name: "org/kb",
+                                            clone_url: "https://github.com/org/kb.git", integration_id: integration.id })
+
+    assert error?(body)
+    assert_match(/can see org\/kb but not its contents/, body.dig("result", "content").map { |c| c["text"] }.join("\n"))
+    assert_nil Repository.find_by(full_name: "org/kb")
+  end
+
   test "repository CRUD" do
     integration = create(:integration, company: @company, project: @project, provider: :github,
                          status: :active, connected_by: @user)

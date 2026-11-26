@@ -27,13 +27,12 @@ module Gitlab
         revocation_endpoint: "#{base}/oauth/revoke" }
     end
 
-    # Called by the OAuth callback right after the token is stored. A failed lookup never
-    # destroys the credential: the stored identity is cleared so the new token is not
-    # paired with the previous account's, and identity_for refetches it.
-    def record_identity!(credential)
-      store_identity!(credential, UserTokenService.new.user(credential.access_token))
+    # Called by the OAuth callback with the new access token, before the credential is
+    # stored: the identity to store with it. A failed lookup fails the connection, so
+    # nothing is stored and a previous credential stays as it was.
+    def fetch_identity(access_token)
+      build_identity(UserTokenService.new.user(access_token))
     rescue UserTokenService::Error
-      credential.update!(metadata: credential.metadata.to_h.except(metadata_key))
       raise ::Oauth::TokenExchangeError, "gitlab identity unavailable"
     end
 
@@ -60,23 +59,28 @@ module Gitlab
       OauthCredential.latest_gitlab_connection_of(user)
     end
 
-    # Only a grant of the instance GITLAB_ENDPOINT names now is revoked there. One from a
-    # previous endpoint is deleted without a request: its token would go to the wrong host.
+    # Only a grant of the client configured now is revoked there. One of another client (a
+    # previous endpoint or client id) is deleted without a request: its token would go to
+    # the wrong host, or be refused.
     def disconnect!(user)
       OauthCredential.gitlab_connections_of(user).each do |credential|
         revoke_grant(credential)
         credential.destroy!
       end
-      OauthCredential.for_owner(user).on_other_gitlab_instance.destroy_all
+      OauthCredential.all_connections_of(user, PROVIDER).destroy_all
       ActAsConsent.where(user_id: user.id, provider: PROVIDER).delete_all
     end
 
-    def store_identity!(credential, profile)
-      identity = {
+    def build_identity(profile)
+      {
         "id" => profile[:id], "username" => profile[:username], "name" => profile[:name],
         "avatar_url" => profile[:avatar_url], "commit_email" => profile[:commit_email],
         "fetched_at" => Time.current.iso8601
       }
+    end
+
+    def store_identity!(credential, profile)
+      identity = build_identity(profile)
       credential.update!(metadata: credential.metadata.to_h.merge(metadata_key => identity))
       identity
     end

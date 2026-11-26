@@ -20,6 +20,7 @@ import {
   Tooltip,
   UnstyledButton,
 } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import {
   IconAlertCircle,
   IconArchive,
@@ -52,7 +53,7 @@ import {
   IconWorldOff,
   IconX,
 } from '@tabler/icons-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Markdown from 'react-markdown';
 import {
   Bar,
@@ -73,7 +74,7 @@ import type TaskComment from 'types/generated/TaskComment';
 import type TaskStatistics from 'types/generated/TaskStatistics';
 import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 
-import { apiMutate } from 'shared/lib/apiFetch';
+import { ApiError, apiMutate, apiRequest } from 'shared/lib/apiFetch';
 import { formatDateTime, formatDateTimeShort } from 'shared/lib/formatDate';
 import { useLocalStorage } from 'shared/lib/hooks/useLocalStorage';
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
@@ -95,9 +96,9 @@ import {
   companyProjectTaskPath,
 } from 'shared/routes';
 import { CHART_SERIES } from 'shared/theme/chartPalette';
+import { FileDropZone } from 'shared/ui/FileDropZone';
 import { MarkdownLink } from 'shared/ui/MarkdownLink';
 
-import { ActivityAvatar } from './ActivityAvatar';
 import {
   assigneeFields,
   assigneeKey,
@@ -106,13 +107,14 @@ import {
   taskAssignee,
   type BoardTeam,
 } from './assignee';
-import { formatCostCents, formatDuration, formatRelativeTime, formatTokens } from './boardFormat';
+import { formatCostCents, formatDuration, formatTokens } from './boardFormat';
 import styles from './BoardPage.module.css';
 import { canEditComment } from './canEditComment';
 import { gateCiStatus, gateDetail, gateLink, gateTooltip } from './gates';
 import { GATE_CHIP_WIDTH, GateStatusChip } from './GateStatusChip';
 import { InlineTagsEditor } from './InlineTagsEditor';
 import { LatestRunTile } from './LatestRunTile';
+import { TaskActivityEntry } from './TaskActivityEntry';
 import { TaskDetailSkeleton } from './TaskDetailSkeleton';
 import { WORKFLOW_ACTIVE_STATES } from './taskRuns';
 import { TaskRunsPanel } from './TaskRunsPanel';
@@ -141,6 +143,58 @@ const GATE_UNRESOLVED_STATUSES = new Set(['pending', 'stale']);
 const DRAWER_SIZE = 620;
 // Expanding must never narrow the drawer — a plain 50vw did, on any screen under 1240px wide.
 const DRAWER_SIZE_WIDE = 'clamp(620px, 90vw, 1200px)';
+
+interface TaskDraft {
+  title: string;
+  description: string;
+  taskType: Task['taskType'];
+  priority: string | null;
+  assigneeKey: string | null;
+  parentTaskId: string | null;
+  tags: string[];
+}
+
+function draftFromTask(task: Task): TaskDraft {
+  return {
+    title: task.title,
+    description: task.description ?? '',
+    taskType: task.taskType,
+    priority: task.priority,
+    assigneeKey: assigneeKey(taskAssignee(task)),
+    parentTaskId: task.parentTaskId ? String(task.parentTaskId) : null,
+    tags: task.tags ?? [],
+  };
+}
+
+/** Only the fields the draft changed, in the shape of the PATCH body. Empty when nothing changed. */
+function changedFields(task: Task, draft: TaskDraft): Record<string, unknown> {
+  const saved = draftFromTask(task);
+  const changes: Record<string, unknown> = {};
+  if (draft.title.trim() !== saved.title) changes.title = draft.title.trim();
+  if (draft.description !== saved.description) changes.description = draft.description;
+  if (draft.taskType !== saved.taskType) changes.taskType = draft.taskType;
+  if (draft.priority !== saved.priority) changes.priority = draft.priority;
+  if (draft.assigneeKey !== saved.assigneeKey)
+    Object.assign(changes, assigneeFields(parseAssigneeKey(draft.assigneeKey)));
+  if (draft.parentTaskId !== saved.parentTaskId) changes.parentTaskId = draft.parentTaskId;
+  if (draft.tags.join('\n') !== saved.tags.join('\n')) changes.tags = draft.tags;
+  return changes;
+}
+
+const TASK_TYPE_OPTIONS = [
+  { value: 'not_specified', label: 'Not specified' },
+  { value: 'epic', label: 'Epic' },
+  { value: 'story', label: 'Story' },
+  { value: 'bug', label: 'Bug' },
+];
+
+const PRIORITY_OPTIONS = [
+  { value: '', label: 'None' },
+  { value: 'critical', label: 'Critical' },
+  { value: 'high', label: 'High' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'low', label: 'Low' },
+];
 
 function fitToContent(textarea: HTMLTextAreaElement | null) {
   if (!textarea) return;
@@ -185,15 +239,52 @@ async function deleteTaskComment(projectId: number, taskId: number, commentId: n
   return deleted;
 }
 
-async function uploadTaskAsset(projectId: number, taskId: number, file: File) {
+const ASSET_UPLOAD_CONCURRENCY = 3;
+const LISTED_UPLOAD_FAILURES = 5;
+
+/** Resolves with why the file was refused, or null once it is attached. */
+async function postTaskAsset(projectId: number, taskId: number, file: File): Promise<string | null> {
   const formData = new FormData();
   formData.append('task_asset[name]', file.name);
   formData.append('task_asset[file]', file);
-  const saved = await apiMutate(apiV1ProjectTaskAssetsPath(projectId, taskId), {
-    method: 'POST',
-    body: formData,
-  });
-  if (saved) router.reload({ only: ['task_assets', 'task_activities'] });
+  try {
+    await apiRequest(apiV1ProjectTaskAssetsPath(projectId, taskId), { method: 'POST', body: formData });
+    return null;
+  } catch (error) {
+    return error instanceof ApiError ? error.message : 'The upload failed';
+  }
+}
+
+async function uploadTaskAssets(projectId: number, taskId: number, files: File[], onProgress: (done: number) => void) {
+  let next = 0;
+  let done = 0;
+  const failures: string[] = [];
+  const worker = async () => {
+    while (next < files.length) {
+      const file = files[next++];
+      const reason = await postTaskAsset(projectId, taskId, file);
+      if (reason) failures.push(`${file.name}: ${reason}`);
+      done += 1;
+      onProgress(done);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(ASSET_UPLOAD_CONCURRENCY, files.length) }, worker));
+  if (failures.length > 0) {
+    const hidden = failures.length - LISTED_UPLOAD_FAILURES;
+    notifications.show({
+      color: 'red',
+      title: files.length > 1 ? `${failures.length} of ${files.length} files failed to upload` : undefined,
+      message: (
+        <>
+          {failures.slice(0, LISTED_UPLOAD_FAILURES).map((failure, index) => (
+            <div key={`${index}:${failure}`}>{failure}</div>
+          ))}
+          {hidden > 0 && <div>and {hidden} more</div>}
+        </>
+      ),
+    });
+  }
+  router.reload({ only: ['task_assets', 'task_activities'] });
 }
 
 async function deleteTaskAsset(projectId: number, taskId: number, assetId: number) {
@@ -266,7 +357,11 @@ export function TaskDetailSidebar({
   variant?: 'drawer' | 'page';
 }) {
   const [tab, setTab] = useState<string | null>('details');
-  const [editingTitle, setEditingTitle] = useState(false);
+  const [edits, setEdits] = useState<Partial<TaskDraft> | null>(null);
+  // Only the fields the person changed are kept; the rest follow the task, so a change made
+  // elsewhere during the edit (an agent adding a tag) shows in the form and Save does not undo it.
+  const draft = task && edits ? { ...draftFromTask(task), ...edits } : null;
+  const [savingTask, setSavingTask] = useState(false);
   const [previewKey, setPreviewKey] = useState<string | null>(null);
   const previewItems = useMemo(
     () =>
@@ -287,10 +382,7 @@ export function TaskDetailSidebar({
     [previewItems],
   );
   const closePreview = useCallback(() => setPreviewKey(null), []);
-  const [titleValue, setTitleValue] = useState('');
   const [pendingTitle, setPendingTitle] = useState<string | null>(null);
-  const [editingDesc, setEditingDesc] = useState(false);
-  const [descValue, setDescValue] = useState('');
   const [pendingDesc, setPendingDesc] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [wide, setWide] = useLocalStorage('board:taskDetail:wide', false);
@@ -308,16 +400,19 @@ export function TaskDetailSidebar({
   const [archiving, setArchiving] = useState(false);
   const [deletingGateId, setDeletingGateId] = useState<number | null>(null);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [assetUploadTotal, setAssetUploadTotal] = useState(0);
+  const [assetUploadDone, setAssetUploadDone] = useState(0);
+  const isUploadingAssets = assetUploadTotal > 0;
 
-  // Only comment drafts are at stake: the title and description save on blur, which a click on
-  // the X or the overlay triggers before the close, and Escape in them means "cancel this edit".
+  // Comment drafts and the card's edit-mode draft are at stake; nothing in edit mode saves before Save.
   const editedComment = comments.find((c) => c.id === editingCommentId);
   const requestClose = useUnsavedChanges({
     opened: !!task,
     dirty:
-      commentBody.trim() !== '' || (editedComment !== undefined && editingCommentBody.trim() !== editedComment.body),
-    saving: submittingComment || savingCommentEdit,
+      commentBody.trim() !== '' ||
+      (editedComment !== undefined && editingCommentBody.trim() !== editedComment.body) ||
+      (task != null && draft !== null && Object.keys(changedFields(task, draft)).length > 0),
+    saving: submittingComment || savingCommentEdit || savingTask,
     onClose,
   });
 
@@ -389,11 +484,8 @@ export function TaskDetailSidebar({
 
   useEffect(() => {
     if (task) {
-      setTitleValue(task.title);
-      setDescValue(task.description ?? '');
       setTab('details');
-      setEditingTitle(false);
-      setEditingDesc(false);
+      setEdits(null);
       setDeleteConfirm(false);
       setCommentBody('');
       setCommentTags([]);
@@ -402,54 +494,36 @@ export function TaskDetailSidebar({
     }
   }, [task?.id]);
 
-  const saveTitle = async () => {
-    if (!task || titleValue.trim() === task.title) {
-      setEditingTitle(false);
+  const startEdit = () => setEdits({});
+
+  const cancelEdit = () => setEdits(null);
+
+  const patchDraft = (changes: Partial<TaskDraft>) => setEdits((e) => (e ? { ...e, ...changes } : e));
+
+  const saveEdit = async () => {
+    if (!task || !draft || savingTask) return;
+    const changes = changedFields(task, draft);
+    if (Object.keys(changes).length === 0) {
+      setEdits(null);
       return;
     }
-    const saved = titleValue.trim();
-    setPendingTitle(saved);
-    setEditingTitle(false);
+    setSavingTask(true);
     const ok = await apiMutate(apiV1ProjectTaskPath(projectId, task.id), {
       method: 'PATCH',
       headers: jsonHeaders,
-      body: JSON.stringify({ boardTask: { title: saved } }),
+      body: JSON.stringify({ boardTask: changes }),
     });
-    // On success the cable refreshes selectedTask, and the effect above clears pendingTitle.
-    if (!ok) setPendingTitle(null);
+    setSavingTask(false);
+    if (!ok) return;
+    // On success the cable refreshes selectedTask, and the effect above clears the pending values.
+    if (typeof changes.title === 'string') setPendingTitle(changes.title);
+    if (typeof changes.description === 'string') setPendingDesc(changes.description);
+    setEdits(null);
+    router.reload({ only: ['selected_task', 'task_activities'] });
   };
 
-  const saveDescription = async () => {
-    setEditingDesc(false);
-    if (!task || descValue === (task.description ?? '')) return;
-    const saved = descValue;
-    setPendingDesc(saved);
-    const ok = await apiMutate(apiV1ProjectTaskPath(projectId, task.id), {
-      method: 'PATCH',
-      headers: jsonHeaders,
-      body: JSON.stringify({ boardTask: { description: saved } }),
-    });
-    if (!ok) setPendingDesc(null);
-  };
-
-  const saveField = async (field: string, value: string | string[] | null) => {
-    if (!task) return;
-    await apiMutate(apiV1ProjectTaskPath(projectId, task.id), {
-      method: 'PATCH',
-      headers: jsonHeaders,
-      body: JSON.stringify({ boardTask: { [field]: value } }),
-    });
-    router.reload({ only: ['selected_task'] });
-  };
-
-  const saveAssignee = async (key: string | null) => {
-    if (!task) return;
-    await apiMutate(apiV1ProjectTaskPath(projectId, task.id), {
-      method: 'PATCH',
-      headers: jsonHeaders,
-      body: JSON.stringify({ boardTask: assigneeFields(parseAssigneeKey(key)) }),
-    });
-    router.reload({ only: ['selected_task'] });
+  const cancelOnEscape = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') cancelEdit();
   };
 
   const startEditComment = (c: TaskComment) => {
@@ -534,14 +608,18 @@ export function TaskDetailSidebar({
     [projectId, task],
   );
 
-  const handleUploadAsset = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file || !task) return;
-      await uploadTaskAsset(projectId, task.id, file);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+  const handleAssetFiles = useCallback(
+    async (files: File[]) => {
+      if (!task || files.length === 0 || assetUploadTotal > 0) return;
+      setAssetUploadDone(0);
+      setAssetUploadTotal(files.length);
+      try {
+        await uploadTaskAssets(projectId, task.id, files, setAssetUploadDone);
+      } finally {
+        setAssetUploadTotal(0);
+      }
     },
-    [projectId, task],
+    [projectId, task, assetUploadTotal],
   );
 
   const handleDeleteAsset = useCallback(
@@ -601,39 +679,29 @@ export function TaskDetailSidebar({
 
   const headerSection = (
     <Box style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 18 }}>
-      {/* Editable title */}
-      {editingTitle ? (
+      {draft ? (
         <textarea
+          ref={fitToContent}
           className={styles.ptTitle}
-          value={titleValue}
+          aria-label="Title"
+          // The drawer reads Escape on the window before this field does; the attribute keeps it to
+          // cancelling the edit, instead of also asking to discard the draft the cancel just dropped.
+          data-mantine-stop-propagation
+          value={draft.title}
           rows={1}
           onChange={(e) => {
-            setTitleValue(e.currentTarget.value);
-            e.currentTarget.style.height = 'auto';
-            e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
+            patchDraft({ title: e.currentTarget.value });
+            fitToContent(e.currentTarget);
           }}
-          onBlur={saveTitle}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              saveTitle();
-            }
-            if (e.key === 'Escape') {
-              setTitleValue(task.title);
-              setEditingTitle(false);
-            }
+            if (e.key === 'Enter') e.preventDefault();
+            cancelOnEscape(e);
           }}
           autoFocus
         />
       ) : (
-        // The `#id` is a sibling of the editable title div, never a child of it: putting it
-        // inside would make it part of the text saveTitle reads and persists.
         <Box style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-          <div
-            className={styles.ptTitle}
-            onClick={() => canExecute && setEditingTitle(true)}
-            style={{ cursor: canExecute ? 'text' : 'default', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-          >
+          <div className={styles.ptTitle} style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
             {pendingTitle ?? task.title}
           </div>
           <CopyButton value={String(task.number)}>
@@ -646,6 +714,25 @@ export function TaskDetailSidebar({
             )}
           </CopyButton>
         </Box>
+      )}
+
+      {canExecute && (
+        <Group gap="xs">
+          {draft ? (
+            <>
+              <Button size="xs" onClick={saveEdit} loading={savingTask} disabled={draft.title.trim() === ''}>
+                Save
+              </Button>
+              <Button size="xs" variant="default" onClick={cancelEdit} disabled={savingTask}>
+                Cancel
+              </Button>
+            </>
+          ) : (
+            <Button size="xs" variant="default" onClick={startEdit}>
+              Edit
+            </Button>
+          )}
+        </Group>
       )}
 
       {/* Status chips: type, priority, workflow */}
@@ -764,56 +851,56 @@ export function TaskDetailSidebar({
         <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
           Type
         </Text>
-        <Select
-          data={[
-            { value: 'not_specified', label: 'Not specified' },
-            { value: 'epic', label: 'Epic' },
-            { value: 'story', label: 'Story' },
-            { value: 'bug', label: 'Bug' },
-          ]}
-          value={task.taskType}
-          onChange={(v) => saveField('taskType', v)}
-          size="xs"
-          variant="unstyled"
-          styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
-          disabled={!canExecute}
-        />
+        {draft ? (
+          <Select
+            data={TASK_TYPE_OPTIONS}
+            value={draft.taskType}
+            onChange={(v) => v && patchDraft({ taskType: v as TaskDraft['taskType'] })}
+            aria-label="Type"
+            size="xs"
+            variant="unstyled"
+            styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
+          />
+        ) : (
+          <Text size="sm">{TASK_TYPE_OPTIONS.find((o) => o.value === task.taskType)?.label ?? task.taskType}</Text>
+        )}
 
         <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
           Priority
         </Text>
-        <Select
-          data={[
-            { value: '', label: 'None' },
-            { value: 'critical', label: 'Critical' },
-            { value: 'high', label: 'High' },
-            { value: 'medium', label: 'Medium' },
-            { value: 'low', label: 'Low' },
-          ]}
-          value={task.priority ?? ''}
-          onChange={(v) => saveField('priority', v || null)}
-          clearable
-          size="xs"
-          variant="unstyled"
-          styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
-          disabled={!canExecute}
-        />
+        {draft ? (
+          <Select
+            data={PRIORITY_OPTIONS}
+            value={draft.priority ?? ''}
+            onChange={(v) => patchDraft({ priority: v || null })}
+            aria-label="Priority"
+            clearable
+            size="xs"
+            variant="unstyled"
+            styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
+          />
+        ) : (
+          <Text size="sm">{PRIORITY_OPTIONS.find((o) => o.value === (task.priority ?? ''))?.label}</Text>
+        )}
 
         <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
           Assignee
         </Text>
-        <Select
-          data={assigneeSelectData(members, teams)}
-          value={assigneeKey(taskAssignee(task))}
-          onChange={saveAssignee}
-          aria-label="Assignee"
-          clearable
-          searchable
-          size="xs"
-          variant="unstyled"
-          styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
-          disabled={!canExecute}
-        />
+        {draft ? (
+          <Select
+            data={assigneeSelectData(members, teams)}
+            value={draft.assigneeKey}
+            onChange={(v) => patchDraft({ assigneeKey: v })}
+            aria-label="Assignee"
+            clearable
+            searchable
+            size="xs"
+            variant="unstyled"
+            styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
+          />
+        ) : (
+          <Text size="sm">{task.assigneeTeamName ?? task.assigneeName ?? 'Unassigned'}</Text>
+        )}
 
         {/* Parent epic — for non-epic tasks */}
         {task.taskType !== 'epic' && parentEpicOptions.length > 0 && (
@@ -821,18 +908,23 @@ export function TaskDetailSidebar({
             <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
               Parent Epic
             </Text>
-            <Select
-              data={parentEpicOptions}
-              value={task.parentTaskId ? String(task.parentTaskId) : null}
-              onChange={(v) => saveField('parentTaskId', v)}
-              aria-label="Parent Epic"
-              clearable
-              searchable
-              size="xs"
-              variant="unstyled"
-              styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
-              disabled={!canExecute}
-            />
+            {draft ? (
+              <Select
+                data={parentEpicOptions}
+                value={draft.parentTaskId}
+                onChange={(v) => patchDraft({ parentTaskId: v })}
+                aria-label="Parent Epic"
+                clearable
+                searchable
+                size="xs"
+                variant="unstyled"
+                styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
+              />
+            ) : (
+              <Text size="sm">
+                {parentEpicOptions.find((o) => o.value === String(task.parentTaskId ?? ''))?.label ?? 'None'}
+              </Text>
+            )}
           </>
         )}
 
@@ -840,9 +932,9 @@ export function TaskDetailSidebar({
           Tags
         </Text>
         <InlineTagsEditor
-          tags={task.tags ?? []}
-          onChange={(tags) => saveField('tags', tags)}
-          disabled={!canExecute}
+          tags={draft ? draft.tags : (task.tags ?? [])}
+          onChange={(tags) => patchDraft({ tags })}
+          disabled={!draft}
           suggestions={knownTags}
         />
 
@@ -859,36 +951,24 @@ export function TaskDetailSidebar({
   const mainSections = (
     <>
       <Box style={{ marginBottom: 18 }}>
-        {/* Editable description */}
-        {editingDesc ? (
+        {draft ? (
           <textarea
             ref={fitToContent}
             className={styles.ptDesc}
-            value={descValue}
+            aria-label="Description"
+            data-mantine-stop-propagation
+            value={draft.description}
             rows={3}
-            autoFocus
             onChange={(e) => {
-              setDescValue(e.currentTarget.value);
+              patchDraft({ description: e.currentTarget.value });
               fitToContent(e.currentTarget);
             }}
-            onBlur={saveDescription}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                setDescValue(task.description ?? '');
-                setEditingDesc(false);
-              }
-            }}
+            onKeyDown={cancelOnEscape}
           />
         ) : (
           <div
             className={styles.ptDesc}
-            onClick={() => {
-              if (!canExecute) return;
-              setDescValue(task.description ?? '');
-              setEditingDesc(true);
-            }}
             style={{
-              cursor: canExecute ? 'text' : 'default',
               color:
                 (pendingDesc ?? task.description) ? 'var(--mantine-color-dimmed)' : 'var(--mantine-color-placeholder)',
             }}
@@ -900,9 +980,7 @@ export function TaskDetailSidebar({
                 </Markdown>
               </Box>
             ) : (
-              <span style={{ color: 'var(--mantine-color-placeholder)', fontStyle: 'italic' }}>
-                Click to add description…
-              </span>
+              <span style={{ color: 'var(--mantine-color-placeholder)', fontStyle: 'italic' }}>No description</span>
             )}
           </div>
         )}
@@ -1120,7 +1198,7 @@ export function TaskDetailSidebar({
 
   const body = (
     <>
-      {/* Panel bar — icon actions only, no title here */}
+      {/* Panel bar — icon actions on both sides; the drawer shows the title between them */}
       <Box
         style={{
           display: 'flex',
@@ -1152,7 +1230,20 @@ export function TaskDetailSidebar({
             </Tooltip>
           )}
         </CopyButton>
-        <Box style={{ flex: 1 }} />
+        {variant === 'drawer' && task ? (
+          <Text
+            size="sm"
+            fw={600}
+            truncate="end"
+            title={pendingTitle ?? task.title}
+            data-testid="panel-bar-title"
+            style={{ flex: 1, minWidth: 0, padding: '0 8px' }}
+          >
+            {pendingTitle ?? task.title}
+          </Text>
+        ) : (
+          <Box style={{ flex: 1 }} />
+        )}
         {canExecute && canTriggerWorkflow && (
           <Button
             size="compact-sm"
@@ -1647,7 +1738,6 @@ export function TaskDetailSidebar({
 
         {/* Assets — with upload and delete */}
         <Tabs.Panel value="assets" style={{ flex: 1, overflow: 'auto', padding: 20 }}>
-          {/* Assets header: sec-label + upload button */}
           <Box
             style={{
               display: 'flex',
@@ -1671,28 +1761,21 @@ export function TaskDetailSidebar({
               <IconCloudUpload size={14} color="var(--app-primary-strong)" />
               Assets
             </Box>
-            {canExecute && (
-              <>
-                <input ref={fileInputRef} type="file" hidden onChange={handleUploadAsset} />
-                <Button
-                  size="compact-sm"
-                  leftSection={<IconCloudUpload size={13} />}
-                  onClick={() => fileInputRef.current?.click()}
-                  styles={{
-                    root: {
-                      background: 'transparent',
-                      border: '1px solid var(--app-primary)',
-                      color: 'var(--app-primary-strong)',
-                      fontWeight: 600,
-                      fontSize: 13,
-                    },
-                  }}
-                >
-                  Upload new
-                </Button>
-              </>
-            )}
           </Box>
+
+          {canExecute && (
+            <Box mb="md">
+              <FileDropZone
+                onFiles={handleAssetFiles}
+                disabled={isUploadingAssets}
+                hint={
+                  isUploadingAssets
+                    ? `Uploading ${assetUploadDone} of ${assetUploadTotal}`
+                    : 'Max file size: 1 GB · Multiple files supported'
+                }
+              />
+            </Box>
+          )}
 
           {/* Asset list */}
           {(taskAssets ?? []).length === 0 ? (
@@ -1858,28 +1941,7 @@ export function TaskDetailSidebar({
             </Text>
           ) : (
             (activities ?? []).map((a) => (
-              <Box
-                key={a.id}
-                style={{
-                  display: 'flex',
-                  gap: 10,
-                  padding: '12px 0',
-                  borderBottom: '1px solid rgba(41,39,38,0.6)',
-                }}
-              >
-                <ActivityAvatar actorType={a.actorType} actorName={a.actorName} />
-                <Box style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--mantine-color-text)' }}>
-                    <strong>{a.actorName}</strong>{' '}
-                    {a.description.startsWith(a.actorName)
-                      ? a.description.slice(a.actorName.length).trim()
-                      : a.description}
-                  </Text>
-                  <Text style={{ fontSize: 11, color: 'var(--mantine-color-placeholder)', marginTop: 2 }}>
-                    {formatRelativeTime(a.createdAt)}
-                  </Text>
-                </Box>
-              </Box>
+              <TaskActivityEntry key={a.id} activity={a} projectId={projectId} taskId={task.id} />
             ))
           )}
         </Tabs.Panel>

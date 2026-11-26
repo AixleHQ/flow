@@ -107,3 +107,53 @@ func TestRestrictNamesTheDirectoryAndItsModeWhenItCannotNarrowIt(t *testing.T) {
 		}
 	}
 }
+
+func TestInstallBinaryCopiesTheRunningBinaryToTheStateDirectory(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(t.TempDir(), "aixle-runner-src")
+	if err := os.WriteFile(src, []byte("v1"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	got, err := InstallBinary(dir, src)
+	if err != nil || got != filepath.Join(dir, "bin", "aixle-runner") {
+		t.Fatalf("%q, %v", got, err)
+	}
+	info, _ := os.Stat(got)
+	if data, _ := os.ReadFile(got); string(data) != "v1" || info.Mode().Perm() != 0o755 {
+		t.Fatalf("content %q, mode %v", data, info.Mode())
+	}
+	if bin, _ := os.Stat(filepath.Dir(got)); bin.Mode().Perm() != 0o755 {
+		t.Fatalf("the bin directory is %v", bin.Mode())
+	}
+
+	// A new start replaces the copy by a rename, so a sidecar that runs the old file keeps it.
+	old, _ := os.Open(got)
+	defer old.Close()
+	if err := os.WriteFile(src, []byte("v2"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := InstallBinary(dir, src); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(got); string(data) != "v2" {
+		t.Fatalf("content %q", data)
+	}
+	if kept := make([]byte, 2); func() bool { n, _ := old.Read(kept); return n != 2 || string(kept) != "v1" }() {
+		t.Fatalf("the old file changed under a running sidecar: %q", kept)
+	}
+	left, _ := os.ReadDir(filepath.Dir(got))
+	if len(left) != 1 {
+		t.Fatalf("temporary files are left: %v", left)
+	}
+
+	// A binary that is that file already (the service's own copy) is left alone.
+	if again, err := InstallBinary(dir, got); err != nil || again != got {
+		t.Fatalf("%q, %v", again, err)
+	}
+	if data, _ := os.ReadFile(got); string(data) != "v2" {
+		t.Fatalf("content %q", data)
+	}
+	if _, err := InstallBinary(dir, filepath.Join(dir, "missing")); err == nil {
+		t.Fatal("a missing binary was installed")
+	}
+}

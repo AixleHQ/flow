@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_25_100001) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_25_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -148,6 +148,43 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_25_100001) do
     t.index ["created_at"], name: "index_audits_on_created_at"
     t.index ["request_uuid"], name: "index_audits_on_request_uuid"
     t.index ["user_id", "user_type"], name: "user_index"
+  end
+
+  create_table "aws_oidc_credential_issuances", force: :cascade do |t|
+    t.bigint "aws_oidc_role_id"
+    t.bigint "project_id", null: false
+    t.bigint "terminal_session_id"
+    t.bigint "step_run_id"
+    t.bigint "user_id"
+    t.string "role_name", null: false
+    t.string "role_arn", null: false
+    t.string "subject", null: false
+    t.string "jti", null: false
+    t.string "access_key_id", null: false
+    t.text "encrypted_secrets", null: false
+    t.datetime "expires_at", null: false
+    t.datetime "created_at", null: false
+    t.index ["aws_oidc_role_id"], name: "index_aws_oidc_credential_issuances_on_aws_oidc_role_id"
+    t.index ["project_id", "created_at"], name: "index_aws_oidc_issuances_on_project_and_created_at"
+    t.index ["project_id"], name: "index_aws_oidc_credential_issuances_on_project_id"
+    t.index ["step_run_id"], name: "index_aws_oidc_credential_issuances_on_step_run_id"
+    t.index ["terminal_session_id"], name: "index_aws_oidc_credential_issuances_on_terminal_session_id"
+    t.index ["user_id"], name: "index_aws_oidc_credential_issuances_on_user_id"
+  end
+
+  create_table "aws_oidc_roles", force: :cascade do |t|
+    t.bigint "integration_id", null: false
+    t.string "name", null: false
+    t.string "role_arn", null: false
+    t.string "region", null: false
+    t.integer "session_duration_seconds", default: 3600, null: false
+    t.bigint "created_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_by_id"], name: "index_aws_oidc_roles_on_created_by_id"
+    t.index ["integration_id", "name"], name: "index_aws_oidc_roles_on_integration_id_and_name", unique: true
+    t.index ["integration_id"], name: "index_aws_oidc_roles_on_integration_id"
+    t.check_constraint "session_duration_seconds >= 900 AND session_duration_seconds <= 3600", name: "aws_oidc_roles_session_duration"
   end
 
   create_table "azure_devops_deliveries", force: :cascade do |t|
@@ -1181,6 +1218,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_25_100001) do
     t.index ["status", "expires_at"], name: "index_oauth_credentials_on_status_and_expires_at"
   end
 
+  create_table "oidc_signing_keys", force: :cascade do |t|
+    t.string "kid", null: false
+    t.text "encrypted_private_key", null: false
+    t.jsonb "public_jwk", null: false
+    t.string "state", null: false
+    t.datetime "activated_at"
+    t.datetime "retired_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["kid"], name: "index_oidc_signing_keys_on_kid", unique: true
+    t.index ["state"], name: "index_oidc_signing_keys_one_current", unique: true, where: "((state)::text = 'current'::text)"
+    t.check_constraint "state::text = ANY (ARRAY['next'::character varying, 'current'::character varying, 'retired'::character varying]::text[])", name: "oidc_signing_keys_state"
+  end
+
   create_table "project_collaborators", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.bigint "project_id", null: false
@@ -1743,12 +1794,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_25_100001) do
     t.bigint "repository_id"
     t.bigint "config_item_id"
     t.integer "position", null: false
+    t.bigint "aws_oidc_role_id"
     t.index ["asset_id"], name: "index_step_resource_links_on_asset_id", where: "(asset_id IS NOT NULL)"
+    t.index ["aws_oidc_role_id"], name: "index_step_resource_links_on_aws_oidc_role_id", where: "(aws_oidc_role_id IS NOT NULL)"
     t.index ["config_item_id"], name: "index_step_resource_links_on_config_item_id", where: "(config_item_id IS NOT NULL)"
     t.index ["mcp_server_id"], name: "index_step_resource_links_on_mcp_server_id", where: "(mcp_server_id IS NOT NULL)"
     t.index ["repository_id"], name: "index_step_resource_links_on_repository_id", where: "(repository_id IS NOT NULL)"
     t.index ["skill_id"], name: "index_step_resource_links_on_skill_id", where: "(skill_id IS NOT NULL)"
     t.index ["step_id", "asset_id"], name: "index_step_resource_links_on_step_id_and_asset_id", unique: true, where: "(asset_id IS NOT NULL)"
+    t.index ["step_id", "aws_oidc_role_id"], name: "index_step_resource_links_on_step_id_and_aws_oidc_role_id", unique: true, where: "(aws_oidc_role_id IS NOT NULL)"
     t.index ["step_id", "config_item_id"], name: "index_step_resource_links_on_step_id_and_config_item_id", unique: true, where: "(config_item_id IS NOT NULL)"
     t.index ["step_id", "mcp_server_id"], name: "index_step_resource_links_on_step_id_and_mcp_server_id", unique: true, where: "(mcp_server_id IS NOT NULL)"
     t.index ["step_id", "repository_id"], name: "index_step_resource_links_on_step_id_and_repository_id", unique: true, where: "(repository_id IS NOT NULL)"
@@ -1756,7 +1810,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_25_100001) do
     t.index ["step_id", "tool_id"], name: "index_step_resource_links_on_step_id_and_tool_id", unique: true, where: "(tool_id IS NOT NULL)"
     t.index ["step_id"], name: "index_step_resource_links_on_step_id"
     t.index ["tool_id"], name: "index_step_resource_links_on_tool_id", where: "(tool_id IS NOT NULL)"
-    t.check_constraint "num_nonnulls(tool_id, skill_id, mcp_server_id, asset_id, repository_id, config_item_id) = 1", name: "step_resource_links_one_resource"
+    t.check_constraint "num_nonnulls(tool_id, skill_id, mcp_server_id, asset_id, repository_id, config_item_id, aws_oidc_role_id) = 1", name: "step_resource_links_one_resource"
   end
 
   create_table "step_runs", force: :cascade do |t|
@@ -2349,20 +2403,23 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_25_100001) do
     t.bigint "repository_id"
     t.bigint "config_item_id"
     t.integer "position", null: false
+    t.bigint "aws_oidc_role_id"
     t.index ["asset_id"], name: "index_workflow_resource_links_on_asset_id", where: "(asset_id IS NOT NULL)"
+    t.index ["aws_oidc_role_id"], name: "index_workflow_resource_links_on_aws_oidc_role_id", where: "(aws_oidc_role_id IS NOT NULL)"
     t.index ["config_item_id"], name: "index_workflow_resource_links_on_config_item_id", where: "(config_item_id IS NOT NULL)"
     t.index ["mcp_server_id"], name: "index_workflow_resource_links_on_mcp_server_id", where: "(mcp_server_id IS NOT NULL)"
     t.index ["repository_id"], name: "index_workflow_resource_links_on_repository_id", where: "(repository_id IS NOT NULL)"
     t.index ["skill_id"], name: "index_workflow_resource_links_on_skill_id", where: "(skill_id IS NOT NULL)"
     t.index ["tool_id"], name: "index_workflow_resource_links_on_tool_id", where: "(tool_id IS NOT NULL)"
     t.index ["workflow_id", "asset_id"], name: "index_workflow_resource_links_on_workflow_id_and_asset_id", unique: true, where: "(asset_id IS NOT NULL)"
+    t.index ["workflow_id", "aws_oidc_role_id"], name: "idx_on_workflow_id_aws_oidc_role_id_959f9c144b", unique: true, where: "(aws_oidc_role_id IS NOT NULL)"
     t.index ["workflow_id", "config_item_id"], name: "idx_on_workflow_id_config_item_id_44574998dd", unique: true, where: "(config_item_id IS NOT NULL)"
     t.index ["workflow_id", "mcp_server_id"], name: "index_workflow_resource_links_on_workflow_id_and_mcp_server_id", unique: true, where: "(mcp_server_id IS NOT NULL)"
     t.index ["workflow_id", "repository_id"], name: "index_workflow_resource_links_on_workflow_id_and_repository_id", unique: true, where: "(repository_id IS NOT NULL)"
     t.index ["workflow_id", "skill_id"], name: "index_workflow_resource_links_on_workflow_id_and_skill_id", unique: true, where: "(skill_id IS NOT NULL)"
     t.index ["workflow_id", "tool_id"], name: "index_workflow_resource_links_on_workflow_id_and_tool_id", unique: true, where: "(tool_id IS NOT NULL)"
     t.index ["workflow_id"], name: "index_workflow_resource_links_on_workflow_id"
-    t.check_constraint "num_nonnulls(tool_id, skill_id, mcp_server_id, asset_id, repository_id, config_item_id) = 1", name: "workflow_resource_links_one_resource"
+    t.check_constraint "num_nonnulls(tool_id, skill_id, mcp_server_id, asset_id, repository_id, config_item_id, aws_oidc_role_id) = 1", name: "workflow_resource_links_one_resource"
   end
 
   create_table "workflow_run_assets", force: :cascade do |t|
@@ -2506,6 +2563,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_25_100001) do
   add_foreign_key "assets", "terminal_sessions", on_delete: :nullify
   add_foreign_key "assets", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "assets", "users", column: "shared_by_id", on_delete: :nullify
+  add_foreign_key "aws_oidc_credential_issuances", "aws_oidc_roles", on_delete: :nullify
+  add_foreign_key "aws_oidc_credential_issuances", "projects", on_delete: :cascade
+  add_foreign_key "aws_oidc_credential_issuances", "step_runs", on_delete: :nullify
+  add_foreign_key "aws_oidc_credential_issuances", "terminal_sessions", on_delete: :cascade
+  add_foreign_key "aws_oidc_credential_issuances", "users", on_delete: :nullify
+  add_foreign_key "aws_oidc_roles", "integrations", on_delete: :cascade
+  add_foreign_key "aws_oidc_roles", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "azure_devops_deliveries", "azure_devops_subscriptions"
   add_foreign_key "azure_devops_installations", "companies"
   add_foreign_key "azure_devops_installations", "users", column: "approved_by_id", on_delete: :nullify
@@ -2686,6 +2750,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_25_100001) do
   add_foreign_key "solid_queue_recurring_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
   add_foreign_key "solid_queue_scheduled_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
   add_foreign_key "step_resource_links", "assets", on_delete: :cascade
+  add_foreign_key "step_resource_links", "aws_oidc_roles", on_delete: :cascade
   add_foreign_key "step_resource_links", "config_items", on_delete: :cascade
   add_foreign_key "step_resource_links", "mcp_servers", on_delete: :cascade
   add_foreign_key "step_resource_links", "repositories", on_delete: :cascade
@@ -2768,6 +2833,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_25_100001) do
   add_foreign_key "webhook_endpoints", "projects", on_delete: :cascade
   add_foreign_key "webhook_endpoints", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "workflow_resource_links", "assets", on_delete: :cascade
+  add_foreign_key "workflow_resource_links", "aws_oidc_roles", on_delete: :cascade
   add_foreign_key "workflow_resource_links", "config_items", on_delete: :cascade
   add_foreign_key "workflow_resource_links", "mcp_servers", on_delete: :cascade
   add_foreign_key "workflow_resource_links", "repositories", on_delete: :cascade

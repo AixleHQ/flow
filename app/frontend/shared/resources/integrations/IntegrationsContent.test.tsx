@@ -3,12 +3,13 @@ import { router } from '@inertiajs/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Integration } from '@/types/generated';
+import { buildAwsOidcConnection, buildAwsOidcProps } from 'test/factories/awsOidc';
 import { buildChatChannel, buildChatConnectCode, buildConnectedChatChannel } from 'test/factories/chatChannel';
 import { buildIntegration } from 'test/factories/integration';
 import { answerFetch, jsonResponse } from 'test/fetchStub';
 import { act, renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
-import { type InsightsProps, IntegrationsContent } from './IntegrationsContent';
+import { type AwsOidcProps, type InsightsProps, IntegrationsContent } from './IntegrationsContent';
 
 const settingsProps = { settings: { githubAppSlug: 'aixle-app' } };
 
@@ -474,6 +475,108 @@ describe('IntegrationsContent', () => {
       expect(screen.getByRole('button', { name: 'Aixle Insights for this project' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Rotate the Insights secret' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Disconnect Aixle Insights' })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('AWS', () => {
+    const awsOidcRow = makeIntegration({ id: 9, name: 'AWS', provider: 'aws_oidc', scopeIndicator: 'project' });
+    const renderAwsOidc = (props: { integrations: Integration[]; awsOidc: AwsOidcProps }) =>
+      renderPage(
+        <IntegrationsContent
+          title="Integrations"
+          basePath="/company/projects/3/integrations"
+          projectId={3}
+          integrations={props.integrations}
+          awsOidc={props.awsOidc}
+        />,
+        { props: settingsProps },
+      );
+
+    it('is offered under Connect only to someone who can manage it, and connecting opens it', async () => {
+      const user = userEvent.setup();
+      const { unmount } = renderAwsOidc({
+        integrations: [],
+        awsOidc: buildAwsOidcProps({ canManage: false, connection: null }),
+      });
+
+      await user.click(screen.getAllByRole('button', { name: /Connect/ })[0]);
+      expect(await screen.findByRole('menuitem', { name: 'GitHub' })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: 'AWS' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'AWS' })).not.toBeInTheDocument();
+      unmount();
+
+      const { rerender } = renderAwsOidc({ integrations: [], awsOidc: buildAwsOidcProps({ connection: null }) });
+      expect(screen.getByRole('button', { name: 'AWS' })).toBeInTheDocument();
+      await user.click(screen.getAllByRole('button', { name: /Connect/ })[0]);
+      await user.click(await screen.findByRole('menuitem', { name: 'AWS' }));
+
+      expect(router.post).toHaveBeenCalledWith(
+        '/company/projects/3/aws_oidc/connect',
+        {},
+        expect.objectContaining({ preserveScroll: true }),
+      );
+      // The redirect back brings the new connection; the visit's onSuccess then opens it.
+      rerender(
+        <IntegrationsContent
+          title="Integrations"
+          basePath="/company/projects/3/integrations"
+          projectId={3}
+          integrations={[awsOidcRow]}
+          awsOidc={buildAwsOidcProps()}
+        />,
+      );
+      const options = vi.mocked(router.post).mock.lastCall?.[2] as { onSuccess?: () => void };
+      act(() => options.onSuccess?.());
+      expect(await screen.findByRole('dialog', { name: 'AWS' })).toBeInTheDocument();
+    });
+
+    it('is not offered to someone who cannot manage it', async () => {
+      const user = userEvent.setup();
+      renderAwsOidc({ integrations: [], awsOidc: buildAwsOidcProps({ canManage: false, connection: null }) });
+
+      await user.click(screen.getAllByRole('button', { name: /Connect/ })[0]);
+      expect(await screen.findByRole('menuitem', { name: 'GitHub' })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: 'AWS' })).not.toBeInTheDocument();
+    });
+
+    it('is a row with the issuer and role count, managed from its dialog', async () => {
+      const user = userEvent.setup();
+      renderAwsOidc({ integrations: [awsOidcRow], awsOidc: buildAwsOidcProps() });
+
+      const row = screen.getByRole('row', { name: /^AWS/ });
+      expect(within(row).getByText('flow.example.com/oidc/9fK2abc · 1 role')).toBeInTheDocument();
+      await user.click(within(row).getByRole('button', { name: 'Manage AWS' }));
+
+      expect(await screen.findByRole('dialog', { name: 'AWS' })).toBeInTheDocument();
+    });
+
+    it('asks before disconnecting', async () => {
+      const user = userEvent.setup();
+      renderAwsOidc({ integrations: [awsOidcRow], awsOidc: buildAwsOidcProps() });
+
+      await user.click(screen.getByRole('button', { name: 'Disconnect AWS' }));
+      const confirm = await screen.findByRole('dialog', { name: 'Disconnect AWS' });
+      await user.click(within(confirm).getByRole('button', { name: 'Disconnect' }));
+
+      expect(router.delete).toHaveBeenCalledWith('/company/projects/3/aws_oidc/disconnect', { preserveScroll: true });
+    });
+
+    it('offers Reconnect once disconnected', async () => {
+      const user = userEvent.setup();
+      renderAwsOidc({
+        integrations: [{ ...awsOidcRow, status: 'inactive' }],
+        awsOidc: buildAwsOidcProps({ connection: buildAwsOidcConnection({ status: 'inactive' }) }),
+      });
+
+      expect(screen.getByText(/Disconnected: AWS refuses its tokens/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Disconnect AWS' })).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Reconnect AWS' }));
+
+      expect(router.post).toHaveBeenCalledWith(
+        '/company/projects/3/aws_oidc/connect',
+        {},
+        expect.objectContaining({ preserveScroll: true }),
+      );
     });
   });
 

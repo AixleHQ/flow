@@ -373,7 +373,7 @@ func TestTheSidecarRelaysTheAgentsCallsThroughTheHostRunnersSocket(t *testing.T)
 		t.Fatalf("%d %s", resp.StatusCode, body)
 	}
 
-	// A restarted host runner replaces the socket in the same directory, which a
+	// A restarted machine runner replaces the socket in the same directory, which a
 	// running sidecar has mounted: the sidecar reaches the new one.
 	if _, err := host.OpenSocket(123); err != nil {
 		t.Fatal(err)
@@ -480,7 +480,7 @@ func TestOpeningTheSocketAgainKeepsItsDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// A restarted host runner opens the socket of a running sidecar again. The
+	// A restarted machine runner opens the socket of a running sidecar again. The
 	// sidecar's bind mount follows the directory's inode, so the directory
 	// must be the same one, not a new one at the same path.
 	again, err := host.OpenSocket(123)

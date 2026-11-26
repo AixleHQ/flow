@@ -1,4 +1,4 @@
-// Package update is the host runner's self-update (DESIGN.md §14.4,
+// Package update is the machine runner's self-update (DESIGN.md §14.4,
 // runner/protocol/PROTOCOL.md §5.4, §5.6, §5.7). When an answer of the long-poll
 // without ops offers `update`, the runner takes it only while it holds no session
 // and only towards a newer version. It reads the digest the platform pins from the
@@ -235,7 +235,7 @@ func (u *Updater) install(ctx context.Context, offer protocol.Update) error {
 }
 
 // BinaryPath is the running binary, with links resolved: the file an update
-// replaces, and the one the callback proxy's sidecar runs (cli.HostOptions.Binary).
+// replaces, and the one the callback proxy's sidecar runs (cli.MachineOptions.Binary).
 func BinaryPath() (string, error) {
 	exe, err := os.Executable()
 	if err != nil {

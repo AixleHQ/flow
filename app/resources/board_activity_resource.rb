@@ -2,9 +2,21 @@
 
 class BoardActivityResource < ApplicationResource
   attributes :id, :event_type, :actor_id, :actor_type,
-             :board_task_id, :metadata, :created_at
+             :board_task_id, :created_at
 
-  typelize metadata: "Record<string, unknown>"
+  # `params[:without_changes]` leaves out the old and new field values a
+  # task_updated keeps: a feed shows only which fields changed, and the values,
+  # which can be whole descriptions, are fetched one entry at a time.
+  typelize "Record<string, unknown>"
+  attribute :metadata do |activity|
+    metadata = activity.metadata || {}
+    params[:without_changes] ? metadata.except("changes") : metadata
+  end
+
+  typelize "string[]"
+  attribute :changed_fields do |activity|
+    BoardActivityChanges.new(activity).labels
+  end
 
   DELETED_ACTOR_NAME = User::DELETED_DISPLAY_NAME
 

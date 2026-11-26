@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/aixlehq/aixle-runner/internal/host"
+	"github.com/aixlehq/aixle-runner/internal/machine"
 )
 
 // The ops fixtures (runner/protocol/fixtures/v1/ops/) carry the payloads the
@@ -22,7 +22,7 @@ func TestTheOpsFixturesMatchTheHandlers(t *testing.T) {
 		t.Fatalf("no ops fixtures: %v", err)
 	}
 	classes := map[string]bool{
-		host.ClassUnsupportedOp: true, host.ClassInterrupted: true, host.ClassResultTooLarge: true,
+		machine.ClassUnsupportedOp: true, machine.ClassInterrupted: true, machine.ClassResultTooLarge: true,
 		ClassInvalidPayload: true, ClassDockerError: true, ClassImagePull: true,
 		ClassNoSessionContainer: true, ClassContainerExists: true,
 		ClassForbiddenMount: true, ClassContainerStartFailed: true, ClassVolumeNotOwned: true, ClassContainerNotOwned: true,

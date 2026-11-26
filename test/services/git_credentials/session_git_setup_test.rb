@@ -128,6 +128,29 @@ module GitCredentials
       end
     end
 
+    test "an empty repository gets an empty checkout on the source branch, ready for a first push" do
+      Dir.mktmpdir do |dir|
+        remote = File.join(dir, "remote.git")
+        system("git", "init", "-q", "--bare", "-b", "main", remote, exception: true)
+        target = File.join(dir, "repo", "kb")
+
+        assert run_sync(remote, target)
+
+        assert_equal "refs/heads/main", git(target, "symbolic-ref", "HEAD")
+        assert_equal "file://#{remote}", git(target, "remote", "get-url", "origin")
+        assert_equal "true", git(target, "config", "credential.useHttpPath")
+      end
+    end
+
+    test "a branch the repository does not have still fails the clone" do
+      with_remote do |dir, remote|
+        target = File.join(dir, "app")
+
+        assert_not run_sync(remote, target, branch: "nope")
+        assert_not File.exist?(target)
+      end
+    end
+
     test "a kept checkout is fetched, not cloned again, and sees a commit pushed in between" do
       with_remote do |dir, remote|
         target = File.join(dir, "app")

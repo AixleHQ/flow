@@ -33,4 +33,4 @@ mv "$dir/bin/aixle-runner.new" "$dir/bin/aixle-runner"
 exec "$dir/bin/aixle-runner" "$@" --state-dir "$dir/state"
 EOF
 ENTRYPOINT ["runner-local-entrypoint"]
-CMD ["--mode", "host"]
+CMD ["--mode", "machine"]
