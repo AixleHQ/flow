@@ -17,6 +17,7 @@ governance, community health — carry none.
 - **Tasks**: a card's Assets tab has a drop zone, and **Upload new** accepts several files, so many files can be attached to a card in one go.
 
 ### Changed
+- **Tasks**: a task card on the board shows at most 300 characters of a long title, with the full title on hover. The title itself is not limited.
 - **Tasks**: the task drawer shows the ticket title in its top bar on every tab, truncated with the full title on hover.
 - **Tasks**: a task's Details are read-only until you press Edit, so text can be selected and copied without opening a field. Save applies all changes in one request and Cancel discards them. In Activity, an edit names the fields it changed, and **Show changes** opens their old and new values.
 
