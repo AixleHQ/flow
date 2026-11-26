@@ -14,7 +14,7 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
-- **Tasks**: a card's Assets tab has a drop zone, and **Upload new** accepts several files, so many files can be attached to a card in one go.
+- **Tasks**: a card's Assets tab has a drop zone that takes several files at once, dropped or picked, so many files can be attached to a card in one go.
 
 ### Changed
 - **Tasks**: the task drawer shows the ticket title in its top bar on every tab, truncated with the full title on hover.
