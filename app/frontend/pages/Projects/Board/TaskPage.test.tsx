@@ -47,6 +47,40 @@ describe('Projects/Board/TaskPage', () => {
     expect(screen.queryByRole('link', { name: 'Open as page' })).not.toBeInTheDocument();
   });
 
+  it('keeps the title above the tabs and edits title and description separately', async () => {
+    const fetchSpy = answerFetch({ 'PATCH /api/v1/projects/7/tasks/3': {} });
+    renderAuthedPage(<TaskPage />, { props: pageProps() });
+
+    await userEvent.click(screen.getByRole('tab', { name: /Comments/ }));
+    expect(screen.getByTestId('task-title')).toHaveTextContent('Performance evaluations: add statuses');
+
+    await userEvent.click(screen.getByRole('tab', { name: /Details/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+    expect(screen.queryByRole('textbox', { name: 'Description' })).not.toBeInTheDocument();
+    await userEvent.type(screen.getByRole('textbox', { name: 'Title' }), ' v2');
+    await userEvent.click(screen.getByRole('button', { name: 'Save title' }));
+
+    await waitFor(() => {
+      const call = fetchSpy.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'PATCH');
+      expect(call).toBeTruthy();
+      expect(JSON.parse((call![1] as RequestInit).body as string)).toEqual({
+        boardTask: { title: 'Performance evaluations: add statuses v2' },
+      });
+    });
+  });
+
+  it('cancels a description edit without a request', async () => {
+    const fetchSpy = answerFetch({});
+    renderAuthedPage(<TaskPage />, { props: pageProps() });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit description' }));
+    await userEvent.type(screen.getByRole('textbox', { name: 'Description' }), ' more');
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel description' }));
+
+    expect(screen.queryByRole('textbox', { name: 'Description' })).not.toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it('copies the link to this page', async () => {
     const user = userEvent.setup();
     renderAuthedPage(<TaskPage />, { props: pageProps() });
