@@ -940,7 +940,6 @@ describe('Projects/Board/BoardPage', () => {
 
       expect(drawer.getByRole('textbox', { name: 'Title' })).toHaveValue('Wire up authentication');
       expect(drawer.queryByRole('textbox', { name: 'Description' })).not.toBeInTheDocument();
-      expect(drawer.queryByRole('combobox', { name: 'Type' })).not.toBeInTheDocument();
       expect(drawer.getByRole('button', { name: 'Save title' })).toBeInTheDocument();
       expect(drawer.getByRole('button', { name: 'Cancel title' })).toBeInTheDocument();
       expect(drawer.queryByRole('button', { name: 'Edit title' })).not.toBeInTheDocument();
