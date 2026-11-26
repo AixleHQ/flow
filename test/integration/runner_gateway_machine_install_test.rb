@@ -87,21 +87,27 @@ class RunnerGatewayMachineInstallTest < ActionDispatch::IntegrationTest
 
   # == the script, run under a fake PATH ==
 
-  def fake_bin(dir, machine: "x86_64", kernel: "Linux", uid: "0", systemctl: true)
+  def fake_bin(dir, uid: "0", systemctl: true)
     bin = File.join(dir, "fakebin")
     FileUtils.mkdir_p(bin)
     stub = lambda do |name, body|
       File.write(File.join(bin, name), "#!/bin/sh\n#{body}\n")
       FileUtils.chmod(0o755, File.join(bin, name))
     end
-    stub.call("uname", %(case "$1" in -m) echo #{machine} ;; -s) echo #{kernel} ;; esac))
+    stub.call("uname", <<~'SH')
+      case "$1" in
+        -m) echo "$FAKE_MACHINE" ;;
+        -s) echo "$FAKE_KERNEL" ;;
+      esac
+    SH
     stub.call("id", "echo #{uid}")
     stub.call("systemctl", "exit 0") if systemctl
     # curl -fsSL -o <file> <url>: records the URL and writes the fake binary.
-    stub.call("curl", <<~SH)
+    File.write(File.join(dir, "fake-binary"), BINARY)
+    stub.call("curl", <<~'SH')
       echo "curl $*" >> "$FAKE_LOG"
       out=; while [ "$#" -gt 0 ]; do [ "$1" = -o ] && out=$2; shift; done
-      printf '%s' '#{BINARY.gsub("'", %q('\\\\''))}' > "$out"
+      cp "$FAKE_BINARY" "$out"
     SH
     bin
   end
@@ -110,9 +116,10 @@ class RunnerGatewayMachineInstallTest < ActionDispatch::IntegrationTest
     File.write(File.join(dir, "install.sh"), response.body)
     log = File.join(dir, "log")
     FileUtils.touch(log)
-    bin = fake_bin(dir, **machine)
+    bin = fake_bin(dir, **machine.slice(:uid, :systemctl))
     # `mktemp`, `sha256sum`, `chmod`, `rm` and `sh` come from the real system.
-    env = { "PATH" => "#{bin}:/usr/bin:/bin", "FAKE_LOG" => log }
+    env = { "PATH" => "#{bin}:/usr/bin:/bin", "FAKE_LOG" => log, "FAKE_BINARY" => File.join(dir, "fake-binary"),
+            "FAKE_MACHINE" => machine.fetch(:machine, "x86_64"), "FAKE_KERNEL" => machine.fetch(:kernel, "Linux") }
     out, err, status = Open3.capture3(env, "/bin/sh", File.join(dir, "install.sh"), *args, unsetenv_others: true)
     [ out + err, status, File.read(log) ]
   end

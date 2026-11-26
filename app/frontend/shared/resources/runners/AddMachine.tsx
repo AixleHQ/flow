@@ -307,9 +307,9 @@ function RemoveMachine({ tab, keep, directory, version, validDirectory }: Remove
     return (
       <Text fz="xs">
         Stop the command: press Ctrl+C, or run <Code>docker stop {DOCKER_NAME}</Code> from another terminal. The runner
-        removes its session containers and unregisters the machine. If it is killed instead (docker kill, a power
-        loss), the machine shows as not answering: press Revoke or Delete on the runner’s page, and see the user guide
-        for the containers it leaves.
+        removes its session containers and unregisters the machine. If it is killed instead (docker kill, a power loss),
+        the machine shows as not answering: press Revoke or Delete on the runner’s page, and see the user guide for the
+        containers it leaves.
       </Text>
     );
   }
