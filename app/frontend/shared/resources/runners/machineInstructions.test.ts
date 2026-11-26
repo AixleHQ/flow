@@ -171,7 +171,9 @@ describe('isValidKeepDirectory', () => {
   it('wants an absolute path on one line, without a colon', () => {
     expect(isValidKeepDirectory('/var/lib/aixle-runner')).toBe(true);
     expect(isValidKeepDirectory('/with space')).toBe(true);
-    for (const bad of ['', 'relative', '~/runner', '/a\nb', '/data:ro', '/a:b']) expect(isValidKeepDirectory(bad)).toBe(false);
+    for (const bad of ['', 'relative', '~/runner', '/a\nb', '/data:ro', '/a:b']) {
+      expect(isValidKeepDirectory(bad)).toBe(false);
+    }
   });
 });
 
