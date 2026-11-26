@@ -48,7 +48,7 @@ Open a card and the detail drawer has tabs:
 - **Comments** — the conversation. Agents comment here too, so you can filter
   by author type to read only what people wrote, or only what agents produced.
 - **Assets** — files attached to the card. Drop several files on the drop zone,
-  or use **Upload new** and select several files, to attach them all at once.
+  or click it and select several files, to attach them all at once.
 - **Activity** — what people and agents did on this card, newest first. An
   edit names the fields it changed; **Show changes** opens their old and new
   values.
