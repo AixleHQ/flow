@@ -12,12 +12,16 @@ import {
   IconX,
 } from '@tabler/icons-react';
 
+import { truncateText } from 'shared/lib/truncateText';
+
 import { formatDuration } from './boardFormat';
 import styles from './BoardPage.module.css';
 import { ciGateSummary } from './gates';
 import { RecentRunsTooltip } from './RecentRunsTooltip';
 import { WORKFLOW_ACTIVE_STATES } from './taskRuns';
 import { PRIORITY_COLORS, TASK_TYPE_COLORS, type Task } from './types';
+
+const TASK_CARD_TITLE_MAX_LENGTH = 300;
 
 function avatarInitials(name: string): string {
   return name
@@ -51,6 +55,7 @@ export function TaskCardUI({
   onToggleSelect?: (id: number, checked: boolean) => void;
   selectionMode?: boolean;
 }) {
+  const displayTitle = truncateText(task.title, TASK_CARD_TITLE_MAX_LENGTH);
   // A card shows at most three tags. Whichever ones the board is filtered by come first, so the
   // filter that put this card on screen is always the one you can click to take it back off.
   const cardTags = (activeTags ?? []).length
@@ -172,8 +177,14 @@ export function TaskCardUI({
             />
           </Tooltip>
         )}
-        <Text size="sm" fw={500} lh={1.3} style={{ flex: 1, wordBreak: 'break-word', fontSize: 13 }}>
-          {task.title}
+        <Text
+          size="sm"
+          fw={500}
+          lh={1.3}
+          style={{ flex: 1, wordBreak: 'break-word', fontSize: 13 }}
+          title={displayTitle === task.title ? undefined : task.title}
+        >
+          {displayTitle}
         </Text>
         <CopyButton value={String(task.number)}>
           {({ copied, copy }) => (
