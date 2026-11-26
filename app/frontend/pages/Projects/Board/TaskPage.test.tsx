@@ -102,16 +102,11 @@ describe('Projects/Board/TaskPage', () => {
       expect(postedNames(fetchSpy)).toEqual(['a.txt', 'b.txt', 'c.txt']);
     });
 
-    it('attaches every file chosen with Upload new', async () => {
-      const fetchSpy = answerFetch({ 'POST /api/v1/projects/7/tasks/3/assets': {} });
-      const user = await openAssets();
+    it('offers the drop zone as the only upload control', async () => {
+      await openAssets();
 
-      const input = screen.getByLabelText('Upload files');
-      expect(input).toHaveAttribute('multiple');
-      await user.upload(input, [file('a.txt'), file('b.txt')]);
-
-      await waitFor(() => expect(router.reload).toHaveBeenCalledTimes(1));
-      expect(postedNames(fetchSpy)).toEqual(['a.txt', 'b.txt']);
+      expect(screen.getByText('Click to select files or drag & drop')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Upload new/i })).not.toBeInTheDocument();
     });
 
     it('still uploads a single file', async () => {

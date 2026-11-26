@@ -53,7 +53,7 @@ import {
   IconWorldOff,
   IconX,
 } from '@tabler/icons-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Markdown from 'react-markdown';
 import {
   Bar,
@@ -400,7 +400,6 @@ export function TaskDetailSidebar({
   const [archiving, setArchiving] = useState(false);
   const [deletingGateId, setDeletingGateId] = useState<number | null>(null);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [assetUploadTotal, setAssetUploadTotal] = useState(0);
   const [assetUploadDone, setAssetUploadDone] = useState(0);
   const isUploadingAssets = assetUploadTotal > 0;
@@ -621,15 +620,6 @@ export function TaskDetailSidebar({
       }
     },
     [projectId, task, assetUploadTotal],
-  );
-
-  const handleUploadAsset = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(e.target.files ?? []);
-      e.target.value = '';
-      await handleAssetFiles(files);
-    },
-    [handleAssetFiles],
   );
 
   const handleDeleteAsset = useCallback(
@@ -1748,8 +1738,7 @@ export function TaskDetailSidebar({
 
         {/* Assets — with upload and delete */}
         <Tabs.Panel value="assets" style={{ flex: 1, overflow: 'auto', padding: 20 }}>
-          {/* Assets header: sec-label + upload button */}
-          <Box
+                    <Box
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -1772,36 +1761,6 @@ export function TaskDetailSidebar({
               <IconCloudUpload size={14} color="var(--app-primary-strong)" />
               Assets
             </Box>
-            {canExecute && (
-              <>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  hidden
-                  aria-label="Upload files"
-                  onChange={handleUploadAsset}
-                />
-                <Button
-                  size="compact-sm"
-                  leftSection={<IconCloudUpload size={13} />}
-                  onClick={() => fileInputRef.current?.click()}
-                  loading={isUploadingAssets}
-                  disabled={isUploadingAssets}
-                  styles={{
-                    root: {
-                      background: 'transparent',
-                      border: '1px solid var(--app-primary)',
-                      color: 'var(--app-primary-strong)',
-                      fontWeight: 600,
-                      fontSize: 13,
-                    },
-                  }}
-                >
-                  Upload new
-                </Button>
-              </>
-            )}
           </Box>
 
           {canExecute && (
