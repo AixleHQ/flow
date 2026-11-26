@@ -160,7 +160,7 @@ export function AddMachine({ runner, paths }: AddMachineProps) {
                     description="An absolute path. Its files are the machine's registration: keep them private."
                     value={directory}
                     onChange={(event) => setDirectory(event.currentTarget.value)}
-                    error={validDirectory ? undefined : 'Enter an absolute path, starting with /'}
+                    error={validDirectory ? undefined : 'Enter an absolute path, starting with /, without a colon'}
                   />
                 )}
               </Stack>
@@ -219,13 +219,7 @@ export function AddMachine({ runner, paths }: AddMachineProps) {
             </Group>
 
             <Section title="Remove this machine">
-              <RemoveMachine
-                tab={tab}
-                keep={keepChoice}
-                directory={directory}
-                version={registration.version}
-                validDirectory={validDirectory}
-              />
+              <RemoveMachine tab={tab} keep={keepChoice} version={registration.version} />
             </Section>
 
             {tab === 'service' && (
@@ -283,13 +277,11 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 interface RemoveMachineProps {
   tab: Tab;
   keep: 'none' | 'volume' | 'directory';
-  directory: string;
   version: string;
-  validDirectory: boolean;
 }
 
 /** How to take a machine away again (add-machine.md §2.3), for the command the dialog shows. */
-function RemoveMachine({ tab, keep, directory, version, validDirectory }: RemoveMachineProps) {
+function RemoveMachine({ tab, keep, version }: RemoveMachineProps) {
   if (tab === 'service') {
     return (
       <>
@@ -318,11 +310,7 @@ function RemoveMachine({ tab, keep, directory, version, validDirectory }: Remove
     '# 1. On the runner’s page, press Revoke or Delete for this machine',
     '# 2. Remove the container',
     `docker rm -f ${DOCKER_NAME}`,
-    ...(keep === 'volume'
-      ? [`docker volume rm ${DOCKER_NAME}`]
-      : validDirectory
-        ? [`sudo rm -rf ${shellQuote(directory)}`]
-        : []),
+    ...(keep === 'volume' ? [`docker volume rm ${DOCKER_NAME}`] : []),
     '',
     '# Or remove the machine from the machine’s side instead of step 1:',
     `# docker stop ${DOCKER_NAME} && docker run --rm --volumes-from ${DOCKER_NAME} ${image} unregister`,

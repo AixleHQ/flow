@@ -67,7 +67,7 @@ export const DOCKER_NAME = 'aixle-runner';
 export type DockerKeep = 'none' | 'volume' | { directory: string };
 
 /** A kept directory is any absolute path on the machine; it is quoted, so only its shape is checked. */
-export const isValidKeepDirectory = (path: string): boolean => path.startsWith('/') && !/[\n\r\0]/.test(path);
+export const isValidKeepDirectory = (path: string): boolean => path.startsWith('/') && !/[\n\r\0:]/.test(path);
 
 interface DockerCommandOptions {
   registration: MachineRegistration;

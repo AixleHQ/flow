@@ -97,6 +97,11 @@ describe('AddMachine', () => {
     expect(command()).toBe('Enter a valid machine name to see the instructions.');
     expect(within(dialog).getByRole('button', { name: 'Copy' })).toBeDisabled();
 
+    await user.clear(path);
+    await user.type(path, '/data:ro');
+    expect(command()).toBe('Enter a valid machine name to see the instructions.');
+    expect(within(dialog).getByText(/without a colon/)).toBeInTheDocument();
+
     await user.click(directory);
     expect(command()).toContain('docker run --rm');
     expect(within(dialog).queryByRole('textbox', { name: /Directory on this machine/ })).not.toBeInTheDocument();
@@ -134,6 +139,10 @@ describe('AddMachine', () => {
     await user.click(within(dialog).getByRole('checkbox', { name: /Keep the registration in a volume/ }));
     expect(within(dialog).getByLabelText('Remove instructions').textContent).toContain('docker volume rm aixle-runner');
     expect(within(dialog).getByLabelText('Remove instructions').textContent).not.toContain('--user');
+
+    await user.click(within(dialog).getByRole('checkbox', { name: /Keep it in a directory/ }));
+    expect(within(dialog).getByLabelText('Remove instructions').textContent).toContain('docker rm -f aixle-runner');
+    expect(within(dialog).getByLabelText('Remove instructions').textContent).not.toContain('rm -rf');
 
     await user.click(within(dialog).getByText('Linux service'));
     expect(within(dialog).getByLabelText('Remove instructions').textContent).toContain('service uninstall');
