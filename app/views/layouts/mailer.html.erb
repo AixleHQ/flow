@@ -7,12 +7,9 @@
   <meta name="color-scheme" content="dark">
   <meta name="supported-color-schemes" content="dark">
   <title><%= message.subject %></title>
-  <%# Outlook for Windows (the Word engine) drops the whole font stack for Times New Roman
-      once it sees a web font it cannot load, so the font link is hidden from it and
-      its text is pinned to Segoe UI instead. -%>
-  <!--[if !mso]><!-->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <!--<![endif]-->
+  <%# No web font is linked: Inter applies only where it is installed, and the rest
+      of the stack covers everyone else. Outlook for Windows (the Word engine) falls
+      back to Times New Roman on an unknown family, so its text is pinned to Segoe UI. -%>
   <!--[if mso]>
   <style>body, table, td, th, p, a, span, strong, b, div, h1, h2, h3 { font-family: 'Segoe UI', Arial, sans-serif !important; }</style>
   <![endif]-->

@@ -15,6 +15,15 @@ class ContentSecurityPolicyTest < ActionDispatch::IntegrationTest
     assert_includes reported, "media-src 'self'"
   end
 
+  test "fonts and stylesheets come only from this origin, never from Google or any https URL" do
+    get login_path
+
+    reported = response.headers["Content-Security-Policy-Report-Only"]
+    assert_no_match(/fonts\.(googleapis|gstatic)\.com/, reported)
+    assert_equal "'self' data:", reported[/font-src ([^;]*)/, 1]
+    assert_not_includes reported[/style-src ([^;]*)/, 1].to_s.split, "https:", "any https URL must not be a style source"
+  end
+
   test "the modern Permissions-Policy header denies unused features, not the legacy Feature-Policy" do
     get login_path
 

@@ -18,6 +18,7 @@ governance, community health — carry none.
 - **Tasks**: a card's Assets tab has a drop zone that takes several files at once, dropped or picked, so many files can be attached to a card in one go.
 
 ### Changed
+- Fonts are served by Flow itself: no page, error page or admin screen loads anything from Google Fonts any more, so visitors' browsers no longer send their IP address to Google. Emails no longer link a web font and use the system font stack. For operators: the Content Security Policy's `font-src` is now `'self' data:` and `style-src` allows only this origin and the asset host, no longer any HTTPS host.
 - **Tasks**: the task drawer shows the ticket title in its top bar on every tab, truncated with the full title on hover.
 - **Tasks**: a task's Details are read-only until you press Edit, so text can be selected and copied without opening a field. Save applies all changes in one request and Cancel discards them. In Activity, an edit names the fields it changed, and **Show changes** opens their old and new values.
 
