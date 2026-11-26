@@ -502,8 +502,8 @@ describe('Projects/Board/BoardPage', () => {
 
     // The title also renders on the board card, so scope to the drawer dialog.
     const drawer = within(screen.getByRole('dialog'));
-    // The drawer header shows the title, its ID, plus type and priority badges.
-    expect(drawer.getAllByText('Wire up authentication')).toHaveLength(2);
+    // The drawer header shows the title once, its ID, plus type and priority badges.
+    expect(drawer.getAllByText('Wire up authentication')).toHaveLength(1);
     expect(drawer.getByText('#1')).toBeInTheDocument();
     expect(drawer.getByText('bug')).toBeInTheDocument();
     expect(drawer.getByText('high')).toBeInTheDocument();

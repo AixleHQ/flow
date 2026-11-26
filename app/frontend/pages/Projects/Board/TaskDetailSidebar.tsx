@@ -107,12 +107,12 @@ import {
   taskAssignee,
   type BoardTeam,
 } from './assignee';
-import { InlineEditActions } from './InlineEditActions';
 import { formatCostCents, formatDuration, formatTokens } from './boardFormat';
 import styles from './BoardPage.module.css';
 import { canEditComment } from './canEditComment';
 import { gateCiStatus, gateDetail, gateLink, gateTooltip } from './gates';
 import { GATE_CHIP_WIDTH, GateStatusChip } from './GateStatusChip';
+import { InlineEditActions } from './InlineEditActions';
 import { InlineTagsEditor } from './InlineTagsEditor';
 import { LatestRunTile } from './LatestRunTile';
 import { TaskActivityEntry } from './TaskActivityEntry';
@@ -1007,8 +1007,9 @@ export function TaskDetailSidebar({
             <div
               className={styles.ptDesc}
               style={{
-                color:
-                  (pendingDesc ?? task.description) ? 'var(--mantine-color-dimmed)' : 'var(--mantine-color-placeholder)',
+                color: (pendingDesc ?? task.description)
+                  ? 'var(--mantine-color-dimmed)'
+                  : 'var(--mantine-color-placeholder)',
               }}
             >
               {(pendingDesc ?? task.description) ? (
