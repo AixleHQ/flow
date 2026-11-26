@@ -391,8 +391,6 @@ export function TaskDetailSidebar({
     if (task) {
       setTitleValue(task.title);
       setDescValue(task.description ?? '');
-      setPendingTitle(null);
-      setPendingDesc(null);
       setTab('details');
       setEditingTitle(false);
       setEditingDesc(false);
@@ -403,14 +401,6 @@ export function TaskDetailSidebar({
       setTagFilter('');
     }
   }, [task?.id]);
-
-  useEffect(() => {
-    setPendingTitle(null);
-  }, [task?.id, task?.title]);
-
-  useEffect(() => {
-    setPendingDesc(null);
-  }, [task?.id, task?.description]);
 
   const saveTitle = async () => {
     if (!task || titleValue.trim() === task.title) {

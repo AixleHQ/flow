@@ -520,7 +520,10 @@ describe('Projects/Board/BoardPage', () => {
     it('shows a rename that arrives from the server', () => {
       const { rerender } = renderAuthedPage(<BoardPage />, { props: drawerProps() });
 
-      inertiaState.pageProps = { ...inertiaState.pageProps, ...drawerProps({ title: 'Wire up SSO' }) };
+      inertiaState.pageProps = {
+        ...inertiaState.pageProps,
+        ...drawerProps({ title: 'Wire up SSO', updatedAt: '2026-06-25T00:01:00Z' }),
+      };
       rerender(<BoardPage />);
 
       expect(barTitle()).toHaveTextContent('Wire up SSO');
@@ -539,9 +542,15 @@ describe('Projects/Board/BoardPage', () => {
       fireEvent.keyDown(input, { key: 'Enter' });
       await waitFor(() => expect(barTitle()).toHaveTextContent('Local name'));
 
-      inertiaState.pageProps = { ...inertiaState.pageProps, ...drawerProps({ title: 'Local name' }) };
+      inertiaState.pageProps = {
+        ...inertiaState.pageProps,
+        ...drawerProps({ title: 'Local name', updatedAt: '2026-06-25T00:01:00Z' }),
+      };
       rerender(<BoardPage />);
-      inertiaState.pageProps = { ...inertiaState.pageProps, ...drawerProps({ title: 'Renamed elsewhere' }) };
+      inertiaState.pageProps = {
+        ...inertiaState.pageProps,
+        ...drawerProps({ title: 'Renamed elsewhere', updatedAt: '2026-06-25T00:02:00Z' }),
+      };
       rerender(<BoardPage />);
 
       expect(barTitle()).toHaveTextContent('Renamed elsewhere');
@@ -562,7 +571,13 @@ describe('Projects/Board/BoardPage', () => {
 
       inertiaState.pageProps = {
         ...inertiaState.pageProps,
-        ...drawerProps({ id: 2, number: 12, title: 'Render dashboard charts', boardColumnId: 200 }),
+        ...drawerProps({
+          id: 2,
+          number: 12,
+          title: 'Render dashboard charts',
+          boardColumnId: 200,
+          updatedAt: '2026-06-24T00:00:00Z',
+        }),
       };
       rerender(<BoardPage />);
 
