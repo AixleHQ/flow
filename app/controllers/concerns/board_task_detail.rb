@@ -56,7 +56,7 @@ module BoardTaskDetail
       task_activities: -> {
         next [] unless task
         task.board_activities.includes(:actor, :board_task).order(created_at: :desc)
-            .map { |a| BoardActivityResource.new(a).to_h }
+            .map { |a| BoardActivityResource.new(a, params: { without_changes: true }).to_h }
       },
       task_workflow_runs: -> {
         next [] unless task

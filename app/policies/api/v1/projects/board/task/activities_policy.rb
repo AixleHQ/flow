@@ -7,6 +7,7 @@ module Api
         module Task
           class ActivitiesPolicy < Web::Company::Projects::Board::Task::ActivitiesPolicy
             def index? = project_accessible?
+            def show? = project_accessible?
           end
         end
       end
