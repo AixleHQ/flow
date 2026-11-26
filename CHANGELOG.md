@@ -13,6 +13,9 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
+### Changed
+- **Tasks**: the task drawer shows the ticket title in its top bar on every tab, truncated with the full title on hover.
+
 ## [1.20.0] - 2026-11-26
 
 ### Added

@@ -1120,7 +1120,7 @@ export function TaskDetailSidebar({
 
   const body = (
     <>
-      {/* Panel bar — icon actions only, no title here */}
+      {/* Panel bar — icon actions on both sides; the drawer shows the title between them */}
       <Box
         style={{
           display: 'flex',
@@ -1152,7 +1152,20 @@ export function TaskDetailSidebar({
             </Tooltip>
           )}
         </CopyButton>
-        <Box style={{ flex: 1 }} />
+        {variant === 'drawer' && task ? (
+          <Text
+            size="sm"
+            fw={600}
+            truncate="end"
+            title={pendingTitle ?? task.title}
+            data-testid="panel-bar-title"
+            style={{ flex: 1, minWidth: 0, padding: '0 8px' }}
+          >
+            {pendingTitle ?? task.title}
+          </Text>
+        ) : (
+          <Box style={{ flex: 1 }} />
+        )}
         {canExecute && canTriggerWorkflow && (
           <Button
             size="compact-sm"
