@@ -18,6 +18,9 @@ scope "/runner/v1", module: "runner_gateway/v1", as: :runner_gateway_v1, default
                                      constraints: { version: %r{[^/]+} }, format: false
   get "releases/:version/:platform", to: "releases#show", as: :release,
                                      constraints: { version: %r{[^/]+}, platform: %r{[^/]+} }, format: false
+  # The install script of the "Linux service" tab (add-machine.md §3.4), public for
+  # the same reason. Not `install.sh`: DESIGN.md §6.2 reserves that for the Coder bootstrap.
+  get "machine-install.sh", to: "machine_installs#show", as: :machine_install, format: false
   # The callback proxy (PROTOCOL.md §5.8): any method reaches the controller,
   # which passes only the allow-listed ones. `format: false` keeps a path such
   # as `store/report.json` whole.
