@@ -318,7 +318,10 @@ export function TaskDetailSidebar({
   variant?: 'drawer' | 'page';
 }) {
   const [tab, setTab] = useState<string | null>('details');
-  const [draft, setDraft] = useState<TaskDraft | null>(null);
+  const [edits, setEdits] = useState<Partial<TaskDraft> | null>(null);
+  // Only the fields the person changed are kept; the rest follow the task, so a change made
+  // elsewhere during the edit (an agent adding a tag) shows in the form and Save does not undo it.
+  const draft = task && edits ? { ...draftFromTask(task), ...edits } : null;
   const [savingTask, setSavingTask] = useState(false);
   const [previewKey, setPreviewKey] = useState<string | null>(null);
   const previewItems = useMemo(
@@ -441,7 +444,7 @@ export function TaskDetailSidebar({
   useEffect(() => {
     if (task) {
       setTab('details');
-      setDraft(null);
+      setEdits(null);
       setDeleteConfirm(false);
       setCommentBody('');
       setCommentTags([]);
@@ -450,19 +453,17 @@ export function TaskDetailSidebar({
     }
   }, [task?.id]);
 
-  const startEdit = () => {
-    if (task) setDraft(draftFromTask(task));
-  };
+  const startEdit = () => setEdits({});
 
-  const cancelEdit = () => setDraft(null);
+  const cancelEdit = () => setEdits(null);
 
-  const patchDraft = (changes: Partial<TaskDraft>) => setDraft((d) => (d ? { ...d, ...changes } : d));
+  const patchDraft = (changes: Partial<TaskDraft>) => setEdits((e) => (e ? { ...e, ...changes } : e));
 
   const saveEdit = async () => {
     if (!task || !draft || savingTask) return;
     const changes = changedFields(task, draft);
     if (Object.keys(changes).length === 0) {
-      setDraft(null);
+      setEdits(null);
       return;
     }
     setSavingTask(true);
@@ -476,7 +477,7 @@ export function TaskDetailSidebar({
     // On success the cable refreshes selectedTask, and the effect above clears the pending values.
     if (typeof changes.title === 'string') setPendingTitle(changes.title);
     if (typeof changes.description === 'string') setPendingDesc(changes.description);
-    setDraft(null);
+    setEdits(null);
     router.reload({ only: ['selected_task', 'task_activities'] });
   };
 
@@ -635,14 +636,17 @@ export function TaskDetailSidebar({
     <Box style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 18 }}>
       {draft ? (
         <textarea
+          ref={fitToContent}
           className={styles.ptTitle}
           aria-label="Title"
+          // The drawer reads Escape on the window before this field does; the attribute keeps it to
+          // cancelling the edit, instead of also asking to discard the draft the cancel just dropped.
+          data-mantine-stop-propagation
           value={draft.title}
           rows={1}
           onChange={(e) => {
             patchDraft({ title: e.currentTarget.value });
-            e.currentTarget.style.height = 'auto';
-            e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
+            fitToContent(e.currentTarget);
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') e.preventDefault();
@@ -811,7 +815,6 @@ export function TaskDetailSidebar({
             size="xs"
             variant="unstyled"
             styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
-            onKeyDown={cancelOnEscape}
           />
         ) : (
           <Text size="sm">{TASK_TYPE_OPTIONS.find((o) => o.value === task.taskType)?.label ?? task.taskType}</Text>
@@ -830,7 +833,6 @@ export function TaskDetailSidebar({
             size="xs"
             variant="unstyled"
             styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
-            onKeyDown={cancelOnEscape}
           />
         ) : (
           <Text size="sm">{PRIORITY_OPTIONS.find((o) => o.value === (task.priority ?? ''))?.label}</Text>
@@ -850,7 +852,6 @@ export function TaskDetailSidebar({
             size="xs"
             variant="unstyled"
             styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
-            onKeyDown={cancelOnEscape}
           />
         ) : (
           <Text size="sm">{task.assigneeTeamName ?? task.assigneeName ?? 'Unassigned'}</Text>
@@ -873,7 +874,6 @@ export function TaskDetailSidebar({
                 size="xs"
                 variant="unstyled"
                 styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
-                onKeyDown={cancelOnEscape}
               />
             ) : (
               <Text size="sm">
@@ -911,6 +911,7 @@ export function TaskDetailSidebar({
             ref={fitToContent}
             className={styles.ptDesc}
             aria-label="Description"
+            data-mantine-stop-propagation
             value={draft.description}
             rows={3}
             onChange={(e) => {
