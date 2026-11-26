@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
+import { notifications } from '@mantine/notifications';
 import { fireEvent } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -84,7 +85,10 @@ describe('Projects/Board/TaskPage', () => {
       return user;
     };
 
-    beforeEach(() => vi.mocked(router.reload).mockClear());
+    beforeEach(() => {
+      vi.mocked(router.reload).mockClear();
+      notifications.clean();
+    });
 
     it('attaches every dropped file and reloads once', async () => {
       const fetchSpy = answerFetch({ 'POST /api/v1/projects/7/tasks/3/assets': {} });
@@ -139,7 +143,25 @@ describe('Projects/Board/TaskPage', () => {
       });
 
       expect(await screen.findByText('1 of 2 files failed to upload')).toBeInTheDocument();
+      expect(screen.getByText('bad.txt: File is too large')).toBeInTheDocument();
       expect(router.reload).toHaveBeenCalledTimes(1);
+    });
+
+    it('names the file when a single upload is refused', async () => {
+      answerFetch({
+        'POST /api/v1/projects/7/tasks/3/assets': new Response(JSON.stringify({ error: 'File is too large' }), {
+          status: 422,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      });
+      await openAssets();
+
+      fireEvent.drop(screen.getByText('Click to select files or drag & drop'), {
+        dataTransfer: { files: [file('huge.bin')] },
+      });
+
+      expect(await screen.findByText('huge.bin: File is too large')).toBeInTheDocument();
+      expect(screen.queryByText(/files failed to upload/)).not.toBeInTheDocument();
     });
 
     it('hides the drop zone without execute permission', async () => {

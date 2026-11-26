@@ -74,7 +74,7 @@ import type TaskComment from 'types/generated/TaskComment';
 import type TaskStatistics from 'types/generated/TaskStatistics';
 import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 
-import { apiMutate } from 'shared/lib/apiFetch';
+import { ApiError, apiMutate, apiRequest } from 'shared/lib/apiFetch';
 import { formatDateTime, formatDateTimeShort } from 'shared/lib/formatDate';
 import { useLocalStorage } from 'shared/lib/hooks/useLocalStorage';
 import { useUnsavedChanges } from 'shared/lib/unsaved-changes/useUnsavedChanges';
@@ -240,32 +240,49 @@ async function deleteTaskComment(projectId: number, taskId: number, commentId: n
 }
 
 const ASSET_UPLOAD_CONCURRENCY = 3;
+const LISTED_UPLOAD_FAILURES = 5;
 
-async function postTaskAsset(projectId: number, taskId: number, file: File) {
+/** Resolves with why the file was refused, or null once it is attached. */
+async function postTaskAsset(projectId: number, taskId: number, file: File): Promise<string | null> {
   const formData = new FormData();
   formData.append('task_asset[name]', file.name);
   formData.append('task_asset[file]', file);
-  return apiMutate(apiV1ProjectTaskAssetsPath(projectId, taskId), {
-    method: 'POST',
-    body: formData,
-  });
+  try {
+    await apiRequest(apiV1ProjectTaskAssetsPath(projectId, taskId), { method: 'POST', body: formData });
+    return null;
+  } catch (error) {
+    return error instanceof ApiError ? error.message : 'The upload failed';
+  }
 }
 
 async function uploadTaskAssets(projectId: number, taskId: number, files: File[], onProgress: (done: number) => void) {
   let next = 0;
   let done = 0;
-  let failed = 0;
+  const failures: string[] = [];
   const worker = async () => {
     while (next < files.length) {
       const file = files[next++];
-      if (!(await postTaskAsset(projectId, taskId, file))) failed += 1;
+      const reason = await postTaskAsset(projectId, taskId, file);
+      if (reason) failures.push(`${file.name}: ${reason}`);
       done += 1;
       onProgress(done);
     }
   };
   await Promise.all(Array.from({ length: Math.min(ASSET_UPLOAD_CONCURRENCY, files.length) }, worker));
-  if (failed > 0 && files.length > 1) {
-    notifications.show({ color: 'red', message: `${failed} of ${files.length} files failed to upload` });
+  if (failures.length > 0) {
+    const hidden = failures.length - LISTED_UPLOAD_FAILURES;
+    notifications.show({
+      color: 'red',
+      title: files.length > 1 ? `${failures.length} of ${files.length} files failed to upload` : undefined,
+      message: (
+        <>
+          {failures.slice(0, LISTED_UPLOAD_FAILURES).map((failure, index) => (
+            <div key={`${index}:${failure}`}>{failure}</div>
+          ))}
+          {hidden > 0 && <div>and {hidden} more</div>}
+        </>
+      ),
+    });
   }
   router.reload({ only: ['task_assets', 'task_activities'] });
 }
