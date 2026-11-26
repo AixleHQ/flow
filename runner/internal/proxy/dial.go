@@ -19,14 +19,14 @@ import (
 // network (docs/design/agent-runtimes/runner-relay.md §3.3; PROTOCOL.md §8.12).
 //
 // The sidecar owns the session's network namespace, so it can reach `127.0.0.1:<port>`
-// where the host runner cannot (rootless Docker gives a container no address the machine
-// reaches). The relay socket runs from the sidecar to the host runner, so a second socket
+// where the machine runner cannot (rootless Docker gives a container no address the machine
+// reaches). The relay socket runs from the sidecar to the machine runner, so a second socket
 // runs the other way: the sidecar listens on `dial.sock`, in a directory of the host
 // runner's state directory that is mounted read-write into the sidecar, and the host
 // runner connects to it for each stream.
 //
-//	host runner → sidecar   "<port>\n"
-//	sidecar → host runner   "OK\n"            the port answered; bytes follow both ways
+//	machine runner → sidecar   "<port>\n"
+//	sidecar → machine runner   "OK\n"            the port answered; bytes follow both ways
 //	                        "ERR <reason>\n"  it did not, or the port is not allowed; the sidecar closes
 //
 // The sidecar takes the allowed ports on its command line, from `container.start`'s
@@ -35,7 +35,7 @@ import (
 const (
 	// DialSocketName is the socket's file in the dial directory.
 	DialSocketName = "dial.sock"
-	// DialTimeout bounds the sidecar's dial of the port, and the host runner's wait
+	// DialTimeout bounds the sidecar's dial of the port, and the machine runner's wait
 	// for the sidecar's answer.
 	DialTimeout = 8 * time.Second
 
@@ -147,7 +147,7 @@ func ServeDial(ctx context.Context, socket string, ports []int, logger *slog.Log
 	if err != nil {
 		return fmt.Errorf("listening on %s: %w", socket, err)
 	}
-	// The host runner connects as another user.
+	// The machine runner connects as another user.
 	if err := os.Chmod(socket, 0o666); err != nil {
 		listener.Close()
 		return err

@@ -1,6 +1,8 @@
 // Package preflight checks, before `configure` registers a machine, that it can run
 // sessions (DESIGN.md §6.8): Linux on amd64 or arm64, a reachable Docker daemon with
-// API 1.41 or later, and 20 GiB free where the daemon keeps its images.
+// API 1.41 or later. The free disk space is reported for information only: it is
+// measured where the runner can, logged, and never refuses a machine
+// (docs/design/agent-runtimes/add-machine.md §3.3).
 package preflight
 
 import (
@@ -16,8 +18,16 @@ import (
 // MinDockerAPI is the lowest Docker Engine API version a machine may run.
 const MinDockerAPI = "1.41"
 
-// MinFreeBytes is the free space required for images and the workspace volume.
-const MinFreeBytes uint64 = 20 << 30
+// WarnFreeBytes is the free space below which the report warns. It never refuses.
+const WarnFreeBytes uint64 = 20 << 30
+
+// MinSubpathAPI and MinSubpathEngine are the Docker Engine API and release that
+// mount a volume's subdirectory, which a runner whose state directory is a volume
+// needs for its proxy sidecar.
+const (
+	MinSubpathAPI    = "1.45"
+	MinSubpathEngine = "26.0"
+)
 
 // Docker is the part of the SDK client the preflight calls.
 type Docker interface {
@@ -30,6 +40,9 @@ type Env struct {
 	GOOS   string
 	GOARCH string
 	Docker Docker
+	// StateDir is the runner's state directory: the path whose free space is
+	// reported. Empty measures nothing.
+	StateDir string
 	// FreeBytes returns the space available to unprivileged writes under path.
 	FreeBytes func(path string) (uint64, error)
 }
@@ -42,7 +55,14 @@ type Report struct {
 	DockerVersion    string
 	DockerAPIVersion string
 	DockerRootDir    string
-	DiskFreeBytes    uint64
+	// DiskFreePath is where DiskFreeBytes was measured: the state directory.
+	// It is empty when nothing was measured.
+	DiskFreePath  string
+	DiskFreeBytes uint64
+	// Notes are what the preflight found that does not refuse the machine: the
+	// free space figure with its path, a warning below WarnFreeBytes, a measure
+	// that failed. They are for the operator's log, and nothing relies on them.
+	Notes []string
 }
 
 // Facts is the report as register's `facts` (runner/protocol/PROTOCOL.md §5.1).
@@ -94,15 +114,44 @@ func Run(ctx context.Context, env Env) (Report, error) {
 		return report, errors.Join(failures...)
 	}
 	report.DockerRootDir = info.Info.DockerRootDir
-	free, err := env.FreeBytes(report.DockerRootDir)
-	if err != nil {
-		failures = append(failures, fmt.Errorf("measuring the free space of %s, where Docker keeps its images, failed: %v", report.DockerRootDir, err))
-		return report, errors.Join(failures...)
-	}
-	report.DiskFreeBytes = free
-	if free < MinFreeBytes {
-		failures = append(failures, fmt.Errorf("%s has %.1f GiB free: aixle-runner needs at least 20 GiB for images and the workspace volume", report.DockerRootDir, float64(free)/(1<<30)))
-	}
+	report.measureDisk(env)
 
 	return report, errors.Join(failures...)
+}
+
+// measureDisk reports the free space of the state directory, which in a volume is
+// on the daemon's filesystem and in a directory on the machine's. It is for
+// information only: a failed measure or a low figure is a note, not a failure.
+func (r *Report) measureDisk(env Env) {
+	if env.StateDir == "" {
+		return
+	}
+	free, err := env.FreeBytes(env.StateDir)
+	if err != nil {
+		r.Notes = append(r.Notes, fmt.Sprintf("the free space of %s could not be measured (%v); nothing relies on it", env.StateDir, err))
+		return
+	}
+	r.DiskFreePath, r.DiskFreeBytes = env.StateDir, free
+	gib := float64(free) / (1 << 30)
+	r.Notes = append(r.Notes, fmt.Sprintf("%.1f GiB free on %s (for information only)", gib, env.StateDir))
+	if free < WarnFreeBytes {
+		r.Notes = append(r.Notes, fmt.Sprintf("only %.1f GiB is free on %s: images and the workspace volume may not fit; this is a warning, the runner starts anyway", gib, env.StateDir))
+	}
+}
+
+// RequireSubpath is the check of a runner whose state directory is a volume: the
+// daemon must be Docker Engine 26.0 (API 1.45) or later, which mounts a volume's
+// subdirectory. The error names the version found, the minimum and the ways out.
+// A runner with a directory of the machine does not need it.
+func RequireSubpath(ctx context.Context, d Docker) error {
+	version, err := d.ServerVersion(ctx, client.ServerVersionOptions{})
+	if err != nil {
+		return fmt.Errorf("the Docker daemon is not reachable: %v", err)
+	}
+	if version.APIVersion != "" && !versions.LessThan(version.APIVersion, MinSubpathAPI) {
+		return nil
+	}
+	return fmt.Errorf("the Docker daemon is Docker Engine %s (API %q): a runner whose state directory is a volume needs Docker Engine %s or later (API %s). "+
+		"Update Docker, or keep the runner's state in a directory on this machine (mount a directory at the state directory instead of a volume), or use the Linux service",
+		version.Version, version.APIVersion, MinSubpathEngine, MinSubpathAPI)
 }

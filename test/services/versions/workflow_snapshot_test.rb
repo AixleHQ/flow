@@ -142,6 +142,31 @@ class Versions::WorkflowSnapshotTest < ActiveSupport::TestCase
     assert_empty @build.reload.config_item_ids
   end
 
+  test "AWS roles are recorded, named and restored like the other resource lists" do
+    role = create(:aws_oidc_role, name: "prod-diag",
+                                  integration: create(:integration, :aws_oidc, company: @company, project: @project))
+    Versions.save!(@workflow, actor: @actor) do
+      @workflow.merge_config!("base_aws_oidc_role_ids" => [ role.id ])
+      @build.update!(aws_oidc_role_ids: [ role.id ])
+    end
+    with_role = @workflow.latest_version
+
+    assert_equal [ role.id ], with_role.snapshot.dig("config", "base_aws_oidc_role_ids")
+    assert_equal [ role.id ], with_role.snapshot["steps"].first["aws_oidc_role_ids"]
+    assert_equal({ "prod-diag" => false },
+                 Versions::ReferenceNames.for_snapshots([ with_role.snapshot ], workflow: @workflow)
+                   .fetch("AwsOidcRole").values.to_h { |ref| [ ref[:name], ref[:archived] ] })
+
+    Versions.save!(@workflow, actor: @actor) do
+      @workflow.merge_config!("base_aws_oidc_role_ids" => [])
+      @build.update!(aws_oidc_role_ids: [])
+    end
+    Versions.revert!(@workflow, to: with_role, actor: @actor)
+
+    assert_equal [ role.id ], @workflow.reload.base_aws_oidc_role_ids
+    assert_equal [ role.id ], @build.reload.aws_oidc_role_ids
+  end
+
   test "revert restores a dependency chain whatever order the steps were saved in" do
     deploy = create(:step, workflow: @workflow, name: "Deploy", position: 3, depends_on_step_ids: [ @test.id ])
     Versions.save!(@workflow, actor: @actor) { @workflow.update!(description: "chain") }

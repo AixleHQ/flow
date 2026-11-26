@@ -44,6 +44,20 @@ class BoardActivityResourceTest < ActiveSupport::TestCase
     assert_equal "Deleted user created 'Ship it'", resource["description"]
   end
 
+  test "an edit names its changed fields, and the values are left out when asked" do
+    activity = BoardActivity.create!(
+      board: @board, board_task: @task, event_type: :task_updated, actor: @user, actor_type: :human,
+      metadata: { "changes" => { "description" => [ "Old secret", "New secret" ] }, "source" => "api" }
+    )
+
+    full = BoardActivityResource.new(activity).to_h
+    feed = BoardActivityResource.new(activity, params: { without_changes: true }).to_h
+
+    assert_equal [ "Description" ], feed["changedFields"]
+    assert_equal({ "source" => "api" }, feed["metadata"])
+    assert_equal [ "Old secret", "New secret" ], full["metadata"]["changes"]["description"]
+  end
+
   private
 
   def describe_activity(event_type, actor_type: :system, metadata: {})

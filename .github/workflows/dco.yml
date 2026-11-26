@@ -64,7 +64,9 @@ jobs:
             # in the CLA workflow instead. Our own platform agents commit through the
             # aixle-com GitHub App, but not every one of their identities carries the
             # `[bot]` suffix — match our service-account domains too, since those
-            # commits are the company's own output.
+            # commits are the company's own output. Agent sessions commit as
+            # `noreply@<deployment domain>` (#545), so a subdomain such as
+            # flow.aixle.com is one of ours as well.
             author_email=$(printf '%s' "$author_email" | tr '[:upper:]' '[:lower:]')
             if [ "$trusted_opener" -eq 1 ]; then
               case "$author_name" in
@@ -74,7 +76,7 @@ jobs:
                   ;;
               esac
               case "$author_email" in
-                *'@aixle.com' | *'@aixle.local' | *'@aixle.bot' | *'@palad.ai')
+                *'@aixle.com' | *'@'*'.aixle.com' | *'@aixle.local' | *'@aixle.bot' | *'@palad.ai')
                   echo "skip     $sha (service account: $author_email)"
                   continue
                   ;;

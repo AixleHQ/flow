@@ -19,6 +19,7 @@ Each integration has its own page:
 | **Slack** | Workflows started by mentioning the app, a status card in the thread, the `chat_*` tools | [Slack](/docs/slack) |
 | **Microsoft Teams** | Workflows started from channels, group chats and 1:1 chats, a status card in the thread, files both ways, the `chat_*` tools | [Microsoft Teams](/docs/teams) |
 | **Coder** | Remote workspaces an agent can allocate, run commands on and release | [Coder](/docs/coder) |
+| **AWS** | An IAM role in your AWS account that a workflow step assumes with no access key | [AWS](/docs/aws) |
 
 Jira and Bitbucket are both under **Connect → Atlassian**: pick Jira for issues as trackers, Bitbucket for repositories. They stay two integrations — a Jira site and a Bitbucket workspace are connected separately — and a run started from a Jira issue puts the issue key in its branch and pull-request names, so Jira links them when your Atlassian organization connects the two products.
 

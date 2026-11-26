@@ -24,11 +24,13 @@ module Versions
       # restores empty.
       STEP_REFERENCES = {
         "tool_ids" => "Tool", "skill_ids" => "Skill", "mcp_server_ids" => "MCPServer",
-        "asset_ids" => "Asset", "repository_ids" => "Repository", "config_item_ids" => "ConfigItem"
+        "asset_ids" => "Asset", "repository_ids" => "Repository", "config_item_ids" => "ConfigItem",
+        "aws_oidc_role_ids" => "AwsOidcRole"
       }.freeze
       CONFIG_REFERENCES = {
         "base_tool_ids" => "Tool", "base_skill_ids" => "Skill", "base_mcp_server_ids" => "MCPServer",
-        "base_asset_ids" => "Asset", "base_repository_ids" => "Repository", "base_config_item_ids" => "ConfigItem"
+        "base_asset_ids" => "Asset", "base_repository_ids" => "Repository", "base_config_item_ids" => "ConfigItem",
+        "base_aws_oidc_role_ids" => "AwsOidcRole"
       }.freeze
 
       class << self

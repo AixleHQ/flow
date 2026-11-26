@@ -268,6 +268,28 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     assert_not_equal "Must fail", step.name
   end
 
+  test "AWS roles attach to a step and to the workflow's base list, and read back" do
+    integration = create(:integration, :aws_oidc, company: @company, project: @project)
+    role = create(:aws_oidc_role, integration: integration)
+    foreign = create(:aws_oidc_role)
+    workflow_args = { project_id: @project.id, workflow_id: @workflow.id }
+
+    created = payload(call_tool("create_workflow_step",
+                                workflow_args.merge(name: "Diagnose", instructions: "read the logs",
+                                                    aws_oidc_role_ids: [ role.id ])))
+    assert_equal [ role.id ], created["aws_oidc_role_ids"]
+
+    refused = call_tool("update_workflow_step", workflow_args.merge(step_id: created["id"], aws_oidc_role_ids: [ foreign.id ]))
+    assert error?(refused)
+    assert_match(/outside this project/, text(refused))
+    read_back = payload(call_tool("get_workflow_step", workflow_args.merge(step_id: created["id"])))
+    assert_equal [ role.id ], read_back["aws_oidc_role_ids"]
+
+    updated = payload(call_tool("update_workflow", workflow_args.merge(base_aws_oidc_role_ids: [ role.id ])))
+    assert_equal [ role.id ], updated["base_aws_oidc_role_ids"]
+    assert_equal [ role.id ], payload(call_tool("get_workflow", workflow_args))["base_aws_oidc_role_ids"]
+  end
+
   test "update_workflow_step toggles bmad_enabled and allow_non_interactive" do
     step = create(:step, workflow: @workflow)
 
@@ -519,6 +541,20 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     missing = call_tool("get_workflow_draft_diff", args)
     assert error?(missing)
     assert_match(/has no open draft/, text(missing))
+  end
+
+  test "list_workflow_runs and get_workflow_run name the board task a run was started for" do
+    board = create(:board, project: @project)
+    task = create(:board_task, board: board, board_column: create(:board_column, board: board), title: "Fix login")
+    for_task = create(:workflow_run, workflow: @workflow, project: @project, user: @user, board_task: task)
+    loose = create(:workflow_run, workflow: @workflow, project: @project, user: @user)
+
+    rows = payload(call_tool("list_workflow_runs", { project_id: @project.id }))["runs"].index_by { |r| r["id"] }
+    shown = payload(call_tool("get_workflow_run", { project_id: @project.id, run_id: for_task.id }))
+
+    assert_equal [ task.number, "Fix login" ], rows.fetch(for_task.id).values_at("task_number", "task_title")
+    assert_equal [ task.number, "Fix login" ], shown.values_at("task_number", "task_title")
+    assert_equal [ nil, nil ], rows.fetch(loose.id).values_at("task_number", "task_title")
   end
 
   test "trigger_workflow starts a run and list/get_workflow_run report it" do

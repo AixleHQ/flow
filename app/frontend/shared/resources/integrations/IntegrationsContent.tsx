@@ -23,6 +23,7 @@ import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import {
   IconAdjustments,
+  IconBrandAws,
   IconBuildingCommunity,
   IconCheck,
   IconChevronDown,
@@ -36,6 +37,7 @@ import {
   IconLink,
   IconPencil,
   IconPlugConnected,
+  IconPlugConnectedX,
   IconPlus,
   IconRefresh,
   IconSearch,
@@ -61,6 +63,8 @@ import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/Resourc
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { AtlassianConnectModal, type AtlassianConnectionState } from './AtlassianConnectModal';
+import { awsOidcSummary, confirmAwsOidcDisconnect, connectAwsOidc, type AwsOidcProps } from './awsOidcActions';
+import { AwsOidcDialog } from './AwsOidcDialog';
 import { AzureDevopsConnectModal, type AzureDevopsProps, type AzureSignIn } from './AzureDevopsConnectModal';
 import { BitbucketConnectModal, type BitbucketProps } from './BitbucketConnectModal';
 import { ChatConnectModal, type ChatProvider, type ChatScope } from './ChatConnectModal';
@@ -80,6 +84,7 @@ import { LinearConnectModal, type LinearProps, LinearTeamsModal } from './Linear
 import { TeamsApprovalModal } from './TeamsApprovalModal';
 import { YoutrackConnectModal, type YoutrackProps } from './YoutrackConnectModal';
 
+export type { AwsOidcProps } from './awsOidcActions';
 export type { AzureDevopsProps } from './AzureDevopsConnectModal';
 export type { BitbucketProps } from './BitbucketConnectModal';
 export type { GithubProps } from './GithubConnectModal';
@@ -126,6 +131,8 @@ interface IntegrationsContentProps {
   teams?: TeamsProps;
   // Absent on the company page. `enabled: false` is a deployment Insights has not registered.
   insights?: InsightsProps;
+  // Absent on the company page.
+  awsOidc?: AwsOidcProps;
 }
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -140,6 +147,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   linear: 'Linear',
   youtrack: 'YouTrack',
   insights: 'Aixle Insights',
+  aws_oidc: 'AWS',
 };
 
 const CHAT_PROVIDERS = ['slack', 'teams'];
@@ -194,6 +202,7 @@ export const IntegrationsContent = ({
   slack,
   teams,
   insights,
+  awsOidc,
 }: IntegrationsContentProps) => {
   const { canExecute, canManageCompany } = useProjectPermissions();
   const isProjectContext = basePath.includes('projects');
@@ -268,6 +277,13 @@ export const IntegrationsContent = ({
   const [insightsConnectOpen, setInsightsConnectOpen] = useState(false);
   const [insightsProjectOpen, setInsightsProjectOpen] = useState(false);
   const insightsAvailable = isProjectContext && !!insights?.enabled && !!insights.canConnect && !insights.connection;
+
+  // One AWS OIDC connection per project: offered until there is one, managed from its row after.
+  const [awsOidcOpen, setAwsOidcOpen] = useState(false);
+  const awsOidcAvailable = isProjectContext && projectId !== undefined && !!awsOidc?.canManage && !awsOidc.connection;
+  const handleConnectAwsOidc = useCallback(() => {
+    if (projectId !== undefined) connectAwsOidc(projectId, () => setAwsOidcOpen(true));
+  }, [projectId]);
 
   // The Atlassian and Linear apps' callbacks land here with the connection still to finish.
   useEffect(() => {
@@ -682,6 +698,11 @@ export const IntegrationsContent = ({
                     Aixle Insights
                   </Menu.Item>
                 )}
+                {awsOidcAvailable && (
+                  <Menu.Item leftSection={<IconBrandAws size={16} />} onClick={handleConnectAwsOidc}>
+                    AWS
+                  </Menu.Item>
+                )}
               </Menu.Dropdown>
             </Menu>
           )
@@ -822,6 +843,11 @@ export const IntegrationsContent = ({
                         Aixle Insights
                       </Button>
                     )}
+                    {awsOidcAvailable && (
+                      <Button variant="outline" leftSection={<IconBrandAws size={16} />} onClick={handleConnectAwsOidc}>
+                        AWS
+                      </Button>
+                    )}
                   </Group>
                 )
               }
@@ -867,7 +893,9 @@ export const IntegrationsContent = ({
                           <IntegrationLogo
                             provider={integration.provider}
                             size={18}
-                            fallback={<IconLink size={18} />}
+                            fallback={
+                              integration.provider === 'aws_oidc' ? <IconBrandAws size={18} /> : <IconLink size={18} />
+                            }
                           />
                         </Box>
                         <Box style={{ minWidth: 0 }}>
@@ -908,6 +936,11 @@ export const IntegrationsContent = ({
                           {integration.provider === 'insights' && insights && (
                             <Text fz={11} c="dimmed" truncate maw={260}>
                               {insightsProjectSummary(insights)}
+                            </Text>
+                          )}
+                          {integration.provider === 'aws_oidc' && awsOidc?.connection && (
+                            <Text fz={11} c="dimmed" truncate maw={260}>
+                              {awsOidcSummary(awsOidc.connection)}
                             </Text>
                           )}
                           {/* Which Azure project this connection is pinned to, and
@@ -1154,6 +1187,43 @@ export const IntegrationsContent = ({
                                   }
                                 >
                                   <IconTrash size={16} />
+                                </ActionIcon>
+                              </Tooltip>
+                            )}
+                          </>
+                        )}
+                        {integration.provider === 'aws_oidc' && awsOidc?.connection && projectId != null && (
+                          <>
+                            <Button
+                              aria-label="Manage AWS"
+                              size="compact-xs"
+                              variant="light"
+                              leftSection={<IconSettings size={12} />}
+                              onClick={() => setAwsOidcOpen(true)}
+                            >
+                              Manage
+                            </Button>
+                            {awsOidc.canManage && awsOidc.connection.status === 'active' && (
+                              <Tooltip label="Disconnect">
+                                <ActionIcon
+                                  aria-label="Disconnect AWS"
+                                  variant="subtle"
+                                  size="sm"
+                                  onClick={() => confirmAwsOidcDisconnect(projectId)}
+                                >
+                                  <IconPlugConnectedX size={16} />
+                                </ActionIcon>
+                              </Tooltip>
+                            )}
+                            {awsOidc.canManage && awsOidc.connection.status !== 'active' && (
+                              <Tooltip label="Reconnect">
+                                <ActionIcon
+                                  aria-label="Reconnect AWS"
+                                  variant="subtle"
+                                  size="sm"
+                                  onClick={() => connectAwsOidc(projectId)}
+                                >
+                                  <IconPlugConnected size={16} />
                                 </ActionIcon>
                               </Tooltip>
                             )}
@@ -1611,6 +1681,15 @@ export const IntegrationsContent = ({
             insights={insights}
           />
         </>
+      )}
+
+      {awsOidc && projectId !== undefined && (
+        <AwsOidcDialog
+          opened={awsOidcOpen}
+          onClose={() => setAwsOidcOpen(false)}
+          projectId={projectId}
+          awsOidc={awsOidc}
+        />
       )}
 
       {azureDevops && (

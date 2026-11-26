@@ -2,6 +2,7 @@ import { Head, InfiniteScroll, Link, router } from '@inertiajs/react';
 import { Button, Center, Loader, Select, TextInput, Tooltip } from '@mantine/core';
 import { useDebouncedCallback } from '@mantine/hooks';
 import {
+  IconCheckbox,
   IconChevronRight,
   IconExternalLink,
   IconLock,
@@ -22,6 +23,7 @@ import { costColor, formatCost, formatDuration, formatTokens } from 'shared/lib/
 import {
   companyProjectSessionPath,
   companyProjectSessionsPath,
+  companyProjectTaskPath,
   companyProjectWorkflowRunPath,
   rowsCompanyProjectSessionsPath,
   userPath,
@@ -67,6 +69,7 @@ interface Filters {
   status?: string;
   userId?: string;
   workflowId?: string;
+  taskNumber?: string;
 }
 
 /** The ransack `q` the list honours: a date range and a sort. */
@@ -84,6 +87,7 @@ export interface SessionsRunsPageProps {
   total: number;
   userOptions: { id: number; name: string }[];
   workflowOptions?: { id: number; name: string }[];
+  taskOptions?: { number: number; title: string }[];
   /** Signed stream the page hands out; it names the sessions and runs that changed. */
   cableStream?: string;
 }
@@ -120,6 +124,7 @@ const OPENABLE_SESSION_STATES = new Set([
 
 const NO_QUERY: ListQuery = {};
 const NO_OPTIONS: { id: number; name: string }[] = [];
+const NO_TASK_OPTIONS: { number: number; title: string }[] = [];
 
 /** Router params for the list's `q`; the default sort stays out of the URL. */
 function listQueryParams({ s, createdFrom, createdUntil }: ListQuery): Record<string, string> | null {
@@ -165,6 +170,7 @@ const SessionsRunsPage = ({
   total,
   userOptions,
   workflowOptions = NO_OPTIONS,
+  taskOptions = NO_TASK_OPTIONS,
   cableStream,
 }: SessionsRunsPageProps) => {
   const { canExecute } = useProjectPermissions();
@@ -286,6 +292,7 @@ const SessionsRunsPage = ({
     filters.status ||
     filters.userId ||
     filters.workflowId ||
+    filters.taskNumber ||
     query.createdFrom
   );
 
@@ -297,6 +304,10 @@ const SessionsRunsPage = ({
   const workflowSelectData = useMemo(
     () => workflowOptions.map((w) => ({ value: String(w.id), label: w.name })),
     [workflowOptions],
+  );
+  const taskSelectData = useMemo(
+    () => taskOptions.map((t) => ({ value: String(t.number), label: `#${t.number} ${t.title}` })),
+    [taskOptions],
   );
 
   return (
@@ -400,6 +411,19 @@ const SessionsRunsPage = ({
             w={180}
           />
         )}
+        {taskSelectData.length > 0 && filters.type !== 'solo' && (
+          <Select
+            placeholder="Task"
+            aria-label="Filter by task"
+            data={taskSelectData}
+            value={filters.taskNumber ?? null}
+            onChange={(v) => navigate({ taskNumber: v ?? undefined })}
+            clearable
+            searchable
+            w={180}
+            comboboxProps={{ width: 360, position: 'bottom-end' }}
+          />
+        )}
         <DateRangeFilter
           from={query.createdFrom}
           until={query.createdUntil}
@@ -482,6 +506,7 @@ function EntryRow({
   const finishedAt = isRun ? entry.completedAt : entry.finishedAt;
   const executionStartedAt = isRun ? entry.executionStartedAt : entry.startedAt;
   const teamName = 'teamName' in entry ? entry.teamName : null;
+  const task = 'task' in entry ? entry.task : null;
 
   return (
     <>
@@ -527,6 +552,21 @@ function EntryRow({
               <>
                 <span className={classes.nameSubSep}>·</span>
                 {entry.stepsCompleted}/{entry.stepsTotal} steps
+              </>
+            )}
+            {task && (
+              <>
+                <span className={classes.nameSubSep}>·</span>
+                <Link
+                  href={companyProjectTaskPath(projectId, task.number)}
+                  className={classes.taskLink}
+                  aria-label={`Task #${task.number} ${task.title}`}
+                  title={`#${task.number} ${task.title}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <IconCheckbox size={12} aria-hidden />#{task.number}
+                  <span className={classes.taskTitle}>{task.title}</span>
+                </Link>
               </>
             )}
           </div>

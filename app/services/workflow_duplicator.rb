@@ -106,6 +106,7 @@ class WorkflowDuplicator
   end
 
   def remapped_config(config)
+    config["base_aws_oidc_role_ids"] = @dep_copier.map_aws_oidc_role_ids(config["base_aws_oidc_role_ids"])
     return config unless target_project
 
     config["base_tool_ids"]       = @dep_copier.map_tool_ids(config["base_tool_ids"])             if config["base_tool_ids"]
@@ -181,6 +182,7 @@ class WorkflowDuplicator
       # Resolved by name in the target project; ids are never carried across a
       # secrets boundary. Anything missing is reported by DependencyCopier#summary.
       config_item_ids: @dep_copier.map_config_item_ids(step.config_item_ids),
+      aws_oidc_role_ids: @dep_copier.map_aws_oidc_role_ids(step.aws_oidc_role_ids),
       depends_on_step_ids: []
     )
 

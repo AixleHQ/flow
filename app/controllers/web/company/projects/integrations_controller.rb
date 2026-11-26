@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class Web::Company::Projects::IntegrationsController < Web::Company::Projects::ApplicationController
+  AWS_OIDC_ACTIVITY_LIMIT = 20
+
   PROVIDER_ASSOCIATIONS = {
     azure_devops_installation: :azure_devops?,
     bitbucket_installation: :bitbucket?,
@@ -24,7 +26,8 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
       youtrack: { enabled: true, marketplace_url: Youtrack::Config::MARKETPLACE_URL },
       slack: { enabled: Slack::Oauth.enabled? },
       teams: { enabled: Teams::Config.enabled? },
-      insights: insights_props
+      insights: insights_props,
+      aws_oidc: aws_oidc_props
     }
   end
 
@@ -379,6 +382,45 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   end
 
   private
+
+  # Everything the AWS OIDC dialog needs to generate a trust policy and show what used it
+  # (docs/design/aws-oidc-integration.md §8). Nothing in it is a secret.
+  def aws_oidc_props
+    connection = Integration.find_by(project: current_project, provider: "aws_oidc")
+    {
+      can_manage: Web::Company::Projects::AwsOidcPolicy.new(policy_context, current_project).manage?,
+      connection: connection && aws_oidc_connection_props(connection)
+    }
+  end
+
+  def aws_oidc_connection_props(connection)
+    {
+      id: connection.id,
+      status: connection.status,
+      issuer_url: AwsOidc::Issuer.url(connection),
+      audience: AwsOidc::Token::AUDIENCE,
+      verify_subject: AwsOidc::Subject.for_verify(connection),
+      roles: connection.aws_oidc_roles.order(:name).map do |role|
+        role.slice(:id, :name, :role_arn, :region, :session_duration_seconds).merge(account_id: role.account_id)
+      end,
+      workflows: current_project.workflows.active.not_drafts.order(:name).map { |w| w.slice(:id, :name) },
+      activity: aws_oidc_activity
+    }
+  end
+
+  def aws_oidc_activity
+    AwsOidcCredentialIssuance.where(project: current_project)
+                             .includes(:user, step_run: [ :step, { workflow_run: :workflow } ])
+                             .order(created_at: :desc).limit(AWS_OIDC_ACTIVITY_LIMIT).map do |issuance|
+      step_run = issuance.step_run
+      {
+        id: issuance.id, created_at: issuance.created_at.iso8601, role_name: issuance.role_name,
+        subject: issuance.subject, user_name: issuance.user&.name,
+        workflow_name: step_run&.workflow_run&.workflow&.name, step_name: step_run&.step&.name,
+        workflow_run_id: step_run&.workflow_run_id
+      }
+    end
+  end
 
   # The company's Aixle Insights connection is a row of the list; this is what its actions
   # (Web::Company::Projects::InsightsController) need: the connection, never its secret, and

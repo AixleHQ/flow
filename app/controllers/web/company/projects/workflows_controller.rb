@@ -36,6 +36,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
       config_items: InertiaRails.defer(group: "resources") {
         ConfigItem.visible_for_project(current_project).map { |r| ConfigItemPickerResource.new(r).to_h }
       },
+      aws_oidc_roles: InertiaRails.defer(group: "resources") { aws_oidc_role_options },
       agent_models: InertiaRails.defer(group: "resources") {
         current_project_membership&.agent_models_for_props || []
       },
@@ -177,11 +178,16 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
       config_items: InertiaRails.defer(group: "resources") {
         ConfigItem.visible_for_project(current_project).map { |r| ConfigItemPickerResource.new(r).to_h }
       },
+      aws_oidc_roles: InertiaRails.defer(group: "resources") { aws_oidc_role_options },
       agent_models: InertiaRails.defer(group: "resources") {
         current_project_membership&.agent_models_for_props || []
       },
       runners: InertiaRails.defer(group: "resources") { runner_options(including: workflow.owned_runner) }
     }
+  end
+
+  def aws_oidc_role_options
+    AwsOidcRole.for_project(current_project).order(:name).map { |role| AwsOidcRolePickerResource.new(role).to_h }
   end
 
   def open_draft_props(workflow)

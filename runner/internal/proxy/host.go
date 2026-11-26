@@ -62,7 +62,7 @@ func (h *Host) SocketDir(sessionID int64) string {
 }
 
 // OpenSocket serves the relay on the session's socket and returns its
-// directory. A socket left by an earlier start (a restarted host runner) is
+// directory. A socket left by an earlier start (a restarted machine runner) is
 // replaced in the same directory. The directory itself is kept: a running
 // sidecar has it bind-mounted, and a bind mount follows the directory's inode,
 // not its path, so only a socket in that same directory reaches the sidecar.
@@ -128,7 +128,7 @@ func (h *Host) serve(sessionID int64, listener net.Listener, handler http.Handle
 
 // DialDir creates the session's dial directory, where its sidecar listens for the
 // tunnel's streams (dial.go), and returns it. A directory left by an earlier start (a
-// restarted host runner) is kept, as the socket directory is: a running sidecar has it
+// restarted machine runner) is kept, as the socket directory is: a running sidecar has it
 // mounted.
 func (h *Host) DialDir(sessionID int64) (string, error) {
 	return MakeDialDir(h.StateDir, sessionID)
@@ -169,9 +169,9 @@ func (h *Host) CloseAll() {
 	_ = os.RemoveAll(DialRoot(h.StateDir))
 }
 
-// Stop stops every relay when the host runner stops, cutting the calls in
+// Stop stops every relay when the machine runner stops, cutting the calls in
 // flight: the agent retries them (DESIGN.md §6.7). The socket directories
-// stay, so that a restarted host runner serves the running sidecars in the
+// stay, so that a restarted machine runner serves the running sidecars in the
 // same directories again.
 func (h *Host) Stop() {
 	h.mu.Lock()

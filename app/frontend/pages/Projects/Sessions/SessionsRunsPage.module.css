@@ -210,6 +210,7 @@
   gap: 6px;
   align-items: center;
   font-family: var(--app-font-mono);
+  white-space: nowrap;
 }
 
 .nameSubSep {
@@ -251,6 +252,29 @@
 
 .userLink:hover {
   color: var(--app-primary-strong);
+  text-decoration: underline;
+}
+
+.taskLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--app-text-secondary);
+  text-decoration: none;
+}
+
+.taskLink:hover {
+  color: var(--app-primary-strong);
+}
+
+.taskTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--app-font-body);
+}
+
+.taskLink:hover .taskTitle {
   text-decoration: underline;
 }
 

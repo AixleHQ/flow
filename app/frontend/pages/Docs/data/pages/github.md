@@ -92,7 +92,10 @@ thing fail, not the connection.
   | CI gates | **Checks** read, **Actions** read |
 
   GitHub does not report a fine-grained token's permissions, so Flow accepts one
-  as long as GitHub accepts it, and the row shows no scopes.
+  as long as GitHub accepts it, and the row shows no scopes. When you add a
+  repository, Flow checks that the token can read its contents: a token with
+  **Metadata** but no **Contents** sees the repository and still cannot clone
+  it, so the repository is refused with what to grant.
 
 ### What the token path does not do
 
@@ -149,9 +152,12 @@ field. When the session starts, each one is cloned under `/workspace/repo/`:
 - The **source branch** is checked out. Every other branch and the full commit
   history are there too (`git branch -r` lists them); file contents of other
   revisions download the first time they are needed.
-- A repository that fails to clone is left out of the agent's list of
-  repositories. The session page names it under *did not clone*, with the
-  reason.
+- A repository that fails to clone stops the session before its agent starts.
+  The session, and the run it belongs to, fail with git's error, so the reason
+  is on the run rather than in the agent's log. Fix the access or detach the
+  repository, and start again.
+- An empty repository, with no commits yet, is checked out empty on its source
+  branch with its remote set, so an agent can make and push the first commit.
 - No token is written into the checkout, the remote URL or the environment. A
   credential helper asks Flow for a fresh credential on every `git fetch` and
   `git push`, so a long session outlives the hour an installation token lasts.

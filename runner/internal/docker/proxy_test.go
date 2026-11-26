@@ -22,7 +22,7 @@ import (
 	"github.com/aixlehq/aixle-runner/internal/protocol"
 )
 
-// fakeProxy is the host runner's relay as the docker package sees it.
+// fakeProxy is the machine runner's relay as the docker package sees it.
 type fakeProxy struct {
 	mu        sync.Mutex
 	dir       string
@@ -160,7 +160,7 @@ func TestContainerStartPutsTheAgentInTheNetworkOfItsProxySidecar(t *testing.T) {
 		t.Fatalf("sidecar labels %v", sidecar.Config.Labels)
 	}
 	wantMounts := []mount.Mount{
-		{Type: mount.TypeBind, Source: p.binary, Target: SidecarBinary, ReadOnly: true},
+		{Type: mount.TypeBind, Source: filepath.Dir(p.binary), Target: SidecarBinaryDir, ReadOnly: true},
 		{Type: mount.TypeBind, Source: filepath.Join(p.dir, "123"), Target: SidecarSocketDir, ReadOnly: true},
 	}
 	if !reflect.DeepEqual(sidecar.Host.Mounts, wantMounts) {
@@ -506,7 +506,7 @@ func TestASidecarThatExitsWhileTheWaitStreamIsBrokenStopsTheAgent(t *testing.T) 
 	}
 }
 
-// A sidecar removed by something other than the host runner (`docker rm -f`)
+// A sidecar removed by something other than the machine runner (`docker rm -f`)
 // is gone like one that exited, and the agent is stopped.
 func TestASidecarRemovedBehindTheHostRunnersBackStopsTheAgent(t *testing.T) {
 	h := newEnvironment(t)
@@ -558,7 +558,7 @@ func TestASidecarWhoseLogCannotBeReadStillStopsTheAgent(t *testing.T) {
 	}
 }
 
-// A host runner restarted after a sidecar exited finds it stopped, still
+// A machine runner restarted after a sidecar exited finds it stopped, still
 // there: the log carries the sidecar's real exit code, not the -1 of a
 // removed one.
 func TestResumeLogsTheRealExitCodeOfASidecarThatStoppedMeanwhile(t *testing.T) {
@@ -586,7 +586,7 @@ func TestResumeLogsTheRealExitCodeOfASidecarThatStoppedMeanwhile(t *testing.T) {
 	}
 }
 
-// Resume handles an exited sidecar in line, before the host runner polls: its
+// Resume handles an exited sidecar in line, before the machine runner polls: its
 // log tail is read under SidecarLogTimeout, so a stalled logs endpoint does
 // not hold up the start.
 func TestResumeIsNotHeldUpByASidecarLogThatCannotBeRead(t *testing.T) {
@@ -621,7 +621,7 @@ func TestResumeIsNotHeldUpByASidecarLogThatCannotBeRead(t *testing.T) {
 	}
 }
 
-// startWithNoWatcher starts a session as a host runner that then stops: its
+// startWithNoWatcher starts a session as a machine runner that then stops: its
 // sidecar's watcher has ended, so what happens to the sidecar next is for
 // Resume to find.
 func (h *harness) startWithNoWatcher() {
@@ -642,7 +642,7 @@ func TestResumeServesTheRunningSessionsAgain(t *testing.T) {
 	p2, _ := (&harness{t: t, engine: h.engine, env: other, state: h.state}).withProxy()
 	other.ContainerStart(context.Background(), 456, mustJSON(t, startPayload(map[string]any{"network": "host", "proxy_port": 20456})))
 
-	// A restarted host runner: a fresh relay, the same daemon.
+	// A restarted machine runner: a fresh relay, the same daemon.
 	p := newFakeProxy(t)
 	h.env.Proxy = p
 	if err := h.env.Resume(context.Background()); err != nil {
@@ -678,7 +678,7 @@ func TestResumeStopsTheAgentWhenItsRelayCannotBeServedAgain(t *testing.T) {
 	h.withProxy()
 	h.start(h.env, nil)
 
-	// A restarted host runner whose relay socket cannot be opened.
+	// A restarted machine runner whose relay socket cannot be opened.
 	p := newFakeProxy(t)
 	p.socketErr = errors.New("listening on relay.sock: permission denied")
 	h.env.Proxy = p

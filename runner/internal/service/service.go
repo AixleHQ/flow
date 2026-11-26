@@ -1,5 +1,5 @@
 // Package service is `aixle-runner service install | uninstall | start | stop`: a
-// systemd unit that runs `aixle-runner --mode host` as the dedicated
+// systemd unit that runs `aixle-runner --mode machine` as the dedicated
 // `aixle-runner` system user, in the `docker` group (DESIGN.md §6.3, §9.7), from a
 // directory that user owns, so the runner can update itself (§14.4).
 package service
@@ -30,11 +30,11 @@ const (
 	// DockerGroup is the group that may use the Docker socket. It is
 	// root-equivalent on the machine (§9.7).
 	DockerGroup = "docker"
-	// ExitStop is the exit code of a host runner stopped by a refusal that needs an
+	// ExitStop is the exit code of a machine runner stopped by a refusal that needs an
 	// operator (re-registration, a revoked runner, an update). systemd does not
 	// restart it.
 	ExitStop = 3
-	// ExitUpdated is the exit code of a host runner that replaced its binary with
+	// ExitUpdated is the exit code of a machine runner that replaced its binary with
 	// a newer one. systemd restarts it on the new binary, and so does a supervisor
 	// that restarts only on a failure, such as the `local` adapter's Compose
 	// service.
@@ -351,7 +351,7 @@ Type=simple
 User={{.User}}
 Group={{.User}}
 SupplementaryGroups={{.Group}}
-ExecStart={{.Binary}} --mode host --state-dir {{.StateDir}}
+ExecStart={{.Binary}} --mode machine --state-dir {{.StateDir}}
 # Always: a self-update replaces the binary and exits ({{.ExitUpdated}}), and the
 # restart runs the new one.
 Restart=always

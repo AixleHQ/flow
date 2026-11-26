@@ -26,6 +26,7 @@ const REFERENCE_KEYS: [string, string][] = [
   ['mcp_server_ids', 'MCPServer'],
   ['repository_ids', 'Repository'],
   ['config_item_ids', 'ConfigItem'],
+  ['aws_oidc_role_ids', 'AwsOidcRole'],
 ];
 
 /** [model, id] for every resource a workflow snapshot names. */

@@ -61,6 +61,10 @@ class Web::Company::Projects::RepositoriesController < Web::Company::Projects::A
         build_code_host_repository
       end
 
+    if @clone_refusal
+      return redirect_to company_project_repositories_path(current_project), inertia: { errors: { full_name: @clone_refusal } }
+    end
+
     if repo.save
       Repositories::CiWebhook.register(repo)
       redirect_to company_project_repositories_path(current_project), notice: "Repository added"
@@ -139,6 +143,7 @@ class Web::Company::Projects::RepositoriesController < Web::Company::Projects::A
                              .find_by(id: repo.integration_id)
     found = integration && code_host_repository(integration, repo.full_name)
     repo.is_private = found[:is_private] if found
+    @clone_refusal = Repositories::CloneAccess.refusal(integration, repo.full_name) if found
     repo
   end
 

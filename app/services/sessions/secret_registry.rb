@@ -93,7 +93,8 @@ module Sessions
                            .where(terminal_session_id: session.id, item_type: "secret")
                            .includes(:config_item)
                            .filter_map { |access| readable_value(access.config_item) }
-      (config_item_values + UserTokenIssuance.token_values_for(session)).uniq
+      (config_item_values + UserTokenIssuance.token_values_for(session) +
+        AwsOidcCredentialIssuance.secret_values_for(session)).uniq
     end
 
     def readable_value(item)
