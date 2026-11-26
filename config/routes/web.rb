@@ -616,6 +616,10 @@ scope module: :web, defaults: { format: :html } do
 
   scope "company/:company_slug", module: :company, as: :company do
     post "feedback", to: "feedback#create", as: :feedback
+    # Getting started and the product tour (docs/design/product-tour.md).
+    resource :getting_started, only: :show, controller: "getting_started"
+    post "getting_started/build_with_ai", to: "getting_started#build_with_ai", as: :getting_started_build_with_ai
+    resource :product_tour, only: :update
     resources :members, only: %i[index create update destroy] do
       post :resend, on: :member
     end
@@ -706,6 +710,7 @@ scope module: :web, defaults: { format: :html } do
         end
         resources :workflow_runs, only: %i[index show create] do
           member do
+            get :status
             post :cancel
             post :approve_step
             post :retry_step

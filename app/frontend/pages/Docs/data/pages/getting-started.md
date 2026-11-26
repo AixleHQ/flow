@@ -34,6 +34,19 @@ Nothing can run on your behalf until you connect at least one agent.
 > Viewers read boards, runs and results; they do not start work, so they do not
 > need a credential.
 
+## Getting started and the product tour
+
+Where your installation has the product tour switched on, onboarding ends on a
+**Getting started** page instead of the project list. Its cards connect an
+agent, open the template catalog, start AI Builder or set up Personal MCP, and
+start the **product tour**: about five minutes that install the *Hello Flow*
+starter template into a new project and run its workflow with your agent, from
+the board to the finished result. A viewer gets a shorter tour of projects,
+the board and Sessions & Runs, with nothing to run.
+
+You land on Getting started after each sign-in until you finish or skip your
+tour. Start it again at any time from **Start product tour** in the user menu.
+
 ## Your profile
 
 Everything personal lives in **Profile**, on five tabs.

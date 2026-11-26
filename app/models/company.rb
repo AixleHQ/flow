@@ -138,8 +138,8 @@ class Company < ApplicationRecord
   # be told apart from them.
   RESERVED_SLUGS = %w[
     analytics assets auth_policies billing_cancellation billing_checkout
-    billing_invoice_payment domain_verification feedback folders identity_providers
-    integrations marketplace_license_proposal members memberships projects
+    billing_invoice_payment domain_verification feedback folders getting_started identity_providers
+    integrations marketplace_license_proposal members memberships product_tour projects
     scim_configuration sessions settings switch template_installs user workflow_catalog
   ].freeze
 

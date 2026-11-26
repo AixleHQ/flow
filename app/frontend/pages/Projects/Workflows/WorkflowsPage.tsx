@@ -341,7 +341,7 @@ const WorkflowsPage = () => {
         </Box>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, alignContent: 'start' }}>
-          {filtered.map((wf) => {
+          {filtered.map((wf, index) => {
             const isInherited = wf.scopeIndicator === 'company';
             const isPublished = !!wf.publishedAt;
             const lastRunDot = wf.lastRunStatus
@@ -365,7 +365,7 @@ const WorkflowsPage = () => {
               : null;
 
             return (
-              <div key={wf.id} className="wf-card">
+              <div key={wf.id} className="wf-card" data-tour={index === 0 ? 'workflow-card' : undefined}>
                 <div className="wf-card-body">
                   {/* Name row + status badge */}
                   <div

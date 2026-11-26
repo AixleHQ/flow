@@ -45,7 +45,13 @@ export function SortableTaskCard({
   };
 
   return (
-    <Box ref={setNodeRef} style={style} {...attributes} {...listeners}>
+    <Box
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      data-tour={isDragging ? 'board-card-dragging' : 'board-card'}
+    >
       <TaskCardUI
         task={task}
         href={href}

@@ -72,7 +72,7 @@ function WhatGetsCreated({ template }: { template: TemplateDetail }) {
     ...contents.mcpServers.map((m) => `MCP · ${m.name}${m.builtIn ? ' (built in)' : ''}`),
   ];
   return (
-    <Card withBorder padding="md" radius="md">
+    <Card withBorder padding="md" radius="md" data-tour="template-parts">
       {template.boardColumns.length > 0 && (
         <Section title="Board" count={template.boardColumns.length}>
           <Chips items={template.boardColumns} />
@@ -227,7 +227,7 @@ const ShowPage = () => {
                 </Alert>
               )}
               {installPath && (
-                <Button component="a" href={installPath} fullWidth>
+                <Button component="a" href={installPath} fullWidth data-tour="template-install">
                   {signedIn ? 'Install' : 'Sign in to install'}
                 </Button>
               )}

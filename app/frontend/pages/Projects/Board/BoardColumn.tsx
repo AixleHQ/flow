@@ -52,6 +52,8 @@ export function BoardColumn({
   onToggleSelect,
   onToggleColumn,
   selectionMode,
+  dataTour,
+  addTaskDataTour,
 }: {
   column: Column;
   /** The pages of this column the client has loaded — not necessarily all of it. */
@@ -80,6 +82,9 @@ export function BoardColumn({
   onToggleSelect?: (id: number, checked: boolean) => void;
   onToggleColumn?: (columnId: number, taskIds: number[], select: boolean) => void;
   selectionMode?: boolean;
+  /** Product-tour anchor, rendered as the column root's `data-tour` attribute. */
+  dataTour?: string;
+  addTaskDataTour?: string;
 }) {
   const {
     setNodeRef,
@@ -150,6 +155,7 @@ export function BoardColumn({
     return (
       <Box
         ref={setRefs}
+        data-tour={dataTour}
         onClick={() => onToggleCollapse(column.id)}
         style={{
           flex: '0 0 46px',
@@ -271,6 +277,7 @@ export function BoardColumn({
   return (
     <Box
       ref={setRefs}
+      data-tour={dataTour}
       style={{
         flex: '0 0 300px',
         minWidth: 300,
@@ -507,6 +514,7 @@ export function BoardColumn({
               size="sm"
               variant="subtle"
               aria-label={`Add task to ${column.name}`}
+              data-tour={addTaskDataTour}
               onClick={(e) => {
                 e.stopPropagation();
                 onAddTask(column.id);

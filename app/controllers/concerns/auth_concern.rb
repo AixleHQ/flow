@@ -204,7 +204,14 @@ module AuthConcern
   # Someone in no company — a super admin — has no company page to open, and
   # the root sends them on to theirs.
   def app_home_path
-    current_company ? company_projects_path : root_path
+    return root_path unless current_company
+    return company_getting_started_path if land_on_getting_started?
+
+    company_projects_path
+  end
+
+  def land_on_getting_started?
+    Feature.enabled?(:product_tour, company: current_company) && current_membership.getting_started_pending?
   end
 
   def current_company

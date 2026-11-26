@@ -6,6 +6,7 @@ module Web
       class WorkflowRunsPolicy < Web::Company::ApplicationPolicy
         def index? = project_accessible?
         def show? = project_accessible?
+        def status? = project_accessible?
         def create? = project_writable?
         def cancel? = controllable?
         def approve_step? = controllable?

@@ -289,6 +289,29 @@ class CompanyMembership < ApplicationRecord
     onboarding_completed? && onboarding_requires_agent? && credentials.none?
   end
 
+  # A viewer is shown tour B, anyone who can run things tour A
+  # (docs/design/product-tour.md). A promoted viewer has not finished tour A, so
+  # Getting started comes back for them with every card.
+  def product_tour_variant
+    viewer? ? "b" : "a"
+  end
+
+  def product_tour_finished?(variant = product_tour_variant)
+    public_send(:"product_tour_#{variant}_finished_at").present?
+  end
+
+  def getting_started_pending?
+    onboarding_completed? && !product_tour_finished?
+  end
+
+  # Finished covers skipped: either way the member has seen the tour.
+  def finish_product_tour!(variant)
+    raise ArgumentError, "unknown product tour #{variant.inspect}" unless %w[a b].include?(variant)
+    return if product_tour_finished?(variant)
+
+    update!("product_tour_#{variant}_finished_at": Time.current)
+  end
+
   # Called after a role change or an accepted invitation: send the member back
   # through the agent steps rather than leaving them at empty agent pickers.
   # Returns true when onboarding was re-opened, so callers can redirect.

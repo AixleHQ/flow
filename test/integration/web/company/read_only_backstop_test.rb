@@ -9,6 +9,7 @@ class Web::Company::ReadOnlyBackstopTest < ActiveSupport::TestCase
   VIEWER_WRITABLE = %w[
     Web::Company::FeedbackController
     Web::Company::MembershipsController
+    Web::Company::ProductToursController
     Web::Company::Projects::FavoritesController
   ].freeze
 

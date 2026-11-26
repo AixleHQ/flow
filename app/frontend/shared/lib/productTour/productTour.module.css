@@ -1,0 +1,74 @@
+.popover {
+  background: var(--app-bg-paper);
+  color: var(--app-text-primary);
+  border: 1px solid var(--app-border-strong);
+  border-radius: var(--mantine-radius-md);
+  font-family: var(--mantine-font-family);
+  max-width: 340px;
+}
+
+.popover :global(.driver-popover-title) {
+  font-size: var(--mantine-font-size-md);
+  font-weight: 600;
+  font-family: inherit;
+}
+
+.popover :global(.driver-popover-description) {
+  color: var(--app-text-secondary);
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.5;
+}
+
+.popover :global(.driver-popover-footer) {
+  justify-content: flex-end;
+}
+
+.popover :global(.driver-popover-navigation-btns) {
+  display: flex;
+  gap: 8px;
+}
+
+.popover :global(.driver-popover-arrow-side-left.driver-popover-arrow) {
+  border-left-color: var(--app-bg-paper);
+}
+
+.popover :global(.driver-popover-arrow-side-right.driver-popover-arrow) {
+  border-right-color: var(--app-bg-paper);
+}
+
+.popover :global(.driver-popover-arrow-side-top.driver-popover-arrow) {
+  border-top-color: var(--app-bg-paper);
+}
+
+.popover :global(.driver-popover-arrow-side-bottom.driver-popover-arrow) {
+  border-bottom-color: var(--app-bg-paper);
+}
+
+.primaryButton,
+.secondaryButton {
+  font: inherit;
+  font-size: var(--mantine-font-size-sm);
+  border-radius: var(--mantine-radius-sm);
+  padding: 4px 12px;
+  cursor: pointer;
+  text-shadow: none;
+}
+
+.primaryButton {
+  background: var(--app-primary);
+  border: 1px solid var(--app-primary);
+  color: var(--mantine-color-white);
+}
+
+.secondaryButton {
+  background: transparent;
+  border: 1px solid var(--app-border-strong);
+  color: var(--app-text-secondary);
+}
+
+/* Driver.js turns off pointer events on everything but the highlighted element;
+   the "first run finished" toast can arrive while a step is on screen. */
+:global(.driver-active) :global(.mantine-Notifications-root),
+:global(.driver-active) :global(.mantine-Notifications-root) * {
+  pointer-events: auto;
+}

@@ -24,6 +24,12 @@ class Web::Company::Projects::WorkflowRunsController < Web::Company::Projects::A
     }
   end
 
+  # Polled by the product tour to tell the member when their first run is done.
+  def status
+    run = current_project.workflow_runs.find(params[:id])
+    render json: { id: run.id, state: run.state, finished: run.ended? }
+  end
+
   def create
     workflow = Workflow.editable_for_project(current_project).find(workflow_run_params[:workflow_id])
 

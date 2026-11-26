@@ -98,4 +98,17 @@ class CurrentUserResource < ApplicationResource
   attribute :needs_agent_setup do |_user|
     params[:current_membership]&.needs_agent_setup? || false
   end
+
+  # The user menu's Start product tour reads it on every page
+  # (docs/design/product-tour.md). Nil without a membership: no tour to give.
+  typelize "{ variant: 'a' | 'b'; aFinished: boolean; bFinished: boolean; helloFlowAvailable: boolean } | null"
+  attribute :product_tour do |_user|
+    membership = params[:current_membership]
+    next nil unless membership
+
+    { variant: membership.product_tour_variant,
+      a_finished: membership.product_tour_finished?("a"),
+      b_finished: membership.product_tour_finished?("b"),
+      hello_flow_available: ProductTour.hello_flow_available? }
+  end
 end

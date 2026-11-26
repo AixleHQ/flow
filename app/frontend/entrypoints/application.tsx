@@ -8,6 +8,7 @@ import 'shared/lib/zodConfig';
 import { registerInertiaNetworkErrorNotice } from 'shared/lib/inertiaNetworkErrorNotice';
 import { registerInertiaVersionGuard } from 'shared/lib/inertiaVersionGuard';
 import { registerPreloadErrorReload } from 'shared/lib/preloadErrorReload';
+import { ProductTourProvider, type TourPage } from 'shared/lib/productTour';
 import { initSentry } from 'shared/lib/sentry';
 import { holdBrowserHistory } from 'shared/lib/unsaved-changes/guards';
 import { cssVariablesResolver, mantineTheme } from 'shared/theme/mantineTheme';
@@ -29,6 +30,7 @@ import './global.css';
 // getInitialPageFromDOM) rather than the #app div's data-page attribute, so read
 // it from there. Fall back to the div for the legacy attribute mode.
 let bootVersion: string | null = null;
+let bootPage: TourPage | null = null;
 try {
   const pageJson =
     document.querySelector('script[data-page="app"][type="application/json"]')?.textContent ??
@@ -36,6 +38,7 @@ try {
   if (pageJson) {
     const page = JSON.parse(pageJson);
     bootVersion = typeof page.version === 'string' ? page.version : null;
+    bootPage = typeof page.component === 'string' ? { component: page.component, props: page.props ?? {} } : null;
     if (page.props?.settings) {
       initSentry(page.props.settings);
     }
@@ -74,9 +77,11 @@ createInertiaApp({
           <ModalsProvider>
             <Notifications position="top-right" />
             <InertiaRouteIndicator />
-            <Sentry.ErrorBoundary fallback={({ resetError }) => <AppCrashFallback resetError={resetError} />}>
-              {app}
-            </Sentry.ErrorBoundary>
+            <ProductTourProvider initialPage={bootPage}>
+              <Sentry.ErrorBoundary fallback={({ resetError }) => <AppCrashFallback resetError={resetError} />}>
+                {app}
+              </Sentry.ErrorBoundary>
+            </ProductTourProvider>
           </ModalsProvider>
         </MantineProvider>
       </Sentry.ErrorBoundary>
