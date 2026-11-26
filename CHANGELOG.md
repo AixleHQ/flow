@@ -21,6 +21,9 @@ governance, community health — carry none.
 - **Tasks**: the task drawer shows the ticket title in its top bar on every tab, truncated with the full title on hover.
 - **Tasks**: a task's Details are read-only until you press Edit, so text can be selected and copied without opening a field. Save applies all changes in one request and Cancel discards them. In Activity, an edit names the fields it changed, and **Show changes** opens their old and new values.
 
+### Removed
+- **Tasks**: the **Upload new** button in a card's Assets tab. The drop zone remains: drop files on it, or click it to select several files.
+
 ### Fixed
 - **Tasks**: pressing `n` or `/` while a task's drawer is open, with the cursor outside a field, no longer opens Create task over it or jumps to the board search.
 
