@@ -1738,7 +1738,7 @@ export function TaskDetailSidebar({
 
         {/* Assets — with upload and delete */}
         <Tabs.Panel value="assets" style={{ flex: 1, overflow: 'auto', padding: 20 }}>
-                    <Box
+          <Box
             style={{
               display: 'flex',
               alignItems: 'center',
