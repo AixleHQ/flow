@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -110,6 +111,23 @@ func (e *Environment) Reset(ctx context.Context, _ json.RawMessage) protocol.Res
 		"removed_containers": removed,
 		"removed_volumes":    removedVolumes,
 	}}
+}
+
+// Shutdown is what the machine runner does when it is told to stop: it tears
+// down every session's sidecar and removes the environment's session
+// containers, so that nothing of a stopped runner is left on the machine
+// (add-machine.md §3.1). Like Scrub it selects only by the environment's own
+// label, so it never touches an unlabelled container or another runner's.
+func (e *Environment) Shutdown(ctx context.Context) error {
+	if e.Key == "" {
+		// An empty key would match every unlabelled container.
+		return errors.New("the machine's key is not known, so no container can be proved to be its own")
+	}
+	_, r := e.removeContainers(ctx, ClassScrubFailed)
+	if r != nil {
+		return errors.New(r.Error.Message)
+	}
+	return nil
 }
 
 // removeContainers removes every container labelled with the environment, the

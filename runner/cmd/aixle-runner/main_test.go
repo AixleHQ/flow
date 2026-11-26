@@ -34,7 +34,7 @@ func TestServiceTakesNoStateDir(t *testing.T) {
 func TestAHostRunnerWithoutCredentialsExitsSoSystemdDoesNotRestartIt(t *testing.T) {
 	var stderr bytes.Buffer
 	dir := filepath.Join(t.TempDir(), "never-configured")
-	code := run(context.Background(), []string{"--mode", "host", "--state-dir", dir}, io.Discard, &stderr)
+	code := run(context.Background(), []string{"--mode", "machine", "--state-dir", dir}, io.Discard, &stderr)
 	if code != service.ExitStop || !strings.Contains(stderr.String(), "configure") {
 		t.Fatalf("exit %d, %s", code, stderr.String())
 	}
@@ -54,7 +54,7 @@ func TestAHostRunnerWithACorruptJournalExitsSoSystemdDoesNotRestartIt(t *testing
 		t.Fatal(err)
 	}
 	var stderr bytes.Buffer
-	code := run(context.Background(), []string{"--mode", "host", "--state-dir", dir}, io.Discard, &stderr)
+	code := run(context.Background(), []string{"--mode", "machine", "--state-dir", dir}, io.Discard, &stderr)
 	out := stderr.String()
 	if code != service.ExitStop {
 		t.Fatalf("exit %d, %s", code, out)
@@ -98,5 +98,72 @@ func TestVersionPrintsTheVersion(t *testing.T) {
 func TestAnUpdateExitsWithItsOwnCode(t *testing.T) {
 	if service.ExitUpdated == 0 || service.ExitUpdated == 1 || service.ExitUpdated == service.ExitStop {
 		t.Fatalf("ExitUpdated is %d", service.ExitUpdated)
+	}
+}
+
+func TestTheModesAreMachineAndProxy(t *testing.T) {
+	for _, args := range [][]string{{"--mode", "host"}, {"--mode", "controller"}, {"--mode", ""}, {"--mode", "session"}} {
+		var stderr bytes.Buffer
+		if code := run(context.Background(), args, io.Discard, &stderr); code != 2 || !strings.Contains(stderr.String(), "Usage:") {
+			t.Errorf("%v: exit %d, %s", args, code, stderr.String())
+		}
+	}
+	if strings.Contains(usage, "--mode host") || !strings.Contains(usage, "--mode machine") {
+		t.Fatalf("usage:\n%s", usage)
+	}
+}
+
+// What the machine mode gets from its flags and environment: the settings are
+// explicit, and the flag wins over the variable.
+func TestTheMachineModeReadsItsSettingsFromTheEnvironmentAndTheFlagWins(t *testing.T) {
+	var got cli.MachineOptions
+	defer func(old func(context.Context, cli.MachineOptions) error) { runMachine = old }(runMachine)
+	runMachine = func(_ context.Context, opts cli.MachineOptions) error { got = opts; return nil }
+
+	cases := []struct {
+		name           string
+		env            map[string]string
+		args           []string
+		unregister     bool
+		inContainer    bool
+		url, token, nm string
+		failsWith      string
+	}{
+		{name: "nothing set", args: nil},
+		{name: "the variable turns it on", env: map[string]string{"AIXLE_RUNNER_UNREGISTER_ON_STOP": "1"}, unregister: true},
+		{name: "the flag turns it on", args: []string{"--unregister-on-stop"}, unregister: true},
+		{name: "the flag wins over the variable", env: map[string]string{"AIXLE_RUNNER_UNREGISTER_ON_STOP": "1"}, args: []string{"--unregister-on-stop=false"}},
+		{name: "0 is off", env: map[string]string{"AIXLE_RUNNER_UNREGISTER_ON_STOP": "0"}},
+		{name: "in a container, registering", env: map[string]string{"AIXLE_RUNNER_IN_CONTAINER": "1", "AIXLE_RUNNER_URL": "https://flow.example", "AIXLE_RUNNER_TOKEN": "arreg_x", "AIXLE_RUNNER_NAME": "n"},
+			inContainer: true, url: "https://flow.example", token: "arreg_x", nm: "n"},
+		{name: "a bad value", env: map[string]string{"AIXLE_RUNNER_UNREGISTER_ON_STOP": "maybe"}, failsWith: "must be 1 or 0"},
+	}
+	for _, tc := range cases {
+		got = cli.MachineOptions{}
+		for _, name := range []string{"AIXLE_RUNNER_UNREGISTER_ON_STOP", "AIXLE_RUNNER_IN_CONTAINER", "AIXLE_RUNNER_URL", "AIXLE_RUNNER_TOKEN", "AIXLE_RUNNER_NAME"} {
+			t.Setenv(name, tc.env[name])
+		}
+		var stderr bytes.Buffer
+		code := run(context.Background(), append([]string{"--mode", "machine", "--state-dir", "/x"}, tc.args...), io.Discard, &stderr)
+		if tc.failsWith != "" {
+			if code == 0 || !strings.Contains(stderr.String(), tc.failsWith) {
+				t.Errorf("%s: exit %d, %s", tc.name, code, stderr.String())
+			}
+			continue
+		}
+		if code != 0 || got.StateDir != "/x" || got.UnregisterOnStop != tc.unregister || got.InContainer != tc.inContainer ||
+			got.URL != tc.url || got.Token != tc.token || got.Name != tc.nm {
+			t.Errorf("%s: exit %d, %s, got %+v", tc.name, code, stderr.String(), got)
+		}
+	}
+}
+
+func TestAStopIsSIGINTSIGTERMOrSIGHUP(t *testing.T) {
+	var names []string
+	for _, s := range cli.StopSignals {
+		names = append(names, s.String())
+	}
+	if want := "interrupt terminated hangup"; strings.Join(names, " ") != want {
+		t.Fatalf("stop signals: %v", names)
 	}
 }

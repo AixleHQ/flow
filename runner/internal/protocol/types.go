@@ -16,7 +16,7 @@ const ProtocolVersion = "1"
 // MaxWait is the longest long-poll the gateway holds (§5.4).
 const MaxWait = 25 * time.Second
 
-// HeartbeatEvery is how often the host runner sends a heartbeat while it runs
+// HeartbeatEvery is how often the machine runner sends a heartbeat while it runs
 // an op (§5.10). The platform counts a machine as heard for 90 s, and the
 // protocol asks for one at least every 25 s.
 const HeartbeatEvery = 20 * time.Second

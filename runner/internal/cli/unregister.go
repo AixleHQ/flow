@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -21,14 +22,31 @@ type UnregisterOptions struct {
 }
 
 // Unregister removes the machine from its runner (DELETE /registration) and then
-// deletes the local credentials and journal. It refuses while a host runner runs.
+// deletes the local credentials and journal. It refuses while a machine runner runs.
 func Unregister(ctx context.Context, opts UnregisterOptions) error {
 	lock, err := lockForCommand(opts.StateDir, "unregister")
 	if err != nil {
 		return err
 	}
 	defer lock.Release()
+	err = unregisterLocked(ctx, opts)
+	var failed unregisterFailure
+	if errors.As(err, &failed) {
+		return fmt.Errorf("unregistering failed, and the credentials were kept so it can be tried again: %w", failed.err)
+	}
+	return err
+}
 
+// unregisterFailure is the platform not answering the unregister. The command
+// and a stop each say what it means for them.
+type unregisterFailure struct{ err error }
+
+func (e unregisterFailure) Error() string { return "unregistering failed: " + e.err.Error() }
+func (e unregisterFailure) Unwrap() error { return e.err }
+
+// unregisterLocked is Unregister for a caller that holds the state directory's
+// lock: the machine runner, which unregisters itself when it stops.
+func unregisterLocked(ctx context.Context, opts UnregisterOptions) error {
 	store := credentials.NewStore(opts.StateDir)
 	creds, err := store.Load()
 	if err != nil {
@@ -46,7 +64,7 @@ func Unregister(ctx context.Context, opts UnregisterOptions) error {
 		// is gone from it already. Only the local copy is left to remove.
 		fmt.Fprintln(opts.Out, "The platform no longer knows this machine's credentials; removing the local copy.")
 	} else if err != nil {
-		return fmt.Errorf("unregistering failed, and the credentials were kept so it can be tried again: %w", err)
+		return unregisterFailure{err}
 	}
 
 	if err := store.Delete(); err != nil {

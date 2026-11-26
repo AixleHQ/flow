@@ -63,8 +63,8 @@ type ContainerStartPayload struct {
 	PrivilegeEscalation bool       `json:"privilege_escalation"`
 	// ProxyPort is the session's port of the callback proxy on 127.0.0.1: the
 	// sidecar's, in the session's own network namespace, or with `network:
-	// host` the host runner's listener's, on the machine. The platform
-	// configures it and sends it; the host runner has no port of its own.
+	// host` the machine runner's listener's, on the machine. The platform
+	// configures it and sends it; the machine runner has no port of its own.
 	// Required whenever the environment runs the proxy, and with `network:
 	// host`.
 	ProxyPort int `json:"proxy_port"`
@@ -170,7 +170,9 @@ func resolve(p string) (string, error) {
 // checkBind refuses a bind source that would show the runner's state directory,
 // where its credentials are, inside the container: the directory itself, a
 // directory inside it, or one that contains it. Symlinks are resolved first, as
-// the daemon resolves them.
+// the daemon resolves them. A runner in a container also protects where its
+// state directory is on the machine: a directory's `Source`, and for a volume
+// the daemon's data root, which holds the volume's files (StateLocation).
 func (e *Environment) checkBind(source string) *protocol.Result {
 	refused := func(format string, args ...any) *protocol.Result {
 		r := protocol.ErrorResult(ClassForbiddenMount, fmt.Sprintf(format, args...))
@@ -192,6 +194,14 @@ func (e *Environment) checkBind(source string) *protocol.Result {
 	}
 	if within(src, state) || within(state, src) {
 		return refused("the bind source %s would expose the runner's state directory %s, which holds its credentials", source, state)
+	}
+	for _, protected := range e.stateLocation().protectedPaths() {
+		if resolved, err := resolve(protected); err == nil {
+			protected = resolved
+		}
+		if within(src, protected) || within(protected, src) {
+			return refused("the bind source %s would expose %s, where the runner's state directory is on this machine, and its credentials", source, protected)
+		}
 	}
 	return nil
 }
@@ -415,7 +425,7 @@ func (e *Environment) ContainerStart(ctx context.Context, sessionID int64, raw j
 
 	// The callback proxy (PROTOCOL.md §5.8): the sidecar is created first and
 	// owns the network namespace the agent joins, so that it outlives the
-	// agent's last call; with `network: host` the host runner listens itself.
+	// agent's last call; with `network: host` the machine runner listens itself.
 	sidecar := ""
 	hostNetwork := host.NetworkMode == "host"
 	if e.Proxy != nil {
@@ -520,7 +530,7 @@ func (e *Environment) removeTimeout() time.Duration {
 
 // pastDeadline is the answer of a `container.start` whose deadline_at passed
 // during step, or nil while it has not. A context that ended because the runner
-// is stopping is not a deadline: the loop discards that result (host.Loop).
+// is stopping is not a deadline: the loop discards that result (machine.Loop).
 func pastDeadline(ctx context.Context, step string) *protocol.Result {
 	if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return nil
