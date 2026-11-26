@@ -177,15 +177,18 @@ export function TaskCardUI({
             />
           </Tooltip>
         )}
-        <Text
-          size="sm"
-          fw={500}
-          lh={1.3}
-          style={{ flex: 1, wordBreak: 'break-word', fontSize: 13 }}
-          title={displayTitle === task.title ? undefined : task.title}
+        <Tooltip
+          label={task.title}
+          disabled={displayTitle === task.title}
+          multiline
+          maw={420}
+          openDelay={300}
+          styles={{ tooltip: { padding: '8px 12px', lineHeight: 1.45, wordBreak: 'break-word' } }}
         >
-          {displayTitle}
-        </Text>
+          <Text size="sm" fw={500} lh={1.3} style={{ flex: 1, wordBreak: 'break-word', fontSize: 13 }}>
+            {displayTitle}
+          </Text>
+        </Tooltip>
         <CopyButton value={String(task.number)}>
           {({ copied, copy }) => (
             <Tooltip label={copied ? 'Copied' : 'Copy number'} withArrow>
