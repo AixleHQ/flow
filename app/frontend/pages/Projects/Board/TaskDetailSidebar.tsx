@@ -1007,9 +1007,10 @@ export function TaskDetailSidebar({
             <div
               className={styles.ptDesc}
               style={{
-                color: (pendingDesc ?? task.description)
-                  ? 'var(--mantine-color-dimmed)'
-                  : 'var(--mantine-color-placeholder)',
+                color:
+                  (pendingDesc ?? task.description)
+                    ? 'var(--mantine-color-dimmed)'
+                    : 'var(--mantine-color-placeholder)',
               }}
             >
               {(pendingDesc ?? task.description) ? (
