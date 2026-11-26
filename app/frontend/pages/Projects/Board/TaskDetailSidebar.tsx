@@ -155,12 +155,11 @@ interface TaskDraft {
   tags: string[];
 }
 
-type EditSection = 'title' | 'description' | 'properties';
+type EditSection = 'title' | 'description';
 
 const SECTION_FIELDS: Record<EditSection, (keyof TaskDraft)[]> = {
   title: ['title'],
   description: ['description'],
-  properties: ['taskType', 'priority', 'assigneeKey', 'parentTaskId', 'tags'],
 };
 
 function draftFromTask(task: Task): TaskDraft {
@@ -521,6 +520,22 @@ export function TaskDetailSidebar({
 
   const patchDraft = (changes: Partial<TaskDraft>) => setEdits((e) => ({ ...e, ...changes }));
 
+  // Properties have no edit mode: each change is saved on its own, like the Column select.
+  const saveProperty = async (patch: Partial<TaskDraft>) => {
+    if (!task || savingTask) return;
+    const changes = changedFields(task, { ...draftFromTask(task), ...patch });
+    if (Object.keys(changes).length === 0) return;
+    setSavingTask(true);
+    const ok = await apiMutate(apiV1ProjectTaskPath(projectId, task.id), {
+      method: 'PATCH',
+      headers: jsonHeaders,
+      body: JSON.stringify({ boardTask: changes }),
+    });
+    setSavingTask(false);
+    if (!ok) return;
+    router.reload({ only: ['selected_task', 'task_activities'] });
+  };
+
   const saveSection = async (section: EditSection) => {
     if (!task || !draft || savingTask) return;
     // Fields of the other sections stay at their saved values, so one check never saves another's open edit.
@@ -846,17 +861,7 @@ export function TaskDetailSidebar({
         }}
       >
         <IconListDetails size={14} color="var(--app-primary-strong)" />
-        <span style={{ flex: 1 }}>Properties</span>
-        {canExecute && (
-          <InlineEditActions
-            label="properties"
-            editing={isEditing('properties')}
-            saving={savingSection === 'properties'}
-            onEdit={() => startEdit('properties')}
-            onSave={() => saveSection('properties')}
-            onCancel={() => closeSection('properties')}
-          />
-        )}
+        <span>Properties</span>
       </Box>
 
       {/* props grid */}
@@ -888,11 +893,12 @@ export function TaskDetailSidebar({
         <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
           Type
         </Text>
-        {isEditing('properties') && draft ? (
+        {canExecute ? (
           <Select
             data={TASK_TYPE_OPTIONS}
-            value={draft.taskType}
-            onChange={(v) => v && patchDraft({ taskType: v as TaskDraft['taskType'] })}
+            value={task.taskType}
+            onChange={(v) => v && saveProperty({ taskType: v as TaskDraft['taskType'] })}
+            disabled={savingTask}
             aria-label="Type"
             size="xs"
             variant="unstyled"
@@ -905,11 +911,12 @@ export function TaskDetailSidebar({
         <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
           Priority
         </Text>
-        {isEditing('properties') && draft ? (
+        {canExecute ? (
           <Select
             data={PRIORITY_OPTIONS}
-            value={draft.priority ?? ''}
-            onChange={(v) => patchDraft({ priority: v || null })}
+            value={task.priority ?? ''}
+            onChange={(v) => saveProperty({ priority: v || null })}
+            disabled={savingTask}
             aria-label="Priority"
             clearable
             size="xs"
@@ -923,11 +930,12 @@ export function TaskDetailSidebar({
         <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
           Assignee
         </Text>
-        {isEditing('properties') && draft ? (
+        {canExecute ? (
           <Select
             data={assigneeSelectData(members, teams)}
-            value={draft.assigneeKey}
-            onChange={(v) => patchDraft({ assigneeKey: v })}
+            value={draftFromTask(task).assigneeKey}
+            onChange={(v) => saveProperty({ assigneeKey: v })}
+            disabled={savingTask}
             aria-label="Assignee"
             clearable
             searchable
@@ -945,11 +953,12 @@ export function TaskDetailSidebar({
             <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
               Parent Epic
             </Text>
-            {isEditing('properties') && draft ? (
+            {canExecute ? (
               <Select
                 data={parentEpicOptions}
-                value={draft.parentTaskId}
-                onChange={(v) => patchDraft({ parentTaskId: v })}
+                value={draftFromTask(task).parentTaskId}
+                onChange={(v) => saveProperty({ parentTaskId: v })}
+                disabled={savingTask}
                 aria-label="Parent Epic"
                 clearable
                 searchable
@@ -969,9 +978,9 @@ export function TaskDetailSidebar({
           Tags
         </Text>
         <InlineTagsEditor
-          tags={isEditing('properties') && draft ? draft.tags : (task.tags ?? [])}
-          onChange={(tags) => patchDraft({ tags })}
-          disabled={!isEditing('properties')}
+          tags={task.tags ?? []}
+          onChange={(tags) => saveProperty({ tags })}
+          disabled={!canExecute || savingTask}
           suggestions={knownTags}
         />
 
