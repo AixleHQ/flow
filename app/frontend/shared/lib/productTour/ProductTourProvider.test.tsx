@@ -44,7 +44,7 @@ const storeTour = (tour: Partial<StoredTour>) =>
   sessionStorage.setItem(
     'product-tour',
     JSON.stringify({
-      tour: { variant: 'a', stepId: 'a1', projectId: null, runId: null, resumedFromToast: false, ...tour },
+      tour: { variant: 'a', stepId: 'a1', projectId: null, runId: null, ...tour },
       watched: null,
     }),
   );
@@ -124,21 +124,55 @@ describe('ProductTourProvider', () => {
     expect(storedTour()?.stepId).toBe('a2');
   });
 
-  it('follows a click that stays on the page, such as Run opening its drawer', async () => {
-    storeTour({ stepId: 'a9', projectId: 5 });
-    renderTour(tourPage('Projects/Workflows/WorkflowsPage'), ['workflow-run', 'run-drawer-submit']);
-    await waitFor(() => expect(lastShown()?.title).toBe('Run it'));
+  it('follows a click that stays on the page, such as Add task opening its drawer', async () => {
+    storeTour({ stepId: 'a10', projectId: 5 });
+    renderTour(tourPage('Projects/Board/BoardPage'), ['board-add-task', 'create-task-form']);
+    await waitFor(() => expect(lastShown()?.title).toBe('Add a task'));
 
-    await userEvent.click(screen.getByRole('button', { name: 'workflow-run' }));
+    await userEvent.click(screen.getByRole('button', { name: 'board-add-task' }));
 
-    await waitFor(() => expect(lastShown()?.title).toBe('Run options'));
+    await waitFor(() => expect(lastShown()?.title).toBe('Name it after a company'));
   });
 
-  it('points to agent setup instead of Run when no agent is connected', async () => {
-    storeTour({ stepId: 'a9', projectId: 5 });
-    renderTour(tourPage('Projects/Workflows/WorkflowsPage', { currentUser: { configuredAgents: [] } }), [
-      'workflow-run',
+  it('moves on once the card the member created is on the board, and again once it is in Researching', async () => {
+    storeTour({ stepId: 'a11', projectId: 5 });
+    renderTour(tourPage('Projects/Board/BoardPage'), ['create-task-form', 'board']);
+    await waitFor(() => expect(lastShown()).toMatchObject({ title: 'Name it after a company', interactive: true }));
+
+    const card = document.createElement('div');
+    card.dataset.tour = 'board-card';
+    act(() => {
+      document.body.append(card);
+    });
+    await waitFor(() => expect(lastShown()).toMatchObject({ title: 'Drag it to Researching', interactive: true }));
+
+    const column = document.createElement('div');
+    column.dataset.tour = 'board-trigger-column';
+    act(() => {
+      column.append(card);
+      document.body.append(column);
+    });
+    await waitFor(() => expect(lastShown()?.title).toBe('A run started'));
+    expect(lastShown()?.element).toBe(card);
+    column.remove();
+  });
+
+  it('takes the run from the opened card and opens its page on Next', async () => {
+    storeTour({ stepId: 'a14', projectId: 5 });
+    renderTour(tourPage('Projects/Board/BoardPage', { project: { id: 5 }, taskWorkflowRuns: [{ id: 9 }] }), [
+      'task-latest-run',
     ]);
+    await waitFor(() => expect(lastShown()?.title).toBe('The card’s run'));
+
+    act(() => lastShown()?.primary?.onClick());
+
+    expect(router.visit).toHaveBeenCalledWith(companyProjectWorkflowRunPath(5, 9));
+    expect(storedTour()).toMatchObject({ stepId: 'a15', runId: 9 });
+  });
+
+  it('points to agent setup instead of the board when no agent is connected', async () => {
+    storeTour({ stepId: 'a10', projectId: 5 });
+    renderTour(tourPage('Projects/Board/BoardPage', { currentUser: { configuredAgents: [] } }), ['board-add-task']);
 
     await waitFor(() => expect(lastShown()?.title).toBe('Connect an agent to run'));
     expect(lastShown()?.primary?.label).toBe('Open profile');
@@ -157,19 +191,26 @@ describe('ProductTourProvider', () => {
     expect(storedTour()).toMatchObject({ stepId: 'a5' });
   });
 
-  it('takes the installed project from the setup page and visits its overview on Next', async () => {
+  it('has the member switch the trigger on, then visits the installed project on Next', async () => {
     storeTour({ stepId: 'a5' });
-    renderTour(tourPage('Templates/InstallPage'), ['install-form', 'install-submit', 'setup-checklist']);
+    renderTour(tourPage('Templates/InstallPage'), [
+      'install-form',
+      'install-submit',
+      'setup-trigger-activate',
+      'setup-checklist',
+    ]);
     await waitFor(() => expect(lastShown()?.title).toBe('A new project'));
 
     await userEvent.click(screen.getByRole('button', { name: 'install-submit' }));
     navigate(tourPage('Projects/TemplateInstalls/ShowPage', { project: { id: 42 } }));
-    await waitFor(() => expect(lastShown()?.title).toBe('Set up checklist'));
+    await waitFor(() => expect(lastShown()?.title).toBe('Switch the trigger on'));
 
+    await userEvent.click(screen.getByRole('button', { name: 'setup-trigger-activate' }));
+    await waitFor(() => expect(lastShown()?.title).toBe('Ready to go'));
     act(() => lastShown()?.primary?.onClick());
 
     expect(router.visit).toHaveBeenCalledWith(expect.stringMatching(/\/projects\/42\/overview$/));
-    expect(storedTour()).toMatchObject({ stepId: 'a7', projectId: 42 });
+    expect(storedTour()).toMatchObject({ stepId: 'a8', projectId: 42 });
   });
 
   it('resumes from the stored step after a reload', async () => {
@@ -181,7 +222,7 @@ describe('ProductTourProvider', () => {
   });
 
   it('offers to skip or end when a target never appears, rather than hanging', async () => {
-    storeTour({ stepId: 'a8', projectId: 5 });
+    storeTour({ stepId: 'a9', projectId: 5 });
 
     renderTour(tourPage('Projects/Workflows/WorkflowsPage'));
 
@@ -212,7 +253,7 @@ describe('ProductTourProvider', () => {
     );
   });
 
-  it('sends the member to the board while the run goes on and tells them when it has finished', async () => {
+  it('ends the tour while the run goes on and tells the member when it has finished', async () => {
     let polls = 0;
     answerFetch({
       [`GET ${statusCompanyProjectWorkflowRunPath(5, 9)}`]: () => {
@@ -220,31 +261,30 @@ describe('ProductTourProvider', () => {
         return { id: 9, state: polls < 3 ? 'running' : 'completed', finished: polls >= 3 };
       },
     });
-    storeTour({ stepId: 'a13', projectId: 5, runId: 9 });
+    storeTour({ stepId: 'a17', projectId: 5, runId: 9 });
     renderTour(tourPage('Projects/WorkflowRuns/ShowPage', { project: { id: 5 }, run: { id: 9 } }), ['run-assets-tab']);
 
-    await waitFor(() => expect(lastShown()?.description).toMatch(/It takes ~1–2 min/));
+    await waitFor(() => expect(lastShown()?.description).toMatch(/It takes about 3 minutes/));
     act(() => lastShown()?.primary?.onClick());
-    expect(router.visit).toHaveBeenCalledWith(companyProjectBoardPath(5));
-    expect(storedTour()?.stepId).toBe('a14');
+    expect(storedTour()?.stepId).toBe('a18');
 
     const seeResult = await screen.findByRole('button', { name: 'See the result' });
     expect(screen.getByText('Your first run finished')).toBeInTheDocument();
     await userEvent.click(seeResult);
 
     expect(router.visit).toHaveBeenCalledWith(companyProjectWorkflowRunPath(5, 9));
-    expect(storedTour()).toMatchObject({ stepId: 'a13', resumedFromToast: true });
+    expect(storedTour()).toMatchObject({ stepId: 'a17', runId: 9 });
   });
 
-  it('ends after a failed run instead of showing the board', async () => {
+  it('sends the member to the card after a failed run', async () => {
     answerFetch({ [`GET ${statusCompanyProjectWorkflowRunPath(5, 9)}`]: { id: 9, state: 'failed', finished: true } });
-    storeTour({ stepId: 'a13', projectId: 5, runId: 9 });
+    storeTour({ stepId: 'a17', projectId: 5, runId: 9 });
     renderTour(tourPage('Projects/WorkflowRuns/ShowPage'), ['run-assets-tab']);
 
-    await waitFor(() => expect(lastShown()?.description).toBe('This run failed. Open Sessions & Runs to see why.'));
+    await waitFor(() => expect(lastShown()?.description).toMatch(/The card’s comment says why/));
     act(() => lastShown()?.primary?.onClick());
 
-    expect(storedTour()?.stepId).toBe('a15');
+    expect(storedTour()?.stepId).toBe('a18');
   });
 
   it('runs tour B from the projects to the first project board', async () => {

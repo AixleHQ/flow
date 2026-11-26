@@ -18,13 +18,14 @@ import {
   findStep,
   firstStepId,
   nextStepId,
+  RUN_RESULT_STEP,
   stepBody,
   type TourContext,
   type TourStep,
   type TourVariant,
 } from './tours';
 import { readStoredTour, type StoredTour, type WatchedRun, writeStoredTour } from './tourStorage';
-import { tourSelector, waitForTarget } from './waitForTarget';
+import { tourSelector, waitForSelector } from './waitForTarget';
 
 /** The part of an Inertia page the tour reads. */
 export interface TourPage {
@@ -44,9 +45,13 @@ interface RunStatus {
 }
 
 const RUN_PAGE = 'Projects/WorkflowRuns/ShowPage';
-// The pages the tour takes its project and run from: the install it just made, the run it just started.
-const CAPTURE_PAGES = ['Projects/TemplateInstalls/ShowPage', RUN_PAGE];
+const BOARD_PAGE = 'Projects/Board/BoardPage';
+// The pages the tour takes its project and run from: the install it just made, the card whose run it
+// follows, the run itself.
+const CAPTURE_PAGES = ['Projects/TemplateInstalls/ShowPage', BOARD_PAGE, RUN_PAGE];
 const RUN_WATCH_LIMIT_MS = 15 * 60 * 1000;
+// An `appear` step waits for the member, however long they take.
+const APPEAR_WAIT_MS = 24 * 60 * 60 * 1000;
 
 const ProductTourContext = createContext<ProductTourApi | null>(null);
 
@@ -80,9 +85,20 @@ function withCapturedIds(tour: StoredTour, page: TourPage): StoredTour {
   if (!CAPTURE_PAGES.includes(page.component)) return tour;
 
   const projectId = idOf(page.props.project) ?? tour.projectId;
-  const runId = page.component === RUN_PAGE ? (idOf(page.props.run) ?? tour.runId) : tour.runId;
+  const runId = capturedRunId(page) ?? tour.runId;
   return projectId === tour.projectId && runId === tour.runId ? tour : { ...tour, projectId, runId };
 }
+
+function capturedRunId(page: TourPage): number | null {
+  if (page.component === RUN_PAGE) return idOf(page.props.run);
+  if (page.component === BOARD_PAGE) {
+    const runs = page.props.taskWorkflowRuns;
+    return Array.isArray(runs) ? idOf(runs[0]) : null;
+  }
+  return null;
+}
+
+const targetSelectorOf = (step: TourStep) => step.targetSelector ?? (step.target ? tourSelector(step.target) : null);
 
 async function fetchRunStatus(projectId: number, runId: number): Promise<RunStatus | null> {
   try {
@@ -167,7 +183,7 @@ export function ProductTourProvider({
   const start = useCallback(
     (variant: TourVariant) => {
       highlighter().clear();
-      setTour({ variant, stepId: firstStepId(variant), projectId: null, runId: null, resumedFromToast: false });
+      setTour({ variant, stepId: firstStepId(variant), projectId: null, runId: null });
       router.visit(companyProjectsPath());
     },
     [highlighter],
@@ -215,6 +231,7 @@ export function ProductTourProvider({
     if (step.page !== 'any' && step.page !== component) return;
 
     let cancelled = false;
+    const aborter = new AbortController();
     let removeClickListener: (() => void) | null = null;
     const skipAction = { label: 'Skip tour', onClick: () => finish(tour.variant) };
     const show = (highlight: Omit<Highlight, 'actions'>, actions = [skipAction]) =>
@@ -226,7 +243,6 @@ export function ProductTourProvider({
         runId: tour.runId,
         runState: null,
         runFinished: false,
-        resumedFromToast: tour.resumedFromToast,
         hasAgent: memberHasAgent,
         firstProjectId: memberFirstProjectId,
       };
@@ -241,7 +257,7 @@ export function ProductTourProvider({
           element: document.querySelector(tourSelector('agent-nudge')) ?? undefined,
           title: 'Connect an agent to run',
           description:
-            'Flow runs workflows with your AI agent. Connect one in your profile, then come back here and run the workflow.',
+            'Flow runs workflows with your AI agent. Connect one in your profile, then come back here to go on with the tour.',
           interactive: false,
           primary: {
             label: 'Open profile',
@@ -255,10 +271,16 @@ export function ProductTourProvider({
       }
 
       if (step.expandSidebar) window.dispatchEvent(new CustomEvent(EXPAND_SIDEBAR_EVENT));
-      const element = step.target ? await waitForTarget(step.target, targetTimeoutMs) : null;
+      const selector = targetSelectorOf(step);
+      if (selector && step.targetWaitMs && !document.querySelector(selector)) {
+        show({ title: step.title, description: 'One moment…', interactive: false });
+      }
+      const element = selector
+        ? await waitForSelector(selector, step.targetWaitMs ?? targetTimeoutMs, aborter.signal)
+        : null;
       if (cancelled) return;
 
-      if (step.target && !element) {
+      if (selector && !element) {
         const nextId = nextStepId(tour.variant, step, ctx);
         const nextPage = nextId ? findStep(tour.variant, nextId)?.page : null;
         // Skipping only helps when the next step can be reached from here without the click.
@@ -273,6 +295,12 @@ export function ProductTourProvider({
       if (element instanceof HTMLElement && step.openTarget?.(ctx)) element.click();
 
       const base = { element: element ?? undefined, title: step.title, description: stepBody(step, ctx) };
+      if (step.advance === 'appear') {
+        show({ ...base, interactive: true });
+        const appeared = await waitForSelector(step.appears ?? '', APPEAR_WAIT_MS, aborter.signal);
+        if (!cancelled && appeared) advance(step, tour, ctx);
+        return;
+      }
       if (step.advance !== 'click') {
         const last = step.advance === 'finish';
         show({
@@ -312,13 +340,19 @@ export function ProductTourProvider({
     void present();
     return () => {
       cancelled = true;
+      aborter.abort();
       removeClickListener?.();
     };
   }, [tour, component, enabled, memberHasAgent, memberFirstProjectId, targetTimeoutMs, highlighter, finish, advance]);
 
   const openRunResult = useCallback((run: WatchedRun) => {
     notifications.hide(`product-tour-run-${run.runId}`);
-    setTour({ variant: 'a', stepId: 'a13', projectId: run.projectId, runId: run.runId, resumedFromToast: true });
+    setTour({
+      variant: 'a',
+      stepId: RUN_RESULT_STEP,
+      projectId: run.projectId,
+      runId: run.runId,
+    });
     router.visit(companyProjectWorkflowRunPath(run.projectId, run.runId));
   }, []);
 

@@ -2,8 +2,11 @@ import {
   companyProjectBoardPath,
   companyProjectOverviewIndexPath,
   companyProjectSessionsPath,
+  companyProjectWorkflowRunPath,
   companyProjectWorkflowsPath,
 } from 'shared/routes';
+
+import { tourSelector } from './waitForTarget';
 
 export type TourVariant = 'a' | 'b';
 
@@ -14,8 +17,6 @@ export interface TourContext {
   /** The run's state as the status endpoint last reported it; null before it was asked. */
   runState: string | null;
   runFinished: boolean;
-  /** True when the member came back to the run from the "first run finished" toast. */
-  resumedFromToast: boolean;
   hasAgent: boolean;
   firstProjectId: number | null;
 }
@@ -24,15 +25,22 @@ export interface TourStep {
   id: string;
   /** The Inertia component the step is shown on, or `any`. */
   page: string;
-  /** A `data-tour` key. Without one the step is a centred popover. */
+  /** A `data-tour` key. Without one (and without `targetSelector`) the step is a centred popover. */
   target?: string;
+  /** A CSS selector for the target, for one a single `data-tour` key cannot name (a card in a column). */
+  targetSelector?: string;
+  /** How long to wait for the target, when it only shows up after the server has done something. */
+  targetWaitMs?: number;
   /** For `click` steps: the `data-tour` key a click must land in, when it is not the target itself. */
   clickTarget?: string;
   /**
    * `click`: the member clicks the highlighted element and the tour follows the page that opens.
+   * `appear`: the member works inside the highlighted element until `appears` matches something.
    * `next`: a Next button. `finish`: the last step.
    */
-  advance: 'click' | 'next' | 'finish';
+  advance: 'click' | 'appear' | 'next' | 'finish';
+  /** For `appear` steps: the CSS selector whose first match moves the tour on. */
+  appears?: string;
   title: string;
   body: string | ((ctx: TourContext) => string);
   /** The step after this one; the following step in the list when absent. */
@@ -51,12 +59,14 @@ export interface TourStep {
 
 export const HELLO_FLOW_CARD = 'template-card:aixle/hello-flow';
 
-// A run still going sends the member to the board meanwhile; a failed run, or the
-// second look at a finished one from the toast, goes straight to the end.
-const showsBoardAfterRun = (ctx: TourContext) =>
-  !ctx.runFinished || (ctx.runState === 'completed' && !ctx.resumedFromToast);
+/** The step the "first run finished" toast brings the member back to. */
+export const RUN_RESULT_STEP = 'a17';
 
-const RUN_PENDING_COPY = 'It takes ~1–2 min. Meanwhile, let’s look at the board.';
+const CARD = tourSelector('board-card');
+const CARD_IN_TRIGGER_COLUMN = `${tourSelector('board-trigger-column')} ${CARD}`;
+// The trigger has a short cooldown and the run is created by the server, so the card's run shows up
+// a few seconds after the drop.
+const RUN_APPEARS_MS = 60_000;
 
 const TOUR_A: TourStep[] = [
   {
@@ -108,16 +118,25 @@ const TOUR_A: TourStep[] = [
   {
     id: 'a6',
     page: 'Projects/TemplateInstalls/ShowPage',
-    target: 'setup-checklist',
-    advance: 'next',
-    title: 'Set up checklist',
+    target: 'setup-trigger-activate',
+    advance: 'click',
+    title: 'Switch the trigger on',
     body:
       'This checklist shows what a template still needs: secrets, integrations, and triggers to switch on. ' +
-      'Triggers start inactive, so nothing runs without you. Hello Flow only has a trigger you can switch on later.',
-    visitOnNext: (ctx) => (ctx.projectId ? companyProjectOverviewIndexPath(ctx.projectId) : null),
+      'Triggers start inactive, so nothing runs without you. Hello Flow’s trigger starts the workflow when a card ' +
+      'enters Researching. Activate it.',
   },
   {
     id: 'a7',
+    page: 'Projects/TemplateInstalls/ShowPage',
+    target: 'setup-checklist',
+    advance: 'next',
+    title: 'Ready to go',
+    body: 'The trigger is on, and Hello Flow needs nothing else. Let’s look at the project.',
+    visitOnNext: (ctx) => (ctx.projectId ? companyProjectOverviewIndexPath(ctx.projectId) : null),
+  },
+  {
+    id: 'a8',
     page: 'Projects/Overview/OverviewPage',
     target: 'sidebar-nav',
     advance: 'next',
@@ -129,33 +148,67 @@ const TOUR_A: TourStep[] = [
     visitOnNext: (ctx) => (ctx.projectId ? companyProjectWorkflowsPath(ctx.projectId) : null),
   },
   {
-    id: 'a8',
+    id: 'a9',
     page: 'Projects/Workflows/WorkflowsPage',
     target: 'workflow-card',
     advance: 'next',
     title: 'Workflows',
-    body: 'A workflow is a chain of steps. Each step is an instruction that an agent carries out.',
-  },
-  {
-    id: 'a9',
-    page: 'Projects/Workflows/WorkflowsPage',
-    target: 'workflow-run',
-    advance: 'click',
-    needsAgent: true,
-    title: 'Run it',
-    body: 'You can start a workflow manually, like now, or let a trigger start it for you. Run it.',
+    body:
+      'A workflow is a chain of steps. Each step is an instruction that an agent carries out. ' +
+      'Hello Flow has two: research a company, then lay out a one-page profile.',
+    visitOnNext: (ctx) => (ctx.projectId ? companyProjectBoardPath(ctx.projectId) : null),
   },
   {
     id: 'a10',
-    page: 'Projects/Workflows/WorkflowsPage',
-    target: 'run-drawer-submit',
+    page: 'Projects/Board/BoardPage',
+    target: 'board-add-task',
     advance: 'click',
     needsAgent: true,
-    title: 'Run options',
-    body: 'Here you can pick the model, the runner and repositories for this run. The defaults are fine.',
+    title: 'Add a task',
+    body: 'Work starts on the board. Add a card to To research.',
   },
   {
     id: 'a11',
+    page: 'Projects/Board/BoardPage',
+    target: 'create-task-form',
+    advance: 'appear',
+    appears: CARD,
+    title: 'Name it after a company',
+    body: 'Type a company name as the title, for example Stripe or stripe.com, and click Create task.',
+  },
+  {
+    id: 'a12',
+    page: 'Projects/Board/BoardPage',
+    target: 'board',
+    advance: 'appear',
+    appears: CARD_IN_TRIGGER_COLUMN,
+    needsAgent: true,
+    title: 'Drag it to Researching',
+    body:
+      'Researching has a trigger: a card that enters it starts Hello Flow. Drag your card there. ' +
+      'In real work this is how workflows start, without pressing Run.',
+  },
+  {
+    id: 'a13',
+    page: 'Projects/Board/BoardPage',
+    targetSelector: CARD_IN_TRIGGER_COLUMN,
+    clickTarget: 'board-card',
+    advance: 'click',
+    title: 'A run started',
+    body: 'The trigger started Hello Flow for this card. Open the card to follow it.',
+  },
+  {
+    id: 'a14',
+    page: 'Projects/Board/BoardPage',
+    target: 'task-latest-run',
+    targetWaitMs: RUN_APPEARS_MS,
+    advance: 'next',
+    title: 'The card’s run',
+    body: 'Every run a card starts is listed on it. Let’s watch this one.',
+    visitOnNext: (ctx) => (ctx.projectId && ctx.runId ? companyProjectWorkflowRunPath(ctx.projectId, ctx.runId) : null),
+  },
+  {
+    id: 'a15',
     page: 'Projects/WorkflowRuns/ShowPage',
     target: 'run-sessions',
     advance: 'next',
@@ -163,7 +216,7 @@ const TOUR_A: TourStep[] = [
     body: 'This is a run. Each step runs as a session: an agent working in its own container.',
   },
   {
-    id: 'a12',
+    id: 'a16',
     page: 'Projects/WorkflowRuns/ShowPage',
     target: 'run-console',
     advance: 'next',
@@ -171,7 +224,7 @@ const TOUR_A: TourStep[] = [
     body: 'Watch the agent work live. If a run fails, this is where you find out why.',
   },
   {
-    id: 'a13',
+    id: RUN_RESULT_STEP,
     page: 'Projects/WorkflowRuns/ShowPage',
     target: 'run-assets-tab',
     advance: 'next',
@@ -179,31 +232,23 @@ const TOUR_A: TourStep[] = [
     openTarget: (ctx) => ctx.runState === 'completed',
     title: 'Results',
     body: (ctx) => {
-      if (!ctx.runFinished) return RUN_PENDING_COPY;
-      if (ctx.runState !== 'completed') return 'This run failed. Open Sessions & Runs to see why.';
-      return 'When the run finishes, its results appear here as assets.';
+      if (!ctx.runFinished) {
+        return 'It takes about 3 minutes. We’ll let you know when it’s done; the one-pager will be on the card and here, in Assets.';
+      }
+      if (ctx.runState !== 'completed') {
+        return 'This run did not finish. The card’s comment says why: if its title is not a company name, rename it and drag it to Researching again.';
+      }
+      return 'Here is the result: a one-page profile of the company. It is also attached to the card, which moved to Done.';
     },
-    next: (ctx) => (showsBoardAfterRun(ctx) ? 'a14' : 'a15'),
-    visitOnNext: (ctx) => (ctx.projectId && showsBoardAfterRun(ctx) ? companyProjectBoardPath(ctx.projectId) : null),
   },
   {
-    id: 'a14',
-    page: 'Projects/Board/BoardPage',
-    target: 'board-trigger-column',
-    advance: 'next',
-    title: 'Triggers on the board',
-    body:
-      'In real work you rarely press Run. Move a card into this column, and its trigger starts the workflow. ' +
-      'Switch the trigger on in Triggers to try it.',
-  },
-  {
-    id: 'a15',
+    id: 'a18',
     page: 'any',
     advance: 'finish',
     title: 'That’s Flow',
     body:
-      'A board with tasks, workflows run by agents, triggers that start them, and results in assets. ' +
-      'Next: install another template or describe your own process in AI Builder.',
+      'A board with tasks, triggers that start workflows, agents that run them, and results on the card and in ' +
+      'Assets. Next: install another template or describe your own process in AI Builder.',
   },
 ];
 

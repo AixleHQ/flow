@@ -119,7 +119,7 @@ function ItemActions({ item, props }: { item: SetupItem; props: Props }) {
         </>
       )}
       {item.kind === 'trigger' && !item.detail.missing && (
-        <Button size="xs" onClick={() => act('activate')}>
+        <Button size="xs" onClick={() => act('activate')} data-tour="setup-trigger-activate">
           Activate
         </Button>
       )}

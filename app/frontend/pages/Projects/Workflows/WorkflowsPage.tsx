@@ -418,12 +418,7 @@ const WorkflowsPage = () => {
                   <div className="wf-foot-left">
                     {canExecute && (
                       <Tooltip label="Run workflow">
-                        <button
-                          type="button"
-                          className="wf-btn wf-btn-run"
-                          onClick={() => setRunWorkflow(wf)}
-                          data-tour={index === 0 ? 'workflow-run' : undefined}
-                        >
+                        <button type="button" className="wf-btn wf-btn-run" onClick={() => setRunWorkflow(wf)}>
                           <IconPlayerPlay size={12} /> Run
                         </button>
                       </Tooltip>

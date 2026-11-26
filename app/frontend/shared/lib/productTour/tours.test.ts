@@ -19,7 +19,6 @@ const ctx = (overrides: Partial<TourContext> = {}): TourContext => ({
   runId: 2,
   runState: 'completed',
   runFinished: true,
-  resumedFromToast: false,
   hasAgent: true,
   firstProjectId: 1,
   ...overrides,
@@ -40,7 +39,7 @@ describe('product tours', () => {
     },
   );
 
-  it('tour A goes from Templates to the closing words and B from Projects', () => {
+  it('tour A goes from Templates through the board to the closing words and B from Projects', () => {
     expect([firstStepId('a'), firstStepId('b')]).toEqual(['a1', 'b1']);
 
     const walk = (variant: 'a' | 'b', context: TourContext) => {
@@ -55,9 +54,7 @@ describe('product tours', () => {
     };
 
     expect(walk('a', ctx())).toEqual(TOURS.a.map((step) => step.id));
-    expect(walk('a', ctx({ runState: 'failed' })).slice(-2)).toEqual(['a13', 'a15']);
-    expect(walk('a', ctx({ resumedFromToast: true })).slice(-2)).toEqual(['a13', 'a15']);
-    expect(walk('a', ctx({ runState: 'running', runFinished: false })).slice(-3)).toEqual(['a13', 'a14', 'a15']);
+    expect(walk('a', ctx({ runState: 'running', runFinished: false })).slice(-2)).toEqual(['a17', 'a18']);
     expect(walk('b', ctx())).toEqual(['b1', 'b2', 'b3', 'b4']);
     expect(walk('b', ctx({ firstProjectId: null }))).toEqual(['b1', 'b4']);
   });

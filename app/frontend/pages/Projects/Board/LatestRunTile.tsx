@@ -22,7 +22,7 @@ export function LatestRunTile({
   const cost = run.totalCostCents;
 
   return (
-    <Box style={{ marginBottom: 20 }}>
+    <Box style={{ marginBottom: 20 }} data-tour="task-latest-run">
       {/* sec-label */}
       <Box
         style={{

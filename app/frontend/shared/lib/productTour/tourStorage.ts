@@ -5,7 +5,6 @@ export interface StoredTour {
   stepId: string;
   projectId: number | null;
   runId: number | null;
-  resumedFromToast: boolean;
   /**
    * The step a click on a `click` step leads to, taken once the page it opened arrives. Stored, because
    * some of those clicks are full page loads (the template page's Install link).

@@ -237,7 +237,6 @@ export function RunWorkflowDrawer({
           onClick={handleSubmit}
           loading={starting}
           disabled={!canSubmit}
-          data-tour="run-drawer-submit"
         >
           Run workflow
         </Button>

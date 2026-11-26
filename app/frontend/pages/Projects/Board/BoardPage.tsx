@@ -937,6 +937,7 @@ const BoardPage = () => {
                   dataTour={
                     col.id === localColumns.find((c) => c.workflowBinding)?.id ? 'board-trigger-column' : undefined
                   }
+                  addTaskDataTour={idx === 0 ? 'board-add-task' : undefined}
                   tasks={tasksByColumn[col.id] ?? []}
                   totalCount={columnCounts[col.id] ?? (tasksByColumn[col.id] ?? []).length}
                   hasMore={columnHasMore[col.id] ?? false}
@@ -1118,6 +1119,7 @@ const BoardPage = () => {
         }}
       >
         <form
+          data-tour="create-task-form"
           onSubmit={form.onSubmit(handleCreateTask)}
           style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}
         >
