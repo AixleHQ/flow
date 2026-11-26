@@ -1,7 +1,7 @@
 import { Alert, Button, MultiSelect, Switch } from '@mantine/core';
 import type { ReactNode } from 'react';
 
-import type { ConfigItemPicker, RunnerSummary, Workflow } from '@/types/generated';
+import type { AwsOidcRolePicker, ConfigItemPicker, RunnerSummary, Workflow } from '@/types/generated';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
 import { ToolPicker } from 'shared/components/ToolPicker';
@@ -24,6 +24,7 @@ type BaseResources = Pick<
   | 'baseAssetIds'
   | 'baseRepositoryIds'
   | 'baseConfigItemIds'
+  | 'baseAwsOidcRoleIds'
   | 'runnerId'
 >;
 
@@ -36,6 +37,8 @@ interface BaseResourcesTabProps {
   assets: AssetPickerItem[];
   repositories: NamedItem[];
   configItems: ConfigItemPicker[];
+  /** The picker shows only when the project has roles to offer. */
+  awsOidcRoles?: AwsOidcRolePicker[];
   runners: RunnerSummary[];
   readOnly: boolean;
   onWorkflowChange: (field: string, value: unknown) => void;
@@ -50,6 +53,7 @@ export function BaseResourcesTab({
   assets,
   repositories,
   configItems,
+  awsOidcRoles = [],
   runners,
   readOnly,
   onWorkflowChange,
@@ -71,6 +75,7 @@ export function BaseResourcesTab({
     .map((c) => ({ value: String(c.id), label: c.itemType === 'secret' ? `${c.name} (secret)` : c.name }));
 
   const baseConfigItemIds = workflow.baseConfigItemIds ?? [];
+  const baseAwsOidcRoleIds = workflow.baseAwsOidcRoleIds ?? [];
 
   return (
     <div style={{ overflowY: 'auto', height: '100%', background: 'var(--bg)' }}>
@@ -244,6 +249,33 @@ export function BaseResourcesTab({
               )}
             </Field>
           ))}
+          {/* "Inherit all" never attaches a role: each one is picked by hand (docs/design/aws-oidc-integration.md §7.2). */}
+          {awsOidcRoles.length > 0 && (
+            <Field
+              label="AWS roles"
+              isEmpty={baseAwsOidcRoleIds.length === 0}
+              emptyHint="None added — steps can attach their own"
+            >
+              <MultiSelect
+                data={awsOidcRoles.map((r) => ({ value: String(r.id), label: `${r.name} (${r.accountId})` }))}
+                value={toStringArr(baseAwsOidcRoleIds)}
+                onChange={(v) => onWorkflowChange('baseAwsOidcRoleIds', toNumberArr(v))}
+                disabled={readOnly}
+                searchable
+                placeholder="Select AWS roles…"
+                aria-label="AWS roles"
+                styles={{
+                  input: {
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 5,
+                    fontSize: 13,
+                    minHeight: 36,
+                  },
+                }}
+              />
+            </Field>
+          )}
         </div>
       </div>
     </div>

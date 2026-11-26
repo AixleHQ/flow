@@ -38,7 +38,7 @@ class WorkflowRunResourceTest < ActiveSupport::TestCase
   end
 
   test "a step whose container is not up yet has no terminal socket" do
-    @session.update!(state: "running")
+    put_session_in_state!(@session, "running")
     @owner.update!(share_active_sessions: false)
     colleague = create(:user, :employee, company: @owner.companies.first)
 
@@ -47,6 +47,17 @@ class WorkflowRunResourceTest < ActiveSupport::TestCase
 
     assert_nil step["websocketUrl"]
     assert_equal false, unshared["liveViewPrivate"] # rubocop:disable Minitest/RefuteFalse
+  end
+
+  test "a run started for a board task names it; any other run, nothing" do
+    board = create(:board, project: @project)
+    task = create(:board_task, board: board, board_column: create(:board_column, board: board), title: "Fix login")
+
+    assert_nil WorkflowRunResource.new(@run).to_h["task"]
+
+    @run.update!(board_task: task)
+
+    assert_equal({ "number" => task.number, "title" => "Fix login" }, WorkflowRunResource.new(@run.reload).to_h["task"])
   end
 
   test "a chat-started run names where its request came from; any other run, nothing" do

@@ -18,14 +18,14 @@ import (
 
 // SidecarOptions are the inputs of `aixle-runner --mode proxy`.
 type SidecarOptions struct {
-	// Socket is the host runner's relay socket, mounted into the sidecar.
+	// Socket is the machine runner's relay socket, mounted into the sidecar.
 	Socket string
 	// Listen is the address the agent calls, 127.0.0.1:<protocol.ProxyPort>.
 	Listen string
 	Logger *slog.Logger
 	// Ready, when set, receives the listener's address once it accepts.
 	Ready chan<- string
-	// DialSocket, when set, is where the sidecar listens for the host runner's stream
+	// DialSocket, when set, is where the sidecar listens for the machine runner's stream
 	// dials (dial.go), and DialPorts the only ports it dials: the session's five. With
 	// no DialSocket the sidecar serves no tunnel stream.
 	DialSocket string
@@ -33,7 +33,7 @@ type SidecarOptions struct {
 }
 
 // RunSidecar is `aixle-runner --mode proxy`: it listens on opts.Listen, in the
-// agent's network namespace, and relays every request to the host runner's
+// agent's network namespace, and relays every request to the machine runner's
 // socket as `/runner/v1/proxy/<route>/…`, streaming the answer back. It holds
 // no credential and reads nothing but the socket. It runs until ctx is done.
 func RunSidecar(ctx context.Context, opts SidecarOptions) error {
@@ -122,9 +122,9 @@ func sidecarProxy(socket string, logger *slog.Logger) *httputil.ReverseProxy {
 		FlushInterval: -1,
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			if r.Context().Err() == nil {
-				logger.Warn("relaying to the host runner failed", "method", r.Method, "error", withoutURL(err))
+				logger.Warn("relaying to the machine runner failed", "method", r.Method, "error", withoutURL(err))
 			}
-			WriteRefusal(w, http.StatusBadGateway, ClassRelayFailed, "the host runner does not answer on its socket")
+			WriteRefusal(w, http.StatusBadGateway, ClassRelayFailed, "the machine runner does not answer on its socket")
 		},
 	}
 }

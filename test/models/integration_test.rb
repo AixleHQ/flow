@@ -235,7 +235,7 @@ class IntegrationTest < ActiveSupport::TestCase
   # ====== Enumerize ======
 
   test "provider enumerize values" do
-    assert_equal %w[github gitlab bitbucket linear coder slack teams azure_devops jira youtrack insights],
+    assert_equal %w[github gitlab bitbucket linear coder slack teams azure_devops jira youtrack insights aws_oidc],
                  Integration.provider.values.map(&:to_s)
   end
 

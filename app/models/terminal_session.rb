@@ -178,9 +178,6 @@ class TerminalSession < ApplicationRecord
   broadcasts_to ->(s) { s }, on: :update
   broadcasts_to ->(s) { s.step_run.workflow_run }, on: :update, if: :step_run
   after_commit :broadcast_session_list_update, on: :update
-  # The relay closes a runner session's streams the moment it leaves `ready`, whichever
-  # way its state was written (the state machine's events or a direct write).
-  after_save :signal_relay_session_ended, if: :left_ready?
 
   # Validations
   validates :session_type, presence: true, inclusion: {
@@ -465,21 +462,6 @@ class TerminalSession < ApplicationRecord
     "finished"
   end
 
-  # Wakes the parent workflow run of a step session, unless the run is being stopped.
-  # Sessions::Lifecycle calls it; the callbacks below do for the moves they make.
-  def notify_workflow_execution_if_step_session
-    return unless session_type == "workflow_step"
-
-    sr = step_run
-    return unless sr&.workflow_run_id
-    # A run being stopped was already told so (workflow_cancelled); its steps end with it.
-    return if sr.workflow_run.stop_requested?
-
-    WorkflowService.notify_container_finished(step_run: sr)
-  rescue StandardError => e
-    Rails.logger.error("[TerminalSession] notify_workflow_execution_if_step_session failed: #{e.message}")
-  end
-
   def sync_usage
     assign_usage_totals
     save! if changed?
@@ -591,27 +573,15 @@ class TerminalSession < ApplicationRecord
   # == State machine callbacks ==
   #
   # A transition's `after:` runs before AASM writes the new state, so these only
-  # assign: the attributes land in the same save as the state. Anything that
-  # leaves the process waits for the commit — a signal sent from inside the
-  # transaction can reach the workflow before the state does, or announce a
-  # transition that then rolls back.
+  # assign: the attributes land in the same save as the state. Nothing that leaves the
+  # process is sent from here: Sessions::Lifecycle.transition! sends it, after commit.
 
   def on_started
     self.started_at = Time.current
-    start_workflow_run_execution
-  end
-
-  def left_ready?
-    on_runner? && saved_change_to_state? && state_before_last_save == "ready"
-  end
-
-  def signal_relay_session_ended
-    Runners::RelaySignals.session_ended(id)
   end
 
   def on_ready
     self.ready_at = Time.current
-    ActiveRecord.after_all_transactions_commit { Sessions::Lifecycle.restored(self) } if restored_from_session_id
   end
 
   def on_queued
@@ -629,46 +599,23 @@ class TerminalSession < ApplicationRecord
     self.container_id = nil
   end
 
-  # `notify` is false for the moves finalize makes: the run is woken once, by
-  # Sessions::Lifecycle.slot_released, after the reservation is released (the parent
-  # reads "unreleased + terminal" as `finishing`, so waking it earlier would start the
-  # next step before the capacity is back). The argument is temporary: #283 removes it,
-  # when the effects move into Sessions::Lifecycle.transition! (also for on_failed and
-  # on_cancelled).
-  def on_finished(notify = true)
+  def on_finished
     assign_usage_totals
     self.finished_at = Time.current
     self.container_id = nil
-    ActiveRecord.after_all_transactions_commit { notify_workflow_execution_if_step_session } if notify
   end
 
-  # `notify` is temporary, removed by #283 (see on_finished).
-  def on_failed(notify = true)
+  def on_failed
     assign_usage_totals
     self.finished_at = Time.current
     self.container_id = nil
-    ActiveRecord.after_all_transactions_commit { notify_workflow_execution_if_step_session } if notify
   end
 
   # The container is still being torn down (by its own workflow), so it keeps
   # its id; the usage it ran up so far is recorded like any other ending.
-  # `notify` is temporary, removed by #283 (see on_finished).
-  def on_cancelled(notify = true)
+  def on_cancelled
     assign_usage_totals
     self.finished_at = Time.current
-    ActiveRecord.after_all_transactions_commit { notify_workflow_execution_if_step_session } if notify
-  end
-
-  # A run starts the moment it is dispatched, while its first step may still sit
-  # in the admission queue for minutes; its duration counts from here instead.
-  # Written in the transition's transaction, so it rolls back with the state.
-  def start_workflow_run_execution
-    return unless session_type == "workflow_step"
-
-    run_id = step_run&.workflow_run_id
-    return unless run_id
-
-    WorkflowRun.where(id: run_id, execution_started_at: nil).update_all(execution_started_at: started_at)
   end
 
   def assign_usage_totals

@@ -205,7 +205,7 @@ module Sessions
       end
 
       test "a step that started finishing while the pass read it is not failed" do
-        @runtime.on_next_exec("capture-pane") { TerminalSession.find(@session.id).update!(state: "finishing") }
+        @runtime.on_next_exec("capture-pane") { put_session_in_state!(TerminalSession.find(@session.id), "finishing") }
 
         assert_equal :taken_over, pass("some output", last_output_at: 45.minutes.ago)
 

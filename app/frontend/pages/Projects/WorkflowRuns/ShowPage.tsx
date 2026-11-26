@@ -1,4 +1,4 @@
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Alert, Anchor, Button, Group, Loader, Modal, Stack, Text, Textarea, TextInput } from '@mantine/core';
 import {
   IconAlertTriangle,
@@ -28,6 +28,7 @@ import { RunsOnBadge } from 'shared/resources/runners/runnerChoice';
 import { useRunsOnMeta } from 'shared/resources/runners/useRunsOnMeta';
 import {
   companyProjectPath,
+  companyProjectTaskPath,
   exportAllApiV1ProjectWorkflowRunWorkflowRunAssetsPath,
   exportApiV1ProjectWorkflowRunWorkflowRunAssetPath,
   finishApiV1TerminalSessionPath,
@@ -465,7 +466,12 @@ const WorkflowRunShowPage = () => {
           agentType={run.agentType}
           userName={runOwnerLabel(run.teamName, run.userName)}
           mode={run.mode}
-          extraMeta={[...draftTestMeta(run.draftTest), ...chatOriginMeta(run.chatOrigin), ...runsOnMeta]}
+          extraMeta={[
+            ...taskMeta(run.task, project.id),
+            ...draftTestMeta(run.draftTest),
+            ...chatOriginMeta(run.chatOrigin),
+            ...runsOnMeta,
+          ]}
           stats={stats}
           formatTokenValue={formatTokens}
           actions={
@@ -746,12 +752,26 @@ setPageLayout(WorkflowRunShowPage, persistentProjectLayoutNoPadding);
 
 export default WorkflowRunShowPage;
 
-// Where a chat-started run's request came from: the messenger, the conversation,
-// who asked, and a link back to their message when the messenger has one.
+function taskMeta(task: WorkflowRun['task'], projectId: number) {
+  if (!task) return [];
+  return [
+    {
+      label: 'Task',
+      value: (
+        <Anchor component={Link} href={companyProjectTaskPath(projectId, task.number)} size="xs">
+          #{task.number} {task.title}
+        </Anchor>
+      ),
+    },
+  ];
+}
+
 function draftTestMeta(draftTest: boolean) {
   return draftTest ? [{ label: 'Runs', value: 'the draft — a test run' }] : [];
 }
 
+// Where a chat-started run's request came from: the messenger, the conversation,
+// who asked, and a link back to their message when the messenger has one.
 function chatOriginMeta(origin: WorkflowRun['chatOrigin']) {
   if (!origin) return [];
   const where = [origin.provider, origin.conversation, origin.sender].filter(Boolean).join(' · ');

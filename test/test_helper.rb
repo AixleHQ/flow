@@ -97,6 +97,7 @@ class ActiveSupport::TestCase
   # Include FactoryBot methods
   include FactoryBot::Syntax::Methods
   include AuthHelper
+  include SessionStateHelper
   include TemporalHelper
   include UploadSupport
   include StubSupport
@@ -110,6 +111,7 @@ class ActiveSupport::TestCase
   include YoutrackTestHelper
   include GithubProjectsTestHelper
   include InsightsTestHelper
+  include AwsOidcTestHelper
   include FeatureFlagsHelper
   include TemporalActivityHelper
   include TemporalWorkflowHelper

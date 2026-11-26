@@ -94,6 +94,11 @@ class WorkflowRunResource < ApplicationResource
     run.picked_from_team&.name
   end
 
+  typelize "{ number: number; title: string } | null"
+  attribute :task do |run|
+    run.board_task && { number: run.board_task.number, title: run.board_task.title }
+  end
+
   # May the viewer steer this run (cancel / approve / retry / skip)? Mirrors
   # WorkflowRunsPolicy so the buttons match what the POST would actually do;
   # the policy is the enforcement, this is only what the page renders. Pass

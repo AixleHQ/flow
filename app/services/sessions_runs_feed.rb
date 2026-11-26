@@ -92,6 +92,12 @@ class SessionsRunsFeed
             .order(:name).map { |w| { id: w.id, name: w.name } }
   end
 
+  # Board tasks this project has runs for — the Task filter's options.
+  def task_options
+    BoardTask.where(id: WorkflowRun.where(project: project).select(:board_task_id))
+             .order(number: :desc).map { |t| { number: t.number, title: t.title } }
+  end
+
   private
 
   # The ordered (id, kind) spine, as a real relation so pagination is AR's job
@@ -144,8 +150,8 @@ class SessionsRunsFeed
   end
 
   def filtered_sessions
-    # A standalone session belongs to no workflow.
-    return TerminalSession.none if filters[:workflow_id].present?
+    # A standalone session belongs to no workflow and no board task.
+    return TerminalSession.none if filters[:workflow_id].present? || filters[:task_number].present?
 
     scope = TerminalSession.where(project: project, session_type: TOP_LEVEL_SESSION_TYPES)
                            .ransack(conditions).result
@@ -166,6 +172,10 @@ class SessionsRunsFeed
     scope = WorkflowRun.where(project: project).ransack(conditions).result
     if filters[:workflow_id].present?
       scope = scope.where(workflow_id: Workflow.with_drafts_of(filters[:workflow_id]).select(:id))
+    end
+    if filters[:task_number].present?
+      tasks = BoardTask.joins(:board).where(boards: { project_id: project.id }, number: filters[:task_number])
+      scope = scope.where(board_task_id: tasks.select(:id))
     end
     scope = scope.where(user_id: filters[:user_id]) if filters[:user_id].present?
     states = status_states(:runs)
@@ -209,7 +219,7 @@ class SessionsRunsFeed
 
     sessions = TerminalSession.where(id: session_ids).includes(:user, :project).index_by(&:id)
     runs = WorkflowRun.where(id: run_ids)
-                      .includes(:user, :team, :workflow, step_runs: [ :step, { terminal_session: :user } ])
+                      .includes(:user, :team, :workflow, :board_task, step_runs: [ :step, { terminal_session: :user } ])
                       .index_by(&:id)
 
     rows.filter_map do |row|

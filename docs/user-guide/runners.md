@@ -27,8 +27,8 @@ program and needs one **registration token**.
 Open the runner's page and press **Add machine**. The button is shown to
 whoever may manage that runner, and only while the runner is not revoked.
 
-The platform creates a registration token and shows it in a copy-paste
-sequence. The token is:
+The platform creates a registration token and shows it inside one command. The
+token is:
 
 - **single use**: it registers one machine, and a machine that has registered
   does not need it again;
@@ -36,70 +36,158 @@ sequence. The token is:
 - **shown once**: the platform keeps only a digest of it. Close the window and
   it is gone; press **Add machine** again for a new token.
 
-### The sequence
+The dialog opens on **Docker**. Choose a machine name, pick **Docker** or
+**Linux service**, tick the boxes you need, and copy the command. The command
+is the same for every machine of its tab: only the name and the token change.
 
-Choose a machine name and a platform (`linux-amd64` or `linux-arm64`), and
-copy the sequence. Run it on a Linux machine with systemd and Docker, as a user
-who can use `sudo`, with `curl` and `sha256sum` installed, that can reach the
-platform. (Hosts without systemd are not covered by this sequence.) It does
-three things:
+### Docker
 
-1. **Downloads the binary and verifies it.** The binary is downloaded from the
-   platform's own host (`/runner/v1/releases/<version>/<os>-<arch>`), at the
-   version the platform recommends. The `sha256sum -c` line checks it against
-   the SHA-256 the platform pins for that version and platform; if it fails,
-   do not run the binary.
-2. **Registers the machine.** `aixle-runner configure --url … --token … --name …`
-   uses up the token and stores the machine's credentials on the machine, in
-   `/var/lib/aixle-runner/credentials`.
-3. **Runs it as a service.** `service install` and `service start` (both run as
-   `./aixle-runner` from the directory you downloaded it to: `service install`
-   puts no `aixle-runner` on the `PATH`) set up a
-   systemd service that survives logout and reboot.
+Run it on any machine that has Docker and can reach the platform. It needs no
+`curl`, no `sha256sum` and no systemd. By default the command is one
+`docker run` that stays in the foreground:
 
-By default an idle machine updates itself to the version the platform
-recommends. To turn that off, tick **Turn off self-update**, which adds
-`--no-auto-update` to `configure`.
+```sh
+docker run --rm --name aixle-runner -v /var/run/docker.sock:/var/run/docker.sock \
+  -e AIXLE_RUNNER_URL='…' -e AIXLE_RUNNER_TOKEN='…' -e AIXLE_RUNNER_NAME='…' \
+  'ghcr.io/aixlehq/aixle-runner:<version>'
+```
 
-### Running the runner in Docker
+(The dialog shows it on one line.) The container registers the machine on its
+first start, using the three variables, and then runs it. The Docker socket
+lets the runner start the sessions' containers. On a Linux machine whose user
+is not in the `docker` group, put `sudo` in front.
 
-Choose **Docker** instead of a platform when the machine has no systemd, when
-you want no service user, or on macOS. The machine needs Docker and has to
-reach the platform; it needs no `curl` or `sha256sum`. The sequence:
+By default **nothing is kept**. The registration lives in a volume that goes
+away with the container (`--rm`), and stopping the command (Ctrl+C, closing the
+terminal, or `docker stop aixle-runner` from another terminal) stops the
+runner: it removes its session containers and **unregisters the machine**.
+Start the command again and you get a new machine, with a new token from a new
+**Add machine**.
 
-1. **Picks the runner's directory.** `/var/lib/aixle-runner` on Linux; on macOS
-   `~/aixle-runner`, which Docker shares with its VM. The runner keeps its
-   binary and credentials there, and the directory is mounted at the same path
-   in the container: Docker starts the session's containers from files on the
-   machine, not in the runner's container.
-2. **Registers the machine.** A throwaway container of
-   `ghcr.io/aixlehq/aixle-runner:<version>`, the version the platform
-   recommends, runs `configure --url … --token … --name …` with the Docker
-   socket and the `aixle-runner-docker-root` volume, because `configure` checks
-   Docker and the disk before it registers. It uses up the token.
-3. **Runs it.** A container with `--restart unless-stopped` and the Docker
-   socket, so it starts again with Docker.
+The runner in the container runs as root, because access to the Docker socket
+is already root on the machine. It does not update itself: the image's tag is
+its version.
 
-The container runs as root (`--user 0:0`): reaching the Docker socket already
-gives root on the machine. A runner in Docker does not update itself: to update
-it, remove the container and run the image of the new version with the same
-directory.
+**Docker version.** Needs Docker 26 or later. On older Docker, tick **Keep it
+in a directory on this machine**, or use the Linux service.
 
-The runner reads registry credentials from `~/.docker/config.json` of the user
-it runs as, which in the container is the container's root, not yours. For agent
-images in a private registry, add
-`-v "$HOME/.docker/config.json:/root/.docker/config.json:ro"` to the step 3
-command. A file with a credential helper (`credsStore`) does not work in the
-container: use a file with the credentials in it.
+#### The boxes
 
-To remove the machine, stop and remove the container, run the same image with
-`unregister` (it removes the machine on the platform), then delete the
-directory and the `aixle-runner-docker-root` volume. The dialog lists the
-commands after the sequence, commented out.
+Each box adds exactly its own flags to the command.
+
+| Box | What it adds |
+| --- | --- |
+| **Images from a private registry** | `-v "$HOME/.docker/config.json:/root/.docker/config.json:ro"`. The runner reads registry credentials from `~/.docker/config.json` of the user it runs as, which in the container is the container's root, not yours. A file with a credential helper (`credsStore`) does not work in the container: use a file with the credentials in it. |
+| **Keep the registration in a volume** | `-v aixle-runner:/var/lib/aixle-runner`, `-e AIXLE_RUNNER_UNREGISTER_ON_STOP=0`, and `-d --restart unless-stopped` instead of `--rm`. The container runs in the background and starts again with Docker. The machine survives a container restart without the token. Needs Docker 26 or later. |
+| **Keep it in a directory on this machine** | The same, with `-v <directory>:/var/lib/aixle-runner` and a path you enter, any absolute path. Also works on Docker older than 26. |
+
+The two "keep" boxes exclude each other. With either one, stopping the
+container does not remove the machine, and `docker start aixle-runner` brings
+it back without the token. Removing the volume or the directory deletes the
+machine's credentials: Revoke the machine and add it again.
+
+#### Unregister on stop in an edited command
+
+The image unregisters the machine when it stops, unless
+`AIXLE_RUNNER_UNREGISTER_ON_STOP` is `0`. The keep boxes set it to `0`. If you
+edit the command so that the container is kept (for example `--restart always`
+or no `--rm`), add `-e AIXLE_RUNNER_UNREGISTER_ON_STOP=0` yourself, or
+`docker stop` will unregister a machine that `docker start` brings back without
+a registration.
+
+#### If the runner is killed
+
+`docker kill` or a power loss gives the runner no chance to clean up. The
+machine shows as not answering on the runner's page: press **Revoke** or
+**Delete** on its row. In the default mode the next start is a new machine and
+does not touch what the old run left, so remove the leftovers by hand. List the
+containers the old runner started (they carry its machine key in a label) and
+remove them together with their anonymous volumes:
+
+```sh
+docker ps -a --filter label=aixle.com/environment
+docker rm -fv <container id>
+```
+
+With a kept registration the restarted runner is the same machine, and it
+removes its own leftovers at start.
+
+#### Updating a Docker runner
+
+A runner in Docker does not update itself. To update it, remove the container
+and run the new command of **Add machine** with the **Keep the registration in
+a volume** box ticked (or the directory box, with the same path) and without the
+three `-e AIXLE_RUNNER_URL`, `_TOKEN` and `_NAME` flags. The volume or directory
+holds the registration, so those variables would be ignored and the old token is not needed. Remove the container with
+`docker rm -f aixle-runner` first, then run the new command; it names the image
+of the new version.
+
+#### Removing a Docker machine
+
+- **Default command:** stop it. The machine unregisters itself.
+- **Kept registration:** press **Revoke** or **Delete** on the machine's row,
+  then run `docker rm -f aixle-runner` (and `docker volume rm aixle-runner` for
+  the volume, or delete the directory). To remove it from the machine's side
+  instead, stop it and run the same image with `unregister` on the kept state:
+  `docker stop aixle-runner && docker run --rm --volumes-from aixle-runner
+  'ghcr.io/aixlehq/aixle-runner:<version>' unregister`.
+
+The dialog shows these commands in its collapsed **Remove this machine**
+section.
+
+#### Free disk
+
+The runner reports the free disk space where it keeps its files and logs a
+warning below 20 GiB. The figure is for information only: it never stops the
+runner from starting, and the platform does not use it.
 
 macOS works through Docker: OrbStack is checked, Docker Desktop as far as
 checked. Rootless Docker and Podman (another socket path) and Windows are not
 covered.
+
+### Linux service
+
+Run it on a Linux machine with systemd and Docker, with `curl` and `sha256sum`
+installed, as a user who can use `sudo`, that can reach the platform. (Hosts
+without systemd are not covered; use Docker.) The command is one line:
+
+```sh
+curl -fsSL '<platform>/runner/v1/machine-install.sh' | sudo sh -s -- --token '…' --name '…'
+```
+
+The platform serves the script and renders it from its own pins, so the
+version and the SHA-256 it checks are the ones the platform pins. The script:
+
+1. **Checks the machine.** It stops, with a message, on a machine that is not
+   Linux, that has no `systemctl`, `curl` or `sha256sum`, or when it is not run
+   as root.
+2. **Downloads the binary and verifies it.** It picks `linux-amd64` or
+   `linux-arm64` from `uname -m`, downloads the binary from the platform's own
+   host (`/runner/v1/releases/<version>/<os>-<arch>`) at the version the
+   platform recommends, and checks it against the SHA-256 the platform pins for
+   that version and architecture. It does not run the binary if they differ.
+3. **Registers the machine and runs it as a service.** `aixle-runner configure`
+   uses up the token and stores the machine's credentials in
+   `/var/lib/aixle-runner/credentials`; `service install` and `service start`
+   set up a systemd service that survives logout and reboot.
+
+The script accepts only `--token`, `--name` and `--no-auto-update`.
+
+By default an idle machine updates itself to the version the platform
+recommends. To turn that off, tick **Turn off self-update**, which adds
+`--no-auto-update`.
+
+To remove the machine, run `sudo aixle-runner unregister` and
+`sudo aixle-runner service uninstall` on it, or press **Revoke** or **Delete**
+on its row.
+
+#### Install step by step
+
+If you would rather not pipe a script into a root shell, the dialog's
+collapsed **Install step by step** section (on the Linux service tab) has the
+same steps to run one at a time: download the binary, compare its SHA-256 with
+the one the platform shows, run `configure`, then `service install` and
+`service start`. Choose `linux-amd64` or `linux-arm64` inside it.
 
 ## The machines list
 

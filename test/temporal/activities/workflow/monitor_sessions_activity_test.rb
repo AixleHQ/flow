@@ -462,7 +462,7 @@ module Activities
       test "does not fail a session that started finishing while the pass read it" do
         session = create_step_session(agent_type: "kiro_cli", container_id: "container-finishing")
         stub_pane("container-finishing", [ "● Thinking...\n", "#{KIRO_STOP}\n" ], last_output_at: 2.minutes.ago)
-        @runtime.on_next_exec("capture-pane") { TerminalSession.find(session.id).update!(state: "finishing") }
+        @runtime.on_next_exec("capture-pane") { put_session_in_state!(TerminalSession.find(session.id), "finishing") }
 
         result = run_activity(MonitorSessionsActivity)
 
@@ -476,7 +476,7 @@ module Activities
         session = create_step_session(agent_type: "codex", container_id: "container-trust-paused")
         stub_trust_prompt_pane("container-trust-paused")
         @runtime.on_next_exec("capture-pane") do
-          TerminalSession.find(session.id).update!(state: "finishing")
+          put_session_in_state!(TerminalSession.find(session.id), "finishing")
         end
 
         run_activity(MonitorSessionsActivity)

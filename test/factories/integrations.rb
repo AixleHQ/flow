@@ -274,6 +274,14 @@ FactoryBot.define do
     end
 
     # A company's connection to an Insights organization; the secret is the connection's own.
+    # A project's AWS OIDC integration: connected, with its issuer key assigned on create.
+    trait :aws_oidc do
+      provider { :aws_oidc }
+      status { :active }
+      name { "AWS" }
+      project { association(:project, company: company, owner: association(:user, company: company)) }
+    end
+
     trait :insights do
       provider { :insights }
       status { :active }

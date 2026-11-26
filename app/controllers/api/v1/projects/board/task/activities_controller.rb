@@ -16,6 +16,11 @@ module Api
               pagy, records = paginate(activities)
               render json: PaginatedResource.build(pagy, records) { |a| BoardActivityResource.new(a).to_h }
             end
+
+            def show
+              activity = current_task.board_activities.includes(:actor, :board_task).find(params[:id])
+              render json: BoardActivityDetailResource.new(activity).to_h
+            end
           end
         end
       end

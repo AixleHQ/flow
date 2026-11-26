@@ -13,19 +13,52 @@ governance, community health — carry none.
 
 ## [Unreleased]
 
-## [1.18.0] - 2026-11-24
+### Added
+- Runners: **Add machine** shows one command per tab. **Docker** (the default) is a single `docker run` that registers the machine on its first start, keeps nothing and unregisters the machine when it stops, with boxes for a private registry and for keeping the registration in a volume or a directory. **Linux service** is one `curl … | sudo sh` line that runs the platform's new public `machine-install.sh`, which checks the binary's SHA-256 before it runs it. Removal and the step-by-step install are collapsed sections. The Docker command needs Docker 26 or later, or the directory box on older Docker. The platform now recommends `aixle-runner` 0.6.0 and pins the `linux-amd64` and `linux-arm64` binaries of [runner-v0.6.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.6.0) by their SHA-256. No minimum runner version: older runners keep working.
+- **Tasks**: a card's Assets tab has a drop zone that takes several files at once, dropped or picked, so many files can be attached to a card in one go.
+
+### Changed
+- **Tasks**: the task drawer shows the ticket title in its top bar on every tab, truncated with the full title on hover.
+- **Tasks**: a task's Details are read-only until you press Edit, so text can be selected and copied without opening a field. Save applies all changes in one request and Cancel discards them. In Activity, an edit names the fields it changed, and **Show changes** opens their old and new values.
+
+### Removed
+- **Tasks**: the **Upload new** button in a card's Assets tab. The drop zone remains: drop files on it, or click it to select several files.
+
+### Fixed
+- **Assets**: the file drop zone, in the Assets upload dialog and on a card's Assets tab, can be reached with Tab and opens the file picker with Enter or Space.
+- **Tasks**: pressing `n` or `/` while a task's drawer is open, with the cursor outside a field, no longer opens Create task over it or jumps to the board search.
+
+## [1.20.0] - 2026-11-26
+
+### Added
+- **Integrations**: AWS. A workflow step can assume an IAM role in your AWS
+  account with no access key: Flow is an OpenID Connect provider the account trusts, and the step gets
+  credentials that last at most an hour through a profile in `~/.aws/config`. Connect it per project, add
+  roles, check them with Verify, and attach them to steps in the builder.
+- **Sessions & Runs**: a workflow run started for a board task names that task in the Sessions & Runs list and in the run's header, with a link to the task, and the list filters by task. Over MCP, `list_workflow_runs` and `get_workflow_run` return it as `task_number` and `task_title`, and `list_workflow_runs` filters by `task_number`.
+
+### Changed
+- **Integrations**: for GitHub, GitLab and Bitbucket, only connections made with the OAuth client the deployment is configured with now count. After an operator changes a provider's client id (or GitLab's endpoint), connections made with the previous client are no longer shown, handed to agents or refreshed, and people connect again (docs/operations/rotating-oauth-clients.md).
+
+### Fixed
+- **Repositories**: a session whose attached repository does not clone now fails before its agent starts,
+  with git's error on the session and its run, instead of starting without the repository. Adding a GitHub
+  repository through a token that can see it but not read its contents is refused with what to grant, and an
+  empty repository is checked out empty instead of failing the clone.
+- **Integrations**: a GitHub, GitLab or Bitbucket connect whose account lookup fails stores nothing, and a failed reconnect keeps the connection that worked.
+- **Integrations**: with `GITHUB_APP_VERIFY_INSTALLATION_OWNER` on, a company can connect a GitHub organization that already has the app installed for another company: after **Configure** on GitHub, Flow asks the person to authorize the app and checks that they can see the installation. Operators add `https://<domain>/company/integrations/github_setup` to the app's Redirect URIs before turning the setting on; "Request user authorization (OAuth) during installation" is no longer needed.
+- **Admin**: moving a project whose GitHub installation the source company still uses elsewhere now says the target company cannot connect that installation again while the source keeps it.
+- **Sign-in & onboarding**: an email address without a dotted domain (like name@2005) is
+  refused when a workspace is created or a person is invited, instead of being accepted and
+  the email never arriving.
+
+## [1.19.0] - 2026-11-25
 
 ### Added
 - **Integrations**: the `pull_request_*` tools can act as a person. Pass `user_id` to `pull_request_create`,
   `_update`, `_add_comment`, `_review` or `_merge` and the pull request, comment, review or merge is that
   member's own, under the same conditions as `github_user_token_for` (a connected account and the consent for
   the project). Without it the tools act as the connection, as before.
-- **Workflows**: change a workflow that is in use through a draft. **Edit in draft** (or
-  **Save as draft** when a Save would go live) opens a copy that you edit and test-run while
-  triggers and board columns keep running the live version; **Apply** makes it live as one
-  new version, **Discard draft** drops it. The personal MCP has the same flow:
-  `create_workflow_draft`, `get_workflow_draft_diff`, `apply_workflow_draft`,
-  `discard_workflow_draft`.
 - Runners: an interactive session can run on a runner. The new-session form no longer
   disables runners in interactive mode, and the session page has the terminal, the read-only
   view, the file panel, uploads and the IDE, as for a hosted session. A machine needs
@@ -34,6 +67,24 @@ governance, community health — carry none.
   `linux-arm64` binaries of
   [runner-v0.5.0](https://github.com/AixleHQ/flow/releases/tag/runner-v0.5.0) by their
   SHA-256. No minimum runner version: older runners keep working.
+
+### Changed
+- **Workflows**: the `pull_request_*` tools are a tool group, **Pull requests**, that a workflow or a step can
+  add or remove. Existing workflows keep them through a migration; sessions no longer get them just because
+  they hold a GitHub, GitLab or Bitbucket repository, and the session context no longer tells agents to use
+  them.
+- **Companies & projects**: each company in the switcher on the far left is a link, so
+  Cmd/Ctrl+click opens it in a new tab and leaves the current tab where it is.
+
+## [1.18.0] - 2026-11-24
+
+### Added
+- **Workflows**: change a workflow that is in use through a draft. **Edit in draft** (or
+  **Save as draft** when a Save would go live) opens a copy that you edit and test-run while
+  triggers and board columns keep running the live version; **Apply** makes it live as one
+  new version, **Discard draft** drops it. The personal MCP has the same flow:
+  `create_workflow_draft`, `get_workflow_draft_diff`, `apply_workflow_draft`,
+  `discard_workflow_draft`.
 - **Sessions & Runs**: an interactive session can be suspended instead of finished, by its
   owner with **Suspend** or by the 23-hour limit, which used to finish it. Its files, each
   repository's unpushed commits and uncommitted changes, and the agent's conversation are
@@ -52,10 +103,6 @@ governance, community health — carry none.
   and sets `BITBUCKET_OAUTH_CLIENT_ID` and `BITBUCKET_OAUTH_CLIENT_SECRET`.
 
 ### Changed
-- **Workflows**: the `pull_request_*` tools are a tool group, **Pull requests**, that a workflow or a step can
-  add or remove. Existing workflows keep them through a migration; sessions no longer get them just because
-  they hold a GitHub, GitLab or Bitbucket repository, and the session context no longer tells agents to use
-  them.
 - **Company settings**: a self-hosted installation bought through AWS Marketplace
   reports its usage under the dimension `worker_minute`, the same word as the SaaS
   product, instead of `queue_minute`. Operators: from this version an installation meters
@@ -68,8 +115,6 @@ governance, community health — carry none.
   the right company, and two tabs can stay on two companies. Links from before keep
   working and open in the project's company, or in the one you used last. A company's short
   name in the address comes from its email domain (`acme.com` → `acme`).
-- **Companies & projects**: each company in the switcher on the far left is a link, so
-  Cmd/Ctrl+click opens it in a new tab and leaves the current tab where it is.
 - **Admin**: the dashboard opens on the current week, shows Utilization, Average wait and
   p95 wait right after Company, keeps the table's header and Company column in view while
   it scrolls, and folds its explanation into a "How to read this dashboard" section.
@@ -1841,7 +1886,9 @@ For deployments that ran a build from before this release:
   no effect; they can be dropped from ConfigMaps, compose files and CI build
   args.
 
-[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.18.0...develop
+[Unreleased]: https://github.com/AixleHQ/flow/compare/v1.20.0...develop
+[1.20.0]: https://github.com/AixleHQ/flow/compare/v1.19.0...v1.20.0
+[1.19.0]: https://github.com/AixleHQ/flow/compare/v1.18.0...v1.19.0
 [1.18.0]: https://github.com/AixleHQ/flow/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/AixleHQ/flow/compare/v1.16.0...v1.17.0
 [1.16.0]: https://github.com/AixleHQ/flow/compare/v1.15.0...v1.16.0

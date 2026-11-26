@@ -532,12 +532,19 @@ module Agents
         "#{home_dir}/.claude/settings.json" =>
           generate_settings(mcp_names, model: model, bedrock: bedrock, mode: workflow_config[:mode]).to_json
       }
-      files.merge!(aws_config_file(bedrock)) if bedrock
+      files.merge!(aws_config_file(bedrock, aws_oidc_config: workflow_config[:aws_oidc_config])) if bedrock
 
       files.merge!(credential_files(credentials))
 
       files
     end
+
+    def writes_aws_config?(credentials)
+      bedrock = bedrock_block(credentials)
+      bedrock.present? && aws_config_file(bedrock).any?
+    end
+
+    def sets_aws_env?(credentials) = bedrock_block(credentials).present?
 
     # Only the token files: where the rotating tokens live, and the ones a mid-session
     # delivery may replace. .claude.json holds the API-key path and the per-project
@@ -852,7 +859,7 @@ module Agents
     # The native Bedrock setup wizard lists profiles by scanning the process HOME for
     # [profile ...] sections and IGNORES AWS_CONFIG_FILE, so this has to land at the
     # literal $HOME/.aws/config or the profile is silently absent from the picker.
-    def aws_config_file(bedrock)
+    def aws_config_file(bedrock, aws_oidc_config: nil)
       profile = bedrock["profile"]
       return {} if profile.blank?
 
@@ -880,6 +887,7 @@ module Agents
       lines << "region = #{bedrock['region']}"
       sections << lines.join("\n")
 
+      sections << aws_oidc_config.chomp if aws_oidc_config.present?
       { "#{home_dir}/.aws/config" => "#{sections.join("\n\n")}\n" }
     end
 

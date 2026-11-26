@@ -13,7 +13,7 @@ import {
 } from '@tabler/icons-react';
 import { useRef, useState } from 'react';
 
-import type { ConfigItemPicker, Step } from '@/types/generated';
+import type { AwsOidcRolePicker, ConfigItemPicker, Step } from '@/types/generated';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
 import { ReasoningEffortSelect } from 'shared/components/ReasoningEffortSelect';
@@ -57,6 +57,7 @@ type SessionStep = Pick<
   | 'assetIds'
   | 'repositoryIds'
   | 'configItemIds'
+  | 'awsOidcRoleIds'
   | 'inputAssetSpecs'
   | 'outputAssetSpecs'
 >;
@@ -202,6 +203,8 @@ interface SessionEditorPanelProps {
   assets: AssetPickerItem[];
   repositories: NamedItem[];
   configItems: ConfigItemPicker[];
+  /** The picker shows only when the project has roles to offer. */
+  awsOidcRoles?: AwsOidcRolePicker[];
   agentModels?: AgentModelsEntry[];
   readOnly: boolean;
   onFieldChange: (field: string, value: unknown) => void;
@@ -229,6 +232,7 @@ export function SessionEditorPanel({
   assets,
   repositories,
   configItems,
+  awsOidcRoles = [],
   agentModels = [],
   readOnly,
   onFieldChange,
@@ -567,6 +571,26 @@ export function SessionEditorPanel({
             }}
           />
         </div>
+
+        {awsOidcRoles.length > 0 && (
+          <div className={classes.resGroup}>
+            <div className={classes.resType}>
+              AWS roles <span className={classes.resTypeSub}>— AWS profiles this session can assume</span>
+            </div>
+            <MultiSelect
+              data={awsOidcRoles.map((r) => ({ value: String(r.id), label: `${r.name} (${r.accountId})` }))}
+              value={toStringArr(step.awsOidcRoleIds ?? [])}
+              onChange={(v) => onFieldChange('awsOidcRoleIds', toNumberArr(v))}
+              disabled={readOnly}
+              searchable
+              placeholder="None added"
+              aria-label="AWS roles"
+              styles={{
+                input: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, fontSize: 13 },
+              }}
+            />
+          </div>
+        )}
 
         <div className={classes.resGroup}>
           <div className={classes.resType}>

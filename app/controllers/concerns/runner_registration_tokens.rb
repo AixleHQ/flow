@@ -28,6 +28,6 @@ module RunnerRegistrationTokens
   end
 
   def gateway_url
-    "#{Settings.protocol}://#{Settings.domain}"
+    Runners::MachineRegistration.gateway_url
   end
 end

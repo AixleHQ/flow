@@ -8,6 +8,10 @@ class UserConnectionsTest < ActiveSupport::TestCase
     @user = create(:user, :employee, :onboarding_completed, company: @company)
     @alpha = create(:project, company: @company, owner: @user, name: "Alpha")
     @beta = create(:project, company: @company, owner: @user, name: "Beta")
+    # The clients the factories' connections are made with are the configured ones.
+    Settings.github.stubs(:client_id).returns("Iv1.client")
+    Settings.gitlab.stubs(:oauth_client_id).returns("lab-cid")
+    Settings.bitbucket.oauth.stubs(:client_id).returns("bb-cid")
   end
 
   test "available? follows the App's client credentials" do

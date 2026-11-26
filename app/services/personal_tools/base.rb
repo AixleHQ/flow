@@ -199,6 +199,10 @@ module PersonalTools
       { draft_test: run.workflow&.draft? || false, draft_of_workflow_id: run.workflow&.draft_of_id }
     end
 
+    def task_fields(run)
+      { task_number: run.board_task&.number, task_title: run.board_task&.title }
+    end
+
     def find_step!(workflow, id = params[:step_id])
       step = workflow.steps.not_deleted.find_by(id: id)
       raise NotFoundError, "Step #{id} not found in this workflow" unless step

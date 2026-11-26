@@ -23,6 +23,32 @@ class Web::Company::Integrations::GithubSetupControllerTest < ActionDispatch::In
     )
   end
 
+  def stub_token_service
+    Github::TokenService.stubs(:new).returns(
+      FakeGithub::TokenService.new(installation: { account_login: "acme", account_type: "Organization",
+                                                   target_type: "Organization" })
+    )
+  end
+
+  def verify_installation_owners!
+    Settings.github.stubs(:client_id).returns("Iv1.client")
+    Settings.github.stubs(:client_secret).returns("client-secret")
+    Settings.github.stubs(:verify_installation_owner).returns(true)
+  end
+
+  # GitHub confirms that the person who brought `code` can see the installation.
+  def confirm_installation(installation_id, code:)
+    ownership = mock("ownership")
+    ownership.stubs(:includes?).with(installation_id).returns(true)
+    Github::InstallationOwnership.stubs(:new).with(code: code).returns(ownership)
+  end
+
+  def github_app_connection(installation_id, **attributes)
+    integration = build(:integration, :github, :active, **attributes)
+    integration.credentials_data = { installation_id: installation_id }
+    integration.tap(&:save!)
+  end
+
   test "creates project-scoped github integration and redirects to the project" do
     token_service = FakeGithub::TokenService.new(
       installation: { account_login: "octocat", account_type: "User", target_type: "User" }
@@ -148,6 +174,73 @@ class Web::Company::Integrations::GithubSetupControllerTest < ActionDispatch::In
 
     assert_redirected_to company_project_integrations_path(@project)
     assert_equal "This GitHub installation is already connected to another workspace", flash[:alert]
+  end
+
+  test "with installation owners verified, an update without a code goes through GitHub's authorization " \
+       "and connects an installation another company holds" do
+    stub_token_service
+    other_company = create(:company)
+    github_app_connection("424242", company: other_company)
+    verify_installation_owners!
+
+    assert_no_difference("Integration.count") do
+      get company_integrations_github_setup_path,
+          params: { state: signed_state(project: @project, user: @user), installation_id: "424242", setup_action: "update" }
+    end
+    authorization = URI(response.location)
+    query = Rack::Utils.parse_query(authorization.query)
+    assert_equal "https://github.com/login/oauth/authorize", "#{authorization.scheme}://#{authorization.host}#{authorization.path}"
+    assert_equal "Iv1.client", query["client_id"]
+    assert_equal company_integrations_github_setup_url(protocol: Settings.protocol, host: Settings.domain), query["redirect_uri"]
+
+    confirm_installation("424242", code: "user-code")
+    get company_integrations_github_setup_path, params: { code: "user-code", state: query["state"] }
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_equal "GitHub connected", flash[:notice]
+    assert_equal [ other_company.id, @company.id ].sort,
+                 Integration.where(provider: :github, github_installation_id: 424_242, status: "active").pluck(:company_id).sort
+  end
+
+  test "on the way back from GitHub's authorization, the installation is the one in the signed state" do
+    stub_token_service
+    verify_installation_owners!
+    get company_integrations_github_setup_path,
+        params: { state: signed_state(project: @project, user: @user), installation_id: "12345" }
+    state = Rack::Utils.parse_query(URI(response.location).query)["state"]
+
+    confirm_installation("12345", code: "user-code")
+    get company_integrations_github_setup_path, params: { code: "user-code", state: state, installation_id: "67890" }
+
+    assert_equal [ 12_345 ], @company.integrations.pluck(:github_installation_id)
+  end
+
+  test "a person who declines GitHub's authorization is told so and not sent back to it" do
+    verify_installation_owners!
+    get company_integrations_github_setup_path,
+        params: { state: signed_state(project: @project, user: @user), installation_id: "12345" }
+    state = Rack::Utils.parse_query(URI(response.location).query)["state"]
+
+    assert_no_difference("Integration.count") do
+      get company_integrations_github_setup_path, params: { error: "access_denied", state: state }
+    end
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_equal "GitHub did not confirm your access to this installation — connect GitHub again.", flash[:alert]
+  end
+
+  test "a new installation that already carries the person's code connects without another trip to GitHub" do
+    stub_token_service
+    verify_installation_owners!
+    confirm_installation("12345", code: "install-code")
+
+    assert_difference("Integration.count", 1) do
+      get company_integrations_github_setup_path,
+          params: { state: signed_state(project: @project, user: @user), installation_id: "12345", code: "install-code" }
+    end
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_equal "GitHub connected", flash[:notice]
   end
 
   test "records the installation's account so repository owners can be checked" do

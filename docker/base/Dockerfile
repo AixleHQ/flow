@@ -115,6 +115,11 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 COPY git/gh-aixle /usr/local/bin/gh
 RUN chmod 0755 /usr/local/bin/gh
 
+# AWS SDK credential_process helper — the container's only route to AWS credentials:
+# Bedrock for Claude Code, and AWS OIDC roles for any runtime's workflow step.
+COPY cloud/aixle-aws-creds /usr/local/bin/aixle-aws-creds
+RUN chmod 0755 /usr/local/bin/aixle-aws-creds
+
 # -----------------------------------------------------------------------------
 # MITM proxy for request/response logging
 # -----------------------------------------------------------------------------

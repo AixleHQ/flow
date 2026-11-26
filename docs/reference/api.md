@@ -172,6 +172,7 @@ DELETE /api/v1/projects/:project_id/board/tasks/:task_id/assets/:id
 DELETE /api/v1/projects/:project_id/board/tasks/:task_id/gates/:id
 GET    /api/v1/projects/:project_id/board/tasks/:task_id/transitions
 GET    /api/v1/projects/:project_id/board/tasks/:task_id/activities
+GET    /api/v1/projects/:project_id/board/tasks/:task_id/activities/:id
 GET    /api/v1/projects/:project_id/board/tasks/:task_id/statistics
 ```
 

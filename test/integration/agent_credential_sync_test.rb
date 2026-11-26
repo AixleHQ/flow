@@ -60,7 +60,7 @@ class AgentCredentialSyncTest < ActionDispatch::IntegrationTest
   # A finished session must not be able to overwrite a credential the user may have
   # re-authenticated since.
   test "rejects a session that is no longer active" do
-    @session.update!(state: "finished")
+    put_session_in_state!(@session, "finished")
 
     post PATH, params: rotated_body, headers: headers
 

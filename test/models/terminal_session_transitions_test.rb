@@ -2,6 +2,8 @@
 
 require "test_helper"
 
+# What a transition of a TerminalSession sets off, and what it assigns. The effects are
+# sent by Sessions::Lifecycle.transition!, after the commit; the model's callbacks assign.
 class TerminalSessionTransitionsTest < ActiveSupport::TestCase
   setup do
     @user = create(:user, :with_company)
@@ -16,34 +18,34 @@ class TerminalSessionTransitionsTest < ActiveSupport::TestCase
   test "a step session's failure wakes its run once the failure is committed" do
     WorkflowService.expects(:notify_container_finished).with { TerminalSession.find(@session.id).failed? }.once
 
-    @session.fail!
+    Sessions::Lifecycle.transition!(@session, :fail)
   end
 
   test "a step session's finish wakes its run once the finish is committed" do
-    @session.start_finishing!
+    Sessions::Lifecycle.transition!(@session, :start_finishing)
     WorkflowService.expects(:notify_container_finished).with { TerminalSession.find(@session.id).finished? }.once
 
-    @session.finish!
+    Sessions::Lifecycle.transition!(@session, :finish)
   end
 
   test "a step session's cancellation wakes its run once the cancel is committed" do
     WorkflowService.expects(:notify_container_finished).with { TerminalSession.find(@session.id).cancelled? }.once
 
-    @session.cancel!
+    Sessions::Lifecycle.transition!(@session, :cancel)
   end
 
   test "the sessions of a run being stopped do not wake it again" do
     @step_run.workflow_run.update!(stop_requested_at: Time.current)
     WorkflowService.expects(:notify_container_finished).never
 
-    @session.cancel!
+    Sessions::Lifecycle.transition!(@session, :cancel)
   end
 
   test "a failure that rolls back wakes nobody" do
     WorkflowService.expects(:notify_container_finished).never
 
     TerminalSession.transaction do
-      @session.fail!
+      Sessions::Lifecycle.transition!(@session, :fail)
       raise ActiveRecord::Rollback
     end
 
@@ -51,7 +53,7 @@ class TerminalSessionTransitionsTest < ActiveSupport::TestCase
   end
 
   test "an ending is written in the same save as its state" do
-    @session.fail!
+    Sessions::Lifecycle.transition!(@session, :fail)
 
     @session.reload
     assert_equal "failed", @session.state
@@ -63,7 +65,7 @@ class TerminalSessionTransitionsTest < ActiveSupport::TestCase
     UsageStatistic.create!(terminal_session: @session, cost_cents: 250, input_tokens: 900, output_tokens: 100,
                            cache_write_tokens: 0, cache_read_tokens: 0)
 
-    @session.cancel!
+    Sessions::Lifecycle.transition!(@session, :cancel)
 
     @session.reload
     assert_equal "cancelled", @session.state
@@ -79,12 +81,12 @@ class TerminalSessionTransitionsTest < ActiveSupport::TestCase
     second = queued_step_session(run)
 
     freeze_time do
-      first.start!
+      Sessions::Lifecycle.transition!(first, :start)
       assert_equal Time.current, run.reload.execution_started_at
     end
 
     travel 10.minutes do
-      second.start!
+      Sessions::Lifecycle.transition!(second, :start)
     end
     assert_equal first.reload.started_at, run.reload.execution_started_at
   end
@@ -95,7 +97,7 @@ class TerminalSessionTransitionsTest < ActiveSupport::TestCase
     queued = queued_step_session(run)
 
     TerminalSession.transaction do
-      queued.start!
+      Sessions::Lifecycle.transition!(queued, :start)
       raise ActiveRecord::Rollback
     end
 

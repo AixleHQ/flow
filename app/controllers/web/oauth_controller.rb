@@ -157,16 +157,20 @@ class Web::OauthController < Web::ApplicationController
                           code_verifier: consumed["code_verifier"], resource: payload["resource"],
                           provider: provider)
 
-    credential = OauthCredential.upsert_from_token!(
+    # A person's own account is looked up with the new token first: when that fails
+    # nothing is stored, and a reconnect keeps the credential it already had.
+    identity = Oauth::Providers.fetch_identity(provider, resp["access_token"])
+
+    OauthCredential.upsert_from_token!(
       owner: owner,
       oauth_client: client,
       provider: provider,
       mcp_server: mcp_server,
       resource: payload["resource"],
       connected_by: current_user,
-      token_response: resp
+      token_response: resp,
+      identity: identity
     )
-    Oauth::Providers.after_connect(provider, credential) unless provider.start_with?("mcp:")
     redirect_to return_to, notice: "Connected"
   rescue Oauth::TokenExchangeError, Encryptable::DecryptionError => e
     # (7) never logs tokens or the code — only class name / HTTP status.

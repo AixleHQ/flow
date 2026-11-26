@@ -32,7 +32,7 @@ module Sessions
     # landed before the state change. The state change compares the row's state first.
     test "a session finished after the caller read it stays finished" do
       session = ready_session
-      TerminalSession.find(session.id).update!(state: "finished", finished_at: Time.current)
+      put_session_in_state!(TerminalSession.find(session.id), "finished", finished_at: Time.current)
       TemporalService.expects(:send_signal).never
 
       refute Sessions::Lifecycle.fail_if(session, expected_state: "ready", error_message: "stuck")

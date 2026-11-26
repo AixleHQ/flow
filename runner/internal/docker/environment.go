@@ -17,7 +17,7 @@ import (
 	"github.com/aixlehq/aixle-runner/internal/tunnel"
 )
 
-// The labels the host runner puts on what it creates (DESIGN.md §6.8, §7.2).
+// The labels the machine runner puts on what it creates (DESIGN.md §6.8, §7.2).
 // Scrub and reset select by them, never by enumeration.
 const (
 	LabelEnvironment = "aixle.com/environment"
@@ -27,7 +27,7 @@ const (
 	// (`scrub`), and a session's proxy sidecar (`proxy`).
 	LabelRole = "aixle.com/role"
 	// LabelTunnelPorts is the session's five tunnel ports on its agent container, so
-	// that a restarted host runner serves them again (Resume).
+	// that a restarted machine runner serves them again (Resume).
 	LabelTunnelPorts = "aixle.com/tunnel-ports"
 )
 
@@ -57,7 +57,7 @@ type SessionHandler = func(ctx context.Context, sessionID int64, payload json.Ra
 // EnvironmentHandler runs an environment op, which names no session.
 type EnvironmentHandler = func(ctx context.Context, payload json.RawMessage) protocol.Result
 
-// Environment is the host runner's view of one environment on the machine's
+// Environment is the machine runner's view of one environment on the machine's
 // Docker daemon: its session container, its volumes, and the ops on them.
 type Environment struct {
 	API API
@@ -66,6 +66,10 @@ type Environment struct {
 	Key string
 	// StateDir is the runner's state directory. No bind mount may expose it.
 	StateDir string
+	// State is where the state directory is on the machine, for the proxy
+	// sidecar's mounts and for checkBind. Its zero value is a runner that runs on
+	// the machine itself, with StateDir the machine's path.
+	State StateLocation
 	// Now is replaced in tests.
 	Now func() time.Time
 	// RemoveTimeout bounds the removal after a failed or cut-short
@@ -77,7 +81,7 @@ type Environment struct {
 	// Uploader puts the output and the files over OutputCap to the signed URLs of
 	// an op's payload (PROTOCOL.md §6.5). Nil is HTTPUploader{}.
 	Uploader Uploader
-	// Proxy is the host runner's callback-proxy relay (PROTOCOL.md §5.8).
+	// Proxy is the machine runner's callback-proxy relay (PROTOCOL.md §5.8).
 	// `container.start` starts a session's proxy through it: a sidecar, or with
 	// `network: host` a listener. Nil starts none.
 	Proxy ProxyHost
@@ -100,8 +104,15 @@ type Environment struct {
 	SidecarLogTimeout time.Duration
 
 	mu sync.Mutex
-	// retired are the sidecars the host runner removes itself, by id.
+	// retired are the sidecars the machine runner removes itself, by id.
 	retired map[string]bool
+}
+
+func (e *Environment) stateLocation() StateLocation {
+	if e.State.Dir == "" {
+		return OnMachine(e.StateDir)
+	}
+	return e.State
 }
 
 func (e *Environment) now() time.Time {
@@ -153,7 +164,7 @@ func (e *Environment) containers(ctx context.Context) ([]container.Summary, erro
 }
 
 // sessionContainer finds the environment's session container by its labels, as a
-// restarted host runner does: the container belongs to the daemon, not to the
+// restarted machine runner does: the container belongs to the daemon, not to the
 // runner, so nothing about it is kept in the runner's memory or state. It answers
 // nil when the environment has none. `container.start` refuses to start a second
 // one, so there is at most one. A container with a role (the proxy sidecar, the
@@ -261,7 +272,7 @@ func trimName(name string) string {
 	return name
 }
 
-// Handlers are the ops the host runner runs against this environment. Of the op
+// Handlers are the ops the machine runner runs against this environment. Of the op
 // names of protocol 1, `session.start` and `session.stop` stay reserved and have
 // no handler, so the loop answers them `unsupported_op` (PROTOCOL.md §6). Every
 // session op needs the envelope's `session_id`; the environment ops take none.

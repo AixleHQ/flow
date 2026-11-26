@@ -84,7 +84,8 @@ module GitCredentials
     # caller). A scrub on a reusable machine keeps checkouts (DESIGN.md §7.2), so
     # the path may already hold one:
     #
-    # - nothing there: a clone;
+    # - nothing there: a clone, or an empty checkout with origin set when the
+    #   repository has no commits yet;
     # - a working clone whose `origin` is this repository (an older token in the
     #   URL is ignored): its objects and refs are kept, its config is rebuilt from
     #   scratch (origin, fetch refspec, partial-clone settings) and its hooks are
@@ -111,9 +112,17 @@ module GitCredentials
         URL=#{Shellwords.escape(url)}
         BRANCH=#{Shellwords.escape(repository.source_branch)}
         AUTHED_GIT="git --config-env=http.extraheader=AIXLE_GIT_AUTH_HEADER"
+        # An empty repository has no branch, and git refuses --branch on it: when the
+        # remote answers with no refs at all, the checkout starts empty on the source
+        # branch, so a first commit can be pushed. Any other failure stays a failure.
         fresh_clone() {
           rm -rf "$TARGET"
-          $AUTHED_GIT clone --filter=blob:none --branch="$BRANCH" "$URL" "$TARGET"
+          $AUTHED_GIT clone --filter=blob:none --branch="$BRANCH" "$URL" "$TARGET" && return 0
+          rm -rf "$TARGET"
+          refs="$($AUTHED_GIT ls-remote "$URL")" || return 1
+          [ -z "$refs" ] || return 1
+          git init -q -b "$BRANCH" "$TARGET" &&
+          git -C "$TARGET" remote add origin "$URL"
         }
         kept_clone() {
           [ -d "$TARGET/.git" ] || return 1

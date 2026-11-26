@@ -4,8 +4,8 @@
 //
 //   - The sidecar (`aixle-runner --mode proxy`, RunSidecar) listens there, in
 //     the agent's network namespace, and relays every request over a Unix
-//     socket to the host runner. It holds no credential.
-//   - The host runner (Relay, served by Host on that socket) adds the
+//     socket to the machine runner. It holds no credential.
+//   - The machine runner (Relay, served by Host on that socket) adds the
 //     environment's access token and sends the request to the gateway's
 //     `/runner/v1/proxy/<route>/…`, which forwards it to the platform. It
 //     serves nothing else on the socket: never ops, results, `token` or
@@ -41,10 +41,10 @@ type Tokens interface {
 	Do(ctx context.Context, call func(accessToken string) error) error
 }
 
-// The classes of the refusals the host runner answers itself, in the gateway's
+// The classes of the refusals the machine runner answers itself, in the gateway's
 // refusal shape (PROTOCOL.md §3, §5.8).
 const (
-	// ClassRelayFailed: the host runner could not get an answer from the gateway.
+	// ClassRelayFailed: the machine runner could not get an answer from the gateway.
 	ClassRelayFailed = "relay_failed"
 	// ClassNotProxied: a request on the relay's socket for anything but the proxy
 	// route.
@@ -57,7 +57,7 @@ const (
 )
 
 // BodyReadTimeout bounds reading a request's body, on the relay and on the
-// sidecar: a caller that drips a body must not hold the host runner's
+// sidecar: a caller that drips a body must not hold the machine runner's
 // goroutines and descriptors. The answer is not bounded, so that an MCP
 // stream stays open as long as it needs.
 const BodyReadTimeout = 30 * time.Second
@@ -84,7 +84,7 @@ func dropHop(h http.Header) {
 	}
 }
 
-// Relay is the host runner's end of the proxy: an http.Handler for
+// Relay is the machine runner's end of the proxy: an http.Handler for
 // `/runner/v1/proxy/*` that sends each request on to the gateway with the
 // environment credential, and streams the answer back. It logs the method and
 // path of what it relays, never a header or a body: those carry session keys.
@@ -104,7 +104,7 @@ func (r *Relay) logger() *slog.Logger {
 func (r *Relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	escaped := req.URL.EscapedPath()
 	if !strings.HasPrefix(escaped, protocol.ProxyPathPrefix) || !canonical(strings.TrimPrefix(escaped, protocol.ProxyPathPrefix)) {
-		WriteRefusal(w, http.StatusNotFound, ClassNotProxied, "the host runner serves only the callback proxy here")
+		WriteRefusal(w, http.StatusNotFound, ClassNotProxied, "the machine runner serves only the callback proxy here")
 		return
 	}
 	below := strings.TrimPrefix(escaped, protocol.ProxyPathPrefix)
@@ -148,7 +148,7 @@ func (r *Relay) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		if req.Context().Err() == nil {
 			r.logger().Warn("relaying a proxied request failed", "method", req.Method, "route", route, "error", withoutURL(err))
 		}
-		WriteRefusal(w, http.StatusBadGateway, ClassRelayFailed, "the host runner could not reach the platform")
+		WriteRefusal(w, http.StatusBadGateway, ClassRelayFailed, "the machine runner could not reach the platform")
 		return
 	}
 	defer resp.Body.Close()
@@ -177,7 +177,7 @@ func withoutURL(err error) error {
 // sent (percent-encoded), stays below it: no segment is empty, `.` or `..`
 // once decoded, and none holds an encoded `/` or a `\`. One trailing slash is
 // allowed, as hosted Rails allows it (`/mcp/`), but not an empty segment in
-// the middle (`//ops`) or a path that is only a slash. The host runner adds
+// the middle (`//ops`) or a path that is only a slash. The machine runner adds
 // the environment credential, so it must not rely on the gateway's router,
 // or on whatever stands in front of it, to refuse `/runner/v1/proxy/../ops`:
 // a proxy that normalizes paths would make that `/runner/v1/ops`. The

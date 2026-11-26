@@ -283,6 +283,12 @@ export const SEARCH_INDEX: SearchResult[] = [
     desc: 'Connect a Coder deployment so agents can allocate remote workspaces, run commands there and release them; locks, health checks and dead-workspace cleanup.',
   },
   {
+    slug: 'aws',
+    title: 'AWS',
+    section: 'User guide',
+    desc: 'Let workflow steps assume an IAM role in your AWS account with no access key: a walkthrough from connecting to a first run (console, CLI and Terraform), the trust and permission policies, Verify, what a step sees, subjects and troubleshooting.',
+  },
+  {
     slug: 'configuration',
     title: 'Configuration',
     section: 'User guide',
