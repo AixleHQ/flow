@@ -798,6 +798,11 @@ export function apiV1ProjectTaskActivitiesPath(project_id: ScalarType, task_id: 
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "tasks" + "/" + task_id + "/" + "activities" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","task_id","format"]);
 }
 
+/** /api/v1/projects/:project_id/tasks/:task_id/activities/:id(.:format) */
+export function apiV1ProjectTaskActivityPath(project_id: ScalarType, task_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "tasks" + "/" + task_id + "/" + "activities" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","task_id","id","format"]);
+}
+
 /** /api/v1/projects/:project_id/tasks/:task_id/statistics(.:format) */
 export function apiV1ProjectTaskStatisticsPath(project_id: ScalarType, task_id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "tasks" + "/" + task_id + "/" + "statistics" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","task_id","format"]);

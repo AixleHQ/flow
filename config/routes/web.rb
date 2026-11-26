@@ -339,7 +339,7 @@ namespace :api, defaults: { format: :json } do
               end
               resources :gates, only: %i[destroy]
               resources :transitions, only: %i[index]
-              resources :activities, only: %i[index]
+              resources :activities, only: %i[index show]
               resource :statistics, only: %i[show]
             end
           end

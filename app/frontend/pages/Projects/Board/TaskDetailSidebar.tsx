@@ -97,7 +97,6 @@ import {
 import { CHART_SERIES } from 'shared/theme/chartPalette';
 import { MarkdownLink } from 'shared/ui/MarkdownLink';
 
-import { ActivityAvatar } from './ActivityAvatar';
 import {
   assigneeFields,
   assigneeKey,
@@ -106,13 +105,14 @@ import {
   taskAssignee,
   type BoardTeam,
 } from './assignee';
-import { formatCostCents, formatDuration, formatRelativeTime, formatTokens } from './boardFormat';
+import { formatCostCents, formatDuration, formatTokens } from './boardFormat';
 import styles from './BoardPage.module.css';
 import { canEditComment } from './canEditComment';
 import { gateCiStatus, gateDetail, gateLink, gateTooltip } from './gates';
 import { GATE_CHIP_WIDTH, GateStatusChip } from './GateStatusChip';
 import { InlineTagsEditor } from './InlineTagsEditor';
 import { LatestRunTile } from './LatestRunTile';
+import { TaskActivityEntry } from './TaskActivityEntry';
 import { TaskDetailSkeleton } from './TaskDetailSkeleton';
 import { WORKFLOW_ACTIVE_STATES } from './taskRuns';
 import { TaskRunsPanel } from './TaskRunsPanel';
@@ -1904,28 +1904,7 @@ export function TaskDetailSidebar({
             </Text>
           ) : (
             (activities ?? []).map((a) => (
-              <Box
-                key={a.id}
-                style={{
-                  display: 'flex',
-                  gap: 10,
-                  padding: '12px 0',
-                  borderBottom: '1px solid rgba(41,39,38,0.6)',
-                }}
-              >
-                <ActivityAvatar actorType={a.actorType} actorName={a.actorName} />
-                <Box style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--mantine-color-text)' }}>
-                    <strong>{a.actorName}</strong>{' '}
-                    {a.description.startsWith(a.actorName)
-                      ? a.description.slice(a.actorName.length).trim()
-                      : a.description}
-                  </Text>
-                  <Text style={{ fontSize: 11, color: 'var(--mantine-color-placeholder)', marginTop: 2 }}>
-                    {formatRelativeTime(a.createdAt)}
-                  </Text>
-                </Box>
-              </Box>
+              <TaskActivityEntry key={a.id} activity={a} projectId={projectId} taskId={task.id} />
             ))
           )}
         </Tabs.Panel>
