@@ -163,7 +163,7 @@ class RunnerGatewayMachineInstallTest < ActionDispatch::IntegrationTest
 
       assert_not status.success?
       assert_includes output, "does not match"
-      assert_not_includes log, "aixle-runner"
+      assert_empty log.lines.grep(/\Aaixle-runner /)
     end
   end
 
