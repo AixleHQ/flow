@@ -174,6 +174,49 @@ class Api::V1::Projects::Workflows::AggregatesTest < ActionDispatch::Integration
     Bullet.enable = true
   end
 
+  test "a save attaches the project's integrations to a step and to the base list" do
+    coder = create(:integration, :coder, :active, company: @company, project: @project)
+    slack = Integration.create!(provider: :teams, company: @company, connected_by: @owner, name: "Contoso",
+                                status: :active, settings: { "tenant_id" => TEAMS_CUSTOMER_TENANT })
+
+    save([ { id: @build.id, name: "Build", integrationIds: [ coder.id ] }, { id: @test.id, name: "Test" } ],
+         config: { baseIntegrationIds: [ slack.id ] })
+
+    assert_response :success
+    assert_equal [ coder.id ], @build.reload.integration_ids
+    assert_equal [ slack.id ], @workflow.reload.base_integration_ids
+    assert_equal [ coder.id ], response.parsed_body["steps"].find { |s| s["id"] == @build.id }["integrationIds"]
+    assert_equal [ slack.id ], response.parsed_body.dig("workflow", "baseIntegrationIds")
+  end
+
+  test "a save naming an integration of another project, another company or an unknown id is refused" do
+    Bullet.enable = false
+    other_project = create(:project, company: @company, owner: @user)
+    foreign = [ create(:integration, :coder, :active, company: @company, project: other_project),
+                create(:integration, :coder, :active, company: create(:company)), 0 ]
+
+    foreign.each do |integration|
+      id = integration.respond_to?(:id) ? integration.id : integration
+      save([ { id: @build.id, name: "Build", integrationIds: [ id ] }, { id: @test.id, name: "Test" } ])
+      assert_response :unprocessable_entity
+    end
+    assert_empty @build.reload.integration_ids
+  ensure
+    Bullet.enable = true
+  end
+
+  test "a save naming a GitHub or an AWS integration is refused: only Coder, Slack, Teams and Azure DevOps attach" do
+    Bullet.enable = false
+    github = create(:integration, :github_pat, :active, company: @company, project: @project)
+
+    save([ { id: @build.id, name: "Build", integrationIds: [ github.id ] }, { id: @test.id, name: "Test" } ])
+
+    assert_response :unprocessable_entity
+    assert_empty @build.reload.integration_ids
+  ensure
+    Bullet.enable = true
+  end
+
   test "a reference to a step created in the same save is stored with that step's id" do
     save([
       { id: @build.id, name: "Build", output_asset_specs: [ { name: "dist.md", required: true } ] },
