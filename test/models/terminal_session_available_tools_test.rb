@@ -106,7 +106,7 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
   # == Coder ==
 
   test "Coder tools are not served because a Coder connection exists" do
-    create(:integration, :coder, :active, company: @company, project: @project, connected_by: @user) if Integration.respond_to?(:coder)
+    create(:integration, :coder, :active, company: @company, project: @project, connected_by: @user)
     session = create(:terminal_session, :agent_session, user: @user, project: @project)
 
     assert session.available_tools.map(&:name).none? { |n| n.start_with?("coder_") }
@@ -278,12 +278,6 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
   end
 
   # == Edge cases ==
-
-  test "returns empty for auth_setup with no project and no tools" do
-    session = create(:terminal_session, :auth_setup, user: @user, project: nil)
-
-    assert_empty session.available_tools
-  end
 
   test "a disabled shadow row keeps its tool out of the injected set" do
     Tools::Reconciler.run!

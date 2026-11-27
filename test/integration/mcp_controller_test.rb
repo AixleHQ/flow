@@ -345,7 +345,8 @@ class McpControllerTest < ActionDispatch::IntegrationTest
 
   # ── integration-gated Coder tools ──
 
-  test "Coder tools surface through aixle-tools once the Coder integration is active" do
+  test "an attached Coder tool surfaces once the Coder integration is active" do
+    attach_platform_tool("coder_ssh_exec")
     names = listed_tools(rpc("tools/list")).map { |t| t["name"] }
     refute_includes names, "coder_ssh_exec"
 
