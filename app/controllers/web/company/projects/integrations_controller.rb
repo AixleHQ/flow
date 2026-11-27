@@ -78,6 +78,14 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     redirect_to company_project_integrations_path(current_project), alert: e.message
   end
 
+  # The templates the stored token of a connected Coder integration can see, for its settings form.
+  def coder_template_list
+    integration = Integration.for_project(current_project).where(provider: :coder).find(params[:id])
+    render json: { templates: coder_service.templates_of(integration) }
+  rescue Coder::IntegrationService::ConnectionError => e
+    render json: { error: e.code, message: e.message }, status: :unprocessable_content
+  end
+
   # The templates a Coder token can see, for the connect form's select. The token is not
   # saved yet, so the form sends the URL and the token it just collected.
   def coder_templates

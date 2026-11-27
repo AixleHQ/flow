@@ -59,6 +59,16 @@ module Coder
       template_names(url, token)
     end
 
+    # The same list for a connected integration, read with its stored token (the settings form).
+    def templates_of(integration)
+      raise ConfigurationError, "Only Coder integrations have templates" unless integration.coder?
+
+      stored = Coder::TokenService.new(integration)
+      template_names(stored.coder_url, stored.session_token)
+    rescue Coder::TokenService::ConfigurationError
+      raise ConnectionError.new("The stored session token cannot be read. Renew the token first.", code: "not_authorized")
+    end
+
     # Renew token: the new token has to work against the integration's own URL. The
     # integration keeps its id, which runners and attachments refer to.
     def replace_token(integration, session_token:)

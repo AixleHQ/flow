@@ -37,6 +37,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
         ConfigItem.visible_for_project(current_project).map { |r| ConfigItemPickerResource.new(r).to_h }
       },
       aws_oidc_roles: InertiaRails.defer(group: "resources") { aws_oidc_role_options },
+      integrations: InertiaRails.defer(group: "resources") { integration_options },
       agent_models: InertiaRails.defer(group: "resources") {
         current_project_membership&.agent_models_for_props || []
       },
@@ -179,11 +180,16 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
         ConfigItem.visible_for_project(current_project).map { |r| ConfigItemPickerResource.new(r).to_h }
       },
       aws_oidc_roles: InertiaRails.defer(group: "resources") { aws_oidc_role_options },
+      integrations: InertiaRails.defer(group: "resources") { integration_options },
       agent_models: InertiaRails.defer(group: "resources") {
         current_project_membership&.agent_models_for_props || []
       },
       runners: InertiaRails.defer(group: "resources") { runner_options(including: workflow.owned_runner) }
     }
+  end
+
+  def integration_options
+    Integration.attachable_for_project(current_project).map { |integration| IntegrationPickerResource.new(integration).to_h }
   end
 
   def aws_oidc_role_options

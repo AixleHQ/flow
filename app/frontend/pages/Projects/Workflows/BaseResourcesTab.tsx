@@ -1,11 +1,12 @@
 import { Alert, Button, MultiSelect, Switch } from '@mantine/core';
 import type { ReactNode } from 'react';
 
-import type { AwsOidcRolePicker, ConfigItemPicker, RunnerSummary, Workflow } from '@/types/generated';
+import type { AwsOidcRolePicker, ConfigItemPicker, IntegrationPicker, RunnerSummary, Workflow } from '@/types/generated';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
 import { ToolPicker } from 'shared/components/ToolPicker';
 import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
+import { integrationLabel } from 'shared/lib/integrationLabel';
 import { type ToolGroup } from 'shared/lib/toolPicker';
 import { RunnerSelect } from 'shared/resources/runners/runnerChoice';
 import { runnerUnusableReason } from 'shared/resources/runners/runnerCopy';
@@ -25,6 +26,7 @@ type BaseResources = Pick<
   | 'baseRepositoryIds'
   | 'baseConfigItemIds'
   | 'baseAwsOidcRoleIds'
+  | 'baseIntegrationIds'
   | 'runnerId'
 >;
 
@@ -39,6 +41,8 @@ interface BaseResourcesTabProps {
   configItems: ConfigItemPicker[];
   /** The picker shows only when the project has roles to offer. */
   awsOidcRoles?: AwsOidcRolePicker[];
+  /** The picker shows only when the project has integrations to offer. */
+  integrations?: IntegrationPicker[];
   runners: RunnerSummary[];
   readOnly: boolean;
   onWorkflowChange: (field: string, value: unknown) => void;
@@ -54,6 +58,7 @@ export function BaseResourcesTab({
   repositories,
   configItems,
   awsOidcRoles = [],
+  integrations = [],
   runners,
   readOnly,
   onWorkflowChange,
@@ -76,6 +81,7 @@ export function BaseResourcesTab({
 
   const baseConfigItemIds = workflow.baseConfigItemIds ?? [];
   const baseAwsOidcRoleIds = workflow.baseAwsOidcRoleIds ?? [];
+  const baseIntegrationIds = workflow.baseIntegrationIds ?? [];
 
   return (
     <div style={{ overflowY: 'auto', height: '100%', background: 'var(--bg)' }}>
@@ -264,6 +270,33 @@ export function BaseResourcesTab({
                 searchable
                 placeholder="Select AWS roles…"
                 aria-label="AWS roles"
+                styles={{
+                  input: {
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 5,
+                    fontSize: 13,
+                    minHeight: 36,
+                  },
+                }}
+              />
+            </Field>
+          )}
+          {/* "Inherit all" never attaches an integration either: access to an external account is picked by hand (docs/design/session-integrations.md §3). */}
+          {integrations.length > 0 && (
+            <Field
+              label="Integrations"
+              isEmpty={baseIntegrationIds.length === 0}
+              emptyHint="None added — steps can attach their own"
+            >
+              <MultiSelect
+                data={integrations.map((i) => ({ value: String(i.id), label: integrationLabel(i) }))}
+                value={toStringArr(baseIntegrationIds)}
+                onChange={(v) => onWorkflowChange('baseIntegrationIds', toNumberArr(v))}
+                disabled={readOnly}
+                searchable
+                placeholder="Select integrations…"
+                aria-label="Integrations"
                 styles={{
                   input: {
                     background: 'var(--bg-card)',

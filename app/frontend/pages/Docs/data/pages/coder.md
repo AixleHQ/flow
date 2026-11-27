@@ -21,9 +21,13 @@ Any member who can change the project connects it; viewers cannot.
   in that account, deletes dead ones, and runs commands on them with
   `coder ssh`. Use an account kept for Flow rather than your own.
 - **A pool.** The pool is every workspace the token's account owns whose name
-  starts with the connection's machine name prefix, or every workspace it owns
-  when there is no prefix. Other people's workspaces are never in the pool,
-  even with an admin's token.
+  is `<prefix>-<suffix>`, where the suffix is one segment of lowercase letters
+  and digits with no hyphen. So the pool `aixle` takes `aixle-1a2b3c4d` but not
+  `aixle-r-1a2b3c4d`, which belongs to the pool `aixle-r`; case is ignored.
+  Other people's workspaces are never in the pool, even with an admin's token,
+  and a workspace made by hand under another name pattern is not in it either.
+  A connection made before the prefix was required may have none: its pool is
+  every workspace the token's account owns, until its next settings save.
 - **`git` on the workspaces**, if agents should clone repositories onto them.
 
 ## Connecting
@@ -31,14 +35,18 @@ Any member who can change the project connects it; viewers cannot.
 1. On the project's **Integrations** page choose **Connect → Coder**.
 2. Enter the **Coder URL** (for example `https://coder.example.com`; `http`
    works too) and the **Session Token**.
-3. Open **Advanced** for the pool settings:
-   - **Default template** — the name of the Coder template Flow creates a new
-     workspace from when no workspace in the pool is free. Leave it blank and
-     Flow only hands out workspaces that already exist.
-   - **Machine name prefix** — which workspaces make up the pool. New
-     workspaces are named `<prefix>-<8 hex characters>`, or `aixle-…` without
-     a prefix.
-   - **Lock TTL (minutes)** — how long a workspace stays with a session after
+3. Select **Load templates**. Flow asks Coder which templates the token can see
+   and fills the list; the form fills the prefix from the project's name.
+   Both settings are required:
+   - **Default template** — the Coder template Flow creates a new workspace
+     from when no workspace in the pool is free. You choose it from the list;
+     Flow refuses a template the token cannot see.
+   - **Machine name prefix** — which workspaces make up the pool. It is
+     prefilled from the project's name (lowercased, characters other than
+     letters, digits and hyphens turned into hyphens), and you can change it.
+     Lowercase letters, digits and hyphens, no leading or trailing hyphen, at
+     most 23 characters. New workspaces are named `<prefix>-<8 hex characters>`.
+   - **Lock TTL (minutes)**, under **Advanced** — how long a workspace stays with a session after
      the session's last Coder call. The default is 120.
 4. Select **Connect**.
 
@@ -47,22 +55,24 @@ account, for example **Coder (alice)**. The row shows the URL, the template,
 the prefix and the lock TTL. If the check fails, the dialog stays open, says
 why, and nothing is saved.
 
-A project has at most one active Coder connection. Connecting again with the
-same URL and the same Coder account updates that connection: the new token
-replaces the old one, and the pool settings you fill in replace theirs, while
-blank ones are kept. Connecting another URL or account while the project has an
-active Coder connection is refused: replace that connection's token, or remove
-it first.
+A project can have several Coder connections, including two for the same URL and
+account. Connecting always adds a new one; Flow compares no URLs, accounts or
+prefixes between connections. Which connection a session uses is decided by
+the connections attached to it (see
+[Which connection a session uses](#which-connection-a-session-uses)).
 
 ## Changing the settings
 
 **Edit settings** on the row opens **Coder settings** with the same three
-fields. Clearing **Default template** stops Flow creating workspaces. Clearing
-**Machine name prefix** widens the pool to every workspace the token's account
-owns, and stops Flow deleting dead ones.
+fields. The template and the prefix are required, also on a connection made
+before they were: such a row shows **Needs default template** or **Needs
+machine prefix**, keeps working with its old pool, and its next settings save
+needs both. The template is chosen from the templates the stored token can see.
 
-**Replace token** on the row swaps the session token in place, once Coder
-accepts the new one; the settings and the locks stay. The URL cannot be
+**Replace token** (also called Renew token) on the row swaps the session token in
+place, once Coder accepts the new one; the settings, the locks and the
+connection's id stay, so runners and workflows attached to it keep pointing at
+it. The URL cannot be
 changed: remove the connection and connect again.
 
 **Test connection** on the row asks Coder about the stored token and changes
@@ -72,6 +82,22 @@ as it was.
 
 Removing a connection deletes nothing in Coder. It drops Flow's locks, and
 sessions in the project lose the tools.
+
+---
+
+## Which connection a session uses
+
+A session uses only the Coder connections in its **integration set**: the ones
+attached to its workflow or step (the **Integrations** list in the workflow
+builder), the ones chosen in the new-session form, and nothing else. A
+connection that nobody attached is not reachable, and its tools are not
+offered.
+
+Every `coder_*` tool takes an optional `integration_id`. Leave it out when the
+session has exactly one Coder connection. With two or more, leaving it out is
+an error that lists them (id, name, host). An id outside the session's set is
+refused as not attached. The agent is told its connections, with their ids, in
+its context.
 
 ---
 
@@ -161,9 +187,15 @@ the admin page shows the flag as locked by `CODER_REAP_ENABLED`.
 - Flow checks the token when you connect, replace it, or select **Test
   connection**. A token that expires in between leaves the row **Active**
   until then.
-- A project gets one active Coder connection; Flow refuses a second. A project
-  that already had two from before should remove one: with two, which one the
-  tools use is not defined.
+- A workspace that two connections reach is one machine: the lock is
+  exclusive, so a session that allocates it through both sees the second call
+  refused.
+- A workspace made by hand whose name does not follow `<prefix>-<suffix>` (for
+  example `aixle-prod-a-b` under the prefix `aixle`) is not in the pool. Flow
+  neither allocates nor deletes it, and Flow does not delete it from Coder
+  either. Before a release that changes the pool rule, an operator runs
+  `bin/rails coder:audit_pools`: it lists, for every active connection, the
+  workspaces that leave the pool and the prefixes that break the rule.
 - Coder connections made before integrations moved to projects may be
   company-wide. They show **Company** scope, serve every project that has no
   Coder connection of its own, and cannot be edited from a project page.

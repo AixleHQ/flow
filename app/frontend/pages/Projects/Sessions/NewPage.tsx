@@ -1,7 +1,7 @@
 import { Head, usePage } from '@inertiajs/react';
 import { Box } from '@mantine/core';
 
-import type { Project, RunnerSummary } from '@/types/generated';
+import type { IntegrationPicker, Project, RunnerSummary } from '@/types/generated';
 
 import type { AssetPickerItem } from 'shared/components/AssetPicker';
 import { SessionNewForm } from 'shared/components/SessionNewForm';
@@ -35,6 +35,8 @@ interface Props {
   repositories?: NamedItem[];
   assets?: AssetPickerItem[];
   configItems?: ConfigItemOption[];
+  integrations?: IntegrationPicker[];
+  defaultIntegrationIds?: number[];
   costHint?: SessionCostHint;
   runners?: RunnerSummary[];
 }
@@ -51,6 +53,8 @@ const ProjectSessionNewPage = () => {
     repositories = [],
     assets = [],
     configItems = [],
+    integrations = [],
+    defaultIntegrationIds = [],
     costHint,
     runners,
   } = usePage<{ props: Props }>().props as unknown as Props;
@@ -72,6 +76,8 @@ const ProjectSessionNewPage = () => {
           costHint={costHint}
           assets={assets}
           configItems={configItems}
+          integrations={integrations}
+          defaultIntegrationIds={defaultIntegrationIds}
           runners={runners}
           onCreatedPath={(sessionId) => companyProjectSessionPath(project.id, sessionId)}
           fallbackPath={companyProjectSessionsPath(project.id)}

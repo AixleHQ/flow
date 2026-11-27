@@ -7,11 +7,7 @@ module Integrations
   #
   # The data migration BackfillSessionIntegrations follows the same rules in its own SQL.
   class Backfill
-    # Per workflow: the project's Coder (its own active one, else the company's, the earliest by
-    # id), every active Slack and Teams install the project can see, and its Azure DevOps
-    # connections. Nothing is attached for a provider the project has no integration of.
-    CHAT_PROVIDERS = %w[slack teams].freeze
-
+    # Per workflow, what Integrations::Defaults names for its project.
     def initialize(logger: Rails.logger)
       @logger = logger
     end
@@ -46,11 +42,7 @@ module Integrations
       added
     end
 
-    # The integrations a project's workflows get, and what an interactive session is given by
-    # default in the new-session form.
-    def project_integration_ids(project)
-      (coder_pick(project) + chat_installs(project) + azure_connections(project)).uniq
-    end
+    def project_integration_ids(project) = Defaults.ids(project, logger: @logger)
 
     private
 
@@ -64,24 +56,6 @@ module Integrations
       ids = resolver.resolve_integration_ids
       ids += project_integration_ids(session.project) if session.project && !session.workflow_step?
       ids.uniq
-    end
-
-    def coder_pick(project)
-      active = Integration.active.where(provider: :coder, company_id: project.company_id)
-      own = active.where(project_id: project.id).order(:id).to_a
-      candidates = own.presence || active.where(project_id: nil).order(:id).to_a
-      @logger.info("[Integrations::Backfill] project #{project.id} has #{candidates.size} active Coder integrations; " \
-                   "attached #{candidates.first.id}, left #{candidates.drop(1).map(&:id).join(', ')}") if candidates.size > 1
-      candidates.first(1).map(&:id)
-    end
-
-    # Chat::ChannelAccess.installs: what the chat tools reach today.
-    def chat_installs(project)
-      Chat::ChannelAccess.installs(project, provider: nil).where(provider: CHAT_PROVIDERS).order(:id).pluck(:id)
-    end
-
-    def azure_connections(project)
-      Integration.active.where(provider: :azure_devops, project_id: project.id).order(:id).pluck(:id)
     end
 
     def attach(workflow, integration_ids)

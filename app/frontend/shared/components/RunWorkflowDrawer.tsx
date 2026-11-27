@@ -4,7 +4,7 @@ import { notifications } from '@mantine/notifications';
 import { IconAdjustments, IconPlayerPlay, IconRobot, IconSitemap } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
 
-import type { RunnerSummary } from '@/types/generated';
+import type { IntegrationPicker, RunnerSummary } from '@/types/generated';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
 import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
@@ -31,6 +31,8 @@ export interface RunWorkflowOption {
   name: string;
   /** The workflow's runner, null for hosted: what "Runs on" starts from. */
   runnerId?: number | null;
+  /** The integrations the workflow attaches; a run gets these and no others. */
+  integrationIds?: number[];
   steps: RunWorkflowStep[];
 }
 
@@ -56,6 +58,8 @@ interface RunWorkflowDrawerProps {
   defaultAgentRuntime?: string | null;
   agentModels?: AgentModelsEntry[];
   repositories: NamedItem[];
+  /** Names the workflow's integrations, shown read-only. */
+  integrations?: IntegrationPicker[];
   assets: AssetPickerItem[];
   /** The runners the project can see; only read with the externalRunners flag. */
   runners?: RunnerSummary[];
@@ -112,6 +116,7 @@ export function RunWorkflowDrawer({
   defaultAgentRuntime,
   agentModels = [],
   repositories,
+  integrations = [],
   assets,
   runners = [],
 }: RunWorkflowDrawerProps) {
@@ -259,6 +264,15 @@ export function RunWorkflowDrawer({
             searchable
           />
         </Box>
+
+        {workflow && (workflow.integrationIds?.length ?? 0) > 0 && (
+          <Text size="xs" c="dimmed">
+            Integrations (set on the workflow):{' '}
+            {(workflow.integrationIds ?? [])
+              .map((id) => integrations.find((i) => i.id === id)?.name ?? `#${id}`)
+              .join(', ')}
+          </Text>
+        )}
 
         {externalRunners && workflow && (
           <Box>

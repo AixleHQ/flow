@@ -134,6 +134,10 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
       repositories: repositories.map { |r| { id: r.id, name: r.full_name } },
       # Names and types only — a config item's value never reaches a prop.
       config_items: config_items.map { |c| ConfigItemPickerResource.new(c).to_h },
+      # What a session can act through is chosen here: omitted means none (docs/design/session-integrations.md
+      # §5.1), so the form starts from what the project's workflows get by default.
+      integrations: Integration.attachable_for_project(current_project).map { |i| IntegrationPickerResource.new(i).to_h },
+      default_integration_ids: Integrations::Defaults.ids(current_project),
       agent_models: current_project_membership&.agent_models_for_props || [],
       configured_agents: current_project_membership&.configured_agents || [],
       default_agent_runtime: current_project_membership&.default_agent_runtime,
@@ -156,6 +160,7 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
         id: workflow.id,
         name: workflow.name,
         runner_id: workflow.runner_id,
+        integration_ids: workflow.base_integration_ids,
         steps: workflow.visible_steps.map { |step| StepResource.new(step).to_h }
       }
     end

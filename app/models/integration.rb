@@ -86,6 +86,8 @@ class Integration < ApplicationRecord
   scope :for_project, ->(project) { where(project_id: project.id) }
   scope :active, -> { where(status: "active") }
   scope :attachable, -> { where(provider: ATTACHABLE_PROVIDERS) }
+  # What a picker offers for attaching: the project's own and the company's, of a provider that can be attached.
+  scope :attachable_for_project, ->(project) { visible_for_project(project).attachable.order(:provider, :id) }
   scope :visible_for_project, ->(project) {
     where(company_id: project.company_id, project_id: nil).or(where(project_id: project.id))
   }

@@ -38,6 +38,7 @@ export function RunWorkflowDrawer({ projectId, opened, onClose }: Props) {
       defaultAgentRuntime={options.defaultAgentRuntime}
       agentModels={options.agentModels}
       repositories={options.repositories}
+      integrations={options.integrations}
       assets={options.assets}
       runners={options.runners}
     />

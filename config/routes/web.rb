@@ -764,6 +764,7 @@ scope module: :web, defaults: { format: :html } do
             get :teams_package
             post :teams_link
             get :jira_projects
+            get :coder_template_list
             get :github_projects
             get :linear_teams
             get :gitlab_projects
