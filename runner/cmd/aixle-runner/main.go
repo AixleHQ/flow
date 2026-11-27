@@ -151,7 +151,14 @@ func unregister(ctx context.Context, args []string, stdout, stderr io.Writer) er
 	if err := parse(fs, args); err != nil {
 		return err
 	}
-	return cli.Unregister(ctx, cli.UnregisterOptions{StateDir: *stateDir, Out: stdout})
+	// The machine's volumes go with it. connecting does not dial: with no daemon
+	// the unregister still works and the removal is logged as failed.
+	opts := cli.UnregisterOptions{StateDir: *stateDir, Out: stdout}
+	if api, err := docker.Connect(); err == nil {
+		defer api.Close()
+		opts.Docker = api
+	}
+	return cli.Unregister(ctx, opts)
 }
 
 func serviceCommand(ctx context.Context, args []string, stderr io.Writer) error {

@@ -204,6 +204,61 @@ func TestResetAlsoRemovesTheEnvironmentsVolumes(t *testing.T) {
 	}
 }
 
+// RemoveVolumes is what a machine does once it has unregistered itself: its own
+// workspace and cache volumes go, and nothing else does.
+func TestRemoveVolumesRemovesOnlyTheEnvironmentsOwnVolumes(t *testing.T) {
+	h, _ := twoEnvironments(t)
+	// Not its own: no label, and a volume that only starts like its name.
+	h.addVolume("aixle-cache-"+envKey+"-nolabel", map[string]string{})
+	h.addVolume("aixle-ws-"+envKey+"x", map[string]string{LabelEnvironment: otherKey})
+	h.addVolume("unrelated", map[string]string{})
+	if err := h.env.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	removed, err := h.env.RemoveVolumes(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"aixle-cache-" + envKey + "-pip", "aixle-ws-" + envKey}; !reflect.DeepEqual(removed, want) {
+		t.Fatalf("removed %v", removed)
+	}
+	want := []string{"aixle-cache-" + envKey + "-nolabel", "aixle-cache-" + otherKey + "-pip", "aixle-ws-" + envKey + "x", "aixle-ws-" + otherKey, "unrelated"}
+	sort.Strings(want)
+	if got := h.volumeNames(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("volumes left %v, want %v", got, want)
+	}
+	// Nothing left of its own is not an error.
+	if removed, err := h.env.RemoveVolumes(context.Background()); err != nil || len(removed) != 0 {
+		t.Fatalf("%v %v", removed, err)
+	}
+}
+
+func TestRemoveVolumesNamesTheVolumeItCouldNotRemoveAndRemovesTheRest(t *testing.T) {
+	h, _ := twoEnvironments(t)
+	// The containers are still there, so the volumes are in use.
+	removed, err := h.env.RemoveVolumes(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "aixle-ws-"+envKey) {
+		t.Fatalf("%v %v", removed, err)
+	}
+	for _, name := range h.volumeNames() {
+		if strings.Contains(name, otherKey) {
+			continue
+		}
+		if !strings.Contains(err.Error(), name) {
+			t.Fatalf("%s is left and the error does not name it: %v", name, err)
+		}
+	}
+}
+
+func TestRemoveVolumesWithoutAKeyRemovesNothing(t *testing.T) {
+	h, _ := twoEnvironments(t)
+	env := *h.env
+	env.Key = ""
+	if _, err := env.RemoveVolumes(context.Background()); err == nil {
+		t.Fatal("no error for an empty key")
+	}
+}
+
 func TestAVolumeInUseFailsTheReset(t *testing.T) {
 	h := newEnvironment(t)
 	h.start(h.env, nil)
