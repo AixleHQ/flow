@@ -1936,7 +1936,7 @@ export const IntegrationsContent = ({
         <Stack gap="md">
           <Text size="sm" c="dimmed">
             The default template and the machine name prefix are required. The template is chosen from the templates
-            this connection's token can see. Workspaces named &lt;prefix&gt;-&lt;suffix&gt; form the pool.
+            this connection&apos;s token can see. Workspaces named &lt;prefix&gt;-&lt;suffix&gt; form the pool.
           </Text>
           <Select
             label="Default template"

@@ -48,7 +48,7 @@ module PersonalTools
         errors << "Step '#{step.name}' has no instructions" if step.instructions.blank?
         check_agent(project, step, errors, warnings)
         check_links(project, step, errors)
-        check_integrations(workflow, step, warnings)
+        check_integrations(project, workflow, step, warnings)
         if unattended.any? && !step.allow_non_interactive
           errors << "Step '#{step.name}' must allow non-interactive runs — the workflow is launched " \
                     "unattended by #{unattended.to_sentence}"
@@ -96,9 +96,11 @@ module PersonalTools
 
     # A tool served only with an integration of its provider attached to the session: warn when
     # the workflow and the step attach none, since the tool would not be offered.
-    def check_integrations(workflow, step, warnings)
-      attached = Integration.where(id: workflow.base_integration_ids + step.integration_ids).pluck(:provider).map(&:to_s)
-      tools = Tool.where(source: "code", id: workflow.base_tool_ids + step.tool_ids, requires_integration: ATTACHED_REQUIREMENTS.keys)
+    def check_integrations(project, workflow, step, warnings)
+      attached = TenantScope.owned(Integration, project: project)
+                            .where(id: workflow.base_integration_ids + step.integration_ids).pluck(:provider).map(&:to_s)
+      tools = TenantScope.owned(Tool, project: project)
+                         .where(source: "code", id: workflow.base_tool_ids + step.tool_ids, requires_integration: ATTACHED_REQUIREMENTS.keys)
       tools.each do |tool|
         next if (ATTACHED_REQUIREMENTS.fetch(tool.requires_integration) & attached).any?
 
