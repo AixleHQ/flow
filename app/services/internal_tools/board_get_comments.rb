@@ -7,7 +7,6 @@ module InternalTools
       description "List comments for a task on the current board, newest first, with optional tag or " \
                   "author-type filters and a limit."
       tags :board
-      inject_when :workflow_step_session
       input_schema({
         type: "object",
         required: [],

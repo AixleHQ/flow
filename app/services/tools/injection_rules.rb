@@ -1,39 +1,19 @@
 # frozen_string_literal: true
 
 module Tools
-  # Named session predicates that replace the kind-driven auto-injection in
+  # Named session predicates for the plumbing tools that stay automatic in
   # TerminalSession#available_tools. Closed vocabulary: the DSL rejects
   # unknown rule names at class-load time.
   module InjectionRules
+    # Plumbing only (docs/design/tool-attachment.md §2.1). Every other tool is
+    # served when a workflow, a step or the session itself attached it.
     RULES = {
-      # kind :workflow — board_*, list_sub_steps, mark_sub_step, chat_post_message
-      workflow_step_session: ->(ctx) { TerminalSession.workflow_step_type?(ctx.session_type) },
-      # kind :internal — read_tool_result, needed to poll async container tools
+      # finish_session, fail_session, list_sub_steps, mark_sub_step — how a
+      # session ends and reports progress. Served to every session.
+      any_session: ->(_ctx) { true },
+      # read_tool_result — the only way to poll the result of a container tool
+      # the session attached.
       container_tools_present: ->(ctx) { ctx.candidate_tools.any? { |t| t.execution_mode.container? } },
-      # kind :internal — finish_session/fail_session lifecycle tools
-      non_interactive_session: ->(ctx) { ctx.mode == "non_interactive" },
-      # coder_* tools — surface through aixle-tools whenever the project has an
-      # active Coder integration (mirrors how chat_post_message is gated).
-      coder_integration_connected: ->(ctx) { ctx.connected?(:coder) },
-      # refresh_github_token — only sessions holding a GitHub clone carry the
-      # one-hour installation token that can expire mid-run.
-      github_repositories_attached: ->(ctx) { ctx.repository_providers.include?("github") },
-      # azure_devops_* repository tools — every one of them takes a
-      # `repository_id` that must already be attached to the session, so there
-      # is nothing for them to act on without one. They are not offered in the
-      # picker at all (TagCatalog marks the tag hidden and the tools are not
-      # user_attachable): attaching an Azure repository IS the opt-in.
-      azure_repositories_attached: ->(ctx) { ctx.repository_providers.include?("azure_devops") },
-      # azure_devops_* build tools, plus list_connections. These are scoped by
-      # `integration_id` rather than by a repository, so the connection is the
-      # only thing they need. Mirrors the Coder gating exactly. Azure Boards work
-      # items go through the tracker_* tools instead.
-      azure_integration_connected: ->(ctx) { ctx.connected?(:azure_devops) },
-      # tracker_* tools — a run a tracker event started has its tracker's tools
-      # without anyone attaching them (docs/design/task-tracker-integrations.md §7.3).
-      tracker_run: lambda { |ctx|
-        ctx.session&.step_run&.workflow_run&.shared_context.to_h.key?("tracker")
-      },
       # get_config_item — served only where an attachment already authorized it.
       # Resolved through SessionConfigResolver so a workflow step sees the items
       # its workflow/step named, not just the (empty) session association.

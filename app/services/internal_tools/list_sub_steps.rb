@@ -6,7 +6,7 @@ module InternalTools
       display_name "List Sub-Steps"
       description "List current step's sub-steps with their statuses. Only available during workflow execution."
       tags :workflow_control
-      inject_when :workflow_step_session
+      inject_when :any_session
       user_attachable false
       input_schema({
         type: "object",

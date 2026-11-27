@@ -2,7 +2,7 @@
 
 Coder connects per Flow project. A connection names one Coder deployment and a
 session token for one Coder account. From then on, every session in the
-project has the `coder_*` tools: an agent borrows a workspace from a pool,
+project can attach the `coder_*` tools: an agent borrows a workspace from a pool,
 clones a repository onto it, runs commands there over SSH, and hands it back.
 Use it for work that should run on a machine of your own rather than in the
 agent's container — a test suite, a build, a `docker compose` stack.
@@ -77,9 +77,8 @@ sessions in the project lose the tools.
 
 ## Tools
 
-You do not attach these: every session in a project with an active Coder
-connection has them. They also appear as the **Coder** group in the tool
-picker (see [Tools](/docs/tools)).
+Attach them to a workflow or a step: a Coder connection does not grant them. They
+appear as the **Coder** group in the tool picker (see [Tools](/docs/tools)).
 
 | Tool | What it does |
 | --- | --- |

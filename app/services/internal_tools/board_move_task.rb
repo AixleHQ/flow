@@ -7,7 +7,6 @@ module InternalTools
       description "Move a task to another board column by name, optionally to a position within it " \
                   "(0 = top). Without a position the task goes to the bottom of the column."
       tags :board
-      inject_when :workflow_step_session
       input_schema({
         type: "object",
         required: %w[column_name],

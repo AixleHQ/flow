@@ -18,6 +18,7 @@ governance, community health — carry none.
 - **Tasks**: a card's Assets tab has a drop zone that takes several files at once, dropped or picked, so many files can be attached to a card in one go.
 
 ### Changed
+- **Workflows**: a session gets a tool only when its workflow, its step or the session itself attached it. A connected integration, an attached repository or a tracker trigger no longer grants tools, and a session with no custom tool no longer gets every custom tool of the project. Only `finish_session`, `fail_session`, `list_sub_steps` and `mark_sub_step` stay automatic for every session (plus `read_tool_result` and `get_config_item` next to the tools that need them). `finish_session` and `fail_session` now work in interactive sessions. The Azure DevOps tools and `refresh_github_token` can be attached, and the tool picker has an Azure DevOps section. A migration attaches the tools each existing workflow step used to receive, so existing workflows keep working; workflows created through the builder, the API, the MCP tools or a template install must attach their tools, and sessions running at deploy lose the tools that were injected.
 - **Tasks**: the task title and its status chips sit above the tabs in the task drawer and on the task page, so the title shows on every tab. The copy of the title in the drawer's top bar is gone.
 - **Tasks**: a task's Details are read-only until you press a pencil icon, so text can be selected and copied without opening a field. The title and the description each have their own pencil, which turns into a green check to save and a red cross to cancel, so each can be edited and saved separately. The properties have no pencil: each one saves as soon as it is changed. In Activity, an edit names the fields it changed, and **Show changes** opens their old and new values.
 
@@ -25,6 +26,10 @@ governance, community health — carry none.
 - **Tasks**: the **Upload new** button in a card's Assets tab. The drop zone remains: drop files on it, or click it to select several files.
 
 ### Fixed
+- **Connectors**: the agent images ship uv / uvx 0.13.4, which fixes three advisories in
+  0.9.29 (among them the critical GHSA-hq85-5cpj-mr62, a compromised root in uv's bundled
+  CA store). Connectors from PyPI start through this `uvx`. Self-hosted installations:
+  pull the new agent images.
 - **Assets**: the file drop zone, in the Assets upload dialog and on a card's Assets tab, can be reached with Tab and opens the file picker with Enter or Space.
 - **Tasks**: pressing `n` or `/` while a task's drawer is open, with the cursor outside a field, no longer opens Create task over it or jumps to the board search.
 

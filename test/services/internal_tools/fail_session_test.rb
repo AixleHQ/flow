@@ -61,16 +61,17 @@ class InternalTools::FailSessionTest < ActiveSupport::TestCase
     assert_equal "Some details", @step_run.step_note
   end
 
-  test "returns error for interactive session" do
+  test "ends an interactive session too" do
     session = create(:terminal_session, :running, :agent_session,
       user: @user, project: @project, step_run: @step_run, mode: "interactive")
+    session.stubs(:signal_workflow)
 
     result = InternalTools::FailSession.new(
       params: { reason: "test" },
       session: session
     ).execute
 
-    assert_equal 1, result[:exit_code]
-    assert_includes result[:stderr], "non-interactive"
+    assert_equal 0, result[:exit_code]
+    assert_includes result[:stdout], "test"
   end
 end

@@ -28,7 +28,6 @@ module InternalTools
                   "issue_id, files: [{name, status, reason}], operation_key}; status is attached, already_on_issue or " \
                   "refused."
       tags :tracker
-      inject_when :tracker_run
       requires_integration :tracker
       unavailable_message "No task tracker is connected to this project. Add one on the project's Trackers page."
       param :tracker, type: :string, description: Concerns::TrackerContext::TRACKER_PARAM

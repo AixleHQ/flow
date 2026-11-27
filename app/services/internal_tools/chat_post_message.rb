@@ -14,7 +14,6 @@ module InternalTools
       display_name "Chat Post Message"
       description "Send a message to Slack or Microsoft Teams. `text` is Markdown; `slack_blocks` (Block Kit) or `adaptive_card` (Teams) add rich layout; `files` attach files, each entry setting EXACTLY ONE source: `content` (inline text, needs `filename`), `file_path` (a path in the running container, any type), or `asset_id` (a project asset). At least one of text/slack_blocks/adaptive_card/files is required. Omit provider/conversation/thread to answer in the thread the run was started from; `new_thread: true` starts a new thread in that channel instead. Returns JSON {provider, conversation, thread, message_id}; chat_update_message and chat_delete_message take that message_id."
       tags :messaging, :chat
-      inject_when :workflow_step_session
       requires_integration :chat
       input_schema({
         type: "object",

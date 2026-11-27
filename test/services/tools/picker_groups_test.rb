@@ -27,6 +27,16 @@ class Tools::PickerGroupsTest < ActiveSupport::TestCase
     assert_not_includes tags, "builder"   # hidden
   end
 
+  test "the Azure DevOps section appears once the project has the connection" do
+    assert_not_includes Tools::PickerGroups.for_project(@project).map { |g| g[:tag] }, "azure_devops"
+
+    create(:integration, :azure_devops, :active, company: @project.company, project: @project, connected_by: @user)
+    azure = Tools::PickerGroups.for_project(@project).find { |g| g[:tag] == "azure_devops" }
+
+    assert_equal "Azure DevOps", azure[:label]
+    assert_equal 17, azure[:tool_ids].size
+  end
+
   test "a group whose tools this project cannot see is dropped" do
     # Chat tools are gated on a messenger being connected, so an unconnected
     # project must not be offered an empty "Chat" entry.

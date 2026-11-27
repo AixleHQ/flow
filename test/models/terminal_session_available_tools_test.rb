@@ -41,140 +41,116 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
     refute_includes session.reload.available_tools.map(&:name), "static_analyzer"
   end
 
-  # == Workflow tools: auto-injected for workflow_step sessions ==
+  # == Plumbing: the only tools served without an attachment ==
+  # docs/design/tool-attachment.md. The exhaustive guard is Tools::PlumbingTest.
 
-  test "registry workflow tools are injected for workflow_step sessions without pre-seeded rows" do
+  PLUMBING = %w[finish_session fail_session list_sub_steps mark_sub_step].freeze
+
+  def attach(session, name)
+    session.tools << Tool.shadow_for(Tools::Registry.fetch(name))
+  end
+
+  test "a workflow step session that attached nothing gets only the plumbing tools" do
     session = create(:terminal_session, user: @user, project: @project,
       session_type: "workflow_step", agent_type: nil)
 
-    names = session.available_tools.map(&:name)
-
-    assert_includes names, "list_sub_steps"
-    assert_includes names, "mark_sub_step"
-    assert_includes names, "board_list_tasks"
-    assert_includes names, "chat_post_message"
-    # DB rows cannot opt into auto-injection anymore — injection rules are
-    # declared in code only.
-    refute_includes names, "static_analyzer"
+    assert_equal PLUMBING.sort, session.available_tools.map(&:name).sort
   end
 
-  test "non_interactive sessions get session lifecycle tools injected" do
-    session = create(:terminal_session, :agent_session, user: @user, project: @project,
+  test "an agent session that attached nothing gets only the plumbing tools, interactive or not" do
+    interactive = create(:terminal_session, :agent_session, user: @user, project: @project)
+    unattended = create(:terminal_session, :agent_session, user: @user, project: @project,
       mode: "non_interactive", initial_prompt: "run")
 
-    names = session.available_tools.map(&:name)
-
-    assert_includes names, "finish_session"
-    assert_includes names, "fail_session"
+    assert_equal PLUMBING.sort, interactive.available_tools.map(&:name).sort
+    assert_equal PLUMBING.sort, unattended.available_tools.map(&:name).sort
   end
 
-  test "non_interactive Antigravity sessions get the completion contract" do
-    session = create(:terminal_session, :agent_session, user: @user, project: @project,
-      agent_type: "antigravity_cli", mode: "non_interactive", initial_prompt: "run")
+  test "board and chat tools reach a workflow step only when attached" do
+    session = create(:terminal_session, user: @user, project: @project,
+      session_type: "workflow_step", agent_type: nil)
+    refute_includes session.available_tools.map(&:name), "board_list_tasks"
+    refute_includes session.available_tools.map(&:name), "chat_post_message"
 
-    names = session.available_tools.map(&:name)
+    attach(session, "board_list_tasks")
+    names = session.reload.available_tools.map(&:name)
 
-    assert_includes names, "finish_session"
-    assert_includes names, "fail_session"
-  end
-
-  test "interactive sessions do not get session lifecycle tools" do
-    session = create(:terminal_session, :agent_session, user: @user, project: @project)
-
-    names = session.available_tools.map(&:name)
-
-    refute_includes names, "finish_session"
-    refute_includes names, "fail_session"
-  end
-
-  test "workflow tools are NOT included for agent_session" do
-    session = create(:terminal_session, :agent_session, user: @user, project: @project)
-
-    names = session.available_tools.map(&:name)
-
-    refute_includes names, "list_sub_steps"
-    refute_includes names, "mark_sub_step"
+    assert_includes names, "board_list_tasks"
     refute_includes names, "chat_post_message"
+    refute_includes names, "board_move_task"
   end
 
-  test "workflow tools are NOT included for auth_setup" do
+  test "workflow tools are not served to a session with no project, apart from plumbing" do
     session = create(:terminal_session, :auth_setup, user: @user, project: nil)
 
-    names = session.available_tools.map(&:name)
-
-    refute_includes names, "list_sub_steps"
-    refute_includes names, "mark_sub_step"
+    assert_equal PLUMBING.sort, session.available_tools.map(&:name).sort
   end
 
-  # == refresh_github_token: auto-injected when a GitHub clone is attached ==
+  # == refresh_github_token: attached, not injected ==
 
-  test "refresh_github_token is injected for a session holding a GitHub repository" do
+  test "refresh_github_token is not served to a session holding a GitHub repository" do
     integration = create(:integration, company: @company, connected_by: @user, status: :active)
     session = create(:terminal_session, :agent_session, user: @user, project: @project)
     session.repositories << create(:repository, integration: integration, scope: @project)
 
-    assert_includes session.available_tools.map(&:name), "refresh_github_token"
-  end
-
-  test "refresh_github_token is NOT injected without a GitHub repository" do
-    session = create(:terminal_session, :agent_session, user: @user, project: @project)
-    session.repositories << create(:repository, :public_source, full_name: "torvalds/linux",
-      scope: @project, clone_url: "https://github.com/torvalds/linux.git")
-
     refute_includes session.available_tools.map(&:name), "refresh_github_token"
   end
 
-  # == Azure DevOps: injected, never picked ==
-  #
-  # Two rules rather than one. The repository tools all take a `repository_id`
-  # that must already be attached, so a session without an Azure clone has
-  # nothing to point them at; the build tools are scoped by connection. Boards
-  # work items are tracker tools, which are attached, not injected.
+  test "refresh_github_token is served when attached" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+    attach(session, "refresh_github_token")
 
-  test "Azure repository tools are injected for a session holding an Azure repository" do
+    assert_includes session.available_tools.map(&:name), "refresh_github_token"
+  end
+
+  # == Coder ==
+
+  test "Coder tools are not served because a Coder connection exists" do
+    create(:integration, :coder, :active, company: @company, project: @project, connected_by: @user)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+
+    assert session.available_tools.map(&:name).none? { |n| n.start_with?("coder_") }
+  end
+
+  # == Azure DevOps: attached like any other tool ==
+
+  test "Azure repository tools are not served for a session holding an Azure repository" do
     integration = create(:integration, :azure_devops, :active, company: @company,
       project: @project, connected_by: @user)
     session = create(:terminal_session, :agent_session, user: @user, project: @project)
     session.repositories << create(:repository, :azure_devops, integration: integration, scope: @project)
 
-    names = session.available_tools.map(&:name)
+    assert session.available_tools.map(&:name).none? { |n| n.start_with?("azure_devops_") }
+
+    attach(session, "azure_devops_create_pull_request")
+    names = session.reload.available_tools.map(&:name)
 
     assert_includes names, "azure_devops_create_pull_request"
-    assert_includes names, "azure_devops_reply_pull_request_thread"
+    refute_includes names, "azure_devops_reply_pull_request_thread"
   end
 
-  test "Azure repository tools are NOT injected for a session holding only a GitHub repository" do
-    create(:integration, :azure_devops, :active, company: @company, project: @project, connected_by: @user)
-    github = create(:integration, company: @company, connected_by: @user, status: :active)
-    session = create(:terminal_session, :agent_session, user: @user, project: @project)
-    session.repositories << create(:repository, integration: github, scope: @project)
-
-    refute_includes session.available_tools.map(&:name), "azure_devops_create_pull_request"
-  end
-
-  test "Azure build tools follow the connection, not the repositories" do
+  test "Azure build tools are not served because the connection exists" do
     create(:integration, :azure_devops, :active, company: @company, project: @project, connected_by: @user)
     session = create(:terminal_session, :agent_session, user: @user, project: @project)
 
-    names = session.available_tools.map(&:name)
+    assert session.available_tools.map(&:name).none? { |n| n.start_with?("azure_devops_") }
 
-    assert_includes names, "azure_devops_list_builds"
-    assert_includes names, "azure_devops_list_connections"
-    refute_includes names, "azure_devops_create_pull_request"
+    attach(session, "azure_devops_list_builds")
+    assert_includes session.reload.available_tools.map(&:name), "azure_devops_list_builds"
   end
 
-  test "tracker tools are attached, never injected by a connection alone" do
+  test "tracker tools are attached, never served by a connection alone" do
     integration = create(:integration, :azure_devops, :active, company: @company, project: @project, connected_by: @user)
     create(:project_tracker, :primary, integration: integration)
     session = create(:terminal_session, :agent_session, user: @user, project: @project)
 
     refute session.available_tools.map(&:name).any? { |n| n.start_with?("tracker_") }
 
-    session.tools << Tool.shadow_for(Tools::Registry.fetch("tracker_get_issue"))
+    attach(session, "tracker_get_issue")
     assert_includes session.reload.available_tools.map(&:name), "tracker_get_issue"
   end
 
-  test "a run a tracker event started gets the tracker tools without anyone attaching them" do
+  test "a run a tracker event started gets no tracker tool unless it is attached" do
     integration = create(:integration, :azure_devops, :active, company: @company, project: @project, connected_by: @user)
     tracker = create(:project_tracker, :primary, integration: integration)
     workflow = create(:workflow, scope: @project)
@@ -183,15 +159,10 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
     step_run = create(:step_run, workflow_run: run, step: create(:step, workflow: workflow))
     session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: step_run)
 
-    assert_includes session.available_tools.map(&:name), "tracker_transition_issue"
-  end
+    refute_includes session.available_tools.map(&:name), "tracker_transition_issue"
 
-  test "no Azure tool reaches a project without an Azure connection" do
-    session = create(:terminal_session, :agent_session, user: @user, project: @project)
-
-    names = session.available_tools.map(&:name)
-
-    assert names.none? { |n| n.start_with?("azure_devops_") }, "Azure tools leaked into an unconnected project"
+    attach(session, "tracker_transition_issue")
+    assert_includes session.reload.available_tools.map(&:name), "tracker_transition_issue"
   end
 
   # == System tools: explicitly attached ==
@@ -244,16 +215,13 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
     assert_includes names, "read_tool_result"
   end
 
-  test "internal tools are auto-injected when project has custom container tools (fallback)" do
+  test "project custom tools do not give a session read_tool_result" do
     create(:tool, scope: @project, name: "project_tool",
       display_name: "Project Tool", docker_image: "pt:1.0")
 
     session = create(:terminal_session, :agent_session, user: @user, project: @project)
 
-    names = session.available_tools.map(&:name)
-
-    assert_includes names, "project_tool"
-    assert_includes names, "read_tool_result"
+    refute_includes session.available_tools.map(&:name), "read_tool_result"
   end
 
   # == Custom tools ==
@@ -270,18 +238,16 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
     assert_includes names, "my_linter"
   end
 
-  test "falls back to project custom tools when no custom tools explicitly selected" do
+  test "a session that attached no custom tool gets none of the project's custom tools" do
     create(:tool, scope: @project, name: "project_tool",
       display_name: "Project Tool", docker_image: "pt:1.0")
 
     session = create(:terminal_session, :agent_session, user: @user, project: @project)
 
-    names = session.available_tools.map(&:name)
-
-    assert_includes names, "project_tool"
+    refute_includes session.available_tools.map(&:name), "project_tool"
   end
 
-  test "does not fall back to project tools when custom tools are explicitly selected" do
+  test "a session that attached a custom tool gets it and no other custom tool" do
     create(:tool, scope: @project, name: "project_tool",
       display_name: "Project Tool", docker_image: "pt:1.0")
     custom_tool = create(:tool, scope: @project, name: "my_tool",
@@ -298,7 +264,7 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
 
   # == Workflow step with mixed tools ==
 
-  test "workflow_step session gets workflow tools and explicitly selected tools" do
+  test "workflow_step session gets plumbing and explicitly selected tools" do
     session = create(:terminal_session, user: @user, project: @project,
       session_type: "workflow_step", agent_type: nil)
     session.tools << local_container_tool
@@ -312,12 +278,6 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
   end
 
   # == Edge cases ==
-
-  test "returns empty for auth_setup with no project and no tools" do
-    session = create(:terminal_session, :auth_setup, user: @user, project: nil)
-
-    assert_empty session.available_tools
-  end
 
   test "a disabled shadow row keeps its tool out of the injected set" do
     Tools::Reconciler.run!

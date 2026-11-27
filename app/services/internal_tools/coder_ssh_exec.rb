@@ -19,7 +19,6 @@ module InternalTools
                   "For anything long (test suites, builds, full check runs) pass `detach: true`: it returns a `job_id` in seconds, " \
                   "then poll `coder_job_status`. Never re-issue a command that timed out."
       tags :coder
-      inject_when :coder_integration_connected
       requires_integration :coder
       input_schema({
         type: "object",

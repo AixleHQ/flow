@@ -10,7 +10,6 @@ module InternalTools
                   "When this run is about a board task, the new issue is linked to it unless `link_to_task` is false. " \
                   "Returns JSON: the created issue plus `operation_key`."
       tags :tracker
-      inject_when :tracker_run
       requires_integration :tracker
       unavailable_message "No task tracker is connected to this project. Add one on the project's Trackers page."
       param :tracker, type: :string, description: Concerns::TrackerContext::TRACKER_PARAM

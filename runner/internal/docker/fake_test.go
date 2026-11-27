@@ -156,6 +156,9 @@ type fakeVolume struct {
 	Labels map[string]string
 	// Files are the volume's content, by path relative to its root.
 	Files map[string][]byte
+	// BlankOnCreate makes a create request for this existing volume answer with
+	// no labels, as a daemon does after a restart; inspect and list keep them.
+	BlankOnCreate bool
 }
 
 var versionedPath = regexp.MustCompile(`^/v[0-9.]+(/.*)$`)
@@ -714,7 +717,11 @@ func (f *fakeEngine) serveVolumes(w http.ResponseWriter, r *http.Request, p stri
 			}
 			f.volumes[req.Name] = v
 		}
-		writeJSON(w, http.StatusCreated, volume.Volume{Name: v.Name, Labels: v.Labels, Driver: "local"})
+		labels := v.Labels
+		if ok && v.BlankOnCreate {
+			labels = nil
+		}
+		writeJSON(w, http.StatusCreated, volume.Volume{Name: v.Name, Labels: labels, Driver: "local"})
 	default:
 		name := strings.TrimPrefix(p, "/volumes/")
 		v, ok := f.volumes[name]
