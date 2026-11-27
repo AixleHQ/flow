@@ -38,7 +38,7 @@ under weak-copyleft licenses
 | busybox | (Alpine) | GPL-2.0-only (OS boundary; does not propagate) |
 | Linux kernel | (host/Alpine) | GPL-2.0-only (syscall boundary; does not propagate) |
 | Temporal server / UI | 1.29.0 / 2.43.3 | MIT |
-| Traefik | v3.6.6 | MIT |
+| Traefik | v3.7.20 | MIT |
 
 > The Linux kernel and busybox are GPL-2.0-only but sit at the OS boundary
 > (syscall interface); their license does not extend to application code running
