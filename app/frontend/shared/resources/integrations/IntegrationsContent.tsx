@@ -357,6 +357,7 @@ export const IntegrationsContent = ({
   const [coderEditTtl, setCoderEditTtl] = useState<number | string>(DEFAULT_CODER_LOCK_TTL);
   const [coderEditLoading, setCoderEditLoading] = useState(false);
   const [coderEditTemplates, setCoderEditTemplates] = useState<string[] | null>(null);
+  const [coderEditError, setCoderEditError] = useState<string | null>(null);
 
   const resetCoderForm = useCallback(() => {
     setCoderUrl('');
@@ -557,13 +558,17 @@ export const IntegrationsContent = ({
   const openCoderSettings = useCallback(
     (integration: Integration) => {
       setCoderEditTemplates(null);
+      setCoderEditError(null);
       requestJson(
         `${basePath}/${integration.id}/coder_template_list`,
         { method: 'GET' },
         'Could not list the templates',
       )
         .then((result: { templates: string[] }) => setCoderEditTemplates(result.templates))
-        .catch(() => setCoderEditTemplates([]));
+        .catch((e: unknown) => {
+          setCoderEditTemplates([]);
+          setCoderEditError(e instanceof Error ? e.message : 'Could not list the templates');
+        });
       setCoderEditTarget(integration);
       setCoderEditTemplate(integration.coderDefaultTemplate ?? '');
       setCoderEditPrefix(integration.coderMachinePrefix ?? '');
@@ -1777,6 +1782,8 @@ export const IntegrationsContent = ({
           <PasswordInput
             label="Personal Access Token"
             placeholder="glpat-..."
+            name="gitlab-access-credential"
+            autoComplete="new-password"
             value={gitlabPat}
             onChange={(e) => setGitlabPat(e.currentTarget.value)}
             onKeyDown={(e) => {
@@ -1811,11 +1818,16 @@ export const IntegrationsContent = ({
             value={coderUrl}
             onChange={(e) => setCoderUrl(e.currentTarget.value)}
             error={coderUrl.trim() && !isValidHttpUrl(coderUrl) ? 'Must be a valid http or https URL' : undefined}
+            // Not the user's Aixle login: stop browsers and password managers from filling it.
+            name="coder-instance-address"
+            autoComplete="off"
             autoFocus
           />
           <PasswordInput
             label="Session Token"
             placeholder="vFVrbTLdls-..."
+            name="coder-instance-credential"
+            autoComplete="new-password"
             value={coderToken}
             onChange={(e) => setCoderToken(e.currentTarget.value)}
           />
@@ -1917,6 +1929,8 @@ export const IntegrationsContent = ({
                   ? 'Token'
                   : 'Personal Access Token'
             }
+            name="replacement-access-credential"
+            autoComplete="new-password"
             value={replacementToken}
             onChange={(e) => setReplacementToken(e.currentTarget.value)}
             onKeyDown={(e) => {
@@ -1957,6 +1971,7 @@ export const IntegrationsContent = ({
             value={coderEditTemplate || null}
             onChange={(v) => setCoderEditTemplate(v ?? '')}
             disabled={!coderEditTemplates}
+            error={coderEditError}
             required
             searchable
           />

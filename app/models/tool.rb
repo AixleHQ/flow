@@ -153,8 +153,11 @@ class Tool < ApplicationRecord
     end
   end
 
-  def unavailable_message
-    definition&.unavailable_message ||
+  # `ctx` is the request's Tools::Context; with a session it says to attach an integration
+  # that is connected to the project but not in the session's set.
+  def unavailable_message(ctx = nil)
+    ctx&.attach_message(requires_integration) ||
+      definition&.unavailable_message ||
       "The #{requires_integration} integration is not connected for this project. " \
       "Connect it in Project Settings → Integrations."
   end

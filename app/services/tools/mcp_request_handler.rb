@@ -207,7 +207,7 @@ module Tools
     # integration is the dominant fact, so argument validation must not answer
     # in place of the remedy.
     def define_unavailable_tool(row)
-      message = row.unavailable_message
+      message = row.unavailable_message(ctx)
 
       MCP::Tool.define(
         name: row.name,

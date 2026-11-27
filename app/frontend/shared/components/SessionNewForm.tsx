@@ -227,7 +227,15 @@ export const SessionNewForm = ({
     bmadEnabled,
   ]);
 
+  // Compared with the preselected defaults, so a freshly opened form is clean and a removed default counts.
+  const integrationsChanged = useMemo(() => {
+    const current = [...selectedIntegrations].sort();
+    const defaults = defaultIntegrationIds.map(String).sort();
+    return current.length !== defaults.length || current.some((id, i) => id !== defaults[i]);
+  }, [selectedIntegrations, defaultIntegrationIds]);
+
   const dirty =
+    integrationsChanged ||
     projectId !== seed.projectId ||
     agentType !== seed.agentType ||
     mode !== 'interactive' ||

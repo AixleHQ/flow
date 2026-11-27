@@ -419,6 +419,50 @@ describe('SessionNewForm', () => {
     expect(onStateChange).toHaveBeenLastCalledWith({ dirty: true, saving: false });
   });
 
+  describe('integration selection and the unsaved state', () => {
+    const integrations = [
+      buildIntegrationPicker({ id: 41, name: 'Coder (alice)' }),
+      buildIntegrationPicker({ id: 42, name: 'Coder (bob)' }),
+    ];
+    const defaultRuntime = {
+      props: {
+        currentUser: buildSharedUser({ configuredAgents: ['claude_code'], defaultAgentRuntime: 'claude_code' }),
+      },
+    };
+
+    it('is clean with the defaults preselected, and dirty once a default is removed', async () => {
+      const user = userEvent.setup();
+      const onStateChange = vi.fn();
+      renderAuthedPage(
+        <SessionNewForm {...makeProps({ projectId: 3, integrations, defaultIntegrationIds: [41], onStateChange })} />,
+        defaultRuntime,
+      );
+
+      expect(onStateChange).toHaveBeenLastCalledWith({ dirty: false, saving: false });
+
+      await user.click(screen.getByRole('combobox', { name: 'Integrations' }));
+      await user.click(await screen.findByRole('option', { name: /Coder \(alice\)/ }));
+
+      expect(onStateChange).toHaveBeenLastCalledWith({ dirty: true, saving: false });
+    });
+
+    it('is dirty once an integration is added when there is no default', async () => {
+      const user = userEvent.setup();
+      const onStateChange = vi.fn();
+      renderAuthedPage(
+        <SessionNewForm {...makeProps({ projectId: 3, integrations, defaultIntegrationIds: [], onStateChange })} />,
+        defaultRuntime,
+      );
+
+      expect(onStateChange).toHaveBeenLastCalledWith({ dirty: false, saving: false });
+
+      await user.click(screen.getByRole('combobox', { name: 'Integrations' }));
+      await user.click(await screen.findByRole('option', { name: /Coder \(bob\)/ }));
+
+      expect(onStateChange).toHaveBeenLastCalledWith({ dirty: true, saving: false });
+    });
+  });
+
   it('reports a typed prompt as unsaved, and clean again once the form unmounts', async () => {
     const user = userEvent.setup();
     const onStateChange = vi.fn();

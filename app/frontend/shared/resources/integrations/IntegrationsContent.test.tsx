@@ -944,6 +944,24 @@ describe('IntegrationsContent', () => {
       await waitFor(() => expect(within(dialog).getByLabelText(/Machine name prefix/)).toHaveValue('acme'));
     };
 
+    it('asks browsers and password managers not to fill the URL and token', async () => {
+      renderPage(
+        <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
+        { props: settingsProps },
+      );
+
+      const dialog = await openCoderModal();
+      const url = within(dialog).getByPlaceholderText('https://coder.example.com');
+      const token = within(dialog).getByPlaceholderText('vFVrbTLdls-...');
+
+      expect(url).toHaveAttribute('autocomplete', 'off');
+      expect(token).toHaveAttribute('autocomplete', 'new-password');
+      for (const input of [url, token]) {
+        expect(input.getAttribute('name')).toBeTruthy();
+        expect(input.getAttribute('name')).not.toMatch(/user|login|email|pass(word)?\b/i);
+      }
+    });
+
     it('keeps Connect disabled and shows a validation error for a non-http(s) URL', async () => {
       renderPage(
         <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
@@ -1510,6 +1528,44 @@ describe('IntegrationsContent', () => {
         { defaultTemplate: 'aws-ec2-spot-v1', machinePrefix: 'aixle-prod', lockTtlMinutes: 120 },
         expect.objectContaining({ preserveScroll: true }),
       );
+    });
+
+    it('shows the server message in the form when the stored token’s template lookup fails', async () => {
+      answerFetch({
+        'GET /projects/42/integrations/9/coder_template_list': jsonResponse(
+          { error: 'unreachable', message: 'Coder at coder.aixle.dev could not be reached.' },
+          422,
+        ),
+      });
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[coderIntegration()]}
+        />,
+        { props: settingsProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit settings for Acme Coder' }));
+      const dialog = await screen.findByRole('dialog', { name: /Coder settings/i });
+
+      expect(await within(dialog).findByText('Coder at coder.aixle.dev could not be reached.')).toBeInTheDocument();
+    });
+
+    it('asks browsers and password managers not to fill the replacement token', async () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[coderIntegration()]}
+        />,
+        { props: settingsProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Replace token for Acme Coder' }));
+      const dialog = await screen.findByRole('dialog', { name: /Replace token/i });
+
+      expect(within(dialog).getByLabelText('Session Token')).toHaveAttribute('autocomplete', 'new-password');
     });
 
     it('does not save without a prefix', async () => {
