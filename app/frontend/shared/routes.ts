@@ -2163,6 +2163,11 @@ export function gitlabOauthStartCompanyProjectIntegrationsPath(project_id: Scala
   return "/" + "company" + $companySegment(options) + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "gitlab_oauth_start" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_slug","project_id","format"]);
 }
 
+/** /company/:company_slug/projects/:project_id/integrations/coder_templates(.:format) */
+export function coderTemplatesCompanyProjectIntegrationsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + $companySegment(options) + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "coder_templates" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_slug","project_id","format"]);
+}
+
 /** /company/:company_slug/projects/:project_id/integrations/youtrack_connect(.:format) */
 export function youtrackConnectCompanyProjectIntegrationsPath(project_id: ScalarType, options?: object): string {
   return "/" + "company" + $companySegment(options) + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "youtrack_connect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_slug","project_id","format"]);
@@ -2191,6 +2196,11 @@ export function teamsLinkCompanyProjectIntegrationPath(project_id: ScalarType, i
 /** /company/:company_slug/projects/:project_id/integrations/:id/jira_projects(.:format) */
 export function jiraProjectsCompanyProjectIntegrationPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "company" + $companySegment(options) + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + id + "/" + "jira_projects" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_slug","project_id","id","format"]);
+}
+
+/** /company/:company_slug/projects/:project_id/integrations/:id/coder_template_list(.:format) */
+export function coderTemplateListCompanyProjectIntegrationPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + $companySegment(options) + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + id + "/" + "coder_template_list" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_slug","project_id","id","format"]);
 }
 
 /** /company/:company_slug/projects/:project_id/integrations/:id/github_projects(.:format) */

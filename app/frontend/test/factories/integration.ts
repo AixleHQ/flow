@@ -28,6 +28,8 @@ export const buildIntegration = (overrides: Partial<Integration> = {}): Integrat
   bitbucketLastHeardAt: null,
   bitbucketUrl: null,
   coderUrl: null,
+  coderHost: null,
+  missingSettings: [],
   coderDefaultTemplate: null,
   coderMachinePrefix: null,
   coderLockTtlMinutes: null,
