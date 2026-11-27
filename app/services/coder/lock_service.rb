@@ -214,12 +214,12 @@ module Coder
     end
 
     # The integration's lock rows, expired or not, that `holder` owns. One
-    # predicate, so the ownership rule is written once. `value_key` is one of
-    # two constants, never caller input.
+    # predicate, so the ownership rule is written once. `value_key` is bound, not
+    # interpolated.
     def holder_rows(holder)
       @integration.integration_data
                   .with_key_prefix(LOCK_KEY_PREFIX)
-                  .where("value ->> '#{holder.value_key}' = ?", holder.id)
+                  .where("value ->> ? = ?", holder.value_key, holder.id)
     end
 
     def clear_expired_locks_elsewhere(workspace_id, now)
