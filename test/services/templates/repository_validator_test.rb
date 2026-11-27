@@ -103,7 +103,7 @@ class Templates::RepositoryValidatorTest < ActiveSupport::TestCase
 
   def warnings_for(target, instructions)
     path = target.join("template.yaml")
-    path.write(path.read.sub('instructions: Implement the design and open a pull request.', "instructions: #{instructions.inspect}"))
+    path.write(path.read.sub("instructions: Implement the design and open a pull request.", "instructions: #{instructions.inspect}"))
     Templates::RepositoryValidator.new(root: @root).warnings
   end
 
