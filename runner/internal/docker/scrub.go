@@ -130,6 +130,38 @@ func (e *Environment) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+// RemoveVolumes removes the environment's own volumes, the workspace volume and
+// its cache volumes, each selected by its name and the environment's label as
+// Reset does. A volume with such a name but without the label, or with another
+// environment's, is left alone. It is what a machine runner does once it has
+// unregistered the machine: the key is never used again, so nothing would ever
+// remove them. It keeps going after a failure and answers every volume that
+// could not be removed, by name. It returns the names it removed.
+func (e *Environment) RemoveVolumes(ctx context.Context) ([]string, error) {
+	if e.Key == "" {
+		// An empty key would match every unlabelled volume.
+		return nil, errors.New("the machine's key is not known, so no volume can be proved to be its own")
+	}
+	owned, _, err := e.volumes(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("listing the environment's volumes: %w", err)
+	}
+	var removed []string
+	var failed []error
+	for _, name := range owned {
+		_, err := e.API.VolumeRemove(ctx, name, client.VolumeRemoveOptions{})
+		if cerrdefs.IsNotFound(err) {
+			continue
+		}
+		if err != nil {
+			failed = append(failed, fmt.Errorf("removing the volume %s: %w", name, err))
+			continue
+		}
+		removed = append(removed, name)
+	}
+	return removed, errors.Join(failed...)
+}
+
 // removeContainers removes every container labelled with the environment, the
 // proxy sidecars included, then checks by label that none is left, and stops
 // every relay of the environment.
