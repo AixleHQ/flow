@@ -155,7 +155,7 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
   # execution mode. It reads id, name, and those step fields only — WorkflowResource
   # would count and load every run of every workflow.
   def runnable_workflows
-    Workflow.visible_for_project(current_project).includes(steps: %i[sub_steps resource_links]).map do |workflow|
+    Workflow.visible_for_project(current_project).includes(:base_resource_links, steps: %i[sub_steps resource_links]).map do |workflow|
       {
         id: workflow.id,
         name: workflow.name,

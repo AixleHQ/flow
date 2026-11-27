@@ -32,8 +32,22 @@ module Coder
         ]
       })
 
-      result = @service.list(prefix: "aixle-prod-")
+      result = @service.list(prefix: "aixle-prod")
       assert_equal %w[aixle-prod-1 aixle-prod-2], result.map { |w| w["name"] }
+    end
+
+    test "list keeps the pool of its prefix: a nested prefix and hand-made names are not in it" do
+      stub_get("/api/v2/workspaces", {
+        workspaces: [
+          { id: "u1", name: "aixle-1a2b3c4d" },
+          { id: "u2", name: "aixle-r-1a2b3c4d" },
+          { id: "u3", name: "aixle-prod-a-b" },
+          { id: "u4", name: "Aixle-FFFF" }
+        ]
+      })
+
+      assert_equal %w[aixle-1a2b3c4d Aixle-FFFF], @service.list(prefix: "aixle").map { |w| w["name"] }
+      assert_equal %w[aixle-r-1a2b3c4d], @service.list(prefix: "aixle-r").map { |w| w["name"] }
     end
 
     test "list(own: true) asks Coder only for the token owner's workspaces" do
@@ -42,7 +56,7 @@ module Coder
               .to_return(status: 200, body: { workspaces: [ { id: "u1", name: "aixle-prod-1" } ] }.to_json,
                          headers: { "Content-Type" => "application/json" })
 
-      result = @service.list(prefix: "aixle-prod-", own: true)
+      result = @service.list(prefix: "aixle-prod", own: true)
 
       assert_equal %w[aixle-prod-1], result.map { |w| w["name"] }
       assert_requested own

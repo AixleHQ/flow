@@ -23,6 +23,7 @@ class InternalTools::ChatSlackChannelsTest < ActiveSupport::TestCase
     session = create(:terminal_session, :running, :agent_session, user: @user, project: @project,
                                                                   mode: "non_interactive", initial_prompt: "x")
     step_run.update!(terminal_session: session)
+    session.integrations << @slack
     session.reload
   end
 

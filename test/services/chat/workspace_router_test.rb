@@ -117,6 +117,7 @@ class Chat::WorkspaceRouterTest < ActiveJob::TestCase
     session = create(:terminal_session, :running, :agent_session, user: @acme[:owner], project: @acme[:project],
                                                                   mode: "non_interactive", initial_prompt: "x")
     create(:step_run, workflow_run: run, step: @acme[:workflow].steps.first, terminal_session: session)
+    session.integrations << @acme[:install]
     globex_message = "1700000000.000900"
     ChatMessage.record!(conversation: acme_trigger.chat_conversation, message_id: globex_message,
                         company_id: @globex[:company].id)
