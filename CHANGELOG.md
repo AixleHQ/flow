@@ -25,7 +25,7 @@ governance, community health — carry none.
 - **Tasks**: the **Upload new** button in a card's Assets tab. The drop zone remains: drop files on it, or click it to select several files.
 
 ### Fixed
-- Runners: the `ghcr.io/aixlehq/aixle-runner` image is built on `alpine:3.24` instead of `alpine:3.22`, which picks up the fixed OpenSSL (`libssl3`/`libcrypto3`) and zlib packages. It ships with the next `runner-v*` release; images already published keep their old base.
+- Runners: the `ghcr.io/aixlehq/aixle-runner` image is built on `alpine:3.24` instead of `alpine:3.22`. It ships with the next `runner-v*` release; images already published keep their old base.
 - **Assets**: the file drop zone, in the Assets upload dialog and on a card's Assets tab, can be reached with Tab and opens the file picker with Enter or Space.
 - **Tasks**: pressing `n` or `/` while a task's drawer is open, with the cursor outside a field, no longer opens Create task over it or jumps to the board search.
 
