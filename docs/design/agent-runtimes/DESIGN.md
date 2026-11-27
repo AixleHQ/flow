@@ -327,7 +327,7 @@ workflow version, a run or a step.
 | `config` | jsonb, not null, default `{}` | Non-secret, per-type schema validated by the adapter's `config_schema`. Every key, its default and the types it applies to are in **§2.7**, the authoritative table. There is no `execution_mode` key in v1: container mode is the only one, and the key arrives with the `host` mode (§6.8). |
 | `max_concurrency` | integer, not null | The runner's concurrency limit. Not enforced by admission while row 9 is deferred (§10). Must be > 0. |
 | `max_environments` | integer, null | `coder`: environment pool size, null means equal to `max_concurrency`. `manual`: always null. Its capacity is the number of registered machines, a physical fact and not a setting (§7.3, §10). Check constraints: null when `runner_type = 'manual'`, and > 0 when set. |
-| `reuse_policy` | string, not null | `reuse`, `reset` or `fresh`, the same names on every type (Alex, 2026-11-13, §7.1). `reuse`: a scrub after every session. `reset`: a reset after every session, on the same machine or workspace. `fresh`: a new machine or workspace for every session. Which values a type takes: `manual` `reuse` and `reset` (a `fresh` it had before 11a became `reset`), `coder` all three (`reset` in container mode only, §6.8), `kubernetes` `fresh` only. `Runner` defaults it by type: `reuse` on `manual` and `coder`, `fresh` on `kubernetes` (§2.7). |
+| `reuse_policy` | string, not null | `reuse`, `reset` or `fresh`, the same names on every type (Alex, 2026-11-13, §7.1). `reuse`: a scrub after every session. `reset`: a reset after every session, on the same machine or workspace. `fresh`: a new machine or workspace for every session. Which values a type takes: `manual` `reuse` and `reset` (a `fresh` it had before 11a became `reset`), `coder` `fresh` only (`reuse` and `reset` on `coder` are row 28, `runner-coder.md` §9.1), `kubernetes` `fresh` only. `Runner` defaults it by type: `reuse` on `manual`, `fresh` on `coder` and `kubernetes` (§2.7). |
 | `capabilities` | jsonb, not null, default `{}` | Computed by the adapter from type and config (§4), cached for the UI. |
 | `health` | jsonb, not null, default `{}` | Last health-check facts and timestamp. |
 | `last_seen_at` | datetime, null | Last controller heartbeat (`kubernetes`), last heartbeat of any registered machine (`manual`), or last successful health check (`coder`). |
@@ -683,7 +683,7 @@ constrained in SQL:
 | `integration_id` | Coder `Integration` id | required | `coder` | §2.6 |
 | `max_concurrency` | integer > 0 | required | all | §10 |
 | `max_environments` | integer > 0, or null | null (= `max_concurrency`) | `coder`; always null on `manual` (check constraint); unused on `kubernetes` | §7.3 |
-| `reuse_policy` | `reuse` \| `reset` \| `fresh` | `reuse` on `manual` and `coder`; `fresh` (the only value) on `kubernetes` | all: `manual` takes `reuse` and `reset`, `coder` all three (`reset` in container mode only), `kubernetes` `fresh` | §7.1 |
+| `reuse_policy` | `reuse` \| `reset` \| `fresh` | `reuse` on `manual`; `fresh` (the only value) on `coder` and `kubernetes` | `manual` takes `reuse` and `reset`; `coder` and `kubernetes` take `fresh` only (`reuse` and `reset` on `coder` are row 28, `runner-coder.md` §9.1) | §7.1 |
 
 **`config` keys in v1:**
 
@@ -1010,13 +1010,18 @@ first.
 `runner_environments` row in `requested` (on `coder`, in `provisioning`: `runner-coder.md` §6), with its `key`, `runner_id`, `company_id` and
 bound `project_id`, inside the same locked transaction that counts the pool against
 `max_environments`. **`provision` never creates the row.** It receives the persisted
-environment and creates the provider-side object under it: the Coder workspace named
-after `environment.key`, or the controller's pod. It returns `external_id`, and the
-allocator writes that back to the row and moves it to `provisioning`. Every other adapter
+environment and creates or takes the provider-side object under it. On `kubernetes` that
+is the controller's pod, which it returns as `external_id`; the allocator writes that back
+to the row and moves it to `provisioning`. **On `coder`** the row is inserted already in
+`provisioning`, and `provision` asks the Coder integration for a pool workspace through
+`Coder::Allocator#allocate(holder:, wait: false)`. That workspace is not named after
+`environment.key`, and its name may change between retries, so `external_id` is rewritten
+as it changes (`runner-coder.md` §5.2, D44). Every other adapter
 method also takes an existing row and does not write to `runner_environments`. State
 transitions belong to the allocator and the reconciler. This split is what keeps
-`provision` idempotent on `key` under Temporal retries. A retried `provision` finds the
-workspace named `key` and returns it, and there is never a second row to reconcile.
+`provision` idempotent under Temporal retries: on `kubernetes` a retried `provision` finds
+the pod named `key` and returns it; on `coder` the integration's `held_by(holder)` returns
+the workspace the environment already holds. There is never a second row to reconcile.
 
 **The exception is `manual`: registration owns the row.** There is no provider object to
 create, so the allocator never inserts a `manual` environment. `Runners::Registration`,
@@ -1152,7 +1157,7 @@ The hosted branch is the existing expression, character for character.
 | --- | --- | --- |
 | `pull_image` | Pull the image | A no-op on every type, as on hosted Kubernetes: the host runner pulls the agent image in `container.start`, by the reference it is given, a tag or a digest (`manual`, `coder`), and the kubelet pulls on `kubernetes` |
 | `create_container` | Create the pod | `Runners::Allocator.acquire(session)`: assign an idle environment (§7.3), or, on a `provisionable` type, create a `requested` row (on `coder`, `provisioning`) and call `provision` + `inject_bootstrap` for it. Raises `ContainerRuntime::CapacityError` when at `max_environments` (or, on `manual`, when every registered machine is busy), so the **existing** `capacity_wait` loop in V2 handles it |
-| `start_container` | Service, IngressRoute, wait ready | `prepare`, then wait for check-in with activity heartbeats (immediate on `manual`, whose machine is already checked in). Raises a diagnosed failure on `bootstrap_timeout`. On `manual` and `coder` the host runner then gets `container.start` (§6.8) and the activity waits for the session runner inside the container to report ready. **Decided (§6.9.4):** nothing inside reports ready; `container.start` starts the container and waits for nothing more, as `ContainerRuntime::DockerRuntime#start_container` does |
+| `start_container` | Service, IngressRoute, wait ready | **`kubernetes`:** `prepare`, then wait for check-in with activity heartbeats, and a diagnosed failure on `bootstrap_timeout`. **`manual` and `coder`:** a `status` step only, as `DockerRuntime#start_container` waits for nothing more (§6.9.4). On `coder`, acquisition, provisioning (`prepare`, the wait for check-in under `bootstrap_timeout`) and `container.start` all belong to `create_container` (`runner-coder.md` §5.2 and §10) |
 | `exec` | `before_exec` context assembly + tmux launch via `runtime.exec`/`write_file` | Same strategy code. Each primitive is a runner op |
 | (await `container_finished`) | Unchanged | Unchanged. `finish_session` reaches the platform through the runner's proxy (§6.6) |
 | `cleanup` | Collect logs and outputs, remove the pod | Same collection via `read_file`, then `Runners::Allocator.release(environment, outcome)`, which scrubs, resets or tears down (§7) |
@@ -1947,10 +1952,12 @@ sidecar, never into the agent container.
   `image_override` apply (§2.7); `image_override` is allowed only for images built `FROM`
   our base image. The host-access options do not exist on this type: a pod has no machine
   of the customer's to share.
-- **`manual` and `coder`: a host runner and a session runner.** On `manual` this is
+- **`manual` and `coder`: a host runner and a session runner (superseded).** On `manual` this is
   superseded by decision 1 of task 6b (below): there is no session runner, and the host runner
-  runs the session ops itself through the Docker API. The three bullets that follow are the
-  original design, kept for `coder` and for task #205.
+  runs the session ops itself through the Docker API. **On `coder` it is superseded too**
+  (§6.9.6; `runner-coder.md` §7 and §8): the runner on the workspace is the host runner as a
+  system service, with no session runner in the container. The three bullets that follow are
+  the original design, kept as history and for task #205 only. They do not describe `coder`.
   - The **host runner** (`aixle-runner --mode machine`) is installed by the operator
     (`manual`, §6.3) or by `inject_bootstrap` (`coder`). It holds the environment credential
     and the journal, and polls the environment's ops. It executes `container.start` (which
@@ -4025,7 +4032,7 @@ Alex 2026-11-09): `1.0.0` comes with the extract or the first customer (§14.1).
   answers `302` to the asset. The installer and the runner only ever know this one URL. A
   self-hosted or air-gapped deployment can later serve the bytes from the platform, or
   from a mirror, without changing the runner or the script.
-- **`install.sh` verifies SHA-256** against the digest the platform serves (the
+- **`machine-install.sh` verifies SHA-256** against the digest the platform serves (the
   `X-Aixle-Runner-Sha256` header, and the checksums endpoint for the self-update path).
   Both come from the platform's pins (`runners.release` in `config/settings.yml`), not from
   the asset host, so a tampered asset fails verification. The script keeps a **`verify` hook**, a function called with the
@@ -4103,12 +4110,15 @@ Alex 2026-11-09): `1.0.0` comes with the extract or the first customer (§14.1).
     protocol bump is announced one release ahead because the previous protocol stays
     supported.
 - **Where it lands:**
-  - **Coder:** `inject_bootstrap` pipes `install.sh` over `coder ssh` stdin. The script
-    fetches the binary through the platform's release URL (302 to the GitHub asset),
-    verifies its SHA-256, installs it to `~/.aixle-runner/bin`, and starts it detached in
-    `host` mode. It uses `setsid`, and a systemd user
-    unit where available, so the runner survives the SSH session. On a reused workspace a
-    live runner is detected and not re-installed.
+  - **Coder:** `inject_bootstrap` first checks that the workspace is a virtual machine with
+    root or passwordless sudo and systemd, then pipes `machine-install.sh` (`GET
+    /runner/v1/machine-install.sh`, the same script as `manual`) over `coder ssh` stdin.
+    The script fetches the binary through the platform's release URL (302 to the GitHub
+    asset), verifies its SHA-256, and runs `configure`, `service install` and `service
+    start`, so the runner is a system service that survives the SSH session. There is one
+    install per environment and no second install: `coder` is `fresh` only, so there is no
+    reused workspace (`runner-coder.md` §8.2, §8.3, D6). The old `install.sh`, the detached
+    `host` mode and the user-level systemd unit are not built.
   - **`manual`:** the operator downloads the binary from the platform's release URL,
     verifies the SHA-256 shown next to it, and installs it with `configure` and
     `service install` (§6.3). The binary lives in `/var/lib/aixle-runner/bin`, a directory
