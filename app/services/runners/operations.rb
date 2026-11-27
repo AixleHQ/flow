@@ -60,7 +60,8 @@ module Runners
     # environment op (`env.reset`) included.
     #
     # A session op carries its session in the envelope as `session_id`; an
-    # environment op carries none on the wire (RunnerOperation). The producer
+    # environment op carries none on the wire, and the row keeps its session
+    # all the same (RunnerOperation). The producer
     # is ContainerRuntime::RunnerRuntime.
     #
     # The next sequence is the environment's own counter
@@ -79,7 +80,7 @@ module Runners
         sequence = environment.op_sequence + 1
         environment.update_columns(op_sequence: sequence)
         operation = RunnerOperation.create!(runner_environment: environment,
-                                            terminal_session: (session unless RunnerOperation::ENVIRONMENT_OPS.include?(op)),
+                                            terminal_session: session,
                                             sequence: sequence, op: op, payload: payload,
                                             deadline_at: deadline_at, state: :pending)
         ActiveRecord.after_all_transactions_commit { wake(environment.id, sequence) }

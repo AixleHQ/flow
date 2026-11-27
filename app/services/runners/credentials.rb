@@ -70,14 +70,6 @@ module Runners
                refresh_token: refresh, refresh_token_expires_at: now + REFRESH_TTL)
     end
 
-    # A `gone` or a `failed` machine's credentials stop working. Nothing but a
-    # Revoke and a new Add machine follows a failure, so the machine has nothing
-    # to call the platform for; the runner on the host sees the refusal a revoked
-    # machine gets (`invalid_token`).
-    def out_of_service?(environment)
-      environment.present? && (environment.gone? || environment.failed?)
-    end
-
     # The credential `token` names if it may be used now: not revoked, not
     # expired, not of a `gone` or `failed` environment (§9.2) and, for a single-use
     # registration token, not used.
@@ -85,7 +77,7 @@ module Runners
       credential = RunnerCredential.find_by_token(token, kind: kind)
       return nil if credential.nil? || credential.revoked? || credential.expired?
       return nil if credential.registration? && credential.used?
-      return nil if out_of_service?(credential.runner_environment)
+      return nil if credential.runner_environment&.out_of_service?
 
       credential
     end
@@ -99,7 +91,7 @@ module Runners
       credential = RunnerCredential.find_by_token(token, kind: :refresh)
       return nil if credential.nil? || credential.revoked?
       return nil if credential.expired? && !credential.used?
-      return nil if out_of_service?(credential.runner_environment)
+      return nil if credential.runner_environment&.out_of_service?
 
       credential
     end
@@ -129,7 +121,7 @@ module Runners
         lock_live_runner!(credential.runner_id)
         environment = RunnerEnvironment.lock.find(credential.runner_environment_id)
         credential.lock!
-        if credential.revoked? || out_of_service?(environment)
+        if credential.revoked? || environment.out_of_service?
           nil
         elsif credential.used?
           issued = RunnerCredential.unrevoked.where(rotated_from_id: credential.id).lock.to_a

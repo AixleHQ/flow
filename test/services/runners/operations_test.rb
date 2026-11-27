@@ -86,7 +86,7 @@ class Runners::OperationsTest < ActiveSupport::TestCase
     assert operation.failed?
   end
 
-  test "a session op names its session; an environment op names none, and both need the session that holds the machine" do
+  test "both a session op and an environment op record the session they are for, and both need the session that holds the machine" do
     session = holder
 
     operation = Runners::Operations.enqueue!(@environment, op: "exec", payload: { "cmd" => [ "true" ] },
@@ -95,7 +95,7 @@ class Runners::OperationsTest < ActiveSupport::TestCase
                                                        session: session)
 
     assert_equal session, operation.terminal_session
-    assert_nil reset.terminal_session, "an environment op names no session on the wire"
+    assert_equal session, reset.terminal_session, "the row records it, the wire does not carry it (RunnerGatewayOperationResource)"
     assert_raises(ArgumentError) do
       Runners::Operations.enqueue!(@environment, op: "exec", payload: {}, deadline_at: 1.minute.from_now, session: nil)
     end

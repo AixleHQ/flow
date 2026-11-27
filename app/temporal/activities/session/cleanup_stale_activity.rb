@@ -136,21 +136,14 @@ module Activities
         log(:warn, "Failed to cancel workflow for session #{session.id}: #{e.message}")
       end
 
-      # A stale session on an external runner is not cleaned through its
-      # machine here. Its admission is released only once its machine is free or
-      # `failed`, so it should hold none. One that still does gets the reset a
-      # failed session gets, outside this sweep (Runners::ResetStaleMachineJob):
-      # an `env.reset` under the scanners' cap could fail a healthy machine, and
-      # without the cap one silent machine would hold up the sweep. The machine
-      # is `failed` only if that reset fails; the session's staleness is not
-      # the machine's failure.
+      # A stale session on an external runner is only failed here. Its machine
+      # is not touched: the sweep that finds machines held by a session whose
+      # cleanup will never run resets it, and fails it only if that reset fails
+      # (Runners::Machines.sweep_abandoned!, every minute). The session's
+      # staleness is not the machine's failure, and a reset under the scanners'
+      # cap could fail a healthy machine.
       def cleanup_runner_session(session)
-        machine = Runners::Machines.held_by(session)
         Sessions::Lifecycle.record_failure(session, error_message: "Stale session: workflow ended without cleanup")
-        return unless machine
-
-        Runners::ResetStaleMachineJob.perform_later(session.id)
-        log(:warn, "Machine #{machine.key} of runner #{session.runner_id} was held by stale session #{session.id}; a reset is queued")
       end
     end
   end

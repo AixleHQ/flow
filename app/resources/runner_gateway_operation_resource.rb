@@ -12,7 +12,7 @@ class RunnerGatewayOperationResource
 
   attributes :id, :sequence, :op
 
-  attribute :session_id, if: proc { |operation| operation.terminal_session_id } do |operation|
+  attribute :session_id, if: proc { |operation| operation.session_op? } do |operation|
     operation.terminal_session_id
   end
 

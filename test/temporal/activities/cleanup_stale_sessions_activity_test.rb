@@ -313,29 +313,28 @@ module Activities
 
       # == A session on an external runner ==
 
-      test "a stale runner session that still holds its machine sends the runner nothing in the sweep and queues the machine's reset" do
+      test "a stale runner session that still holds its machine is only failed: the machine stays held and nothing is sent or enqueued" do
         machine, stale = stale_session_holding_a_machine
         @runtime_mock.expects(:resolve_container).never
 
-        result = nil
-        assert_enqueued_with(job: Runners::ResetStaleMachineJob, args: [ stale.id ]) do
-          result = run_activity(CleanupStaleActivity)
-        end
+        result = run_activity(CleanupStaleActivity)
 
         assert_equal 1, result[:cleaned_running]
         machine.reload
         assert_equal [ "registered", stale.id, nil ], [ machine.state, machine.current_session_id, machine.state_reason ],
                      "the machine is not failed for the session's staleness"
         assert_equal 0, RunnerOperation.count, "nothing was sent to the runner by the sweep"
+        assert_empty enqueued_jobs.map { |job| job["job_class"] }.grep(/Runner|Machine|Reset/), "no job is queued for the machine"
         assert_equal "failed", stale.reload.state
       end
 
-      test "the reset of a stale session's machine frees it when it succeeds" do
+      test "the machine a stale session held is then reset by the sweep of abandoned machines, and freed" do
         machine, stale = stale_session_holding_a_machine
         host = ContainerRuntime::FakeHostRunner.new(machine)
 
         run_activity(CleanupStaleActivity)
-        perform_enqueued_jobs(only: Runners::ResetStaleMachineJob)
+        Runners::Machines.sweep_abandoned!
+        Runners::Machines.sweep_abandoned!
 
         assert_equal %w[env.reset], host.ops
         machine.reload
@@ -346,13 +345,14 @@ module Activities
         host&.stop
       end
 
-      test "the reset of a stale session's machine fails the machine when it fails" do
+      test "the machine a stale session held is failed by the sweep of abandoned machines when its reset fails" do
         machine, stale = stale_session_holding_a_machine
         host = ContainerRuntime::FakeHostRunner.new(machine)
         host.answer_with("env.reset", "status" => "error", "error" => { "class" => "reset_failed", "message" => "volume in use" })
 
         run_activity(CleanupStaleActivity)
-        perform_enqueued_jobs(only: Runners::ResetStaleMachineJob)
+        Runners::Machines.sweep_abandoned!
+        Runners::Machines.sweep_abandoned!
 
         machine.reload
         assert_equal [ "failed", nil ], [ machine.state, machine.current_session_id ]
@@ -374,7 +374,7 @@ module Activities
         assert_equal "failed", stale.reload.state
         assert_equal "registered", machine.reload.state
         assert_equal 0, RunnerOperation.count
-        assert_no_enqueued_jobs only: Runners::ResetStaleMachineJob
+        assert_empty enqueued_jobs.map { |job| job["job_class"] }.grep(/Runner|Machine|Reset/)
       end
 
       private

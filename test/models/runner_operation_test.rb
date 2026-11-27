@@ -78,6 +78,26 @@ class RunnerOperationTest < ActiveSupport::TestCase
     assert_match "fk_runner_operations_session_company", error.message
   end
 
+  test "an environment op may record the session it was sent for" do
+    session = create(:runner_session, environment: @environment, runner_environment: nil)
+
+    operation = build_operation(terminal_session: session)
+
+    assert operation.valid?, operation.errors.full_messages.to_sentence
+  end
+
+  test "latest_reset is the newest env.reset sent for that session on that machine" do
+    session = create(:runner_session, environment: @environment, runner_environment: nil)
+    other = create(:runner_session, environment: @environment, runner_environment: nil)
+    build_operation(sequence: 1, op: "env.reset", terminal_session: session).save!
+    build_operation(sequence: 2, op: "env.scrub", terminal_session: session).save!
+    newest = build_operation(sequence: 3, op: "env.reset", terminal_session: session).tap(&:save!)
+    build_operation(sequence: 4, op: "env.reset", terminal_session: other).save!
+
+    assert_equal newest, RunnerOperation.latest_reset(@environment, session)
+    assert_nil RunnerOperation.latest_reset(create(:runner_environment), session)
+  end
+
   test "an environment's ops go with it" do
     build_operation.save!
 

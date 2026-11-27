@@ -41,7 +41,7 @@ module Runners
         # Read fresh: an unregistration that committed since the gateway's
         # check is seen here, and the machine records nothing.
         environment.lock!
-        if environment.gone? || environment.failed?
+        if environment.out_of_service?
           raise Credentials::Refused.new("invalid_token", "The token is unknown, used, revoked or expired.")
         end
 

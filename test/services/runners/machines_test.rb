@@ -116,30 +116,54 @@ class Runners::MachinesTest < ActiveSupport::TestCase
     assert_equal @machine, Runners::Machines.acquire!(runner_session)
   end
 
-  test "reset_held! resets a stale session's machine as that session, and an op that succeeds frees it" do
-    session = runner_session
-    Runners::Machines.acquire!(session)
+  # == The sweep of the machines a stale session holds ==
+
+  test "the sweep sends a stale session's machine the reset as that session, and frees it once the op completed" do
+    session = abandoned_session
     host = ContainerRuntime::FakeHostRunner.new(@machine)
 
-    assert_equal :released, Runners::Machines.reset_held!(session)
+    assert_equal({ checked: 1, reset_sent: 1, released: 0, failed: 0, errors: 0 }, Runners::Machines.sweep_abandoned!)
 
-    @machine.reload
+    reset = RunnerOperation.latest_reset(@machine, session)
+    assert_equal [ "env.reset", session.id ], [ reset.op, reset.terminal_session_id ]
     assert_equal %w[env.reset], host.ops
-    assert_equal [ "registered", nil, nil ], [ @machine.state, @machine.current_session_id, @machine.state_reason ]
+    assert_equal session.id, @machine.reload.current_session_id, "the machine is freed on the next run, which reads the outcome"
+
+    assert_equal({ checked: 1, reset_sent: 0, released: 1, failed: 0, errors: 0 }, Runners::Machines.sweep_abandoned!)
+
+    assert_equal [ "registered", nil, nil ], [ @machine.reload.state, @machine.current_session_id, @machine.state_reason ]
+    assert_equal({ checked: 0, reset_sent: 0, released: 0, failed: 0, errors: 0 }, Runners::Machines.sweep_abandoned!)
     assert_equal @machine, Runners::Machines.acquire!(runner_session)
   ensure
     host&.stop
   end
 
-  test "reset_held! fails the machine when its reset fails, with the reason" do
+  test "the sweep creates no second op while the first is open, and never waits for it" do
+    session = abandoned_session
+    host = ContainerRuntime::FakeHostRunner.new(@machine)
+    host.answer_with("env.reset", :none)
+
+    Runners::Machines.sweep_abandoned!
+    counts = Runners::Machines.sweep_abandoned!
+
+    assert_equal({ checked: 1, reset_sent: 0, released: 0, failed: 0, errors: 0 }, counts)
+    assert_equal 1, RunnerOperation.where(op: "env.reset").count
+    assert RunnerOperation.latest_reset(@machine, session).deliverable?
+    assert_equal session.id, @machine.reload.current_session_id
+  ensure
+    host&.stop
+  end
+
+  test "the sweep fails the machine with the error the runner answered" do
     @machine.update!(display_name: "build-01")
-    session = runner_session
-    Runners::Machines.acquire!(session)
+    session = abandoned_session
     host = ContainerRuntime::FakeHostRunner.new(@machine)
     host.answer_with("env.reset", "status" => "error", "error" => { "class" => "reset_failed", "message" => "volume in use" })
 
-    assert_equal :failed, Runners::Machines.reset_held!(session)
+    Runners::Machines.sweep_abandoned!
+    counts = Runners::Machines.sweep_abandoned!
 
+    assert_equal 1, counts[:failed]
     @machine.reload
     assert_equal [ "failed", nil ], [ @machine.state, @machine.current_session_id ]
     assert_equal "build-01 failed to reset after stale session #{session.id}: reset_failed: volume in use", @machine.state_reason
@@ -147,34 +171,59 @@ class Runners::MachinesTest < ActiveSupport::TestCase
     host&.stop
   end
 
-  test "reset_held! fails a machine that was heard and left the reset unanswered" do
-    session = runner_session
-    Runners::Machines.acquire!(session)
-    host = ContainerRuntime::FakeHostRunner.new(@machine)
-    host.answer_with("env.reset", "status" => "expired")
-
-    assert_equal :failed, Runners::Machines.reset_held!(session)
-
-    assert_equal "failed", @machine.reload.state
-    assert_match(/failed to reset after stale session #{session.id}: the runner did not answer/, @machine.state_reason)
-  ensure
-    host&.stop
+  test "the sweep fails a machine whose reset expired after it was delivered" do
+    assert_expired_reset_fails_machine(delivered: true)
   end
 
-  test "reset_held! leaves the hold when the machine was not heard, and does nothing for a session that holds none" do
-    session = runner_session
-    Runners::Machines.acquire!(session)
-    @machine.update_columns(last_heartbeat_at: 5.minutes.ago)
-    host = ContainerRuntime::FakeHostRunner.new(@machine)
-    host.answer_with("env.reset", "status" => "expired")
+  test "the sweep fails a machine whose reset expired undelivered while the machine was heard" do
+    assert_expired_reset_fails_machine(delivered: false)
+  end
 
-    assert_equal :unheard, Runners::Machines.reset_held!(session)
-    @machine.reload
-    assert_equal [ "registered", session.id ], [ @machine.state, @machine.current_session_id ]
+  test "the sweep leaves alone a machine whose session's admission is not released, and a free machine" do
+    contact_lost = abandoned_session
+    pool = SessionAdmissionPool.create!(key: "project:#{contact_lost.project_id}", limit: 4, policy_revision: 1)
+    SessionAdmission.create!(terminal_session: contact_lost, session_admission_pool: pool, admitted_at: Time.current)
+    free = create(:runner_environment, runner: @runner)
 
-    assert_equal :not_held, Runners::Machines.reset_held!(runner_session)
-  ensure
-    host&.stop
+    counts = Runners::Machines.sweep_abandoned!
+
+    assert_equal({ checked: 0, reset_sent: 0, released: 0, failed: 0, errors: 0 }, counts)
+    assert_equal 0, RunnerOperation.count
+    assert_equal contact_lost.id, @machine.reload.current_session_id
+    assert_nil free.reload.current_session_id
+  end
+
+  test "a machine revoked between the query and the settling is untouched" do
+    session = abandoned_session
+    id = RunnerEnvironment.held_by_abandoned_session.pick(:id)
+    Runners::Machines.let_go!(session)
+
+    assert_equal :untouched, Runners::Machines.settle_abandoned!(id)
+    assert_equal 0, RunnerOperation.count
+  end
+
+  test "a machine whose session's admission is released, as well as one with none, is found" do
+    session = abandoned_session
+    pool = SessionAdmissionPool.create!(key: "project:#{session.project_id}", limit: 4, policy_revision: 1)
+    admission = SessionAdmission.create!(terminal_session: session, session_admission_pool: pool, admitted_at: Time.current)
+    assert_empty RunnerEnvironment.held_by_abandoned_session
+
+    admission.update!(released_at: Time.current)
+
+    assert_equal [ @machine ], RunnerEnvironment.held_by_abandoned_session.to_a
+  end
+
+  test "an error on one machine is logged and does not stop the others" do
+    second = create(:runner_environment, runner: @runner)
+    abandoned_session
+    other = create(:runner_session, environment: second, runner_environment: nil, state: "failed")
+    Runners::Machines.acquire!(other)
+    Runners::Machines.stubs(:settle_abandoned!).with(@machine.id).raises(RuntimeError, "boom")
+    Runners::Machines.stubs(:settle_abandoned!).with(second.id).returns(:released)
+
+    counts = Runners::Machines.sweep_abandoned!
+
+    assert_equal({ checked: 2, reset_sent: 0, released: 1, failed: 0, errors: 1 }, counts)
   end
 
   test "a capacity wait counts only the machines that can come back" do
@@ -346,5 +395,38 @@ class Runners::MachinesTest < ActiveSupport::TestCase
 
   def runner_session
     create(:runner_session, environment: @machine, runner_environment: nil)
+  end
+
+  # A session that has ended and holds the machine, with no admission: its
+  # cleanup will never run.
+  def abandoned_session
+    session = create(:runner_session, environment: @machine, runner_environment: nil, state: "failed")
+    Runners::Machines.acquire!(session)
+    session
+  end
+
+  def assert_expired_reset_fails_machine(delivered:)
+    session = abandoned_session
+    host = ContainerRuntime::FakeHostRunner.new(@machine)
+    host.answer_with("env.reset", :none)
+    Runners::Machines.sweep_abandoned!
+    expire_reset(session, delivered: delivered)
+
+    counts = Runners::Machines.sweep_abandoned!
+
+    assert_equal 1, counts[:failed]
+    assert_equal "failed", @machine.reload.state
+    assert_match(/failed to reset after stale session #{session.id}: the runner did not answer/, @machine.state_reason)
+    assert_equal 1, RunnerOperation.where(op: "env.reset").count, "no new reset is sent"
+  ensure
+    host&.stop
+  end
+
+  # The session's reset op past its deadline and expired, as the ops sweep leaves it.
+  def expire_reset(session, delivered:)
+    reset = RunnerOperation.latest_reset(@machine, session)
+    reset.update_columns(deadline_at: 1.minute.ago, delivered_at: (2.minutes.ago if delivered))
+    Runners::Operations.record_result!(reset, status: "expired")
+    @machine.update_columns(last_heartbeat_at: Time.current)
   end
 end
