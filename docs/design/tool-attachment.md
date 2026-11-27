@@ -1,11 +1,11 @@
 # Tool Attachment: a session gets only the tools attached to it
 
-**Status:** Design (task #290), round 4, with the decisions of 2026-11-26 (no feature flag, one migration, no templates change, no migration tests, AI Builder text)
+**Status:** Design (task #290), round 5, with the review decisions (no feature flag, one migration, no templates change, no migration tests, AI Builder text, tracker and repository reachability)
 **Scope:** Which tools a session is served, and how the platform stops granting tools that nobody attached.
 
 ## 1. Overview
 
-**The rule (Alex, 2026-11-25).** Access to tools is strictly regulated. A session gets a tool only when its workflow, its step or the session itself attached it. A connected integration, an attached repository or a tracker trigger does not grant tools.
+**The rule (Alex).** Access to tools is strictly regulated. A session gets a tool only when its workflow, its step or the session itself attached it. A connected integration, an attached repository or a tracker trigger does not grant tools.
 
 Today `TerminalSession#available_tools` serves attached tools **plus** everything the code-only `inject_when` rules (`Tools::InjectionRules`) match, **plus** a fallback that hands a session with no custom tool every enabled custom tool of the project. A QA workflow with no Coder tools attached ran `coder_ssh_exec` on a Coder workspace because a Coder integration existed.
 
@@ -34,7 +34,7 @@ This design:
 
 ### 2.1 Plumbing list
 
-Plumbing is a tool a session needs to work at all, or one that follows an attachment and grants no capability the attachment did not already grant. Alex settled it (task comments 115113 and 115133).
+Plumbing is a tool a session needs to work at all, or one that follows an attachment and grants no capability the attachment did not already grant. Alex settled it.
 
 | Tool | Served when | Why it is plumbing |
 |---|---|---|
@@ -83,11 +83,11 @@ Alternatives considered:
 
 A workflow with `inherit_all_project_resources` already gets every `Tool.visible_for_project` tool (`SessionConfigResolver#project_tool_ids`). This is a workflow-level opt-in shown in the builder, so it counts as an attachment by the workflow, and this design leaves it unchanged (D5, accepted). The migration skips those workflows' platform links: they already reach every attachable tool (§5.2).
 
-`refresh_github_token` becomes attachable, so it joins that set.
+`refresh_github_token` and the 17 Azure DevOps tools become attachable, so they join that set. This adds no capability: the Azure DevOps tools are hidden without an Azure DevOps connection (`requires_integration`), the pull request tools refuse a repository that is not attached to the session, `refresh_github_token` acts only on attached GitHub repositories, and the two build tools were already served wherever the connection exists. Narrowing `inherit_all_project_resources` itself stays in §11.
 
 ### 2.5 No feature flag
 
-Alex decided (comment 115244) that the new behavior is unconditional. The earlier draft's `attached_tools_only` flag, `InjectionRules::LEGACY`, the two flag read points and the per-company backfill are not part of this design. The legacy rules, their `inject_when` lines and the fallback are deleted in this change, not in a follow-up. The safety for existing workflows comes from the migration (§5), which must run before the new code serves. Catalog templates already list their tools (§5.2).
+Alex decided that the new behavior is unconditional. The earlier draft's `attached_tools_only` flag, `InjectionRules::LEGACY`, the two flag read points and the per-company backfill are not part of this design. The legacy rules, their `inject_when` lines and the fallback are deleted in this change, not in a follow-up. The safety for existing workflows comes from the migration (§5), which must run before the new code serves. Catalog templates already list their tools (§5.2).
 
 ## 3. Data Model Changes
 
@@ -102,7 +102,7 @@ No schema change. One data migration (§5). Tool rows already exist for every co
 
 ## 5. Migration of existing data
 
-Existing workflows must keep working after the release (hard requirement, Alex 2026-11-26). Everything an old rule served to a step becomes an explicit attachment on that step, visible in the builder and removable there (D4).
+Existing workflows must keep working after the release (hard requirement, Alex). Everything an old rule served to a step becomes an explicit attachment on that step, visible in the builder and removable there (D4).
 
 **One migration**, `db/migrate/<ts>_attach_formerly_injected_tools.rb`, for all companies. It follows `20261124112933_attach_pull_request_tools_to_workflows.rb`: self-contained inline models (`workflows`, `steps`, `workflow_resource_links`, `step_resource_links`, plus read-only models for the integration, repository and trigger-binding tables it reads), no app classes, a documented no-op `down`. It runs in the deploy's migrate phase, before the new code serves: an extra link is harmless to the old code, so the old pods keep working while it runs. There is no service object and no rake task (D10 of the previous draft is dropped). The migration is idempotent.
 
@@ -116,15 +116,17 @@ For each non-deleted, non-System workflow and each of its non-deleted steps, a t
 | 4 `chat_*` | an active Slack or Teams integration exists for the workflow's company, company-wide or for its project (same predicate as `Tools::Context#connected_providers`; the tools are hidden otherwise through `requires_integration`) |
 | 5 `coder_*` | an active Coder integration, same predicate |
 | `azure_devops_list_builds`, `azure_devops_list_connections` | an active Azure DevOps integration, same predicate |
-| 15 `azure_devops_*` pull request tools | the step's resolved repositories (workflow base plus step, or every project repository under `inherit_all_project_resources`) include one whose integration provider is `azure_devops` |
-| 15 `tracker_*` | the workflow has a `trigger_bindings` row with a `project_tracker_id` (the only way a tracker event starts a run) |
-| `refresh_github_token` | the step's resolved repositories include a GitHub one |
+| 15 `azure_devops_*` pull request tools | the workflow's project sees an Azure DevOps repository (`Repository.visible_for_project`), for every step |
+| 15 `tracker_*` | the workflow has a `trigger_bindings` row whose `event_type` starts with `TriggerBinding::TRACKER_EVENT_PREFIX`, with or without `project_tracker_id` (an unscoped binding matches any tracker of the project), enabled or not, for every step |
+| `refresh_github_token` | the workflow's project sees a GitHub repository (`Repository.visible_for_project`), for every step |
 
 Not migrated, because still plumbing: `finish_session`, `fail_session`, `list_sub_steps`, `mark_sub_step`, `read_tool_result`, `get_config_item`.
 
+**Repositories chosen at run start.** The Run form can give a run repositories that the workflow does not list (`workflow_run.repository_ids`), and the migration cannot see them. The two repository rows therefore use project visibility, not the step's repository list. This over-grants a step in a project that has such a repository and adds no capability, because these tools act only on repositories attached to the session (Alex's review decision).
+
 **Custom-tool fallback.** A step whose resolved tool set holds no custom (`db`) tool, and whose workflow is not under `inherit_all_project_resources`, gets every enabled custom tool of its project.
 
-**`inherit_all_project_resources` workflows** already reach every attachable tool, so the migration adds no platform links to them (they also get the newly attachable Azure and `refresh_github_token` tools by that path, as for any attachable tool).
+**`inherit_all_project_resources` workflows** already reach every attachable tool, so the migration adds no platform links to them (§2.4).
 
 **Idempotent.** A link that exists is not added again. Tools with no `tools` row (`source = 'code'`) are skipped, as in the precedent.
 
@@ -132,9 +134,9 @@ Not migrated, because still plumbing: `finish_session`, `fail_session`, `list_su
 
 ### 5.2 Templates and workflows created through API / MCP
 
-- **Installed templates and workflows made through the API, builder or MCP tools** are rows in `workflows`/`steps` by the time the migration runs, so §5.1 covers them. This includes workflows installed from a template before the release: they get every formerly injected tool on every step from the migration. A new install gets only the template's list. Accepted (Alex, comment 115386).
-- **Catalog templates need no change and there is no templates pull request** (Alex, comment 115386). A template already says which tools each step gets: a workflow's `base.tools` apply to every step and a step's `tools:` apply to that step. `Templates::Installer` turns them into `base_tool_ids` and `tool_ids`, the same attachments the builder sets. After this change a template's step gets exactly what is listed.
-- **Checked against `flow-templates` `main` on 2026-11-26:** all six packages, 58 steps. Every board, chat, asset, Coder, tracker or Azure tool named in a step's text, sub-steps, agent or skills is listed on the step or its workflow. The only unlisted names appear in prohibitions ("Do not call `promote_asset`", "You do not have `board_move_task`"). Steps that list no board tools say "never call board tools". No package has a tracker trigger or uses Coder or Azure, so no template relied on those rules.
+- **Installed templates and workflows made through the API, builder or MCP tools** are rows in `workflows`/`steps` by the time the migration runs, so §5.1 covers them. This includes workflows installed from a template before the release: they get every formerly injected tool on every step from the migration. A new install gets only the template's list. Accepted (Alex).
+- **Catalog templates need no change and there is no templates pull request** (Alex). A template already says which tools each step gets: a workflow's `base.tools` apply to every step and a step's `tools:` apply to that step. `Templates::Installer` turns them into `base_tool_ids` and `tool_ids`, the same attachments the builder sets. After this change a template's step gets exactly what is listed.
+- **Checked against `flow-templates` `main`:** all six packages, 58 steps. Every board, chat, asset, Coder, tracker or Azure tool named in a step's text, sub-steps, agent or skills is listed on the step or its workflow. The only unlisted names appear in prohibitions ("Do not call `promote_asset`", "You do not have `board_move_task`"). Steps that list no board tools say "never call board tools". No package has a tracker trigger or uses Coder or Azure, so no template relied on those rules.
 - Add to `Templates::RepositoryValidator` (flow) a **warning** (not an error) when a step's text names a platform tool the step does not list. The check is a case-insensitive match of tool names and `{{tool:<id>}}` references in step, sub-step and agent instructions. It may also warn on a prohibition that names a tool; that is acceptable for a warning. This is in the flow pull request.
 - `flow-templates` is detached from the Tech Design, Implementation, Fix Tests, Fix Review, Code Review and Release workflows. The task has one pull request, and the release order has no templates step.
 
@@ -152,10 +154,10 @@ Automated tests cover the new behavior only: items 1 to 6 and 8 to 9. There is n
 4. **Rewrite** `Tools::RegistryTest` (`injectable covers…`; `grouping axes` counts; "Azure tools must not be offered in the picker" becomes the opposite, 17 attachable tools) and `TagCatalogTest`/`PickerGroupsTest` (Azure DevOps group visible). Add `user_attachable` for `refresh_github_token`.
 5. **Handlers:** `finish_session`/`fail_session` tests drop the "only non-interactive" refusal case and cover an interactive session.
 6. **MCP:** `McpControllerTest` / `Tools::MCPRequestHandler`: `tools/list` of a Coder-connected project's session without attached Coder tools lists no `coder_*`; `tools/call coder_ssh_exec` is refused as not entitled.
-7. **Migration: no automated test** (Alex, comments 115333 and 115386). This includes the small cases (running twice, a System workflow, an unreachable step). It is checked by hand, in two places: on staging after Staging Deployment, and on a stack brought up on a Coder workspace.
-   - **Before the migration runs**, set up one workflow per kind of step in §5.1, with the integration or repository that kind needs: a plain step (board and asset tools), a chat-triggered one (Slack or Teams connected), one in a Coder-connected project, one with an Azure DevOps repository, one with a tracker trigger binding, one with a GitHub repository, one in a project with enabled custom tools and none attached, one with a custom tool attached, and one under `inherit_all_project_resources`. Write down each step's served tool names with the old code (the session's tool list in the builder or `tools/list`).
+7. **Migration: no automated test** (Alex). This includes the small cases (running twice, a System workflow, an unreachable step). It is checked by hand, in two places: on staging after Staging Deployment, and on a stack brought up on a Coder workspace.
+   - **Before the migration runs**, set up one workflow per kind of step in §5.1, with the integration or repository that kind needs: a plain step (board and asset tools), a chat-triggered one (Slack or Teams connected), one in a Coder-connected project, one with an Azure DevOps repository, one with a tracker trigger binding for a specific tracker, one with a tracker trigger binding for any tracker of the project, one with no repositories that is run with an Azure DevOps repository picked in the Run form, one with a GitHub repository, one in a project with enabled custom tools and none attached, one with a custom tool attached, and one under `inherit_all_project_resources`. Write down each step's served tool names with the old code (the session's tool list in the builder or `tools/list`).
    - **After the migration**, check for each step that the formerly injected tools are attachments visible in the builder, that a step with a custom tool attached got no extra custom tools, that a System workflow has no new links, and that a run of each workflow still does its work (comments, moves the card, calls Coder or Azure, answers in chat).
-   - **AI Builder case (staging).** Build a small workflow through the AI Builder whose step comments on its board task and moves it. Check that the builder attached the board tools the step needs, and that a run comments and moves the card (Alex, comment 115404).
+   - **AI Builder case (staging).** Build a small workflow through the AI Builder whose step comments on its board task and moves it. Check that the builder attached the board tools the step needs, and that a run comments and moves the card (Alex).
 8. **Existing tests that rely on injection** (`get_config_item_test`, `pull_request_tools_test`, `internal_tools/*_test`, `personal_mcp_test`, `integration/mcp_controller_test`): update them to attach the tool in setup. Find them with `rg "session_type: \"workflow_step\"|available_tools"` under `test/`.
 9. **Frontend:** `ToolPicker.test.tsx`: the Azure DevOps section renders when the project has the connection.
 10. **Validator:** a `Templates::RepositoryValidator` test for the new warning (a step names an unlisted tool; a listed one gives none).
@@ -193,7 +195,7 @@ Flow pull request:
 
 - **Sessions in flight at deploy.** Running sessions lose the injected tools once the new code serves them (the implementation checks whether a session's tool list is fixed at creation or resolved per call, and states the result in the pull request). Accepted (Alex, D8), with no compatibility layer.
 - **Window between the migration and the new code.** A workflow created by an old pod in that window relies on injection and gets no links. The window is the length of a rolling deploy. Accepted, no mitigation; the builder shows the missing tools and they can be attached.
-- **AI Builder session.** It is an interactive agent session flagged `metadata.aixle_builder`, not a run of the System workflow, so the migration skips it. It stops getting `coder_*`, the two Azure tools and every custom tool of the project without an attachment, and gets the plumbing tools. Accepted (Alex, comment 115404).
+- **AI Builder session.** It is an interactive agent session flagged `metadata.aixle_builder`, not a run of the System workflow, so the migration skips it. It stops getting `coder_*`, the two Azure tools and every custom tool of the project without an attachment, and gets the plumbing tools. Accepted (Alex).
 - **Over-grant by migration.** Attaching everything the old rules served gives each step more tools than it may use. That is today's access, now explicit, visible and removable in the builder (D4). It is not a regression.
 - **Standalone sessions** (personal, API) carry their tool list in the creation request and persist no template, so nothing is migrated for them. People who relied on injection attach tools in the session form.
 - **Tool without a shadow row.** The migration skips tools with no `tools` row; the reconciler creates rows at boot and on first use, so a fresh install has nothing to migrate.
@@ -207,18 +209,18 @@ Flow pull request:
 
 | ID | Decision | Source |
 |---|---|---|
-| D1 | Plumbing is six tools: `finish_session`, `fail_session`, `list_sub_steps`, `mark_sub_step` for every session, `read_tool_result` and `get_config_item` only with an attachment. `refresh_github_token` is attachable and not plumbing. | Alex, comments 115113 and 115133 |
-| D2 | The `inject_when` mechanism stays and is the only plumbing list; no `Plumbing::NAMES`. A static test compares the names to the six. | Alex, comment 115079 |
+| D1 | Plumbing is six tools: `finish_session`, `fail_session`, `list_sub_steps`, `mark_sub_step` for every session, `read_tool_result` and `get_config_item` only with an attachment. `refresh_github_token` is attachable and not plumbing. | Alex's review decision |
+| D2 | The `inject_when` mechanism stays and is the only plumbing list; no `Plumbing::NAMES`. A static test compares the names to the six. | Alex's review decision |
 | D3 | Azure tools become attachable and visible; picker section gated by `requires_integration`. | Task: "The Azure tools are hidden from the picker today" |
-| D4 | Migration attaches every tool the old rules would have served to the step (reachability only), including the custom-tool fallback. Granularity is the step. | Alex, comment 115079 |
-| D5 | `inherit_all_project_resources` is an explicit workflow-level attachment and is unchanged. | Alex, comment 115079 |
-| D6 | No templates pull request: the six packages already list the tools their steps use (checked 2026-11-26). The validator warning stays. | Alex, comment 115386 |
-| D7 | No production identifiers appear in this document, the migration output or the PR. | Alex, comment of 2026-11-25 |
-| D8 | Sessions running at deploy lose injected tools; no compatibility layer. | Alex, comment 115079 |
-| D9 | No feature flag: the new behavior is unconditional, and the legacy rules and fallback are deleted in this change. | Alex, comment 115244 (replaces 115133) |
-| D11 | No automated migration test and no oracle; the migration is checked by hand on staging and on a Coder stack (§6.7). | Alex, comments 115333 and 115386 |
-| D12 | The AI Builder session loses its un-attached tools and gets plumbing only; builder and guide text changes as in §7 item 8. A QA case covers it. | Alex, comment 115404 |
-| D10 | One migration at deploy attaches the formerly injected tools; no rake task and no backfill service. | Alex, comment 115244 |
+| D4 | Migration attaches every tool the old rules would have served to the step (reachability only), including the custom-tool fallback. Granularity is the step. | Alex's review decision |
+| D5 | `inherit_all_project_resources` is an explicit workflow-level attachment and is unchanged. | Alex's review decision |
+| D6 | No templates pull request: the six packages already list the tools their steps use (checked against `flow-templates` `main`). The validator warning stays. | Alex's review decision |
+| D7 | No production identifiers appear in this document, the migration output or the PR. | Alex's task decision |
+| D8 | Sessions running at deploy lose injected tools; no compatibility layer. | Alex's review decision |
+| D9 | No feature flag: the new behavior is unconditional, and the legacy rules and fallback are deleted in this change. | Alex's review decision |
+| D11 | No automated migration test and no oracle; the migration is checked by hand on staging and on a Coder stack (§6.7). | Alex's review decision |
+| D12 | The AI Builder session loses its un-attached tools and gets plumbing only; builder and guide text changes as in §7 item 8. A QA case covers it. | Alex's review decision |
+| D10 | One migration at deploy attaches the formerly injected tools; no rake task and no backfill service. | Alex's review decision |
 
 ## 11. Deferred Questions
 
