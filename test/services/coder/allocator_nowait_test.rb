@@ -71,10 +71,6 @@ module Coder
       @integration.integration_data.find_by(key: "coder:workspace_lock:#{name}")
     end
 
-    def assert_no_build_waited
-      assert_not_requested :get, %r{/api/v2/workspacebuilds/}
-    end
-
     # ---------- a new workspace ----------
 
     test "a new workspace is created and returned pending without waiting for its build" do
@@ -89,7 +85,7 @@ module Coder
       assert_equal "Building workspace aixle-prod-new", result.message
       assert_equal "n1", result.workspace[:workspace_id]
       assert_requested create, times: 1
-      assert_no_build_waited
+      assert_not_requested :get, %r{/api/v2/workspacebuilds/}
       assert_equal "7", @integration.integration_data.find_by("value ->> 'workspace_id' = 'n1'").value["runner_environment_id"]
     end
 
@@ -106,7 +102,7 @@ module Coder
       assert_equal "Starting workspace aixle-prod-1", result.message
       assert_equal "aixle-prod-1", result.workspace[:workspace_name]
       assert_requested start, times: 1
-      assert_no_build_waited
+      assert_not_requested :get, %r{/api/v2/workspacebuilds/}
       assert_nil hold_row.expires_at, "the hold is explicit"
     end
 
