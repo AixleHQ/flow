@@ -58,7 +58,30 @@ module Tools
       end
     end
 
+    # What to tell a session caller whose tool was refused for `provider`: set only when the
+    # provider's integration is connected to the project but not in the session's set, where
+    # "connect it in Project Settings" would not fix the call. Nil otherwise (no session, or
+    # nothing connected), so the caller keeps the connection guidance.
+    def attach_message(provider)
+      return nil if session.nil? || company.nil? || provider.blank?
+      return nil if connected?(provider) || !project_connected?(provider)
+
+      "The #{provider} integration is not attached to this session. " \
+        "Attach it to the workflow, the step or the session."
+    end
+
     private
+
+    # The project-wide counterpart of `connected?`, with the same capability expansion.
+    def project_connected?(provider)
+      @project_connected ||= begin
+        providers = Set.new(project_providers)
+        providers << Chat::CAPABILITY if providers.intersect?(Chat::PROVIDERS.keys.to_set)
+        providers << PullRequests::CAPABILITY if providers.intersect?(PullRequests::PROVIDERS.keys.to_set)
+        providers
+      end
+      @project_connected.include?(provider.to_s)
+    end
 
     def project_providers
       scope = Integration.active.where(company_id: company.id)

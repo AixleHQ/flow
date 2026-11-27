@@ -223,6 +223,20 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     assert_match(/Project Settings/, text)
   end
 
+  test "tools/call on a tool whose integration is connected to the project but not attached to the session says to attach it" do
+    create(:integration, company: @company, project: @project, provider: :slack,
+                         status: :active, connected_by: @user)
+    attach_platform_tool("chat_post_message")
+
+    body = rpc("tools/call", { name: "chat_post_message", arguments: { text: "hi" } })
+
+    assert body.dig("result", "isError")
+    text = body.dig("result", "content").map { |c| c["text"] }.join("\n")
+    assert_match(/chat integration is not attached to this session/i, text)
+    assert_match(/Attach it to the workflow, the step or the session/, text)
+    assert_no_match(/Project Settings/, text)
+  end
+
   test "the in-band error for a disconnected tool is stamped on the modern wire" do
     # The disconnected tool is hidden from the server that serves tools/list,
     # so its call is served by one that registers it with the remedy as its

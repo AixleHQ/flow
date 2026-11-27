@@ -113,6 +113,27 @@ class Tools::ContextTest < ActiveSupport::TestCase
     assert_not Tools::Context.for_session(session.reload).connected?(:coder)
   end
 
+  test "attach_message names the attach remedy for a session whose project has the provider connected" do
+    create(:integration, :coder, :active, company: @company, project: @project, connected_by: @user)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+
+    message = Tools::Context.for_session(session).attach_message(:coder)
+
+    assert_equal "The coder integration is not attached to this session. " \
+                 "Attach it to the workflow, the step or the session.", message
+  end
+
+  test "attach_message is nil without a session, when attached, or when the project has nothing connected" do
+    coder = create(:integration, :coder, :active, company: @company, project: @project, connected_by: @user)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+
+    assert_nil Tools::Context.for_project(@project).attach_message(:coder)
+    assert_nil Tools::Context.for_session(session).attach_message(:slack)
+
+    session.integrations << coder
+    assert_nil Tools::Context.for_session(session.reload).attach_message(:coder)
+  end
+
   test "no company yields an empty provider set without querying" do
     ctx = Tools::Context.new(project: nil, company: nil)
 
