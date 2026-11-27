@@ -176,14 +176,17 @@ module Runners
     # takes too, so two runs never send two resets. The latest `env.reset` sent
     # for that session says what is next:
     #
-    # - none, or one that expired while the machine was not heard: a reset is
-    #   sent as the session if the machine is heard now (`:reset_sent`), else
-    #   nothing, and the next run looks again;
+    # - none: a reset is sent as the session if the machine is heard now
+    #   (`:reset_sent`), else nothing, and the next run looks again;
     # - still open: nothing;
     # - completed: the machine is free (`:released`);
     # - answered with an error: the machine is `failed`, with that error;
-    # - expired although the machine was heard (RunnerOperation#left_unanswered_by_heard_machine?):
-    #   `failed`, "the runner did not answer", as in RunnerRuntime#cleanup_session.
+    # - expired: `failed`, "the runner did not answer", whether or not the
+    #   runner took the reset and whether or not the machine was heard at the
+    #   deadline. The sweep sends a reset only to a machine it hears, so carrying
+    #   it out is the machine's own job; a runner stuck in an earlier op
+    #   heartbeats but never polls ops, and would otherwise be sent a new reset
+    #   every `lifecycle_op_timeout` for ever.
     #
     # Answers `:reset_sent`, `:released`, `:failed`, or `:untouched`: the machine
     # no longer qualifies (a Revoke let it go, or its session's cleanup is alive
@@ -209,7 +212,7 @@ module Runners
         fail!(environment, "#{label(environment)} failed to reset after stale session #{session.id}: #{failure_text(operation.result)}",
               holder: session)
         :failed
-      elsif operation&.left_unanswered_by_heard_machine?(environment)
+      elsif operation&.expired?
         fail!(environment, "#{label(environment)} failed to reset after stale session #{session.id}: the runner did not answer",
               holder: session)
         :failed

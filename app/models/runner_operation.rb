@@ -70,15 +70,6 @@ class RunnerOperation < ApplicationRecord
     SESSION_OPS.include?(op)
   end
 
-  # Expired although the runner was sent it in time by a machine that was heard
-  # up to the deadline: the runner is there and does not run ops. An op nobody
-  # sent to the machine, or one whose machine had gone quiet before the deadline,
-  # says nothing of the machine (the rule of RunnerRuntime#cleanup_session,
-  # read from the op, since the sweep looks some time after the deadline).
-  def left_unanswered_by_heard_machine?(environment)
-    expired? && delivered_at.present? && delivered_at <= deadline_at && environment.heard?(deadline_at)
-  end
-
   # The decrypted payload, a Hash, or nil once the op is over.
   def payload
     plaintext = decrypt_secret(encrypted_payload, column: "encrypted_payload")

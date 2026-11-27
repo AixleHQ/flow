@@ -98,25 +98,6 @@ class RunnerOperationTest < ActiveSupport::TestCase
     assert_nil RunnerOperation.latest_reset(create(:runner_environment), session)
   end
 
-  test "an expired op was left unanswered by a heard machine only when it was sent in time to a machine heard up to the deadline" do
-    deadline = 10.minutes.ago
-    @environment.update!(last_heartbeat_at: deadline + 30.seconds)
-    operation = build_operation(state: :expired, deadline_at: deadline, delivered_at: deadline - 1.minute)
-
-    assert operation.left_unanswered_by_heard_machine?(@environment)
-
-    operation.delivered_at = nil
-    assert_not operation.left_unanswered_by_heard_machine?(@environment), "never sent to the machine"
-    operation.delivered_at = deadline + 1.second
-    assert_not operation.left_unanswered_by_heard_machine?(@environment), "sent late"
-    operation.delivered_at = deadline - 1.minute
-    @environment.last_heartbeat_at = deadline - 5.minutes
-    assert_not operation.left_unanswered_by_heard_machine?(@environment), "the machine went quiet before the deadline"
-    @environment.last_heartbeat_at = deadline
-    operation.state = :completed
-    assert_not operation.left_unanswered_by_heard_machine?(@environment), "it was answered"
-  end
-
   test "an environment's ops go with it" do
     build_operation.save!
 

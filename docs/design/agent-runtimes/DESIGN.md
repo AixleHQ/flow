@@ -1218,16 +1218,19 @@ op names no session on the wire, but the row records the one it was sent for) an
 
 | Latest `env.reset` op | What the sweep does |
 |---|---|
-| None, or expired while the machine was not heard | If the machine is heard now, enqueues `env.reset` as that session with the lifecycle deadline. If not, nothing; the next run looks again |
+| None | If the machine is heard now, enqueues `env.reset` as that session with the lifecycle deadline. If not, nothing; the next run looks again |
 | Open | Nothing |
 | Completed | `release!`: the machine is free |
 | The runner answered with an error | `fail!`, with the error as the reason ("failed to reset after stale session <id>") |
-| Expired while the machine was heard | `fail!` ("the runner did not answer"), as `cleanup_session` does |
+| Expired | `fail!` ("the runner did not answer"), whether or not the runner took the reset and whether or not the machine was heard at the deadline |
 
-"Heard" is the online window (§2.5, `last_heartbeat_at` within 90 s). The sweep looks some time
-after an op's deadline, so for an expired op it reads the rule from the op:
-the runner was sent the op in time (`delivered_at` before the deadline) and the machine was
-heard up to the deadline (`RunnerOperation#left_unanswered_by_heard_machine?`). The sweep never
+"Heard" is the online window (§2.5, `last_heartbeat_at` within 90 s). The sweep sends a reset only
+to a machine it hears, so carrying it out is the machine's own job: an expired reset fails the
+machine, taken by the runner or not. A runner stuck in an earlier op keeps sending heartbeats but
+never polls ops, so it never takes the reset; a rule that forgave an undelivered reset would send
+it a new one every `lifecycle_op_timeout` for ever, the machine online and held by a dead session.
+A machine that leaves right after the reset is sent and comes back after the deadline ends `failed`
+too; that case has no handling of its own. The sweep never
 waits for an op: it only creates op rows and reads their outcomes, so a reset gets the full
 lifecycle budget and a silent machine holds up nothing, in the sweep or in a Solid Queue
 thread. The check and the enqueue happen under the machine's row lock, so two runs never send
