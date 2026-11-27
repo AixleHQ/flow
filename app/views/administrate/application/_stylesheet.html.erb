@@ -28,7 +28,7 @@ follows them between the app and the admin.
   <%= stylesheet_link_tag css_path %>
 <% end %>
 
-<%= render "shared/web_fonts", families: %w[Inter:wght@400..700 Spline+Sans+Mono:wght@400;500] %>
+<%= render "shared/web_fonts" %>
 <%= vite_stylesheet_tag "admin.css" %>
 
 <%= yield :stylesheet %>

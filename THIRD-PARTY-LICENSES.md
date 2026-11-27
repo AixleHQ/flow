@@ -154,6 +154,7 @@ Ruby-licensed.
 | remark-gfm | 4.0.1 | MIT |
 | zod | 3.25.76 | MIT |
 | zustand | 5.0.12 | MIT |
+| Fonts: Inter, JetBrains Mono, Spline Sans Mono (`public/fonts/v1/`, from `@fontsource-variable/*`) | 5.3.0 | OFL-1.1 |
 
 ### Notable transitive npm packages
 

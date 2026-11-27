@@ -17,6 +17,13 @@ class PasswordMailerTest < ActionMailer::TestCase
     assert_equal @user, User.find_by_password_reset_token(token)
   end
 
+  test "the email links no web font and keeps the fallback font stack" do
+    html = PasswordMailer.reset(@user).html_part.decoded
+
+    assert_no_match(/googleapis|gstatic/, html)
+    assert_includes html, "font-family:#{MailerHelper::FONT_SANS}"
+  end
+
   test "the notice names what happened and links to a reset" do
     { "set" => "A password was set", "changed" => "was changed", "reset" => "was reset" }.each do |event, phrase|
       email = PasswordMailer.updated(@user, event)

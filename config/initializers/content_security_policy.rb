@@ -23,7 +23,7 @@ csp_report_uri =
     "/csp-violation-report-endpoint"
   end
 
-# Scripts come from this origin or the asset host, never from "any https URL";
+# Scripts and stylesheets come from this origin or the asset host, never from "any https URL";
 # the one inline script the app layout needs carries the per-request nonce.
 script_hosts = [ :self, Settings.asset_host.presence ].compact
 
@@ -64,12 +64,12 @@ Rails.application.configure do
     policy.default_src :self
     policy.base_uri    :self
     policy.frame_ancestors :self
-    policy.font_src    :self, :https, "https://fonts.gstatic.com", :data
+    policy.font_src    :self, :data
     policy.img_src     :self, :https, :data, :blob
     policy.object_src  :none
     policy.script_src(*script_hosts)
     # Mantine writes style attributes at runtime.
-    policy.style_src   :self, :https, :unsafe_inline, "https://fonts.googleapis.com"
+    policy.style_src(*script_hosts, :unsafe_inline)
     # Sentry's session replay compresses in a worker it starts from a blob: URL.
     policy.worker_src  :self, :blob
     policy.connect_src :self, :https, "wss://#{Settings.domain}"
