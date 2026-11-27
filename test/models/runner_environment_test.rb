@@ -125,6 +125,12 @@ class RunnerEnvironmentTest < ActiveSupport::TestCase
     assert_equal [ holder.id ], RunnerEnvironment.where(id: [ idle.id, holder.id ]).holding_session.pluck(:id)
   end
 
+  test "out_of_service? is true for a gone or a failed machine and false for the others" do
+    assert create(:runner_environment, runner: @runner, state: :gone).out_of_service?
+    assert create(:runner_environment, runner: @runner, state: :failed, state_reason: "Docker is stopped").out_of_service?
+    assert_not create(:runner_environment, runner: @runner, state: :registered).out_of_service?
+  end
+
   test "revoked_by_operator? is true only for a gone machine that a Revoke on the runner page ended" do
     revoked = create(:runner_environment, runner: @runner)
     revoked.unregister!(RunnerEnvironmentStateMachine::REVOKED)

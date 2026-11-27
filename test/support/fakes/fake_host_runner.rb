@@ -72,7 +72,7 @@ module ContainerRuntime
 
     def answer(operation)
       payload = operation.payload
-      session_id = operation.terminal_session_id
+      session_id = (operation.terminal_session_id if operation.session_op?)
       @operations << { op: operation.op, session_id: session_id, payload: payload }
       result = @overrides[operation.op]&.call(payload, session_id) || run(operation.op, payload, session_id)
       return if result == :none

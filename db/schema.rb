@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_27_110025) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_27_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1421,7 +1421,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_27_110025) do
     t.bigint "op_sequence", default: 0, null: false
     t.boolean "auto_update", default: true, null: false
     t.datetime "last_heartbeat_at"
-    t.integer "consecutive_failures", default: 0, null: false
     t.string "first_seen_ip"
     t.bigint "created_by_id"
     t.index ["company_id"], name: "index_runner_environments_on_company_id"

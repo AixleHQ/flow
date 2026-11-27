@@ -62,7 +62,6 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
     assert_equal %w[container.stop env.scrub], @host_runner.ops.last(2), "a reuse runner scrubs after a session that ended well"
     assert_equal "finished", session.reload.state
     assert_nil @machine.reload.current_session_id, "the machine is free after its scrub"
-    assert_equal 0, @machine.consecutive_failures
     assert admission.reload.released_at
     assert_ops_name_their_session(session)
     assert RunnerOperation.all.none?(&:deliverable?)
@@ -105,7 +104,7 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
 
     assert_not cleaned.key?(:cleanup_pending), "cleanup left #{cleaned.inspect}"
     assert_equal %w[container.stop env.reset], @host_runner.ops.last(2), "a failed session is reset even under reuse"
-    assert_equal 1, @machine.reload.consecutive_failures
+    assert_equal "registered", @machine.reload.state
     assert_nil @machine.current_session_id, "the machine is free again"
     assert admission.reload.released_at
   end
@@ -524,11 +523,7 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
 
   def assert_ops_name_their_session(session)
     RunnerOperation.order(:sequence).each do |operation|
-      if RunnerOperation::ENVIRONMENT_OPS.include?(operation.op)
-        assert_nil operation.terminal_session_id, "#{operation.op} is an environment op and names no session"
-      else
-        assert_equal session.id, operation.terminal_session_id, "#{operation.op} names the wrong session"
-      end
+      assert_equal session.id, operation.terminal_session_id, "#{operation.op} records the wrong session"
     end
   end
 end
