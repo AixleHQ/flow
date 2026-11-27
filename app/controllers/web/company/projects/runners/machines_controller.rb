@@ -9,13 +9,6 @@ class Web::Company::Projects::Runners::MachinesController < Web::Company::Projec
 
   requires_feature :external_runners
 
-  # Return to service for a `failed` machine of a `manual` runner of the
-  # project (§5.2, §7.2).
-  def return_to_service
-    runner = current_project.runners.not_deleted.find(params[:runner_id])
-    redirect_to company_project_runner_path(current_project, runner), **return_machine_to_service(runner)
-  end
-
   # Revoke for a machine of a `manual` runner of the project (§9.3).
   def revoke
     runner = current_project.runners.not_deleted.find(params[:runner_id])

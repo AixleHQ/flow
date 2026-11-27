@@ -41,7 +41,7 @@ module Runners
         # Read fresh: an unregistration that committed since the gateway's
         # check is seen here, and the machine records nothing.
         environment.lock!
-        if environment.gone?
+        if environment.out_of_service?
           raise Credentials::Refused.new("invalid_token", "The token is unknown, used, revoked or expired.")
         end
 
@@ -60,9 +60,9 @@ module Runners
     # A machine that reports a failed preflight (no reachable Docker daemon, too
     # little disk) cannot run a session: it goes `failed`, out of rotation, with
     # the failure for people in its reason (DESIGN.md §8, "Prerequisites
-    # missing"), and stays so until Return to service resets it (§5.2). A report
-    # without a failure changes nothing: a `failed` machine whose Docker is back
-    # waits for the operator's Return to service, it does not return by itself.
+    # missing"), and stays so until it is revoked (§5.2). Its credentials stop
+    # working with it, so a later check-in, with or without the failure, is
+    # refused and does not bring the machine back.
     def fail_for_preflight!(environment)
       failure = environment.preflight_failure
       return unless failure

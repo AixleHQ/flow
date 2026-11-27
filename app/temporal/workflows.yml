@@ -89,6 +89,12 @@ workflows:
       - name: runner_operations_sweep_activity
         task_queue: aixle_ruby
 
+  - name: runner_abandoned_machines_workflow
+    owner: aixle_ruby
+    activities:
+      - name: runner_machines_settle_abandoned_activity
+        task_queue: aixle_ruby
+
   - name: runner_health_check_workflow
     owner: aixle_ruby
     activities:

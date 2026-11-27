@@ -43,8 +43,7 @@ module ContainerRuntime
   #   scrub is followed by a reset; a failed reset moves the machine to `failed`
   #   (a reset nobody answered does not, for a session that lost contact while
   #   the machine is not heard when the reset expires: the machine is reset when
-  #   it is heard again), and so do
-  #   `runners.max_consecutive_failures` failed sessions in a row (§7.2).
+  #   it is heard again). A session's outcome never fails the machine (§7.2).
   #   It waits for nothing queued: while an earlier op is unfinished on the
   #   machine the session holds (a `container.start` whose wait a stop cut
   #   short, or an `env.reset` of an earlier cleanup attempt), cleanup_ready?
@@ -150,9 +149,7 @@ module ContainerRuntime
     # session under either policy, `env.reset`: the workspace and cache volumes go
     # too. A failed scrub is followed by a reset, and the machine is free again
     # once either succeeded. A failed reset, a machine that does not answer
-    # included, moves the machine to `failed` with the reason, and so does the
-    # session that is the `runners.max_consecutive_failures`th failed one in a
-    # row on it (Runners::Machines.release!). The exception is a session that
+    # included, moves the machine to `failed` with the reason. The exception is a session that
     # lost contact whose reset expired while the machine was not heard: the
     # session keeps the machine and the cleanup sends a new reset when the
     # machine is heard again. A machine heard throughout the reset's deadline
@@ -168,13 +165,13 @@ module ContainerRuntime
 
       if !failed && session.runner.reuse_policy == "reuse"
         scrub = call(session, "env.scrub", { "image" => scrub_image(session) }, lifecycle: true)
-        return Runners::Machines.release!(environment, session, failed: failed) if scrub.ok?
+        return Runners::Machines.release!(environment, session) if scrub.ok?
 
         Rails.logger.warn("[RunnerRuntime] session #{session.id}: #{scrub.message}; machine #{environment.key} is reset instead")
       end
 
       reset = call(session, "env.reset", {}, lifecycle: true)
-      return Runners::Machines.release!(environment, session, failed: failed) if reset.ok?
+      return Runners::Machines.release!(environment, session) if reset.ok?
 
       # A machine that is not heard when its reset expires is still away (or
       # went quiet again before it took the reset: DESIGN.md §6.7). The reset it
