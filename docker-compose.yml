@@ -207,7 +207,7 @@ services:
     attach: false
 
   traefik:
-    image: traefik:v3.6.6
+    image: traefik:v3.7.20
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${HTTP_HOST_PORT:-80}:80"
       - "${BIND_ADDRESS:-127.0.0.1}:${HTTPS_HOST_PORT:-443}:443"
