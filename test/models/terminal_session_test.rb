@@ -246,16 +246,16 @@ class TerminalSessionTest < ActiveSupport::TestCase
     assert_includes session.available_tools, tool2
   end
 
-  test "available_tools falls back to project tools when no HABTM tools" do
+  test "available_tools does not fall back to project tools when none is attached" do
     tool = create(:tool, scope: @project)
     session = create(:terminal_session, user: @user, project: @project)
 
-    assert_includes session.available_tools, tool
+    assert_not_includes session.available_tools, tool
   end
 
-  test "available_tools returns empty when no project and no tools" do
+  test "available_tools holds only plumbing when no project and no tools" do
     session = build(:terminal_session, user: @user, project: nil)
-    assert_empty session.available_tools
+    assert_equal %w[fail_session finish_session list_sub_steps mark_sub_step], session.available_tools.map(&:name).sort
   end
 
   # == FK CASCADE / NULLIFY tests ==

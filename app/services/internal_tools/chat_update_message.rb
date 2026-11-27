@@ -11,7 +11,6 @@ module InternalTools
       display_name "Chat Update Message"
       description "Edit a message the bot posted in Slack or Microsoft Teams, by the message_id chat_post_message returned. The message is REPLACED, not merged: send everything it should end up with. Only the bot's own messages can be edited. Pass the same conversation and thread the message was posted to when they are not the ones this run was started from."
       tags :messaging, :chat
-      inject_when :workflow_step_session
       requires_integration :chat
       idempotent
       input_schema({

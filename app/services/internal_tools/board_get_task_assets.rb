@@ -6,7 +6,6 @@ module InternalTools
       display_name "Board Get Task Assets"
       description "List files attached to a board task, optionally filtered by tag."
       tags :board
-      inject_when :workflow_step_session
       input_schema({
         type: "object",
         required: [],

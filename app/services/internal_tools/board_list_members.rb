@@ -7,7 +7,6 @@ module InternalTools
       description "List the people who can access this board's project, with the user IDs to assign a task to, " \
                   "and the project's teams, with the team IDs a task can be assigned to instead."
       tags :board
-      inject_when :workflow_step_session
       read_only
       input_schema({
         type: "object",

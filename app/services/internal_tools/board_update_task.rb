@@ -6,7 +6,6 @@ module InternalTools
       display_name "Board Update Task"
       description "Update mutable task fields such as title, description, priority, tags, task type, or assignee."
       tags :board
-      inject_when :workflow_step_session
       input_schema({
         type: "object",
         required: [],

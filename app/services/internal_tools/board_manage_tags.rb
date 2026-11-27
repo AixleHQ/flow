@@ -6,7 +6,6 @@ module InternalTools
       display_name "Board Manage Tags"
       description "Add or remove a tag on a task or comment on the current board."
       tags :board
-      inject_when :workflow_step_session
       input_schema({
         type: "object",
         required: %w[action entity_type entity_id tag],

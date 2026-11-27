@@ -6,7 +6,7 @@ module InternalTools
       display_name "Mark Sub-Step"
       description "Update sub-step status with optional note and structured data. Only available during workflow execution. Only the top-level agent may call this: a subagent reports back to the agent that started it instead."
       tags :workflow_control
-      inject_when :workflow_step_session
+      inject_when :any_session
       user_attachable false
       input_schema({
         type: "object",

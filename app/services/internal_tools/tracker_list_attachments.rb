@@ -13,7 +13,6 @@ module InternalTools
                   "{tracker, issue: {id, key}, attachments: [{id, name, size, content_type, origin, location, " \
                   "restricted, available, url, task_asset_id}]}."
       tags :tracker
-      inject_when :tracker_run
       requires_integration :tracker
       unavailable_message "No task tracker is connected to this project. Add one on the project's Trackers page."
       read_only

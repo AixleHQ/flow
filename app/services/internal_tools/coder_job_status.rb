@@ -24,7 +24,6 @@ module InternalTools
                   "`diagnosis` names both instead of asserting one — and `command_group_alive` tells you when " \
                   "the wrapper died but the command (`command_pgid`) is still running on the workspace."
       tags :coder
-      inject_when :coder_integration_connected
       requires_integration :coder
       input_schema({
         type: "object",
