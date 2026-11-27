@@ -167,6 +167,10 @@ module Coder
         begin
           return create_and_lock(note: note, acquired_by: acquired_by, wait: wait)
         rescue Coder::WorkspaceService::OperationError => e
+          # Without waiting, only a quota refusal means "no capacity"; any other
+          # refusal is a provisioning failure the caller must see as such.
+          raise unless wait || e.is_a?(Coder::WorkspaceService::QuotaError)
+
           # Creation is the preferred escape from an unhealthy pool, but it is
           # not the last one: fall through to the deferred candidates instead
           # of failing the allocation outright.
@@ -266,7 +270,7 @@ module Coder
         raise Coder::WorkspaceService::OperationError, "workspace #{ws_name} is being deleted"
       when :failed
         if retrying
-          detail = status.error ? " — #{status.error.truncate(Coder::WorkspaceService::EXPLANATION_LIMIT)}" : ""
+          detail = status.error ? " — #{@workspace_service.redacted_excerpt(status.error)}" : ""
           raise Coder::WorkspaceService::OperationError,
                 "build #{status.build_id} of workspace #{ws_name} failed (#{status.transition})#{detail}"
         end

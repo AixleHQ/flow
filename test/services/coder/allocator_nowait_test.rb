@@ -172,6 +172,19 @@ module Coder
       assert_match(/Quota exceeded/, error.message)
     end
 
+    test "a create refusal that is not about quota is raised, not turned into ExhaustedError" do
+      with_template!
+      stub_list([])
+      stub_json(:post, "/api/v2/users/#{@integration.coder_user_id}/workspaces",
+                { message: "Missing required parameter", detail: "region" }, status: 400)
+
+      error = assert_raises(Coder::WorkspaceService::OperationError) { allocator.allocate(wait: false) }
+
+      assert_not_kind_of Coder::Allocator::ExhaustedError, error
+      assert_not_kind_of Coder::WorkspaceService::QuotaError, error
+      assert_match(/Missing required parameter/, error.message)
+    end
+
     # ---------- a probe that fails ----------
 
     test "a workspace that fails its probe is never handed over and is not held any more" do
@@ -264,6 +277,20 @@ module Coder
 
       assert_match(/no capacity/, error.message)
       assert hold_row, "the hold stays until the workspace is deleted"
+    end
+
+    test "a retry whose workspace build failed does not show the integration token in the message" do
+      token = @integration.credentials_data["session_token"]
+      @locks.acquire(workspace_name: "aixle-prod-1", workspace_id: "u1", holder: @holder)
+      stub_json(:get, "/api/v2/users/me/workspace/aixle-prod-1", {
+        id: "u1", name: "aixle-prod-1",
+        latest_build: { id: "b1", transition: "start", job: { status: "failed", error: "auth #{token} rejected" } }
+      })
+
+      error = assert_raises(Coder::WorkspaceService::OperationError) { allocator.allocate(wait: false) }
+
+      assert_match(/rejected/, error.message)
+      assert_not_includes error.message, token
     end
 
     # ---------- delete ----------

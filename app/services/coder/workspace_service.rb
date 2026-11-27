@@ -20,12 +20,6 @@ module Coder
     DEFAULT_BUILD_TIMEOUT  = (Settings.coder&.await_build_timeout || 240).to_i
     DEFAULT_BUILD_INTERVAL = 3   # seconds
     EXPLANATION_LIMIT      = 300
-    GONE_STATUSES          = [ 404, 410 ].freeze
-
-    # What Coder answers when the account is out of quota. The exact status and
-    # body of a refusal are recorded on staging (design runner-coder.md §15);
-    # until then a refusal is a quota one only when it says so itself.
-    QUOTA_STATUSES = [ 402, 403, 409, 429 ].freeze
 
     def initialize(integration)
       @integration = integration
@@ -48,14 +42,10 @@ module Coder
     end
 
     # One `GET`: the status of one of the token owner's workspaces. A workspace
-    # Coder does not know (404) or has deleted (410) is `deleted`.
+    # Coder does not know or has deleted is `deleted`.
     def status(name)
       workspace = Coder::Api.get_workspace_by_name(coder_url: coder_url, session_token: session_token, name: name)
       Coder::WorkspaceStatus.from(workspace)
-    rescue Coder::Api::HTTPError => e
-      return Coder::WorkspaceStatus.from(nil) if GONE_STATUSES.include?(e.status)
-
-      raise OperationError, "workspace status failed: #{@token.redact(e.message)}"
     rescue Coder::Api::ApiError => e
       raise OperationError, "workspace status failed: #{@token.redact(e.message)}"
     end
@@ -100,9 +90,9 @@ module Coder
         transition:    transition,
         orphan:        orphan
       )
+    rescue Coder::Api::QuotaRefusedError => e
+      raise QuotaError, "build (#{transition}) failed: #{with_coder_explanation(e)}"
     rescue Coder::Api::ApiError => e
-      raise QuotaError, "build (#{transition}) failed: #{with_coder_explanation(e)}" if quota_refusal?(e)
-
       raise OperationError, "build (#{transition}) failed: #{@token.redact(e.message)}"
     end
 
@@ -148,49 +138,32 @@ module Coder
         name:          name,
         template_id:   tpl_id
       )
+    rescue Coder::Api::QuotaRefusedError => e
+      raise QuotaError, "create_workspace failed: #{with_coder_explanation(e)}"
     rescue Coder::Api::ApiError => e
-      raise QuotaError, "create_workspace failed: #{with_coder_explanation(e)}" if quota_refusal?(e)
-
       raise OperationError, "create_workspace failed: #{with_coder_explanation(e)}"
+    end
+
+    # Redact before truncating: a cut through the token would leave a fragment
+    # the redaction no longer matches. For text from Coder that a caller shows.
+    def redacted_excerpt(text)
+      @token.redact(text).truncate(EXPLANATION_LIMIT)
     end
 
     private
 
-    # Coder refuses a request with `{"message": ..., "detail": ...}`; the status
+    # Coder's own account of a refusal is added to the message: the status
     # alone does not tell a missing template parameter from an exhausted quota.
     def with_coder_explanation(error)
       plain = @token.redact(error.message)
-      return plain unless error.is_a?(Coder::Api::HTTPError)
-
-      body = JSON.parse(error.body.to_s)
-      return plain unless body.is_a?(Hash)
-
-      message, detail = body.values_at("message", "detail").map { |part| part.to_s.strip }
-      explanation = [ message, ("(#{detail})" if detail.present?) ].compact_blank.join(" ")
-      explanation.empty? ? plain : "#{plain} — #{redacted_excerpt(explanation)}"
-    rescue JSON::ParserError
-      plain
-    end
-
-    def quota_refusal?(error)
-      return false unless error.is_a?(Coder::Api::HTTPError) && QUOTA_STATUSES.include?(error.status)
-
-      body = JSON.parse(error.body.to_s)
-      body.is_a?(Hash) && body.values_at("message", "detail").any? { |part| part.to_s.match?(/quota/i) }
-    rescue JSON::ParserError
-      false
+      explanation = error.explanation if error.is_a?(Coder::Api::HTTPError)
+      explanation ? "#{plain} — #{redacted_excerpt(explanation)}" : plain
     end
 
     def build_failure(build_id, build)
       message = "build #{build_id} failed: status=#{build.dig('job', 'status')}"
       error   = build.dig("job", "error").to_s.strip
       error.empty? ? message : "#{message} — #{redacted_excerpt(error)}"
-    end
-
-    # Redact before truncating: a cut through the token would leave a fragment
-    # the redaction no longer matches.
-    def redacted_excerpt(text)
-      @token.redact(text).truncate(EXPLANATION_LIMIT)
     end
 
     def coder_url
