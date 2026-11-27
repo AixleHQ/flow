@@ -37,7 +37,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
       attr_accessor :last_options
     end
 
-    def initialize(integration:, terminal_session:)
+    def initialize(integration:, **_holder)
       @integration = integration
     end
 
@@ -106,7 +106,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
     @session.define_singleton_method(:integrations) { Integration.where(id: [ integration.id, second.id ]) }
     captured = nil
 
-    Coder::Allocator.stub(:new, ->(integration:, terminal_session:) { captured = integration; FakeAllocator.new(integration: integration, terminal_session: terminal_session) }) do
+    Coder::Allocator.stub(:new, ->(integration:, **holder) { captured = integration; FakeAllocator.new(integration: integration, **holder) }) do
       result = InternalTools::CoderAllocateMachine.new(params: { integration_id: second.id }, session: @session).execute
       assert_equal 0, result[:exit_code], result[:stderr]
     end
