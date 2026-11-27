@@ -6,7 +6,7 @@ import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 import { formatDateTime } from 'shared/lib/formatDate';
 import { runOwnerLabel } from 'shared/lib/runOwner';
 
-import { formatCostCents } from './boardFormat';
+import { formatCostCents, formatDuration } from './boardFormat';
 import { RunStepTimeline } from './RunStepTimeline';
 import { RunTileRow } from './RunTileRow';
 
@@ -77,9 +77,16 @@ export function TaskRunsPanel({
                       run={run}
                       projectId={projectId}
                       trailing={
-                        <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
-                          {formatDateTime(run.createdAt)}
-                        </Text>
+                        <Group gap="xs" wrap="nowrap" style={{ flexShrink: 0 }}>
+                          {run.durationSeconds != null && (
+                            <Text size="xs" c="dimmed" ff="monospace" data-testid="run-duration">
+                              {formatDuration(run.durationSeconds)}
+                            </Text>
+                          )}
+                          <Text size="xs" c="dimmed">
+                            {formatDateTime(run.createdAt)}
+                          </Text>
+                        </Group>
                       }
                     />
                     {owner && (

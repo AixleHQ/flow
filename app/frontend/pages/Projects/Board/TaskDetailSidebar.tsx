@@ -112,6 +112,7 @@ import styles from './BoardPage.module.css';
 import { canEditComment } from './canEditComment';
 import { gateCiStatus, gateDetail, gateLink, gateTooltip } from './gates';
 import { GATE_CHIP_WIDTH, GateStatusChip } from './GateStatusChip';
+import { InlineEditActions } from './InlineEditActions';
 import { InlineTagsEditor } from './InlineTagsEditor';
 import { LatestRunTile } from './LatestRunTile';
 import { TaskActivityEntry } from './TaskActivityEntry';
@@ -153,6 +154,13 @@ interface TaskDraft {
   parentTaskId: string | null;
   tags: string[];
 }
+
+type EditSection = 'title' | 'description';
+
+const SECTION_FIELDS: Record<EditSection, (keyof TaskDraft)[]> = {
+  title: ['title'],
+  description: ['description'],
+};
 
 function draftFromTask(task: Task): TaskDraft {
   return {
@@ -357,10 +365,12 @@ export function TaskDetailSidebar({
   variant?: 'drawer' | 'page';
 }) {
   const [tab, setTab] = useState<string | null>('details');
-  const [edits, setEdits] = useState<Partial<TaskDraft> | null>(null);
+  const [edits, setEdits] = useState<Partial<TaskDraft>>({});
+  const [editing, setEditing] = useState<EditSection[]>([]);
+  const [savingSection, setSavingSection] = useState<EditSection | null>(null);
   // Only the fields the person changed are kept; the rest follow the task, so a change made
   // elsewhere during the edit (an agent adding a tag) shows in the form and Save does not undo it.
-  const draft = task && edits ? { ...draftFromTask(task), ...edits } : null;
+  const draft = task ? { ...draftFromTask(task), ...edits } : null;
   const [savingTask, setSavingTask] = useState(false);
   const [previewKey, setPreviewKey] = useState<string | null>(null);
   const previewItems = useMemo(
@@ -485,7 +495,8 @@ export function TaskDetailSidebar({
   useEffect(() => {
     if (task) {
       setTab('details');
-      setEdits(null);
+      setEdits({});
+      setEditing([]);
       setDeleteConfirm(false);
       setCommentBody('');
       setCommentTags([]);
@@ -494,19 +505,26 @@ export function TaskDetailSidebar({
     }
   }, [task?.id]);
 
-  const startEdit = () => setEdits({});
+  const isEditing = (section: EditSection) => editing.includes(section);
 
-  const cancelEdit = () => setEdits(null);
+  const startEdit = (section: EditSection) => setEditing((e) => (e.includes(section) ? e : [...e, section]));
 
-  const patchDraft = (changes: Partial<TaskDraft>) => setEdits((e) => (e ? { ...e, ...changes } : e));
+  const closeSection = (section: EditSection) => {
+    setEditing((e) => e.filter((x) => x !== section));
+    setEdits((e) => {
+      const next = { ...e };
+      for (const key of SECTION_FIELDS[section]) delete next[key];
+      return next;
+    });
+  };
 
-  const saveEdit = async () => {
-    if (!task || !draft || savingTask) return;
-    const changes = changedFields(task, draft);
-    if (Object.keys(changes).length === 0) {
-      setEdits(null);
-      return;
-    }
+  const patchDraft = (changes: Partial<TaskDraft>) => setEdits((e) => ({ ...e, ...changes }));
+
+  // Properties have no edit mode: each change is saved on its own, like the Column select.
+  const saveProperty = async (patch: Partial<TaskDraft>) => {
+    if (!task || savingTask) return;
+    const changes = changedFields(task, { ...draftFromTask(task), ...patch });
+    if (Object.keys(changes).length === 0) return;
     setSavingTask(true);
     const ok = await apiMutate(apiV1ProjectTaskPath(projectId, task.id), {
       method: 'PATCH',
@@ -515,15 +533,38 @@ export function TaskDetailSidebar({
     });
     setSavingTask(false);
     if (!ok) return;
-    // On success the cable refreshes selectedTask, and the effect above clears the pending values.
-    if (typeof changes.title === 'string') setPendingTitle(changes.title);
-    if (typeof changes.description === 'string') setPendingDesc(changes.description);
-    setEdits(null);
     router.reload({ only: ['selected_task', 'task_activities'] });
   };
 
-  const cancelOnEscape = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') cancelEdit();
+  const saveSection = async (section: EditSection) => {
+    if (!task || !draft || savingTask) return;
+    // Fields of the other sections stay at their saved values, so one check never saves another's open edit.
+    const scoped: TaskDraft = { ...draftFromTask(task) };
+    for (const key of SECTION_FIELDS[section]) Object.assign(scoped, { [key]: draft[key] });
+    const changes = changedFields(task, scoped);
+    if (Object.keys(changes).length === 0) {
+      closeSection(section);
+      return;
+    }
+    setSavingTask(true);
+    setSavingSection(section);
+    const ok = await apiMutate(apiV1ProjectTaskPath(projectId, task.id), {
+      method: 'PATCH',
+      headers: jsonHeaders,
+      body: JSON.stringify({ boardTask: changes }),
+    });
+    setSavingTask(false);
+    setSavingSection(null);
+    if (!ok) return;
+    // On success the cable refreshes selectedTask, and the effect above clears the pending values.
+    if (typeof changes.title === 'string') setPendingTitle(changes.title);
+    if (typeof changes.description === 'string') setPendingDesc(changes.description);
+    closeSection(section);
+    router.reload({ only: ['selected_task', 'task_activities'] });
+  };
+
+  const cancelOnEscape = (section: EditSection) => (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') closeSection(section);
   };
 
   const startEditComment = (c: TaskComment) => {
@@ -679,61 +720,62 @@ export function TaskDetailSidebar({
 
   const headerSection = (
     <Box style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 18 }}>
-      {draft ? (
-        <textarea
-          ref={fitToContent}
-          className={styles.ptTitle}
-          aria-label="Title"
-          // The drawer reads Escape on the window before this field does; the attribute keeps it to
-          // cancelling the edit, instead of also asking to discard the draft the cancel just dropped.
-          data-mantine-stop-propagation
-          value={draft.title}
-          rows={1}
-          onChange={(e) => {
-            patchDraft({ title: e.currentTarget.value });
-            fitToContent(e.currentTarget);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') e.preventDefault();
-            cancelOnEscape(e);
-          }}
-          autoFocus
-        />
-      ) : (
-        <Box style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-          <div className={styles.ptTitle} style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-            {pendingTitle ?? task.title}
-          </div>
-          <CopyButton value={String(task.number)}>
-            {({ copied, copy }) => (
-              <Tooltip label={copied ? 'Copied' : 'Copy number'} withArrow>
-                <Text c="dimmed" style={{ flexShrink: 0, whiteSpace: 'nowrap', cursor: 'pointer' }} onClick={copy}>
-                  #{task.number}
-                </Text>
-              </Tooltip>
-            )}
-          </CopyButton>
-        </Box>
-      )}
-
-      {canExecute && (
-        <Group gap="xs">
-          {draft ? (
-            <>
-              <Button size="xs" onClick={saveEdit} loading={savingTask} disabled={draft.title.trim() === ''}>
-                Save
-              </Button>
-              <Button size="xs" variant="default" onClick={cancelEdit} disabled={savingTask}>
-                Cancel
-              </Button>
-            </>
-          ) : (
-            <Button size="xs" variant="default" onClick={startEdit}>
-              Edit
-            </Button>
-          )}
-        </Group>
-      )}
+      <Box style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+        {isEditing('title') && draft ? (
+          <textarea
+            ref={fitToContent}
+            className={styles.ptTitle}
+            aria-label="Title"
+            // The drawer reads Escape on the window before this field does; the attribute keeps it to
+            // cancelling the edit, instead of also asking to discard the draft the cancel just dropped.
+            data-mantine-stop-propagation
+            value={draft.title}
+            rows={1}
+            onChange={(e) => {
+              patchDraft({ title: e.currentTarget.value });
+              fitToContent(e.currentTarget);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                if (draft.title.trim() !== '') saveSection('title');
+              }
+              cancelOnEscape('title')(e);
+            }}
+            autoFocus
+          />
+        ) : (
+          <Box style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
+            <div
+              className={styles.ptTitle}
+              data-testid="task-title"
+              style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+            >
+              {pendingTitle ?? task.title}
+            </div>
+            <CopyButton value={String(task.number)}>
+              {({ copied, copy }) => (
+                <Tooltip label={copied ? 'Copied' : 'Copy number'} withArrow>
+                  <Text c="dimmed" style={{ flexShrink: 0, whiteSpace: 'nowrap', cursor: 'pointer' }} onClick={copy}>
+                    #{task.number}
+                  </Text>
+                </Tooltip>
+              )}
+            </CopyButton>
+          </Box>
+        )}
+        {canExecute && (
+          <InlineEditActions
+            label="title"
+            editing={isEditing('title')}
+            saving={savingSection === 'title'}
+            canSave={(draft?.title ?? '').trim() !== ''}
+            onEdit={() => startEdit('title')}
+            onSave={() => saveSection('title')}
+            onCancel={() => closeSection('title')}
+          />
+        )}
+      </Box>
 
       {/* Status chips: type, priority, workflow */}
       <Box style={{ display: 'flex', flexWrap: 'wrap', gap: 7, alignItems: 'center' }}>
@@ -819,7 +861,7 @@ export function TaskDetailSidebar({
         }}
       >
         <IconListDetails size={14} color="var(--app-primary-strong)" />
-        Properties
+        <span>Properties</span>
       </Box>
 
       {/* props grid */}
@@ -851,11 +893,12 @@ export function TaskDetailSidebar({
         <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
           Type
         </Text>
-        {draft ? (
+        {canExecute ? (
           <Select
             data={TASK_TYPE_OPTIONS}
-            value={draft.taskType}
-            onChange={(v) => v && patchDraft({ taskType: v as TaskDraft['taskType'] })}
+            value={task.taskType}
+            onChange={(v) => v && saveProperty({ taskType: v as TaskDraft['taskType'] })}
+            disabled={savingTask}
             aria-label="Type"
             size="xs"
             variant="unstyled"
@@ -868,11 +911,12 @@ export function TaskDetailSidebar({
         <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
           Priority
         </Text>
-        {draft ? (
+        {canExecute ? (
           <Select
             data={PRIORITY_OPTIONS}
-            value={draft.priority ?? ''}
-            onChange={(v) => patchDraft({ priority: v || null })}
+            value={task.priority ?? ''}
+            onChange={(v) => saveProperty({ priority: v || null })}
+            disabled={savingTask}
             aria-label="Priority"
             clearable
             size="xs"
@@ -886,11 +930,12 @@ export function TaskDetailSidebar({
         <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
           Assignee
         </Text>
-        {draft ? (
+        {canExecute ? (
           <Select
             data={assigneeSelectData(members, teams)}
-            value={draft.assigneeKey}
-            onChange={(v) => patchDraft({ assigneeKey: v })}
+            value={draftFromTask(task).assigneeKey}
+            onChange={(v) => saveProperty({ assigneeKey: v })}
+            disabled={savingTask}
             aria-label="Assignee"
             clearable
             searchable
@@ -908,11 +953,12 @@ export function TaskDetailSidebar({
             <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
               Parent Epic
             </Text>
-            {draft ? (
+            {canExecute ? (
               <Select
                 data={parentEpicOptions}
-                value={draft.parentTaskId}
-                onChange={(v) => patchDraft({ parentTaskId: v })}
+                value={draftFromTask(task).parentTaskId}
+                onChange={(v) => saveProperty({ parentTaskId: v })}
+                disabled={savingTask}
                 aria-label="Parent Epic"
                 clearable
                 searchable
@@ -932,9 +978,9 @@ export function TaskDetailSidebar({
           Tags
         </Text>
         <InlineTagsEditor
-          tags={draft ? draft.tags : (task.tags ?? [])}
-          onChange={(tags) => patchDraft({ tags })}
-          disabled={!draft}
+          tags={task.tags ?? []}
+          onChange={(tags) => saveProperty({ tags })}
+          disabled={!canExecute || savingTask}
           suggestions={knownTags}
         />
 
@@ -950,39 +996,53 @@ export function TaskDetailSidebar({
 
   const mainSections = (
     <>
-      <Box style={{ marginBottom: 18 }}>
-        {draft ? (
-          <textarea
-            ref={fitToContent}
-            className={styles.ptDesc}
-            aria-label="Description"
-            data-mantine-stop-propagation
-            value={draft.description}
-            rows={3}
-            onChange={(e) => {
-              patchDraft({ description: e.currentTarget.value });
-              fitToContent(e.currentTarget);
-            }}
-            onKeyDown={cancelOnEscape}
+      <Box style={{ marginBottom: 18, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+        <Box style={{ flex: 1, minWidth: 0 }}>
+          {isEditing('description') && draft ? (
+            <textarea
+              ref={fitToContent}
+              className={styles.ptDesc}
+              aria-label="Description"
+              data-mantine-stop-propagation
+              value={draft.description}
+              rows={3}
+              onChange={(e) => {
+                patchDraft({ description: e.currentTarget.value });
+                fitToContent(e.currentTarget);
+              }}
+              onKeyDown={cancelOnEscape('description')}
+            />
+          ) : (
+            <div
+              className={styles.ptDesc}
+              style={{
+                color:
+                  (pendingDesc ?? task.description)
+                    ? 'var(--mantine-color-dimmed)'
+                    : 'var(--mantine-color-placeholder)',
+              }}
+            >
+              {(pendingDesc ?? task.description) ? (
+                <Box className={styles.commentMd}>
+                  <Markdown remarkPlugins={[remarkGfm]} components={{ a: MarkdownLink }}>
+                    {pendingDesc ?? task.description ?? ''}
+                  </Markdown>
+                </Box>
+              ) : (
+                <span style={{ color: 'var(--mantine-color-placeholder)', fontStyle: 'italic' }}>No description</span>
+              )}
+            </div>
+          )}
+        </Box>
+        {canExecute && (
+          <InlineEditActions
+            label="description"
+            editing={isEditing('description')}
+            saving={savingSection === 'description'}
+            onEdit={() => startEdit('description')}
+            onSave={() => saveSection('description')}
+            onCancel={() => closeSection('description')}
           />
-        ) : (
-          <div
-            className={styles.ptDesc}
-            style={{
-              color:
-                (pendingDesc ?? task.description) ? 'var(--mantine-color-dimmed)' : 'var(--mantine-color-placeholder)',
-            }}
-          >
-            {(pendingDesc ?? task.description) ? (
-              <Box className={styles.commentMd}>
-                <Markdown remarkPlugins={[remarkGfm]} components={{ a: MarkdownLink }}>
-                  {pendingDesc ?? task.description ?? ''}
-                </Markdown>
-              </Box>
-            ) : (
-              <span style={{ color: 'var(--mantine-color-placeholder)', fontStyle: 'italic' }}>No description</span>
-            )}
-          </div>
         )}
       </Box>
 
@@ -1230,20 +1290,7 @@ export function TaskDetailSidebar({
             </Tooltip>
           )}
         </CopyButton>
-        {variant === 'drawer' && task ? (
-          <Text
-            size="sm"
-            fw={600}
-            truncate="end"
-            title={pendingTitle ?? task.title}
-            data-testid="panel-bar-title"
-            style={{ flex: 1, minWidth: 0, padding: '0 8px' }}
-          >
-            {pendingTitle ?? task.title}
-          </Text>
-        ) : (
-          <Box style={{ flex: 1 }} />
-        )}
+        <Box style={{ flex: 1 }} />
         {canExecute && canTriggerWorkflow && (
           <Button
             size="compact-sm"
@@ -1299,7 +1346,7 @@ export function TaskDetailSidebar({
         )}
       </Box>
 
-      {variant === 'page' && <Box style={{ padding: '20px 20px 0' }}>{headerSection}</Box>}
+      <Box style={{ padding: '20px 20px 0' }}>{headerSection}</Box>
 
       <Tabs
         value={tab}
@@ -1323,8 +1370,6 @@ export function TaskDetailSidebar({
 
         {/* Details — fully editable fields */}
         <Tabs.Panel value="details" style={{ flex: 1, overflow: 'auto', padding: 20 }}>
-          {variant === 'drawer' && headerSection}
-
           {variant === 'page' ? (
             <Box className={styles.taskPageColumns}>
               <Box style={{ minWidth: 0 }}>{mainSections}</Box>
