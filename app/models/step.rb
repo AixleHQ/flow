@@ -136,14 +136,22 @@ class Step < ApplicationRecord
 
   STEP_RESOURCES = {
     tool_ids: :tools, skill_ids: :skills, mcp_server_ids: :mcp_servers,
-    asset_ids: :assets, repository_ids: :repositories, aws_oidc_role_ids: :aws_oidc_roles
+    asset_ids: :assets, repository_ids: :repositories, aws_oidc_role_ids: :aws_oidc_roles,
+    integration_ids: :integrations
   }.freeze
 
   def resource_ids_belong_to_project
+    if workflow&.scope_type == "System"
+      errors.add(:integration_ids, "cannot be set on a system workflow") if resource_list_changed?(:integration_ids) && self[:integration_ids].present?
+      return
+    end
     return unless workflow&.scope_type == "Project"
 
     if will_save_change_to_agent_id?
       validate_owned_ids(workflow.scope, :agents, :agent_id, agent_id_in_database, agent_id)
+    end
+    if resource_list_changed?(:integration_ids)
+      validate_attachable_integrations(:integration_ids, linked_ids(:integration_ids), self[:integration_ids])
     end
     STEP_RESOURCES.each do |list, kind|
       next unless resource_list_changed?(list)

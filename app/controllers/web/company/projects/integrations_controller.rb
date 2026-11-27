@@ -74,8 +74,17 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     )
 
     redirect_to company_project_integrations_path(current_project), notice: "Integration settings saved"
-  rescue Coder::IntegrationService::ConfigurationError => e
+  rescue Coder::IntegrationService::ConfigurationError, Coder::IntegrationService::ConnectionError => e
     redirect_to company_project_integrations_path(current_project), alert: e.message
+  end
+
+  # The templates a Coder token can see, for the connect form's select. The token is not
+  # saved yet, so the form sends the URL and the token it just collected.
+  def coder_templates
+    names = coder_service.templates(coder_url: params[:coder_url].to_s, session_token: params[:session_token].to_s)
+    render json: { templates: names, suggested_prefix: Coder::Pool.suggest_prefix(current_project.name) }
+  rescue Coder::IntegrationService::ConnectionError => e
+    render json: { error: e.code, message: e.message }, status: :unprocessable_content
   end
 
   # A company-wide install (Slack) serves every project and has no page of its

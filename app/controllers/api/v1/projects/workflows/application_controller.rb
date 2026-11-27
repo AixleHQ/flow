@@ -23,7 +23,7 @@ module Api
               input_asset_specs: [ :name, :asset_type, :required ],
               output_asset_specs: [ :name, :asset_type, :required, :name_pattern ],
               tool_ids: [], mcp_server_ids: [], skill_ids: [], asset_ids: [], repository_ids: [],
-              config_item_ids: [], aws_oidc_role_ids: [],
+              config_item_ids: [], aws_oidc_role_ids: [], integration_ids: [],
               depends_on_step_ids: [],
               sub_steps_attributes: %i[id position name instructions required _destroy]
             )

@@ -37,6 +37,12 @@ module PersonalTools
                          "and put a role only one step uses on that step. Replaces the whole list — read " \
                          "the current value with get_workflow first.",
             items: { type: "integer" }
+      param :base_integration_ids, type: :array,
+            description: "Integration ids (list_integrations) of Coder, Slack, Teams or Azure DevOps every step of this " \
+                         "workflow may act through. An integration is access to an external account: attach only " \
+                         "what every step needs, and put one only a step uses on that step. Replaces the whole " \
+                         "list — read the current value with get_workflow first.",
+            items: { type: "integer" }
       param :base_repository_ids, type: :array,
             description: "Repository ids cloned for every step of this workflow, each into /workspace/repo/<name>/. " \
                          "Replaces the whole list — read the current value with get_workflow first. " \
@@ -48,7 +54,7 @@ module PersonalTools
             items: { type: "integer" }
       param :inherit_all_project_resources, type: :boolean,
             description: "When true, every step is granted every resource in the project (AWS roles " \
-                         "excepted) and the base_* lists stop being the limit. Convenient for a workflow " \
+                         "and integrations excepted) and the base_* lists stop being the limit. Convenient for a workflow " \
                          "you trust, and the opposite of least privilege for one that installs or runs " \
                          "third-party code."
       param :base_version, type: :integer, description: "The workflow version you read (current_version_number). A newer one means someone else saved since, and the change is refused."
@@ -58,7 +64,7 @@ module PersonalTools
     # Base resources are not columns: they are the workflow's resource links,
     # written through merge_config! with the rest of its config.
     CONFIG_ATTRS = %i[base_tool_ids base_skill_ids base_mcp_server_ids base_repository_ids
-                      base_config_item_ids base_aws_oidc_role_ids base_asset_ids].freeze
+                      base_config_item_ids base_aws_oidc_role_ids base_integration_ids base_asset_ids].freeze
     # Same store, but a flag rather than a list: JSON config does no
     # ActiveRecord casting, so "false" would land as a truthy string.
     CONFIG_FLAGS = %i[inherit_all_project_resources].freeze
@@ -84,6 +90,7 @@ module PersonalTools
               base_repository_ids: workflow.base_repository_ids,
               base_config_item_ids: workflow.base_config_item_ids,
               base_aws_oidc_role_ids: workflow.base_aws_oidc_role_ids,
+              base_integration_ids: workflow.base_integration_ids,
               base_asset_ids: workflow.base_asset_ids,
               inherit_all_project_resources: workflow.inherit_all_project_resources,
               updated_fields: (attrs.keys + config.keys).map(&:to_s))

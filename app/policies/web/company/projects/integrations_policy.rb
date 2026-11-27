@@ -24,6 +24,7 @@ module Web
         def github_app_install? = manage_integrations?
         def jira_oauth_start? = manage_integrations?
         def jira_inspect? = manage_integrations?
+        def coder_templates? = manage_integrations?
         def jira_projects? = manage_integrations?
         def github_projects? = manage_integrations?
         def linear_oauth_start? = manage_integrations?

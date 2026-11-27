@@ -39,24 +39,40 @@ module Tools
       connected_providers.include?(provider.to_s)
     end
 
+    # The providers a tool's `requires_integration` is checked against. With a session it is
+    # the providers of the session's own integration set (docs/design/session-integrations.md
+    # §5.3), so a tool is served only when its provider's integration is attached to the
+    # session. Without one (pickers, project pages) it stays project-wide, so a tool can still
+    # be attached.
     def connected_providers
       @connected_providers ||= begin
         if company.nil?
           Set.new
         else
-          scope = Integration.active.where(company_id: company.id)
-          scope = if project
-            scope.where("project_id IS NULL OR project_id = ?", project.id)
-          else
-            scope.where(project_id: nil)
-          end
-          providers = Set.new(scope.distinct.pluck(:provider).map(&:to_s))
+          providers = Set.new(session ? session_providers : project_providers)
           providers << Trackers::CAPABILITY if project && ProjectTracker.usable.for_project(project).exists?
           providers << Chat::CAPABILITY if providers.intersect?(Chat::PROVIDERS.keys.to_set)
           providers << PullRequests::CAPABILITY if providers.intersect?(PullRequests::PROVIDERS.keys.to_set)
           providers
         end
       end
+    end
+
+    private
+
+    def project_providers
+      scope = Integration.active.where(company_id: company.id)
+      scope = if project
+        scope.where("project_id IS NULL OR project_id = ?", project.id)
+      else
+        scope.where(project_id: nil)
+      end
+      scope.distinct.pluck(:provider).map(&:to_s)
+    end
+
+    # One query, memoized on the context with the rest of the answer.
+    def session_providers
+      session.integrations.active.distinct.pluck(:provider).map(&:to_s)
     end
   end
 end

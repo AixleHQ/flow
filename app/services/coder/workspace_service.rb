@@ -23,11 +23,12 @@ module Coder
     end
 
     # `own: true` lists only workspaces the integration's token owns — never the
-    # personal workspaces an admin token can also see.
+    # personal workspaces an admin token can also see. `prefix:` keeps the pool's
+    # workspaces, matched by Coder::Pool and not by the start of the name.
     def list(prefix: nil, own: false)
       workspaces = Coder::Api.list_workspaces(coder_url: coder_url, session_token: session_token,
                                               query: own ? "owner:me" : nil)
-      workspaces = workspaces.select { |w| w["name"].to_s.start_with?(prefix) } if prefix.present?
+      workspaces = workspaces.select { |w| Coder::Pool.matches?(prefix, w["name"]) } if prefix.present?
       workspaces
     rescue Coder::Api::ApiError => e
       raise OperationError, "list workspaces failed: #{@token.redact(e.message)}"

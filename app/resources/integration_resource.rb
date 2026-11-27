@@ -186,6 +186,16 @@ class IntegrationResource < ApplicationResource
     integration.coder? ? integration.coder_lock_ttl_minutes : nil
   end
 
+  typelize "string | null"
+  attribute :coder_host do |integration|
+    integration.coder? ? integration.coder_host : nil
+  end
+
+  typelize "string[]"
+  attribute :missing_settings do |integration|
+    integration.coder_missing_settings
+  end
+
   # The deployment's one Slack events endpoint, the same for every workspace.
   typelize "string | null"
   attribute :slack_request_url do |integration|

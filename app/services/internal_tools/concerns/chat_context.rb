@@ -12,7 +12,41 @@ module InternalTools
                             "rejected, since nothing here receives their clicks yet. Keep `text` set as well."
       INTERACTIVE_ACTIONS = %w[Action.Submit Action.Execute].freeze
 
+      INTEGRATION_ID_SCHEMA = {
+        type: "integer",
+        description: "The Slack or Teams integration to act through (the ID in this session's Available Integrations). " \
+                     "Not needed in a conversation the run came from, or when the session has exactly one integration " \
+                     "of that messenger."
+      }.freeze
+
       private
+
+      # The active installs of `provider` attached to this session (docs/design/session-integrations.md
+      # §5.3), never the project's.
+      def attached_chat_installs(provider)
+        session ? session.integrations.active.where(provider: provider) : Integration.none
+      end
+
+      # The attached installs of `provider` this call may use: all of them, or the one named by
+      # `integration_id`. → [relation, error]
+      def chat_install_scope(provider)
+        attached = attached_chat_installs(provider)
+        return [ attached, nil ] if params[:integration_id].blank?
+
+        id = Integer(params[:integration_id].to_s, 10)
+        named = attached.where(id: id)
+        return [ named, nil ] if named.exists?
+
+        [ nil, error("integration_id #{params[:integration_id]} is not a #{provider} integration attached to this session. " \
+                     "#{attached_chat_hint(provider)}") ]
+      rescue ArgumentError
+        [ nil, error("integration_id must be an integer. #{attached_chat_hint(provider)}") ]
+      end
+
+      def attached_chat_hint(provider)
+        rows = attached_chat_installs(provider).order(:id).map { |i| "#{i.id} (#{i.chat_workspace_name})" }
+        rows.any? ? "Attached #{provider} integrations: #{rows.join('; ')}." : "No #{provider} integration is attached to this session."
+      end
 
       def chat_origin
         Chat.origin(workflow_run).to_h
@@ -24,7 +58,7 @@ module InternalTools
         return [ named, nil ] if named.present? && Chat::PROVIDERS.key?(named.to_s)
         return [ nil, error("Unknown provider #{named.inspect}: use slack or teams") ] if named.present?
 
-        connected = project ? (Tool.active_integration_providers(project) & Chat::PROVIDERS.keys).sort : []
+        connected = session ? (session.integrations.active.distinct.pluck(:provider).map(&:to_s) & Chat::PROVIDERS.keys).sort : []
         return [ connected.first, nil ] if connected.one?
 
         [ nil, error("Name the messenger: pass `provider` (#{connected.join(' or ').presence || 'none is connected'})") ]
@@ -33,7 +67,10 @@ module InternalTools
       def teams_target
         return [ nil, error("This tool needs a project — the session has none") ] if project.nil?
 
-        conversation, message = Chat::TargetResolver.teams(project, params[:conversation], chat_origin)
+        scope, scope_error = chat_install_scope("teams")
+        return [ nil, scope_error ] if scope_error
+
+        conversation, message = Chat::TargetResolver.teams(project, params[:conversation], chat_origin, within: scope)
         [ conversation, message && error(message) ]
       end
 
