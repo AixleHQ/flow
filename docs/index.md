@@ -29,6 +29,7 @@ a document is added, removed, or moved here, update this index in the same chang
 
 ## System Design
 
+- **[design/session-integrations.md](./design/session-integrations.md)** — Integrations chosen per session (task #295): several integrations of one provider in a scope (Coder first, with a required template and machine prefix, #294), attached explicitly to workflows, steps and interactive sessions through resource links and a `session_integrations` table, named by `integration_id` in tools, and listed to the agent; what changes per provider, the behaviour-preserving backfill, and the order of tasks
 - **[design/tool-execution.md](./design/tool-execution.md)** — Tool execution strategy framework
 - **[design/tool-attachment.md](./design/tool-attachment.md)** — A session gets only the tools attached to it (#290): the six plumbing tools that stay automatic, removal of integration, repository, tracker and custom-tool-fallback grants with no feature flag, Azure tools and `refresh_github_token` made attachable, the one data migration that attaches every tool the old rules served (checked by hand, no migration tests), catalog templates left unchanged, the AI Builder text changes, and the test that guards the rule
 - **[design/meta-workflow.md](./design/meta-workflow.md)** — Aixle Builder: the original meta-workflow design, with a note on what ships (an interactive session served the personal MCP tools pinned to its project) and how its tools are authorized
