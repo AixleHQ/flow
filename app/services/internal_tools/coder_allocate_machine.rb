@@ -41,7 +41,7 @@ module InternalTools
 
       result = Coder::Allocator.new(
         integration:      coder_integration,
-        terminal_session: session
+        holder:           Coder::LockService::Holder.session(session.id)
       ).allocate(
         note:        params[:note],
         acquired_by: acquired_by_label,

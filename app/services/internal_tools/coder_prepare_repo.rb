@@ -58,11 +58,11 @@ module InternalTools
       return error("workspace_name is required") if workspace_name.empty?
 
       lock_service = Coder::LockService.new(coder_integration)
-      unless lock_service.held_by_session?(workspace_name: workspace_name, terminal_session_id: session.id)
+      unless lock_service.held_by_session?(workspace_name: workspace_name, holder: Coder::LockService::Holder.session(session.id))
         return error("session does not hold the lock for workspace #{workspace_name}")
       end
 
-      lock_service.touch(workspace_name: workspace_name, terminal_session_id: session.id)
+      lock_service.touch(workspace_name: workspace_name, holder: Coder::LockService::Holder.session(session.id))
 
       repository = resolve_repository
       return error(no_repository_message) if repository.nil?

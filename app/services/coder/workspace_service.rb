@@ -11,11 +11,21 @@ module Coder
   class WorkspaceService
     class OperationError < StandardError; end
 
+    # Coder refused a request because the account is out of quota. A kind of
+    # `OperationError`, so a caller that does not care keeps rescuing that.
+    class QuotaError < OperationError; end
+
     # Operator-tunable from `settings.yml` (`Settings.coder.await_build_timeout`,
     # `CODER_AWAIT_BUILD_TIMEOUT`). The numeric fallback matches DD-14 / OQ-6.
     DEFAULT_BUILD_TIMEOUT  = (Settings.coder&.await_build_timeout || 240).to_i
     DEFAULT_BUILD_INTERVAL = 3   # seconds
     EXPLANATION_LIMIT      = 300
+    GONE_STATUSES          = [ 404, 410 ].freeze
+
+    # What Coder answers when the account is out of quota. The exact status and
+    # body of a refusal are recorded on staging (design runner-coder.md §15);
+    # until then a refusal is a quota one only when it says so itself.
+    QUOTA_STATUSES = [ 402, 403, 409, 429 ].freeze
 
     def initialize(integration)
       @integration = integration
@@ -36,6 +46,34 @@ module Coder
 
     def find_by_name(name)
       list.find { |w| w["name"].to_s == name.to_s }
+    end
+
+    # One `GET`: the status of one of the token owner's workspaces. A workspace
+    # Coder does not know (404) or has deleted (410) is `deleted`.
+    def status(name)
+      workspace = Coder::Api.get_workspace_by_name(coder_url: coder_url, session_token: session_token, name: name)
+      Coder::WorkspaceStatus.from(workspace)
+    rescue Coder::Api::HTTPError => e
+      return Coder::WorkspaceStatus.from(nil) if GONE_STATUSES.include?(e.status)
+
+      raise OperationError, "workspace status failed: #{@token.redact(e.message)}"
+    rescue Coder::Api::ApiError => e
+      raise OperationError, "workspace status failed: #{@token.redact(e.message)}"
+    end
+
+    # Starts a stopped workspace without waiting for the build. Returns the
+    # build to wait for: the start build already in flight, or the one just
+    # started. Returns nil when the workspace is already running.
+    #
+    # A start already in flight is reused, not repeated: another `start` against
+    # the same workspace would race it and answer HTTP 409.
+    # `status` defaults to the one read off `workspace`; a caller that holds
+    # only the workspace's id passes the status it fetched.
+    def ensure_started_async(workspace, status: Coder::WorkspaceStatus.from(workspace))
+      return nil if status.running?
+      return { "id" => status.build_id } if status.building? && status.transition == "start" && status.build_id
+
+      start(workspace["id"])
     end
 
     def start(workspace_id)
@@ -64,6 +102,8 @@ module Coder
         orphan:        orphan
       )
     rescue Coder::Api::ApiError => e
+      raise QuotaError, "build (#{transition}) failed: #{with_coder_explanation(e)}" if quota_refusal?(e)
+
       raise OperationError, "build (#{transition}) failed: #{@token.redact(e.message)}"
     end
 
@@ -110,6 +150,8 @@ module Coder
         template_id:   tpl_id
       )
     rescue Coder::Api::ApiError => e
+      raise QuotaError, "create_workspace failed: #{with_coder_explanation(e)}" if quota_refusal?(e)
+
       raise OperationError, "create_workspace failed: #{with_coder_explanation(e)}"
     end
 
@@ -129,6 +171,15 @@ module Coder
       explanation.empty? ? plain : "#{plain} — #{redacted_excerpt(explanation)}"
     rescue JSON::ParserError
       plain
+    end
+
+    def quota_refusal?(error)
+      return false unless error.is_a?(Coder::Api::HTTPError) && QUOTA_STATUSES.include?(error.status)
+
+      body = JSON.parse(error.body.to_s)
+      body.is_a?(Hash) && body.values_at("message", "detail").any? { |part| part.to_s.match?(/quota/i) }
+    rescue JSON::ParserError
+      false
     end
 
     def build_failure(build_id, build)

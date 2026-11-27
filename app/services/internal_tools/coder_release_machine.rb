@@ -35,8 +35,8 @@ module InternalTools
       # the delete statement itself, so a lock that expired and was reclaimed
       # by another session between check and delete cannot be dropped here.
       released = Coder::LockService.new(coder_integration).release_owned(
-        workspace_name:      workspace_name,
-        terminal_session_id: session.id
+        workspace_name: workspace_name,
+        holder:         Coder::LockService::Holder.session(session.id)
       )
 
       success({

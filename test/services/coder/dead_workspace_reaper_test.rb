@@ -199,12 +199,24 @@ module Coder
     test "a failed workspace held by a live session is not deleted" do
       service = FakeWorkspaceService.new(workspaces: [ running("aixle-prod-1", "u1", status: "failed") ])
       locks   = Coder::LockService.new(@integration)
-      locks.acquire(workspace_name: "aixle-prod-1", workspace_id: "u1", terminal_session_id: "sess-1")
+      locks.acquire(workspace_name: "aixle-prod-1", workspace_id: "u1", holder: Coder::LockService::Holder.session("sess-1"))
 
       build_reaper(workspace_service: service, lock_service: locks).reap
       travel(11.minutes) { build_reaper(workspace_service: service, lock_service: locks).reap }
 
       assert_empty service.deleted_ids
+    end
+
+    test "a dead workspace held by an environment is never deleted, however long it is held" do
+      service = FakeWorkspaceService.new(workspaces: [ running("aixle-prod-1", "u1") ])
+      locks   = Coder::LockService.new(@integration)
+      locks.acquire(workspace_name: "aixle-prod-1", workspace_id: "u1", holder: Coder::LockService::Holder.environment(3))
+
+      build_reaper(workspace_service: service, lock_service: locks).reap
+      travel(30.days) { build_reaper(workspace_service: service, lock_service: locks).reap }
+
+      assert_empty service.deleted_ids
+      assert_nil marker_for("aixle-prod-1")
     end
 
     test "with no machine prefix the reaper does nothing, and it only ever lists its own workspaces" do
@@ -310,7 +322,7 @@ module Coder
     test "a workspace held by a live session is never reaped underneath it" do
       service = FakeWorkspaceService.new(workspaces: [ running("aixle-prod-1", "u1") ])
       locks   = Coder::LockService.new(@integration)
-      locks.acquire(workspace_name: "aixle-prod-1", workspace_id: "u1", terminal_session_id: "sess-1")
+      locks.acquire(workspace_name: "aixle-prod-1", workspace_id: "u1", holder: Coder::LockService::Holder.session("sess-1"))
 
       build_reaper(workspace_service: service, lock_service: locks).reap
       travel(11.minutes) { build_reaper(workspace_service: service, lock_service: locks).reap }
