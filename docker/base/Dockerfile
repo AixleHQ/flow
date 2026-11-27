@@ -1,7 +1,7 @@
 # uv / uvx (Astral), pulled in as a stage so the version stays a single pinned
 # ARG. `COPY --from=<image>` does NOT expand build args — BuildKit rejects it
 # outright — so a named stage is the only way to keep the tag in one place.
-ARG UV_VERSION=0.9.29
+ARG UV_VERSION=0.13.4
 FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
 
 # =============================================================================

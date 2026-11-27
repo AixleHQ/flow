@@ -28,6 +28,11 @@ governance, community health — carry none.
 - **Tasks**: the **Upload new** button in a card's Assets tab. The drop zone remains: drop files on it, or click it to select several files.
 
 ### Fixed
+- **Connectors**: the agent images ship uv / uvx 0.13.4, which fixes three advisories in
+  0.9.29 (among them the critical GHSA-hq85-5cpj-mr62, a compromised root in uv's bundled
+  CA store). Connectors from PyPI start through this `uvx`. Self-hosted installations:
+  pull the new agent images.
+- **Assets**: the file drop zone, in the Assets upload dialog and on a card's Assets tab, can be reached with Tab and opens the file picker with Enter or Space.
 - **Tasks**: pressing `n` or `/` while a task's drawer is open, with the cursor outside a field, no longer opens Create task over it or jumps to the board search.
 
 ## [1.20.0] - 2026-11-26

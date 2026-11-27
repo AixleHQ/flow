@@ -13,6 +13,7 @@ http:
         # from a host of their own.
         addAuthCookiesToResponse:
           - aixle_container
+        trustForwardHeader: false
     terminal-cors:
       headers:
         accessControlAllowOriginList:
