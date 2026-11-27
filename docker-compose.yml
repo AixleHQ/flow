@@ -176,7 +176,7 @@ services:
     restart: on-failure:5
 
   db:
-    image: postgres:15.3-alpine
+    image: postgres:15.20-alpine
     # The lock table is sized at startup, as max_locks_per_transaction ×
     # max_connections, and relation locks are taken on indexes as well as
     # tables. The suite runs one worker per core, each in a transaction over a
