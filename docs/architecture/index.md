@@ -39,6 +39,8 @@ Core pattern: **PhaseActivity → ContainerService → Strategy → Runtime**
 
 The hosted runtimes' `exec` return `[stdout, stderr, exit_code]`, with stdout and stderr as arrays of strings (Kubernetes splits its output into lines; Docker returns the daemon's chunks). `exec!` is the variant for callers that must tell "the container is gone" from "the command failed": it raises `ContainerRuntime::ContainerUnreachableError` instead of reporting exit code 1, on Kubernetes when the pod cannot be reached and on Docker when the daemon does not know the container. `RunnerRuntime#exec!` raises it too when the runner reports the container gone.
 
+The layers a session start goes through (activity, `ContainerService`, strategy, runtime, and for a runner `Runners::Machines` and the runner adapter), where per-type differences live, and the behaviour every runtime and runner type guarantees are in [Runtime and Runner Adapter Layers](./runtime-layers.md).
+
 ### Agent Adapters
 
 One adapter per runtime in `app/services/agents/`, registered in `AgentCredentialsService::ADAPTERS`. Each declares its home directory and auth files (`home_dir`, `config_path`, `auth_watch_path`), renders the CLI's config, and records usage:
@@ -108,4 +110,5 @@ Visibility scopes: `Model.visible_for_project(project)` is what a picker offers:
 ## Other Architecture Docs
 
 - [Container Runtime & Service](./container-runtime.md) — pluggable Docker/K8s runtime + ContainerService refactoring (historical)
+- [Runtime and Runner Adapter Layers](./runtime-layers.md) — the layers of a session start and the guarantees of every runtime and runner type
 - [Workflow Engine](./workflows.md) — workflow data models and execution flow
