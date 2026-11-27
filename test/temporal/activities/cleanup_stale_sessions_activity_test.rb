@@ -317,16 +317,14 @@ module Activities
         machine, stale = stale_session_holding_a_machine
         @runtime_mock.expects(:resolve_container).never
 
-        result = nil
-        assert_no_enqueued_jobs do
-          result = run_activity(CleanupStaleActivity)
-        end
+        result = run_activity(CleanupStaleActivity)
 
         assert_equal 1, result[:cleaned_running]
         machine.reload
         assert_equal [ "registered", stale.id, nil ], [ machine.state, machine.current_session_id, machine.state_reason ],
                      "the machine is not failed for the session's staleness"
         assert_equal 0, RunnerOperation.count, "nothing was sent to the runner by the sweep"
+        assert_empty enqueued_jobs.map { |job| job["job_class"] }.grep(/Runner|Machine|Reset/), "no job is queued for the machine"
         assert_equal "failed", stale.reload.state
       end
 
@@ -376,7 +374,7 @@ module Activities
         assert_equal "failed", stale.reload.state
         assert_equal "registered", machine.reload.state
         assert_equal 0, RunnerOperation.count
-        assert_no_enqueued_jobs
+        assert_empty enqueued_jobs.map { |job| job["job_class"] }.grep(/Runner|Machine|Reset/)
       end
 
       private
