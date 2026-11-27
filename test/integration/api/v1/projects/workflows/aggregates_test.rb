@@ -193,7 +193,7 @@ class Api::V1::Projects::Workflows::AggregatesTest < ActionDispatch::Integration
     Bullet.enable = false
     other_project = create(:project, company: @company, owner: @owner)
     foreign = [ create(:integration, :coder, :active, company: @company, project: other_project),
-                create(:integration, :coder, :active, company: create(:company)), 0 ]
+                create(:integration, :coder, :active, company: create(:company)), 999_999_999 ]
 
     foreign.each do |integration|
       id = integration.respond_to?(:id) ? integration.id : integration

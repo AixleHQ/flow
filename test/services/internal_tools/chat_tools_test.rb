@@ -226,7 +226,7 @@ class InternalTools::ChatToolsTest < ActiveSupport::TestCase
     assert_equal 1, ambiguous[:exit_code]
     assert_match(/several Slack integrations: pass `integration_id`/, ambiguous[:stderr])
 
-    outside = run_tool(InternalTools::ChatPostMessage, { text: "hi", provider: "slack", integration_id: 0 }, session: plain)
+    outside = run_tool(InternalTools::ChatPostMessage, { text: "hi", provider: "slack", integration_id: 999_999_999 }, session: plain)
     assert_match(/is not a slack integration attached to this session/, outside[:stderr])
   end
 
