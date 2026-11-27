@@ -37,6 +37,6 @@ class WorkflowAggregateSave
     @workflow.runner_id = @payload["runner_id"].presence if @payload.key?("runner_id")
     @workflow.merge_config(@payload["config"]) if @payload.key?("config")
     @workflow.save!
-    WorkflowStepSync.new(@workflow, @steps).sync!
+    WorkflowStepSync.new(@workflow, @steps, refuse_unknown: %w[integration_ids]).sync!
   end
 end
