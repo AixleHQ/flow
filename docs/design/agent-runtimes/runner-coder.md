@@ -26,7 +26,7 @@ Today the type cannot be created. `Runners::Adapter::REGISTRY` holds `manual` on
 | --- | --- | --- |
 | Coder services for a second consumer | `Coder::Allocator`, `LockService`, `WorkspaceService` serve a terminal session only, and block up to 240 s per call | §4 (17b) |
 | Runner allocator | `Runners::Machines.acquire!` takes a free registered machine (DESIGN.md §7.3 as 8a built it). No step 4 | `Runners::Allocator` (§5) |
-| Provisioned states | `RunnerEnvironmentStateMachine` has `registered`, `resetting`, `failed`, `gone` | The provisioned arm (§6) |
+| Provisioned states | `RunnerEnvironmentStateMachine` has `registered`, `failed`, `gone`, and `resetting`, which only Return to service uses and #302 removes. The reset after a session runs while the machine is still `registered` and held | The provisioned arm (§6) |
 | Delivery of `aixle-runner` | `register` creates an environment for a `manual` machine | `register` fills the environment the allocator created (§8) |
 | `CoderAdapter` | None | §7 |
 | `reuse_policy` | `reuse` and `reset` on `manual`, in `RunnerRuntime#cleanup_session` | `fresh` only on `coder`: a workspace per session, deleted after it (§9). No `on_release` |
@@ -184,7 +184,7 @@ The HTTP and SSH calls run outside the allocator's runner lock, and the result o
 
 - **An allocated row is created in `provisioning`**, held by its session, with `boot_started_at` null until the integration hands over a workspace (§5.2). There is no `requested` state. Teardown does not branch on whether a workspace exists: it always calls `Coder::Allocator#delete(holder:)`, which returns `:gone` when the holder holds none (§4.5).
 - `idle` is free when no session holds it and busy when one does. `RunnerEnvironment` gets `in_service?` (`registered` or `idle`) and the `free` scope reads it, so `Allocator`, `Resolver`'s availability and the `manual` code share one definition of "can take a session".
-- `registered` and `resetting` stay the `manual` states. The two arms never mix: a `manual` environment is created `registered`, an allocated one `provisioning`, chosen by `origin`.
+- `registered`, `failed` and `gone` are the `manual` states. #302 removes `resetting`: the reset after a session runs while the machine is held. The two arms never mix: a `manual` environment is created `registered`, an allocated one `provisioning`, chosen by `origin`.
 - `failed` on a provisioned environment is not a resting state. The reconciler (§11) tears it down (the workspace is deleted), and the allocator takes another machine on demand. This is the **rebuild** (D4): retire-and-replace, a new key and a new row. `Adapter#reset(level: :rebuild)` is not built. The `rebuildable` capability stays `true` for `coder`, and the runner page's Rebuild action calls `begin_teardown`.
 - `check_in` is `booting → idle`, fired by the first check-in after `register` (§8.4). It is not fired by `register`, so an environment is never `idle` before its preflight is reported.
 - There is no `restart` event and no revival: a workspace that stops under a session fails the session through the contact-loss grace (§11).
@@ -252,7 +252,7 @@ Today the session start does not reach the adapter: `RunnerRuntime` and `Runners
 | --- | --- | --- |
 | `new_environment(runner)` | `nil`: no new environment can be made, so the allocator goes to the capacity wait and the offline rules | The attributes of a new row: `provisioning`, `allocated`, a platform-made `key` (§5.1) |
 | `advance!(environment)` | `:ready` (a registered machine is ready) | `Runners::Provisioning.advance!` (§5.2): `:pending` or `:ready`, or raises |
-| `release!(environment, session, failed:)` | The scrub or reset by the runner's policy, and on success the machine returns to rotation; a failed reset takes it out of rotation. The code of `RunnerRuntime#cleanup_session` after the stop (the scrub or reset) and `Machines.release!` moves here. What `settle_resets!` still does for a release-time reset is whatever #302 leaves, and 17c builds on that | `begin_teardown`, then `teardown` once (§9.3). No scrub |
+| `release!(environment, session, failed:)` | The scrub or reset by the runner's policy, and on success the machine returns to rotation; a failed reset takes it out of rotation. The code of `RunnerRuntime#cleanup_session` after the stop (the scrub or reset) and `Machines.release!` moves here. What `settle_resets!` still does is whatever #302 leaves, and 17c builds on that | `begin_teardown`, then `teardown` once (§9.3). No scrub |
 | `fail!(environment, reason)` | The machine goes `failed`, out of rotation, with the reason (`Machines.fail!`). It stays `failed` until it is revoked and registered again with Add machine | `mark_failed` with the reason, `begin_teardown`, then `teardown` once |
 | `end_registration!(environment, ended_by:)` | §6.1: the row becomes `gone` | §6.1: `begin_teardown`; `gone` when the workspace is deleted |
 | `cleanup_waits_for_unheard?(environment)` | `true`: cleanup waits for a machine that is not heard (the guarantee of `runtime-layers.md`, 7) | `false` |
