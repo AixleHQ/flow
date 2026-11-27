@@ -535,13 +535,14 @@ class TerminalSession < ApplicationRecord
     @full_telemetry
   end
 
+  # The tools this session is served: the ones attached to it (resolved from its
+  # workflow, step or the session itself) plus the plumbing tools whose
+  # injection rule matches (docs/design/tool-attachment.md). A session with no
+  # custom tool attached gets no custom tool: there is no project-wide fallback.
   def available_tools(ctx: nil)
     ctx ||= Tools::Context.for_session(self)
 
     base = tools.not_deleted.enabled.where(id: TenantScope.owned(Tool, project: project, company: company || project&.company).select(:id)).to_a
-    if base.none?(&:db_source?) && project.present?
-      base += Tool.for_project(project).enabled.to_a
-    end
 
     ctx.candidate_tools = base
     injected = Tools::Registry.injectable.select { |d| d.inject?(ctx) }.map(&:name)

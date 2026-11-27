@@ -10,7 +10,7 @@ module Tools
   #               picker SECTION ("Board management", "Slack"): its header
   #               attaches every session tool carrying the tag in one click, and
   #               the tools under it can each be attached on their own. Hidden
-  #               tags stay out of the picker entirely: they auto-inject or are
+  #               tags stay out of the picker entirely: they are plumbing or are
   #               surfaced through a managed server.
   #
   # A tag not listed here is treated as hidden. A user_attachable session tool
@@ -30,13 +30,10 @@ module Tools
       Entry.new(tag: :github_identity, label: "GitHub as a user", ui_visible: true),
       Entry.new(tag: :gitlab_identity, label: "GitLab as a user", ui_visible: true),
       Entry.new(tag: :bitbucket_identity, label: "Bitbucket as a user", ui_visible: true),
-      # Hidden because the Azure tools are not chosen — they auto-inject.
-      # The repository ones arrive when an Azure repository is attached to the
-      # session and the build ones when the project has an Azure connection, so
-      # a picker entry would only offer a second, weaker way to say the same
-      # thing — and let someone attach half a working set by hand. Azure Boards
-      # work items are reached through the :tracker tools.
-      Entry.new(tag: :azure_devops, label: "Azure DevOps", ui_visible: false),
+      # Chosen like any other tools. The section stays hidden until the project
+      # has an Azure DevOps connection (requires_integration). Azure Boards work
+      # items are reached through the :tracker tools.
+      Entry.new(tag: :azure_devops, label: "Azure DevOps", ui_visible: true),
       # Chosen like any other tools: a workflow or a step attaches or removes the set.
       Entry.new(tag: :pull_requests, label: "Pull requests", ui_visible: true),
       Entry.new(tag: :assets, label: "Assets", ui_visible: true),

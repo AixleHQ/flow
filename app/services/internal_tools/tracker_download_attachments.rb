@@ -15,7 +15,6 @@ module InternalTools
                   "{tracker, issue: {id, key}, task_id, files: [{id, name, path, status, reason, task_asset_id}]}; " \
                   "status is copied, reused or skipped."
       tags :tracker
-      inject_when :tracker_run
       requires_integration :tracker
       unavailable_message "No task tracker is connected to this project. Add one on the project's Trackers page."
       idempotent

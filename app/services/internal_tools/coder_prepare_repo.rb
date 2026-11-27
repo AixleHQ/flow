@@ -18,7 +18,6 @@ module InternalTools
                   "repositories and for GitHub, GitLab, Bitbucket and Azure DevOps ones; the credential is never " \
                   "written to the workspace disk."
       tags :coder
-      inject_when :coder_integration_connected
       requires_integration :coder
       input_schema({
         type: "object",

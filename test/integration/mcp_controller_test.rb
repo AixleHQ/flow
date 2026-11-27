@@ -295,6 +295,17 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     refute_match(/Project Settings/, body["error"]["message"].to_s)
   end
 
+  test "a Coder connection does not put coder tools in tools/list or make them callable" do
+    create(:integration, :coder, :active, company: @company, project: @project, connected_by: @user)
+
+    names = listed_tools(rpc("tools/list")).map { |t| t["name"] }
+    assert names.none? { |n| n.start_with?("coder_") }
+
+    body = rpc("tools/call", { name: "coder_ssh_exec", arguments: {} })
+    assert_nil body["result"]
+    assert body["error"].present?
+  end
+
   test "the /mcp alias serves the same endpoint" do
     attach_platform_tool("board_list_tasks")
 

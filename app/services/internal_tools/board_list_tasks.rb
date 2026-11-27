@@ -10,7 +10,6 @@ module InternalTools
                   "description with board_get_task. Archived tasks are left out, as on the board, " \
                   "unless include_archived is true."
       tags :board
-      inject_when :workflow_step_session
       input_schema({
         type: "object",
         required: [],

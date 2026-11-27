@@ -124,7 +124,7 @@ module ContextBuilders
         - **Files** land in `/workspace/assets/` from the workflow's `base_asset_ids`,
           the step's `asset_ids`, and the files picked when a run starts. Files
           attached to a board task are NOT mounted — the step agent reads them with
-          its board tools. Declare expectations with `input_asset_specs` /
+          board tools attached to the step (`board_get_task_assets`). Declare expectations with `input_asset_specs` /
           `output_asset_specs`. A step receives the outputs of every step it runs
           after, directly or through others.
         - **References** in instructions (`{{asset:<id>}}`, `{{output:<step id>:<file>}}`,
@@ -179,10 +179,12 @@ module ContextBuilders
         - A chat trigger listens in one channel connected to the company
           (`chat_channel_id` from `list_chat_channels`). To connect another, call
           `create_chat_connect_code` and give the user its `invite`, `mention` and
-          `command` to post in that channel.
+          `command` to post in that channel. The trigger does not grant tools: attach
+          `chat_post_message` to the step that replies.
         - A tracker trigger usually wants `subject_policy: find_or_create_task`, so
           every event about one issue lands on the same board task. Moving the
-          issue on is the workflow's job, with the tracker_* tools.
+          issue on is the workflow's job, with the tracker_* tools: attach the tracker
+          tools the step needs, a tracker trigger does not grant them.
         - A pull request trigger that fixes review feedback wants
           `filter_predicate: {"review.verdict": "changes_requested"}`, a step with
           the repository attached, and `subject_policy: existing_task` to land on

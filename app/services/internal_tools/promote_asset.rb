@@ -18,7 +18,6 @@ module InternalTools
                   "Only use this tool when the step instructions explicitly ask to promote (or save/publish) " \
                   "an asset; do not call it on your own initiative."
       tags :assets
-      inject_when :workflow_step_session
       param :name, type: :string, required: true,
                    description: "Name of the output to promote: its path relative to #{Asset::OUTPUT_DIR} " \
                                 "(e.g. report.md or reports/q3.pdf)."

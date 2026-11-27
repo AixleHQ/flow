@@ -19,8 +19,6 @@ module InternalTools
                   '"could not read Username". Run it, then retry — no re-clone and no manual git ' \
                   "remote surgery."
       tags :repositories
-      inject_when :github_repositories_attached
-      user_attachable false
       idempotent true
       destructive false
       input_schema({

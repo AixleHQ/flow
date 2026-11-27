@@ -25,7 +25,6 @@ module InternalTools
                   "Only use this tool when the step instructions explicitly ask to share (or make public) " \
                   "an asset; do not call it on your own initiative."
       tags :assets
-      inject_when :workflow_step_session
       idempotent
       param :source, type: :string, enum: SOURCES,
                      description: "Where the asset lives: project (default), run or task."

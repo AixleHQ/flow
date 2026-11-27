@@ -46,7 +46,59 @@ module Templates
       errors.reject { |_, problems| problems.empty? }
     end
 
+    # Advice that does not fail the gate: a step whose text names a platform tool the
+    # step does not list (docs/design/tool-attachment.md §5.2). A session gets only the
+    # tools its workflow or step lists, so the step could not call it. A prohibition
+    # ("do not call board_move_task") warns too; that is accepted for a warning.
+    #
+    # @return [Hash{String => Array<String>}] "namespace/slug" → warnings
+    def warnings
+      template_dirs(@root).each_with_object({}) do |dir, found|
+        package = Package.from_directory(dir)
+        messages = unlisted_tool_warnings(package)
+        found[identifier_for(dir)] = messages if messages.any?
+      rescue Psych::Exception
+        next # call reports the malformed definition
+      end
+    end
+
     private
+
+    def unlisted_tool_warnings(package)
+      platform_names = platform_tool_names
+      keys_to_names = package.section("tools").to_h { |tool| [ tool["key"], tool["platform"] || tool["name"] ] }
+      agents = package.section("agents").index_by { |agent| agent["key"] }
+
+      package.section("workflows").flat_map do |workflow|
+        base_tools = Array(workflow.dig("base", "tools"))
+        Array(workflow["steps"]).flat_map do |step|
+          listed = (base_tools + Array(step["tools"])).map { |key| keys_to_names[key] || key }
+          named = named_tools(step_texts(step, agents[step["agent"]]), platform_names, keys_to_names)
+          (named - listed).sort.map do |name|
+            "workflow #{workflow['key']} step #{step['key']} names #{name} but does not list it in tools"
+          end
+        end
+      end
+    end
+
+    def step_texts(step, agent)
+      texts = [ step["instructions"] ]
+      texts += Array(step["sub_steps"]).flat_map { |sub| [ sub["name"], sub["instructions"] ] }
+      texts += agent.values_at("persona", "principles", "title") if agent
+      texts.compact.map(&:to_s)
+    end
+
+    # Names of the platform tools in the text, plain or as a {{tool:<key>}} reference.
+    def named_tools(texts, platform_names, keys_to_names)
+      text = texts.join("\n")
+      plain = platform_names.select { |name| text.match?(/(?<![a-z0-9_])#{Regexp.escape(name)}(?![a-z0-9_])/i) }
+      referenced = text.scan(/\{\{tool:([^}\s]+)\}\}/i).flatten.filter_map { |key| keys_to_names[key] }
+      (plain + referenced).uniq
+    end
+
+    def platform_tool_names
+      Tools::Registry.definitions.values.select { |d| d.audience == :session && d.user_attachable && d.inject_rules.empty? }.map(&:name)
+    end
 
     def read(root, file)
       path = root.join(file)

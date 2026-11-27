@@ -39,7 +39,7 @@ One Step = one agent session = one container = one major deliverable.
 | `skip_policy`          | `never`, `if_outputs_exist`, or `manual`.                                |
 | `on_failure`           | `retry`, `skip`, or `fail` (default). A step that stopped on its owner's agent quota is not retried — the same account would fail again. In a run a team handed out, a quota stop or a failed login hands the step to the team's next member whatever this says, without using a retry. |
 | `max_retries`          | Times a failed step starts again when `on_failure` is `retry`: 1–10.     |
-| `tool_ids`             | Tools available in this step (merged with workflow base).                |
+| `tool_ids`             | Tools available in this step (merged with workflow base). A step gets only the tools attached here or to the workflow, plus the session-lifecycle and sub-step tools. |
 | `skill_ids`            | Skills injected (merged with workflow base).                             |
 | `mcp_server_ids`       | MCP servers connected (merged with workflow base).                       |
 | `repository_ids`       | Repos cloned under `/workspace/repo/` (merged with workflow base).       |
