@@ -156,7 +156,7 @@ class Step < ApplicationRecord
     STEP_RESOURCES.each do |list, kind|
       next unless resource_list_changed?(list)
 
-      validate_owned_ids(workflow.scope, kind, list, linked_ids(list), self[list], lenient: true)
+      validate_owned_ids(workflow.scope, kind, list, linked_ids(list), self[list], lenient: kind != :integrations)
     end
   end
 

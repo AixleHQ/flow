@@ -203,7 +203,8 @@ class InternalTools::ChatToolsTest < ActiveSupport::TestCase
                       session: session_for({}))
 
     assert_equal 1, result[:exit_code]
-    assert_match(/No slack integration is attached to this session/, result[:stderr])
+    assert_match(/is not a Slack channel connected to/, result[:stderr])
+    assert_empty fake_slack.posted_messages
   end
 
   test "with two Slack workspaces attached, the origin wins, an integration_id picks one, and no id is ambiguous" do
@@ -217,7 +218,10 @@ class InternalTools::ChatToolsTest < ActiveSupport::TestCase
     originated = run_tool(InternalTools::ChatPostMessage, { text: "hi" }, session: session_for(from_second, attached: [ first, second ]))
     assert_equal 0, originated[:exit_code], originated[:stderr]
 
-    plain = session_for({ "chat" => { "provider" => "slack" } }, attached: [ first, second ])
+    gone = Integration.create!(provider: :slack, company: @company, connected_by: @user, name: "Gone", status: :active)
+    left = { "chat" => { "provider" => "slack", "conversation" => { "id" => "C9", "type" => "channel" },
+                         "thread_id" => "1.2", "integration_id" => gone.id } }
+    plain = session_for(left, attached: [ first, second ])
     ambiguous = run_tool(InternalTools::ChatPostMessage, { text: "hi", provider: "slack" }, session: plain)
     assert_equal 1, ambiguous[:exit_code]
     assert_match(/several Slack integrations: pass `integration_id`/, ambiguous[:stderr])

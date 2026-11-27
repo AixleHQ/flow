@@ -274,7 +274,8 @@ class Workflow < ApplicationRecord
     BASE_RESOURCES.each do |list, kind|
       next unless resource_list_changed?(list)
 
-      validate_owned_ids(scope, kind, :config, linked_ids(list), self[list], label: list, lenient: true)
+      # An unknown integration id is refused, not dropped: a list of integrations is access to accounts.
+      validate_owned_ids(scope, kind, :config, linked_ids(list), self[list], label: list, lenient: kind != :integrations)
     end
   end
 

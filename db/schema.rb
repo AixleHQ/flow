@@ -2424,7 +2424,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_27_133318) do
     t.index ["workflow_id", "asset_id"], name: "index_workflow_resource_links_on_workflow_id_and_asset_id", unique: true, where: "(asset_id IS NOT NULL)"
     t.index ["workflow_id", "aws_oidc_role_id"], name: "idx_on_workflow_id_aws_oidc_role_id_959f9c144b", unique: true, where: "(aws_oidc_role_id IS NOT NULL)"
     t.index ["workflow_id", "config_item_id"], name: "idx_on_workflow_id_config_item_id_44574998dd", unique: true, where: "(config_item_id IS NOT NULL)"
-    t.index ["workflow_id", "integration_id"], name: "index_workflow_resource_links_on_workflow_id_and_integration_id", unique: true, where: "(integration_id IS NOT NULL)"
+    t.index ["workflow_id", "integration_id"], name: "idx_on_workflow_id_integration_id_e8fbb99549", unique: true, where: "(integration_id IS NOT NULL)"
     t.index ["workflow_id", "mcp_server_id"], name: "index_workflow_resource_links_on_workflow_id_and_mcp_server_id", unique: true, where: "(mcp_server_id IS NOT NULL)"
     t.index ["workflow_id", "repository_id"], name: "index_workflow_resource_links_on_workflow_id_and_repository_id", unique: true, where: "(repository_id IS NOT NULL)"
     t.index ["workflow_id", "skill_id"], name: "index_workflow_resource_links_on_workflow_id_and_skill_id", unique: true, where: "(skill_id IS NOT NULL)"
