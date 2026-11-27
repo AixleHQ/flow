@@ -15,7 +15,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -o /out/aixle-runner ./cmd/aixle-runner
 
-FROM alpine:3.22
+FROM alpine:3.24
 COPY --from=build /out/aixle-runner /usr/local/bin/aixle-runner
 # The proxy sidecar bind-mounts the runner's own binary and its relay socket,
 # from the state directory, and the Docker daemon resolves those paths on this
