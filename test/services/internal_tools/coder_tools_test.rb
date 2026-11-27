@@ -184,7 +184,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
 
   test "ssh_exec: works without workflow context when the session holds the lock" do
     Coder::LockService.new(@integration).acquire(
-      workspace_name: "ws-1", workspace_id: "u1", holder: Coder::LockService::Holder.session(@no_workflow_session.id)
+      workspace_name: "ws-1", workspace_id: "u1", **lock_owner(@no_workflow_session.id)
     )
 
     Coder::SshRunner.any_instance.stubs(:exec).returns(
@@ -203,7 +203,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
 
   test "ssh_exec: runs the command when the session holds the lock" do
     Coder::LockService.new(@integration).acquire(
-      workspace_name: "ws-1", workspace_id: "u1", holder: Coder::LockService::Holder.session(@session.id)
+      workspace_name: "ws-1", workspace_id: "u1", **lock_owner(@session.id)
     )
 
     Coder::SshRunner.any_instance.stubs(:exec).returns(
@@ -237,7 +237,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
   # every use of the workspace renews it.
   test "ssh_exec: renews the lock it just used" do
     lock_service = Coder::LockService.new(@integration)
-    lock_service.acquire(workspace_name: "ws-1", workspace_id: "u1", holder: Coder::LockService::Holder.session(@session.id))
+    lock_service.acquire(workspace_name: "ws-1", workspace_id: "u1", **lock_owner(@session.id))
     original = @integration.integration_data.find_by(key: "coder:workspace_lock:ws-1").expires_at
 
     travel 5.minutes do
@@ -254,7 +254,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
 
   test "ssh_exec: detach returns a job id and points the caller at coder_job_status" do
     Coder::LockService.new(@integration).acquire(
-      workspace_name: "ws-1", workspace_id: "u1", holder: Coder::LockService::Holder.session(@session.id)
+      workspace_name: "ws-1", workspace_id: "u1", **lock_owner(@session.id)
     )
 
     result = Coder::SshRunner.stub(:new, ->(_integration) { FakeSshRunner.new }) do
@@ -275,7 +275,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
 
   test "job_status: returns the state and log tail of a detached job" do
     Coder::LockService.new(@integration).acquire(
-      workspace_name: "ws-1", workspace_id: "u1", holder: Coder::LockService::Holder.session(@session.id)
+      workspace_name: "ws-1", workspace_id: "u1", **lock_owner(@session.id)
     )
     runner = FakeSshRunner.new
 
@@ -319,9 +319,19 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
     end
   end
 
+  # `Coder::LockService` names its owner `holder:` where the runners services are
+  # present and `terminal_session_id:` where they are not; build whichever it takes.
+  def lock_owner(session_id)
+    if defined?(Coder::LockService::Holder)
+      { holder: Coder::LockService::Holder.session(session_id) }
+    else
+      { terminal_session_id: session_id }
+    end
+  end
+
   def hold_lock(workspace_name = "ws-1")
     Coder::LockService.new(@integration).acquire(
-      workspace_name: workspace_name, workspace_id: "u1", holder: Coder::LockService::Holder.session(@session.id)
+      workspace_name: workspace_name, workspace_id: "u1", **lock_owner(@session.id)
     )
   end
 
@@ -418,7 +428,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
 
   test "release: idempotently releases the workspace lock" do
     Coder::LockService.new(@integration).acquire(
-      workspace_name: "ws-1", workspace_id: "u1", holder: Coder::LockService::Holder.session(@session.id)
+      workspace_name: "ws-1", workspace_id: "u1", **lock_owner(@session.id)
     )
 
     result = InternalTools::CoderReleaseMachine.new(
@@ -446,7 +456,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
 
   test "release: works without workflow context" do
     Coder::LockService.new(@integration).acquire(
-      workspace_name: "ws-1", workspace_id: "u1", holder: Coder::LockService::Holder.session(@no_workflow_session.id)
+      workspace_name: "ws-1", workspace_id: "u1", **lock_owner(@no_workflow_session.id)
     )
 
     result = InternalTools::CoderReleaseMachine.new(
@@ -465,7 +475,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
   test "release: does not delete a lock held by a different session" do
     owner_session_id = 9001
     Coder::LockService.new(@integration).acquire(
-      workspace_name: "ws-1", workspace_id: "u1", holder: Coder::LockService::Holder.session(owner_session_id)
+      workspace_name: "ws-1", workspace_id: "u1", **lock_owner(owner_session_id)
     )
 
     # @session.id is 4242, so this call comes from a non-owning session.
@@ -478,7 +488,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
     payload = JSON.parse(result[:stdout])
     assert_not payload["released"], "non-owner must see released=false"
     assert Coder::LockService.new(@integration).held_by_session?(
-      workspace_name: "ws-1", holder: Coder::LockService::Holder.session(owner_session_id)
+      workspace_name: "ws-1", **lock_owner(owner_session_id)
     ), "owner's lock row must survive"
   end
 end
