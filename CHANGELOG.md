@@ -18,6 +18,7 @@ governance, community health — carry none.
 - **Tasks**: a card's Assets tab has a drop zone that takes several files at once, dropped or picked, so many files can be attached to a card in one go.
 
 ### Changed
+- Local development: the Docker Compose `temporal` service is now the Temporal CLI dev server (`temporalio/temporal` 1.10.1), which keeps its data in the `temporal_data` volume instead of the `temporal` databases in PostgreSQL, because `temporalio/auto-setup` is no longer published. Port 7233, the `default` namespace and the Temporal UI are unchanged. Workflow history from before the switch is not carried over; the worker recreates the schedules on start. The old `temporal` and `temporal_visibility` databases can be dropped.
 - **Tasks**: the task drawer shows the ticket title in its top bar on every tab, truncated with the full title on hover.
 - **Tasks**: a task's Details are read-only until you press Edit, so text can be selected and copied without opening a field. Save applies all changes in one request and Cancel discards them. In Activity, an edit names the fields it changed, and **Show changes** opens their old and new values.
 

@@ -62,7 +62,7 @@ make setup
 
 This single command:
 
-- Builds the web, worker, and Temporal images.
+- Builds the web and worker images and pulls the Temporal dev server image.
 - Installs Ruby gems (Bundler) and JS packages (Yarn) inside the web
   container.
 - Creates the database, runs migrations, and seeds defaults.

@@ -77,26 +77,23 @@ x-web-environment: &web-environment
 
 services:
   temporal:
-    image: temporalio/auto-setup:1.29.7
+    image: temporalio/temporal:1.10.1
+    # The image runs as uid 1000 and has no /data; a fresh named volume takes the
+    # owner of an existing image path, so the store lives in the user's home.
+    command: >-
+      server start-dev --ip 0.0.0.0 --port 7233 --headless
+      --namespace default --db-filename /home/temporal/temporal.db --log-level error
     restart: on-failure
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${TEMPORAL_HOST_PORT:-7233}:7233"
-    environment:
-      - DB=postgres12
-      - DB_PORT=5432
-      - POSTGRES_USER=postgres
-      - POSTGRES_PWD=postgres
-      - POSTGRES_SEEDS=db
-      - LOG_LEVEL=error
-    depends_on:
-      db:
-        condition: service_healthy
+    volumes:
+      - temporal_data:/home/temporal
     healthcheck:
-      test: ["CMD-SHELL", "temporal operator cluster health --address $(hostname -i):7233"]
+      test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "127.0.0.1:7233"]
       interval: 5s
       timeout: 5s
       retries: 60
-      start_period: 60s
+      start_period: 10s
     attach: false
 
   temporal-ui:
@@ -321,6 +318,7 @@ services:
 volumes:
   pg_data:
   redis_data:
+  temporal_data:
   runner_local_docker_root:
 
 networks:
