@@ -68,6 +68,7 @@ class InternalTools::ChatSlackChannelsTest < ActiveSupport::TestCase
     connect_chat_channel(company: @company, integration: ops, external_id: "C0OPSREP1", name: "reports")
     @slack.chat_workspace.update!(name: "Acme")
     session = session_for({})
+    session.integrations << ops
 
     ambiguous = post_message(session, conversation: "#reports")
     assert_equal 1, ambiguous[:exit_code]
@@ -79,6 +80,19 @@ class InternalTools::ChatSlackChannelsTest < ActiveSupport::TestCase
     assert_equal 0, post_message(session, conversation: "acme/reports")[:exit_code]
     assert_equal [ %w[C0OPSREP1 xoxb-ops], %w[C0REPORTS1 xoxb-acme] ],
                  fake_slack.posted_messages.map { |m| m.values_at(:channel, :token) }
+  end
+
+  test "a channel of a workspace the session was not given is not reached, though the company connected it" do
+    ops = Integration.create!(provider: :slack, company: @company, project: nil, connected_by: @user, name: "Ops",
+                              status: :active, settings: { "team_id" => "T2", "team_name" => "Ops" })
+    ops.update!(credentials_data: { "bot_token" => "xoxb-ops" })
+    connect_chat_channel(company: @company, integration: ops, external_id: "C0OPSONLY1", name: "ops-only")
+
+    refused = post_message(session_for({}), conversation: "C0OPSONLY1")
+
+    assert_equal 1, refused[:exit_code]
+    assert_match(/is not a Slack channel connected to/, refused[:stderr])
+    assert_empty fake_slack.posted_messages
   end
 
   test "reading, editing and deleting are confined the same way" do

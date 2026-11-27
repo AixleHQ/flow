@@ -22,6 +22,7 @@ class InternalTools::AzureDevopsToolsTest < ActiveSupport::TestCase
                                       azure_repository_name: "api")
     @session = create(:terminal_session, :running, user: @user, project: @project)
     @session.repositories << @repository
+    @session.integrations << @integration
     @fakes = stub_azure_devops!(integration: @integration)
   end
 
@@ -70,6 +71,25 @@ class InternalTools::AzureDevopsToolsTest < ActiveSupport::TestCase
     assert_equal 1, result[:exit_code]
     assert_match(/not_authorized/, result[:stderr])
     assert_match(/No such Azure DevOps connection/, result[:stderr])
+  end
+
+  test "a build tool refuses a connection of the project that is not in the session's set" do
+    outside = create(:integration, :azure_devops, :active, company: @company, connected_by: @user, project: @project)
+
+    result = run_tool(InternalTools::AzureDevopsListBuilds, { integration_id: outside.id })
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/not_authorized/, result[:stderr])
+    assert_match(/is not attached to this session/, result[:stderr])
+    assert_match(/Attached: #{@integration.id}\./, result[:stderr])
+  end
+
+  test "list_connections lists only the connections in the session's set" do
+    create(:integration, :azure_devops, :active, company: @company, connected_by: @user, project: @project)
+
+    body = JSON.parse(run_tool(InternalTools::AzureDevopsListConnections, {})[:stdout])
+
+    assert_equal [ @integration.id ], body["connections"].pluck("integration_id")
   end
 
   test "a disabled capability is refused before any Azure request" do

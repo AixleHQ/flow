@@ -178,8 +178,12 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     names = listed_tools(rpc("tools/list")).map { |t| t["name"] }
     refute_includes names, "chat_post_message"
 
-    create(:integration, company: @company, project: @project, provider: :slack,
-                         status: :active, connected_by: @user)
+    slack = create(:integration, company: @company, project: @project, provider: :slack,
+                                 status: :active, connected_by: @user)
+    names = listed_tools(rpc("tools/list")).map { |t| t["name"] }
+    refute_includes names, "chat_post_message", "an install the session was not given is not reachable"
+
+    @session.integrations << slack
     names = listed_tools(rpc("tools/list")).map { |t| t["name"] }
     assert_includes names, "chat_post_message"
   end
@@ -350,9 +354,12 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     names = listed_tools(rpc("tools/list")).map { |t| t["name"] }
     refute_includes names, "coder_ssh_exec"
 
-    create(:integration, company: @company, project: @project,
-                         provider: :coder, status: :active, connected_by: @user)
+    coder = create(:integration, company: @company, project: @project,
+                                 provider: :coder, status: :active, connected_by: @user)
+    names = listed_tools(rpc("tools/list")).map { |t| t["name"] }
+    refute_includes names, "coder_ssh_exec", "a connected integration is not reachable until it is in the session's set"
 
+    @session.integrations << coder
     names = listed_tools(rpc("tools/list")).map { |t| t["name"] }
     assert_includes names, "coder_ssh_exec"
   end
