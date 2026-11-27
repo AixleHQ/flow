@@ -149,7 +149,8 @@ class AttachFormerlyInjectedTools < ActiveRecord::Migration[8.1]
     select_value(<<~SQL.squish).present?
       SELECT 1 FROM repositories
         JOIN integrations ON integrations.id = repositories.integration_id
-        WHERE repositories.scope_type = 'Project' AND repositories.scope_id = #{workflow.project_id.to_i}
+        WHERE repositories.company_id = #{workflow.company_id.to_i}
+          AND repositories.scope_type = 'Project' AND repositories.scope_id = #{workflow.project_id.to_i}
           AND integrations.provider = #{connection.quote(provider)}
         LIMIT 1
     SQL
@@ -169,7 +170,8 @@ class AttachFormerlyInjectedTools < ActiveRecord::Migration[8.1]
   def custom_tool_ids(workflow)
     select_values(<<~SQL.squish).map(&:to_i)
       SELECT id FROM tools
-        WHERE source = 'db' AND deleted_at IS NULL AND enabled IS NOT FALSE
+        WHERE source = 'db' AND deleted_at IS NULL AND enabled = TRUE
+          AND company_id = #{workflow.company_id.to_i}
           AND scope_type = 'Project' AND scope_id = #{workflow.project_id.to_i}
     SQL
   end

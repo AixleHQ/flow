@@ -54,7 +54,9 @@ module Templates
     # @return [Hash{String => Array<String>}] "namespace/slug" → warnings
     def warnings
       template_dirs(@root).each_with_object({}) do |dir, found|
-        package = Package.from_directory(dir)
+        package = loadable_package(dir)
+        next unless package
+
         messages = unlisted_tool_warnings(package)
         found[identifier_for(dir)] = messages if messages.any?
       rescue Psych::Exception
@@ -64,15 +66,24 @@ module Templates
 
     private
 
+    # A directory that does not load or does not validate is reported by `call`, so
+    # `warnings` skips it instead of raising.
+    def loadable_package(dir)
+      return unless dir.join(Package::DEFINITION_FILE).file?
+
+      package = Package.from_directory(dir)
+      package if Validator.new(package).errors.empty?
+    end
+
     def unlisted_tool_warnings(package)
       platform_names = platform_tool_names
-      keys_to_names = package.section("tools").to_h { |tool| [ tool["key"], tool["platform"] || tool["name"] ] }
+      keys_to_names = package.section("tools").to_h { |tool| [ tool["key"].to_s.downcase, tool["platform"] || tool["name"] ] }
       agents = package.section("agents").index_by { |agent| agent["key"] }
 
       package.section("workflows").flat_map do |workflow|
         base_tools = Array(workflow.dig("base", "tools"))
         Array(workflow["steps"]).flat_map do |step|
-          listed = (base_tools + Array(step["tools"])).map { |key| keys_to_names[key] || key }
+          listed = (base_tools + Array(step["tools"])).map { |key| keys_to_names[key.to_s.downcase] || key }
           named = named_tools(step_texts(step, agents[step["agent"]]), platform_names, keys_to_names)
           (named - listed).sort.map do |name|
             "workflow #{workflow['key']} step #{step['key']} names #{name} but does not list it in tools"
@@ -84,7 +95,7 @@ module Templates
     def step_texts(step, agent)
       texts = [ step["instructions"] ]
       texts += Array(step["sub_steps"]).flat_map { |sub| [ sub["name"], sub["instructions"] ] }
-      texts += agent.values_at("persona", "principles", "title") if agent
+      texts += agent.values_at("persona", "principles", "title", "communication_style") if agent
       texts.compact.map(&:to_s)
     end
 
@@ -92,7 +103,7 @@ module Templates
     def named_tools(texts, platform_names, keys_to_names)
       text = texts.join("\n")
       plain = platform_names.select { |name| text.match?(/(?<![a-z0-9_])#{Regexp.escape(name)}(?![a-z0-9_])/i) }
-      referenced = text.scan(/\{\{tool:([^}\s]+)\}\}/i).flatten.filter_map { |key| keys_to_names[key] }
+      referenced = text.scan(/\{\{tool:([^}\s]+)\}\}/i).flatten.filter_map { |key| keys_to_names[key.downcase] }
       (plain + referenced).uniq
     end
 

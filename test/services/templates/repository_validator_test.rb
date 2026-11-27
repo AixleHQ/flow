@@ -132,4 +132,46 @@ class Templates::RepositoryValidatorTest < ActiveSupport::TestCase
     assert_equal [ "workflow delivery step implement names board_add_comment but does not list it in tools" ],
                  warnings["acme/dev-team-sdlc"]
   end
+
+  test "a mixed-case {{tool:KEY}} reference to an unlisted tool gets a warning" do
+    target = checkout(@root)
+
+    warnings = warnings_for(target, "Use {{TOOL:Board_Comment}} to report.")
+
+    assert_equal [ "workflow delivery step implement names board_add_comment but does not list it in tools" ],
+                 warnings["acme/dev-team-sdlc"]
+  end
+
+  test "a tool named only in an agent's communication_style gets a warning" do
+    target = checkout(@root)
+    path = target.join("template.yaml")
+    path.write(path.read.sub("    persona: Designs systems and writes clear notes.\n",
+                             "    persona: Designs systems and writes clear notes.\n    communication_style: Always finish by calling board_move_task.\n"))
+
+    warnings = Templates::RepositoryValidator.new(root: @root).warnings
+
+    assert_includes warnings["acme/dev-team-sdlc"],
+                    "workflow delivery step implement names board_move_task but does not list it in tools"
+  end
+
+  test "warnings skip a directory without template.yaml and call still reports it" do
+    checkout(@root).join("template.yaml").delete
+
+    validator = Templates::RepositoryValidator.new(root: @root)
+
+    assert_empty validator.warnings
+    assert_includes validator.call["acme/dev-team-sdlc"], "template.yaml is missing"
+  end
+
+  test "warnings skip a schema-invalid package and call still reports it" do
+    target = checkout(@root)
+    path = target.join("template.yaml")
+    path.write(path.read.sub("instructions: Implement the design and open a pull request.",
+                             "instructions: Call board_move_task.\n        depends_on: [missing_step]"))
+
+    validator = Templates::RepositoryValidator.new(root: @root)
+
+    assert_empty validator.warnings
+    assert_not_empty validator.call["acme/dev-team-sdlc"]
+  end
 end
