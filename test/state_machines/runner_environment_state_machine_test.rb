@@ -3,14 +3,12 @@
 require "test_helper"
 
 class RunnerEnvironmentStateMachineTest < ActiveSupport::TestCase
-  ALL_STATES = %w[registered resetting failed gone].freeze
+  ALL_STATES = %w[registered failed gone].freeze
 
   # The states each event may leave from (DESIGN.md §5.2).
   ALLOWED_FROM = {
-    mark_failed: %w[registered resetting failed],
-    begin_return_to_service: %w[failed],
-    finish_reset: %w[resetting],
-    unregister: %w[registered resetting failed gone]
+    mark_failed: %w[registered failed],
+    unregister: %w[registered failed gone]
   }.freeze
 
   setup do
@@ -35,11 +33,11 @@ class RunnerEnvironmentStateMachineTest < ActiveSupport::TestCase
   end
 
   test "a refused transition raises and leaves the machine as it was" do
-    machine = machine_in(:registered)
+    machine = machine_in(:gone)
 
-    assert_raises(AASM::InvalidTransition) { machine.begin_return_to_service! }
+    assert_raises(AASM::InvalidTransition) { machine.mark_failed! }
 
-    assert_equal "registered", machine.reload.state
+    assert_equal "gone", machine.reload.state
   end
 
   test "mark_failed releases the session's hold and records the reason, cut to the column" do
@@ -55,14 +53,9 @@ class RunnerEnvironmentStateMachineTest < ActiveSupport::TestCase
     assert_equal 255, machine.state_reason.length
   end
 
-  test "the Return to service events clear the reason, and a finished reset clears the streak" do
-    machine = machine_in(:failed, state_reason: "boom", consecutive_failures: 3)
-
-    machine.begin_return_to_service!
-    assert_equal [ "resetting", nil ], [ machine.reload.state, machine.state_reason ]
-
-    machine.finish_reset!
-    assert_equal [ "registered", 0 ], [ machine.reload.state, machine.consecutive_failures ]
+  test "a machine has no resetting state, and failed is final: no event leaves it but unregister" do
+    assert_not_includes RunnerEnvironment.aasm.states.map { |state| state.name.to_s }, "resetting"
+    assert_equal [ :unregister ], machine_in(:failed).aasm.events(permitted: true).map(&:name) - [ :mark_failed ]
   end
 
   test "unregister releases the hold, and a machine that is gone stays gone" do

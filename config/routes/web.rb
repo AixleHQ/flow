@@ -648,10 +648,8 @@ scope module: :web, defaults: { format: :html } do
         post :revoke
         post :registration_token
       end
-      # A machine belongs to its runner. Return to service: a failed machine of
-      # the runner is reset (§5.2). Revoke: the machine leaves for good (§9.3).
+      # A machine belongs to its runner. Revoke: the machine leaves for good (§9.3).
       resources :machines, only: [], controller: "runners/machines" do
-        post :return_to_service, on: :member
         post :revoke, on: :member
       end
     end
@@ -797,11 +795,9 @@ scope module: :web, defaults: { format: :html } do
             post :revoke
             post :registration_token
           end
-          # A machine belongs to its runner. Return to service: a failed machine
-          # of the project's runner is reset (§5.2). Revoke: the machine leaves
-          # for good (§9.3).
+          # A machine belongs to its runner. Revoke: the machine leaves for good
+          # (§9.3).
           resources :machines, only: [], controller: "runners/machines" do
-            post :return_to_service, on: :member
             post :revoke, on: :member
           end
         end

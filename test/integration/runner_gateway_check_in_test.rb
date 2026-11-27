@@ -214,21 +214,14 @@ class RunnerGatewayCheckInTest < ActionDispatch::IntegrationTest
     assert_not response.parsed_body.key?("update")
   end
 
-  test "a failed machine stays failed when it reports a clean preflight, and Return to service resets it" do
+  test "a failed machine stays failed, and a later check-in, clean or not, is refused" do
     check_in({ facts: { "preflight_error" => "the Docker daemon is not reachable: down" } })
     assert_equal "failed", @environment.reload.state
 
     check_in({ facts: { "docker" => "27.1.0", "docker_api" => "1.47" } })
-    assert_equal "failed", @environment.reload.state, "only Return to service brings it back"
 
-    host = ContainerRuntime::FakeHostRunner.new(@environment)
-    assert Runners::Machines.return_to_service!(@environment)
-
-    assert_equal %w[env.reset], host.ops
-    assert_equal "registered", @environment.reload.state
-    assert_nil @environment.state_reason
-  ensure
-    host&.stop
+    assert_response :unauthorized
+    assert_equal "failed", @environment.reload.state, "nothing brings it back but a Revoke and a new Add machine"
   end
 
   test "a clean report leaves a registered machine registered" do

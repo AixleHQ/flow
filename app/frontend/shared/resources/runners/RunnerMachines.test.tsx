@@ -10,8 +10,7 @@ import type { RunnerPaths } from './runnerConfig';
 import { MACHINES_REFRESH_MS, RunnerMachines } from './RunnerMachines';
 
 const runner = { id: 5 };
-const paths: Pick<RunnerPaths, 'returnToService' | 'revokeMachine'> = {
-  returnToService: (id, machineId) => `/company/settings/runners/${id}/machines/${machineId}/return_to_service`,
+const paths: Pick<RunnerPaths, 'revokeMachine'> = {
   revokeMachine: (id, machineId) => `/company/settings/runners/${id}/machines/${machineId}/revoke`,
 };
 
@@ -76,7 +75,7 @@ describe('RunnerMachines', () => {
     expect(within(rows[2]).getByText('Never')).toBeInTheDocument();
     expect(within(rows[3]).getByText('Failed')).toBeInTheDocument();
     expect(within(rows[3]).getByText('env.reset failed')).toBeInTheDocument();
-    expect(within(rows[3]).getByText('Fix the machine and press Return to service.')).toBeInTheDocument();
+    expect(within(rows[3]).getByText('Revoke it, then register the host again with Add machine.')).toBeInTheDocument();
   });
 
   it('says so when no machine has registered', () => {
@@ -95,13 +94,13 @@ describe('RunnerMachines', () => {
     expect(router.reload).toHaveBeenCalledWith({ only: ['runner', 'machines'] });
   });
 
-  it('offers Return to service on a failed machine only, and posts to the machine', async () => {
-    vi.useRealTimers();
+  it('offers Revoke only on a machine that is not gone, and no Return to service', () => {
     renderAuthedPage(
       <RunnerMachines
         machines={[
           machine(),
           machine({ id: 7, displayName: 'bad-box', state: 'failed', stateReason: 'bad-box failed to reset: boom' }),
+          machine({ id: 8, state: 'gone' }),
         ]}
         runner={runner}
         paths={paths}
@@ -109,17 +108,10 @@ describe('RunnerMachines', () => {
       />,
     );
 
-    expect(screen.getAllByRole('button', { name: 'Return to service' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Revoke' })).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Return to service' })).not.toBeInTheDocument();
     expect(screen.getByText('bad-box failed to reset: boom')).toBeInTheDocument();
-    expect(screen.getByText('Fix the machine and press Return to service.')).toBeInTheDocument();
-
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Return to service' }));
-
-    expect(router.post).toHaveBeenCalledWith(
-      '/company/settings/runners/5/machines/7/return_to_service',
-      {},
-      expect.objectContaining({ preserveScroll: true }),
-    );
+    expect(screen.getByText('Revoke it, then register the host again with Add machine.')).toBeInTheDocument();
   });
 
   it("shows a failed machine's reason as it is, with no second mark after a `?` or a `.`", () => {
@@ -150,16 +142,7 @@ describe('RunnerMachines', () => {
       />,
     );
 
-    expect(screen.queryByRole('button', { name: 'Return to service' })).not.toBeInTheDocument();
-  });
-
-  it('says a machine that is being reset takes no session', () => {
-    renderAuthedPage(
-      <RunnerMachines machines={[machine({ state: 'resetting' })]} runner={runner} paths={paths} canManage />,
-    );
-
-    expect(screen.getByText('Being reset; takes no session until it succeeds')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Return to service' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Revoke' })).not.toBeInTheDocument();
   });
 
   it('shows the first-seen IP and who added a machine, and a dash for a machine that has neither', () => {

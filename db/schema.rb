@@ -1421,7 +1421,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_27_133318) do
     t.bigint "op_sequence", default: 0, null: false
     t.boolean "auto_update", default: true, null: false
     t.datetime "last_heartbeat_at"
-    t.integer "consecutive_failures", default: 0, null: false
     t.string "first_seen_ip"
     t.bigint "created_by_id"
     t.index ["company_id"], name: "index_runner_environments_on_company_id"

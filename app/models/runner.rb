@@ -87,7 +87,7 @@ class Runner < ApplicationRecord
   end
 
   # A `manual` runner's machines busy/total (§11): busy holds a session, total
-  # is every machine not `gone`, `failed` and `resetting` ones included. Counted
+  # is every machine not `gone`, `failed` ones included. Counted
   # over the loaded machines, so a list loads them with `includes(:environments)`.
   # Nil for another type.
   def machine_counts

@@ -617,7 +617,8 @@ check-in refreshes what the platform records about it.
 
 A `facts.preflight_error` (a string) says the machine can no longer run sessions, for example that
 the Docker daemon is not reachable. The platform moves the machine to `failed` with that text in its
-reason; a later check-in without it does not return the machine, only Return to service does.
+reason; the machine stays `failed` until it is revoked, and its credentials are refused from then on
+(`invalid_token`, as for a revoked machine), so a later check-in does not return it.
 
 Other fields are ignored. The `X-Aixle-Runner-Version` and `X-Aixle-Runner-Protocol` of the request
 are recorded as the machine's runner and protocol versions, **over** the ones it registered with.
@@ -1600,7 +1601,7 @@ Each of these is designed in DESIGN.md §6 and comes with its own section and fi
   next ops are not enqueued and answer `no_session_container`, and the session fails as one whose
   container is gone. That session's container keeps running on the machine: nothing can stop it,
   because the runner is unregistered and its credentials are revoked, so the operator removes it
-  by hand. Scrub and return to service are task 11a (#242).
+  by hand. Scrub is task 11a (#242).
 - An endpoint that issues registration tokens ("Add machine"): built (task 12a, #225). `POST
   /company/settings/runners/:id/registration_token` and `POST /company/projects/:project_id/runners/:id/registration_token`
   on the web application (not the gateway; the caller is a signed-in user who may manage the runner) mint one through

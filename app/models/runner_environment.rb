@@ -4,17 +4,13 @@
 # §2.2). In v1 so far the only entry path is a `manual` machine registering
 # through the runner gateway (§5.2), which creates the row `registered`;
 # unregistering marks it `gone`. A machine whose `env.reset` failed after a
-# session, or whose refresh token was reused (Runners::Credentials.rotate!), is
-# `failed` (Runners::Machines.fail!), with the reason in `state_reason`, and
-# takes no session until it is returned to service (Runners::Machines.return_to_service!):
-# an `env.reset` runs on it while it is `resetting`, and it is `registered` and
-# free again once that succeeds, or `failed` with the new reason. The states and
-# their events are RunnerEnvironmentStateMachine's; the rest of the §5.2 state
-# machine arrives with Runners::Allocator.
-#
-# `consecutive_failures` counts the failed sessions in a row on the machine; a
-# session that ends well sets it back to 0, and `runners.max_consecutive_failures`
-# of them take the machine out of rotation (§7.2).
+# session, whose check-in reported missing prerequisites or whose refresh token
+# was reused (Runners::Credentials.rotate!) is `failed` (Runners::Machines.fail!),
+# with the reason in `state_reason`, and takes no session. `failed` is final:
+# its credentials stop working, and it leaves by a Revoke (`gone`) and is
+# registered again with Add machine. A session's outcome never fails a machine.
+# The states and their events are RunnerEnvironmentStateMachine's; the rest of
+# the §5.2 state machine arrives with Runners::Allocator.
 #
 # `current_session` is the session that holds the machine (Runners::Machines):
 # a `registered` machine without one is free. It is cleared once the machine
@@ -52,6 +48,8 @@ class RunnerEnvironment < ApplicationRecord
 
   scope :free, -> { where(state: "registered", current_session_id: nil) }
   scope :holding_session, -> { where.not(current_session_id: nil) }
+  # Held by a session whose cleanup will never run (TerminalSession.cleanup_abandoned).
+  scope :held_by_abandoned_session, -> { where(current_session_id: TerminalSession.cleanup_abandoned.select(:id)) }
   scope :heard, ->(now = Time.current) { where(last_heartbeat_at: (now - ONLINE_WINDOW)..) }
   # Never heard, or last heard at or before `time`.
   scope :not_heard_since, ->(time) { where(last_heartbeat_at: nil).or(where(arel_table[:last_heartbeat_at].lteq(time))) }
@@ -82,6 +80,12 @@ class RunnerEnvironment < ApplicationRecord
     gone? && state_reason == REVOKED
   end
 
+  # The machine takes no more calls from the platform: it left (`gone`) or it
+  # failed, and nothing but a Revoke and a new Add machine follows either.
+  def out_of_service?
+    gone? || failed?
+  end
+
   # What the machine's last report says keeps it from running sessions (the
   # host runner's preflight, DESIGN.md §6.8: no reachable Docker daemon, too
   # little disk), or nil when the report has no failure.
@@ -98,8 +102,8 @@ class RunnerEnvironment < ApplicationRecord
     (last_heartbeat_at || created_at) <= now - period
   end
 
-  # How the machine shows on the runner page (§2.5): `resetting`, `failed` and
-  # `gone` as they are; a `registered` one is `offline` unless it is heard, else `online`
+  # How the machine shows on the runner page (§2.5): `failed` and `gone` as
+  # they are; a `registered` one is `offline` unless it is heard, else `online`
   # holding a session and `idle` without one.
   def display_state(now = Time.current)
     return state.to_s unless registered?
