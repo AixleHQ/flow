@@ -441,7 +441,7 @@ describe('SessionNewForm', () => {
       expect(onStateChange).toHaveBeenLastCalledWith({ dirty: false, saving: false });
 
       await user.click(screen.getByRole('combobox', { name: 'Integrations' }));
-      await user.click(await screen.findByRole('option', { name: 'Coder (alice)' }));
+      await user.click(await screen.findByRole('option', { name: /Coder \(alice\)/ }));
 
       expect(onStateChange).toHaveBeenLastCalledWith({ dirty: true, saving: false });
     });
@@ -457,7 +457,7 @@ describe('SessionNewForm', () => {
       expect(onStateChange).toHaveBeenLastCalledWith({ dirty: false, saving: false });
 
       await user.click(screen.getByRole('combobox', { name: 'Integrations' }));
-      await user.click(await screen.findByRole('option', { name: 'Coder (bob)' }));
+      await user.click(await screen.findByRole('option', { name: /Coder \(bob\)/ }));
 
       expect(onStateChange).toHaveBeenLastCalledWith({ dirty: true, saving: false });
     });
