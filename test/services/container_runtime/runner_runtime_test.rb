@@ -433,13 +433,13 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
   end
 
   # The session holds the machine, so every op on it is the session's, an
-  # env.reset, which names no session, included.
+  # env.reset, which names no session on the wire, included.
   test "a cleanup retry behind an unfinished env.reset queues nothing until that reset finishes or expires" do
     handle = start_session
     @host_runner.answer_with("env.reset", :none)
     pending_reset = Runners::Operations.enqueue!(@environment, op: "env.reset", payload: {}, deadline_at: 1.minute.from_now,
                                                                session: @session)
-    assert_nil pending_reset.terminal_session_id
+    assert_equal @session.id, pending_reset.terminal_session_id
     @host_runner.operations.clear
 
     assert_not @runtime.cleanup_ready?(handle), "the retry would queue container.stop and env.reset behind the reset"
