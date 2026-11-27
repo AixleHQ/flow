@@ -12,6 +12,7 @@ import {
   NumberInput,
   PasswordInput,
   SegmentedControl,
+  Select,
   Stack,
   Table,
   Text,
@@ -81,6 +82,7 @@ import {
 import { InsightsConnectModal, InsightsProjectModal } from './InsightsModals';
 import { JiraConnectModal, JiraProjectsModal, type JiraProps, JiraWebhookModal } from './JiraConnectModal';
 import { LinearConnectModal, type LinearProps, LinearTeamsModal } from './LinearConnectModal';
+import { requestJson } from './requestJson';
 import { TeamsApprovalModal } from './TeamsApprovalModal';
 import { YoutrackConnectModal, type YoutrackProps } from './YoutrackConnectModal';
 
@@ -345,6 +347,8 @@ export const IntegrationsContent = ({
   const [coderLockTtlMinutes, setCoderLockTtlMinutes] = useState<number | string>(DEFAULT_CODER_LOCK_TTL);
   const [coderAdvancedOpen, setCoderAdvancedOpen] = useState(false);
   const [coderLoading, setCoderLoading] = useState(false);
+  const [coderTemplates, setCoderTemplates] = useState<string[] | null>(null);
+  const [coderTemplatesLoading, setCoderTemplatesLoading] = useState(false);
   const [coderError, setCoderError] = useState<string | null>(null);
 
   const [coderEditTarget, setCoderEditTarget] = useState<Integration | null>(null);
@@ -352,6 +356,7 @@ export const IntegrationsContent = ({
   const [coderEditPrefix, setCoderEditPrefix] = useState('');
   const [coderEditTtl, setCoderEditTtl] = useState<number | string>(DEFAULT_CODER_LOCK_TTL);
   const [coderEditLoading, setCoderEditLoading] = useState(false);
+  const [coderEditTemplates, setCoderEditTemplates] = useState<string[] | null>(null);
 
   const resetCoderForm = useCallback(() => {
     setCoderUrl('');
@@ -360,6 +365,7 @@ export const IntegrationsContent = ({
     setCoderMachinePrefix('');
     setCoderLockTtlMinutes(DEFAULT_CODER_LOCK_TTL);
     setCoderAdvancedOpen(false);
+    setCoderTemplates(null);
     setCoderError(null);
   }, []);
 
@@ -511,9 +517,9 @@ export const IntegrationsContent = ({
       provider: 'coder',
       coderUrl: trimmedUrl,
       sessionToken: trimmedToken,
+      defaultTemplate: coderDefaultTemplate.trim(),
+      machinePrefix: coderMachinePrefix.trim(),
     };
-    if (coderDefaultTemplate.trim()) payload.defaultTemplate = coderDefaultTemplate.trim();
-    if (coderMachinePrefix.trim()) payload.machinePrefix = coderMachinePrefix.trim();
     if (!Number.isNaN(ttl) && ttl > 0) payload.lockTtlMinutes = ttl;
 
     router.post(basePath, payload, {
@@ -526,12 +532,45 @@ export const IntegrationsContent = ({
     });
   }, [basePath, closeCoderModal, coderDefaultTemplate, coderLockTtlMinutes, coderMachinePrefix, coderToken, coderUrl]);
 
-  const openCoderSettings = useCallback((integration: Integration) => {
-    setCoderEditTarget(integration);
-    setCoderEditTemplate(integration.coderDefaultTemplate ?? '');
-    setCoderEditPrefix(integration.coderMachinePrefix ?? '');
-    setCoderEditTtl(integration.coderLockTtlMinutes ?? DEFAULT_CODER_LOCK_TTL);
-  }, []);
+  // The templates the token just entered can see. The connection is not saved yet, so the
+  // server is given the URL and the token, and answers with a prefix made from the project's name.
+  const loadCoderTemplates = useCallback(() => {
+    setCoderError(null);
+    setCoderTemplatesLoading(true);
+    requestJson(
+      `${basePath}/coder_templates`,
+      { method: 'POST', body: JSON.stringify({ coder_url: coderUrl.trim(), session_token: coderToken.trim() }) },
+      'Could not list the templates',
+    )
+      .then((result: { templates: string[]; suggestedPrefix?: string; suggested_prefix?: string }) => {
+        setCoderTemplates(result.templates);
+        setCoderDefaultTemplate((current) =>
+          result.templates.includes(current) ? current : (result.templates[0] ?? ''),
+        );
+        const suggested = result.suggestedPrefix ?? result.suggested_prefix ?? '';
+        setCoderMachinePrefix((current) => current || suggested);
+      })
+      .catch((e: unknown) => setCoderError(e instanceof Error ? e.message : 'Could not list the templates'))
+      .finally(() => setCoderTemplatesLoading(false));
+  }, [basePath, coderToken, coderUrl]);
+
+  const openCoderSettings = useCallback(
+    (integration: Integration) => {
+      setCoderEditTemplates(null);
+      requestJson(
+        `${basePath}/${integration.id}/coder_template_list`,
+        { method: 'GET' },
+        'Could not list the templates',
+      )
+        .then((result: { templates: string[] }) => setCoderEditTemplates(result.templates))
+        .catch(() => setCoderEditTemplates([]));
+      setCoderEditTarget(integration);
+      setCoderEditTemplate(integration.coderDefaultTemplate ?? '');
+      setCoderEditPrefix(integration.coderMachinePrefix ?? '');
+      setCoderEditTtl(integration.coderLockTtlMinutes ?? DEFAULT_CODER_LOCK_TTL);
+    },
+    [basePath],
+  );
 
   const handleSaveCoderSettings = useCallback(() => {
     if (!coderEditTarget) return;
@@ -539,8 +578,7 @@ export const IntegrationsContent = ({
     if (Number.isNaN(ttl) || ttl <= 0) return;
 
     setCoderEditLoading(true);
-    // Template and prefix go out even when empty — a blank value clears the
-    // setting, which is how you stop the allocator from creating machines.
+    // Both are required; the server refuses a blank one and a template the token cannot see.
     router.patch(
       `${basePath}/${coderEditTarget.id}`,
       { defaultTemplate: coderEditTemplate.trim(), machinePrefix: coderEditPrefix.trim(), lockTtlMinutes: ttl },
@@ -1098,6 +1136,11 @@ export const IntegrationsContent = ({
                                 : 'no prefix'}
                               {` · lock ${integration.coderLockTtlMinutes ?? DEFAULT_CODER_LOCK_TTL}m`}
                             </Text>
+                          )}
+                          {integration.provider === 'coder' && integration.missingSettings.length > 0 && (
+                            <Badge color="yellow" variant="light" size="xs" mt={2}>
+                              Needs {integration.missingSettings.map((s) => s.replace('_', ' ')).join(' and ')}
+                            </Badge>
                           )}
                         </Box>
                       </Group>
@@ -1777,6 +1820,35 @@ export const IntegrationsContent = ({
             onChange={(e) => setCoderToken(e.currentTarget.value)}
           />
 
+          <Button
+            variant="default"
+            size="xs"
+            onClick={loadCoderTemplates}
+            loading={coderTemplatesLoading}
+            disabled={!coderUrl.trim() || !coderToken.trim() || !isValidHttpUrl(coderUrl)}
+          >
+            Load templates
+          </Button>
+          <Select
+            label="Default template"
+            description="Chosen from the templates this token can see in Coder. Load them first."
+            placeholder="Load templates to choose one"
+            data={coderTemplates ?? []}
+            value={coderDefaultTemplate || null}
+            onChange={(v) => setCoderDefaultTemplate(v ?? '')}
+            disabled={!coderTemplates}
+            required
+            searchable
+          />
+          <TextInput
+            label="Machine name prefix"
+            description="Lowercase letters, digits and hyphens, at most 23 characters. Workspaces named <prefix>-<suffix> form this connection's pool."
+            placeholder="my-project"
+            value={coderMachinePrefix}
+            onChange={(e) => setCoderMachinePrefix(e.currentTarget.value)}
+            required
+          />
+
           <UnstyledButton onClick={() => setCoderAdvancedOpen((open) => !open)}>
             <Group gap={4}>
               {coderAdvancedOpen ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
@@ -1788,18 +1860,6 @@ export const IntegrationsContent = ({
 
           {coderAdvancedOpen && (
             <Stack gap="sm">
-              <TextInput
-                label="Default template"
-                placeholder="aws-ec2-spot-v1"
-                value={coderDefaultTemplate}
-                onChange={(e) => setCoderDefaultTemplate(e.currentTarget.value)}
-              />
-              <TextInput
-                label="Machine name prefix"
-                placeholder="aixle-prod"
-                value={coderMachinePrefix}
-                onChange={(e) => setCoderMachinePrefix(e.currentTarget.value)}
-              />
               <NumberInput
                 label="Lock TTL (minutes)"
                 min={1}
@@ -1828,6 +1888,8 @@ export const IntegrationsContent = ({
                 !coderUrl.trim() ||
                 !coderToken.trim() ||
                 !isValidHttpUrl(coderUrl) ||
+                !coderDefaultTemplate.trim() ||
+                !coderMachinePrefix.trim() ||
                 !(typeof coderLockTtlMinutes === 'number' && coderLockTtlMinutes > 0)
               }
             >
@@ -1881,21 +1943,30 @@ export const IntegrationsContent = ({
       <Modal opened={!!coderEditTarget} onClose={requestCloseCoderSettings} title="Coder settings" centered size="sm">
         <Stack gap="md">
           <Text size="sm" c="dimmed">
-            Without a default template the allocator can only hand out workspaces that already exist — it never creates
-            one. Leave it blank to cap the pool at its current size.
+            The default template and the machine name prefix are required. The template is chosen from the templates
+            this connection&apos;s token can see. Workspaces named &lt;prefix&gt;-&lt;suffix&gt; form the pool.
           </Text>
-          <TextInput
+          <Select
             label="Default template"
-            placeholder="aws-ec2-spot-v1"
-            value={coderEditTemplate}
-            onChange={(e) => setCoderEditTemplate(e.currentTarget.value)}
-            autoFocus
+            placeholder={coderEditTemplates ? 'Choose a template' : 'Loading templates…'}
+            data={
+              coderEditTemplates && coderEditTemplate && !coderEditTemplates.includes(coderEditTemplate)
+                ? [...coderEditTemplates, coderEditTemplate]
+                : (coderEditTemplates ?? [])
+            }
+            value={coderEditTemplate || null}
+            onChange={(v) => setCoderEditTemplate(v ?? '')}
+            disabled={!coderEditTemplates}
+            required
+            searchable
           />
           <TextInput
             label="Machine name prefix"
-            placeholder="aixle-prod"
+            description="Lowercase letters, digits and hyphens, at most 23 characters."
+            placeholder="my-project"
             value={coderEditPrefix}
             onChange={(e) => setCoderEditPrefix(e.currentTarget.value)}
+            required
           />
           <NumberInput
             label="Lock TTL (minutes)"
@@ -1912,7 +1983,9 @@ export const IntegrationsContent = ({
             <Button
               onClick={handleSaveCoderSettings}
               loading={coderEditLoading}
-              disabled={!(typeof coderEditTtl === 'number' && coderEditTtl > 0)}
+              disabled={
+                !(typeof coderEditTtl === 'number' && coderEditTtl > 0) || !coderEditTemplate || !coderEditPrefix.trim()
+              }
             >
               Save
             </Button>

@@ -16,6 +16,7 @@ class InternalTools::AzureDevopsParityToolsTest < ActiveSupport::TestCase
     @repository = create(:repository, :azure_devops, integration: @integration, scope: @project)
     @session = create(:terminal_session, :running, user: @user, project: @project)
     @session.repositories << @repository
+    @session.integrations << @integration
     @fakes = stub_azure_devops!(integration: @integration)
   end
 

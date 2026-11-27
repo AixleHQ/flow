@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { buildIntegrationPicker } from 'test/factories/integrationPicker';
 import { buildRunnerSummary } from 'test/factories/runner';
 import { buildSharedUser } from 'test/factories/sharedProps';
 import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
@@ -252,6 +253,43 @@ describe('SessionNewForm', () => {
     expect(JSON.parse(init!.body as string).terminalSession.configItemIds).toEqual([7]);
 
     fetchSpy.mockRestore();
+  });
+
+  it('preselects the default integrations and sends the ones left selected', async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: { id: 'sess-9' } }),
+    } as Response);
+
+    renderAuthedPage(
+      <SessionNewForm
+        {...makeProps({
+          projectId: 3,
+          integrations: [
+            buildIntegrationPicker({ id: 41, name: 'Coder (alice)' }),
+            buildIntegrationPicker({ id: 42, name: 'Coder (bob)' }),
+          ],
+          defaultIntegrationIds: [41],
+        })}
+      />,
+      { props: authProps(['claude_code']) },
+    );
+
+    await user.click(screen.getByText('Claude Code'));
+    await user.click(screen.getByRole('button', { name: /start session/i }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const [, init] = fetchSpy.mock.calls[0];
+    expect(JSON.parse(init!.body as string).terminalSession.integrationIds).toEqual([41]);
+
+    fetchSpy.mockRestore();
+  });
+
+  it('offers no integration picker when the project has none', () => {
+    renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 3 })} />, { props: authProps(['claude_code']) });
+
+    expect(screen.queryByRole('combobox', { name: 'Integrations' })).not.toBeInTheDocument();
   });
 
   it('offers a tool group as a collapsed section whose tools open on demand', async () => {

@@ -1,6 +1,6 @@
 # Integrations chosen per session
 
-**Status:** design (task #295), round 4: updated by the decisions of 2026-11-26 and 2026-11-27 (Alex). Nothing here is built.
+**Status:** implemented (task #298) from the design of task #295, round 4 (decisions of 2026-11-26 and 2026-11-27, Alex).
 It is implemented as **one task**; §8 gives the order inside it. Task #294 (required Coder template and prefix) is done
 inside this task (§4.2). The Coder tools and gates are written against #290 as merged (§5.3).
 

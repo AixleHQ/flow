@@ -28,7 +28,7 @@ class Workflow < ApplicationRecord
 
   ALLOWED_CONFIG_KEYS = %w[
     base_tool_ids base_skill_ids base_mcp_server_ids
-    base_asset_ids base_repository_ids base_config_item_ids base_aws_oidc_role_ids
+    base_asset_ids base_repository_ids base_config_item_ids base_aws_oidc_role_ids base_integration_ids
     inherit_all_project_resources
   ].freeze
 
@@ -256,16 +256,26 @@ class Workflow < ApplicationRecord
   BASE_RESOURCES = {
     "base_tool_ids" => :tools, "base_skill_ids" => :skills, "base_mcp_server_ids" => :mcp_servers,
     "base_asset_ids" => :assets, "base_repository_ids" => :repositories,
-    "base_aws_oidc_role_ids" => :aws_oidc_roles
+    "base_aws_oidc_role_ids" => :aws_oidc_roles, "base_integration_ids" => :integrations
   }.freeze
 
   def base_resource_ids_belong_to_project
+    if scope_type == "System"
+      errors.add(:config, "base_integration_ids cannot be set on a system workflow") if base_integration_ids.present?
+      return
+    end
     return unless scope_type == "Project"
+
+    if resource_list_changed?("base_integration_ids")
+      validate_attachable_integrations(:config, linked_ids("base_integration_ids"), self["base_integration_ids"],
+                                       label: "base_integration_ids")
+    end
 
     BASE_RESOURCES.each do |list, kind|
       next unless resource_list_changed?(list)
 
-      validate_owned_ids(scope, kind, :config, linked_ids(list), self[list], label: list, lenient: true)
+      # An unknown integration id is refused, not dropped: a list of integrations is access to accounts.
+      validate_owned_ids(scope, kind, :config, linked_ids(list), self[list], label: list, lenient: kind != :integrations)
     end
   end
 

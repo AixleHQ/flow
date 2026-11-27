@@ -33,8 +33,12 @@ class WorkflowStepSync
     ids.select { |id| found.include?(id) }
   end
 
-  def initialize(workflow, specs, keep_origins: false)
+  # `refuse_unknown:` names step lists whose ids of rows that are gone are kept, so the step's own
+  # validation refuses them (a person saving an integration list that names none has made a
+  # mistake; a revert has not, and drops them).
+  def initialize(workflow, specs, keep_origins: false, refuse_unknown: [])
     @workflow = workflow
+    @refuse_unknown = refuse_unknown
     @step_columns = keep_origins ? STEP_COLUMNS + %w[origin_step_id] : STEP_COLUMNS
     @sub_step_columns = keep_origins ? SUB_STEP_COLUMNS + %w[origin_sub_step_id] : SUB_STEP_COLUMNS
     @specs = specs.each_with_index.map do |spec, index|
@@ -73,7 +77,9 @@ class WorkflowStepSync
       step = rows[spec["id"].presence&.to_i] || @workflow.steps.new
       attrs = spec.slice(*@step_columns)
       Versions::Snapshots::Workflow::STEP_REFERENCES.each do |column, model|
-        attrs[column] = self.class.existing_ids(model, attrs[column]) if attrs.key?(column)
+        next if !attrs.key?(column) || @refuse_unknown.include?(column)
+
+        attrs[column] = self.class.existing_ids(model, attrs[column])
       end
       attrs["agent_id"] = nil if attrs["agent_id"].present? && !Agent.exists?(attrs["agent_id"])
       step.assign_attributes(attrs.merge("depends_on_step_ids" => [], "deleted_at" => nil))

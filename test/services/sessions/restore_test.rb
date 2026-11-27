@@ -53,6 +53,25 @@ module Sessions
       assert_match(/"#{gone.name}" is no longer available/, params[:metadata]["restore"]["notes"].join)
     end
 
+    test "the integrations that can be attached are carried over, the repositories' own are derived again" do
+      coder = create(:integration, :coder, :active, company: @project.company, project: @project, connected_by: @user)
+      github = create(:integration, :github_pat, :active, company: @project.company, project: @project, connected_by: @user)
+      @origin.integrations << coder << github
+
+      assert_equal [ coder.id ], Restore.params_for(@origin)[:integration_ids]
+    end
+
+    test "an integration that is no longer active is listed in the notice, not dropped silently" do
+      coder = create(:integration, :coder, status: :error, company: @project.company, project: @project, connected_by: @user,
+                                                   name: "Coder (alice)")
+      @origin.integrations << coder
+
+      params = Restore.params_for(@origin)
+
+      assert_empty params[:integration_ids]
+      assert_match(/"Coder \(alice\)" is no longer available/, params[:metadata]["restore"]["notes"].join)
+    end
+
     test "a conversation saved by the same CLI version is resumed" do
       restore
 

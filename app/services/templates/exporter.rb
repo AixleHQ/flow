@@ -136,6 +136,7 @@ module Templates
     def export_steps(workflow)
       steps = workflow.steps.not_deleted.includes(:resource_links).order(:position).to_a
       note_aws_oidc_roles(workflow, steps)
+      note_integrations(workflow, steps)
       step_keys = steps.to_h { |step| [ step.id, key_for("steps:#{workflow.id}", step.id, step.name) ] }
       steps.map do |step|
         where = "workflow #{workflow.name} step #{step.name}"
@@ -168,6 +169,16 @@ module Templates
 
       @notes << "Workflow #{workflow.name} uses AWS roles, which are not exported: attach the installing " \
                 "project's own roles after installing it."
+    end
+
+    # An integration is an account of the exporting company, so a package carries none. The
+    # providers a workflow needs are listed under `requires`, from its tools; the installer leaves
+    # the list empty and the installing project attaches its own integrations.
+    def note_integrations(workflow, steps)
+      return if workflow.base_integration_ids.empty? && steps.all? { |step| step.integration_ids.empty? }
+
+      @notes << "Workflow #{workflow.name} has integrations attached, which are not exported: attach the " \
+                "installing project's own integrations after installing it."
     end
 
     # References name rows by id; a package names them by key, which the

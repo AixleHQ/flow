@@ -26,13 +26,16 @@ class InternalTools::ChatToolsTest < ActiveSupport::TestCase
     @session = session_for(origin)
   end
 
-  def session_for(shared_context)
+  # The session's integration set is what the chat tools reach (design §5.3): the install the run
+  # came from, and the ones attached.
+  def session_for(shared_context, attached: [ @teams ])
     workflow = create(:workflow, scope: @project)
     run = create(:workflow_run, workflow: workflow, project: @project, user: @user, shared_context: shared_context)
     step_run = create(:step_run, workflow_run: run, step: create(:step, workflow: workflow))
     session = create(:terminal_session, :running, :agent_session, user: @user, project: @project,
                                                                   mode: "non_interactive", initial_prompt: "x")
     step_run.update!(terminal_session: session)
+    session.integrations << attached
     session.reload
   end
 
@@ -169,8 +172,8 @@ class InternalTools::ChatToolsTest < ActiveSupport::TestCase
     stub_slack_client!
     slack = Integration.create!(provider: :slack, company: @company, connected_by: @user, name: "Acme", status: :active)
     slack.update!(credentials_data: { "bot_token" => "xoxb-1" })
-    session = session_for("chat" => { "provider" => "slack", "conversation" => { "id" => "C1", "type" => "channel" },
-                                      "thread_id" => "111.2", "integration_id" => slack.id })
+    session = session_for({ "chat" => { "provider" => "slack", "conversation" => { "id" => "C1", "type" => "channel" },
+                                        "thread_id" => "111.2", "integration_id" => slack.id } }, attached: [ slack ])
 
     result = run_tool(InternalTools::ChatPostMessage, { text: "**Done**" }, session: session)
 
@@ -184,11 +187,47 @@ class InternalTools::ChatToolsTest < ActiveSupport::TestCase
   end
 
   test "with two messengers connected and no chat origin, the provider must be named" do
-    Integration.create!(provider: :slack, company: @company, connected_by: @user, name: "Acme", status: :active)
+    slack = Integration.create!(provider: :slack, company: @company, connected_by: @user, name: "Acme", status: :active)
 
-    result = run_tool(InternalTools::ChatPostMessage, { text: "hi" }, session: session_for({}))
+    result = run_tool(InternalTools::ChatPostMessage, { text: "hi" }, session: session_for({}, attached: [ @teams, slack ]))
 
     assert_match(/Name the messenger: pass `provider` \(slack or teams\)/, result[:stderr])
+  end
+
+  test "a Slack install the session was not given is not reached, and without any the tool says so" do
+    stub_slack_client!
+    slack = Integration.create!(provider: :slack, company: @company, connected_by: @user, name: "Acme", status: :active)
+    slack.update!(credentials_data: { "bot_token" => "xoxb-1" })
+
+    result = run_tool(InternalTools::ChatPostMessage, { text: "hi", provider: "slack", conversation: "C1" },
+                      session: session_for({}))
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/is not a Slack channel connected to/, result[:stderr])
+    assert_empty fake_slack.posted_messages
+  end
+
+  test "with two Slack workspaces attached, the origin wins, an integration_id picks one, and no id is ambiguous" do
+    stub_slack_client!
+    first = Integration.create!(provider: :slack, company: @company, connected_by: @user, name: "First", status: :active)
+    second = Integration.create!(provider: :slack, company: @company, connected_by: @user, name: "Second", status: :active)
+    [ first, second ].each { |slack| slack.update!(credentials_data: { "bot_token" => "xoxb-#{slack.id}" }) }
+    from_second = { "chat" => { "provider" => "slack", "conversation" => { "id" => "C2", "type" => "channel" },
+                                "thread_id" => "1.2", "integration_id" => second.id } }
+
+    originated = run_tool(InternalTools::ChatPostMessage, { text: "hi" }, session: session_for(from_second, attached: [ first, second ]))
+    assert_equal 0, originated[:exit_code], originated[:stderr]
+
+    gone = Integration.create!(provider: :slack, company: @company, connected_by: @user, name: "Gone", status: :active)
+    left = { "chat" => { "provider" => "slack", "conversation" => { "id" => "C9", "type" => "channel" },
+                         "thread_id" => "1.2", "integration_id" => gone.id } }
+    plain = session_for(left, attached: [ first, second ])
+    ambiguous = run_tool(InternalTools::ChatPostMessage, { text: "hi", provider: "slack" }, session: plain)
+    assert_equal 1, ambiguous[:exit_code]
+    assert_match(/several Slack integrations: pass `integration_id`/, ambiguous[:stderr])
+
+    outside = run_tool(InternalTools::ChatPostMessage, { text: "hi", provider: "slack", integration_id: 999_999_999 }, session: plain)
+    assert_match(/is not a slack integration attached to this session/, outside[:stderr])
   end
 
   test "the chat tools are offered wherever Slack or Teams is connected" do

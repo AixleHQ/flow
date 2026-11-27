@@ -1,7 +1,7 @@
 import { router, usePage } from '@inertiajs/react';
 import { useEffect } from 'react';
 
-import type { RunnerSummary } from '@/types/generated';
+import type { IntegrationPicker, RunnerSummary } from '@/types/generated';
 
 import type { AssetPickerItem } from 'shared/components/AssetPicker';
 import { ConfigItemOption } from 'shared/components/SessionNewForm';
@@ -16,6 +16,7 @@ interface WorkflowOption {
   id: number;
   name: string;
   runnerId?: number | null;
+  integrationIds?: number[];
   steps: {
     id: number;
     name: string;
@@ -42,6 +43,10 @@ export interface CreateOptions {
   defaultAgentRuntime: string | null;
   workflows: WorkflowOption[];
   configItems: ConfigItemOption[];
+  /** Coder, Slack, Teams and Azure DevOps integrations a session can be given. */
+  integrations?: IntegrationPicker[];
+  /** What the form preselects: the project's Coder, its chat installs and Azure DevOps connections. */
+  defaultIntegrationIds?: number[];
   /** Absent from a server that predates runners. */
   runners?: RunnerSummary[];
   costHint?: { avgCostCentsByRuntime: Record<string, number>; monthToDateCents: number };

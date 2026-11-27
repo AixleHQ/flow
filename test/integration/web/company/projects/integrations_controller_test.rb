@@ -511,23 +511,34 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert Integration.exists?(coder.id)
   end
 
+  def stub_coder_templates(base: "https://coder.example.com", names: %w[tpl aws-ec2-spot-v1])
+    stub_request(:get, "#{base}/api/v2/templates")
+      .to_return(status: 200, body: names.map { |name| { id: SecureRandom.uuid, name: name } }.to_json,
+                 headers: { "Content-Type" => "application/json" })
+  end
+
   test "create coder integration happy path persists project-scoped record" do
     stub_request(:get, "https://coder.example.com/api/v2/users/me").to_return(
       status: 200,
       body: { id: "user-uuid", username: "alice", email: "alice@example.com" }.to_json,
       headers: { "Content-Type" => "application/json" }
     )
+    stub_coder_templates
 
     assert_difference("Integration.count", 1) do
       post company_project_integrations_path(@project), params: {
         provider: "coder",
         coderUrl: "https://coder.example.com",
         sessionToken: "tok-1",
+        defaultTemplate: "tpl",
+        machinePrefix: "my-project",
         lockTtlMinutes: "60"
       }
     end
 
     integration = Integration.last
+    assert_equal "tpl", integration.coder_default_template
+    assert_equal "my-project", integration.coder_machine_prefix
     assert_equal @project.id, integration.project_id
     assert_equal "coder", integration.provider.to_s
     assert_equal "active", integration.status.to_s
@@ -542,6 +553,8 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
         provider: "coder",
         coderUrl: "https://coder.example.com",
         sessionToken: "bad-token",
+        defaultTemplate: "tpl",
+        machinePrefix: "my-project",
         lockTtlMinutes: "60"
       }
     end
@@ -556,12 +569,15 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
       body: { id: "user-uuid", username: "alice", email: "alice@example.com" }.to_json,
       headers: { "Content-Type" => "application/json" }
     )
+    stub_coder_templates(base: "http://coder.example.com")
 
     assert_difference("Integration.count", 1) do
       post company_project_integrations_path(@project), params: {
         provider: "coder",
         coderUrl: "http://coder.example.com",
         sessionToken: "tok-1",
+        defaultTemplate: "tpl",
+        machinePrefix: "my-project",
         lockTtlMinutes: "60"
       }
     end
@@ -583,6 +599,7 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
   test "update saves coder settings without touching credentials" do
     integration = create_coder_integration("machine_prefix" => "old-prefix")
     credentials_before = integration.credentials_data
+    stub_coder_templates
 
     patch company_project_integration_path(@project, integration), params: {
       defaultTemplate: "aws-ec2-spot-v1",
@@ -614,22 +631,55 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert_equal 60, integration.coder_lock_ttl_minutes
   end
 
-  test "update clears a blank template so the pool stops growing" do
-    integration = create_coder_integration("default_template" => "aws-ec2-spot-v1")
+  test "update refuses a blank template or prefix and keeps the stored settings" do
+    integration = create_coder_integration("default_template" => "tpl", "machine_prefix" => "aixle-prod")
+    stub_coder_templates
 
     patch company_project_integration_path(@project, integration), params: {
       defaultTemplate: "", machinePrefix: "", lockTtlMinutes: "120"
     }
 
     assert_response :redirect
-    assert_nil integration.reload.coder_default_template
+    assert_match(/Default template is required/, flash[:alert])
+    assert_equal "tpl", integration.reload.coder_default_template
+  end
+
+  test "the connect form asks for the templates a token can see, with a prefix made from the project's name" do
+    stub_coder_templates(names: %w[b a])
+
+    post coder_templates_company_project_integrations_path(@project),
+         params: { coderUrl: "https://coder.example.com", sessionToken: "tok-1" }, as: :json
+
+    assert_response :success
+    assert_equal %w[a b], response.parsed_body["templates"]
+    assert_equal Coder::Pool.suggest_prefix(@project.name), response.parsed_body["suggested_prefix"]
+  end
+
+  test "the templates of a connected integration are read with its stored token" do
+    integration = create_coder_integration
+    stub_coder_templates(names: %w[one])
+
+    get coder_template_list_company_project_integration_path(@project, integration)
+
+    assert_response :success
+    assert_equal %w[one], response.parsed_body["templates"]
+  end
+
+  test "the template list answers a token Coder refuses with its code" do
+    stub_request(:get, "https://coder.example.com/api/v2/templates").to_return(status: 401)
+
+    post coder_templates_company_project_integrations_path(@project),
+         params: { coderUrl: "https://coder.example.com", sessionToken: "bad" }, as: :json
+
+    assert_response :unprocessable_content
+    assert_equal "not_authorized", response.parsed_body["error"]
   end
 
   test "update rejects a non-positive lock TTL and keeps the stored settings" do
     integration = create_coder_integration("machine_prefix" => "aixle-prod")
 
     patch company_project_integration_path(@project, integration), params: {
-      machinePrefix: "changed", lockTtlMinutes: "0"
+      defaultTemplate: "tpl", machinePrefix: "changed", lockTtlMinutes: "0"
     }
 
     assert_response :redirect

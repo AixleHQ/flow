@@ -24,6 +24,7 @@ module InternalTools
         type: "object",
         required: %w[workspace_name command],
         properties: {
+          integration_id: Concerns::CoderResolver::INTEGRATION_ID_SCHEMA,
           command: {
             type: "string",
             description: "Shell command to execute (run via sh -c)."

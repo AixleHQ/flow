@@ -41,13 +41,14 @@ class SessionService
         metadata: metadata.presence,
         **params.slice(:mode, :initial_prompt, :requested_model, :reasoning_effort, :session_config,
                        :tool_ids, :skill_ids, :mcp_server_ids, :input_asset_ids, :repository_ids,
-                       :config_item_ids, :runner_id, :restored_from_session_id)
+                       :config_item_ids, :integration_ids, :runner_id, :restored_from_session_id)
       )
 
       return session if refuse_runner_pick(session, params)
       return session unless session.save
       return session if fail_on_runner_refusal(session)
 
+      attach_derived_integrations(session)
       Versions::LaunchRecord.record!(session)
       # The writer lock is taken around the queue write only — never around the
       # save, which touches half a dozen join tables.
@@ -412,6 +413,19 @@ class SessionService
       session.mcp_servers = scoped_resources(MCPServer, config[:mcp_server_ids], session) if config[:mcp_server_ids].present?
       session.repositories = scoped_resources(Repository, config[:repository_ids], session) if config[:repository_ids].present?
       session.input_assets = scoped_resources(Asset, config[:input_asset_ids], session) if config[:input_asset_ids].present?
+      session.integrations = scoped_integrations(config[:integration_ids], session) if config[:integration_ids].present?
+    end
+
+    # An interactive or API session starts with the integrations it was given. What its
+    # repositories bring with them is added here, once they are attached.
+    def attach_derived_integrations(session)
+      ids = SessionConfigResolver.new(session).resolve_integration_ids
+      session.integrations = scoped_integrations(ids, session) if ids.present?
+    end
+
+    # Ownership, not what a picker offers: a company-wide integration stays attachable.
+    def scoped_integrations(ids, session)
+      TenantScope.owned(Integration, project: session.project, company: SessionCompany.company_for(session)).where(id: ids)
     end
 
     # Resources resolve against the session's PROJECT company; project-less

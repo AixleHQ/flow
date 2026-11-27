@@ -83,6 +83,12 @@ module PersonalTools
                          "attach only the roles this step needs. Replaces the whole list — read the " \
                          "current value with get_workflow_step first.",
             items: { type: "integer" }
+      param :integration_ids, type: :array,
+            description: "Integration ids (list_integrations) of Coder, Slack, Teams or Azure DevOps this step may act through, " \
+                         "in addition to the workflow's own list. An integration is access to an external account: attach " \
+                         "only what this step needs. Replaces the whole list — read the current value with " \
+                         "get_workflow_step first.",
+            items: { type: "integer" }
       param :depends_on_step_ids, type: :array,
             description: "Step ids this step depends on. " \
                          "The /workspace/outputs files of these steps, and of every step they run after, are copied " \
@@ -97,7 +103,7 @@ module PersonalTools
     UPDATABLE = %i[
       name instructions agent_id required_agent_runtime preferred_model reasoning_effort tool_ids skill_ids
       mcp_server_ids repository_ids asset_ids input_asset_specs output_asset_specs on_failure max_retries skip_policy
-      config_item_ids aws_oidc_role_ids depends_on_step_ids bmad_enabled allow_non_interactive
+      config_item_ids aws_oidc_role_ids integration_ids depends_on_step_ids bmad_enabled allow_non_interactive
     ].freeze
 
     def execute

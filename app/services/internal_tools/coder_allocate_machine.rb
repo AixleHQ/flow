@@ -12,13 +12,15 @@ module InternalTools
                   "(or creates one if a default template is configured), locks it to the current terminal session, and returns the workspace " \
                   "identity (name, id, ssh command, lock expiry). Workspaces are health-checked before hand-over; if none is healthy the least-bad " \
                   "one is returned with a `health_warning`. If the allocated workspace turns out to be unusable, call this again with `exclude` " \
-                  "set to its name instead of releasing and retrying — a plain retry returns the same workspace."
+                  "set to its name instead of releasing and retrying — a plain retry returns the same workspace. " \
+                  "With several Coder integrations attached, pass `integration_id`; a workspace reached through two integrations is one machine and is locked once."
       tags :coder
       requires_integration :coder
       input_schema({
         type: "object",
         required: [],
         properties: {
+          integration_id: Concerns::CoderResolver::INTEGRATION_ID_SCHEMA,
           note: {
             type: "string",
             description: "Optional free-form note recorded on the workspace lock (audit / debug aid). Do NOT include the task id or task link — task context is derived server-side."

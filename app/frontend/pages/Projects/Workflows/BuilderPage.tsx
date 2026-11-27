@@ -8,6 +8,7 @@ import { useCallback, useMemo, useState } from 'react';
 import type {
   AwsOidcRolePicker,
   ConfigItemPicker,
+  IntegrationPicker,
   MCPServerPicker,
   Picker,
   Project,
@@ -76,6 +77,8 @@ interface Props {
   configItems?: ConfigItemPicker[];
   /** Roles of the project's AWS integration; empty without one. */
   awsOidcRoles?: AwsOidcRolePicker[];
+  /** Coder, Slack, Teams and Azure DevOps integrations a workflow or a step can attach. */
+  integrations?: IntegrationPicker[];
   agentModels?: AgentModelsEntry[];
   runners?: RunnerSummary[];
   readOnly: boolean;
@@ -117,6 +120,7 @@ const BuilderPage = () => {
     repositories: rawRepositories,
     configItems: rawConfigItems,
     awsOidcRoles: rawAwsOidcRoles,
+    integrations: rawIntegrations,
     agentModels: rawAgentModels,
     runners: rawRunners,
     readOnly,
@@ -143,6 +147,7 @@ const BuilderPage = () => {
   const configItems = useMemo(() => rawConfigItems ?? [], [rawConfigItems]);
   const repositories = rawRepositories ?? [];
   const awsOidcRoles = rawAwsOidcRoles ?? [];
+  const integrations = rawIntegrations ?? [];
   const agentModels = rawAgentModels ?? [];
   const runners = rawRunners ?? [];
   const catalogLoading = [rawAssets, rawMcpServers, rawTools, rawSkills, rawConfigItems].some((p) => p === undefined);
@@ -694,6 +699,7 @@ const BuilderPage = () => {
                       repositories={repositories}
                       configItems={configItems}
                       awsOidcRoles={awsOidcRoles}
+                      integrations={integrations}
                       agentModels={agentModels}
                       readOnly={readOnly}
                       onFieldChange={(field, value) => updateStepField(selectedSession.id, field, value)}
@@ -761,6 +767,7 @@ const BuilderPage = () => {
               repositories={repositories}
               configItems={configItems}
               awsOidcRoles={awsOidcRoles}
+              integrations={integrations}
               runners={runners}
               readOnly={readOnly}
               onWorkflowChange={updateWorkflowField}

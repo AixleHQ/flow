@@ -9,9 +9,12 @@ module Chat
     module_function
 
     # [conversation, error message]
-    def teams(project, value, origin)
-      installed = ChatConversation.where(provider: "teams")
-                                  .in_workspace_of(Integration.active.visible_for_project(project).where(provider: :teams).select(:id))
+    # `within:` is a relation of integrations, a session's set: only conversations in the
+    # workspace of one of them are reachable.
+    def teams(project, value, origin, within: nil)
+      installs = Integration.active.visible_for_project(project).where(provider: :teams)
+      installs = installs.where(id: within.select(:id)) if within
+      installed = ChatConversation.where(provider: "teams").in_workspace_of(installs.select(:id))
       return from_origin(installed, origin) if value.blank?
 
       value = value.to_s.strip

@@ -4,7 +4,7 @@ import { notifications } from '@mantine/notifications';
 import { IconAdjustments, IconPlayerPlay, IconRobot, IconSparkles } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import type { ConfigItemPicker, RunnerSummary } from '@/types/generated';
+import type { ConfigItemPicker, IntegrationPicker, RunnerSummary } from '@/types/generated';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
 import { ReasoningEffortSelect } from 'shared/components/ReasoningEffortSelect';
@@ -12,6 +12,7 @@ import { ToolPicker } from 'shared/components/ToolPicker';
 import { apiFetch } from 'shared/lib/apiFetch';
 import { useFeatureFlag } from 'shared/lib/hooks/useFeatureFlag';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { integrationLabel } from 'shared/lib/integrationLabel';
 import { postNavigate } from 'shared/lib/postNavigate';
 import { type ToolGroup } from 'shared/lib/toolPicker';
 import { allowUnload } from 'shared/lib/unsaved-changes/guards';
@@ -55,6 +56,10 @@ export interface SessionNewFormProps {
   repositories?: NamedItem[];
   assets?: AssetPickerItem[];
   configItems?: ConfigItemOption[];
+  /** Coder, Slack, Teams and Azure DevOps integrations the session can be given. */
+  integrations?: IntegrationPicker[];
+  /** Preselected: a session gets no integrations unless it is given some. */
+  defaultIntegrationIds?: number[];
   /** The runners the fixed project can see; only read with the externalRunners flag. */
   runners?: RunnerSummary[];
   /** Where to redirect after session creation */
@@ -108,6 +113,8 @@ export const SessionNewForm = ({
   repositories = [],
   assets = [],
   configItems = [],
+  integrations = [],
+  defaultIntegrationIds = [],
   runners = [],
   onCreatedPath,
   fallbackPath,
@@ -149,6 +156,7 @@ export const SessionNewForm = ({
   const [selectedRepos, setSelectedRepos] = useState<string[]>([]);
   const [selectedAssets, setSelectedAssets] = useState<number[]>([]);
   const [selectedConfigItems, setSelectedConfigItems] = useState<string[]>([]);
+  const [selectedIntegrations, setSelectedIntegrations] = useState<string[]>(defaultIntegrationIds.map(String));
   const [runnerId, setRunnerId] = useState<number | null>(null);
 
   const resolvedProjectId = fixedProjectId ? String(fixedProjectId) : projectId;
@@ -259,6 +267,7 @@ export const SessionNewForm = ({
             repositoryIds: selectedRepos.length > 0 ? selectedRepos.map(Number) : undefined,
             inputAssetIds: selectedAssets.length > 0 ? selectedAssets : undefined,
             configItemIds: selectedConfigItems.length > 0 ? selectedConfigItems.map(Number) : undefined,
+            integrationIds: selectedIntegrations.length > 0 ? selectedIntegrations.map(Number) : undefined,
             sessionConfig: bmadEnabled ? { bmadEnabled: true } : {},
             ...(showRunner && runnerId !== null && { runnerId }),
           },
@@ -314,6 +323,7 @@ export const SessionNewForm = ({
     selectedRepos,
     selectedAssets,
     selectedConfigItems,
+    selectedIntegrations,
     showRunner,
     runnerId,
     onCreatedPath,
@@ -561,6 +571,20 @@ export const SessionNewForm = ({
           }))}
           value={selectedConfigItems}
           onChange={setSelectedConfigItems}
+          searchable
+          clearable
+        />
+      )}
+
+      {integrations.length > 0 && (
+        <MultiSelect
+          label="Integrations"
+          description="Accounts the agent can act through. A session gets only the integrations chosen here, plus those of its repositories."
+          placeholder="Select integrations..."
+          aria-label="Integrations"
+          data={integrations.map((i) => ({ value: String(i.id), label: integrationLabel(i) }))}
+          value={selectedIntegrations}
+          onChange={setSelectedIntegrations}
           searchable
           clearable
         />
