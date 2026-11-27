@@ -131,5 +131,90 @@ module Coder
       assert_match(/\[REDACTED\]/, err.message)
       assert_no_match(/#{Regexp.escape(@integration.credentials_data['session_token'])}/, err.message)
     end
+
+    test "status reads one workspace by name" do
+      request = stub_get("/api/v2/users/me/workspace/aixle-prod-1", {
+        id: "u1", name: "aixle-prod-1",
+        latest_build: { id: "b1", transition: "start", job: { status: "succeeded" },
+                        resources: [ { agents: [ { status: "connected" } ] } ] }
+      })
+
+      status = @service.status("aixle-prod-1")
+
+      assert status.running?
+      assert status.connected?
+      assert_requested request, times: 1
+    end
+
+    test "status of a workspace Coder does not know, or has deleted, is deleted" do
+      stub_get("/api/v2/users/me/workspace/gone-1", { message: "Not found" }, status: 404)
+      stub_get("/api/v2/users/me/workspace/gone-2", { message: "Workspace was deleted" }, status: 410)
+
+      assert @service.status("gone-1").deleted?
+      assert @service.status("gone-2").deleted?
+    end
+
+    test "status raises OperationError on any other failure, without the token" do
+      stub_get("/api/v2/users/me/workspace/aixle-prod-1", { message: "boom" }, status: 500)
+
+      error = assert_raises(Coder::WorkspaceService::OperationError) { @service.status("aixle-prod-1") }
+      assert_match(/workspace status failed/, error.message)
+    end
+
+    test "ensure_started_async starts a stopped workspace and does not wait" do
+      request = stub_post("/api/v2/workspaces/u1/builds", { id: "build-1", job: { status: "pending" } })
+      workspace = { "id" => "u1", "latest_build" => { "transition" => "stop", "job" => { "status" => "succeeded" } } }
+
+      build = @service.ensure_started_async(workspace)
+
+      assert_equal "build-1", build["id"]
+      assert_requested request, times: 1
+    end
+
+    test "ensure_started_async returns the start build already in flight instead of starting again" do
+      workspace = { "id" => "u1",
+                    "latest_build" => { "id" => "build-7", "transition" => "start", "job" => { "status" => "running" } } }
+
+      assert_equal({ "id" => "build-7" }, @service.ensure_started_async(workspace))
+      assert_not_requested :post, %r{/builds}
+    end
+
+    test "ensure_started_async returns nil for a running workspace" do
+      workspace = { "id" => "u1", "latest_build" => { "transition" => "start", "job" => { "status" => "succeeded" } } }
+
+      assert_nil @service.ensure_started_async(workspace)
+      assert_not_requested :post, %r{/builds}
+    end
+
+    test "a refusal for quota raises QuotaError, which is an OperationError" do
+      stub_get("/api/v2/templates", [ { id: "t1", name: "pool" } ])
+      stub_post("/api/v2/users/#{@integration.coder_user_id}/workspaces",
+                { message: "Quota exceeded", detail: "workspace quota is used up" }, status: 403)
+
+      error = assert_raises(Coder::WorkspaceService::QuotaError) do
+        @service.create_workspace(name: "aixle-prod-9", template_name: "pool")
+      end
+
+      assert_kind_of Coder::WorkspaceService::OperationError, error
+      assert_match(/Quota exceeded/, error.message)
+    end
+
+    test "a refusal for quota on a start build raises QuotaError" do
+      stub_post("/api/v2/workspaces/u1/builds", { message: "Over quota" }, status: 429)
+
+      assert_raises(Coder::WorkspaceService::QuotaError) { @service.start("u1") }
+    end
+
+    test "a refusal that does not mention quota stays an OperationError" do
+      stub_get("/api/v2/templates", [ { id: "t1", name: "pool" } ])
+      stub_post("/api/v2/users/#{@integration.coder_user_id}/workspaces",
+                { message: "Missing required parameter", detail: "region" }, status: 403)
+
+      error = assert_raises(Coder::WorkspaceService::OperationError) do
+        @service.create_workspace(name: "aixle-prod-9", template_name: "pool")
+      end
+
+      assert_not_kind_of Coder::WorkspaceService::QuotaError, error
+    end
   end
 end

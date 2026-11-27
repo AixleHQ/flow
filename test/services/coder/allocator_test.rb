@@ -43,6 +43,17 @@ module Coder
         { "job" => { "status" => "succeeded" } }
       end
 
+      # The real `WorkspaceService#ensure_started_async` decides from the
+      # workspace's last build; this stand-in does the same over `start`.
+      def ensure_started_async(workspace, **)
+        build = workspace["latest_build"] || {}
+        job   = build.dig("job", "status").to_s
+        return nil if build["transition"] == "start" && job == "succeeded"
+        return { "id" => build["id"] } if build["transition"] == "start" && %w[pending running].include?(job) && build["id"].present?
+
+        start(workspace["id"])
+      end
+
       def create_workspace(name:, template_name: nil, template_id: nil)
         raise Coder::WorkspaceService::OperationError, @create_failure if @create_failure
 
@@ -89,7 +100,7 @@ module Coder
                         health_check: FakeHealthCheck.new, quarantine_service: nil)
       Coder::Allocator.new(
         integration:        @integration,
-        terminal_session:   @session,
+        holder:             Coder::LockService::Holder.session(@session.id),
         workspace_service:  workspace_service,
         lock_service:       lock_service,
         health_check:       health_check,
@@ -172,7 +183,7 @@ module Coder
       ])
 
       Coder::LockService.new(@integration).acquire(
-        workspace_name: "aixle-prod-1", workspace_id: "u1", terminal_session_id: "sess-OTHER"
+        workspace_name: "aixle-prod-1", workspace_id: "u1", holder: Coder::LockService::Holder.session("sess-OTHER")
       )
 
       allocator = build_allocator(workspace_service: ws)
@@ -189,7 +200,7 @@ module Coder
 
       @integration.update!(settings: @integration.settings.merge("default_template" => "tpl-x"))
       Coder::LockService.new(@integration).acquire(
-        workspace_name: "aixle-prod-1", workspace_id: "u1", terminal_session_id: "sess-OTHER"
+        workspace_name: "aixle-prod-1", workspace_id: "u1", holder: Coder::LockService::Holder.session("sess-OTHER")
       )
 
       allocator = build_allocator(workspace_service: ws)
@@ -256,7 +267,7 @@ module Coder
         create_failure: "create_workspace failed: create_workspace failed: HTTP 403 — Forbidden."
       )
       Coder::LockService.new(@integration).acquire(
-        workspace_name: "aixle-prod-1", workspace_id: "u1", terminal_session_id: "sess-OTHER"
+        workspace_name: "aixle-prod-1", workspace_id: "u1", holder: Coder::LockService::Holder.session("sess-OTHER")
       )
 
       error = assert_raises(Coder::Allocator::ExhaustedError) do
@@ -277,8 +288,8 @@ module Coder
           "latest_build" => { "transition" => "start", "job" => { "status" => "succeeded" } } }
       ])
       lock_service = Coder::LockService.new(@integration)
-      lock_service.acquire(workspace_name: "aixle-prod-1", workspace_id: "u1", terminal_session_id: "sess-OTHER")
-      lock_service.acquire(workspace_name: "aixle-prod-2", workspace_id: "u2", terminal_session_id: "sess-OTHER")
+      lock_service.acquire(workspace_name: "aixle-prod-1", workspace_id: "u1", holder: Coder::LockService::Holder.session("sess-OTHER"))
+      lock_service.acquire(workspace_name: "aixle-prod-2", workspace_id: "u2", holder: Coder::LockService::Holder.session("sess-OTHER"))
 
       error = assert_raises(Coder::Allocator::ExhaustedError) do
         build_allocator(workspace_service: ws).allocate
@@ -375,7 +386,7 @@ module Coder
       assert_equal "aixle-prod-2", result[:workspace_name], "expected the lower-load box"
       assert_match(/no healthy workspace was available/, result[:health_warning])
       assert Coder::LockService.new(@integration).held_by_session?(
-        workspace_name: "aixle-prod-2", terminal_session_id: @session.id
+        workspace_name: "aixle-prod-2", holder: Coder::LockService::Holder.session(@session.id)
       )
     end
 

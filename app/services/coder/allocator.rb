@@ -23,7 +23,23 @@ module Coder
   # failing while usable boxes exist. Allocation must never be worse than it
   # was before health gating existed.
   #
-  # Returns a plain hash describing the allocated workspace:
+  # The holder is a `Coder::LockService::Holder`: a terminal session (the
+  # agents' `coder_*` tools) or a runner environment. A session's hold expires
+  # with its inactivity; an environment's is explicit, ends only through
+  # `delete` or `LockService#release_owned`, and is never taken by another
+  # holder, never reaped and never reclaimed.
+  #
+  # `allocate(wait: false)` is for a caller that cannot sit in a build: it never
+  # sleeps in `await_build` and returns a `Result`, `:ready` or `:pending`, and
+  # every retry for the same holder continues the same workspace. It hands a
+  # workspace over only when it is ready, as the integration defines it: the
+  # build succeeded, the agent is connected and the SSH probe passed. A
+  # workspace that fails the probe is quarantined and released, as in the
+  # blocking mode, and is never handed over, including as the blocking mode's
+  # least-bad fallback.
+  #
+  # With `wait: true` (the default) it returns a plain hash describing the
+  # allocated workspace:
   #
   #   {
   #     workspace_id:      "uuid",
@@ -37,6 +53,14 @@ module Coder
   class Allocator
     class ExhaustedError < StandardError; end
 
+    # What `allocate(wait: false)` answers: `:ready` with the workspace hash
+    # (the same one the blocking mode returns), or `:pending` with the
+    # workspace the holder holds and what it is waiting for.
+    Result = Data.define(:status, :workspace, :message) do
+      def ready?   = status == :ready
+      def pending? = status == :pending
+    end
+
     # Fallback ordering when every candidate failed a health check: a box that
     # merely looks loaded beats one under an unexpired quarantine, which beats
     # one whose agent Coder itself reports as disconnected.
@@ -44,22 +68,29 @@ module Coder
     RANK_QUARANTINED    = 1
     RANK_AGENT_UNHEALTHY = 2
 
-    def initialize(integration:, terminal_session:, workspace_service: nil, lock_service: nil,
+    def initialize(integration:, holder:, workspace_service: nil, lock_service: nil,
                    quarantine_service: nil, health_check: nil)
       @integration        = integration
-      @terminal_session   = terminal_session
+      @holder             = holder
       @workspace_service  = workspace_service  || Coder::WorkspaceService.new(integration)
       @lock_service       = lock_service       || Coder::LockService.new(integration)
       @quarantine_service = quarantine_service || Coder::QuarantineService.new(integration)
       @health_check       = health_check       || Coder::HealthCheck.new(integration)
     end
 
-    def allocate(note: nil, acquired_by: nil, exclude: [])
+    def allocate(note: nil, acquired_by: nil, exclude: [], wait: true)
       excluded = Array(exclude).map(&:to_s).map(&:strip).reject(&:empty?)
 
+      unless wait
+        held = @lock_service.held_by(holder: @holder)
+        if held
+          continued = continue_hold(held)
+          return continued if continued
+        end
+      end
+
       candidates = @workspace_service.list(prefix: prefix, own: true).sort_by do |w|
-        status = w["latest_build"]&.dig("transition") == "start" && w.dig("latest_build", "job", "status") == "succeeded" ? 0 : 1
-        [ status, w["name"].to_s ]
+        [ Coder::WorkspaceStatus.from(w).running? ? 0 : 1, w["name"].to_s ]
       end
 
       held           = []
@@ -97,7 +128,14 @@ module Coder
         end
 
         begin
-          status = ensure_started(ws)
+          if wait
+            status = ensure_started(ws)
+          else
+            waiting_for = advance(ws_name, ws, Coder::WorkspaceStatus.from(ws), retrying: false)
+            return pending_result(waiting_for, workspace_id: ws_id, workspace_name: ws_name, lock: lock) if waiting_for
+
+            status = "running"
+          end
         rescue Coder::WorkspaceService::OperationError => e
           # A lock is only worth holding while the workspace is usable. Handing
           # it back keeps a failed start (spot capacity, build timeout) from
@@ -120,13 +158,14 @@ module Coder
 
         @quarantine_service.clear(workspace_name: ws_name) if verdict.healthy?
 
-        return build_result(workspace_id: ws_id, workspace_name: ws_name, status: status, lock: lock)
+        result = build_result(workspace_id: ws_id, workspace_name: ws_name, status: status, lock: lock)
+        return wait ? result : Result.new(status: :ready, workspace: result, message: nil)
       end
 
       create_failure = nil
       if @integration.coder_default_template.present?
         begin
-          return create_and_lock(note: note, acquired_by: acquired_by)
+          return create_and_lock(note: note, acquired_by: acquired_by, wait: wait)
         rescue Coder::WorkspaceService::OperationError => e
           # Creation is the preferred escape from an unhealthy pool, but it is
           # not the last one: fall through to the deferred candidates instead
@@ -136,7 +175,9 @@ module Coder
         end
       end
 
-      fallback = allocate_deferred(deferred, note: note, acquired_by: acquired_by)
+      # The least-bad fallback hands over a workspace that failed a health
+      # check. A caller that asked not to wait is told only about a ready one.
+      fallback = wait ? allocate_deferred(deferred, note: note, acquired_by: acquired_by) : nil
       return fallback if fallback
 
       raise ExhaustedError, exhausted_message(
@@ -145,23 +186,110 @@ module Coder
       )
     end
 
+    # Deletes the workspace `holder` holds, through the integration, and
+    # releases the hold once Coder reports it deleted. `:pending` while the
+    # delete build runs, `:gone` when it is done, and `:gone` at once for a
+    # holder that holds nothing or a workspace Coder no longer knows. A delete
+    # Coder refuses raises `WorkspaceService::OperationError`; the caller retries.
+    #
+    # The workspace is found by its hold, not by a name the caller recorded: one
+    # locked before any name was written down is deleted too, never returned to
+    # the pool.
+    def delete(holder: @holder)
+      hold = @lock_service.held_by(holder: holder)
+      return :gone unless hold
+
+      status = @workspace_service.status(hold.workspace_name)
+      if status.deleted?
+        @lock_service.release_owned(workspace_name: hold.workspace_name, holder: holder)
+        return :gone
+      end
+      return :pending if status.deleting?
+
+      @workspace_service.delete(hold.workspace_id)
+      :pending
+    end
+
     private
 
     def acquire_lock(ws_name, ws_id, note:, acquired_by:)
       @lock_service.acquire(
-        workspace_name:      ws_name,
-        workspace_id:        ws_id,
-        terminal_session_id: @terminal_session.id,
-        note:                note,
-        acquired_by:         acquired_by
+        workspace_name: ws_name,
+        workspace_id:   ws_id,
+        holder:         @holder,
+        note:           note,
+        acquired_by:    acquired_by
       )
     end
 
     def release_own_lock(ws_name)
-      @lock_service.release_owned(
-        workspace_name:      ws_name,
-        terminal_session_id: @terminal_session.id
-      )
+      @lock_service.release_owned(workspace_name: ws_name, holder: @holder)
+    end
+
+    # The next try of a holder that already holds a workspace: continue that one
+    # from where it stands. Returns a `Result`, or nil when the workspace failed
+    # its probe (quarantined and released, so the search for another goes on).
+    # A workspace that cannot be recovered raises `OperationError`.
+    def continue_hold(hold)
+      status = @workspace_service.status(hold.workspace_name)
+      waiting_for = advance(hold.workspace_name, { "id" => hold.workspace_id }, status, retrying: true)
+      if waiting_for
+        return pending_result(waiting_for, workspace_id: hold.workspace_id, workspace_name: hold.workspace_name, lock: hold)
+      end
+
+      verdict = @health_check.probe(workspace_name: hold.workspace_name)
+      if verdict.sick?
+        @quarantine_service.quarantine(workspace_name: hold.workspace_name, reason: verdict.reason)
+        release_own_lock(hold.workspace_name)
+        return nil
+      end
+
+      @quarantine_service.clear(workspace_name: hold.workspace_name) if verdict.healthy?
+      workspace = build_result(workspace_id: hold.workspace_id, workspace_name: hold.workspace_name,
+                               status: "running", lock: hold)
+      Result.new(status: :ready, workspace: workspace, message: nil)
+    end
+
+    # One non-blocking step of bringing a locked workspace up: starts it when it
+    # is stopped, and says what it is waiting for otherwise. Returns nil when
+    # the build succeeded and the agent is connected (the workspace is ready to
+    # be probed), or the message of what it waits for.
+    #
+    # `retrying` is a holder continuing a workspace it held already: a build
+    # that failed is then final. A candidate just locked from the pool gets a
+    # new start instead, as the blocking mode gives it.
+    def advance(ws_name, workspace, status, retrying:)
+      case status.state
+      when :deleted
+        raise Coder::WorkspaceService::OperationError, "workspace #{ws_name} was deleted"
+      when :deleting
+        raise Coder::WorkspaceService::OperationError, "workspace #{ws_name} is being deleted"
+      when :failed
+        if retrying
+          detail = status.error ? " — #{status.error.truncate(Coder::WorkspaceService::EXPLANATION_LIMIT)}" : ""
+          raise Coder::WorkspaceService::OperationError,
+                "build #{status.build_id} of workspace #{ws_name} failed (#{status.transition})#{detail}"
+        end
+
+        start_async(ws_name, workspace, status)
+      when :stopped
+        start_async(ws_name, workspace, status)
+      when :building
+        status.transition == "start" ? "Starting workspace #{ws_name}" : "Waiting for workspace #{ws_name} to stop"
+      else
+        status.connected? ? nil : "Waiting for the agent of #{ws_name}"
+      end
+    end
+
+    def start_async(ws_name, workspace, status)
+      @workspace_service.ensure_started_async(workspace, status: status)
+      "Starting workspace #{ws_name}"
+    end
+
+    def pending_result(message, workspace_id:, workspace_name:, lock:)
+      workspace = build_result(workspace_id: workspace_id, workspace_name: workspace_name,
+                               status: "starting", lock: lock)
+      Result.new(status: :pending, workspace: workspace, message: message)
     end
 
     def quarantine_reason(ws_name)
@@ -202,11 +330,15 @@ module Coder
       nil
     end
 
-    def create_and_lock(note:, acquired_by:)
-      created = create_new_workspace
+    def create_and_lock(note:, acquired_by:, wait: true)
+      created = create_new_workspace(wait: wait)
       ws_id   = created["id"].to_s
       ws_name = created["name"].to_s
       lock    = acquire_lock(ws_name, ws_id, note: note, acquired_by: acquired_by)
+
+      unless wait
+        return pending_result("Building workspace #{ws_name}", workspace_id: ws_id, workspace_name: ws_name, lock: lock)
+      end
 
       build_result(workspace_id: ws_id, workspace_name: ws_name, status: "starting", lock: lock)
     end
@@ -246,34 +378,24 @@ module Coder
       @integration.coder_machine_prefix.presence
     end
 
+    # The blocking start: `ensure_started_async` (which reuses a start build
+    # already in flight, e.g. one left over from an allocation attempt that
+    # timed out at the MCP layer, since another `start` would race it and answer
+    # HTTP 409), then wait for that build.
     def ensure_started(workspace)
-      status = workspace.dig("latest_build", "job", "status").to_s
-      transition = workspace.dig("latest_build", "transition").to_s
-      return "running" if transition == "start" && status == "succeeded"
-
-      # If a start-build is already in flight (e.g. left over from a previous
-      # allocation attempt that timed out at the MCP layer), await that build
-      # instead of triggering a new one — issuing another `start` against the
-      # same workspace would race the existing build and return HTTP 409.
-      if transition == "start" && %w[pending running].include?(status)
-        build_id = workspace.dig("latest_build", "id").to_s
-        @workspace_service.await_build(build_id) if build_id.present?
-        return "running"
-      end
-
-      build = @workspace_service.start(workspace["id"])
-      @workspace_service.await_build(build["id"])
+      build = @workspace_service.ensure_started_async(workspace)
+      @workspace_service.await_build(build["id"]) if build && build["id"].present?
       "running"
     end
 
-    def create_new_workspace
+    def create_new_workspace(wait: true)
       name = generate_workspace_name
       created = @workspace_service.create_workspace(
         name:          name,
         template_name: @integration.coder_default_template
       )
       build_id = created.dig("latest_build", "id")
-      @workspace_service.await_build(build_id) if build_id.present?
+      @workspace_service.await_build(build_id) if wait && build_id.present?
       created
     end
 

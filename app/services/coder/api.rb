@@ -48,6 +48,15 @@ module Coder
         body["workspaces"] || []
       end
 
+      # One of the token owner's workspaces, by name. Raises `HTTPError`
+      # (404, or 410 for a deleted one) when Coder does not have it.
+      def get_workspace_by_name(coder_url:, session_token:, name:)
+        json_get(
+          "/api/v2/users/me/workspace/#{ERB::Util.url_encode(name.to_s)}",
+          coder_url: coder_url, session_token: session_token, op: "get_workspace"
+        )
+      end
+
       def build_workspace(coder_url:, session_token:, workspace_id:, transition:, orphan: false)
         body = { transition: transition }
         body[:orphan] = true if orphan
