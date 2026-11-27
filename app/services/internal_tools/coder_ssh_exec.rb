@@ -59,7 +59,7 @@ module InternalTools
       return error("command is required") if command.empty?
 
       lock_service = Coder::LockService.new(coder_integration)
-      unless lock_service.held_by_session?(workspace_name: workspace_name, terminal_session_id: session.id)
+      unless lock_service.held_by_session?(workspace_name: workspace_name, holder: Coder::LockService::Holder.session(session.id))
         return error("session does not hold the lock for workspace #{workspace_name}")
       end
 
@@ -67,7 +67,7 @@ module InternalTools
       # since allocation, so a session that dies hard frees the workspace after
       # one idle window instead of holding it for the whole TTL, and a long
       # gate never loses its box mid-run.
-      lock_service.touch(workspace_name: workspace_name, terminal_session_id: session.id)
+      lock_service.touch(workspace_name: workspace_name, holder: Coder::LockService::Holder.session(session.id))
 
       runner = Coder::SshRunner.new(coder_integration)
       return detach(runner, workspace_name, command) if detach?

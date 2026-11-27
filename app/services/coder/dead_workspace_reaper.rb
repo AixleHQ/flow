@@ -128,13 +128,14 @@ module Coder
 
       @checked += 1
 
-      return consider_failed(workspace, name: name, id: id) if failed?(workspace)
+      status = Coder::WorkspaceStatus.from(workspace)
+      return consider_failed(status, name: name, id: id) if status.failed?
 
       # A workspace that is stopped, being deleted, or mid-build is not a
       # workspace with a dead agent — it is one that is doing what it was told.
-      return clear_marker(name) unless supposedly_running?(workspace)
+      return clear_marker(name) unless status.running?
 
-      return clear_marker(name) unless Coder::HealthCheck.agents_unhealthy?(workspace)
+      return clear_marker(name) unless status.agent == :disconnected
 
       if @lock_service.held?(workspace_name: name)
         @skipped << "#{name} (held by a live session)"
@@ -159,20 +160,11 @@ module Coder
       confirm_or_delete(name: name, id: id, reason: "#{Coder::HealthCheck.unhealthy_reason(workspace)}; #{verdict.reason}")
     end
 
-    def supposedly_running?(workspace)
-      workspace.dig("latest_build", "transition").to_s == "start" &&
-        workspace.dig("latest_build", "job", "status").to_s == "succeeded"
-    end
-
-    def failed?(workspace)
-      workspace.dig("latest_build", "job", "status").to_s == "failed"
-    end
-
     # A failed start or stop cannot recover by probing an agent, so it goes
     # straight to confirmation — held twice, apart, before it is deleted. A failed
     # delete is not retried as an orphan: that would forget the machine, not stop it.
-    def consider_failed(workspace, name:, id:)
-      if workspace.dig("latest_build", "transition").to_s == "delete"
+    def consider_failed(status, name:, id:)
+      if status.transition == "delete"
         @skipped << "#{name} (its delete build failed — needs an operator)"
         return
       end
@@ -182,7 +174,7 @@ module Coder
         return
       end
 
-      confirm_or_delete(name: name, id: id, reason: "last #{workspace.dig('latest_build', 'transition')} build failed")
+      confirm_or_delete(name: name, id: id, reason: "last #{status.transition} build failed")
     end
 
     # First sighting only writes the marker. Deletion happens on a later sweep,
