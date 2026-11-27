@@ -18,8 +18,8 @@ governance, community health — carry none.
 - **Tasks**: a card's Assets tab has a drop zone that takes several files at once, dropped or picked, so many files can be attached to a card in one go.
 
 ### Changed
-- **Tasks**: the task drawer shows the ticket title in its top bar on every tab, truncated with the full title on hover.
-- **Tasks**: a task's Details are read-only until you press Edit, so text can be selected and copied without opening a field. Save applies all changes in one request and Cancel discards them. In Activity, an edit names the fields it changed, and **Show changes** opens their old and new values.
+- **Tasks**: the task title and its status chips sit above the tabs in the task drawer and on the task page, so the title shows on every tab. The copy of the title in the drawer's top bar is gone.
+- **Tasks**: a task's Details are read-only until you press a pencil icon, so text can be selected and copied without opening a field. The title and the description each have their own pencil, which turns into a green check to save and a red cross to cancel, so each can be edited and saved separately. The properties have no pencil: each one saves as soon as it is changed. In Activity, an edit names the fields it changed, and **Show changes** opens their old and new values.
 
 ### Removed
 - **Tasks**: the **Upload new** button in a card's Assets tab. The drop zone remains: drop files on it, or click it to select several files.
