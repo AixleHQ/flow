@@ -48,6 +48,8 @@ class RunnerEnvironment < ApplicationRecord
 
   scope :free, -> { where(state: "registered", current_session_id: nil) }
   scope :holding_session, -> { where.not(current_session_id: nil) }
+  # Held by a session whose cleanup will never run (TerminalSession.cleanup_abandoned).
+  scope :held_by_abandoned_session, -> { where(current_session_id: TerminalSession.cleanup_abandoned.select(:id)) }
   scope :heard, ->(now = Time.current) { where(last_heartbeat_at: (now - ONLINE_WINDOW)..) }
   # Never heard, or last heard at or before `time`.
   scope :not_heard_since, ->(time) { where(last_heartbeat_at: nil).or(where(arel_table[:last_heartbeat_at].lteq(time))) }

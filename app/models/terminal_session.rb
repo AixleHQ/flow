@@ -244,6 +244,11 @@ class TerminalSession < ApplicationRecord
   scope :agent_sessions, -> { where(session_type: "agent_session") }
   scope :not_ended, -> { where.not(state: TERMINAL_STATES) }
   scope :ended, -> { where(state: TERMINAL_STATES) }
+  # Ended, with no admission that is still unreleased: the container workflow's
+  # cleanup, which releases it, will never run (it ended without one, or the
+  # admission is gone). A session that failed on contact loss keeps its admission
+  # until its cleanup has run, so it is not one.
+  scope :cleanup_abandoned, -> { ended.where.not(id: SessionAdmission.unreleased.select(:terminal_session_id)) }
   scope :not_auth_sessions, -> { where.not(session_type: "auth_setup") }
   scope :workflow_steps, -> { where(session_type: "workflow_step") }
   # The container is up and in use: running or ready.

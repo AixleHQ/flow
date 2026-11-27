@@ -78,6 +78,45 @@ class RunnerOperationTest < ActiveSupport::TestCase
     assert_match "fk_runner_operations_session_company", error.message
   end
 
+  test "an environment op may record the session it was sent for" do
+    session = create(:runner_session, environment: @environment, runner_environment: nil)
+
+    operation = build_operation(terminal_session: session)
+
+    assert operation.valid?, operation.errors.full_messages.to_sentence
+  end
+
+  test "latest_reset is the newest env.reset sent for that session on that machine" do
+    session = create(:runner_session, environment: @environment, runner_environment: nil)
+    other = create(:runner_session, environment: @environment, runner_environment: nil)
+    build_operation(sequence: 1, op: "env.reset", terminal_session: session).save!
+    build_operation(sequence: 2, op: "env.scrub", terminal_session: session).save!
+    newest = build_operation(sequence: 3, op: "env.reset", terminal_session: session).tap(&:save!)
+    build_operation(sequence: 4, op: "env.reset", terminal_session: other).save!
+
+    assert_equal newest, RunnerOperation.latest_reset(@environment, session)
+    assert_nil RunnerOperation.latest_reset(create(:runner_environment), session)
+  end
+
+  test "an expired op was left unanswered by a heard machine only when it was sent in time to a machine heard up to the deadline" do
+    deadline = 10.minutes.ago
+    @environment.update!(last_heartbeat_at: deadline + 30.seconds)
+    operation = build_operation(state: :expired, deadline_at: deadline, delivered_at: deadline - 1.minute)
+
+    assert operation.left_unanswered_by_heard_machine?(@environment)
+
+    operation.delivered_at = nil
+    assert_not operation.left_unanswered_by_heard_machine?(@environment), "never sent to the machine"
+    operation.delivered_at = deadline + 1.second
+    assert_not operation.left_unanswered_by_heard_machine?(@environment), "sent late"
+    operation.delivered_at = deadline - 1.minute
+    @environment.last_heartbeat_at = deadline - 5.minutes
+    assert_not operation.left_unanswered_by_heard_machine?(@environment), "the machine went quiet before the deadline"
+    @environment.last_heartbeat_at = deadline
+    operation.state = :completed
+    assert_not operation.left_unanswered_by_heard_machine?(@environment), "it was answered"
+  end
+
   test "an environment's ops go with it" do
     build_operation.save!
 

@@ -10,7 +10,7 @@ module Runners
   #   Runners::Machines.release!(environment, session)             # after its env.scrub or env.reset succeeded
   #   Runners::Machines.let_go!(session)                           # a revoked or retired runner's session: the machine is free
   #   Runners::Machines.fail!(environment, reason, holder: session) # its env.reset failed: out of rotation
-  #   Runners::Machines.reset_held!(session)                       # a stale session's machine: env.reset, then free or failed
+  #   Runners::Machines.sweep_abandoned!                           # machines of sessions whose cleanup will never run: env.reset, then free or failed
   #   Runners::Machines.availability(runner)                       # => Availability, for the launch's checks
   #
   # A machine is held through runner_environments.current_session_id, set
@@ -148,37 +148,80 @@ module Runners
       end
     end
 
-    # The machine of a stale session (the workflow ended without cleanup) gets
-    # the reset a failed session gets: an `env.reset` as the session, with the
-    # lifecycle budget. The machine is free when it succeeds and `failed` when
-    # it fails, as in RunnerRuntime#cleanup_session. Runs in
-    # Runners::ResetStaleMachineJob, never in the sweep that finds the session:
-    # the sweep runs under the scanners' cap, where a slow reset could fail a
-    # healthy machine, and a silent machine would hold up the sweep.
+    # The machines held by a session whose cleanup will never run (a stale
+    # session: its workflow ended without one, so nothing resets its machine),
+    # settled one by one (#settle_abandoned!), by the schedule every minute
+    # (Workflows::RunnerAbandonedMachinesSweepWorkflow). It never waits for an
+    # op: it creates op rows and reads their outcomes, so a silent machine
+    # holds up nothing, and a reset has the lifecycle budget. An error on one
+    # machine is logged and does not stop the others; the next run tries again.
     #
-    # Returns `:released`, `:failed`, `:not_held` (the session no longer holds a
-    # machine: nothing to do) or `:unheard` (the machine did not answer while
-    # it was not heard, so nothing is known of it: the caller tries again).
-    def reset_held!(session)
-      environment = held_by(session)
-      return :not_held if environment.nil?
+    # Answers how many machines were looked at, how many a reset was sent to,
+    # how many were freed or failed, and how many raised.
+    def sweep_abandoned!
+      counts = { checked: 0, reset_sent: 0, released: 0, failed: 0, errors: 0 }
+      RunnerEnvironment.held_by_abandoned_session.pluck(:id).each do |id|
+        counts[:checked] += 1
+        outcome = settle_abandoned!(id)
+        counts[outcome] += 1 if counts.key?(outcome)
+      rescue StandardError => e
+        counts[:errors] += 1
+        Rails.logger.error("[Runners::Machines] abandoned machine #{id}: #{e.class}: #{e.message}")
+        Sentry.capture_exception(e, extra: { runner_environment_id: id })
+      end
+      counts
+    end
 
-      deadline = Settings.runners.lifecycle_op_timeout.to_f.seconds.from_now
-      operation = Operations.enqueue!(environment, op: "env.reset", payload: {}, deadline_at: deadline, session: session)
-      return :not_held if operation.nil?
+    # One machine of a stale session, under its row lock, which an enqueue
+    # takes too, so two runs never send two resets. The latest `env.reset` sent
+    # for that session says what is next:
+    #
+    # - none, or one that expired while the machine was not heard: a reset is
+    #   sent as the session if the machine is heard now (`:reset_sent`), else
+    #   nothing, and the next run looks again;
+    # - still open: nothing;
+    # - completed: the machine is free (`:released`);
+    # - answered with an error: the machine is `failed`, with that error;
+    # - expired although the machine was heard (RunnerOperation#left_unanswered_by_heard_machine?):
+    #   `failed`, "the runner did not answer", as in RunnerRuntime#cleanup_session.
+    #
+    # Answers `:reset_sent`, `:released`, `:failed`, or `:untouched`: the machine
+    # no longer qualifies (a Revoke let it go, or its session's cleanup is alive
+    # after all), or nothing is to be done now.
+    def settle_abandoned!(environment_id)
+      RunnerEnvironment.transaction do
+        environment = RunnerEnvironment.held_by_abandoned_session.lock.find_by(id: environment_id)
+        next :untouched if environment.nil?
 
-      operation = Operations.await(operation)
-      if operation.completed?
-        release!(environment, session)
-        :released
-      elsif operation.expired? && !environment.reload.heard?
-        :unheard
-      else
-        reason = operation.expired? ? "the runner did not answer" : failure_text(operation.result)
-        fail!(environment, "#{label(environment)} failed to reset after stale session #{session.id}: #{reason}", holder: session)
-        :failed
+        session = environment.current_session
+        operation = RunnerOperation.latest_reset(environment, session)
+        next :untouched if operation&.deliverable?
+
+        settle_by(environment, session, operation)
       end
     end
+
+    def settle_by(environment, session, operation)
+      if operation&.completed?
+        release!(environment, session)
+        :released
+      elsif operation&.failed?
+        fail!(environment, "#{label(environment)} failed to reset after stale session #{session.id}: #{failure_text(operation.result)}",
+              holder: session)
+        :failed
+      elsif operation&.left_unanswered_by_heard_machine?(environment)
+        fail!(environment, "#{label(environment)} failed to reset after stale session #{session.id}: the runner did not answer",
+              holder: session)
+        :failed
+      elsif environment.heard?
+        deadline = Settings.runners.lifecycle_op_timeout.to_f.seconds.from_now
+        Operations.enqueue!(environment, op: "env.reset", payload: {}, deadline_at: deadline, session: session)
+        :reset_sent
+      else
+        :untouched
+      end
+    end
+    private_class_method :settle_by
 
     def label(environment)
       environment.display_name.presence || environment.key

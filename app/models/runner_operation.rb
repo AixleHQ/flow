@@ -7,8 +7,10 @@
 #
 # A session op is for one session, which the envelope names as `session_id`, and
 # the runner checks it against the container's label (PROTOCOL.md §5.4, §6.3).
-# An environment op (`env.scrub`, `env.reset`) names none. Either kind is
-# created only while its session holds the environment, which
+# An environment op (`env.scrub`, `env.reset`) names none on the wire, but the
+# platform records the session it was sent for, so that the outcome of a stale
+# session's reset can be read back (Runners::Machines.settle_abandoned!). Either
+# kind is created only while its session holds the environment, which
 # Runners::Operations.enqueue! checks under the environment's lock.
 #
 # `sequence` is monotonic per environment, taken from the environment's
@@ -52,9 +54,13 @@ class RunnerOperation < ApplicationRecord
   validates :sequence, numericality: { only_integer: true, greater_than: 0 }
   validates :op, :state, :deadline_at, presence: true
   validates :terminal_session, presence: { message: "is required for a session op" }, if: :session_op?
-  validates :terminal_session, absence: { message: "must be empty for an environment op" }, unless: :session_op?
 
   scope :deliverable, -> { where(state: DELIVERABLE_STATES) }
+
+  # The newest `env.reset` sent for `session` on `environment`, or nil.
+  def self.latest_reset(environment, session)
+    where(runner_environment_id: environment.id, terminal_session_id: session.id, op: "env.reset").order(:sequence).last
+  end
 
   def deliverable?
     DELIVERABLE_STATES.include?(state)
@@ -62,6 +68,15 @@ class RunnerOperation < ApplicationRecord
 
   def session_op?
     SESSION_OPS.include?(op)
+  end
+
+  # Expired although the runner was sent it in time by a machine that was heard
+  # up to the deadline: the runner is there and does not run ops. An op nobody
+  # sent to the machine, or one whose machine had gone quiet before the deadline,
+  # says nothing of the machine (the rule of RunnerRuntime#cleanup_session,
+  # read from the op, since the sweep looks some time after the deadline).
+  def left_unanswered_by_heard_machine?(environment)
+    expired? && delivered_at.present? && delivered_at <= deadline_at && environment.heard?(deadline_at)
   end
 
   # The decrypted payload, a Hash, or nil once the op is over.
