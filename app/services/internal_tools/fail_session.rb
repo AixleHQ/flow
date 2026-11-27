@@ -4,9 +4,9 @@ module InternalTools
   class FailSession < Base
     tool do
       display_name "Fail Session"
-      description "Signal that a non-interactive session has failed. This terminates the session with an error. Use when the task cannot be completed. Only the top-level agent may call this: a subagent reports back to the agent that started it instead."
+      description "Signal that a session has failed. This terminates the session with an error. Use when the task cannot be completed. Only the top-level agent may call this: a subagent reports back to the agent that started it instead."
       tags :session_lifecycle
-      inject_when :non_interactive_session
+      inject_when :any_session
       user_attachable false
       input_schema({
         type: "object",
@@ -25,10 +25,6 @@ module InternalTools
     end
 
     def execute
-      unless session.mode == "non_interactive"
-        return error("fail_session is only available in non-interactive sessions")
-      end
-
       unless session.may_fail?
         return error("Session cannot be failed in current state: #{session.state}")
       end

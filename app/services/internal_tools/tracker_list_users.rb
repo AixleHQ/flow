@@ -10,7 +10,6 @@ module InternalTools
                   "returned `id` as tracker_assign_issue's assignee when a name is ambiguous. Returns JSON: " \
                   "{tracker, users: [{id, name}]}. Not every tracker can list users."
       tags :tracker
-      inject_when :tracker_run
       requires_integration :tracker
       unavailable_message "No task tracker is connected to this project. Add one on the project's Trackers page."
       read_only

@@ -22,8 +22,9 @@ is reached over `streamable-http` at `Settings.mcp.server_url` (the
 
 - **Board tools** (`board_*`) — read and mutate the board: get/list/create/
   update/move tasks, comments, assets, tags, and gates.
-- **Progress tools** (`list_sub_steps`, `mark_sub_step`) — auto-injected
-  only in workflow-step sessions.
+- **Progress tools** (`list_sub_steps`, `mark_sub_step`) — always served;
+  outside a workflow step they answer that they are only available during
+  workflow execution. Board tools are not automatic: attach them to the step.
 - **Session lifecycle** (`finish_session`, `fail_session`) — how an agent
   signals it is done or has failed.
 

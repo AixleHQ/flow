@@ -16,7 +16,6 @@ module InternalTools
       display_name "Chat Read Thread"
       description "Read a Slack or Microsoft Teams thread, oldest first. In a run started from chat, call it with no arguments to read the thread behind the request — the usual case. Teams reads channel threads and group chats; in a 1:1 chat Teams lets an app see only the message that started the run. Returns JSON {provider, messages: [...]}. Read a thread once rather than polling it."
       tags :messaging, :chat
-      inject_when :workflow_step_session
       requires_integration :chat
       read_only
       input_schema({

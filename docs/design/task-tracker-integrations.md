@@ -676,6 +676,8 @@ Then:
 
 ### 7.3 Availability and injection
 
+> **Superseded in part:** tools are no longer injected. A session gets a tool only when it is attached ([tool-attachment.md](tool-attachment.md)). The `tracker_run` rule is gone; a tracker-started run has the tracker tools only when they are attached.
+
 - **Availability.** The tools are tagged `tracker` and declare an `availability` predicate: the
   project has at least one active project tracker. With one, they appear in the tool picker under
   "Trackers" and can be attached to a workflow or step like any other tool (capability 2).

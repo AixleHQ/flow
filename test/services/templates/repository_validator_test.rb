@@ -100,4 +100,36 @@ class Templates::RepositoryValidatorTest < ActiveSupport::TestCase
 
     assert_empty validate(base_root: @base, author: "someone-else")
   end
+
+  def warnings_for(target, instructions)
+    path = target.join("template.yaml")
+    path.write(path.read.sub("instructions: Implement the design and open a pull request.", "instructions: #{instructions.inspect}"))
+    Templates::RepositoryValidator.new(root: @root).warnings
+  end
+
+  test "a step that names a platform tool it does not list gets a warning" do
+    target = checkout(@root)
+
+    warnings = warnings_for(target, "Implement it, then call board_move_task.")
+
+    assert_equal [ "workflow delivery step implement names board_move_task but does not list it in tools" ],
+                 warnings["acme/dev-team-sdlc"]
+    assert_empty validate, "a warning is not an error"
+  end
+
+  test "a step that names only the tools it lists gets no warning" do
+    target = checkout(@root)
+
+    assert_empty warnings_for(target, "Implement it, then call run_tests.")
+    assert_empty Templates::RepositoryValidator.new(root: @root).warnings
+  end
+
+  test "a {{tool:key}} reference to an unlisted tool gets a warning" do
+    target = checkout(@root)
+
+    warnings = warnings_for(target, "Use {{tool:board_comment}} to report.")
+
+    assert_equal [ "workflow delivery step implement names board_add_comment but does not list it in tools" ],
+                 warnings["acme/dev-team-sdlc"]
+  end
 end

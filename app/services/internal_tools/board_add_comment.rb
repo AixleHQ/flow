@@ -6,7 +6,6 @@ module InternalTools
       display_name "Board Add Comment"
       description "Add an agent comment to a task on the current board. Markdown is supported in the body field (bold, italic, code blocks, lists, links, tables, etc.)."
       tags :board
-      inject_when :workflow_step_session
       input_schema({
         type: "object",
         required: %w[body],

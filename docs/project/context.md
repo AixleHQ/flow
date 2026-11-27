@@ -456,7 +456,7 @@ docs/                                   # Architecture & design docs (see docs/i
 | **Agent Runtime** | Which AI agent CLI to use | `workflow_runs.agent_runtime`, `terminal_sessions.agent_type` | `claude_code`, `cursor_cli`, `codex`, `gemini_cli`, `antigravity_cli`, `grok`, `kiro_cli`, `copilot_cli` |
 | **Container Runtime** | Infrastructure that runs containers | `ContainerRuntime.for_session` (code-level) | Docker (local development), Kubernetes (production), an external runner (`RunnerRuntime`) |
 | **Internal Tool** | Platform tool defined in code (`Tools::Registry`), runs in-process | `tools.source = 'code'`, `execution_mode = 'app'` | `list_sub_steps`, `chat_post_message`, `board_*`, `coder_*` |
-| **Workflow Tool** | Internal tool needing workflow context, auto-injected via code-only `inject_when` rules | `Tools::Registry` `inject_when` (no DB column) | `list_sub_steps`, `mark_sub_step`, `finish_session`, `fail_session` |
+| **Plumbing Tool** | Internal tool a session needs to work, served without an attachment through a code-only `inject_when` rule. Six exist; every other tool must be attached ([design](../design/tool-attachment.md)) | `Tools::Registry` `inject_when` (no DB column) | `list_sub_steps`, `mark_sub_step`, `finish_session`, `fail_session`, `read_tool_result`, `get_config_item` |
 | **Builder Tool** | Personal MCP tools served inside an Aixle Builder session, pinned to its project and run as its user | `Tools::BuilderToolset` (no rows) | `create_workflow`, `create_workflow_trigger`, `validate_workflow` |
 | **Custom Tool** | User-created tool in Docker container | `tools.source = 'db'`, `execution_mode = 'container'` | Project-scoped |
 | **Alba Resource** | Serializer for Inertia props + JSON | `app/resources/` | `BoardTaskResource`, `ProjectResource` |
@@ -464,10 +464,10 @@ docs/                                   # Architecture & design docs (see docs/i
 | **Shared Props** | Auto-injected Inertia props | `inertia_share` | `current_user`, `projects`, `flash`, `settings`, `permissions`, `project` |
 
 ### Tool visibility rules
-- **Auto-injected internal tools** are pulled in by code-only `inject_when` rules in `Tools::Registry` (e.g. workflow-step sessions get `list_sub_steps`/`mark_sub_step`/`finish_session`/`fail_session`, and `chat_post_message` once Slack or Teams is connected)
+- **Only plumbing is automatic.** Code-only `inject_when` rules in `Tools::Registry` serve six tools: `finish_session`, `fail_session`, `list_sub_steps`, `mark_sub_step` to every session, `read_tool_result` when a container tool is attached, `get_config_item` when a config item is attached. Every other tool (`board_*`, `chat_*`, `coder_*`, `azure_devops_*`, `tracker_*`, `share_asset`, `promote_asset`, `refresh_github_token`) is served only when the workflow, the step or the session attached it. A connected integration, an attached repository or a tracker trigger grants no tool (`docs/design/tool-attachment.md`)
 - **Other internal tools** (e.g. `session_list`, `session_log`, `github_user_token`) appear only when explicitly added to `session.tools`
-- **Integration-gated tools** (`requires_integration`), injected or attached, are hidden until the integration is connected
-- **Custom tools** come from `session.tools`; fallback to project-level tools if none explicitly selected
+- **Integration-gated tools** (`requires_integration`) are hidden until the integration is connected; the integration does not attach them
+- **Custom tools** come from the attached tools only; there is no project-level fallback
 - **Picker visibility** is `Tool.visible_for_project` / `visible_for_company` — non-attachable tools (`user_attachable: false`) are excluded
 - **Builder sessions** additionally get `Tools::BuilderToolset`: the personal MCP tools that take a `project_id`, served by the session's own MCP endpoint with `project_id` filled in and every lookup pinned to the session's project
 

@@ -365,6 +365,8 @@ Disconnecting one project integration blocks its new token requests/API calls, r
 
 Implement `InternalTools::AzureDevops*` handlers with `tool do` definitions, `requires_integration :azure_devops`, and an Azure tag in `Tools::TagCatalog`. Use the existing code registry/reconciler; no separate seed registry or per-tool MCP server is needed.
 
+> **Superseded in part:** tools are no longer injected. A session gets a tool only when it is attached ([tool-attachment.md](tool-attachment.md)).
+
 The tools are **injected, not picked**. An earlier draft offered them as an attachable "Azure DevOps" picker group; that was dropped because attachment would have been a second, weaker way of saying what the project already says — and a way to attach half a working set, so an agent could open a pull request but not answer the review it triggered.
 
 Two injection rules, matching the two ways a tool is scoped:

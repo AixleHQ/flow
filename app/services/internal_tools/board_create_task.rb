@@ -6,7 +6,6 @@ module InternalTools
       display_name "Board Create Task"
       description "Create a new board task in the current board, optionally targeting a specific column."
       tags :board
-      inject_when :workflow_step_session
       input_schema({
         type: "object",
         required: %w[title],

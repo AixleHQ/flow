@@ -236,6 +236,14 @@ with, so **Clone and push repositories** covers both, and what the identity may
 push is decided by its Azure permissions — **Contribute** and **Create branch**,
 which the project's Contributors group holds.
 
+## Azure DevOps tools
+
+The pull request tools (`azure_devops_*`) and the two build tools appear as the
+**Azure DevOps** group in the tool picker once the connection exists. Attach them
+to a workflow or a step: neither the connection nor an attached repository grants
+them. A pull request tool still refuses a repository that is not attached to the
+session.
+
 ## Azure Boards
 
 Each Azure project a connection covers becomes a **tracker** on the project's

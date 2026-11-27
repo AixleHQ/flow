@@ -373,8 +373,8 @@ on the trigger form (`status_reporting: none` through the API) to stop it.
 
 The `tracker_*` tools are listed in the tool picker under **Task trackers**
 once the project has a usable tracker. Attach them to a workflow or a step like
-any other tool ([Tools](/docs/tools)). A run a tracker event started has all of
-them without attaching anything.
+any other tool ([Tools](/docs/tools)). A tracker trigger does not grant them:
+attach the tools a step needs.
 
 | Tool | Does |
 | --- | --- |

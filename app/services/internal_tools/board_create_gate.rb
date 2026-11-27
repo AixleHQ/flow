@@ -9,7 +9,6 @@ module InternalTools
                   "the provider about the recorded repository and run/check id and resolves the Gate with the real " \
                   "verdict, or marks it stale with a diagnostic reason once it is unreadable or past its TTL."
       tags :board
-      inject_when :workflow_step_session
       input_schema({
         type: "object",
         required: %w[gate_type],

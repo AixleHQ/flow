@@ -439,8 +439,9 @@ module Tools
           - Say WHAT to do and WHAT to produce — the concrete deliverable and where
             it goes. Be specific about output files/paths.
           - Do NOT restate platform mechanics: session-completion rules, /workspace
-            layout, sub-step tracking, or which tools are available. The platform
-            injects those automatically — repeating them wastes context.
+            layout, or sub-step tracking. Session completion, sub-step tools and the
+            file layout are automatic; every other tool must be attached, so do
+            not list tools in the instructions but attach them to the step.
           - Keep it focused on this step alone; earlier steps' outputs are available
             to every later step that runs after them, directly or through others.
           - Instructions may hold references written by the builder's `@` picker:
