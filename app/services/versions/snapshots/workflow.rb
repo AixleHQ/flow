@@ -55,7 +55,7 @@ module Versions
           attrs = with_column_defaults(::Workflow, FIELDS, snapshot.slice(*FIELDS))
           record.assign_attributes(
             "name" => attrs["name"], "description" => attrs["description"],
-            "config" => existing_config(attrs["config"] || {}),
+            "config" => existing_config(attrs["config"] || {}, record.runner_project),
             "runner_id" => restorable_runner_id(record, attrs["runner_id"])
           )
           record.save!
@@ -102,9 +102,9 @@ module Versions
           id if TenantScope.owned(::Runner, project: project).exists?(id)
         end
 
-        def existing_config(config)
+        def existing_config(config, project)
           CONFIG_REFERENCES.each_with_object(config.dup) do |(key, model), memo|
-            memo[key] = WorkflowStepSync.existing_ids(model, config[key])
+            memo[key] = WorkflowStepSync.existing_ids(model, config[key], project: project)
           end
         end
       end

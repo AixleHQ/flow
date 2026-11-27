@@ -24,12 +24,15 @@ class WorkflowStepSync
   SUB_STEP_COLUMNS = (Versions::Snapshots::Workflow::SUB_STEP_FIELDS - %w[id]).freeze
 
   # Ids of rows that still exist, in the given order. A reference to a row that
-  # is gone altogether is dropped; an archived one is kept.
-  def self.existing_ids(model_name, ids)
+  # is gone altogether is dropped; an archived one is kept. Integrations are accounts of one
+  # tenant: with a `project:`, one it does not own (detached by a project move) is dropped too.
+  def self.existing_ids(model_name, ids, project: nil)
     ids = Array(ids).compact_blank.map(&:to_i)
     return [] if ids.empty?
 
-    found = model_name.constantize.where(id: ids).pluck(:id).to_set
+    model = model_name.constantize
+    rows = project && model == Integration ? TenantScope.owned(model, project: project) : model
+    found = rows.where(id: ids).pluck(:id).to_set
     ids.select { |id| found.include?(id) }
   end
 
@@ -79,7 +82,7 @@ class WorkflowStepSync
       Versions::Snapshots::Workflow::STEP_REFERENCES.each do |column, model|
         next if !attrs.key?(column) || @refuse_unknown.include?(column)
 
-        attrs[column] = self.class.existing_ids(model, attrs[column])
+        attrs[column] = self.class.existing_ids(model, attrs[column], project: @workflow.runner_project)
       end
       attrs["agent_id"] = nil if attrs["agent_id"].present? && !Agent.exists?(attrs["agent_id"])
       step.assign_attributes(attrs.merge("depends_on_step_ids" => [], "deleted_at" => nil))

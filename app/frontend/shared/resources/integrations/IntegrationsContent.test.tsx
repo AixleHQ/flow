@@ -926,7 +926,7 @@ describe('IntegrationsContent', () => {
       answerFetch({
         'POST /company/integrations/coder_templates': {
           templates: ['aws-template', 'other-template'],
-          suggested_prefix: 'acme',
+          suggestedPrefix: 'acme',
         },
       });
     });
@@ -1007,7 +1007,7 @@ describe('IntegrationsContent', () => {
       const fetchSpy = answerFetch({
         'POST /company/integrations/coder_templates': {
           templates: ['aws-template', 'other-template'],
-          suggested_prefix: 'acme',
+          suggestedPrefix: 'acme',
         },
       });
       renderPage(

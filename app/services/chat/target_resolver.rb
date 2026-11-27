@@ -29,6 +29,16 @@ module Chat
       by_name(scope, value)
     end
 
+    # The conversation the run came from, when the call means it (no conversation given, or the
+    # origin's own id), looked up in the attached installs `within:`. nil otherwise.
+    def origin_conversation(project, value, origin, within:)
+      return nil unless origin.to_h["provider"] == "teams"
+
+      installs = Integration.active.visible_for_project(project).where(provider: :teams, id: within.select(:id))
+      row = from_origin(ChatConversation.where(provider: "teams").in_workspace_of(installs.select(:id)), origin).first
+      row if row && (value.blank? || [ row.id.to_s, row.external_id ].include?(value.to_s.strip))
+    end
+
     def from_origin(scope, origin)
       origin = origin.to_h
       unless origin["provider"] == "teams"

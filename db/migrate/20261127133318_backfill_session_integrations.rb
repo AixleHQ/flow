@@ -31,6 +31,13 @@ class BackfillSessionIntegrations < ActiveRecord::Migration[8.1]
     FROM projects p
   SQL
 
+  # An integration the session's tenant owns (TenantScope.owned): its company's, with no
+  # project or the session's project. The ids in a run's shared_context are not trusted.
+  OWNED_INTEGRATION = <<~SQL.squish
+    i.company_id = COALESCE(s.company_id, (SELECT sp.company_id FROM projects sp WHERE sp.id = s.project_id))
+    AND (i.project_id IS NULL OR i.project_id = s.project_id)
+  SQL
+
   def up
     workflows = backfill_workflows
     sessions = backfill_sessions
@@ -76,9 +83,11 @@ class BackfillSessionIntegrations < ActiveRecord::Migration[8.1]
         UNION
         SELECT i.id FROM integrations i
           WHERE wr.id IS NOT NULL AND i.id::text = (wr.shared_context #>> '{chat,integration_id}')
+            AND #{OWNED_INTEGRATION}
         UNION
-        SELECT t.integration_id FROM project_trackers t
+        SELECT i.id FROM project_trackers t JOIN integrations i ON i.id = t.integration_id
           WHERE wr.id IS NOT NULL AND t.id::text = (wr.shared_context #>> '{tracker,id}')
+            AND t.project_id = s.project_id AND #{OWNED_INTEGRATION}
         UNION
         SELECT pi.integration_id FROM (#{PROJECT_INTEGRATIONS}) pi
           WHERE wr.id IS NULL AND s.project_id = pi.project_id AND pi.integration_id IS NOT NULL

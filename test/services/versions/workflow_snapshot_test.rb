@@ -142,6 +142,31 @@ class Versions::WorkflowSnapshotTest < ActiveSupport::TestCase
     assert_empty @build.reload.config_item_ids
   end
 
+  # A project move detaches the integrations that stay with the old company; an older version
+  # still names them, and reverting to it must not fail on them.
+  test "a revert drops integrations the project no longer owns, in the base list and in a step" do
+    own = create(:integration, :coder, :active, company: @company, project: @project)
+    foreign = create(:integration, :coder, :active, company: create(:company))
+    Versions.save!(@workflow, actor: @actor) do
+      @workflow.merge_config!("base_integration_ids" => [ own.id ])
+      @build.update!(integration_ids: [ own.id ])
+    end
+    version = @workflow.latest_version
+    snapshot = version.snapshot.deep_dup
+    snapshot["config"]["base_integration_ids"] << foreign.id
+    snapshot["steps"].first["integration_ids"] << foreign.id
+    version.update_columns(snapshot: snapshot)
+    Versions.save!(@workflow, actor: @actor) do
+      @workflow.merge_config!("base_integration_ids" => [])
+      @build.update!(integration_ids: [])
+    end
+
+    Versions.revert!(@workflow, to: version, actor: @actor)
+
+    assert_equal [ own.id ], @workflow.reload.base_integration_ids
+    assert_equal [ own.id ], @build.reload.integration_ids
+  end
+
   test "AWS roles are recorded, named and restored like the other resource lists" do
     role = create(:aws_oidc_role, name: "prod-diag",
                                   integration: create(:integration, :aws_oidc, company: @company, project: @project))

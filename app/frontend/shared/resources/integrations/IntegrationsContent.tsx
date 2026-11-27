@@ -542,12 +542,12 @@ export const IntegrationsContent = ({
       { method: 'POST', body: JSON.stringify({ coder_url: coderUrl.trim(), session_token: coderToken.trim() }) },
       'Could not list the templates',
     )
-      .then((result: { templates: string[]; suggestedPrefix?: string; suggested_prefix?: string }) => {
+      .then((result: { templates: string[]; suggestedPrefix?: string }) => {
         setCoderTemplates(result.templates);
         setCoderDefaultTemplate((current) =>
           result.templates.includes(current) ? current : (result.templates[0] ?? ''),
         );
-        const suggested = result.suggestedPrefix ?? result.suggested_prefix ?? '';
+        const suggested = result.suggestedPrefix ?? '';
         setCoderMachinePrefix((current) => current || suggested);
       })
       .catch((e: unknown) => setCoderError(e instanceof Error ? e.message : 'Could not list the templates'))

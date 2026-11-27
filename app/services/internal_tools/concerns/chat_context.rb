@@ -67,6 +67,12 @@ module InternalTools
       def teams_target
         return [ nil, error("This tool needs a project — the session has none") ] if project.nil?
 
+        # The origin first (design §5.3), as for Slack: the conversation the run came from is
+        # reachable through any attached install, even when the call names another one.
+        origin_row = Chat::TargetResolver.origin_conversation(project, params[:conversation], chat_origin,
+                                                              within: attached_chat_installs("teams"))
+        return [ origin_row, nil ] if origin_row
+
         scope, scope_error = chat_install_scope("teams")
         return [ nil, scope_error ] if scope_error
 

@@ -600,6 +600,43 @@ class SessionServiceTest < ActiveSupport::TestCase
     restore_checkpoint_storage
   end
 
+  # The set is the suspended session's, not what the step's workflow links by now.
+  test "restoring a step keeps the suspended session's integrations, whatever the workflow links since" do
+    use_checkpoint_storage
+    mock_temporal_start
+    create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
+    kept = create(:integration, :coder, :active, company: @company, project: @project)
+    detached = create(:integration, :coder, :active, company: @company, project: @project)
+    later = create(:integration, :coder, :active, company: @company, project: @project)
+    origin, step_run = suspended_step
+    origin.integrations = [ kept, detached ]
+    step_run.workflow_run.workflow.update!(config: step_run.workflow_run.workflow.config.merge("base_integration_ids" => [ kept.id, later.id ]))
+
+    restored = SessionService.restore(session: origin, user: @user)
+
+    assert_equal [ kept.id, detached.id ].sort, restored.integration_ids.sort
+    refute_includes restored.integration_ids, later.id
+  ensure
+    restore_checkpoint_storage
+  end
+
+  test "restoring a step leaves out an integration that is no longer available" do
+    use_checkpoint_storage
+    mock_temporal_start
+    create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
+    kept = create(:integration, :coder, :active, company: @company, project: @project)
+    gone = create(:integration, :coder, :active, company: @company, project: @project)
+    origin, = suspended_step
+    origin.integrations = [ kept, gone ]
+    gone.update_columns(status: "inactive")
+
+    restored = SessionService.restore(session: origin, user: @user)
+
+    assert_equal [ kept.id ], restored.integration_ids
+  ensure
+    restore_checkpoint_storage
+  end
+
   test "a step its run no longer waits on cannot be restored" do
     use_checkpoint_storage
     origin, step_run = suspended_step

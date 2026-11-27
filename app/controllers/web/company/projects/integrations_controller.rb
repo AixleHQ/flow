@@ -90,7 +90,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   # saved yet, so the form sends the URL and the token it just collected.
   def coder_templates
     names = coder_service.templates(coder_url: params[:coder_url].to_s, session_token: params[:session_token].to_s)
-    render json: { templates: names, suggested_prefix: Coder::Pool.suggest_prefix(current_project.name) }
+    render json: { templates: names, suggestedPrefix: Coder::Pool.suggest_prefix(current_project.name) }
   rescue Coder::IntegrationService::ConnectionError => e
     render json: { error: e.code, message: e.message }, status: :unprocessable_content
   end
