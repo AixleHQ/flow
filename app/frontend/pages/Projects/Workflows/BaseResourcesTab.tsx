@@ -1,7 +1,13 @@
 import { Alert, Button, MultiSelect, Switch } from '@mantine/core';
 import type { ReactNode } from 'react';
 
-import type { AwsOidcRolePicker, ConfigItemPicker, IntegrationPicker, RunnerSummary, Workflow } from '@/types/generated';
+import type {
+  AwsOidcRolePicker,
+  ConfigItemPicker,
+  IntegrationPicker,
+  RunnerSummary,
+  Workflow,
+} from '@/types/generated';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
 import { ToolPicker } from 'shared/components/ToolPicker';

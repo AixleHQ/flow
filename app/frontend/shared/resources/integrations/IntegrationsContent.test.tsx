@@ -1005,7 +1005,10 @@ describe('IntegrationsContent', () => {
 
     it('posts the chosen template and the edited prefix with the URL and token', async () => {
       const fetchSpy = answerFetch({
-        'POST /company/integrations/coder_templates': { templates: ['aws-template', 'other-template'], suggested_prefix: 'acme' },
+        'POST /company/integrations/coder_templates': {
+          templates: ['aws-template', 'other-template'],
+          suggested_prefix: 'acme',
+        },
       });
       renderPage(
         <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
@@ -1429,7 +1432,9 @@ describe('IntegrationsContent', () => {
 
     // The templates the stored token can see, read when the settings open.
     beforeEach(() => {
-      answerFetch({ 'GET /projects/42/integrations/9/coder_template_list': { templates: ['aws-ec2-spot-v1', 'other'] } });
+      answerFetch({
+        'GET /projects/42/integrations/9/coder_template_list': { templates: ['aws-ec2-spot-v1', 'other'] },
+      });
     });
 
     it('shows the allocator settings on the row', () => {

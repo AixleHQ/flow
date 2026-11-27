@@ -63,8 +63,6 @@ import { PageHeader } from 'shared/ui/PageHeader';
 import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
-import { requestJson } from './requestJson';
-
 import { AtlassianConnectModal, type AtlassianConnectionState } from './AtlassianConnectModal';
 import { awsOidcSummary, confirmAwsOidcDisconnect, connectAwsOidc, type AwsOidcProps } from './awsOidcActions';
 import { AwsOidcDialog } from './AwsOidcDialog';
@@ -84,6 +82,7 @@ import {
 import { InsightsConnectModal, InsightsProjectModal } from './InsightsModals';
 import { JiraConnectModal, JiraProjectsModal, type JiraProps, JiraWebhookModal } from './JiraConnectModal';
 import { LinearConnectModal, type LinearProps, LinearTeamsModal } from './LinearConnectModal';
+import { requestJson } from './requestJson';
 import { TeamsApprovalModal } from './TeamsApprovalModal';
 import { YoutrackConnectModal, type YoutrackProps } from './YoutrackConnectModal';
 
@@ -545,7 +544,9 @@ export const IntegrationsContent = ({
     )
       .then((result: { templates: string[]; suggestedPrefix?: string; suggested_prefix?: string }) => {
         setCoderTemplates(result.templates);
-        setCoderDefaultTemplate((current) => (result.templates.includes(current) ? current : (result.templates[0] ?? '')));
+        setCoderDefaultTemplate((current) =>
+          result.templates.includes(current) ? current : (result.templates[0] ?? ''),
+        );
         const suggested = result.suggestedPrefix ?? result.suggested_prefix ?? '';
         setCoderMachinePrefix((current) => current || suggested);
       })
@@ -553,16 +554,23 @@ export const IntegrationsContent = ({
       .finally(() => setCoderTemplatesLoading(false));
   }, [basePath, coderToken, coderUrl]);
 
-  const openCoderSettings = useCallback((integration: Integration) => {
-    setCoderEditTemplates(null);
-    requestJson(`${basePath}/${integration.id}/coder_template_list`, { method: 'GET' }, 'Could not list the templates')
-      .then((result: { templates: string[] }) => setCoderEditTemplates(result.templates))
-      .catch(() => setCoderEditTemplates([]));
-    setCoderEditTarget(integration);
-    setCoderEditTemplate(integration.coderDefaultTemplate ?? '');
-    setCoderEditPrefix(integration.coderMachinePrefix ?? '');
-    setCoderEditTtl(integration.coderLockTtlMinutes ?? DEFAULT_CODER_LOCK_TTL);
-  }, [basePath]);
+  const openCoderSettings = useCallback(
+    (integration: Integration) => {
+      setCoderEditTemplates(null);
+      requestJson(
+        `${basePath}/${integration.id}/coder_template_list`,
+        { method: 'GET' },
+        'Could not list the templates',
+      )
+        .then((result: { templates: string[] }) => setCoderEditTemplates(result.templates))
+        .catch(() => setCoderEditTemplates([]));
+      setCoderEditTarget(integration);
+      setCoderEditTemplate(integration.coderDefaultTemplate ?? '');
+      setCoderEditPrefix(integration.coderMachinePrefix ?? '');
+      setCoderEditTtl(integration.coderLockTtlMinutes ?? DEFAULT_CODER_LOCK_TTL);
+    },
+    [basePath],
+  );
 
   const handleSaveCoderSettings = useCallback(() => {
     if (!coderEditTarget) return;
@@ -1975,7 +1983,9 @@ export const IntegrationsContent = ({
             <Button
               onClick={handleSaveCoderSettings}
               loading={coderEditLoading}
-              disabled={!(typeof coderEditTtl === 'number' && coderEditTtl > 0) || !coderEditTemplate || !coderEditPrefix.trim()}
+              disabled={
+                !(typeof coderEditTtl === 'number' && coderEditTtl > 0) || !coderEditTemplate || !coderEditPrefix.trim()
+              }
             >
               Save
             </Button>
