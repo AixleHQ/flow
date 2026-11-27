@@ -7,16 +7,18 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
     @company     = create(:company)
     @user        = create(:user, :admin, company: @company)
     @project     = create(:project, company: @company, owner: @user)
-    # Company-wide (project_id nil) active Coder integration — resolved directly
-    # from the session's project by Concerns::CoderResolver.
+    # The integration is in the session's set: Concerns::CoderResolver reads the set,
+    # not the project's integrations.
     @integration = create(:integration, :coder, :active, company: @company, connected_by: @user)
 
     project = @project
+    integration_ids = -> { [ @integration.id ] }
     @session = Object.new
     @session.define_singleton_method(:id) { 4242 }
     @session.define_singleton_method(:project) { project }
     @session.define_singleton_method(:step_run) { OpenStruct.new(id: 1) }
     @session.define_singleton_method(:user) { nil }
+    @session.define_singleton_method(:integrations) { Integration.where(id: integration_ids.call) }
 
     # Same project (so the integration still resolves) but no step_run — exercises
     # the tools running outside of a workflow context.
@@ -25,6 +27,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
     @no_workflow_session.define_singleton_method(:project) { project }
     @no_workflow_session.define_singleton_method(:step_run) { nil }
     @no_workflow_session.define_singleton_method(:user) { nil }
+    @no_workflow_session.define_singleton_method(:integrations) { Integration.where(id: integration_ids.call) }
   end
 
   class FakeAllocator
@@ -67,13 +70,73 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
 
   # ---------- coder_allocate_machine ----------
 
-  test "allocate: errors when there is no active Coder integration for the project" do
+  test "allocate: errors when the session's Coder integration is not active" do
     @integration.update!(status: :error)
 
     result = InternalTools::CoderAllocateMachine.new(params: {}, session: @session).execute
 
     assert_equal 1, result[:exit_code]
-    assert_match(/No active Coder integration for this project/, result[:stderr])
+    assert_match(/is error, not active/, result[:stderr])
+  end
+
+  test "allocate: errors when no Coder integration is attached to the session" do
+    @session.define_singleton_method(:integrations) { Integration.none }
+
+    result = InternalTools::CoderAllocateMachine.new(params: {}, session: @session).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/No Coder integration is attached to this session/, result[:stderr])
+  end
+
+  test "allocate: with several attached integrations, leaving integration_id out lists them" do
+    second = create(:integration, :coder, :active, company: @company, connected_by: @user, name: "Coder (second)")
+    integration = @integration
+    @session.define_singleton_method(:integrations) { Integration.where(id: [ integration.id, second.id ]) }
+
+    result = InternalTools::CoderAllocateMachine.new(params: {}, session: @session).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/several Coder integrations: pass `integration_id`/, result[:stderr])
+    assert_includes result[:stderr], "#{second.id} (Coder (second)"
+  end
+
+  test "allocate: integration_id picks one of several attached integrations" do
+    second = create(:integration, :coder, :active, company: @company, connected_by: @user)
+    integration = @integration
+    @session.define_singleton_method(:integrations) { Integration.where(id: [ integration.id, second.id ]) }
+    captured = nil
+
+    Coder::Allocator.stub(:new, ->(integration:, terminal_session:) { captured = integration; FakeAllocator.new(integration: integration, terminal_session: terminal_session) }) do
+      result = InternalTools::CoderAllocateMachine.new(params: { integration_id: second.id }, session: @session).execute
+      assert_equal 0, result[:exit_code], result[:stderr]
+    end
+
+    assert_equal second.id, captured.id
+  end
+
+  test "allocate: an integration_id outside the session's set is refused, whatever the project has" do
+    outside = create(:integration, :coder, :active, company: @company, connected_by: @user)
+
+    result = InternalTools::CoderAllocateMachine.new(params: { integration_id: outside.id }, session: @session).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/Coder integration #{outside.id} is not attached to this session/, result[:stderr])
+  end
+
+  test "allocate: an integration_id that is not a number is refused" do
+    result = InternalTools::CoderAllocateMachine.new(params: { integration_id: "abc" }, session: @session).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/integration_id must be an integer/, result[:stderr])
+  end
+
+  test "every Coder tool advertises an optional integration_id" do
+    [ InternalTools::CoderAllocateMachine, InternalTools::CoderSshExec, InternalTools::CoderPrepareRepo,
+      InternalTools::CoderJobStatus, InternalTools::CoderReleaseMachine ].each do |tool|
+      schema = tool.tool_definition.input_schema
+      assert schema.dig(:properties, :integration_id) || schema.dig("properties", "integration_id"), tool.name
+      assert_not Array(schema[:required] || schema["required"]).include?("integration_id"), tool.name
+    end
   end
 
   test "allocate: dispatches to the allocator with the integration resolved from the session project" do

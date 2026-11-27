@@ -1584,6 +1584,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_27_133318) do
     t.index ["terminal_session_id", "asset_id"], name: "index_session_input_assets_on_terminal_session_id_and_asset_id", unique: true
   end
 
+  create_table "session_integrations", id: false, force: :cascade do |t|
+    t.bigint "integration_id", null: false
+    t.bigint "terminal_session_id", null: false
+    t.index ["integration_id"], name: "index_session_integrations_on_integration_id"
+    t.index ["terminal_session_id", "integration_id"], name: "index_session_integrations_on_pair", unique: true
+  end
+
   create_table "session_logs", force: :cascade do |t|
     t.string "content_type"
     t.datetime "created_at", null: false
@@ -1593,13 +1600,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_27_133318) do
     t.bigint "terminal_session_id", null: false
     t.datetime "updated_at", null: false
     t.index ["terminal_session_id"], name: "index_session_logs_on_terminal_session_id"
-  end
-
-  create_table "session_integrations", id: false, force: :cascade do |t|
-    t.bigint "integration_id", null: false
-    t.bigint "terminal_session_id", null: false
-    t.index ["integration_id"], name: "index_session_integrations_on_integration_id"
-    t.index ["terminal_session_id", "integration_id"], name: "index_session_integrations_on_pair", unique: true
   end
 
   create_table "session_mcp_servers", id: false, force: :cascade do |t|
@@ -2741,9 +2741,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_27_133318) do
   add_foreign_key "session_concurrency_limits", "projects", on_delete: :cascade, validate: false
   add_foreign_key "session_input_assets", "assets", on_delete: :cascade
   add_foreign_key "session_input_assets", "terminal_sessions", on_delete: :cascade
-  add_foreign_key "session_logs", "terminal_sessions", on_delete: :cascade
   add_foreign_key "session_integrations", "integrations", on_delete: :cascade
   add_foreign_key "session_integrations", "terminal_sessions", on_delete: :cascade
+  add_foreign_key "session_logs", "terminal_sessions", on_delete: :cascade
   add_foreign_key "session_mcp_servers", "mcp_servers", on_delete: :cascade
   add_foreign_key "session_mcp_servers", "terminal_sessions", on_delete: :cascade
   add_foreign_key "session_repositories", "repositories", on_delete: :cascade

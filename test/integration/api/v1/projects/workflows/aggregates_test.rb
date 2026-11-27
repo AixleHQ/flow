@@ -191,7 +191,7 @@ class Api::V1::Projects::Workflows::AggregatesTest < ActionDispatch::Integration
 
   test "a save naming an integration of another project, another company or an unknown id is refused" do
     Bullet.enable = false
-    other_project = create(:project, company: @company, owner: @user)
+    other_project = create(:project, company: @company, owner: @owner)
     foreign = [ create(:integration, :coder, :active, company: @company, project: other_project),
                 create(:integration, :coder, :active, company: create(:company)), 0 ]
 
