@@ -26,7 +26,7 @@ module Sessions
     def self.params_for(session)
       notes = []
       resources = RESOURCES.to_h do |param, association|
-        kept, gone = restorable(session, association).partition { |record| available?(record) }
+        kept, gone = available_split(session, association)
         gone.each { |record| notes << "#{record.class.model_name.human} \"#{record.try(:name) || record.id}\" is no longer available" }
         [ param, kept.map(&:id) ]
       end
@@ -39,6 +39,17 @@ module Sessions
         restored_from_session_id: session.id, metadata: metadata
       }.merge(resources).compact
     end
+
+    # The ids of the suspended session's integrations that can still be attached: the set a
+    # restored step's session keeps, in place of the one its workflow now links.
+    def self.integration_ids_for(session)
+      available_split(session, :integrations).first.map(&:id)
+    end
+
+    def self.available_split(session, association)
+      restorable(session, association).partition { |record| available?(record) }
+    end
+    private_class_method :available_split
 
     # The integrations a restored session is given are the ones that can be attached. Those its
     # repositories brought along are derived again from the repositories.

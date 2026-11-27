@@ -19,11 +19,11 @@ class InternalTools::ChatToolsTest < ActiveSupport::TestCase
     @channel = ChatConversation.record_teams!(integration: @teams, activity: teams_activity)
     @channel.update!(team_aad_group_id: "1b22f251-0000-4000-8000-000000000001")
     @thread = "#{TEAMS_SERVICE_URL}v3/conversations/19%3Aabc%40thread.tacv2%3Bmessageid%3D1700000000001/activities"
-    origin = Chat::TeamsProvider.run_context(TriggerEvent.new(data: {
+    @origin = Chat::TeamsProvider.run_context(TriggerEvent.new(data: {
       "provider" => "teams", "integration_id" => @teams.id, "conversation" => { "id" => "19:abc@thread.tacv2", "type" => "channel" },
       "thread_id" => "1700000000001", "message_id" => "1700000000002", "raw_text" => "deploy"
     }))
-    @session = session_for(origin)
+    @session = session_for(@origin)
   end
 
   # The session's integration set is what the chat tools reach (design §5.3): the install the run
@@ -228,6 +228,18 @@ class InternalTools::ChatToolsTest < ActiveSupport::TestCase
 
     outside = run_tool(InternalTools::ChatPostMessage, { text: "hi", provider: "slack", integration_id: 999_999_999 }, session: plain)
     assert_match(/is not a slack integration attached to this session/, outside[:stderr])
+  end
+
+  test "in a Teams-started run the origin conversation wins over an integration_id naming another install" do
+    other = Integration.create!(provider: :teams, company: @company, connected_by: @user, name: "Fabrikam",
+                                status: :active, settings: { "tenant_id" => SecureRandom.uuid })
+    posted = stub_request(:post, @thread).to_return(status: 201, body: { id: "1700000000778" }.to_json)
+
+    result = run_tool(InternalTools::ChatPostMessage, { text: "hi", integration_id: other.id },
+                      session: session_for(@origin, attached: [ @teams, other ]))
+
+    assert_equal 0, result[:exit_code], result[:stderr]
+    assert_requested posted
   end
 
   test "the chat tools are offered wherever Slack or Teams is connected" do

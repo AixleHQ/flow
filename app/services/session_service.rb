@@ -89,6 +89,8 @@ class SessionService
 
         build_for_workflow_step(step_run: step_run).tap do |built|
           built.update!(restored_from_session: origin)
+          # The step's links may have changed while the session was suspended; its set did not.
+          built.integrations = scoped_integrations(Sessions::Restore.integration_ids_for(origin), built)
           step_run.update!(state: :running)
         end
       end

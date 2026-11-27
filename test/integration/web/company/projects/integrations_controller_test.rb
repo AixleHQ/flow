@@ -652,7 +652,7 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
 
     assert_response :success
     assert_equal %w[a b], response.parsed_body["templates"]
-    assert_equal Coder::Pool.suggest_prefix(@project.name), response.parsed_body["suggested_prefix"]
+    assert_equal Coder::Pool.suggest_prefix(@project.name), response.parsed_body["suggestedPrefix"]
   end
 
   test "the templates of a connected integration are read with its stored token" do
