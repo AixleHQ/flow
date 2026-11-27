@@ -1863,11 +1863,6 @@ export function registrationTokenCompanySettingsRunnerPath(id: ScalarType, optio
   return "/" + "company" + $companySegment(options) + "/" + "settings" + "/" + "runners" + "/" + id + "/" + "registration_token" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_slug","id","format"]);
 }
 
-/** /company/:company_slug/settings/runners/:settings_runner_id/machines/:id/return_to_service(.:format) */
-export function returnToServiceCompanySettingsRunnerMachinePath(settings_runner_id: ScalarType, id: ScalarType, options?: object): string {
-  return "/" + "company" + $companySegment(options) + "/" + "settings" + "/" + "runners" + "/" + settings_runner_id + "/" + "machines" + "/" + id + "/" + "return_to_service" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_slug","settings_runner_id","id","format"]);
-}
-
 /** /company/:company_slug/settings/runners/:settings_runner_id/machines/:id/revoke(.:format) */
 export function revokeCompanySettingsRunnerMachinePath(settings_runner_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "company" + $companySegment(options) + "/" + "settings" + "/" + "runners" + "/" + settings_runner_id + "/" + "machines" + "/" + id + "/" + "revoke" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_slug","settings_runner_id","id","format"]);
@@ -2321,11 +2316,6 @@ export function revokeCompanyProjectRunnerPath(project_id: ScalarType, id: Scala
 /** /company/:company_slug/projects/:project_id/runners/:id/registration_token(.:format) */
 export function registrationTokenCompanyProjectRunnerPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "company" + $companySegment(options) + "/" + "projects" + "/" + project_id + "/" + "runners" + "/" + id + "/" + "registration_token" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_slug","project_id","id","format"]);
-}
-
-/** /company/:company_slug/projects/:project_id/runners/:runner_id/machines/:id/return_to_service(.:format) */
-export function returnToServiceCompanyProjectRunnerMachinePath(project_id: ScalarType, runner_id: ScalarType, id: ScalarType, options?: object): string {
-  return "/" + "company" + $companySegment(options) + "/" + "projects" + "/" + project_id + "/" + "runners" + "/" + runner_id + "/" + "machines" + "/" + id + "/" + "return_to_service" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["company_slug","project_id","runner_id","id","format"]);
 }
 
 /** /company/:company_slug/projects/:project_id/runners/:runner_id/machines/:id/revoke(.:format) */

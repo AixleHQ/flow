@@ -252,7 +252,6 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert_equal [ @session.id, nil ], @host_runner.operations.last(2).pluck(:session_id)
     assert_equal({ "image" => IMAGE }, @host_runner.operations.last[:payload].slice("image"))
     assert_nil @environment.reload.current_session_id
-    assert_equal 0, @environment.consecutive_failures
     assert @runtime.session_absent?(handle)
   end
 
@@ -267,7 +266,7 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert_equal "registered", @environment.state
   end
 
-  test "a failed session is followed by a reset even under reuse, and counts toward the machine's streak" do
+  test "a failed session is followed by a reset even under reuse, and the machine stays in rotation" do
     handle = start_session
 
     @runtime.cleanup_session(handle, failed: true)
@@ -276,7 +275,6 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     @environment.reload
     assert_nil @environment.current_session_id
     assert_equal "registered", @environment.state
-    assert_equal 1, @environment.consecutive_failures
   end
 
   test "a failed scrub is followed by a reset, and the machine is freed when it succeeds" do
@@ -304,26 +302,20 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert_match(/failed to reset after session #{@session.id}: reset_failed: volume in use/, @environment.state_reason)
   end
 
-  test "the session that is the third failed one in a row takes the machine out of rotation after its reset" do
-    @environment.update!(consecutive_failures: 2)
+  test "any number of failed sessions in a row leave the machine in rotation once its reset succeeds" do
     handle = start_session
-
     @runtime.cleanup_session(handle, failed: true)
 
+    3.times do
+      session = another_session
+      Runners::Machines.acquire!(session)
+      identity = ContainerRuntime::FakeHostRunner.identify!(session).runtime_id
+      @runtime.cleanup_session(identity, failed: true)
+    end
+
     @environment.reload
-    assert_equal "failed", @environment.state
-    assert_nil @environment.current_session_id
-    assert_equal 3, @environment.consecutive_failures
-    assert_match(/failed 3 sessions in a row/, @environment.state_reason)
-  end
-
-  test "a session that ends well sets the streak back to 0" do
-    @environment.update!(consecutive_failures: 2)
-    handle = start_session
-
-    @runtime.cleanup_session(handle)
-
-    assert_equal 0, @environment.reload.consecutive_failures
+    assert_equal [ "registered", nil, nil ], [ @environment.state, @environment.current_session_id, @environment.state_reason ]
+    assert_equal @environment, Runners::Machines.acquire!(another_session)
   end
 
   test "the cleanup identity finds the session as its container's name does" do

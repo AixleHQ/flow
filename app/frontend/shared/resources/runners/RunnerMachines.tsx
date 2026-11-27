@@ -16,8 +16,7 @@ const STATE_HINT: Record<RunnerMachine['state'], string> = {
   online: 'Running a session',
   idle: 'Connected, no session',
   offline: 'Not heard from for 90 seconds',
-  resetting: 'Being reset; takes no session until it succeeds',
-  failed: 'Out of rotation',
+  failed: 'Out of rotation until revoked',
   gone: 'Unregistered',
 };
 
@@ -31,35 +30,25 @@ const platform = (machine: Pick<RunnerMachine, 'os' | 'arch'>): string =>
 const failedReason = (machine: RunnerMachine): string =>
   machine.stateReason ?? `${machine.displayName ?? machine.key} failed`;
 
-const FAILED_ACTION = 'Fix the machine and press Return to service.';
+const FAILED_ACTION = 'Revoke it, then register the host again with Add machine.';
 
 interface RunnerMachinesProps {
   machines: RunnerMachine[];
   runner: Pick<Runner, 'id'>;
-  paths: Pick<RunnerPaths, 'returnToService' | 'revokeMachine'>;
-  /** Who may press Return to service and Revoke: the policy that guards update and revoke. */
+  paths: Pick<RunnerPaths, 'revokeMachine'>;
+  /** Who may press Revoke: the policy that guards update and revoke. */
   canManage: boolean;
 }
 
 /**
  * The machines of a `manual` runner (DESIGN.md §2.5, §11). A machine's state and last seen change
  * while the page is open, so it asks for the runner and its machines again every MACHINES_REFRESH_MS
- * while the tab is visible. A `failed` machine has Return to service, which resets it (§5.2); any
+ * while the tab is visible. A `failed` machine stays so until it is revoked (§5.2); any
  * machine that is not `gone` has Revoke, which ends the session it holds (§9.3).
  */
 export function RunnerMachines({ machines, runner, paths, canManage }: RunnerMachinesProps) {
-  const [returning, setReturning] = useState<number | null>(null);
   const [revoking, setRevoking] = useState<RunnerMachine | null>(null);
   const [revokeBusy, setRevokeBusy] = useState(false);
-
-  const returnToService = (machine: RunnerMachine) => {
-    setReturning(machine.id);
-    router.post(
-      paths.returnToService(runner.id, machine.id),
-      {},
-      { preserveScroll: true, onFinish: () => setReturning(null) },
-    );
-  };
 
   const revoke = (machine: RunnerMachine) => {
     setRevokeBusy(true);
@@ -158,16 +147,6 @@ export function RunnerMachines({ machines, runner, paths, canManage }: RunnerMac
               {canManage && (
                 <Table.Td>
                   <Group gap="xs" wrap="nowrap">
-                    {machine.state === 'failed' && (
-                      <Button
-                        size="xs"
-                        variant="default"
-                        loading={returning === machine.id}
-                        onClick={() => returnToService(machine)}
-                      >
-                        Return to service
-                      </Button>
-                    )}
                     {machine.state !== 'gone' && (
                       <Button size="xs" variant="default" color="red" onClick={() => setRevoking(machine)}>
                         Revoke

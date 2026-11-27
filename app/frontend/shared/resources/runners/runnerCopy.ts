@@ -126,7 +126,7 @@ export const SCRUB_NOTES: string[] = [
   'A scrub removes the session container (the agent home, credential files, MCP config, prompt, context files, /tmp, the proxy CA and logs, every process) and empties /workspace/outputs. It keeps repository checkouts, package caches and pulled images.',
   'On a company runner with reuse, the next session on a machine may belong to another project, and it sees what a scrub kept: the repository checkouts and caches. Use reset, or a project runner, to keep projects apart.',
   'On a project runner, what is kept stays within that project.',
-  'A reset wipes the workspace and cache volumes after every session. A session that fails is followed by a reset whatever the policy, and a machine whose reset fails, or that fails three sessions in a row, is taken out of rotation until you press Return to service.',
+  'A reset wipes the workspace and cache volumes after every session. A session that fails is followed by a reset whatever the policy, and a machine whose reset fails is taken out of rotation until you revoke it and register the host again. A failed session does not take a machine out of rotation.',
   'A writable host mount (home mount, an extra mount with :rw, a host-path cache mount) is outside every policy: a scrub removes what Aixle wrote there, not what the agent wrote.',
 ];
 

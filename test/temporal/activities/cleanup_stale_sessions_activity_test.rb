@@ -5,6 +5,8 @@ require "test_helper"
 module Activities
   module Session
     class CleanupStaleActivityTest < ActiveSupport::TestCase
+      include ActiveJob::TestHelper
+
       setup do
         @company = create(:company)
         @user = create(:user, :admin, company: @company)
@@ -311,25 +313,55 @@ module Activities
 
       # == A session on an external runner ==
 
-      test "a stale runner session that still holds its machine moves the machine to failed and sends the runner nothing" do
-        machine = create(:runner_environment)
-        stale = create(:runner_session, environment: machine, state: "running", started_at: 1.hour.ago,
-                                        container_id: "aixle-#{machine.key}-1")
-        machine.update!(current_session: stale)
+      test "a stale runner session that still holds its machine sends the runner nothing in the sweep and queues the machine's reset" do
+        machine, stale = stale_session_holding_a_machine
         @runtime_mock.expects(:resolve_container).never
 
-        result = run_activity(CleanupStaleActivity)
+        result = nil
+        assert_enqueued_with(job: Runners::ResetStaleMachineJob, args: [ stale.id ]) do
+          result = run_activity(CleanupStaleActivity)
+        end
 
         assert_equal 1, result[:cleaned_running]
         machine.reload
-        assert_equal "failed", machine.state
-        assert_nil machine.current_session_id
-        assert_equal "held by stale session #{stale.id}", machine.state_reason
-        assert_equal 0, RunnerOperation.count, "nothing was sent to the runner"
+        assert_equal [ "registered", stale.id, nil ], [ machine.state, machine.current_session_id, machine.state_reason ],
+                     "the machine is not failed for the session's staleness"
+        assert_equal 0, RunnerOperation.count, "nothing was sent to the runner by the sweep"
         assert_equal "failed", stale.reload.state
+      end
+
+      test "the reset of a stale session's machine frees it when it succeeds" do
+        machine, stale = stale_session_holding_a_machine
+        host = ContainerRuntime::FakeHostRunner.new(machine)
+
+        run_activity(CleanupStaleActivity)
+        perform_enqueued_jobs(only: Runners::ResetStaleMachineJob)
+
+        assert_equal %w[env.reset], host.ops
+        machine.reload
+        assert_equal [ "registered", nil ], [ machine.state, machine.current_session_id ]
+        assert_equal machine, Runners::Machines.acquire!(create(:runner_session, environment: machine, runner_environment: nil))
+        assert_equal "failed", stale.reload.state
+      ensure
+        host&.stop
+      end
+
+      test "the reset of a stale session's machine fails the machine when it fails" do
+        machine, stale = stale_session_holding_a_machine
+        host = ContainerRuntime::FakeHostRunner.new(machine)
+        host.answer_with("env.reset", "status" => "error", "error" => { "class" => "reset_failed", "message" => "volume in use" })
+
+        run_activity(CleanupStaleActivity)
+        perform_enqueued_jobs(only: Runners::ResetStaleMachineJob)
+
+        machine.reload
+        assert_equal [ "failed", nil ], [ machine.state, machine.current_session_id ]
+        assert_match(/failed to reset after stale session #{stale.id}: reset_failed: volume in use/, machine.state_reason)
         assert_raises(Runners::Machines::NoMachine) do
           Runners::Machines.acquire!(create(:runner_session, environment: machine, runner_environment: nil))
         end
+      ensure
+        host&.stop
       end
 
       test "a stale runner session that holds no machine is failed and leaves the machines alone" do
@@ -342,6 +374,17 @@ module Activities
         assert_equal "failed", stale.reload.state
         assert_equal "registered", machine.reload.state
         assert_equal 0, RunnerOperation.count
+        assert_no_enqueued_jobs only: Runners::ResetStaleMachineJob
+      end
+
+      private
+
+      def stale_session_holding_a_machine
+        machine = create(:runner_environment)
+        stale = create(:runner_session, environment: machine, state: "running", started_at: 1.hour.ago,
+                                        container_id: "aixle-#{machine.key}-1")
+        machine.update!(current_session: stale)
+        [ machine, stale ]
       end
     end
   end

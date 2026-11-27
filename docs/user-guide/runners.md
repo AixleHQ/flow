@@ -12,7 +12,7 @@ do not exist for your company.
 
 This page covers adding machines to a `manual` runner and reading the
 machines list on its page, what the runner's status means, what a session shows
-while it waits for a free machine, the reuse policy and Return to service, what
+while it waits for a free machine, the reuse policy and what a failed machine needs, what
 you take on with a `manual` machine, what it reaches outbound and its known
 limits, and interactive sessions.
 
@@ -203,11 +203,8 @@ machine appears as soon as it has run `configure`. Each row shows:
   - **Offline**: the platform has not heard from the machine for 90 seconds, or
     never has. Stop `aixle-runner` on a machine, or lose its network, and it
     turns offline within about two minutes;
-  - **Resetting**: a reset started by Return to service is running, and the
-    machine takes no session;
-  - **Failed**: the machine is out of rotation after a failed reset or three
-    failed sessions in a row, with the reason shown and a **Return to service**
-    button (see below);
+  - **Failed**: the machine is out of rotation after a failed reset, with the
+    reason shown. It stays so until you revoke it (see below);
   - **Gone**: the machine was unregistered or revoked, and the line under it says which;
 - the runner **version** and the **OS / arch** it reported at `configure`
   (updated every time the runner starts);
@@ -297,7 +294,7 @@ the runner and how many of its machines are busy:
 are offline or failed are not counted. A session that waits for a hosted
 cluster still says **Waiting for cluster capacity**.
 
-## Reuse policy, scrub and Return to service
+## Reuse policy and scrub
 
 A `manual` runner's **reuse policy** decides what happens on a machine after
 every session. There are two values:
@@ -323,8 +320,10 @@ Two things apply whatever the policy:
 
 - **A session that fails is followed by a reset**, even under Reuse, and so is a
   scrub that fails.
-- **A machine is taken out of rotation** (state **Failed**, with the reason) when
-  its reset fails, or when 3 sessions in a row fail on it.
+- **A machine is taken out of rotation** (state **Failed**, with the reason) only
+  for its own failure: its reset fails, or its runner reports that Docker or the
+  disk is not fit to run sessions. A session that fails, however many in a row,
+  does not fail the machine once its reset succeeds.
 
 **Who sees what a scrub keeps.** A company runner's machines are shared by every
 project of the company. On a company runner with Reuse, the next session on a
@@ -369,20 +368,18 @@ one waiting for one of its machines ends with the message a launch gives for a
 revoked runner. Nothing stays in Finishing or waiting because its runner was
 revoked.
 
-### Return to service
+### A failed machine
 
 A **Failed** machine takes no session and shows why, for example *build-01
-failed to reset after session 12: reset_failed: …. Fix the machine and press
-Return to service.* Fix what the reason names (start Docker, free a volume that
-is in use), then press **Return to service** in the machine's row. The machine
-shows **Resetting** and takes no session meanwhile. When the reset succeeds the
-machine is **Idle** again. When it fails, the machine stays **Failed** with the
-new reason. Pressing the button is available to whoever can edit or revoke the
-runner: a company admin on a company runner, and a project admin or owner on a
-project runner.
+failed to reset after session 12: reset_failed: …*. Failed is final: the
+machine's credentials stop working, and nothing returns it to rotation. Fix what
+the reason names (start Docker, free a volume that is in use), then **Revoke**
+the machine and register the host again with **Add machine**. Return to service
+was removed.
 
 While every machine of a runner is Failed, a launch on it is refused with a
-message that points to Return to service.
+message that says to revoke the machine and add it again, or to pick another
+runner.
 
 ## A machine that stops answering
 
@@ -447,7 +444,7 @@ yours to run and secure. Know this before you add one:
   checkouts and caches. **Reset** wipes the workspace and cache volumes after
   every session, at the cost of a fresh clone each time. A session that fails
   gets a reset under either policy (see
-  [Reuse policy, scrub and Return to service](#reuse-policy-scrub-and-return-to-service)).
+  [Reuse policy and scrub](#reuse-policy-and-scrub)).
 - **The launching user's agent login reaches the machine.** The session runs
   with the credentials of the user who started it, as on every runner.
 - **On a company runner the machine is reused across projects.** What a scrub

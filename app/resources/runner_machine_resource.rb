@@ -11,7 +11,7 @@ class RunnerMachineResource < ApplicationResource
   attributes :id, :key, :display_name, :os, :arch, :runner_version, :state_reason, :last_heartbeat_at, :created_at,
              :first_seen_ip
 
-  typelize "'online' | 'idle' | 'offline' | 'resetting' | 'failed' | 'gone'"
+  typelize "'online' | 'idle' | 'offline' | 'failed' | 'gone'"
   attribute :state, &:display_state
 
   typelize "boolean"

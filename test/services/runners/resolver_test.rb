@@ -28,7 +28,7 @@ class Runners::ResolverTest < ActiveSupport::TestCase
                  "on the workflow.", refusal.message
   end
 
-  test "a runner whose every machine failed is unreachable, with the machines and Return to service" do
+  test "a runner whose every machine failed is unreachable, with the machines and what to do" do
     @run.update!(runner: @runner)
     machine = create(:runner_environment, runner: @runner, display_name: "build-01")
     Runners::Machines.fail!(machine, "env.reset failed after session 3: the runner did not answer")
@@ -38,7 +38,7 @@ class Runners::ResolverTest < ActiveSupport::TestCase
     assert_equal "runner_unreachable", refusal.reason
     assert_match(/\ARunner "Prod VPC" has no machine that can take a session: its machine is out of rotation: build-01 \(env.reset failed/,
                  refusal.message)
-    assert_match(/press Return to service on the runner page, or pick another runner on the workflow\.\z/,
+    assert_match(/register the host again with Add machine, or pick another runner on the workflow\.\z/,
                  refusal.message)
   end
 
