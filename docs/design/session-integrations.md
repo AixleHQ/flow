@@ -416,8 +416,8 @@ restores the project-wide gate; the data added by steps 1 to 4 is inert.
   and is refused on its next settings save until both are set.
 - Models (`test/models`): `ResourceLink` with integrations, `Workflow` / `Step` list validation (foreign
   company and foreign project rejected, system workflow rejected), `Coder::IntegrationService` with two
-  active integrations (replace the "cannot get a second" test with "two accounts coexist; same account
-  renews").
+  active integrations (replace the "cannot get a second" test with "two integrations of the same account and
+  prefix coexist in one scope").
 - Services: `SessionConfigResolver` (workflow + step additive, not inherited, derived repository and origin
   integrations, standalone, breakdown), `SessionService` attach, `CoderResolver` (none / one / many /
   foreign id / inactive), `Tools::Context` session-aware vs project-wide, `Integrations::Backfill` (workflows and running
