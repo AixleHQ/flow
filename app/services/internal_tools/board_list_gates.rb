@@ -12,7 +12,6 @@ module InternalTools
                   "resolved by CI webhooks, so there is no tool to resolve or delete one from a " \
                   "session: a Gate stuck `stale` is cleared by a person from the board UI."
       tags :board
-      inject_when :workflow_step_session
       read_only
       input_schema({
         type: "object",

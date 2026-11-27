@@ -14,7 +14,6 @@ module InternalTools
                   "one is returned with a `health_warning`. If the allocated workspace turns out to be unusable, call this again with `exclude` " \
                   "set to its name instead of releasing and retrying — a plain retry returns the same workspace."
       tags :coder
-      inject_when :coder_integration_connected
       requires_integration :coder
       input_schema({
         type: "object",

@@ -4,9 +4,9 @@ module InternalTools
   class FinishSession < Base
     tool do
       display_name "Finish Session"
-      description "Signal successful completion of a non-interactive session. This terminates the session. Call only after ALL work is done and output files are saved. Only the top-level agent may call this: a subagent reports back to the agent that started it instead."
+      description "Signal successful completion of a session. This terminates the session. Call only after ALL work is done and output files are saved. Only the top-level agent may call this: a subagent reports back to the agent that started it instead."
       tags :session_lifecycle
-      inject_when :non_interactive_session
+      inject_when :any_session
       user_attachable false
       input_schema({
         type: "object",
@@ -21,10 +21,6 @@ module InternalTools
     end
 
     def execute
-      unless session.mode == "non_interactive"
-        return error("finish_session is only available in non-interactive sessions")
-      end
-
       unless session.may_start_finishing? || session.finishing?
         return error("Session cannot be finished in current state: #{session.state}")
       end

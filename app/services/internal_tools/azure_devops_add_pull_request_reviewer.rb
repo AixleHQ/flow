@@ -17,8 +17,6 @@ module InternalTools
       display_name "Azure DevOps Add Pull Request Reviewer"
       description "Add a reviewer to an Azure Repos pull request. `reviewer_id` is an Azure identity id — a user or a group. Use it to put someone on the review, or to make an existing reviewer's approval required. Voting does not need it — azure_devops_vote_pull_request adds the identity itself. Re-adding an existing reviewer keeps their current vote. Optional by default; `required: true` makes the reviewer's approval mandatory, which blocks completion until they vote. Returns the reviewer entry: {id, display_name, vote, required}."
       tags :azure_devops
-      inject_when :azure_repositories_attached
-      user_attachable false
       requires_integration :azure_devops
       idempotent
       param :repository_id, type: :integer, description: "Aixle repository id.", required: true

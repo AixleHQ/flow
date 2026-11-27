@@ -7,7 +7,6 @@ module InternalTools
       description "Return full details for a board task, by task_id or by task_number (the #N people see " \
                   "on the board). Defaults to the workflow's bound board task when both are omitted."
       tags :board
-      inject_when :workflow_step_session
       input_schema({
         type: "object",
         required: [],

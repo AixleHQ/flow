@@ -741,6 +741,10 @@ and an `execute` method. Nothing is seeded by hand: `Tools::Registry` collects t
 `Tools::Reconciler` projects each into a `source: "code"`, `execution_mode: "app"` row on deploy
 (`platform_tools:seed`) and at boot.
 
+`inject_when` is for plumbing only: a tool a session needs to work at all. A new tool leaves it out and is
+served only when a workflow, a step or the session attaches it
+(see [tool-attachment.md](tool-attachment.md)). A static test pins the names that have an `inject_when` rule.
+
 ### New internal container tool
 
 1. Add `define :my_tool` block in `InternalToolStrategy`

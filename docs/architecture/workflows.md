@@ -724,13 +724,15 @@ end
 ## 6. Internal Tools (Workflow-specific)
 
 Internal tools are code-defined (`app/services/internal_tools/`, subclasses of
-`InternalTools::Base`) and injected into a session based on an `inject_when`
-condition rather than by hardcoding to one session type. The ones relevant to
-workflow execution:
+`InternalTools::Base`). Only the plumbing tools below are served without an
+attachment, through an `inject_when` rule; every other tool (board, chat, Coder,
+Azure DevOps, tracker, `share_asset`, `promote_asset`) must be attached to the
+workflow or the step ([design](../design/tool-attachment.md)). The ones relevant
+to workflow execution:
 
-- **list_sub_steps** / **mark_sub_step** — injected when `workflow_step_session`;
+- **list_sub_steps** / **mark_sub_step** — served to every session;
   the two sub-step tracking tools (below).
-- **finish_session** / **fail_session** — injected for a `non_interactive_session`;
+- **finish_session** / **fail_session** — served to every session, interactive too;
   signal completion/failure and terminate the session. Their optional `note` is
   saved to `StepRun.step_note` when running inside a workflow.
   A session ends only through these (or a watchdog), so an agent that ends its
@@ -738,11 +740,11 @@ workflow execution:
 - **read_tool_result** — injected when container tools are present; fetches status
   and presigned download URLs for an async tool execution.
 
-- **promote_asset** — injected when `workflow_step_session`; promotes a file in
+- **promote_asset** — attached like any tool; promotes a file in
   `/workspace/outputs/` or an output an earlier step of the run produced to a
   versioned project-level Asset (into a folder, `/` nesting), through
   `AssetExportService`, the same service the post-workflow export UI uses.
-- **share_asset** — injected when `workflow_step_session`; publishes a file at a
+- **share_asset** — attached like any tool; publishes a file at a
   public link (see [§8](#8-asset-public-sharing)).
 
 There is **no** `write_step_note` internal tool. Step notes are written through
@@ -1038,7 +1040,7 @@ looks it up in each.
   `X-Content-Type-Options: nosniff`: the content is untrusted, since an agent may
   have written arbitrary HTML or JavaScript. For an `Asset` it serves the latest
   version, so the link stays the same as new versions arrive.
-- **Making a link:** the `share_asset` tool, injected into workflow step sessions, is
+- **Making a link:** the `share_asset` tool, once attached to the step, is
   what shares a file: a project asset, an output of the session's run, or an
   attachment of a task on the project's board. A company asset is never shared, since
   every project of the company sees it. `share!` is idempotent (a shared file keeps its

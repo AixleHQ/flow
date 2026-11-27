@@ -6,7 +6,6 @@ module InternalTools
       display_name "Board Get Board Info"
       description "Return the current board with its columns and related metadata for the active workflow task."
       tags :board
-      inject_when :workflow_step_session
       input_schema({
         type: "object",
         required: [],

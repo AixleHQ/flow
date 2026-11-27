@@ -769,6 +769,8 @@ The four tools keep today's Slack behavior and contract, generalized:
   `new_thread`. Omitting them means the triggering thread. The value is resolved through
   `Chat::TargetResolver` against the conversations of integrations visible to the project.
 
+> **Superseded in part:** tools are no longer injected. A session gets a tool only when it is attached ([tool-attachment.md](tool-attachment.md)).
+
 **Availability** follows today's Slack rule. The tools are injected into workflow-step sessions
 (`inject_when :workflow_step_session`) when the project can see an active chat integration
 (`requires_integration` over both providers), so a board-started run can post to a channel too. That is

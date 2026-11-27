@@ -9,7 +9,6 @@ module InternalTools
       display_name "Coder: Release Machine"
       description "Release the Coder workspace lock for the given workspace. Idempotent — returns success whether or not a lock was held. The step's teardown also auto-releases any locks held by this session."
       tags :coder
-      inject_when :coder_integration_connected
       requires_integration :coder
       input_schema({
         type: "object",

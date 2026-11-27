@@ -53,6 +53,22 @@ describe('ToolPicker', () => {
     expect(screen.getByRole('option', { name: 'Board Move Task' })).toBeInTheDocument();
   });
 
+  it('offers an Azure DevOps section that attaches its tools like any other group', async () => {
+    const azureTools = [
+      ...tools,
+      { id: 40, name: 'Azure DevOps List Builds' },
+      { id: 41, name: 'Azure DevOps Create Pull Request' },
+    ];
+    const azureGroups: ToolGroup[] = [...groups, { tag: 'azure_devops', label: 'Azure DevOps', toolIds: [40, 41] }];
+
+    renderPage(<Harness tools={azureTools} groups={azureGroups} />);
+    await openPicker();
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Azure DevOps/ }));
+
+    expect(screen.getByRole('checkbox', { name: /Azure DevOps/ })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('button', { name: 'Remove Azure DevOps' })).toBeInTheDocument();
+  });
+
   it('attaches every tool in the group from its header', async () => {
     renderPage(<Harness />);
     await openPicker();

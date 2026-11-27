@@ -18,7 +18,9 @@ module PersonalTools
       display_name "List Project Tools"
       description "List the tools available in a project — attachable platform tools plus the " \
                   "project's own custom tools — with description, tags and integration " \
-                  "requirement, so a step's tool_ids can be chosen rather than guessed."
+                  "requirement, so a step's tool_ids can be chosen rather than guessed. These are the " \
+                  "tools to attach: board, chat, tracker, Coder and Azure DevOps tools are never " \
+                  "served to a session that did not attach them."
       audience :user
       tags :resources
       read_only

@@ -6,7 +6,6 @@ module InternalTools
       display_name "Board Attach Asset"
       description "Attach a file to a board task by reading it from a path inside the running container."
       tags :board
-      inject_when :workflow_step_session
       input_schema({
         type: "object",
         required: %w[name file_path],
