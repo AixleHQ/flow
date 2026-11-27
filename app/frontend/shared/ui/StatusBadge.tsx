@@ -27,7 +27,6 @@ const STATE_TONES: Record<string, StatusTone> = {
   in_progress: 'running',
   starting: 'running',
   finishing: 'running',
-  resetting: 'running',
   // waiting on something
   pending: 'info',
   queued: 'info',

@@ -4,17 +4,13 @@
 # §2.2). In v1 so far the only entry path is a `manual` machine registering
 # through the runner gateway (§5.2), which creates the row `registered`;
 # unregistering marks it `gone`. A machine whose `env.reset` failed after a
-# session, or whose refresh token was reused (Runners::Credentials.rotate!), is
-# `failed` (Runners::Machines.fail!), with the reason in `state_reason`, and
-# takes no session until it is returned to service (Runners::Machines.return_to_service!):
-# an `env.reset` runs on it while it is `resetting`, and it is `registered` and
-# free again once that succeeds, or `failed` with the new reason. The states and
-# their events are RunnerEnvironmentStateMachine's; the rest of the §5.2 state
-# machine arrives with Runners::Allocator.
-#
-# `consecutive_failures` counts the failed sessions in a row on the machine; a
-# session that ends well sets it back to 0, and `runners.max_consecutive_failures`
-# of them take the machine out of rotation (§7.2).
+# session, whose check-in reported missing prerequisites or whose refresh token
+# was reused (Runners::Credentials.rotate!) is `failed` (Runners::Machines.fail!),
+# with the reason in `state_reason`, and takes no session. `failed` is final:
+# its credentials stop working, and it leaves by a Revoke (`gone`) and is
+# registered again with Add machine. A session's outcome never fails a machine.
+# The states and their events are RunnerEnvironmentStateMachine's; the rest of
+# the §5.2 state machine arrives with Runners::Allocator.
 #
 # `current_session` is the session that holds the machine (Runners::Machines):
 # a `registered` machine without one is free. It is cleared once the machine
@@ -98,8 +94,8 @@ class RunnerEnvironment < ApplicationRecord
     (last_heartbeat_at || created_at) <= now - period
   end
 
-  # How the machine shows on the runner page (§2.5): `resetting`, `failed` and
-  # `gone` as they are; a `registered` one is `offline` unless it is heard, else `online`
+  # How the machine shows on the runner page (§2.5): `failed` and `gone` as
+  # they are; a `registered` one is `offline` unless it is heard, else `online`
   # holding a session and `idle` without one.
   def display_state(now = Time.current)
     return state.to_s unless registered?

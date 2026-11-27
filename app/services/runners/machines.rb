@@ -7,10 +7,10 @@ module Runners
   # (task 8a, decision 2).
   #
   #   environment = Runners::Machines.acquire!(session)            # raises CapacityError when every machine is busy
-  #   Runners::Machines.release!(environment, session, failed:)    # after its env.scrub or env.reset succeeded
+  #   Runners::Machines.release!(environment, session)             # after its env.scrub or env.reset succeeded
   #   Runners::Machines.let_go!(session)                           # a revoked or retired runner's session: the machine is free
   #   Runners::Machines.fail!(environment, reason, holder: session) # its env.reset failed: out of rotation
-  #   Runners::Machines.return_to_service!(environment)            # a failed machine: env.reset, then free again
+  #   Runners::Machines.reset_held!(session)                       # a stale session's machine: env.reset, then free or failed
   #   Runners::Machines.availability(runner)                       # => Availability, for the launch's checks
   #
   # A machine is held through runner_environments.current_session_id, set
@@ -21,19 +21,19 @@ module Runners
   # not heard within 90 s (RunnerEnvironment.heard; a machine running an op
   # sends heartbeats, §6.7) is offline and is given no session (task 12c).
   #
-  # A machine whose reset failed, or on which `runners.max_consecutive_failures`
-  # sessions in a row failed, is `failed` (§5.2) and held by no session, so
-  # nothing that happens to the session, its deletion included, returns it to
-  # rotation. Return to service (§5.2, §7.2) does: it sends `env.reset` with no
-  # session, the machine is `resetting` and takes no session meanwhile, and the
-  # result of the op settles it (#settle_resets!): `registered` and free, or
-  # `failed` with the new reason.
+  # A machine is `failed` (§5.2) only for a failure of its own or of its runner:
+  # a reset that failed, a check-in that reports missing prerequisites, a
+  # refresh token presented twice. It is then held by no session, so nothing
+  # that happens to the session, its deletion included, returns it to rotation,
+  # and nothing returns it but a Revoke and a new Add machine. A session's
+  # outcome never fails a machine: any number of failed sessions in a row leave
+  # it in rotation once its reset succeeded.
   module Machines
     # Whether a runner has a machine that can take a session: `:available`
     # (one registered and reachable, free or busy), `:all_offline` (some
     # registered, none reachable, with the offline machines for the message),
     # `:none_registered`, or `:all_failed`, with the machines that are out of
-    # rotation, `failed` or `resetting`, for the message.
+    # rotation, `failed`, for the message.
     Availability = Data.define(:status, :failed, :offline) do
       def available? = status == :available
     end
@@ -46,9 +46,6 @@ module Runners
     end
 
     UNREACHABLE = "runner_unreachable"
-
-    # Return to service of a machine whose runner is not `manual`.
-    class NotManual < StandardError; end
 
     # The wait reason of ContainerRuntime::CapacityError when every machine that
     # can take a session is busy (SessionAdmission::WAIT_REASONS, §10).
@@ -71,31 +68,21 @@ module Runners
       held_by(session) || raise
     end
 
-    # Frees the machine once the session's `env.scrub` or `env.reset` succeeded,
-    # and counts the session: a session that `failed` adds to the machine's
-    # streak, one that ended well sets it back to 0, and the machine whose
-    # streak reaches `runners.max_consecutive_failures` is `failed` instead of
-    # freed (§7.2), with the reason. Only while `session` holds the machine.
-    def release!(environment, session, failed: false)
+    # Frees the machine once the session's `env.scrub` or `env.reset` succeeded.
+    # The session's outcome is not counted: a session that failed does not
+    # fail the machine, whose reset says whether it is fit. Only while
+    # `session` holds the machine.
+    def release!(environment, session)
       RunnerEnvironment.transaction do
         held = RunnerEnvironment.where(id: environment.id, current_session_id: session.id, state: "registered")
                                 .lock.first
-        next unless held
-
-        streak = failed ? held.consecutive_failures + 1 : 0
-        held.consecutive_failures = streak
-        if streak >= max_consecutive_failures
-          held.mark_failed!("#{label(held)} failed #{streak} sessions in a row")
-        else
-          held.update!(current_session_id: nil, state_reason: nil)
-        end
+        held&.update!(current_session_id: nil, state_reason: nil)
       end
     end
 
-    # The machine the session holds stops holding it, with no count of the
-    # session's outcome: for a session whose runner is revoked or deleted, whose
-    # machine no `env.scrub` will ever answer, where #release! would count a
-    # failure streak that means nothing. Under the machine's row lock, and only
+    # The machine the session holds stops holding it, for a session whose
+    # runner is revoked or deleted, whose machine no `env.scrub` will ever
+    # answer. Under the machine's row lock, and only
     # while the session holds it. A machine holds at most one session
     # (`current_session_id` is unique), so there is one row. Saved, not written
     # past the model, so its callback tells the relay.
@@ -110,7 +97,7 @@ module Runners
     # reason for people in state_reason. With a `holder`, only while that
     # session still holds it, as #release! does: a late failure of a session
     # that has since released the machine leaves the next session's hold alone.
-    # Without one (a reused refresh token), whoever holds it. A machine already
+    # Without one (a reused refresh token or a failed check-in), whoever holds it. A machine already
     # gone stays gone.
     def fail!(environment, reason, holder: nil)
       RunnerEnvironment.transaction do
@@ -134,7 +121,7 @@ module Runners
       offline = registered.order(:id).to_a
       return Availability.new(status: :all_offline, failed: [], offline: offline) if offline.any?
 
-      failed = RunnerEnvironment.where(runner_id: runner.id, state: %w[failed resetting]).order(:id).to_a
+      failed = RunnerEnvironment.where(runner_id: runner.id, state: "failed").order(:id).to_a
       Availability.new(status: failed.empty? ? :none_registered : :all_failed, failed: failed, offline: [])
     end
 
@@ -155,66 +142,47 @@ module Runners
         listed = machines.map { |machine| "#{label(machine)} (#{out_of_rotation_reason(machine)})" }
         "Runner \"#{runner.name}\" has no machine that can take a session: " \
           "#{machines.one? ? 'its machine is out of rotation' : 'every machine is out of rotation'}: #{listed.join('; ')}. " \
-          "Fix the machine and press Return to service on the runner page, or pick another runner#{elsewhere}."
+          "A failed machine stays out until it is revoked: revoke it on the runner page and register the host again with Add machine, or pick another runner#{elsewhere}."
       else
         raise ArgumentError, "runner \"#{runner.name}\" is available"
       end
     end
 
-    # Return to service (§5.2): a `failed` machine goes `resetting`, held by no
-    # session, and an `env.reset` is put on its queue. It takes no session until
-    # the op settles it (#settle_resets!). False for a machine that is not
-    # `failed`: pressing it twice sends one reset. Only a `manual` runner's
-    # machine returns this way (NotManual): a `coder` machine's recovery may be
-    # a rebuild, not a reset (§7.2).
-    def return_to_service!(environment)
-      raise NotManual, "Only a machine of a manual runner is returned to service." unless environment.runner.manual?
+    # The machine of a stale session (the workflow ended without cleanup) gets
+    # the reset a failed session gets: an `env.reset` as the session, with the
+    # lifecycle budget. The machine is free when it succeeds and `failed` when
+    # it fails, as in RunnerRuntime#cleanup_session. Runs in
+    # Runners::ResetStaleMachineJob, never in the sweep that finds the session:
+    # the sweep runs under the scanners' cap, where a slow reset could fail a
+    # healthy machine, and a silent machine would hold up the sweep.
+    #
+    # Returns `:released`, `:failed`, `:not_held` (the session no longer holds a
+    # machine: nothing to do) or `:unheard` (the machine did not answer while
+    # it was not heard, so nothing is known of it: the caller tries again).
+    def reset_held!(session)
+      environment = held_by(session)
+      return :not_held if environment.nil?
 
-      RunnerEnvironment.transaction do
-        locked = RunnerEnvironment.where(id: environment.id).lock.first
-        next false unless locked&.may_begin_return_to_service?
+      deadline = Settings.runners.lifecycle_op_timeout.to_f.seconds.from_now
+      operation = Operations.enqueue!(environment, op: "env.reset", payload: {}, deadline_at: deadline, session: session)
+      return :not_held if operation.nil?
 
-        locked.begin_return_to_service!
-        Runners::Operations.enqueue_reset!(locked, deadline_at: Settings.runners.lifecycle_op_timeout.to_f.seconds.from_now)
-        true
+      operation = Operations.await(operation)
+      if operation.completed?
+        release!(environment, session)
+        :released
+      elsif operation.expired? && !environment.reload.heard?
+        :unheard
+      else
+        reason = operation.expired? ? "the runner did not answer" : failure_text(operation.result)
+        fail!(environment, "#{label(environment)} failed to reset after stale session #{session.id}: #{reason}", holder: session)
+        :failed
       end
-    end
-
-    # Settles every `resetting` machine whose `env.reset` has an outcome: the
-    # machine is free again when it succeeded, `failed` with the new reason when
-    # it failed or expired. A machine whose op is still open stays `resetting`.
-    # Called wherever an op gets its outcome, so it is idempotent.
-    def settle_resets!(environment_ids = nil)
-      machines = RunnerEnvironment.where(state: "resetting")
-      machines = machines.where(id: environment_ids) if environment_ids
-      machines.find_each { |machine| settle_reset!(machine) }
     end
 
     def label(environment)
       environment.display_name.presence || environment.key
     end
-
-    # The reset that settles the machine is the latest `env.reset` the machine
-    # has, read under its row lock: the Return to service that put it in
-    # `resetting` is the last one to have enqueued one (it did so under the same
-    # lock), so a result of an earlier reset can never settle a later attempt.
-    def settle_reset!(machine)
-      RunnerEnvironment.transaction do
-        locked = RunnerEnvironment.where(id: machine.id, state: "resetting").lock.first
-        next unless locked
-
-        operation = RunnerOperation.where(runner_environment_id: locked.id, op: "env.reset").order(:sequence).last
-        next if operation.nil? || operation.deliverable?
-
-        if operation.completed?
-          locked.finish_reset!
-        else
-          reason = operation.expired? ? "the runner did not answer" : failure_text(operation.result)
-          locked.mark_failed!("#{label(locked)} failed to reset on Return to service: #{reason}")
-        end
-      end
-    end
-    private_class_method :settle_reset!
 
     # "<class>: <message>" of an op result that carries an error.
     def failure_text(result)
@@ -223,16 +191,9 @@ module Runners
     end
 
     def out_of_rotation_reason(machine)
-      return "being returned to service" if machine.resetting?
-
       machine.state_reason.presence || "no reason recorded"
     end
     private_class_method :out_of_rotation_reason
-
-    def max_consecutive_failures
-      Settings.runners.max_consecutive_failures.to_i.clamp(1, 1_000)
-    end
-    private_class_method :max_consecutive_failures
 
     # The runner is locked first, in the one order every issuer and revoker
     # uses (runner, then environment): a Revoke either waits for this

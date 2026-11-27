@@ -39,6 +39,20 @@ class Runners::CredentialsTest < ActiveSupport::TestCase
     assert_empty RunnerCredential.where(kind: :registration)
   end
 
+  test "the credentials of a failed machine are refused, as a gone machine's are" do
+    failed_environment = create(:runner_environment, runner: @runner)
+    pair = Runners::Credentials.issue_pair!(failed_environment)
+    assert Runners::Credentials.usable(pair.access_token, kind: :access)
+    Runners::Machines.fail!(failed_environment, "env.reset failed after session 1: boom")
+
+    assert_nil Runners::Credentials.usable(pair.access_token, kind: :access)
+    assert_nil Runners::Credentials.refreshable(pair.refresh_token)
+    error = assert_raises(Runners::Credentials::Refused) do
+      Runners::Credentials.rotate!(RunnerCredential.find_by_token(pair.refresh_token, kind: :refresh))
+    end
+    assert_equal "invalid_token", error.reason
+  end
+
   test "a refresh token is refreshable unless revoked, of a gone environment, or expired unspent" do
     spent = Runners::Credentials.issue_pair!(@environment).refresh_token
     Runners::Credentials.rotate!(RunnerCredential.find_by_token(spent, kind: :refresh))

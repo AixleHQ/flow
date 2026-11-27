@@ -22,6 +22,7 @@ governance, community health — carry none.
 - **Tasks**: a task's Details are read-only until you press a pencil icon, so text can be selected and copied without opening a field. The title and the description each have their own pencil, which turns into a green check to save and a red cross to cancel, so each can be edited and saved separately. The properties have no pencil: each one saves as soon as it is changed. In Activity, an edit names the fields it changed, and **Show changes** opens their old and new values.
 
 ### Removed
+- Runners: **Return to service** on a failed machine, and the rule that failed a machine after 3 failed sessions in a row. A machine now fails only for its own failure (a reset that fails, missing prerequisites on the host, a refresh token used twice); a failed session no longer takes it out of rotation, and a stale session's machine is reset instead of failed. A **Failed** machine stays so: revoke it and register the host again with **Add machine**. Its credentials stop working. A machine that was **Resetting** at the update becomes **Failed**.
 - **Tasks**: the **Upload new** button in a card's Assets tab. The drop zone remains: drop files on it, or click it to select several files.
 
 ### Fixed
@@ -1877,6 +1878,7 @@ For deployments that ran a build from before this release:
   instead of 8 connections.
 
 ### Removed
+- Runners: **Return to service** on a failed machine, and the rule that failed a machine after 3 failed sessions in a row. A machine now fails only for its own failure (a reset that fails, missing prerequisites on the host, a refresh token used twice); a failed session no longer takes it out of rotation, and a stale session's machine is reset instead of failed. A **Failed** machine stays so: revoke it and register the host again with **Add machine**. Its credentials stop working. A machine that was **Resetting** at the update becomes **Failed**.
 For deployments that ran a build from before this release:
 - Configuration nothing read: `AUTHOR_NAME`, `AUTHOR_EMAIL`, `RAILS_PORT`,
   `TEMPORAL_UI_URL`, `REDIS_UI_URL`, `TRAEFIK_DASHBOARD_URL`,
