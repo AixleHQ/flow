@@ -54,64 +54,73 @@ export function installScript({ registration, binary, name, noAutoUpdate }: Scri
   ].join('\n');
 }
 
-/** The Docker choice next to the binaries' platforms in "Add machine" (DESIGN.md §6.3). */
-export const DOCKER_PLATFORM = 'docker';
-
-/** The machine a Docker runner is set up on; it decides where the runner's directory lives. */
-export type DockerHost = 'linux' | 'macos';
+/** Where the image keeps the runner's registration and files (the image's `VOLUME`, add-machine.md §3.1). */
+export const RUNNER_STATE_DIR = '/var/lib/aixle-runner';
 
 /** The published, multi-arch runner image of a version (DESIGN.md §14.2). */
 export const runnerImage = (version: string): string => `ghcr.io/aixlehq/aixle-runner:${version}`;
 
-interface DockerScriptOptions {
+/** The name of the volume the "keep in a volume" box asks for, and of the container. */
+export const DOCKER_NAME = 'aixle-runner';
+
+/** What a Docker runner keeps across `docker stop` (add-machine.md §2.2): nothing, a named volume, or a directory. */
+export type DockerKeep = 'none' | 'volume' | { directory: string };
+
+/** A kept directory is any absolute path on the machine; it is quoted, so only its shape is checked. */
+export const isValidKeepDirectory = (path: string): boolean => path.startsWith('/') && !/[\n\r\0:]/.test(path);
+
+interface DockerCommandOptions {
   registration: MachineRegistration;
   name: string;
-  host: DockerHost;
+  /** Mounts the Docker config file, for agent images in a private registry. */
+  privateRegistry: boolean;
+  keep: DockerKeep;
 }
 
 /**
- * The Docker variant of the sequence (DESIGN.md §6.3, §14.4): register with `configure`, then run the
- * image with the Docker socket. The runner's directory is the same path on the machine and in the
- * container, because the Docker daemon resolves the proxy sidecar's bind mounts on the machine. The
- * image does not update itself, so `configure` registers it with self-update off.
+ * The one `docker run` of the Docker tab (add-machine.md §2.1, §2.2). The container registers itself on its
+ * first start from the three variables, and the image unregisters it on stop, so by default nothing is kept
+ * and the command is a single foreground `--rm` run. Each "keep" choice adds exactly its own flags and
+ * turns unregister-on-stop off. Every platform value goes through `shellQuote`.
  */
-export function dockerScript({ registration, name, host }: DockerScriptOptions): string {
-  const image = shellQuote(runnerImage(registration.version));
-  const linux = host === 'linux';
-  const dir = linux ? "RUNNER_DIR='/var/lib/aixle-runner'" : 'RUNNER_DIR="$HOME/aixle-runner"';
-  const sudo = linux ? 'sudo ' : '';
-  // `configure` runs the Docker preflight (the daemon and the disk check, §14.4), so it needs the same
-  // socket and volume as the running container.
-  const common = [
-    '--user 0:0',
-    '-e AIXLE_RUNNER_DIR="$RUNNER_DIR"',
-    '-v "$RUNNER_DIR:$RUNNER_DIR"',
-    '-v /var/run/docker.sock:/var/run/docker.sock',
-    '-v aixle-runner-docker-root:/var/lib/docker:ro',
-  ];
-  const withRoot = (...rest: string[]) => ['docker run', ...rest, ...common].join(' ');
-
-  const configure = [
-    `${sudo}${withRoot('--rm')} ${image} configure`,
-    `--url ${shellQuote(registration.gatewayUrl)}`,
-    `--token ${shellQuote(registration.token)}`,
-    `--name ${shellQuote(name)}`,
-  ].join(' ');
+export function dockerCommand({ registration, name, privateRegistry, keep }: DockerCommandOptions): string {
+  const kept = keep !== 'none';
+  const state =
+    keep === 'volume'
+      ? [`-v ${DOCKER_NAME}:${RUNNER_STATE_DIR}`]
+      : typeof keep === 'object'
+        ? [`-v ${shellQuote(`${keep.directory}:${RUNNER_STATE_DIR}`)}`]
+        : [];
 
   return [
-    '# 1. The runner keeps its binary and credentials in a directory of this machine',
-    dir,
-    '',
-    '# 2. Register this machine (this uses up the token)',
-    configure,
-    '',
-    '# 3. Run it; it restarts with Docker. The Docker socket lets it start the sessions',
-    '#    (images from a private registry: add -v "$HOME/.docker/config.json:/root/.docker/config.json:ro")',
-    `${sudo}${withRoot('-d', '--name aixle-runner', '--restart unless-stopped')} ${image}`,
-    '',
-    '# To remove this machine later: stop it, unregister it, delete what it left',
-    '# docker stop aixle-runner && docker rm aixle-runner',
-    `# ${sudo}${withRoot('--rm')} ${image} unregister`,
-    `# ${sudo}rm -rf "$RUNNER_DIR" && docker volume rm aixle-runner-docker-root`,
-  ].join('\n');
+    'docker run',
+    kept ? '-d --restart unless-stopped' : '--rm',
+    `--name ${DOCKER_NAME}`,
+    '-v /var/run/docker.sock:/var/run/docker.sock',
+    ...(privateRegistry ? ['-v "$HOME/.docker/config.json:/root/.docker/config.json:ro"'] : []),
+    ...state,
+    `-e AIXLE_RUNNER_URL=${shellQuote(registration.gatewayUrl)}`,
+    `-e AIXLE_RUNNER_TOKEN=${shellQuote(registration.token)}`,
+    `-e AIXLE_RUNNER_NAME=${shellQuote(name)}`,
+    ...(kept ? ['-e AIXLE_RUNNER_UNREGISTER_ON_STOP=0'] : []),
+    shellQuote(runnerImage(registration.version)),
+  ].join(' ');
+}
+
+interface InstallCommandOptions {
+  registration: MachineRegistration;
+  name: string;
+  /** Adds `--no-auto-update` (DESIGN.md §14.4). */
+  noAutoUpdate: boolean;
+}
+
+/** The one line of the Linux service tab: the platform's install script (add-machine.md §3.4), run as root. */
+export function installCommand({ registration, name, noAutoUpdate }: InstallCommandOptions): string {
+  return [
+    `curl -fsSL ${shellQuote(`${registration.gatewayUrl}/runner/v1/machine-install.sh`)}`,
+    '| sudo sh -s --',
+    `--token ${shellQuote(registration.token)}`,
+    `--name ${shellQuote(name)}`,
+    ...(noAutoUpdate ? ['--no-auto-update'] : []),
+  ].join(' ');
 }

@@ -1,0 +1,86 @@
+#!/bin/sh
+# Installs aixle-runner <%= version %> as a systemd service and registers this machine
+# (docs/design/agent-runtimes/add-machine.md §3.4). Run it as root:
+#   curl -fsSL '<gateway>/runner/v1/machine-install.sh' | sudo sh -s -- --token '<token>' --name '<name>'
+# Options: --token TOKEN (required), --name NAME, --no-auto-update. Nothing else is accepted.
+set -eu
+
+version=<%= sh(version) %>
+gateway=<%= sh(gateway_url) %>
+
+die() {
+  echo "aixle-runner install: $*" >&2
+  exit 1
+}
+
+token=
+name=
+no_auto_update=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --token)
+      [ "$#" -ge 2 ] || die "--token needs a value"
+      token=$2
+      shift 2
+      ;;
+    --name)
+      [ "$#" -ge 2 ] || die "--name needs a value"
+      name=$2
+      shift 2
+      ;;
+    --no-auto-update)
+      no_auto_update=1
+      shift
+      ;;
+    *)
+      die "an argument is not accepted; only --token, --name and --no-auto-update are"
+      ;;
+  esac
+done
+
+[ "$(uname -s)" = "Linux" ] || die "this installs a Linux service; this machine is not running Linux"
+command -v systemctl >/dev/null 2>&1 || die "systemctl was not found; the runner service needs systemd"
+command -v curl >/dev/null 2>&1 || die "curl was not found; install curl and run this again"
+command -v sha256sum >/dev/null 2>&1 || die "sha256sum was not found; install coreutils and run this again"
+[ "$(id -u)" -eq 0 ] || die "run this as root, for example with sudo sh -s -- ..."
+
+[ -n "$token" ] || die "--token is required"
+if [ -n "$name" ]; then
+  case "$name" in
+    [!A-Za-z0-9]* | *[!A-Za-z0-9._-]*) die "--name: start with a letter or digit; then letters, digits, . _ - only (63 at most)" ;;
+  esac
+  [ "${#name}" -le 63 ] || die "--name: 63 characters at most"
+fi
+
+case "$(uname -m)" in
+  x86_64 | amd64) platform=linux-amd64 ;;
+  aarch64 | arm64) platform=linux-arm64 ;;
+  *) die "unsupported architecture: $(uname -m) (linux-amd64 and linux-arm64 are published)" ;;
+esac
+
+# The SHA-256 this platform pins for each binary of this version.
+case "$platform" in
+<% digests.each do |platform, digest| -%>
+  <%= platform %>) expected=<%= sh(digest) %> ;;
+<% end -%>
+  *) die "this platform pins no binary for $platform" ;;
+esac
+
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT HUP INT TERM
+
+echo "Downloading aixle-runner $version ($platform)"
+curl -fsSL -o "$tmp/aixle-runner" "$gateway/runner/v1/releases/$version/$platform" || die "the download failed"
+
+if ! (cd "$tmp" && echo "$expected  aixle-runner" | sha256sum -c - >/dev/null 2>&1); then
+  die "the SHA-256 of the download does not match the one this platform pins; nothing was run"
+fi
+chmod 0755 "$tmp/aixle-runner"
+
+set -- configure --url "$gateway" --token "$token"
+[ -z "$name" ] || set -- "$@" --name "$name"
+[ "$no_auto_update" -eq 0 ] || set -- "$@" --no-auto-update
+
+"$tmp/aixle-runner" "$@"
+"$tmp/aixle-runner" service install
+"$tmp/aixle-runner" service start

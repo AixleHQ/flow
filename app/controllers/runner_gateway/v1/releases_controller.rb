@@ -18,9 +18,8 @@ module RunnerGateway
     # (PROTOCOL.md §2): a cached `404` would outlive the deploy that pins the
     # version.
     class ReleasesController < ApplicationController
-      skip_before_action :check_protocol
+      include PublicRunnerEndpoint
 
-      before_action { response.set_header("Cache-Control", "no-store") }
       before_action :check_params
 
       def show

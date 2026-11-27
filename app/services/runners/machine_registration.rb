@@ -21,6 +21,12 @@ module Runners
 
     module_function
 
+    # This platform's own canonical URL (the one the app's mailers and integrations
+    # use): what the instructions and the install script send the live token to.
+    def gateway_url
+      "#{Settings.protocol}://#{Settings.domain}"
+    end
+
     def issue!(runner, gateway_url:, created_by: nil)
       raise Credentials::Refused.new("runner_not_manual", "Only a manual runner registers machines.") unless runner.manual?
 
