@@ -155,7 +155,8 @@ class Versions::WorkflowSnapshotTest < ActiveSupport::TestCase
     snapshot = version.snapshot.deep_dup
     snapshot["config"]["base_integration_ids"] << foreign.id
     snapshot["steps"].first["integration_ids"] << foreign.id
-    version.update_columns(snapshot: snapshot)
+    EntityVersion.where(id: version.id).update_all(snapshot: snapshot)
+    version.reload
     Versions.save!(@workflow, actor: @actor) do
       @workflow.merge_config!("base_integration_ids" => [])
       @build.update!(integration_ids: [])
