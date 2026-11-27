@@ -252,8 +252,7 @@ func TestRemoveVolumesNamesTheVolumeItCouldNotRemoveAndRemovesTheRest(t *testing
 
 func TestRemoveVolumesWithoutAKeyRemovesNothing(t *testing.T) {
 	h, _ := twoEnvironments(t)
-	env := *h.env
-	env.Key = ""
+	env := &Environment{API: h.env.API}
 	if _, err := env.RemoveVolumes(context.Background()); err == nil {
 		t.Fatal("no error for an empty key")
 	}
