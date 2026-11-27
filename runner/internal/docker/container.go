@@ -407,16 +407,26 @@ func (e *Environment) ContainerStart(ctx context.Context, sessionID int64, raw j
 	// The volumes are created with the environment's label, so that reset finds
 	// them by label as well as by name. Creating a volume that exists returns it
 	// unchanged, so one with the name but not the label is not the environment's:
-	// it is refused and left alone (PROTOCOL.md §6.2).
+	// it is refused and left alone (PROTOCOL.md §6.2). Ownership is read from
+	// VolumeInspect, not from the create response: after a Docker daemon restart
+	// the create response for an existing volume can carry no labels although the
+	// volume still has its persisted ones.
 	for _, v := range volumes {
-		res, err := e.API.VolumeCreate(ctx, client.VolumeCreateOptions{Name: v, Labels: map[string]string{LabelEnvironment: e.Key}})
+		_, err := e.API.VolumeCreate(ctx, client.VolumeCreateOptions{Name: v, Labels: map[string]string{LabelEnvironment: e.Key}})
 		if err != nil {
 			if r := pastDeadline(ctx, "creating the volume "+v); r != nil {
 				return *r
 			}
 			return protocol.ErrorResult(ClassContainerStartFailed, fmt.Sprintf("creating the volume %s failed: %v", v, err))
 		}
-		if got := res.Volume.Labels[LabelEnvironment]; got != e.Key {
+		inspected, err := e.API.VolumeInspect(ctx, v, client.VolumeInspectOptions{})
+		if err != nil {
+			if r := pastDeadline(ctx, "inspecting the volume "+v); r != nil {
+				return *r
+			}
+			return protocol.ErrorResult(ClassContainerStartFailed, fmt.Sprintf("inspecting the volume %s failed: %v", v, err))
+		}
+		if got := inspected.Volume.Labels[LabelEnvironment]; got != e.Key {
 			return protocol.ErrorResult(ClassVolumeNotOwned, fmt.Sprintf(
 				"the volume %s exists without the label %s=%s (it has %q), so it is not this environment's; it was not mounted or changed",
 				v, LabelEnvironment, e.Key, got))

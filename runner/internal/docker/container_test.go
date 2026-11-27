@@ -615,6 +615,29 @@ func TestTheReservedSessionOpsHaveNoHandler(t *testing.T) {
 	}
 }
 
+func TestContainerStartReusesAVolumeWhoseCreateResponseHasNoLabels(t *testing.T) {
+	h := newEnvironment(t)
+	name := "aixle-cache-" + envKey + "-pip"
+	h.engine.mu.Lock()
+	h.engine.volumes[name] = &fakeVolume{
+		Name: name, Labels: map[string]string{LabelEnvironment: envKey},
+		Files: map[string][]byte{"data": []byte("mine")}, BlankOnCreate: true,
+	}
+	h.engine.mu.Unlock()
+	r := h.run(h.env.ContainerStart, startPayload(map[string]any{
+		"mounts": []map[string]any{{"type": "cache", "name": "pip", "target": "/root/.cache/pip"}},
+	}))
+	if r.Status != protocol.StatusOK {
+		t.Fatalf("%#v", r)
+	}
+	h.engine.mu.Lock()
+	v := h.engine.volumes[name]
+	h.engine.mu.Unlock()
+	if v.Labels[LabelEnvironment] != envKey || string(v.Files["data"]) != "mine" {
+		t.Fatalf("the volume was changed: %#v", v)
+	}
+}
+
 func TestContainerStartRefusesAVolumeThatIsNotTheEnvironments(t *testing.T) {
 	for _, labels := range []map[string]string{{}, {LabelEnvironment: otherKey}} {
 		h := newEnvironment(t)
