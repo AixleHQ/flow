@@ -9,7 +9,7 @@ rows 21 and 23 are built and rows 17–18 (Coder) are not; phase 6 (Kubernetes, 
 not built; of phase 7, row 22 is built and row 20 (`host` execution mode) is not. The only
 runner type with an adapter is `manual` (`Runners::Adapter::REGISTRY`): `coder` and
 `kubernetes` are declared on `Runner` but cannot be created. Row 17 (Coder) is designed in
-[`runner-coder.md`](runner-coder.md) (task #284) and cut into rows 17b–17e in §15. Rows 24–27 (the relay taking
+[`runner-coder.md`](runner-coder.md) (task #284) and cut into rows 17b–17e in §15; `coder` ships with `fresh` only (`reuse` and `reset` are row 28). Rows 24–27 (the relay taking
 over from `runner-gateway`) are not built. What this document says about the pending rows is
 design, not code yet.
 **Created:** 2026-10-20 · **Revised:** 2026-11-06
@@ -343,12 +343,11 @@ with the first runner type that needs one.
 | Column | Notes |
 | --- | --- |
 | `runner_id`, `company_id` | |
-| `key` | Adapter idempotency key, unique per runner, e.g. `aixle-r12-e7f3a`. It is the Coder workspace name or the pod name. For `manual` it is generated at registration. |
-| `external_id` | Coder workspace UUID or pod UID. Null for `manual`. |
+| `key` | Adapter idempotency key, unique per runner, e.g. `aixle-r12-e7f3a`. On `coder` it is a platform-made identifier (`coder-` and 8 hex); on `kubernetes`, the pod name. For `manual` it is generated at registration. |
+| `external_id` | `coder`: the Coder workspace's name (what the integration addresses a workspace by: the lock key, `coder ssh`, the `workspace_name` of the Coder tools). `kubernetes`: the pod UID. Null for `manual`. |
 | `display_name` | `manual`: the name the operator gave in `aixle-runner configure --name` (default: the hostname). Shown on the runner page. Null for the other types. |
 | `origin` | `allocated` (created by `Runners::Allocator`, `coder` and `kubernetes`) or `registered` (created by `POST /runner/v1/register`, `manual`). Decides the entry path into the state machine (§5.2). |
 | `state` | §5.2. |
-| `reusable` | Copied from the runner's reuse policy when the environment was created. |
 | `runner_version`, `protocol_version`, `os`, `arch` | Reported at check-in or registration. |
 | `facts` | jsonb: prerequisites found, disk free, the Docker daemon version and agent images present. Check-in collects them, as built; the Machines list does not show them (§11). |
 | `auto_update` | `manual`: copied from the runner's `config.auto_update`, overridable per machine with `aixle-runner configure --no-auto-update` (§14.4). |
@@ -359,10 +358,10 @@ with the first runner type that needs one.
 | `reset_requested` | `none`, `reset` or `rebuild` (§7.2). |
 
 **Coder (row 17, [`runner-coder.md`](runner-coder.md) §6).** An `allocated` environment adds
-`external_id` (the Coder workspace's name, unique per runner), `autostop_error` (the last refusal to extend the workspace's autostop deadline) and `boot_started_at` (when the current boot began; the
-`bootstrap_timeout` counts from it). There is no `reusable` column: `reuse_policy` is read from the runner at
-release, so an edit applies from the next release. A runner's pool is its environments that are not `gone`,
-`tearing_down` and `failed` ones included.
+`external_id` (the Coder workspace's name, unique per runner) and `boot_started_at` (set when the row is inserted;
+the `bootstrap_timeout` counts from it). There is no `reusable` column and no `autostop_error`: `reuse_policy` is
+read from the runner at release, so an edit applies from the next release, and the autostop deadline is not
+pushed in this item. A runner's pool is its environments that are not `gone`, `tearing_down` and `failed` ones included.
 
 **Removed from the plan (Alex, 2026-11-13): affinity and project binding.** The table had a bound `project_id` (set on first assignment, never changed) and `last_workflow_id` (warm-cache affinity). They are not needed for now, so neither column is planned, and §7.3 steps 1 to 3, §9.4's bound project with Release to company and their mention in §15 task 11 are gone with them.
 
@@ -378,7 +377,7 @@ values, and the §5.2 state machine replaces that with task 11. `state_reason` h
 "credential reuse detected" (§9.2). Since task 8a the machine is also `failed`
 (`Runners::Credentials.rotate!` through `Runners::Machines.fail!`), held by no session, so it is
 given no session, besides its revoked credentials keeping it out.
-`external_id`, `reusable`, `auto_update`, `current_session_id`,
+`external_id`, `auto_update`, `current_session_id`,
 `checked_in_at`, the other counters and `reset_requested` land with their
 first reader. `last_heartbeat_at` landed with task 12c: every authenticated request of a
 machine records its time (`Runners::Liveness.record!`, from the gateway's `authenticate` and
@@ -391,7 +390,7 @@ registered with `configure --no-auto-update`, which is then never offered an upd
 
 `runner_credentials`: `runner_id`, `runner_environment_id` (null for controller-level
 credentials and for unused `manual` registration tokens), `kind` (`registration`,
-`controller`, `bootstrap`, `environment`),
+`controller`, `bootstrap` (`kubernetes` only), `environment`),
 `token_digest` (SHA-256, never the token), `family_id` (rotation lineage),
 `expires_at`, `used_at`, `revoked_at`, `last_used_at`, `last_used_ip`, `created_by_id`.
 Token semantics are in §9.2.
@@ -400,7 +399,7 @@ Token semantics are in §9.2.
 `runner_environment_id`, `kind`, `token_digest` (unique), `family_id` (uuid),
 `expires_at`, `used_at` and `revoked_at`. `kind` is `registration`, `access` or `refresh`:
 an access/refresh pair is told apart by kind, and an environment pair from a controller
-pair (task 19) by `runner_environment_id`. `bootstrap` joins the list with tasks 17 and 19.
+pair (task 19) by `runner_environment_id`. `bootstrap` joins the list with task 19 only: on `coder` there is no bootstrap credential, the platform mints an ordinary `registration` credential bound to the environment (`runner-coder.md` §8.1).
 A registration token has no family. Once used, it names the environment it created. The
 §2 key `(runner_id, company_id) → runners` ties the company, and
 `(runner_environment_id, runner_id) → runner_environments (id, runner_id)` ties a
@@ -542,14 +541,13 @@ implements them:
 - Deleting a runner is a soft delete that revokes it in the same write: `deleted_at` and
   `revoked` are set together, so a deleted runner is revoked in the data, not only in reads.
 
-- `pending`: created, never verified. Coder: the integration token and its default template have not
+- `pending`: created, never verified. Coder: the integration's token has not
   been checked yet. Kubernetes: the controller has not connected yet. Manual: no machine
   has registered yet.
 - `connected`: health check passed within the last 5 minutes. For Kubernetes this also
   requires a controller heartbeat within the last 60 s. For Manual, every registered
   machine was heard within the last 90 s and none has failed.
-- `degraded`: reachable, but something is wrong: the workspace name does not fit Coder's limit, provisioning
-  keeps failing, the
+- `degraded`: reachable, but something is wrong: provisioning keeps failing, the
   controller reports missing RBAC, the controller version is below the recommended one, or
   some (not all) of a manual runner's machines are offline or `failed`. New sessions are
   still admitted, and the reason, which names those machines, is shown.
@@ -618,7 +616,7 @@ page and the runners list already show the status and its reason.
 - `revoked`: every credential is invalidated immediately and running sessions fail (§9.3).
   This is terminal: to get it back, create a new runner.
 
-### 2.6 Coder: through the Coder integration, templates on the runner
+### 2.6 Coder: through the Coder integration, the template is the integration's
 
 **Decision:** a `coder` runner references an existing Coder `Integration` for the
 connection (URL and token, already encrypted in `integrations.credentials`). The template
@@ -630,16 +628,17 @@ workspace of the integration's pool, or a new one from the template; the integra
 and has it deleted through them, and never calls Coder directly. There is no runner rule for an integration
 without a default template: when the integration has nothing to give, the session waits in `capacity_wait` with its
 message. Several runners can point at one integration, each with its own concurrency limit; two templates need two
-integrations. A Coder integration is per project and a project has one active, so until #295 a project's Coder runner
-and its agents' Coder tools share one integration, pool and quota; keeping them apart is the customer's job.
-How a runner picks its integration, and whether company-wide Coder integrations exist, follow #295.
+integrations. With #295 (several Coder integrations per scope, the default template and the machine prefix required;
+implemented by task #298) a customer keeps the runner's integration apart from the agents' with a second one; until then
+a project's Coder runner and its agents' Coder tools share one integration, pool and quota.
 
 Why not configure the connection on the runner itself: the integration already handles the
 token lifecycle (`Coder::TokenService`), scoping (`visible_for_project`), revocation and the
 existing Coder MCP tools. A second copy of the same token would rotate and expire
 independently. Scoping rule: a project runner can use a company-wide Coder integration or
 one of its own project's. A company runner can only use a company-wide one, which cannot be created today (a Coder
-integration is per project only), so a `coder` runner is a project runner for now (`runner-coder.md` §12). When the
+integration is per project only, and #295 defers creating one from the UI), so a `coder` runner is a project runner for now
+(`runner-coder.md` §12). A runner's integration is chosen when the runner is created and never changes (`runner-coder.md` §7.1). When the
 integration becomes `inactive` or `error`, every runner on it goes `unreachable`, with a
 reason that names the integration. The template keys are in §2.7.
 
@@ -908,7 +907,7 @@ container mode, so they are the same across the three external types; the `host`
 | --- | --- | --- | --- | --- | --- |
 | `provisionable` | true | **false**: the platform cannot create a machine | true | true | Allocator step 4 (§7.3), waiting-session copy (§10) |
 | `rebuildable` | n/a | **false**: we do not own the machine | true | n/a (ephemeral) | Reset escalation (§7.2) |
-| `reusable` | false | true | true | false (v1) | Lifecycle (§7), scrub |
+| `reusable` | false | true | false (v1: `fresh` only, `runner-coder.md` §9.1) | false (v1) | Lifecycle (§7), scrub |
 | `persistent_disk` | false | true | true (mounted volumes only) | false (a PVC option is later) | Reset semantics, UI copy |
 | `human_accessible` | false | true (it is the operator's machine; there is no link to open) | true (Coder's own SSH, web terminal, IDE) | false | "Open in Coder" link on the session, when there is a link |
 | `interactive_terminal` | true | true (the tunnel, §15 task 16g) | same | same | Not declared or read: the same on every type, so nothing reads it. Interactive standalone sessions pick a runner like any other session |
@@ -1008,7 +1007,7 @@ first.
 
 **Who owns what: the allocator owns the row, the adapter owns the provider object.**
 `Runners::Allocator` (§7.3) decides that a new environment is needed. It creates the
-`runner_environments` row in `requested`, with its `key`, `runner_id`, `company_id` and
+`runner_environments` row in `requested` (on `coder`, in `provisioning`: `runner-coder.md` §6), with its `key`, `runner_id`, `company_id` and
 bound `project_id`, inside the same locked transaction that counts the pool against
 `max_environments`. **`provision` never creates the row.** It receives the persisted
 environment and creates the provider-side object under it: the Coder workspace named
@@ -1030,14 +1029,14 @@ The per-type mapping:
 | Method | `manual` (nothing to call) | `coder` (outside, Coder API via `Coder::Api`) | `kubernetes` (via controller ops) |
 | --- | --- | --- | --- |
 | Config checks (`Runners::ConfigSchema`, no IO) | `config.container` options only (§2.7, §6.8) | the `config.container` options; the integration usable is `Runner`'s own validation. No template keys | Namespace, `config.container.resources` and `image_override` valid |
-| `check_health` | Derived from the machines' last heartbeats and states (§2.5, built in task 12d). No outbound call | The integration is active and its token is accepted; no environment has a refused autostop extension (`runner-coder.md` §7.3). Nothing about templates. At most one Coder call per 5 minutes | Controller heartbeat and its RBAC report |
+| `check_health` | Derived from the machines' last heartbeats and states (§2.5, built in task 12d). No outbound call | The integration is active and its token is accepted (`runner-coder.md` §7.3). Nothing about templates or autostop. At most one Coder call per 5 minutes | Controller heartbeat and its RBAC report |
 | `provision` | **No-op.** Never called: `provisionable: false` | `Coder::Allocator#allocate(holder:, wait: false)`: the integration gives a free workspace or creates one, locked for the environment with an explicit hold, without blocking on the build (`runner-coder.md` §4.3) | `controller.provision {key, image, resources, labels}`. The controller creates Pod, ServiceAccount and Secret (bootstrap) in its namespace |
 | `prepare` | **No-op**, returns `:ready`: the machine is the operator's and is already running | Asks `allocate` again for the same holder. `:ready` when the integration hands the machine over: built, agent connected, its SSH probe passed. The adapter does not poll | Await pod `Ready` (controller reports) |
 | `inject_bootstrap` | **No-op**: the operator installed the runner (§14.4) | Over `Coder::SshRunner`: the platform's checks (a virtual machine, root or sudo, systemd), then `machine-install.sh` (`Runners::MachineInstallScript`, the script on stdin, `--token` of a registration token bound to the environment and `--name`). It installs and starts the system service `aixle-runner --mode machine` (§6.8). The token is in argv for the seconds before it is spent (`runner-coder.md` §8) | No-op: the controller mounts the bootstrap Secret and the pod's init container installs the runner (§9.6) |
 | `reset :reset` | Runner op `env.reset`: **scrub ops only**, the full wipe of §7.2 | Runner op `env.reset` (§7.2) | n/a |
 | `reset :rebuild` | **Does not exist** (`rebuildable: false`) | **Not built as an adapter method (`runner-coder.md` §6, D4):** a rebuild is retire-and-replace. The environment is torn down (its workspace deleted) and the allocator takes another machine (a new key) on demand | n/a |
 | `teardown` | **No-op** on the machine. Removing a machine is `aixle-runner unregister` or Revoke (§9.3); the platform side only marks the row `gone` | Always `Coder::Allocator#delete(holder:)`: delete the workspace and release the hold. There is no `on_release`, and nothing goes back to the pool (`runner-coder.md` §9.3) | `controller.teardown {key}` |
-| `observe` | **Heartbeat-based. Built in 11b** (`Runners::ManualAdapter#observe(environment)`): `:running` while the machine is heard (within 90 s, as `Runners::Liveness` counts it), `:unknown` after, never `:missing` (we cannot tell a powered-off machine from a removed one) | Workspace build status, and a probe over SSH when the agent is connected but the environment is not heard | Controller's pod list |
+| `observe` | **Heartbeat-based. Built in 11b** (`Runners::ManualAdapter#observe(environment)`): `:running` while the machine is heard (within 90 s, as `Runners::Liveness` counts it), `:unknown` after, never `:missing` (we cannot tell a powered-off machine from a removed one) | **As `manual`'s** (`runner-coder.md` §7.2): `:running` while heard, `:unknown` otherwise, no Coder call | Controller's pod list |
 
 **Decided (§6.9.2):** `inject_bootstrap` on `kubernetes` mounts no bootstrap Secret and runs
 no init container. The bootstrap token travels in the `provision` op to the controller, which
@@ -1062,10 +1061,14 @@ does the pod's check-in itself (§9.2).
                                                     unreachable (heartbeat lost) ⇄ idle/busy (§6.7)
 ```
 
-**The provisioned arm, as designed for `coder` (`runner-coder.md` §6).** The states are `requested`,
-`provisioning`, `booting`, `idle`, `resetting`, `tearing_down`, `failed` and `gone`. There is no `busy` state: `idle` with a
-hold is busy, as `registered` with a hold is on `manual`. A `max_environments` refusal happens before the row exists. A `requested` row waits while the integration has nothing to give (`ExhaustedError`). A `requested` row never lives without a session: when its session releases it, or it waits past `bootstrap_timeout`, it goes through `begin_teardown` and `finish_teardown` makes it `gone` at once (no workspace; not a failure). A `provisioning` environment that no session holds keeps being advanced by the reconciler until it is `booting` or times out. A revival of a stopped workspace is `idle → booting` with a new bound registration token. `register` fills the row the allocator created, and the first check-in moves it to `idle`.
-A `failed` provisioned environment is torn down and replaced, never kept.
+**The provisioned arm, as designed for `coder` (`runner-coder.md` §6).** The states are `provisioning`, `booting`,
+`idle`, `tearing_down`, `failed` and `gone`. There is no `requested` state on `coder`: the row is created in `provisioning`,
+held by its session, with its timeout clock set at the insert. There is no `busy` state: `idle` with a hold is busy, as
+`registered` with a hold is on `manual`. A `max_environments` refusal happens before the row exists. `coder` ships with
+`fresh` only, so an environment is torn down when its session ends, is cancelled or fails; there is no `restart` event
+and no revival. `register` fills the row the allocator created, and the first check-in moves it to `idle`. A `failed`
+provisioned environment is torn down and replaced, never kept. Ending an environment's registration (Revoke, `unregister`,
+a runner's Revoke) is one adapter method per type (`runner-coder.md` §6.1).
 
 **The self-registering entry path (`manual`).** A registered environment has no
 `requested`, `provisioning` or `booting` state, because nothing is provisioned:
@@ -1148,7 +1151,7 @@ The hosted branch is the existing expression, character for character.
 | Phase | Hosted (unchanged) | `RunnerRuntime` |
 | --- | --- | --- |
 | `pull_image` | Pull the image | A no-op on every type, as on hosted Kubernetes: the host runner pulls the agent image in `container.start`, by the reference it is given, a tag or a digest (`manual`, `coder`), and the kubelet pulls on `kubernetes` |
-| `create_container` | Create the pod | `Runners::Allocator.acquire(session)`: assign an idle environment (§7.3), or, on a `provisionable` type, create a `requested` row and call `provision` + `inject_bootstrap` for it. Raises `ContainerRuntime::CapacityError` when at `max_environments` (or, on `manual`, when every registered machine is busy), so the **existing** `capacity_wait` loop in V2 handles it |
+| `create_container` | Create the pod | `Runners::Allocator.acquire(session)`: assign an idle environment (§7.3), or, on a `provisionable` type, create a `requested` row (on `coder`, `provisioning`) and call `provision` + `inject_bootstrap` for it. Raises `ContainerRuntime::CapacityError` when at `max_environments` (or, on `manual`, when every registered machine is busy), so the **existing** `capacity_wait` loop in V2 handles it |
 | `start_container` | Service, IngressRoute, wait ready | `prepare`, then wait for check-in with activity heartbeats (immediate on `manual`, whose machine is already checked in). Raises a diagnosed failure on `bootstrap_timeout`. On `manual` and `coder` the host runner then gets `container.start` (§6.8) and the activity waits for the session runner inside the container to report ready. **Decided (§6.9.4):** nothing inside reports ready; `container.start` starts the container and waits for nothing more, as `ContainerRuntime::DockerRuntime#start_container` does |
 | `exec` | `before_exec` context assembly + tmux launch via `runtime.exec`/`write_file` | Same strategy code. Each primitive is a runner op |
 | (await `container_finished`) | Unchanged | Unchanged. `finish_session` reaches the platform through the runner's proxy (§6.6) |
@@ -1352,7 +1355,7 @@ All requests are `Authorization: Bearer <token>`,
 | --- | --- | --- |
 | `POST /runner/v1/register` | controller, `manual` host runner | Exchange a registration token for long-lived credentials: controller credentials (`kubernetes`), or environment credentials for the environment the call creates (`manual`). Body: `{name, os, arch, facts, auto_update}`; fields it does not know are ignored (§6.3). |
 | `DELETE /runner/v1/registration` | `manual` host runner | `aixle-runner unregister`: marks the environment `gone` and revokes its credential family. Refused with `409 busy` while a session runs, unless `--force`, which fails that session. |
-| `POST /runner/v1/check-in` | host runner (`coder`, and `manual` after every start), session runner (`kubernetes` pod) | Coder and Kubernetes: exchange the bootstrap token for environment credentials. `manual`: authenticated with the environment credential, no token exchanged. All: report os/arch and facts, and the version in `X-Aixle-Runner-Version`. The response carries the environment, config (so far the upload limit; there are no log limits, since there is no log endpoint) and `update` (§14.4). **Built for `manual` (task 8c)**, below. |
+| `POST /runner/v1/check-in` | host runner (`manual` and `coder`, after every start), session runner (`kubernetes` pod) | Kubernetes: exchange the bootstrap token for environment credentials. `manual` and `coder`: authenticated with the environment credential that `register` issued, no token exchanged. All: report os/arch and facts, and the version in `X-Aixle-Runner-Version`. The response carries the environment, config (so far the upload limit; there are no log limits, since there is no log endpoint) and `update` (§14.4). **Built for `manual` (task 8c)**, below. |
 | `POST /runner/v1/token` | both | Refresh-token rotation. |
 | `GET  /runner/v1/ops?after=<seq>&wait=25` | both | Long-poll. Returns ops with `sequence > after`, batched. An empty 200 after `wait` doubles as the heartbeat. |
 | `POST /runner/v1/ops/:id/result` | both | Op outcome. Idempotent on op id. |
@@ -1471,10 +1474,11 @@ ends as on hosted (§6.9.4).
   and the company/project scope already does what runner groups do. The os/arch/facts
   report at registration and every check-in stays, so a machine that cannot run the agent
   image (no Docker daemon, wrong arch) is refused at connection time and not mid-session.
-- **Every environment:** the platform mints a single-use **bootstrap token** bound to that
-  environment and hands it to `inject_bootstrap` (Coder) or to the controller (Kubernetes).
-  The runner calls `check-in`, the token is consumed, and the runner gets an environment
-  access/refresh pair that is valid for that environment only.
+- **Every environment:** on `kubernetes` the platform mints a single-use **bootstrap token** bound to that
+  environment and hands it to the controller. The runner calls `check-in`, the token is consumed, and the runner
+  gets an environment access/refresh pair that is valid for that environment only. On `coder` the platform mints
+  one ordinary **registration token** bound to the environment row and `inject_bootstrap` passes it to
+  `machine-install.sh`; `register` fills the row (`runner-coder.md` §8).
 
 **What v1 has so far (§15 task 5a).** `manual` registration only.
 `Runners::Credentials.mint_registration!(runner)` (`app/services/runners/credentials.rb`)
@@ -1862,10 +1866,9 @@ a sidecar in the agent's network namespace.
 
 **Decided (Alex, 2026-11-06), container mode on Coder (§15 row 17).** v1 supports only Coder
 workspaces that are virtual machines (§2.6). A workspace runs one session at a time; a second
-concurrent session gets another workspace, up to the runner's limit. `reuse` (the default)
-keeps the workspace warm between sessions, `reset` (container mode only) wipes the workspace and
-cache volumes after every session, and `fresh` gives each session a new workspace and
-deletes it afterwards (§7.1). The reason for the type: it moves load from our cluster to the
+concurrent session gets another workspace, up to the runner's limit. `coder` ships with `fresh`
+only: each session gets a new workspace and it is deleted afterwards (§7.1). `reuse` (a warm workspace) and
+`reset` (container mode only) are row 28, after row 18. The reason for the type: it moves load from our cluster to the
 customer's machines, and the customer can run the machines in their own subnet, with access to
 private resources that are never exposed.
 
@@ -2706,8 +2709,8 @@ and this section win.
   and no init container. The callback URLs are rewritten to the proxy sidecar, not to a session
   runner's proxy. Container mode on Coder runs one session per workspace, and the `host` mode is
   for Coder only, with no per-session OS user.
-- **§7.1.** On `coder`, `reuse` keeps the workspace warm and `fresh` gives each session a new
-  workspace, in both execution modes.
+- **§7.1.** On `coder`, `fresh` gives each session a new workspace, in both execution modes; `reuse`
+  (a warm workspace) and `reset` are row 28, after row 18.
 - **§9.2, tokens.** On `kubernetes` the bootstrap token travels in the `provision` op to the
   controller, which does the check-in itself; no bootstrap Secret is mounted into a pod. The
   environment credential of a pod is held by the controller.
@@ -2796,7 +2799,7 @@ names on every type.**
 | Type | `reuse` | `reset` | `fresh` |
 | --- | --- | --- | --- |
 | `kubernetes` | Not offered | Not offered | Always: a new pod per session. The image provides the warm state. |
-| `coder` | Default. The workspace is kept: the pulled agent image, the `aixle-ws-<key>` volume with its repository clones, and any cache mounts stay warm. | Container mode only: in the `host` mode the workspace is the unit of isolation (§6.8). The workspace and cache volumes are wiped after every session. | A new workspace is created per session and destroyed after it, for hosted-like isolation with the cold start accepted. |
+| `coder` | **Not offered yet (row 28, after row 18); `coder` ships with `fresh` only (`runner-coder.md` §9.1).** When built: default. The workspace is kept: the pulled agent image, the `aixle-ws-<key>` volume with its repository clones, and any cache mounts stay warm. | Not offered yet (row 28). When built, container mode only: in the `host` mode the workspace is the unit of isolation (§6.8). The workspace and cache volumes are wiped after every session. | **The only policy on `coder` now, and the default.** A new workspace is taken per session and deleted after it, for hosted-like isolation with the cold start accepted. The workspace may be a free one of the integration's pool that the runner never used (`runner-coder.md` §4.6). |
 | `manual` | Default. The machine keeps the pulled images, the workspace volume and the cache volumes. Scrub after every session. | A new container (always), and a **Reset** of the workspace and cache volumes after every session instead of a scrub (§7.2). Pulled images stay; they are public, the same for every session, and every session pulls its image reference again before it starts. What `fresh` meant on `manual` until 11a. | Not offered: Aixle cannot give a new machine. A `manual` runner that had `fresh` has `reset` (a migration, 11a; there is no compatibility with earlier states, §12.2). |
 
 The `manual` form says what each value does, what a scrub removes and keeps, and the
@@ -2832,7 +2835,7 @@ per-session CA and its logs), the session's processes and its tmux server.
 | --- | --- | --- | --- |
 | **Scrub** (`env.scrub`) | The session container, removed with `docker rm -f`, which takes the agent home, credential files, MCP config, prompt, context files, `/tmp`, the MITM CA and logs, the tmux server and every process with it; then a check by label that no container of the session is left. `/workspace/outputs` on the volume. Anything the strategy itself wrote to a writable cache or home mount. On `kubernetes`, deleting the pod is the scrub | Repository checkouts, package caches, pulled images | **After every session on a reusable environment, always**, before it returns to `idle`. Not optional: it is what makes reuse safe. A failed scrub leads to a rebuild where the type is `rebuildable`, and to a reset on `manual` (built in 11a) |
 | **Reset** (`env.reset`) | Scrub, plus the `aixle-ws-<key>` volume and every `aixle-cache-<key>-*` volume, including repository checkouts | Pulled images. On `manual`, everything on the machine that Aixle did not create | Not started by a user: there is no Reset action on a healthy machine and no "Start from a clean workspace" for one run (removed, Alex 2026-11-13); **automatically after a failed session** on that environment, whatever the policy; on `manual` with `reuse_policy: reset`, after every session. **Return to service** on a `failed` `manual` machine runs one (§5.2) |
-| **Rebuild** (adapter `reset level: :rebuild`, `coder` only) | Everything: the environment is torn down and another machine is taken through the integration on demand (retire-and-replace, `runner-coder.md` §6) | Nothing | Manually; automatically when a scrub or reset fails, after `runners.max_consecutive_failures` (default 3) failed sessions in a row on one environment |
+| **Rebuild** (a runner-page action on `coder`; no adapter `reset level: :rebuild`) | Everything: the environment is torn down and its workspace deleted, and another machine is taken through the integration on demand (retire-and-replace, `runner-coder.md` §6) | Nothing | Manually; automatically when a scrub or reset fails, after `runners.max_consecutive_failures` (default 3) failed sessions in a row on one environment |
 
 The repository bootstrap that `SessionContextService` already does (clone, or fetch and
 repair) is what makes a kept checkout safe to reuse: an existing clone is fetched and reset
@@ -2956,7 +2959,7 @@ rows:
    not needed for now (§9.4). The first step is any `idle` environment of this runner.
 4. Otherwise, **only if the runner is `provisionable`** and
    `count(non-gone environments) < max_environments`, insert a new `runner_environments`
-   row in `requested` in the same transaction. After
+   row in the same transaction (`requested`; on `coder`, `provisioning`, `runner-coder.md` §5.1). After
    commit, call `adapter.provision` for it (§5.1).
 5. Otherwise raise `CapacityError`, and the session waits in the existing admission
    capacity wait.
@@ -2995,7 +2998,7 @@ infrastructure, with credentials the customer meant to keep inside their perimet
 | At `max_environments`, or provider capacity (Coder quota, unschedulable pod) | `create_container` | `capacity_wait`, wait reason `runner_capacity`, reservation kept (session-admission §7) | "Waiting for capacity on runner "X"." |
 | `provision` fails (template error, image pull, RBAC) | `create_container` | Diagnosed failure, environment `failed` | Provider message, e.g. "Coder: template parameter `instance_type` invalid" |
 | Runner never checks in | `create_container`'s retries, and the reconciler, after `runners.bootstrap_timeout` (one setting, 15 min; `runner-coder.md` D5) | Fails, environment `failed`, teardown | "Workspace started but aixle-runner did not check in within 15 min. Check egress to the platform host on 443." plus the last output of the install script the adapter captured |
-| `coder`: a workspace is being built, or revived, for the session | `create_container` | `capacity_wait`, wait reason `runner_provisioning` (new, `runner-coder.md` §5.1), reservation kept | "Starting a workspace on runner "X" (building)." |
+| `coder`: a workspace is being built for the session | `create_container` | `capacity_wait`, wait reason `runner_provisioning` (new, `runner-coder.md` §5.1), reservation kept | "Starting a workspace on runner "X" (building)." |
 | Prerequisites missing | Registration (`manual`) or check-in | Refused or fails, environment `failed` | "Machine build-01 has no reachable Docker daemon (aixle-runner needs Docker API ≥ 1.41)." |
 | External runners not enabled for the company (no `external_runners` override, §12.1) | Selection, launch, every gateway request | Refused; launches fail with `runner_unavailable`; the gateway answers `403 runners_disabled` | "External runners are not enabled for this company." |
 | `manual`: no machine registered yet, or every machine offline | Launch | Fails, `runner_unreachable`. A session already waiting for a machine (`runner_capacity`) keeps waiting while the machines are offline and fails the same way once none has been heard for 15 minutes (§7.3, §10) | "Runner "X" has no machine online. Last seen: build-01 at 14:02." |
@@ -3035,7 +3038,7 @@ credentials, config items not attached to the session (still only through
 | Token | Issued | Lifetime | Grants | Storage |
 | --- | --- | --- | --- | --- |
 | Registration (Kubernetes) | Runner creation (there is no Rotate token, removed from the plan, Alex 2026-11-13). Shown once | Single use, expires in 24 h if unused (a GitOps `helm install` can take a review cycle) | Calling `register` once for this runner | Digest only |
-| Registration (`manual`, and `coder` bound to an environment) | "Add machine" on the runner page. Shown once, inside the copy-paste command | **Single use, expires in 1 h** if unused | Calling `register` once, which creates **one** environment of this runner | Digest only. One token per machine |
+| Registration (`manual`, and `coder` bound to an environment) | `manual`: "Add machine" on the runner page. Shown once, inside the copy-paste command. `coder`: minted once per environment by the platform, passed to `machine-install.sh` over `coder ssh`, never shown | **Single use, expires in 1 h** if unused | Calling `register` once, which creates **one** environment of this runner (`manual`) or fills the environment it is bound to (`coder`) | Digest only. One token per machine |
 | Controller access / refresh | `register` | Access 1 h. Refresh rotates on every use and becomes invalid after 30 days idle | Polling **controller ops of this runner** (provision, teardown, observe); posting results; minting nothing | Digest only. Refresh-token reuse detection revokes the whole family and marks the runner `degraded` ("credential reuse detected") |
 | Bootstrap | `kubernetes` only. On `coder` there is none: the platform mints an ordinary registration token bound to the environment row (`runner-coder.md` §8.1), and `register` fills that row | Single use, 30 min (or `bootstrap_timeout`, whichever is longer) | Calling `check-in` for **this environment** | Digest only. Delivered by a k8s Secret the controller deletes after check-in |
 | Environment access / refresh | `check-in` (`kubernetes`), `register` (`manual`, `coder`) | Access 1 h, rotating refresh. Invalid the moment the environment becomes `gone` or the runner is revoked. On `coder` and `kubernetes` also when it leaves `idle`/`busy`/`resetting`; a `failed` `manual` machine keeps its credential so it can be returned to service. A `manual` refresh token becomes invalid after 30 days without use, like the controller's | Polling **this environment's ops**; posting logs, events and results for the session **currently assigned** to it; the proxy for that session only | Digest only. On `manual`, stored by the runner in `/var/lib/aixle-runner/credentials` (`0600`, the runner's own user). Reuse detection revokes the family and marks the machine `failed` ("credential reuse detected") |
@@ -3601,7 +3604,7 @@ staging. The first phase that gives the flag to a named company (phase 4) ends t
 | 2 | Protocol, gateway, `aixle-runner` (`host` and `session` modes), the conformance fixtures, the dev `local` adapter | Unchanged: test company only | Not declared | Test company. Developers locally, through the `local` adapter and the test helpers |
 | 3 | **`manual` type, container mode, end to end**, non-interactive. Validated on staging (§12.4); not yet given to customers | Unchanged: test company only | Not declared | Test company. Type cards: Manual |
 | 4 | **Interactive tunnel**: ttyd, the IDE and the watcher relayed through the runner. UX parity with hosted. Lifts `interactive_terminal: false`. **The first customer-usable slice** | `default: false`. Overrides: test company, then **named companies** that need a `manual` runner, only once this phase is done | Not declared | Members of those companies. Type cards: Manual. Interactive sessions and steps are selectable on runners from the start |
-| 5 | **Coder adapter**: provisioning, pooling, warm disk. Staging validation (§12.5) | Unchanged. Coder becomes available to every company that already has the override; no new flag | Not declared | Same companies. Type cards: Manual, Coder |
+| 5 | **Coder adapter**: provisioning, pooling, a workspace per session. Staging validation (§12.5) | Unchanged. Coder becomes available to every company that already has the override; no new flag | Not declared | Same companies. Type cards: Manual, Coder |
 | 6 | **Kubernetes controller, Helm chart**, the second flag | Unchanged | **Declared.** `default: false`. Override on for the test company, then named companies | Kubernetes card only for companies with both overrides |
 | 7 | **`host` execution mode** (services in containers, CLI on the host), toolcache kits, P2 (§6.8) | Unchanged | Unchanged | The `execution_mode` option appears on `manual` and `coder` runner forms of companies with the override |
 | GA, then removal | Docs, then the flags are removed | Global on from `/admin`, then a removal PR (§ "Removing a flag" in `docs/architecture/feature-flags.md`); `remove_by` is moved to the GA checkpoint until that PR lands (§12.1) | Same, after its own GA | Everyone |
@@ -3625,7 +3628,7 @@ Phase 2 details that stay from revision 3:
 **Why `manual` is the first type.** It has no provisioning, so phase 3 is only the runner,
 the protocol and container mode, the parts every later type reuses. It is also the purest
 form of the security axis: the platform holds nothing into the customer's machine. Coder
-adds provisioning, pooling and warm disks on top of a path that already works.
+adds provisioning and pooling on top of a path that already works.
 
 **Why the tunnel is phase 4.** Runners have to give the same user experience as hosted, and
 that is only true once the live terminal, the IDE and the watcher work. In container mode
@@ -3779,8 +3782,8 @@ from the chosen template is checked at test time, not assumed here:
 - it can run a Docker daemon, which is the only container-mode prerequisite (§6.8). If it
   cannot, the runner reports that at check-in, which is itself a check of the §8 message;
 - its disk covers an agent image plus the workspace volume (§6.8);
-- if it prunes images or build cache on a schedule, the warm-image result of step 5 is
-  read with that counted.
+- if it prunes images or build cache on a schedule, the start time of step 5 is read with
+  that counted.
 
 The template used, and the answers to these three, are recorded in the validation task's
 result, so a later re-run knows what it is comparing against.
@@ -3788,7 +3791,7 @@ result, so a later re-run knows what it is comparing against.
 1. Create a project runner on the staging test project over its existing Coder
    integration: one of the templates the integration offers, `max_environments: 2`.
    The steps of §12.4 already proved the runner, the protocol and container mode, so this
-   validation concentrates on what Coder adds: provisioning, pooling and the warm disk.
+   validation concentrates on what Coder adds: provisioning, pooling and the workspace per session.
 2. Health goes `connected`. Revoking the integration token turns it `unreachable` with the
    integration named.
 3. A one-step non-interactive workflow (`claude_code`, a repository attached) runs. Check:
@@ -3799,10 +3802,9 @@ result, so a later re-run knows what it is comparing against.
    - cost is recorded.
 4. Run it twice in parallel: the second run gets the second workspace, and a third run
    queues with `runner_capacity`.
-5. Run it again: it lands on a warm workspace (the machine's), the agent image is not
-   re-pulled, the clone on the `/workspace` volume is fetched rather than re-cloned, and
-   the scrub left no session container and no credential files on the volume (check over
-   Coder SSH with `docker ps -a` and a file search).
+5. Run it again: `coder` is `fresh` only, so the session gets a new workspace, and the one of
+   step 3 is deleted after its session (check in Coder). The cold start of this session
+   is recorded: row 28 (`reuse` and `reset` on `coder`) is cut from that measurement.
 6. Repeat step 3 with `cursor_cli` and with `grok`: usage is recorded from the MITM log
    exactly as on hosted, which confirms `agent_runtimes: all` on a provisioned type.
 7. Kill the runner's connection (block the workspace's outbound traffic to the platform
@@ -4185,11 +4187,11 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 16e | 4 | **Done** (#828). **The browser path.** The relay's edge handler (route token and surface to stream, the header cross-check, the path rules), signal subscription, the reconcile pass and revocation; the runner's `Dialer`s (the proxy sidecar's `dial.sock`, the `network: host` dial) and the free-port check at start; the readiness measurement. End to end on the `local` adapter with Traefik's `terminal-auth` in Compose (§7, §8, §9, §13). |
 | 16f | 4 | **`aixle-infra`:** the `runner-relay` Deployment (one replica), Service, Secret, ConfigMap, the ingress routes `/runner/v1/tunnel` (explicit priority above 100) and `/t/` (behind `terminal-auth`, explicit priority 2, one host), both on `TRAEFIK_ENTRYPOINT`, the NetworkPolicy ingress rules, the scrape and alerts. A task in that repository, started once 16c's image exists (§2.3, §13). |
 | 16g | 4 | **Parity and the first customers.** Lift `interactive_terminal` and the `:interactive` refusal in `Runners::Selection`, the form's disabled runners and the builder; the session page and the user guide; the QA validation of the interactive path on a real machine; then `external_runners` may go to the first named companies (§12.2, phase 4). Once it is done, `PROTOCOL.md` is checked against what was built (§9, §13). |
-| 17a | 5 | **Design (task #284).** [`runner-coder.md`](runner-coder.md): a `coder` runner is one more consumer of the Coder integration. It takes machines through `Coder::Allocator#allocate` (a variant that does not block on the build and hands over a ready machine: built, agent connected, probe passed; the integration decides what it gives), holds them with an explicit hold with no expiry, runs commands on them over `SshRunner`, and has them deleted through the integration. No runner rule for templates, no `on_release`, nothing goes back to the pool. While a session runs the reconciler pushes the workspace's autostop deadline forward. `Runners::Allocator`, the provisioned arm of the environment state machine, `CoderAdapter`, delivery of `aixle-runner` by a registration token bound to the environment and `machine-install.sh`, the failure paths of §8 on `coder`, and the split below. Replaces the single row 17. **Decided (§6.9, Alex, 2026-11-06): mode 1, container mode.** v1 supports only Coder workspaces that are virtual machines, a workspace runs one session at a time, `reuse` keeps it warm, `fresh` gives each session a new one and deletes it (§7.1). No new feature flag: `coder` is creatable only after 17e. |
-| 17b | 5 | **The Coder services for a second consumer.** `LockService::Holder` (a terminal session or a runner environment), explicit holds with no expiry, `Allocator#allocate(wait: false)`, `Coder::WorkspaceStatus` extracted from the allocator and the reaper, `WorkspaceService#status`, `ensure_started_async`, `extend_deadline` and `QuotaError`, deleting a workspace through the integration. No runner code; the hosted behaviour does not change. A task of its own because it changes what the agents' `coder_*` tools use in production: its staging check includes an agent session that uses `coder_*` as before. |
-| 17c | 5 | **The runner core without Coder.** `Runners::Allocator` (`acquire!`, `release!`, `let_go!`, `fail!`) replaces the `Machines` calls in `RunnerRuntime`, `Revocation`, `ContactLoss` and `CheckIn`, with step 4 and the `max_environments` count. The provisioned arm of `RunnerEnvironmentStateMachine`, `external_id`, `boot_started_at` and `autostop_error`, `Runners::Provisioning.advance!`, `Adapter#launch_refusal`, the `runner_provisioning` wait reason, `Settings.runners.bootstrap_timeout`. Registering into a row the platform created: a registration token bound to the environment, `register!` filling the row, the first check-in moving `booting` to `idle`. Tested with a fake provisionable adapter; the `manual` suites pass unchanged. Independent of 17b, and neither depends on #295. |
-| 17d | 5 | **A Coder runner created from the console.** `CoderAdapter` (the VM, sudo and systemd checks, `machine-install.sh` over `SshRunner`, `provision` through `allocate`, `teardown` through the integration's delete, `observe`, `check_health`, `launch_refusal`). Sessions with `reuse`, `reset` and `fresh`. The failure paths of §8 and the complete `Runners::Reconciler`: boot timeout, teardown pacing and cap, dead workspace, revival, the autostop deadline push, releasing the holds of `gone` environments, teardown on Revoke. `ConfigSchema` without the template keys and `on_release`. Not in `REGISTRY` yet. Cut after #295. |
-| 17e | 5 | **The type, the form, the page and the docs.** `coder` in `REGISTRY`, the form (the integration), the Environments section with Rebuild and per-environment Revoke, the list column, the integration-removal message, the user guide and its portal mirror. Cut after #295. After it the type is creatable and row 18 can run. Each row's tests, staging check and what row 18 needs from it are in `runner-coder.md` §14. |
+| 17a | 5 | **Design (task #284).** [`runner-coder.md`](runner-coder.md): a `coder` runner is one more consumer of the Coder integration. It takes machines through `Coder::Allocator#allocate` (a variant that does not block on the build and hands over a ready machine: built, agent connected, probe passed; the integration decides what it gives), holds them with an explicit hold with no expiry, runs commands on them over `SshRunner`, and has them deleted through the integration. No runner rule for templates, no `on_release`, nothing goes back to the pool. **`coder` ships with `fresh` only**: a workspace per session, deleted after it; there is no warm environment, no revival and no autostop deadline push (the template's autostop must be off, or longer than a session). A workspace that stops under a session fails it through the contact-loss grace. A runner's integration never changes. `Runners::Allocator`, the provisioned arm of the environment state machine (no `requested` state), one adapter method for ending an environment's registration, `CoderAdapter`, delivery of `aixle-runner` by one registration token bound to the environment and `machine-install.sh` (a failed install fails the attempt), the failure paths of §8 on `coder`, and the split below. Replaces the single row 17. **Decided (§6.9, Alex, 2026-11-06): mode 1, container mode.** v1 supports only Coder workspaces that are virtual machines, and a workspace runs one session at a time. No new feature flag: `coder` is creatable only after 17e. |
+| 17b | 5 | **The Coder services for a second consumer.** `LockService::Holder` (a terminal session or a runner environment), explicit holds with no expiry, `Allocator#allocate(wait: false)`, `Coder::WorkspaceStatus` extracted from the allocator and the reaper, `WorkspaceService#status`, `ensure_started_async` and `QuotaError`, deleting a workspace through the integration (`:gone` for a holder with no workspace). No runner code; the hosted behaviour does not change. A task of its own because it changes what the agents' `coder_*` tools use in production: its staging check includes an agent session that uses `coder_*` as before. |
+| 17c | 5 | **The runner core without Coder.** `Runners::Allocator` (`acquire!`, `release!`, `let_go!`, `fail!`) replaces the `Machines` calls in `RunnerRuntime`, `Revocation`, `ContactLoss`, `CheckIn`, `CleanupStaleActivity` and `Credentials.rotate!`, with step 4 and the `max_environments` count. The provisioned arm of `RunnerEnvironmentStateMachine` (`provisioning`, `booting`, `tearing_down`), `external_id` and `boot_started_at`, `Adapter#end_registration!` (Revoke, `unregister` and a runner's Revoke), `Runners::Provisioning.advance!`, `Adapter#launch_refusal`, the `runner_provisioning` wait reason, `Settings.runners.bootstrap_timeout`, `fresh` validated for `coder` and the integration fixed after create. Registering into a row the platform created: a registration token bound to the environment, `register!` filling the row, the first check-in moving `booting` to `idle`. Tested with a fake provisionable adapter; the `manual` suites pass unchanged. Independent of 17b, and neither depends on #298. |
+| 17d | 5 | **A Coder runner created from the console.** `CoderAdapter` (the VM, sudo and systemd checks, `machine-install.sh` over `SshRunner`, `provision` through `allocate`, `teardown` through the integration's delete, `observe` as `manual`'s, `check_health`, `launch_refusal`, `end_registration!`). Sessions with `fresh`. The failure paths of §8 and the `Runners::Reconciler`: teardown pacing and cap, boot timeout, releasing the holds of `gone` environments. Not in `REGISTRY` yet. Cut after #298 (the implementation of #295). |
+| 17e | 5 | **The type, the form, the page and the docs.** `coder` in `REGISTRY`, the form (the integration, chosen on create only; `fresh` only), the Environments section with Rebuild and per-environment Revoke, the list column, the integration-removal message, the user guide and its portal mirror. Cut after #298. After it the type is creatable and row 18 can run. Each row's tests, staging check and what row 18 needs from it are in `runner-coder.md` §14. |
 | 18 | 5 | Staging validation per §12.5 (QA task), cut after 17e, on the staging Coder integration configured on the test project and a template it offers at test time. Record the template used and the §12.5 checks (Docker daemon, disk, pruning) in the result. |
 | 19 | 6 | Kubernetes: declare `external_runners_kubernetes` (§12.1); `aixle-runner` controller mode, the Helm chart and its `runner-chart-v*` OCI lane in `AixleHQ/aixle-runner` (§14.1), `KubernetesAdapter` over controller ops, registration-token UX, documented agent image sizes. Preceded by the runner extract if it has not happened yet. **Decided (§6.9.2):** the controller runs the session ops through the Kubernetes API (`client-go` exec, `tar` over exec, the pod watch and the log API) behind the session-op handlers of #204, does the check-in for each pod with the bootstrap token from the `provision` op, follows the pod log, creates the proxy sidecar and its per-session proxy key (TLS on the relay, revoked when the session ends), keeps its state on a `PersistentVolumeClaim`, takes leader election with a `Lease` and a controller generation the gateway checks, requires Kubernetes 1.29 and an enforced NetworkPolicy (checked by the validation), and gets the RBAC of §9.6's decided footprint. An `interrupted` op may still run in the pod (§6.9.7). |
 | 20 | 7 | `host` execution mode (§6.8): `config.execution_mode: host` and `config.host.cli_source` declared in the §2.7 schema, the host-side CLI with `cli_source` (prototype `docker create` + `docker cp` first), the host-generated CA trusted in three stores and passed into the MITM container, the `NODE_OPTIONS` instrumentation, host-side ttyd/IDE/watcher for the tunnel, the redaction path, the per-session OS user and its scrub (§7.2), toolcache session kits, P2. Likely several tasks when it is cut. **Decided (§6.9, Alex, 2026-11-06): mode 2, on Coder only, with one session per workspace.** The agent CLI runs on the workspace's machine; the services that can run in Docker (`mitmdump`, the callback proxy and the others) run in containers with their ports published on the machine, so that the runner and the agent reach them. The reason: a full development machine with no container around the agent, for example to run `docker compose up`. The workspace is the unit of isolation, so the per-session OS user and the airtight scrub of §7.2, written for `manual`, are not needed. The `host` mode is not planned for `manual`. |
@@ -4200,6 +4202,7 @@ reviewable and lands behind the flags. The number in the second column is the ph
 | 25 | later | **The callback proxy moves into the relay** (`runner-relay.md` §10.3): `POST /runner/v1/proxy-authorizations` answers the route and session-key checks (`Runners::Proxy.holder`) with the upstream address, and the relay streams the request and the answer, so no Rails thread is held. The upstream endpoints (`/action_mcp` and the others) stay as they are. |
 | 26 | later | **Remove the `runner-gateway` deployment** (`runner-relay.md` §10.4): the web app draws and serves `/runner/v1/*`; the 2 MiB body cap moves to a Traefik `buffering` middleware; `config/puma_runner_gateway.rb`, the `runner_gateway` Procfile entry and Compose port, the `AIXLE_PROCESS_MODE` code and `ActionController::Live` go; in `aixle-infra`, the chart and `doc/helm/runner-gateway.md`. |
 | 27 | later, deferred | **More than one relay replica** (`runner-relay.md` §11): a Redis machine-to-pod registry and pod-to-pod forwarding. Cut when a deployment needs it. |
+| 28 | after 18 | **`reuse` and `reset` on `coder`** (`runner-coder.md` §17): the warm environment, the scrub and reset on release, the revival of an idle environment and the reconciler's rules for warm environments, cut once the start time of a `fresh` session is measured in row 18. |
 
 ---
 
