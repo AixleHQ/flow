@@ -80,6 +80,12 @@ class RunnerEnvironment < ApplicationRecord
     gone? && state_reason == REVOKED
   end
 
+  # The machine takes no more calls from the platform: it left (`gone`) or it
+  # failed, and nothing but a Revoke and a new Add machine follows either.
+  def out_of_service?
+    gone? || failed?
+  end
+
   # What the machine's last report says keeps it from running sessions (the
   # host runner's preflight, DESIGN.md §6.8: no reachable Docker daemon, too
   # little disk), or nil when the report has no failure.
