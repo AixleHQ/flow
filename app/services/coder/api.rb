@@ -12,6 +12,7 @@ module Coder
   #
   #   ApiError
   #   ├── HTTPError      — non-success HTTP status (`.status` populated)
+  #   │   └── QuotaRefusedError — Coder refused because the account is out of quota
   #   ├── TransportError — Faraday-level error (connection/SSL/etc.)
   #   │   └── UnsafeUrlError — the host has no address we may dial
   #   ├── TimeoutError   — open/read timeout
@@ -30,10 +31,36 @@ module Coder
         @status = status
         @body   = body
       end
+
+      # Coder's own account of a refusal: its `message` and `detail`, which say
+      # more than the status (a missing template parameter and an exhausted
+      # quota can share one). nil when the body does not carry them.
+      def explanation
+        body = JSON.parse(@body.to_s)
+        return nil unless body.is_a?(Hash)
+
+        message, detail = body.values_at("message", "detail").map { |part| part.to_s.strip }
+        explanation = [ message, ("(#{detail})" if detail.present?) ].compact_blank.join(" ")
+        explanation.presence
+      rescue JSON::ParserError
+        nil
+      end
     end
+
+    # Coder refused a request because the account is out of quota.
+    class QuotaRefusedError < HTTPError; end
 
     HTTP_TIMEOUTS         = { open: 10, read: 30 }.freeze
     SESSION_TOKEN_HEADER  = "Coder-Session-Token"
+
+    # Coder answers 404 for a workspace it does not know and 410 for one it has
+    # deleted.
+    GONE_STATUSES = [ 404, 410 ].freeze
+
+    # What Coder answers when the account is out of quota. The exact status and
+    # body of a refusal are recorded on staging (design runner-coder.md §15);
+    # until then a refusal is a quota one only when it says so itself.
+    QUOTA_STATUSES = [ 402, 403, 409, 429 ].freeze
 
     class << self
       def verify_token(coder_url:, session_token:)
@@ -48,13 +75,17 @@ module Coder
         body["workspaces"] || []
       end
 
-      # One of the token owner's workspaces, by name. Raises `HTTPError`
-      # (404, or 410 for a deleted one) when Coder does not have it.
+      # One of the token owner's workspaces, by name. nil when Coder does not
+      # have it (404, or 410 for a deleted one).
       def get_workspace_by_name(coder_url:, session_token:, name:)
         json_get(
           "/api/v2/users/me/workspace/#{ERB::Util.url_encode(name.to_s)}",
           coder_url: coder_url, session_token: session_token, op: "get_workspace"
         )
+      rescue HTTPError => e
+        raise unless GONE_STATUSES.include?(e.status)
+
+        nil
       end
 
       def build_workspace(coder_url:, session_token:, workspace_id:, transition:, orphan: false)
@@ -149,10 +180,14 @@ module Coder
       def assert_ok!(response, op:, accept: [ 200 ])
         return if accept.include?(response.status)
 
-        raise HTTPError.new(
-          "#{op} failed: HTTP #{response.status}",
-          status: response.status, body: response.body.to_s
-        )
+        error = HTTPError.new("#{op} failed: HTTP #{response.status}", status: response.status, body: response.body.to_s)
+        raise QuotaRefusedError.new(error.message, status: error.status, body: error.body) if quota_refusal?(error)
+
+        raise error
+      end
+
+      def quota_refusal?(error)
+        QUOTA_STATUSES.include?(error.status) && error.explanation.to_s.match?(/quota/i)
       end
 
       def parse_json(response, op:)
