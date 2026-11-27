@@ -91,13 +91,19 @@ provider. With two or more, omitting it is an error that lists the candidates.
 3. **Ownership validation:** `validates :base_integration_ids, tenant_ids: { model: Integration, ... }` on
    `Workflow` and `Step`, following `base_aws_oidc_role_ids` and `base_repository_ids`. `TenantScope.owned`
    already has an `Integration` rule (company-wide and the project's own). A `System` workflow cannot hold
-   integrations (it has no project): validate absence.
+   integrations (it has no project): validate absence. Ids are validated with `TenantIdsValidator` and
+   resolved with `TenantScope.owned(Integration, project:)`, never `visible_for_*`, which is for pickers
+   (`docs/architecture/implementation-patterns.md`, Tenant References). `TerminalSession` gets the same
+   association validation as `Workflow` and `Step`. Every explicit id (workflow, step, standalone session,
+   API) is also checked against `Integration::ATTACHABLE_PROVIDERS` **before** the repository- and
+   origin-derived integrations are added. An id that fails either check is refused with a 422; it is never
+   dropped silently.
 4. **On the session:** table `session_integrations (terminal_session_id, integration_id)`, both FKs
    cascading, unique pair index. `TerminalSession has_many :session_integrations; has_many :integrations,
    through:`. `SessionService#attach_resolved_resources` sets
-   `session.integrations = scoped_resources(Integration, config[:integration_ids], session)`; add
-   `Integration.visible_for_project` handling to `scoped_resources` (it already exists). Company-wide
-   Integrations stay attachable (a project may use the company's Coder).
+   `session.integrations = scoped_resources(Integration, config[:integration_ids], session)`, where the
+   `Integration` case of `scoped_resources` resolves through `TenantScope.owned(Integration, project:)` (not
+   `visible_for_project`). Company-wide Integrations stay attachable (a project may use the company's Coder).
 5. **Per-run override:** none (accepted in review). `workflow_runs` gets no column (unlike `repository_ids`); see §11.
 6. **Naming:** an integration needs a name the agent and the user can tell apart. Coder names are generated
    (`"Coder <username>"`), so two accounts on two deployments can read alike. `IntegrationResource` and the
@@ -112,22 +118,43 @@ provider. With two or more, omitting it is an error that lists the candidates.
 - `ensure_only_active!` and its three calls (`create`, `replace_token`, `test`) are removed, with the
   "at most one" wording in the class comment and the test "a project cannot get a second active Coder
   connection".
-- `existing_for(url, info)` additionally compares the prefix (`machine_prefix.presence`; blank is its own
-  value). The same URL and account with **another** prefix is a **new** row. The same triple is a
+- **Canonical URL.** Identity and every overlap check compare the *canonical* Coder URL, not the stored string
+  (today `normalize_url` only trims and drops one trailing slash). Canonical form: lowercase scheme and host,
+  the default port removed (443 for `https`, 80 for `http`), no trailing slash. Path, query and fragment keep
+  today's handling, unchanged. Stored values are **not** rewritten in this task: the comparison goes through
+  one `Coder::IntegrationService.canonical_url` method, so `https://CODER.example`, `https://coder.example/`
+  and `https://coder.example:443` are one deployment.
+- `existing_for(url, info)` compares the canonical URL and additionally the prefix (`machine_prefix.presence`;
+  blank is its own value). The same URL and account with **another** prefix is a **new** row. The same triple is a
   **renewal**: only the token (and the identity fields `apply` already refreshes) is replaced.
+- **Renewing a token.** The UI renews through `replace_token` on the existing row (a "Renew token" action on
+  that integration), not by submitting the connect form again. When the connect form is started from an
+  existing integration, it **prefills** that integration's prefix. The form text says "A blank prefix is a
+  different pool: it takes every workspace of the account and is refused next to another integration of
+  it." A form submitted with a blank prefix is therefore never read as a renewal of a prefixed row; it is
+  a new identity and hits the overlap guard below. Decision 6 (identity = URL + account + prefix) is kept.
 - `create` no longer merges the submitted `default_template` / `machine_prefix` / `lock_ttl_minutes` into a
   row it found. They apply only to a new row; a renewal keeps the row's settings (edited through
   `update_settings`, as the UI already offers). This removes the silent rewrite of another integration's
   prefix and template that `existing_for` plus the merge do today. The connect form says "Renewing keeps the
   existing pool settings".
 - `replace_token` keeps its "already has another connection here" check, now over the triple, as a guard.
-- **Pool overlap guard.** A blank prefix means "every workspace the token owns". For one URL and account, a
-  blank prefix cannot coexist with another integration (`create` and `update_settings` refuse with "set a
-  prefix on the other integration first"), because the pools would overlap and one machine would be
+- **Pool overlap guard.** A blank prefix means "every workspace the token owns". For one canonical URL and
+  account, a blank prefix cannot coexist with another integration (`create` and `update_settings` refuse with
+  "set a prefix on the other integration first"), because the pools would overlap and one machine would be
   reachable through two integrations. Two non-blank prefixes never overlap, see below. `update_settings`
-  also refuses a prefix change that makes the triple equal to another row's. Both checks run in a
-  transaction holding `company.lock!`: integrations per company are few, this runs only on connect and edit,
-  and no column holds the triple (the credentials are encrypted), so a unique index is not possible.
+  also refuses a prefix change that makes the triple equal to another row's.
+- **The guard and `existing_for` read every Coder integration of the company** for that canonical URL and
+  account, project-level and company-wide alike. Today `IntegrationService#scope` reads one scope
+  (`project_id: @project&.id`), so a project integration and a company-wide one could share a pool.
+- **One shared method, one lock.** Every read-decide-write path, `create`, `replace_token`, `test`
+  (reactivation) and `update_settings`, runs through one method that opens a transaction holding
+  `company.lock!`, loads the company's Coder integrations, and applies the identity and overlap rules to the
+  *resulting* (URL, account, prefix), not only to the exact triple. So `replace_token` to an account that
+  already has a non-blank pool next to a blank-prefix row is refused, and so is `test` reactivating a row
+  whose triple now conflicts (legacy data). Integrations per company are few and this runs only on connect
+  and edit. No column holds the triple (the credentials are encrypted), so a unique index is not possible;
+  the lock is the guarantee.
 
 **The pool is matched by a pattern, not by `start_with?`.** Today `Coder::WorkspaceService#list` keeps
 workspaces whose name `start_with?(prefix)`, so pool `aixle` also takes `aixle-r-1a2b3c4d`, which belongs to
@@ -142,14 +169,26 @@ account. Because the suffix has no hyphen, `aixle` does not match `aixle-r-1a2b3
 while prefix `aixle-r` does. A prefix that ends in a hyphen or has characters outside `[0-9a-zA-Z-]` is
 refused on save (`create` and `update_settings`), so the pattern is unambiguous.
 
+**Case.** The repository compares names case-sensitively today (`WorkspaceService#list` uses `start_with?`,
+and `Allocator` / `DeadWorkspaceReaper` do not fold case), while Coder itself treats a workspace name as
+case-insensitive (assumption: from Coder's behaviour, not from this repository; check it on the target Coder
+before release). Rule: `Coder::Pool.matches?` compares case-insensitively (both sides downcased), and
+prefixes stay free to contain uppercase, so `Aixle-1a2b` belongs to pool `aixle`. The same rule applies to the
+prefix comparison in the overlap guard (`Aixle` and `aixle` are one prefix).
+
 **Existing workspaces that do not follow the pattern** (made by hand, e.g. `aixle-prod-a-b` under prefix
 `aixle`): they were pool members through `start_with?` and would silently leave the pool. Nothing is deleted
 or stopped; they stop being allocated and reaped. So that this is a decision and not a surprise:
 
 - A read-only rake task `coder:audit_pools` (new, `lib/tasks/coder.rake`) lists, for every active Coder
-  integration, the workspaces that match `start_with?(prefix)` but not the pattern, and the integrations of
-  one URL and account whose prefixes nest. **Production is checked with it before release**, and the release
+  integration, the workspaces that match `start_with?(prefix)` but not the pattern, the integrations of
+  one URL and account whose prefixes nest, and the **integrations whose stored prefix breaks the new
+  rule** (a trailing hyphen such as `aixle-`, or a character outside `[0-9a-zA-Z-]`). The format is checked
+  only on save, so existing rows keep prefixes saved before this change, and such a prefix would leave the
+  pool at once. **Production is checked with it before release**, and the release
   waits while the list holds a workspace someone still uses.
+- The release checklist names the fix for a non-conforming prefix: edit the prefix (`aixle-` becomes
+  `aixle`) before release.
 - The fixes are data-only: set the integration's prefix to a longer one that matches (`aixle-prod` matches
   `aixle-prod-001`), or rename the workspace in Coder.
 - Lock and quarantine rows are keyed by workspace name inside the integration, so a workspace leaving the
@@ -175,12 +214,25 @@ or stopped; they stop being allocated and reaped. So that this is a decision and
   `RunWorkflowDrawer.tsx` shows the workflow's set read-only) gets the same picker. When the parameter is
   omitted, the session gets **no integrations**, interactive and API sessions alike (review decision).
   The new-session form preselects a default, so people in the UI see the choice: the project's Coder
-  integration, its Slack or Teams install and its Azure DevOps connections (the backfill's rule, §7). API
+  integration, every active Slack and Teams install visible to the project and its Azure DevOps connections
+  (the backfill's rule, §7). API
   clients pass `integration_ids`; the API docs and the CHANGELOG announce it.
 - **Standalone session resolution:** `SessionConfigResolver` for a standalone session reads
   `session.integration_ids` (like `config_item_ids` there); for a workflow step it is
   `workflow.base_integration_ids + step.integration_ids`, additive, **not** widened by
   `inherit_all_project_resources` (same rule as AWS roles: access to an external account is never implied).
+- **Restoring a suspended session.** `Sessions::Restore.params_for` copies a session's resources through the
+  fixed map `Sessions::Restore::RESOURCES`, which has no integrations entry. With "omitted means none"
+  (decision 2 of review) a restored session would lose its integrations. The map gains
+  `integration_ids: :integrations`. The copy stays subject to `available?`, so a deleted or inactive
+  integration is listed in the restore notice ("no longer available"), not dropped silently.
+- **Other code that copies a session's resources**, checked on `develop`: `Sessions::Checkpoint` stores git
+  state of the repositories and the container files, not the resource list, and `Sessions::Suspension` only
+  schedules and expires suspension, so neither needs a change. `Sessions::Lifecycle` holds state transitions only. No fork or re-run of a
+  standalone session exists; a workflow run is rebuilt by the resolver from the workflow, which carries the
+  set. `WorkflowRun` has a per-run `repository_ids` and gets no integration counterpart (no per-run
+  override, decision 5). If the implementation finds another path that copies `repository_ids` or
+  `config_item_ids`, it copies `integration_ids` too.
 - **Other session starts**, each ends in the workflow or the form above: Slack and Teams runs, tracker
   runs, pull-request and webhook triggers, board column triggers and schedules all start a workflow, so the
   workflow's set applies, plus the origin integration (§3.3). The Aixle Builder session
@@ -232,7 +284,7 @@ profile) and what the new error message lists when an id is missing or wrong.
   `session.integrations` (today any connection of the project passes). Repository tools unchanged.
   `azure_devops_list_connections` lists `session.integrations` of that provider.
 - **Slack / Teams (`chat_*`):** `ChatContext` / `SlackContext` resolve the install from the set:
-  the origin install if the run came from Slack; otherwise the explicit optional `integration_id`;
+  the origin install if the run came from Slack (additive to the attached installs); otherwise the explicit optional `integration_id`;
   otherwise the sole attached install of that provider; otherwise an error listing them. For a named
   `conversation`, `Chat::ChannelAccess.install_for` must return an install inside the set.
   `Slack::InstallResolver` stays as the resolver for non-session callers (`HelpResponder`,
@@ -282,21 +334,34 @@ place to extend.
 No temporary fallback lives in code: `Integrations::Cutover` and the "created before the cutover" rule in the
 gates are dropped. The gates read `session.integrations` and nothing else. Existing data gets its set from
 **one idempotent backfill**, `Integrations::Backfill`, a plain Ruby service in `app/services/integrations/`,
-run by a data migration at release and, once more, by a rake task after the rollout (below).
+run by the rake tasks after the rollout (below). The **data migration** does not call app code: it carries
+its own minimal SQL (or migration-local model stubs) for the same rules, so a later change to
+`Integration`, `Workflow` or `Slack::InstallResolver` cannot change what an old migration does. The service
+and the migration share the rules in this section, and a test runs both on the same fixture data and
+compares the rows.
 
 - **Workflows.** Every non-system workflow gets what it gets today, regardless of #290 and of whether the
   workflow has that provider's tools:
   - the project's active Coder integration (the company's only if the project has none: the
-    `CoderResolver` pick, so behaviour is kept);
-  - its Slack or Teams install (the `Slack::InstallResolver` pick, per messenger);
+    `CoderResolver` pick, so behaviour is kept). Before release a project cannot have several active Coder
+    integrations in one scope, but a re-run after a second one is connected can meet them. Then the backfill
+    attaches only the same pick as before (the earliest by id) and logs the others, which stay available to
+    attach by hand;
+  - **every** active Slack and Teams install visible to the project, as `Chat::ChannelAccess.installs`
+    (`Integration.active.visible_for_project`) exposes them today, not the single `Slack::InstallResolver`
+    pick: the chat tools reach every one of them now, so a workflow keeps what it gets today;
   - every active Azure DevOps connection of the project (build tools reach all of them today).
 
   Nothing is attached for a provider the project has no integration of. Steps are not backfilled (the
   workflow list is additive). Re-running adds nothing already linked.
-- **Running sessions.** Sessions alive at the deploy get `session_integrations` rows in the same data
-  migration: workflow sessions the workflow's backfilled set, plus their repositories' integrations, plus
+- **Running sessions.** "Alive" means `TerminalSession.not_ended`, the scope of both the data migration and
+  `integrations:backfill_sessions`: the states `not_started`, `queued`, `running`, `ready` and `finishing`.
+  The terminal states (`finished`, `failed`, `cancelled`, `suspended`, `restored`, `TERMINAL_STATES`) are
+  excluded. They get `session_integrations` rows in the same data migration: workflow sessions the workflow's backfilled set, plus their repositories' integrations, plus
   their origin integration (the run's Slack or Teams install, the tracker's integration); standalone
-  sessions the same default the form preselects. Finished sessions get nothing: nothing reads them.
+  sessions the same default the form preselects. A suspended session is terminal here and gets no rows;
+  restoring it copies its set through `Sessions::Restore` (§5.1), and a suspended session created before
+  this release has none, so its restore starts with no integrations and says so in the restore notice. Finished sessions get nothing: nothing reads them.
 - **Sessions created during the rollout.** Between the migration and the last old pod stopping, old code
   creates sessions without writing the set while new code already gates by it. No code in the gates covers
   this. The release runs `bin/rails integrations:backfill_sessions SINCE=<release start>` a second time
@@ -341,7 +406,15 @@ restores the project-wide gate; the data added by steps 1 to 4 is inert.
 - `Coder::Pool` and `Coder::IntegrationService`: same account + another prefix is a new row; same triple
   renews and leaves the row's settings alone; blank prefix refused next to another integration of the account;
   `aixle` does not match `aixle-r-1a2b3c4d`, `aixle-r` does; hand-made names fall out of the pool;
-  `coder:audit_pools` output.
+  `coder:audit_pools` output (including an active integration with a stored prefix `aixle-`).
+  Renewal: `replace_token` on the prefixed row keeps the prefix; a connect form with a blank prefix next to a
+  prefixed row of the same account is refused with the overlap message. Canonical URL: `https://CODER.example`,
+  `https://coder.example/` and `https://coder.example:443` are one deployment (renewal, not a new row);
+  stored values are not rewritten. Case: `Aixle-1a2b` matches pool `aixle`.
+  Concurrency and cross-scope: two concurrent `create` calls with the same triple give one row; a project
+  integration and a company-wide one of the same URL and account cannot overlap; `replace_token` to an
+  account with a non-blank pool next to a blank-prefix row is refused; `test` on a legacy row whose triple
+  conflicts does not reactivate it.
 - Models (`test/models`): `ResourceLink` with integrations, `Workflow` / `Step` list validation (foreign
   company and foreign project rejected, system workflow rejected), `Coder::IntegrationService` with two
   active integrations (replace the "cannot get a second" test with "two accounts coexist; same account
@@ -350,10 +423,18 @@ restores the project-wide gate; the data added by steps 1 to 4 is inert.
   integrations, standalone, breakdown), `SessionService` attach, `CoderResolver` (none / one / many /
   foreign id / inactive), `Tools::Context` session-aware vs project-wide, `Integrations::Backfill` (workflows and running
   sessions; idempotent; only providers that exist; the second session run skips sessions that have rows).
+- Restore: a suspended session restored with Coder, Slack and Azure DevOps integrations keeps the set; a
+  deleted integration is listed in the restore notice.
+- Backfill: every `not_ended` state (`not_started`, `queued`, `running`, `ready`, `finishing`) gets rows and
+  every terminal state (`finished`, `failed`, `cancelled`, `suspended`, `restored`) gets none, for the
+  migration and for `integrations:backfill_sessions`. Two Slack workspaces and two Teams tenants visible to
+  one project: the workflow gets all four. A project with several active Coder integrations gets the one
+  pick and a log line. The migration and the service give the same rows.
 - Tools: each Coder tool with `integration_id`; Azure build tool refuses a connection outside the set;
-  chat tools with two installs (origin wins, explicit id, ambiguous error).
+  chat tools with two Slack workspaces and two Teams tenants (origin wins, explicit id, ambiguous error).
 - Requests (`test/integration`): workflow aggregates and steps accept and return the lists, a foreign id
-  is a 422; terminal sessions API with `integration_ids` and with it omitted (no integrations).
+  is a 422: another project, another company, an unknown id and a non-attachable provider (GitHub, a
+  tracker, AWS, Insights), on workflow, step and standalone-session paths; terminal sessions API with `integration_ids` and with it omitted (no integrations).
 - Frontend: `BuilderPage` draft, `NewSessionDrawer` picker, `versionSchemas` (follow the AWS role tests).
 - Contexts: `ContextBuilders::Integrations` rendering, no secrets in output.
 
