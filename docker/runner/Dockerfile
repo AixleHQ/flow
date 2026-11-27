@@ -15,7 +15,7 @@
 # The dev `local` adapter's image, which builds from source, is docker/runner/local.
 
 # Nothing runs at build time, so both platforms build without emulation.
-FROM alpine:3.22
+FROM alpine:3.24
 ARG TARGETARCH
 COPY --chmod=0755 dist/aixle-runner-linux-${TARGETARCH} /usr/local/bin/aixle-runner
 # Root by default, and no `USER`: a machine runner reaches the Docker socket,

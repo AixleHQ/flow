@@ -34,7 +34,7 @@ under weak-copyleft licenses
 | Redis | 7.2 | BSD-3-Clause |
 | OpenSSL | 3.x | Apache-2.0 |
 | libvips | (Alpine `vips`) | LGPL-2.1+ — see [`NOTICES.md`](NOTICES.md) |
-| Alpine Linux (musl, distro tooling) | 3.21 | MIT |
+| Alpine Linux (musl, distro tooling) | 3.24 | MIT |
 | busybox | (Alpine) | GPL-2.0-only (OS boundary; does not propagate) |
 | Linux kernel | (host/Alpine) | GPL-2.0-only (syscall boundary; does not propagate) |
 | Temporal server / UI | 1.29.0 / 2.43.3 | MIT |

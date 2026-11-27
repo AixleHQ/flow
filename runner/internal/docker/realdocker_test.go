@@ -153,7 +153,7 @@ func realDockerSession(t *testing.T, network string, ports map[string]int, extra
 // that another container (the runner's own) mounts whole. Run them on Docker 26 or
 // later, and on Docker Desktop or OrbStack if one is at hand:
 //
-//	AIXLE_RUNNER_REAL_DOCKER_IMAGE=alpine:3.22 go test ./internal/docker -run RealDockerMounts -v
+//	AIXLE_RUNNER_REAL_DOCKER_IMAGE=alpine:3.24 go test ./internal/docker -run RealDockerMounts -v
 //
 // The image needs `sh` and `cat`.
 
