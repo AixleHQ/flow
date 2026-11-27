@@ -133,11 +133,18 @@ gem "mcp"
 # installation, so it is a hard dependency for us, not an optional one.
 gem "event_stream_parser", ">= 1.0"
 
-group :development, :test do
-  # Testing tools
+# The QA agent seeds data on staging with the test factories.
+group :development, :test, :staging do
   gem "factory_bot_rails"
   gem "faker"
+end
 
+# The console the QA agent reaches through StagingConsoleController.
+group :development, :staging do
+  gem "web-console"
+end
+
+group :development, :test do
   # Debugging tools
   gem "debug"
   gem "dotenv-rails", require: false
