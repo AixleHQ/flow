@@ -183,7 +183,7 @@ func TestUnregisterSaysTheVolumesStayWhenDockerCannotBeReached(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("DOCKER_HOST", "bogus://nowhere")
+	t.Setenv("DOCKER_HOST", "no-scheme-here")
 
 	var stdout, stderr bytes.Buffer
 	if err := unregister(context.Background(), []string{"--state-dir", dir}, &stdout, &stderr); err != nil {
