@@ -13,12 +13,13 @@ import {
 } from '@tabler/icons-react';
 import { useRef, useState } from 'react';
 
-import type { AwsOidcRolePicker, ConfigItemPicker, Step } from '@/types/generated';
+import type { AwsOidcRolePicker, ConfigItemPicker, IntegrationPicker, Step } from '@/types/generated';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
 import { ReasoningEffortSelect } from 'shared/components/ReasoningEffortSelect';
 import { ReferenceEditor, type ReferenceItem } from 'shared/components/ReferenceEditor/ReferenceEditor';
 import { ToolPicker } from 'shared/components/ToolPicker';
+import { integrationLabel } from 'shared/lib/integrationLabel';
 import { type ToolGroup } from 'shared/lib/toolPicker';
 import { AGENT_SELECT_OPTIONS } from 'shared/ui/agentRuntimes';
 import { InfoHint } from 'shared/ui/InfoHint';
@@ -58,6 +59,7 @@ type SessionStep = Pick<
   | 'repositoryIds'
   | 'configItemIds'
   | 'awsOidcRoleIds'
+  | 'integrationIds'
   | 'inputAssetSpecs'
   | 'outputAssetSpecs'
 >;
@@ -205,6 +207,8 @@ interface SessionEditorPanelProps {
   configItems: ConfigItemPicker[];
   /** The picker shows only when the project has roles to offer. */
   awsOidcRoles?: AwsOidcRolePicker[];
+  /** The picker shows only when the project has integrations to offer. */
+  integrations?: IntegrationPicker[];
   agentModels?: AgentModelsEntry[];
   readOnly: boolean;
   onFieldChange: (field: string, value: unknown) => void;
@@ -233,6 +237,7 @@ export function SessionEditorPanel({
   repositories,
   configItems,
   awsOidcRoles = [],
+  integrations = [],
   agentModels = [],
   readOnly,
   onFieldChange,
@@ -585,6 +590,26 @@ export function SessionEditorPanel({
               searchable
               placeholder="None added"
               aria-label="AWS roles"
+              styles={{
+                input: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, fontSize: 13 },
+              }}
+            />
+          </div>
+        )}
+
+        {integrations.length > 0 && (
+          <div className={classes.resGroup}>
+            <div className={classes.resType}>
+              Integrations <span className={classes.resTypeSub}>— accounts this session can act through</span>
+            </div>
+            <MultiSelect
+              data={integrations.map((i) => ({ value: String(i.id), label: integrationLabel(i) }))}
+              value={toStringArr(step.integrationIds ?? [])}
+              onChange={(v) => onFieldChange('integrationIds', toNumberArr(v))}
+              disabled={readOnly}
+              searchable
+              placeholder="None added"
+              aria-label="Integrations"
               styles={{
                 input: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, fontSize: 13 },
               }}

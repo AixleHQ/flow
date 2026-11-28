@@ -500,6 +500,65 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
     assert_empty SessionConfigResolver.resolve(session)[:aws_oidc_role_ids]
   end
 
+  # === Integrations: explicit, repository-derived and origin, never inherited ===
+
+  test "workflow session merges the workflow's and the step's integrations, and inherit_all adds none" do
+    base = create(:integration, :coder, :active, company: @company, project: @project)
+    step_one = create(:integration, :coder, :active, company: @company, project: @project)
+    create(:integration, :coder, :active, company: @company, project: @project)
+    session = build_workflow_session(
+      workflow_config: { "inherit_all_project_resources" => true, "base_integration_ids" => [ base.id ] },
+      step_integration_ids: [ step_one.id ]
+    )
+
+    assert_equal [ base.id, step_one.id ], SessionConfigResolver.resolve(session)[:integration_ids]
+    breakdown = SessionConfigResolver.resolve_with_breakdown(session)[:integrations]
+    assert_equal [ base.id, step_one.id ], breakdown[:from_explicit]
+    assert_empty breakdown[:from_repositories]
+    assert_empty breakdown[:from_origin]
+  end
+
+  test "a session with nothing attached has no integrations, whatever the project has connected" do
+    create(:integration, :coder, :active, company: @company, project: @project)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+
+    assert_empty SessionConfigResolver.resolve(session)[:integration_ids]
+    assert_empty SessionConfigResolver.resolve(build_workflow_session)[:integration_ids]
+  end
+
+  test "a standalone session's set is what it was given, plus its repositories' integrations" do
+    coder = create(:integration, :coder, :active, company: @company, project: @project)
+    repository = create_project_repository
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+    session.update!(integrations: [ coder ], repositories: [ repository ])
+
+    assert_equal [ coder.id, repository.integration_id ], SessionConfigResolver.resolve(session)[:integration_ids]
+  end
+
+  test "the integration of an attached repository is in the set without being attached twice" do
+    repository = create_project_repository
+    session = build_workflow_session(step_repository_ids: [ repository.id ])
+
+    assert_equal [ repository.integration_id ], SessionConfigResolver.resolve(session)[:integration_ids]
+    assert_equal [ repository.integration_id ], SessionConfigResolver.resolve_with_breakdown(session)[:integrations][:from_repositories]
+  end
+
+  test "the install a run started from is in the set" do
+    teams = Integration.create!(provider: :teams, company: @company, connected_by: @user, name: "Contoso", status: :active,
+                                settings: { "tenant_id" => TEAMS_CUSTOMER_TENANT })
+    session = build_workflow_session(run_shared_context: { "chat" => { "provider" => "teams", "integration_id" => teams.id } })
+
+    assert_equal [ teams.id ], SessionConfigResolver.resolve(session)[:integration_ids]
+  end
+
+  test "an origin integration of another company is not in the set" do
+    foreign = Integration.create!(provider: :teams, company: create(:company), connected_by: create(:user), name: "Other",
+                                  status: :active, settings: { "tenant_id" => "00000000-0000-4000-8000-0000000000cc" })
+    session = build_workflow_session(run_shared_context: { "chat" => { "provider" => "teams", "integration_id" => foreign.id } })
+
+    assert_empty SessionConfigResolver.resolve(session)[:integration_ids]
+  end
+
   # === Story 29.5: Step required_agent_runtime ===
 
   test "step required_agent_runtime overrides everything" do
@@ -824,6 +883,8 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
                              step_required_agent_runtime: nil,
                              step_config_item_ids: [],
                              step_aws_oidc_role_ids: [],
+                             step_integration_ids: [],
+                             run_shared_context: {},
                              step_bmad_enabled: false)
     # Scoped to @project, the same project the run and the session belong to —
     # config item attachments are validated against the workflow's own project,
@@ -839,12 +900,12 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
       required_agent_runtime: step_required_agent_runtime, bmad_enabled: step_bmad_enabled)
     { tool_id: step_tool_ids, skill_id: step_skill_ids, mcp_server_id: step_mcp_server_ids,
       asset_id: step_asset_ids, repository_id: step_repository_ids,
-      aws_oidc_role_id: step_aws_oidc_role_ids }.each do |column, ids|
+      aws_oidc_role_id: step_aws_oidc_role_ids, integration_id: step_integration_ids }.each do |column, ids|
       StepResourceLink.replace!(step, column, ids)
     end
     workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user,
       agent_runtime: agent_runtime, mode: run_mode, repository_ids: run_repository_ids,
-      input_asset_ids: run_input_asset_ids, board_task: board_task)
+      input_asset_ids: run_input_asset_ids, board_task: board_task, shared_context: run_shared_context)
 
     session = create(:terminal_session, user: @user, project: @project,
       session_type: "workflow_step", agent_type: agent_runtime || "claude_code")

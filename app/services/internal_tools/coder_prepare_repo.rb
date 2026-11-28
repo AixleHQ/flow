@@ -23,6 +23,7 @@ module InternalTools
         type: "object",
         required: %w[workspace_name],
         properties: {
+          integration_id: Concerns::CoderResolver::INTEGRATION_ID_SCHEMA,
           workspace_name: {
             type: "string",
             description: "Workspace name returned by coder_allocate_machine."

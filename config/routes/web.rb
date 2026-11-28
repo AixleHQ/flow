@@ -648,10 +648,8 @@ scope module: :web, defaults: { format: :html } do
         post :revoke
         post :registration_token
       end
-      # A machine belongs to its runner. Return to service: a failed machine of
-      # the runner is reset (§5.2). Revoke: the machine leaves for good (§9.3).
+      # A machine belongs to its runner. Revoke: the machine leaves for good (§9.3).
       resources :machines, only: [], controller: "runners/machines" do
-        post :return_to_service, on: :member
         post :revoke, on: :member
       end
     end
@@ -752,6 +750,8 @@ scope module: :web, defaults: { format: :html } do
             post :linear_inspect
             # GitLab: the OAuth app redirect that starts a service-account connection.
             get :gitlab_oauth_start
+            # Coder: the templates a token can see, before the connection is saved.
+            post :coder_templates
             # YouTrack: a pairing for the Aixle Flow app on the instance.
             post :youtrack_connect
             # Microsoft Teams: a pending connection and its approval link.
@@ -762,6 +762,7 @@ scope module: :web, defaults: { format: :html } do
             get :teams_package
             post :teams_link
             get :jira_projects
+            get :coder_template_list
             get :github_projects
             get :linear_teams
             get :gitlab_projects
@@ -794,11 +795,9 @@ scope module: :web, defaults: { format: :html } do
             post :revoke
             post :registration_token
           end
-          # A machine belongs to its runner. Return to service: a failed machine
-          # of the project's runner is reset (§5.2). Revoke: the machine leaves
-          # for good (§9.3).
+          # A machine belongs to its runner. Revoke: the machine leaves for good
+          # (§9.3).
           resources :machines, only: [], controller: "runners/machines" do
-            post :return_to_service, on: :member
             post :revoke, on: :member
           end
         end

@@ -304,9 +304,14 @@ no trigger asked for it.
 The same tools work in Microsoft Teams; in a run that started from Slack they
 answer in Slack.
 
-Every workflow step session gets these tools automatically when its company has
-an active Slack install. For other sessions, attach them from the tool picker's
-**Chat** section. Until Slack or Teams is connected, the tools are hidden.
+Attach the tools from the tool picker's **Chat** section. A session reaches only
+the Slack and Teams installs in its integration set: the ones attached to its
+workflow or step (the **Integrations** list in the workflow builder) or chosen in
+the new-session form, plus the install that started the run. Until an install is
+in the set, the tools are hidden. Each tool takes an optional `integration_id`
+(listed in the agent's context): leave it out when the session has one install
+of that messenger, or the run came from it. With several, leaving it out is an
+error that lists them.
 
 In a run that started from Slack, the channel and thread default to the
 triggering message. Anywhere else nothing is filled in, so the agent passes
@@ -330,7 +335,8 @@ Some details:
 - **Which workspace.** Replies go through the workspace the run came from. If
   that workspace was removed or uninstalled, the tools say Slack is not
   connected rather than post through another one. A run that did not start
-  from Slack uses the workspace the company connected first.
+  from Slack uses the only Slack install in the session's set, or the one named
+  by `integration_id`. A channel in a workspace outside the set is refused.
 
 ---
 

@@ -97,6 +97,7 @@ module Templates
       @assets = {}
       @config_item_ids = Set.new
       @repository_ids = Set.new
+      @attached_integration_ids = Set.new
 
       workflows_scope.map do |workflow|
         key = key_for("workflows", workflow.id, workflow.name)
@@ -136,6 +137,7 @@ module Templates
     def export_steps(workflow)
       steps = workflow.steps.not_deleted.includes(:resource_links).order(:position).to_a
       note_aws_oidc_roles(workflow, steps)
+      note_integrations(workflow, steps)
       step_keys = steps.to_h { |step| [ step.id, key_for("steps:#{workflow.id}", step.id, step.name) ] }
       steps.map do |step|
         where = "workflow #{workflow.name} step #{step.name}"
@@ -168,6 +170,18 @@ module Templates
 
       @notes << "Workflow #{workflow.name} uses AWS roles, which are not exported: attach the installing " \
                 "project's own roles after installing it."
+    end
+
+    # An integration is an account of the exporting company, so a package carries none. The
+    # providers a workflow needs are listed under `requires`, from its tools and its attachments; the
+    # installer leaves the list empty and the installing project attaches its own integrations.
+    def note_integrations(workflow, steps)
+      @attached_integration_ids.merge(workflow.base_integration_ids)
+      steps.each { |step| @attached_integration_ids.merge(step.integration_ids) }
+      return if workflow.base_integration_ids.empty? && steps.all? { |step| step.integration_ids.empty? }
+
+      @notes << "Workflow #{workflow.name} has integrations attached, which are not exported: attach the " \
+                "installing project's own integrations after installing it."
     end
 
     # References name rows by id; a package names them by key, which the
@@ -435,10 +449,18 @@ module Templates
       [ variables, secrets ]
     end
 
+    # The providers of the integrations the workflows and steps attach, read through the project's
+    # tenant: an id the project does not own names no provider.
+    def attached_integration_providers
+      TenantScope.owned(Integration, project: @project, company: @project.company)
+                 .where(id: @attached_integration_ids.to_a).pluck(:provider).map(&:to_s)
+    end
+
     def export_requires(secrets, triggers)
       integrations = Tool.where(id: @tools.keys).filter_map(&:requires_integration)
       integrations += triggers.filter_map { |trigger| trigger["chat_provider"] }
       integrations += Repository.where(id: @repository_ids.to_a).filter_map { |r| r.integration&.provider&.to_s }
+      integrations += attached_integration_providers
       repositories = Repository.where(id: @repository_ids.to_a).map do |repository|
         key = @keys["repositories"][repository.id]
         @notes << "Repository #{key} is named after #{repository.full_name} and keeps this project's purpose text — " \

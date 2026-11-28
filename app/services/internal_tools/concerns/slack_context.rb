@@ -54,20 +54,27 @@ module InternalTools
           "team" => origin["workspace_id"], "integration_id" => origin["integration_id"] }.compact
       end
 
-      # Reply through the workspace that triggered this run; a run not started
-      # from Slack gets the company's install that Slack::InstallResolver picks.
+      # The install a call without a channel of its own acts through, from this session's set:
+      # the workspace that started the run, else the one named by `integration_id`, else the
+      # only Slack install attached. → [integration, error]
       def slack_integration
-        return nil if project.nil?
+        return [ nil, error("This tool needs a project — the session has none") ] if project.nil?
 
-        Slack::InstallResolver.call(
-          company_id: project.company_id, project_id: project.id,
-          integration_id: slack_context["integration_id"], team_id: slack_context["team"]
-        )
+        origin = attached_chat_installs("slack").find_by(id: slack_context["integration_id"].to_i)
+        return [ origin, nil ] if origin
+
+        scope, scope_error = chat_install_scope("slack")
+        return [ nil, scope_error ] if scope_error
+        return [ scope.first, nil ] if scope.one?
+
+        [ nil, error(scope.none? ? "Slack is not attached to this session. #{attached_chat_hint('slack')}" :
+                                   "This session has several Slack integrations: pass `integration_id`. #{attached_chat_hint('slack')}") ]
       end
 
       # The install and channel a call acts on: the thread the run came from by
       # default, otherwise a channel connected to the project's company
-      # (Chat::ChannelAccess). Returns [integration, channel, error].
+      # (Chat::ChannelAccess) in a workspace attached to this session.
+      # Returns [integration, channel, error].
       def resolve_slack_target(explicit_channel)
         return [ nil, nil, error("This tool needs a project — the session has none") ] if project.nil?
 
@@ -80,15 +87,20 @@ module InternalTools
                                    "fall back on — pass `conversation` explicitly.") ]
         end
 
-        conversation = Chat::ChannelAccess.find(project, "slack", value)
-        return [ nil, nil, error(Chat::ChannelAccess.not_connected(project, "slack", value)) ] if conversation.nil?
+        scope, scope_error = chat_install_scope("slack")
+        return [ nil, nil, scope_error ] if scope_error
 
-        [ Chat::ChannelAccess.install_for(project, conversation), conversation.external_id, nil ]
+        conversation = Chat::ChannelAccess.find(project, "slack", value, within: scope)
+        if conversation.nil?
+          return [ nil, nil, error(Chat::ChannelAccess.not_connected(project, "slack", value, within: scope)) ]
+        end
+
+        [ Chat::ChannelAccess.install_for(project, conversation, within: scope), conversation.external_id, nil ]
       end
 
       def slack_origin_target(channel)
-        integration = slack_integration
-        return [ nil, nil, error("Slack is not connected for this project") ] if integration.nil?
+        integration, integration_error = slack_integration
+        return [ nil, nil, integration_error ] if integration_error
 
         [ integration, channel, nil ]
       end

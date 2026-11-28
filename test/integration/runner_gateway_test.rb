@@ -189,19 +189,19 @@ class RunnerGatewayTest < ActionDispatch::IntegrationTest
     assert_refused :unauthorized, "invalid_token"
   end
 
-  # A machine whose reset failed takes no session, but stays reachable, so that
-  # Return to service (task 11) can reach it: only `gone` is refused.
-  test "a failed machine's credentials keep working" do
+  # A machine whose reset failed is out of rotation for good: its credentials
+  # are refused as a `gone` machine's are, and nothing but a Revoke follows.
+  test "a failed machine's credentials are refused" do
     pair = registered_pair
     environment = RunnerEnvironment.sole
     Runners::Machines.fail!(environment, "env.reset failed after session 1: reset_failed: volume in use")
     assert environment.reload.failed?
 
     refresh(pair["refresh_token"])
-    assert_response :ok
-    unregister(response.parsed_body["access_token"])
-    assert_response :no_content
-    assert environment.reload.gone?
+    assert_refused :unauthorized, "invalid_token"
+    unregister(pair["access_token"])
+    assert_refused :unauthorized, "invalid_token"
+    assert environment.reload.failed?
   end
 
   test "a credential reaches its own environment only" do

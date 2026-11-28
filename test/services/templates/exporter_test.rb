@@ -231,4 +231,17 @@ class Templates::ExporterTest < ActiveSupport::TestCase
     item = install(result.package).install.setup_items.find_by!(ref: "integration:#{Trackers::CAPABILITY}")
     assert_equal "Connect a task tracker (Jira or Azure DevOps)", Templates::Presenter.setup_item(item)[:label]
   end
+
+  test "an integration attached to a workflow or a step is a required provider, though no tool needs it" do
+    coder = create(:integration, :coder, :active, company: @company, project: @source)
+    teams = create(:integration, provider: :teams, status: :active, company: @company, project: nil)
+    workflow = @source.workflows.first
+    workflow.update!(config: workflow.config.merge("base_integration_ids" => [ coder.id ]))
+    workflow.steps.order(:position).first.update!(integration_ids: [ teams.id ])
+
+    result = export
+
+    assert_equal %w[coder teams], result.package.definition.dig("requires", "integrations").sort
+    refute_includes result.package.definition.to_json, coder.name
+  end
 end

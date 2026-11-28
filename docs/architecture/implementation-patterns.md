@@ -19,8 +19,8 @@
 - **Query params:** snake_case — `params[:q]` for Ransack search
 - **Web routes follow the same rules** (Inertia pages and their form posts): `resources`, nested under the record that owns them, custom actions as member or collection routes.
 - **A record that belongs to another one is a nested `resources`**, with its custom actions as member routes on it, and its own controller. Never a hand-written path with the record's id inside the parent's `member` block.
-  - Right: `resources :runners do resources :machines, only: [] do post :return_to_service, on: :member end end` → `Runners::MachinesController#return_to_service`.
-  - Wrong: `resources :runners do member do post "machines/:machine_id/return_to_service" end end`.
+  - Right: `resources :runners do resources :machines, only: [] do post :revoke, on: :member end end` → `Runners::MachinesController#revoke`.
+  - Wrong: `resources :runners do member do post "machines/:machine_id/revoke" end end`.
 
 ### Code
 
@@ -155,7 +155,7 @@ What the controllers return — no envelope around the resource:
   - **TerminalSession:** `state` (not_started/queued/running/ready/finishing/finished/failed/cancelled/suspended/restored)
   - **WorkflowRun:** `state` (pending/running/paused/completed/failed/cancelled)
   - **Runner:** `status` (pending/connected/degraded/unreachable/disabled/revoked)
-  - **RunnerEnvironment:** `state` (registered/resetting/failed/gone)
+  - **RunnerEnvironment:** `state` (registered/failed/gone)
   - **MarketplaceLicense:** `subscription_state` (pending/active/ending/ended)
 - **`TerminalSession`'s state is owned by `Sessions::Lifecycle`** (`app/services/sessions/lifecycle.rb`). It is the only code that fires the machine's state events, through `transition!`, and it sends what a move sets off (wake the parent run, the relay's `session_ended`) after the commit. The machine's callbacks only assign columns. AASM's `no_direct_assignment: true` makes `state =` and `update!(state: ...)` raise, and `test/services/sessions/lifecycle_ownership_test.rb` fails on an event fired elsewhere. A test that needs a session in a state uses `put_session_in_state!` or the factory's `state:`.
 - **A state changes only through its events.** Other code does not write `state` with `update` or `state =`; a move the machine lacks is added to the machine (see Anti-Patterns → change a record's state, or another column whose change has an owner, past that owner)

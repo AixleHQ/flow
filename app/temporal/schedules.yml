@@ -39,6 +39,18 @@ schedules:
     enabled: true
     overlap: skip
 
+  # The machines that a stale session still holds (Runners::Machines.sweep_abandoned!):
+  # the session ended and its container workflow's cleanup will never run, so
+  # nothing resets its machine. Each gets the `env.reset` a failed session gets,
+  # under the lifecycle budget, and is free when it succeeds and `failed` when it
+  # fails. The sweep waits for no op: it creates op rows and reads their outcomes,
+  # so a silent machine holds nothing up. Every minute; usually it finds nothing.
+  # SKIP overlap: a slow pass must not be joined by the next one over the same machines.
+  - workflow: runner_abandoned_machines_workflow
+    cron: "* * * * *"
+    overlap: skip
+    enabled: true
+
   # Each live runner's health status from its machines (Runners::HealthCheck,
   # DESIGN.md §2.5): connected, degraded or unreachable, with the reason. Every
   # minute, so the status may lag a machine's state by up to a minute. It

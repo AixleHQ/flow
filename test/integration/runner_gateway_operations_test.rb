@@ -98,6 +98,18 @@ class RunnerGatewayOperationsTest < ActionDispatch::IntegrationTest
 
   # == GET /runner/v1/ops ==
 
+  test "an environment op is delivered without a session_id, although the platform records its session" do
+    operation = enqueue(op: "env.reset", payload: {})
+
+    poll(@pair, wait: 0)
+
+    assert_response :ok
+    assert_not_nil operation.reload.terminal_session_id
+    assert_equal [ { "id" => operation.id, "sequence" => 1, "op" => "env.reset",
+                     "deadline_at" => operation.deadline_at.iso8601, "payload" => {} } ],
+                 response.parsed_body["ops"]
+  end
+
   test "an op enqueued before the poll is returned at once and becomes delivered" do
     operation = enqueue(payload: { "cmd" => [ "true" ] })
 

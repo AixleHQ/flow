@@ -7,16 +7,18 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
     @company     = create(:company)
     @user        = create(:user, :admin, company: @company)
     @project     = create(:project, company: @company, owner: @user)
-    # Company-wide (project_id nil) active Coder integration — resolved directly
-    # from the session's project by Concerns::CoderResolver.
+    # The integration is in the session's set: Concerns::CoderResolver reads the set,
+    # not the project's integrations.
     @integration = create(:integration, :coder, :active, company: @company, connected_by: @user)
 
     project = @project
+    integration_ids = -> { [ @integration.id ] }
     @session = Object.new
     @session.define_singleton_method(:id) { 4242 }
     @session.define_singleton_method(:project) { project }
     @session.define_singleton_method(:step_run) { OpenStruct.new(id: 1) }
     @session.define_singleton_method(:user) { nil }
+    @session.define_singleton_method(:integrations) { Integration.where(id: integration_ids.call) }
 
     # Same project (so the integration still resolves) but no step_run — exercises
     # the tools running outside of a workflow context.
@@ -25,6 +27,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
     @no_workflow_session.define_singleton_method(:project) { project }
     @no_workflow_session.define_singleton_method(:step_run) { nil }
     @no_workflow_session.define_singleton_method(:user) { nil }
+    @no_workflow_session.define_singleton_method(:integrations) { Integration.where(id: integration_ids.call) }
   end
 
   class FakeAllocator
@@ -34,7 +37,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
       attr_accessor :last_options
     end
 
-    def initialize(integration:, terminal_session:)
+    def initialize(integration:, **_holder)
       @integration = integration
     end
 
@@ -67,20 +70,80 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
 
   # ---------- coder_allocate_machine ----------
 
-  test "allocate: errors when there is no active Coder integration for the project" do
+  test "allocate: errors when the session's Coder integration is not active" do
     @integration.update!(status: :error)
 
     result = InternalTools::CoderAllocateMachine.new(params: {}, session: @session).execute
 
     assert_equal 1, result[:exit_code]
-    assert_match(/No active Coder integration for this project/, result[:stderr])
+    assert_match(/is error, not active/, result[:stderr])
+  end
+
+  test "allocate: errors when no Coder integration is attached to the session" do
+    @session.define_singleton_method(:integrations) { Integration.none }
+
+    result = InternalTools::CoderAllocateMachine.new(params: {}, session: @session).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/No Coder integration is attached to this session/, result[:stderr])
+  end
+
+  test "allocate: with several attached integrations, leaving integration_id out lists them" do
+    second = create(:integration, :coder, :active, company: @company, connected_by: @user, name: "Coder (second)")
+    integration = @integration
+    @session.define_singleton_method(:integrations) { Integration.where(id: [ integration.id, second.id ]) }
+
+    result = InternalTools::CoderAllocateMachine.new(params: {}, session: @session).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/several Coder integrations: pass `integration_id`/, result[:stderr])
+    assert_includes result[:stderr], "#{second.id} (Coder (second)"
+  end
+
+  test "allocate: integration_id picks one of several attached integrations" do
+    second = create(:integration, :coder, :active, company: @company, connected_by: @user)
+    integration = @integration
+    @session.define_singleton_method(:integrations) { Integration.where(id: [ integration.id, second.id ]) }
+    captured = nil
+
+    Coder::Allocator.stub(:new, ->(integration:, **holder) { captured = integration; FakeAllocator.new(integration: integration, **holder) }) do
+      result = InternalTools::CoderAllocateMachine.new(params: { integration_id: second.id }, session: @session).execute
+      assert_equal 0, result[:exit_code], result[:stderr]
+    end
+
+    assert_equal second.id, captured.id
+  end
+
+  test "allocate: an integration_id outside the session's set is refused, whatever the project has" do
+    outside = create(:integration, :coder, :active, company: @company, connected_by: @user)
+
+    result = InternalTools::CoderAllocateMachine.new(params: { integration_id: outside.id }, session: @session).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/Coder integration #{outside.id} is not attached to this session/, result[:stderr])
+  end
+
+  test "allocate: an integration_id that is not a number is refused" do
+    result = InternalTools::CoderAllocateMachine.new(params: { integration_id: "abc" }, session: @session).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/integration_id must be an integer/, result[:stderr])
+  end
+
+  test "every Coder tool advertises an optional integration_id" do
+    [ InternalTools::CoderAllocateMachine, InternalTools::CoderSshExec, InternalTools::CoderPrepareRepo,
+      InternalTools::CoderJobStatus, InternalTools::CoderReleaseMachine ].each do |tool|
+      schema = tool.tool_definition.input_schema
+      assert schema.dig(:properties, :integration_id) || schema.dig("properties", "integration_id"), tool.name
+      assert_not Array(schema[:required] || schema["required"]).include?("integration_id"), tool.name
+    end
   end
 
   test "allocate: dispatches to the allocator with the integration resolved from the session project" do
     captured = nil
-    Coder::Allocator.stub(:new, ->(integration:, terminal_session:) {
+    Coder::Allocator.stub(:new, ->(integration:, **holder) {
       captured = integration
-      FakeAllocator.new(integration: integration, terminal_session: terminal_session)
+      FakeAllocator.new(integration: integration, **holder)
     }) do
       result = InternalTools::CoderAllocateMachine.new(params: {}, session: @session).execute
 
@@ -93,8 +156,8 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
   end
 
   test "allocate: works without workflow context when an active integration is present" do
-    Coder::Allocator.stub(:new, ->(integration:, terminal_session:) {
-      FakeAllocator.new(integration: integration, terminal_session: terminal_session)
+    Coder::Allocator.stub(:new, ->(integration:, **holder) {
+      FakeAllocator.new(integration: integration, **holder)
     }) do
       result = InternalTools::CoderAllocateMachine.new(
         params: {}, session: @no_workflow_session
@@ -121,7 +184,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
 
   test "ssh_exec: works without workflow context when the session holds the lock" do
     Coder::LockService.new(@integration).acquire(
-      workspace_name: "ws-1", workspace_id: "u1", terminal_session_id: @no_workflow_session.id
+      workspace_name: "ws-1", workspace_id: "u1", **lock_owner(@no_workflow_session.id)
     )
 
     Coder::SshRunner.any_instance.stubs(:exec).returns(
@@ -140,7 +203,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
 
   test "ssh_exec: runs the command when the session holds the lock" do
     Coder::LockService.new(@integration).acquire(
-      workspace_name: "ws-1", workspace_id: "u1", terminal_session_id: @session.id
+      workspace_name: "ws-1", workspace_id: "u1", **lock_owner(@session.id)
     )
 
     Coder::SshRunner.any_instance.stubs(:exec).returns(
@@ -159,8 +222,8 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
   end
 
   test "allocate: passes the caller's exclude list through to the allocator" do
-    Coder::Allocator.stub(:new, ->(integration:, terminal_session:) {
-      FakeAllocator.new(integration: integration, terminal_session: terminal_session)
+    Coder::Allocator.stub(:new, ->(integration:, **holder) {
+      FakeAllocator.new(integration: integration, **holder)
     }) do
       InternalTools::CoderAllocateMachine.new(
         params: { exclude: [ "ws-dead" ] }, session: @session
@@ -174,7 +237,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
   # every use of the workspace renews it.
   test "ssh_exec: renews the lock it just used" do
     lock_service = Coder::LockService.new(@integration)
-    lock_service.acquire(workspace_name: "ws-1", workspace_id: "u1", terminal_session_id: @session.id)
+    lock_service.acquire(workspace_name: "ws-1", workspace_id: "u1", **lock_owner(@session.id))
     original = @integration.integration_data.find_by(key: "coder:workspace_lock:ws-1").expires_at
 
     travel 5.minutes do
@@ -191,7 +254,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
 
   test "ssh_exec: detach returns a job id and points the caller at coder_job_status" do
     Coder::LockService.new(@integration).acquire(
-      workspace_name: "ws-1", workspace_id: "u1", terminal_session_id: @session.id
+      workspace_name: "ws-1", workspace_id: "u1", **lock_owner(@session.id)
     )
 
     result = Coder::SshRunner.stub(:new, ->(_integration) { FakeSshRunner.new }) do
@@ -212,7 +275,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
 
   test "job_status: returns the state and log tail of a detached job" do
     Coder::LockService.new(@integration).acquire(
-      workspace_name: "ws-1", workspace_id: "u1", terminal_session_id: @session.id
+      workspace_name: "ws-1", workspace_id: "u1", **lock_owner(@session.id)
     )
     runner = FakeSshRunner.new
 
@@ -256,9 +319,19 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
     end
   end
 
+  # `Coder::LockService` names its owner `holder:` where the runners services are
+  # present and `terminal_session_id:` where they are not; build whichever it takes.
+  def lock_owner(session_id)
+    if defined?(Coder::LockService::Holder)
+      { holder: Coder::LockService::Holder.session(session_id) }
+    else
+      { terminal_session_id: session_id }
+    end
+  end
+
   def hold_lock(workspace_name = "ws-1")
     Coder::LockService.new(@integration).acquire(
-      workspace_name: workspace_name, workspace_id: "u1", terminal_session_id: @session.id
+      workspace_name: workspace_name, workspace_id: "u1", **lock_owner(@session.id)
     )
   end
 
@@ -355,7 +428,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
 
   test "release: idempotently releases the workspace lock" do
     Coder::LockService.new(@integration).acquire(
-      workspace_name: "ws-1", workspace_id: "u1", terminal_session_id: @session.id
+      workspace_name: "ws-1", workspace_id: "u1", **lock_owner(@session.id)
     )
 
     result = InternalTools::CoderReleaseMachine.new(
@@ -383,7 +456,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
 
   test "release: works without workflow context" do
     Coder::LockService.new(@integration).acquire(
-      workspace_name: "ws-1", workspace_id: "u1", terminal_session_id: @no_workflow_session.id
+      workspace_name: "ws-1", workspace_id: "u1", **lock_owner(@no_workflow_session.id)
     )
 
     result = InternalTools::CoderReleaseMachine.new(
@@ -402,7 +475,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
   test "release: does not delete a lock held by a different session" do
     owner_session_id = 9001
     Coder::LockService.new(@integration).acquire(
-      workspace_name: "ws-1", workspace_id: "u1", terminal_session_id: owner_session_id
+      workspace_name: "ws-1", workspace_id: "u1", **lock_owner(owner_session_id)
     )
 
     # @session.id is 4242, so this call comes from a non-owning session.
@@ -415,7 +488,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
     payload = JSON.parse(result[:stdout])
     assert_not payload["released"], "non-owner must see released=false"
     assert Coder::LockService.new(@integration).held_by_session?(
-      workspace_name: "ws-1", terminal_session_id: owner_session_id
+      workspace_name: "ws-1", **lock_owner(owner_session_id)
     ), "owner's lock row must survive"
   end
 end

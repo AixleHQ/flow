@@ -60,7 +60,8 @@ module Runners
     # environment op (`env.reset`) included.
     #
     # A session op carries its session in the envelope as `session_id`; an
-    # environment op carries none on the wire (RunnerOperation). The producer
+    # environment op carries none on the wire, and the row keeps its session
+    # all the same (RunnerOperation). The producer
     # is ContainerRuntime::RunnerRuntime.
     #
     # The next sequence is the environment's own counter
@@ -79,28 +80,9 @@ module Runners
         sequence = environment.op_sequence + 1
         environment.update_columns(op_sequence: sequence)
         operation = RunnerOperation.create!(runner_environment: environment,
-                                            terminal_session: (session unless RunnerOperation::ENVIRONMENT_OPS.include?(op)),
+                                            terminal_session: session,
                                             sequence: sequence, op: op, payload: payload,
                                             deadline_at: deadline_at, state: :pending)
-        ActiveRecord.after_all_transactions_commit { wake(environment.id, sequence) }
-        instrument("enqueued", environment.id, operation: operation)
-        operation
-      end
-    end
-
-    # Puts an `env.reset` on the queue of a `resetting` machine, which no
-    # session holds: Return to service (Runners::Machines.return_to_service!,
-    # §5.2). Nil for a machine in any other state. The same lock and counter as
-    # #enqueue!.
-    def enqueue_reset!(environment, deadline_at:)
-      RunnerOperation.transaction do
-        environment.lock!
-        next nil unless environment.resetting?
-
-        sequence = environment.op_sequence + 1
-        environment.update_columns(op_sequence: sequence)
-        operation = RunnerOperation.create!(runner_environment: environment, sequence: sequence, op: "env.reset",
-                                            payload: {}, deadline_at: deadline_at, state: :pending)
         ActiveRecord.after_all_transactions_commit { wake(environment.id, sequence) }
         instrument("enqueued", environment.id, operation: operation)
         operation
@@ -147,7 +129,6 @@ module Runners
           operation.update!(state: :expired, completed_at: Time.current)
         end
       end
-      settle_reset(operation)
       operation
     end
 
@@ -166,7 +147,6 @@ module Runners
           )
         end
       end
-      Machines.settle_resets! if expired.positive?
       expired
     end
 
@@ -240,14 +220,7 @@ module Runners
           operation.update!(state: state, result: result, completed_at: Time.current)
         end
       end
-      settle_reset(operation)
       operation
-    end
-
-    # The outcome of a Return to service's `env.reset` settles its machine
-    # (Runners::Machines.settle_resets!), whoever records it.
-    def settle_reset(operation)
-      Machines.settle_resets!([ operation.runner_environment_id ]) if operation.op == "env.reset" && !operation.deliverable?
     end
 
     # Selects the deliverable ops and marks the pending ones `delivered` in one

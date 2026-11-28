@@ -74,6 +74,66 @@ class Tools::ContextTest < ActiveSupport::TestCase
     assert Tools::Context.new(project: github, company: @company).connected?(PullRequests::CAPABILITY)
   end
 
+  test "with a session, only the providers of the session's own integrations count" do
+    slack = create(:integration, company: @company, project: @project, provider: :slack, status: :active, connected_by: @user)
+    create(:integration, :coder, :active, company: @company, project: @project, connected_by: @user)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+    session.integrations << slack
+
+    ctx = Tools::Context.for_session(session.reload)
+
+    assert ctx.connected?(:slack)
+    assert ctx.connected?(Chat::CAPABILITY)
+    assert_not ctx.connected?(:coder)
+  end
+
+  test "a session with no integrations has no integration providers, however much the project has connected" do
+    create(:integration, :coder, :active, company: @company, project: @project, connected_by: @user)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+
+    ctx = Tools::Context.for_session(session)
+
+    assert_not ctx.connected?(:coder)
+    assert Tools::Context.for_project(@project).connected?(:coder)
+  end
+
+  test "a repository's integration puts the pull-request capability in a session's set" do
+    github = create(:integration, :github_pat, :active, company: @company, project: @project, connected_by: @user)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+    session.integrations << github
+
+    assert Tools::Context.for_session(session.reload).connected?(PullRequests::CAPABILITY)
+  end
+
+  test "an inactive integration in a session's set does not count" do
+    coder = create(:integration, :coder, status: :error, company: @company, project: @project, connected_by: @user)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+    session.integrations << coder
+
+    assert_not Tools::Context.for_session(session.reload).connected?(:coder)
+  end
+
+  test "attach_message names the attach remedy for a session whose project has the provider connected" do
+    create(:integration, :coder, :active, company: @company, project: @project, connected_by: @user)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+
+    message = Tools::Context.for_session(session).attach_message(:coder)
+
+    assert_equal "The coder integration is not attached to this session. " \
+                 "Attach it to the workflow, the step or the session.", message
+  end
+
+  test "attach_message is nil without a session, when attached, or when the project has nothing connected" do
+    coder = create(:integration, :coder, :active, company: @company, project: @project, connected_by: @user)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+
+    assert_nil Tools::Context.for_project(@project).attach_message(:coder)
+    assert_nil Tools::Context.for_session(session).attach_message(:slack)
+
+    session.integrations << coder
+    assert_nil Tools::Context.for_session(session.reload).attach_message(:coder)
+  end
+
   test "no company yields an empty provider set without querying" do
     ctx = Tools::Context.new(project: nil, company: nil)
 

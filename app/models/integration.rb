@@ -7,6 +7,12 @@ class Integration < ApplicationRecord
   encrypted_column :credentials
   extend Enumerize
 
+  # The providers a workflow, a step or a session may attach (docs/design/session-integrations.md
+  # §5.3): the ones whose tools take an integration directly. GitHub, GitLab and Bitbucket are
+  # reached through repositories, trackers through ProjectTracker, AWS through roles, and
+  # Insights has no tools. The one place to extend.
+  ATTACHABLE_PROVIDERS = %w[coder slack teams azure_devops].freeze
+
   CONNECTABLE_PROVIDERS = %w[github gitlab bitbucket coder slack azure_devops jira linear youtrack].freeze
 
   enumerize :provider, in: %i[github gitlab bitbucket linear coder slack teams azure_devops jira youtrack insights aws_oidc],
@@ -79,6 +85,9 @@ class Integration < ApplicationRecord
   scope :company_wide, -> { where(project_id: nil) }
   scope :for_project, ->(project) { where(project_id: project.id) }
   scope :active, -> { where(status: "active") }
+  scope :attachable, -> { where(provider: ATTACHABLE_PROVIDERS) }
+  # What a picker offers for attaching: the project's own and the company's, of a provider that can be attached.
+  scope :attachable_for_project, ->(project) { visible_for_project(project).attachable.order(:provider, :id) }
   scope :visible_for_project, ->(project) {
     where(company_id: project.company_id, project_id: nil).or(where(project_id: project.id))
   }
@@ -308,6 +317,22 @@ class Integration < ApplicationRecord
 
   def coder_lock_ttl_minutes
     settings&.dig("lock_ttl_minutes")&.to_i
+  end
+
+  # The host of the Coder URL, to tell two integrations with alike names apart. Nothing else of
+  # the URL, which may carry a path or a port a user typed.
+  def coder_host
+    URI.parse(coder_url.to_s).host
+  rescue URI::InvalidURIError, Encryptable::DecryptionError
+    nil
+  end
+
+  # What a Coder integration connected before the template and the prefix were required still
+  # lacks. It keeps working with today's pool; its next settings save needs both.
+  def coder_missing_settings
+    return [] unless coder?
+
+    [ ("default_template" if coder_default_template.blank?), ("machine_prefix" if coder_machine_prefix.blank?) ].compact
   end
 
   def self.ransackable_attributes(_auth_object = nil)

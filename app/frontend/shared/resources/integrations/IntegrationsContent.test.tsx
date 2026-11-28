@@ -921,11 +921,46 @@ describe('IntegrationsContent', () => {
   });
 
   describe('Coder connect modal', () => {
+    // The templates the typed token can see, and a prefix made from the project's name.
+    beforeEach(() => {
+      answerFetch({
+        'POST /company/integrations/coder_templates': {
+          templates: ['aws-template', 'other-template'],
+          suggestedPrefix: 'acme',
+        },
+      });
+    });
+
     const openCoderModal = async () => {
       await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
       await userEvent.click(await screen.findByRole('menuitem', { name: 'Coder' }));
       return screen.findByRole('dialog', { name: /Connect Coder/i });
     };
+
+    const fillAndLoadTemplates = async (dialog: HTMLElement, url: string) => {
+      await userEvent.type(within(dialog).getByPlaceholderText('https://coder.example.com'), url);
+      await userEvent.type(within(dialog).getByPlaceholderText('vFVrbTLdls-...'), 'session-token-xyz');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Load templates' }));
+      await waitFor(() => expect(within(dialog).getByLabelText(/Machine name prefix/)).toHaveValue('acme'));
+    };
+
+    it('asks browsers and password managers not to fill the URL and token', async () => {
+      renderPage(
+        <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
+        { props: settingsProps },
+      );
+
+      const dialog = await openCoderModal();
+      const url = within(dialog).getByPlaceholderText('https://coder.example.com');
+      const token = within(dialog).getByPlaceholderText('vFVrbTLdls-...');
+
+      expect(url).toHaveAttribute('autocomplete', 'off');
+      expect(token).toHaveAttribute('autocomplete', 'new-password');
+      for (const input of [url, token]) {
+        expect(input.getAttribute('name')).toBeTruthy();
+        expect(input.getAttribute('name')).not.toMatch(/user|login|email|pass(word)?\b/i);
+      }
+    });
 
     it('keeps Connect disabled and shows a validation error for a non-http(s) URL', async () => {
       renderPage(
@@ -952,8 +987,7 @@ describe('IntegrationsContent', () => {
       );
 
       const dialog = await openCoderModal();
-      await userEvent.type(within(dialog).getByPlaceholderText('https://coder.example.com'), 'http://coder.acme.dev');
-      await userEvent.type(within(dialog).getByPlaceholderText('vFVrbTLdls-...'), 'session-token-xyz');
+      await fillAndLoadTemplates(dialog, 'http://coder.acme.dev');
 
       await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
 
@@ -963,12 +997,14 @@ describe('IntegrationsContent', () => {
           provider: 'coder',
           coderUrl: 'http://coder.acme.dev',
           sessionToken: 'session-token-xyz',
+          defaultTemplate: 'aws-template',
+          machinePrefix: 'acme',
         }),
         expect.any(Object),
       );
     });
 
-    it('posts the coder payload with advanced fields when the form is valid', async () => {
+    it('needs a template and a prefix: Connect stays disabled until the templates are loaded', async () => {
       renderPage(
         <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
         { props: settingsProps },
@@ -978,40 +1014,66 @@ describe('IntegrationsContent', () => {
       await userEvent.type(within(dialog).getByPlaceholderText('https://coder.example.com'), 'https://coder.acme.dev');
       await userEvent.type(within(dialog).getByPlaceholderText('vFVrbTLdls-...'), 'session-token-xyz');
 
-      // Advanced section is collapsed by default; open it to fill the optional fields.
-      await userEvent.click(within(dialog).getByText('Advanced'));
-      await userEvent.type(within(dialog).getByPlaceholderText('aws-ec2-spot-v1'), 'aws-template');
-      await userEvent.type(within(dialog).getByPlaceholderText('aixle-prod'), 'acme-prefix');
+      expect(within(dialog).getByRole('button', { name: 'Connect' })).toBeDisabled();
+      expect(within(dialog).getByRole('combobox', { name: /Default template/ })).toBeDisabled();
 
-      await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
-
-      expect(router.post).toHaveBeenCalledWith(
-        '/company/integrations',
-        expect.objectContaining({
-          provider: 'coder',
-          coderUrl: 'https://coder.acme.dev',
-          sessionToken: 'session-token-xyz',
-          defaultTemplate: 'aws-template',
-          machinePrefix: 'acme-prefix',
-        }),
-        expect.objectContaining({ preserveScroll: true }),
-      );
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Load templates' }));
+      await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Connect' })).toBeEnabled());
     });
 
-    it('toggling Advanced reveals and hides the optional Coder fields', async () => {
+    it('posts the chosen template and the edited prefix with the URL and token', async () => {
+      const fetchSpy = answerFetch({
+        'POST /company/integrations/coder_templates': {
+          templates: ['aws-template', 'other-template'],
+          suggestedPrefix: 'acme',
+        },
+      });
       renderPage(
         <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
         { props: settingsProps },
       );
 
       const dialog = await openCoderModal();
-      expect(within(dialog).queryByPlaceholderText('aws-ec2-spot-v1')).not.toBeInTheDocument();
+      await fillAndLoadTemplates(dialog, 'https://coder.acme.dev');
+      await userEvent.click(within(dialog).getByRole('combobox', { name: /Default template/ }));
+      await userEvent.click(await screen.findByRole('option', { name: 'other-template' }));
+      const prefix = within(dialog).getByLabelText(/Machine name prefix/);
+      await userEvent.clear(prefix);
+      await userEvent.type(prefix, 'acme-prefix');
+
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
+
+      expect(JSON.parse(fetchSpy.mock.calls[0][1]?.body as string)).toEqual({
+        coder_url: 'https://coder.acme.dev',
+        session_token: 'session-token-xyz',
+      });
+      expect(router.post).toHaveBeenCalledWith(
+        '/company/integrations',
+        expect.objectContaining({
+          provider: 'coder',
+          coderUrl: 'https://coder.acme.dev',
+          sessionToken: 'session-token-xyz',
+          defaultTemplate: 'other-template',
+          machinePrefix: 'acme-prefix',
+        }),
+        expect.objectContaining({ preserveScroll: true }),
+      );
+    });
+
+    it('toggling Advanced reveals and hides the lock TTL', async () => {
+      renderPage(
+        <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
+        { props: settingsProps },
+      );
+
+      const dialog = await openCoderModal();
+      expect(within(dialog).queryByLabelText('Lock TTL (minutes)')).not.toBeInTheDocument();
 
       await userEvent.click(within(dialog).getByText('Advanced'));
-      expect(within(dialog).getByPlaceholderText('aws-ec2-spot-v1')).toBeInTheDocument();
+      expect(within(dialog).getByLabelText('Lock TTL (minutes)')).toBeInTheDocument();
 
       await userEvent.click(within(dialog).getByText('Advanced'));
-      expect(within(dialog).queryByPlaceholderText('aws-ec2-spot-v1')).not.toBeInTheDocument();
+      expect(within(dialog).queryByLabelText('Lock TTL (minutes)')).not.toBeInTheDocument();
     });
 
     it('keeps Connect disabled when only the URL is filled but the token is empty', async () => {
@@ -1086,8 +1148,7 @@ describe('IntegrationsContent', () => {
       );
 
       const dialog = await openCoderModal();
-      await userEvent.type(within(dialog).getByPlaceholderText('https://coder.example.com'), 'https://coder.acme.dev');
-      await userEvent.type(within(dialog).getByPlaceholderText('vFVrbTLdls-...'), 'session-token-xyz');
+      await fillAndLoadTemplates(dialog, 'https://coder.acme.dev');
       await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
 
       // The router mock records the call but never runs the callbacks itself; drive the onError
@@ -1382,8 +1443,17 @@ describe('IntegrationsContent', () => {
         coderDefaultTemplate: 'aws-ec2-spot-v1',
         coderMachinePrefix: 'aixle-prod',
         coderLockTtlMinutes: 120,
+        coderHost: 'coder.aixle.dev',
+        missingSettings: [],
         ...overrides,
       });
+
+    // The templates the stored token can see, read when the settings open.
+    beforeEach(() => {
+      answerFetch({
+        'GET /projects/42/integrations/9/coder_template_list': { templates: ['aws-ec2-spot-v1', 'other'] },
+      });
+    });
 
     it('shows the allocator settings on the row', () => {
       renderPage(
@@ -1411,7 +1481,26 @@ describe('IntegrationsContent', () => {
       expect(screen.getByText('no default template · no prefix · lock 120m')).toBeInTheDocument();
     });
 
-    it('saving the edit form patches the integration with the changed settings', async () => {
+    it('shows what a connection made before the required settings still lacks', () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[
+            coderIntegration({
+              coderDefaultTemplate: null,
+              coderMachinePrefix: null,
+              missingSettings: ['default_template', 'machine_prefix'],
+            }),
+          ]}
+        />,
+        { props: settingsProps },
+      );
+
+      expect(screen.getByText('Needs default template and machine prefix')).toBeInTheDocument();
+    });
+
+    it('saving the edit form patches the integration with the template chosen from the token’s list', async () => {
       renderPage(
         <IntegrationsContent
           title="Project Integrations"
@@ -1425,9 +1514,13 @@ describe('IntegrationsContent', () => {
       const dialog = await screen.findByRole('dialog', { name: /Coder settings/i });
 
       // Prefilled from the row, so an edit never silently drops the other fields.
-      expect(within(dialog).getByLabelText('Machine name prefix')).toHaveValue('aixle-prod');
+      expect(within(dialog).getByLabelText(/Machine name prefix/)).toHaveValue('aixle-prod');
+      expect(within(dialog).getByRole('button', { name: 'Save' })).toBeDisabled();
 
-      await userEvent.type(within(dialog).getByLabelText('Default template'), 'aws-ec2-spot-v1');
+      const template = within(dialog).getByRole('combobox', { name: /Default template/ });
+      await waitFor(() => expect(template).toBeEnabled());
+      await userEvent.click(template);
+      await userEvent.click(await screen.findByRole('option', { name: 'aws-ec2-spot-v1' }));
       await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
 
       expect(router.patch).toHaveBeenCalledWith(
@@ -1437,7 +1530,13 @@ describe('IntegrationsContent', () => {
       );
     });
 
-    it('sends a blank template when it is cleared, so the pool can be capped', async () => {
+    it('shows the server message in the form when the stored token’s template lookup fails', async () => {
+      answerFetch({
+        'GET /projects/42/integrations/9/coder_template_list': jsonResponse(
+          { error: 'unreachable', message: 'Coder at coder.aixle.dev could not be reached.' },
+          422,
+        ),
+      });
       renderPage(
         <IntegrationsContent
           title="Project Integrations"
@@ -1450,14 +1549,41 @@ describe('IntegrationsContent', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Edit settings for Acme Coder' }));
       const dialog = await screen.findByRole('dialog', { name: /Coder settings/i });
 
-      await userEvent.clear(within(dialog).getByLabelText('Default template'));
-      await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+      expect(await within(dialog).findByText('Coder at coder.aixle.dev could not be reached.')).toBeInTheDocument();
+    });
 
-      expect(router.patch).toHaveBeenCalledWith(
-        '/projects/42/integrations/9',
-        expect.objectContaining({ defaultTemplate: '' }),
-        expect.any(Object),
+    it('asks browsers and password managers not to fill the replacement token', async () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[coderIntegration()]}
+        />,
+        { props: settingsProps },
       );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Replace token for Acme Coder' }));
+      const dialog = await screen.findByRole('dialog', { name: /Replace token/i });
+
+      expect(within(dialog).getByLabelText('Session Token')).toHaveAttribute('autocomplete', 'new-password');
+    });
+
+    it('does not save without a prefix', async () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[coderIntegration()]}
+        />,
+        { props: settingsProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit settings for Acme Coder' }));
+      const dialog = await screen.findByRole('dialog', { name: /Coder settings/i });
+
+      await userEvent.clear(within(dialog).getByLabelText(/Machine name prefix/));
+
+      expect(within(dialog).getByRole('button', { name: 'Save' })).toBeDisabled();
     });
 
     it('closes the settings it opened with, untouched, without asking', async () => {
@@ -1490,7 +1616,7 @@ describe('IntegrationsContent', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'Edit settings for Acme Coder' }));
       const dialog = await screen.findByRole('dialog', { name: /Coder settings/i });
-      await userEvent.type(within(dialog).getByLabelText('Machine name prefix'), '-eu');
+      await userEvent.type(within(dialog).getByLabelText(/Machine name prefix/), '-eu');
       await userEvent.click(within(dialog).getByRole('button', { name: 'Clear' }));
 
       const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });

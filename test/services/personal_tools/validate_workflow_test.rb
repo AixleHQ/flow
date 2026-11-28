@@ -42,6 +42,29 @@ module PersonalTools
       assert validate["warnings"].any? { |w| w.include?("no agent") }
     end
 
+    test "warns when a step's Coder tool has no Coder integration attached, and not once one is" do
+      coder = create(:integration, :coder, :active, company: @company, project: @project, connected_by: @user)
+      tool = Tool.shadow_for(Tools::Registry.fetch("coder_ssh_exec"))
+      step = create(:step, workflow: @workflow, name: "Build", instructions: "Run the build",
+                           agent: create(:agent, scope: @project), tool_ids: [ tool.id ])
+
+      assert validate["warnings"].any? { |w| w.include?("Step 'Build' uses tool coder_ssh_exec") && w.include?("coder integration") }
+
+      step.update!(integration_ids: [ coder.id ])
+
+      assert validate["warnings"].none? { |w| w.include?("coder_ssh_exec") }
+      assert_empty validate["errors"]
+    end
+
+    test "reports an integration that is missing, inactive or not attachable" do
+      inactive = create(:integration, :coder, status: :inactive, company: @company, project: @project, connected_by: @user)
+      create(:step, workflow: @workflow, name: "Build", instructions: "Run", agent: create(:agent, scope: @project),
+                    integration_ids: [ inactive.id ])
+
+      assert_includes validate["errors"],
+                      "Step 'Build' links integration #{inactive.id}, which is missing, disabled or not in this project"
+    end
+
     test "reports an AWS role whose integration is no longer active" do
       integration = create(:integration, :aws_oidc, company: @company, project: @project)
       role = create(:aws_oidc_role, integration: integration)

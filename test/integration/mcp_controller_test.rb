@@ -178,8 +178,12 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     names = listed_tools(rpc("tools/list")).map { |t| t["name"] }
     refute_includes names, "chat_post_message"
 
-    create(:integration, company: @company, project: @project, provider: :slack,
-                         status: :active, connected_by: @user)
+    slack = create(:integration, company: @company, project: @project, provider: :slack,
+                                 status: :active, connected_by: @user)
+    names = listed_tools(rpc("tools/list")).map { |t| t["name"] }
+    refute_includes names, "chat_post_message", "an install the session was not given is not reachable"
+
+    @session.integrations << slack
     names = listed_tools(rpc("tools/list")).map { |t| t["name"] }
     assert_includes names, "chat_post_message"
   end
@@ -217,6 +221,20 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     text = body.dig("result", "content").map { |c| c["text"] }.join("\n")
     assert_match(/chat integration is not connected/i, text)
     assert_match(/Project Settings/, text)
+  end
+
+  test "tools/call on a tool whose integration is connected to the project but not attached to the session says to attach it" do
+    create(:integration, company: @company, project: @project, provider: :slack,
+                         status: :active, connected_by: @user)
+    attach_platform_tool("chat_post_message")
+
+    body = rpc("tools/call", { name: "chat_post_message", arguments: { text: "hi" } })
+
+    assert body.dig("result", "isError")
+    text = body.dig("result", "content").map { |c| c["text"] }.join("\n")
+    assert_match(/chat integration is not attached to this session/i, text)
+    assert_match(/Attach it to the workflow, the step or the session/, text)
+    assert_no_match(/Project Settings/, text)
   end
 
   test "the in-band error for a disconnected tool is stamped on the modern wire" do
@@ -350,9 +368,12 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     names = listed_tools(rpc("tools/list")).map { |t| t["name"] }
     refute_includes names, "coder_ssh_exec"
 
-    create(:integration, company: @company, project: @project,
-                         provider: :coder, status: :active, connected_by: @user)
+    coder = create(:integration, company: @company, project: @project,
+                                 provider: :coder, status: :active, connected_by: @user)
+    names = listed_tools(rpc("tools/list")).map { |t| t["name"] }
+    refute_includes names, "coder_ssh_exec", "a connected integration is not reachable until it is in the session's set"
 
+    @session.integrations << coder
     names = listed_tools(rpc("tools/list")).map { |t| t["name"] }
     assert_includes names, "coder_ssh_exec"
   end

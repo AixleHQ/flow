@@ -117,6 +117,24 @@ module ProjectMove
                                     .order(:name).to_a
     end
 
+    # Company-wide integrations the project's workflows and steps attach. They stay with the
+    # source company, so the move drops those attachments; the project's own integrations
+    # move with it and stay attached.
+    def detached_integrations
+      @detached_integrations ||= Integration.where(id: integration_links.flat_map { |_, links| links.pluck(:integration_id) }.uniq)
+                                            .order(:name).to_a
+    end
+
+    # The attachments the move deletes: [[link class, relation], ...].
+    def integration_links
+      @integration_links ||= begin
+        company_wide = Integration.where(company_id: source.id, project_id: nil).select(:id)
+        step_ids = Step.unscoped.where(workflow_id: workflow_ids).select(:id)
+        [ [ WorkflowResourceLink, WorkflowResourceLink.where(workflow_id: workflow_ids, integration_id: company_wide) ],
+          [ StepResourceLink, StepResourceLink.where(step_id: step_ids, integration_id: company_wide) ] ]
+      end
+    end
+
     # The project's own integrations that move but cannot stay connected, with why.
     def deactivated_integrations
       @deactivated_integrations ||= project.integrations.active.order(:id).filter_map do |integration|
@@ -164,6 +182,7 @@ module ProjectMove
         **cancellation_report,
         "detached_repositories" => detached_repositories.map { |repo| { "id" => repo.id, "full_name" => repo.full_name } },
         "detached_trackers" => detached_trackers.map { |tracker| { "id" => tracker.id, "name" => tracker.name } },
+        "detached_integrations" => detached_integrations.map { |integration| { "id" => integration.id, "name" => integration.name } },
         "deactivated_integrations" => deactivated_integrations.map do |integration, reason|
           { "id" => integration.id, "name" => integration.name, "provider" => integration.provider.to_s, "reason" => reason }
         end,

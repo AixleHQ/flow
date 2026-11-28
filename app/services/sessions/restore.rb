@@ -19,14 +19,14 @@ module Sessions
     DOWNLOAD_TIMEOUT = 20.minutes.to_i
     RESOURCES = {
       tool_ids: :tools, skill_ids: :skills, mcp_server_ids: :mcp_servers, input_asset_ids: :input_assets,
-      repository_ids: :repositories, config_item_ids: :config_items
+      repository_ids: :repositories, config_item_ids: :config_items, integration_ids: :integrations
     }.freeze
 
     # The new session's configuration: the suspended one's, without what has since gone.
     def self.params_for(session)
       notes = []
       resources = RESOURCES.to_h do |param, association|
-        kept, gone = session.public_send(association).partition { |record| available?(record) }
+        kept, gone = available_split(session, association)
         gone.each { |record| notes << "#{record.class.model_name.human} \"#{record.try(:name) || record.id}\" is no longer available" }
         [ param, kept.map(&:id) ]
       end
@@ -40,9 +40,30 @@ module Sessions
       }.merge(resources).compact
     end
 
+    # The ids of the suspended session's integrations that can still be attached: the set a
+    # restored step's session keeps, in place of the one its workflow now links.
+    def self.integration_ids_for(session)
+      available_split(session, :integrations).first.map(&:id)
+    end
+
+    def self.available_split(session, association)
+      restorable(session, association).partition { |record| available?(record) }
+    end
+    private_class_method :available_split
+
+    # The integrations a restored session is given are the ones that can be attached. Those its
+    # repositories brought along are derived again from the repositories.
+    def self.restorable(session, association)
+      records = session.public_send(association)
+      return records unless association == :integrations
+
+      records.select { |integration| Integration::ATTACHABLE_PROVIDERS.include?(integration.provider.to_s) }
+    end
+
     def self.available?(record)
       return false if record.respond_to?(:archived_at) && record.archived_at.present?
       return false if record.respond_to?(:deleted_at) && record.deleted_at.present?
+      return false if record.is_a?(Integration) && !record.active?
 
       true
     end

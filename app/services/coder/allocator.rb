@@ -278,7 +278,7 @@ module Coder
     end
 
     def generate_workspace_name
-      "#{prefix || 'aixle'}-#{SecureRandom.hex(4)}"
+      Coder::Pool.generate_name(prefix)
     end
 
     def build_result(workspace_id:, workspace_name:, status:, lock:)

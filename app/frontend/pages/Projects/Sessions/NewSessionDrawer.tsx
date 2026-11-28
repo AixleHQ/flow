@@ -40,6 +40,8 @@ export function NewSessionDrawer({ projectId, opened, onClose }: Props) {
           repositories={options.repositories}
           assets={options.assets}
           configItems={options.configItems}
+          integrations={options.integrations}
+          defaultIntegrationIds={options.defaultIntegrationIds}
           runners={options.runners}
           costHint={options.costHint}
           onCreatedPath={(sessionId, id) => companyProjectSessionPath(id, sessionId)}

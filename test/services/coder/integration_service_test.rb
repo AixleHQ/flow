@@ -15,12 +15,22 @@ module Coder
         .to_return(status: status, body: body.to_json, headers: { "Content-Type" => "application/json" })
     end
 
+    def stub_templates(names = %w[tpl aws-ec2-spot-v2 aws-ec2-spot-v1], status: 200)
+      stub_request(:get, "https://coder.example.com/api/v2/templates")
+        .to_return(status: status, body: names.map { |name| { id: SecureRandom.uuid, name: name } }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+    end
+
     def service(project: nil)
       Coder::IntegrationService.new(company: @company, connected_by: @user, project: project)
     end
 
-    def connect(project: nil, token: "tok-1")
-      service(project: project).create(coder_url: "https://coder.example.com", session_token: token, lock_ttl_minutes: 60)
+    def connect(project: nil, token: "tok-1", **settings)
+      stub_templates
+      service(project: project).create(
+        coder_url: "https://coder.example.com", session_token: token, lock_ttl_minutes: 60,
+        **{ default_template: "tpl", machine_prefix: "aixle-prod" }.merge(settings)
+      )
     end
 
     def assert_refused(code)
@@ -34,6 +44,7 @@ module Coder
 
     test "happy path: persists active integration with username and settings" do
       stub_users_me
+      stub_templates
 
       integration = Coder::IntegrationService.new(company: @company, connected_by: @user).create(
         coder_url: "https://coder.example.com",
@@ -56,24 +67,70 @@ module Coder
       assert_equal 45, integration.settings["lock_ttl_minutes"]
     end
 
-    test "happy path: optional fields default to nil when blank" do
+    test "sad path: a blank default template saves nothing" do
       stub_users_me
 
-      integration = Coder::IntegrationService.new(company: @company, connected_by: @user).create(
-        coder_url: "https://coder.example.com",
-        session_token: "tok-1",
-        lock_ttl_minutes: 60
-      )
+      error = assert_refused("validation_failed") { connect(default_template: " ") }
 
-      assert integration.active?
-      assert_equal 60, integration.settings["lock_ttl_minutes"]
-      assert_nil integration.settings["default_template"]
-      assert_nil integration.settings["machine_prefix"]
+      assert_match(/Default template is required/, error.message)
+    end
+
+    test "sad path: a template the token cannot see saves nothing" do
+      stub_users_me
+      stub_templates(%w[other])
+
+      error = assert_refused("validation_failed") do
+        service.create(coder_url: "https://coder.example.com", session_token: "tok-1", lock_ttl_minutes: 60,
+                       default_template: "tpl", machine_prefix: "aixle")
+      end
+
+      assert_match(/not one of the templates/, error.message)
+    end
+
+    test "sad path: a blank, uppercase, hyphen-edged or too long prefix saves nothing" do
+      stub_users_me
+
+      [ "", nil, "Aixle", "aixle-", "-aixle", "aixle_prod", "a" * 24 ].each do |prefix|
+        error = assert_refused("validation_failed") { connect(machine_prefix: prefix) }
+        assert_match(/Machine prefix is required/, error.message)
+      end
+    end
+
+    test "sad path: Coder refusing the template list saves nothing" do
+      stub_users_me
+      stub_templates(status: 403)
+
+      assert_refused("not_authorized") do
+        service.create(coder_url: "https://coder.example.com", session_token: "tok-1", lock_ttl_minutes: 60,
+                       default_template: "tpl", machine_prefix: "aixle")
+      end
+    end
+
+    test "templates lists the names the token can see, sorted" do
+      stub_templates(%w[b a])
+
+      assert_equal %w[a b], service.templates(coder_url: "https://coder.example.com/", session_token: "tok-1")
+    end
+
+    test "templates refuses a private URL before any HTTP call" do
+      error = assert_raises(Coder::IntegrationService::ConnectionError) do
+        service.templates(coder_url: "https://10.0.0.5", session_token: "tok-1")
+      end
+
+      assert_equal "validation_failed", error.code
+    end
+
+    test "templates_of reads the list with the stored token" do
+      integration = create(:integration, :coder, :active, company: @company, connected_by: @user)
+      stub_templates(%w[one two])
+
+      assert_equal %w[one two], service.templates_of(integration)
     end
 
     test "sad path: missing lock_ttl_minutes saves nothing and calls no HTTP" do
       error = assert_refused("validation_failed") do
-        service.create(coder_url: "https://coder.example.com", session_token: "tok-1")
+        service.create(coder_url: "https://coder.example.com", session_token: "tok-1",
+                       default_template: "tpl", machine_prefix: "aixle")
       end
 
       assert_match(/Lock TTL minutes is required/, error.message)
@@ -81,7 +138,8 @@ module Coder
 
     test "sad path: zero or negative lock_ttl_minutes is rejected" do
       error = assert_refused("validation_failed") do
-        service.create(coder_url: "https://coder.example.com", session_token: "tok-1", lock_ttl_minutes: 0)
+        service.create(coder_url: "https://coder.example.com", session_token: "tok-1", lock_ttl_minutes: 0,
+                       default_template: "tpl", machine_prefix: "aixle")
       end
 
       assert_match(/Lock TTL minutes is required/, error.message)
@@ -89,11 +147,13 @@ module Coder
 
     test "URL is normalized (trim + chomp trailing slash)" do
       stub_users_me
+      stub_templates
 
       integration = Coder::IntegrationService.new(company: @company, connected_by: @user).create(
         coder_url: "  https://coder.example.com/  ",
         session_token: "tok-1",
-        lock_ttl_minutes: 60
+        lock_ttl_minutes: 60,
+        default_template: "tpl", machine_prefix: "aixle"
       )
 
       assert_equal "https://coder.example.com", integration.credentials_data["coder_url"]
@@ -114,6 +174,8 @@ module Coder
     end
 
     test "allows an http Coder URL" do
+      stub_request(:get, "http://coder.example.com/api/v2/templates")
+        .to_return(status: 200, body: [ { name: "tpl" } ].to_json, headers: { "Content-Type" => "application/json" })
       stub_request(:get, "http://coder.example.com/api/v2/users/me").to_return(
         status: 200,
         body: { id: "user-uuid", username: "alice", email: "alice@example.com" }.to_json,
@@ -123,7 +185,8 @@ module Coder
       integration = Coder::IntegrationService.new(company: @company, connected_by: @user).create(
         coder_url: "http://coder.example.com",
         session_token: "tok-1",
-        lock_ttl_minutes: 60
+        lock_ttl_minutes: 60,
+        default_template: "tpl", machine_prefix: "aixle"
       )
 
       assert integration.persisted?
@@ -132,6 +195,8 @@ module Coder
     end
 
     test "allows a trusted internal kubernetes service URL for Coder" do
+      stub_request(:get, "http://coder.coder.svc.cluster.local/api/v2/templates")
+        .to_return(status: 200, body: [ { name: "tpl" } ].to_json, headers: { "Content-Type" => "application/json" })
       stub_request(:get, "http://coder.coder.svc.cluster.local/api/v2/users/me").to_return(
         status: 200,
         body: { id: "user-uuid", username: "alice", email: "alice@example.com" }.to_json,
@@ -144,7 +209,8 @@ module Coder
       integration = Coder::IntegrationService.new(company: @company, connected_by: @user).create(
         coder_url: "http://coder.coder.svc.cluster.local",
         session_token: "tok-1",
-        lock_ttl_minutes: 60
+        lock_ttl_minutes: 60,
+        default_template: "tpl", machine_prefix: "aixle"
       )
 
       assert integration.persisted?
@@ -154,7 +220,8 @@ module Coder
 
     test "sad path: localhost URL rejected before HTTP call" do
       error = assert_refused("validation_failed") do
-        service.create(coder_url: "https://localhost", session_token: "tok-1", lock_ttl_minutes: 60)
+        service.create(coder_url: "https://localhost", session_token: "tok-1", lock_ttl_minutes: 60,
+                       default_template: "tpl", machine_prefix: "aixle")
       end
 
       assert_match(/internal services/, error.message)
@@ -162,7 +229,8 @@ module Coder
 
     test "sad path: private CIDR URL rejected before HTTP call" do
       error = assert_refused("validation_failed") do
-        service.create(coder_url: "https://10.0.0.5", session_token: "tok-1", lock_ttl_minutes: 60)
+        service.create(coder_url: "https://10.0.0.5", session_token: "tok-1", lock_ttl_minutes: 60,
+                       default_template: "tpl", machine_prefix: "aixle")
       end
 
       assert_match(/private or internal/, error.message)
@@ -170,49 +238,44 @@ module Coder
 
     test "scoping: project-scoped integration is persisted with project_id" do
       stub_users_me
+      stub_templates
       project = create(:project, company: @company, owner: @user)
 
       integration = Coder::IntegrationService.new(
         company: @company, connected_by: @user, project: project
-      ).create(coder_url: "https://coder.example.com", session_token: "tok-1", lock_ttl_minutes: 60)
+      ).create(coder_url: "https://coder.example.com", session_token: "tok-1", lock_ttl_minutes: 60,
+               default_template: "tpl", machine_prefix: "aixle")
 
       assert integration.active?
       assert_equal project.id, integration.project_id
     end
 
-    test "connecting the same URL as the same account renews that connection" do
+    test "connecting the same URL, account and prefix again makes a new integration" do
       stub_users_me
       project = create(:project, company: @company, owner: @user)
-      first = service(project: project).create(
-        coder_url: "https://coder.example.com", session_token: "tok-1", lock_ttl_minutes: 60,
-        default_template: "tpl", machine_prefix: "aixle-prod"
-      )
+      first = connect(project: project)
 
       second = nil
-      assert_no_difference -> { Integration.count } do
-        second = service(project: project).create(
-          coder_url: "https://coder.example.com/", session_token: "tok-2", lock_ttl_minutes: 90
-        )
+      assert_difference -> { Integration.count }, 1 do
+        second = connect(project: project, token: "tok-2")
       end
 
-      assert_equal first.id, second.id
-      first.reload
-      assert_equal "tok-2", first.credentials_data["session_token"]
-      assert_equal 90, first.coder_lock_ttl_minutes
-      # Left blank on the form: kept, not cleared — a blank prefix would widen the pool.
-      assert_equal "tpl", first.coder_default_template
-      assert_equal "aixle-prod", first.coder_machine_prefix
+      assert_not_equal first.id, second.id
+      assert_equal "tok-1", first.reload.credentials_data["session_token"]
+      assert_equal "tok-2", second.credentials_data["session_token"]
+      assert first.active? && second.active?
     end
 
-    test "a project cannot get a second active Coder connection" do
-      project = create(:project, company: @company, owner: @user)
-      create(:integration, :coder, :active, company: @company, project: project, connected_by: @user,
-                                            name: "Coder (bob)")
+    test "two integrations of the same account and prefix coexist in one scope and across scopes" do
       stub_users_me
+      project = create(:project, company: @company, owner: @user)
+      other = create(:project, company: @company, owner: @user)
 
-      error = assert_refused("already_connected") { connect(project: project) }
-
-      assert_match(/Coder \(bob\) is already connected here/, error.message)
+      assert_difference -> { Integration.count }, 3 do
+        connect(project: project)
+        connect(project: project)
+        connect(project: other)
+      end
     end
 
     test "a connection in error does not block connecting another account" do
@@ -223,22 +286,6 @@ module Coder
       assert_difference -> { Integration.count }, 1 do
         assert connect(project: project).active?
       end
-    end
-
-    test "a row a failed attempt left for the same URL is taken over" do
-      project = create(:project, company: @company, owner: @user)
-      failed = create(:integration, :coder, :error, company: @company, project: project, connected_by: @user,
-                                                    name: "Coder (unverified)")
-      failed.update!(credentials_data: { coder_url: "https://coder.example.com", session_token: "bad" })
-      stub_users_me
-
-      assert_no_difference -> { Integration.count } do
-        assert_equal failed.id, connect(project: project).id
-      end
-      failed.reload
-      assert failed.active?
-      assert_equal "Coder (alice)", failed.name
-      assert_nil failed.settings["error"]
     end
 
     test "replace_token swaps the session token in place" do
@@ -293,6 +340,17 @@ module Coder
       assert integration.reload.active?
     end
 
+    test "test reactivates a connection with no check of what else the scope holds" do
+      stub_users_me
+      project = create(:project, company: @company, owner: @user)
+      integration = connect(project: project)
+      connect(project: project, token: "tok-2")
+      integration.update_columns(status: "error")
+
+      assert_equal :active, service(project: project).test(integration.reload)[:status]
+      assert integration.reload.active?
+    end
+
     test "test brings a repaired connection back to active" do
       stub_users_me
       integration = connect
@@ -310,6 +368,7 @@ module Coder
     test "update_settings edits the allocator settings and leaves credentials alone" do
       integration = create(:integration, :coder, :active, company: @company, connected_by: @user)
       credentials_before = integration.credentials_data
+      stub_templates
 
       Coder::IntegrationService.new(company: @company, connected_by: @user).update_settings(
         integration: integration, default_template: "aws-ec2-spot-v1",
@@ -325,19 +384,28 @@ module Coder
       assert_equal "test-user", integration.settings["coder_username"]
     end
 
-    test "update_settings treats a blank template or prefix as a removal" do
+    test "update_settings refuses a blank template or prefix, and a template the token cannot see" do
       integration = create(:integration, :coder, :active, company: @company, connected_by: @user)
-      integration.update!(
-        settings: integration.settings.merge("default_template" => "tpl", "machine_prefix" => "aixle-prod")
-      )
+      stub_templates(%w[tpl])
+      service = Coder::IntegrationService.new(company: @company, connected_by: @user)
 
-      Coder::IntegrationService.new(company: @company, connected_by: @user).update_settings(
-        integration: integration, default_template: "  ", machine_prefix: nil, lock_ttl_minutes: 120
-      )
+      [ [ " ", "aixle" ], [ "tpl", nil ], [ "tpl", "Bad Prefix" ], [ "missing", "aixle" ] ].each do |template, prefix|
+        error = assert_raises(Coder::IntegrationService::ConnectionError) do
+          service.update_settings(integration: integration, default_template: template, machine_prefix: prefix,
+                                  lock_ttl_minutes: 120)
+        end
+        assert_equal "validation_failed", error.code
+      end
 
-      integration.reload
-      assert_nil integration.coder_default_template
-      assert_nil integration.coder_machine_prefix
+      assert_nil integration.reload.coder_default_template
+    end
+
+    test "a legacy row without template or prefix reports what it lacks, and the next save needs both" do
+      legacy = create(:integration, :coder, :active, company: @company, connected_by: @user)
+
+      assert_equal %w[default_template machine_prefix], legacy.coder_missing_settings
+      legacy.update!(settings: legacy.settings.merge("default_template" => "tpl"))
+      assert_equal %w[machine_prefix], legacy.coder_missing_settings
     end
 
     test "update_settings rejects a non-positive or missing lock TTL" do

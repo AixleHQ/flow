@@ -263,7 +263,10 @@ starts themselves with **Run workflow** or `/run` belongs to them instead.
 | `chat_delete_message` | Deletes a message the app posted. |
 
 The same tools work in Slack, and they answer in whichever messenger the run
-came from. In a run that started from Teams, the conversation and thread default
+came from. A session reaches only the Teams installs in its integration set (the
+ones attached to its workflow or step, or chosen in the new-session form, plus the
+one that started the run); the tools take an optional `integration_id` for the
+case of several. In a run that started from Teams, the conversation and thread default
 to the triggering message. Elsewhere, pass `provider: "teams"` and a
 `conversation` connected to your company: `Team/Channel`, a channel name, or its
 id. The tools refuse one that is not connected, and list the ones that are.

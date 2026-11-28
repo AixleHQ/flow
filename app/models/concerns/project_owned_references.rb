@@ -20,7 +20,8 @@ module ProjectOwnedReferences
     },
     repositories: ->(project) { Repository.for_project(project) },
     config_items: ->(project) { ConfigItem.for_project(project) },
-    aws_oidc_roles: ->(project) { AwsOidcRole.for_project(project) }
+    aws_oidc_roles: ->(project) { AwsOidcRole.for_project(project) },
+    integrations: ->(project) { TenantScope.owned(Integration, project: project) }
   }.freeze
 
   # `lenient:` passes an id whose row is gone, as TenantScope.foreign_existing_ids
@@ -36,7 +37,25 @@ module ProjectOwnedReferences
     ids - owners.where(id: ids).pluck(:id)
   end
 
+  # Integrations a list may hold: the providers whose tools take an integration directly
+  # (Integration::ATTACHABLE_PROVIDERS). GitHub, GitLab and Bitbucket arrive through
+  # repositories and trackers through ProjectTracker, so attaching them would be a second switch.
+  def self.unattachable_integration_ids(ids)
+    ids = Array(ids).compact_blank.map(&:to_i).uniq
+    return [] if ids.empty?
+
+    Integration.where(id: ids).where.not(provider: Integration::ATTACHABLE_PROVIDERS).pluck(:id)
+  end
+
   private
+
+  def validate_attachable_integrations(attribute, before, after, label: nil)
+    added = Array(after).compact_blank.map(&:to_i) - Array(before).compact_blank.map(&:to_i)
+    refused = ProjectOwnedReferences.unattachable_integration_ids(added)
+    return if refused.empty?
+
+    errors.add(attribute, [ label, "contains integrations of a provider that cannot be attached: #{refused.sort.join(', ')}" ].compact.join(" "))
+  end
 
   def validate_owned_ids(project, kind, attribute, before, after, label: nil, lenient: false)
     added = Array(after).compact_blank.map(&:to_i) - Array(before).compact_blank.map(&:to_i)

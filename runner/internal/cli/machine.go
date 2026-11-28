@@ -300,8 +300,7 @@ func RunMachine(ctx context.Context, opts MachineOptions) error {
 	// backoff instead of exiting: an exit makes the service manager restart it
 	// every few seconds (Restart=always, RestartSec=5), a loop that tells the
 	// operator nothing. Once Docker answers it reports the machine again, so
-	// that the platform has the facts of a machine that works, and Return to
-	// service (DESIGN.md §5.2) reaches a runner that polls.
+	// that the platform has the facts of a machine that works.
 	waited, err := resumeWhenDockerAnswers(ctx, env, opts.Logger, opts.Sleep)
 	if err != nil {
 		if ctx.Err() != nil {

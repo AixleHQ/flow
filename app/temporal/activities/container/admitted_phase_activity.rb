@@ -141,7 +141,7 @@ module Activities
         if !absent && runtime.cleanup_ready?(admission.runtime_id)
           state = collect_outputs(admission, session, state)
           # A session on a runner's machine that failed gets a reset, whatever
-          # its policy (DESIGN.md §7.2), and counts toward the machine's streak.
+          # its policy (DESIGN.md §7.2).
           runtime.cleanup_session(admission.runtime_id, failed: session_failed?(session, state))
           absent = runtime.session_absent?(admission.runtime_id)
         end
