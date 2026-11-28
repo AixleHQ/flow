@@ -53,9 +53,14 @@ class RunnerEnvironment < ApplicationRecord
   # The states that can take a session: `registered` (a `manual` machine) and `idle`.
   IN_SERVICE_STATES = %w[registered idle].freeze
 
+  # The platform is still bringing the environment up: it has never been heard
+  # and has no container yet (runner-coder.md §15).
+  BEING_BUILT_STATES = %w[provisioning booting].freeze
+
   scope :free, -> { where(state: IN_SERVICE_STATES, current_session_id: nil) }
   # Every environment of a runner that is not `gone`: what `max_environments` counts.
   scope :not_gone, -> { where.not(state: "gone") }
+  scope :being_built, -> { where(state: BEING_BUILT_STATES) }
   scope :holding_session, -> { where.not(current_session_id: nil) }
   # Held by a session whose cleanup will never run (TerminalSession.cleanup_abandoned).
   scope :held_by_abandoned_session, -> { where(current_session_id: TerminalSession.cleanup_abandoned.select(:id)) }
@@ -94,6 +99,11 @@ class RunnerEnvironment < ApplicationRecord
   # availability of a `manual` runner share this one definition.
   def in_service?
     state.to_s.in?(IN_SERVICE_STATES)
+  end
+
+  # The platform is still bringing the environment up: `provisioning` or `booting`.
+  def being_built?
+    state.to_s.in?(BEING_BUILT_STATES)
   end
 
   # The environment takes no more calls from the platform: it left (`gone`),

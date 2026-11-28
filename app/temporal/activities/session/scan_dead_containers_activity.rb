@@ -107,7 +107,7 @@ module Activities
       # so it is not lost: the boot timeout owns that window (runner-coder.md §15).
       def bringing_up?(session)
         environment = session.runner_environment
-        session.runner_id.present? && environment.present? && (environment.provisioning? || environment.booting?)
+        session.runner_id.present? && environment.present? && environment.being_built?
       end
 
       def candidate_sessions

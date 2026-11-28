@@ -66,6 +66,34 @@ class Runners::AllocatorTest < ActiveSupport::TestCase
     assert_equal 1, @adapter.calls.count { |call| call.first == :inject_bootstrap }, "and installed on once"
   end
 
+  test "a second attempt of the session that missed its hold before the runner lock gets the environment the first made" do
+    session = runner_session
+    assert_raises(Runners::Allocator::Pending) { Runners::Allocator.acquire!(session) }
+    @runner.update!(max_environments: 1)
+    made = environments.sole
+    real = Runners::Allocator.method(:held_by)
+    calls = 0
+    missing_first = lambda do |held_session|
+      calls += 1
+      calls == 1 ? nil : real.call(held_session)
+    end
+
+    Runners::Allocator.stub(:held_by, missing_first) do
+      assert_raises(Runners::Allocator::Pending) { Runners::Allocator.acquire!(TerminalSession.find(session.id)) }
+    end
+
+    assert_equal [ made ], environments.to_a
+    assert_equal made.id, session.reload.runner_environment_id
+  end
+
+  test "the hold is written through the session's validations: an environment of another runner is refused" do
+    session = runner_session
+    other = create(:runner_environment, :allocated, runner: create(:runner, :coder))
+
+    assert_raises(ActiveRecord::RecordInvalid) { TerminalSession.find(session.id).update!(runner_environment: other) }
+    assert_nil session.reload.runner_environment_id
+  end
+
   # == step 1: a free environment ==
 
   test "an idle, heard environment is taken before a new one is made, the lowest id first" do

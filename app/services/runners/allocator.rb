@@ -185,6 +185,11 @@ module Runners
         refuse_retired!(runner, session)
         adapter = Adapter.for(runner)
 
+        # Idempotent for a session (§5.1): a concurrent attempt of this session
+        # may have taken its environment while this one waited for the lock.
+        held = held_by(session)
+        next held if held
+
         environment = RunnerEnvironment.free.heard.where(runner_id: runner.id).order(:id)
                                        .lock("FOR UPDATE SKIP LOCKED").first
         if environment
@@ -192,9 +197,9 @@ module Runners
         else
           environment = make!(runner, adapter, session)
         end
-        # A write of its own, so the caller's session object, a strategy's with
+        # A fresh instance, so the caller's session object, a strategy's with
         # changes of its own, is neither saved nor changed here.
-        TerminalSession.where(id: session.id).update_all(runner_environment_id: environment.id, updated_at: Time.current)
+        TerminalSession.find(session.id).update!(runner_environment: environment)
         environment
       end
     end
