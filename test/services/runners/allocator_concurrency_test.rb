@@ -117,9 +117,7 @@ class Runners::AllocatorConcurrencyTest < ActiveSupport::TestCase
     end
     begin
       # The registration waits for the row the Revoke holds.
-      Timeout.timeout(LOCK_WAIT_TIMEOUT) do
-        sleep 0.05 until ActiveRecord::Base.connection.select_value("SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database()").to_i.positive?
-      end
+      assert_nil register.join(1), "the registration waits for the environment's lock"
     ensure
       release << true
     end
