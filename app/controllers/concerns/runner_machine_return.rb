@@ -10,8 +10,9 @@ module RunnerMachineReturn
   private
 
   # Revoke of one machine (§9.3): the machine is `gone` and its credentials are
-  # revoked, and the session it held ends. A machine already `gone`, or whose
-  # runner was revoked meanwhile, has nothing left to revoke.
+  # revoked, and the session it held ends (`Adapter#end_registration!`, which
+  # accepts a runner revoked meanwhile). A machine already `gone` has nothing
+  # left to revoke.
   def revoke_machine(runner)
     machine = runner.environments.find(params[:id])
     name = Runners::Machines.label(machine)
@@ -20,7 +21,5 @@ module RunnerMachineReturn
     else
       { alert: "#{name} is already gone." }
     end
-  rescue Runners::Credentials::Refused
-    { alert: "This runner is revoked, so its machines are no longer usable." }
   end
 end
