@@ -21,9 +21,81 @@ class Runners::CredentialsTest < ActiveSupport::TestCase
     assert_equal credential, Runners::Credentials.usable(token, kind: :registration)
   end
 
-  test "registration tokens are minted for manual runners only" do
-    error = assert_raises(ArgumentError) { Runners::Credentials.mint_registration!(create(:runner, :coder)) }
-    assert_match(/manual/, error.message)
+  test "registration tokens are minted for manual and coder runners only" do
+    error = assert_raises(ArgumentError) { Runners::Credentials.mint_registration!(create(:runner, :kubernetes)) }
+    assert_match(/manual and coder/, error.message)
+  end
+
+  # == a token bound to an environment (runner-coder.md §8.1) ==
+
+  test "a coder runner's token is bound to one environment of the runner in provisioning, and expires in an hour" do
+    coder = create(:runner, :coder)
+    environment = create(:runner_environment, :allocated, runner: coder)
+
+    freeze_time do
+      token = Runners::Credentials.mint_registration!(coder, environment: environment)
+
+      credential = RunnerCredential.find_by_token(token, kind: :registration)
+      assert_equal environment, credential.runner_environment
+      assert_equal Runners::Credentials::REGISTRATION_TTL.from_now, credential.expires_at
+      assert_equal coder, credential.runner
+    end
+  end
+
+  test "a coder runner's token needs an environment, and a manual runner's takes none" do
+    assert_raises(ArgumentError) { Runners::Credentials.mint_registration!(create(:runner, :coder)) }
+    assert_raises(ArgumentError) do
+      Runners::Credentials.mint_registration!(@runner, environment: create(:runner_environment, :allocated))
+    end
+    assert_empty RunnerCredential.where(kind: :registration)
+  end
+
+  test "one token is minted per environment, once, and only for an allocated environment of the runner in provisioning" do
+    coder = create(:runner, :coder)
+    environment = create(:runner_environment, :allocated, runner: coder)
+    Runners::Credentials.mint_registration!(coder, environment: environment)
+
+    assert_raises(ArgumentError) { Runners::Credentials.mint_registration!(coder, environment: environment) }
+
+    other_runner = create(:runner_environment, :allocated)
+    booting = create(:runner_environment, :allocated, runner: coder, state: "booting")
+    manual_origin = create(:runner_environment, runner: coder, state: "provisioning")
+    [ other_runner, booting, manual_origin ].each do |refused|
+      assert_raises(ArgumentError, refused.state) { Runners::Credentials.mint_registration!(coder, environment: refused) }
+    end
+    assert_equal 1, RunnerCredential.where(kind: :registration).count
+  end
+
+  test "a bound token is refused once its environment failed, is torn down or is gone, as every credential of one is" do
+    coder = create(:runner, :coder)
+    %w[failed tearing_down gone].each do |state|
+      environment = create(:runner_environment, :allocated, runner: coder)
+      token = Runners::Credentials.mint_registration!(coder, environment: environment)
+      assert Runners::Credentials.usable(token, kind: :registration), "usable while provisioning"
+
+      environment.update!(state: state)
+
+      assert_nil Runners::Credentials.usable(token, kind: :registration), state
+    end
+  end
+
+  test "the credentials of an environment being torn down are refused" do
+    environment = create(:runner_environment, :allocated, state: "idle")
+    pair = Runners::Credentials.issue_pair!(environment)
+    assert Runners::Credentials.usable(pair.access_token, kind: :access)
+
+    environment.update!(state: "tearing_down")
+
+    assert_nil Runners::Credentials.usable(pair.access_token, kind: :access)
+    assert_nil Runners::Credentials.refreshable(pair.refresh_token)
+  end
+
+  test "lock_runner! takes a retired runner's row, which lock_live_runner! refuses" do
+    @runner.revoke!
+
+    assert_equal @runner, Runners::Credentials.lock_runner!(@runner.id)
+    error = assert_raises(Runners::Credentials::Refused) { Runners::Credentials.lock_live_runner!(@runner.id) }
+    assert_equal "runner_revoked", error.reason
   end
 
   test "a revoked or deleted runner mints no registration token" do
@@ -333,6 +405,26 @@ class Runners::CredentialsTest < ActiveSupport::TestCase
     error = assert_raises(Runners::Machines::NoMachine) { Runners::Allocator.acquire!(session) }
     assert_match(/its machine is out of rotation: .*\(credential reuse detected\)/, error.message)
     assert_nil session.reload.runner_environment_id
+  end
+
+  # == reuse of a refresh token: the machine fails through the allocator, for both types ==
+
+  test "a refresh token reused on an allocated environment revokes the family, fails a live session and tears the environment down" do
+    adapter = with_fake_provisioned_adapter
+    environment = create(:runner_environment, :allocated, state: "idle", last_heartbeat_at: Time.current)
+    pair = Runners::Credentials.issue_pair!(environment)
+    refresh = refresh_credential(pair)
+    Runners::Credentials.record_use!(RunnerCredential.find_by_token(Runners::Credentials.rotate!(refresh).access_token, kind: :access))
+    session = create(:runner_session, environment: environment, runner_environment: nil)
+    Runners::Allocator.acquire!(session)
+
+    assert_raises(Runners::Credentials::Refused) { Runners::Credentials.rotate!(refresh.reload) }
+
+    assert_empty RunnerCredential.where(runner_environment: environment).unrevoked
+    assert_equal "gone", environment.reload.state, "failed, then torn down by its adapter"
+    assert_equal "credential reuse detected", environment.state_reason
+    assert_nil environment.current_session_id
+    assert_includes adapter.calls, [ :fail, environment.id, "credential reuse detected" ]
   end
 
   private

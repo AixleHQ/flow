@@ -115,12 +115,12 @@ class RunnerTest < ActiveSupport::TestCase
 
   # == reuse_policy ==
 
-  test "reuse_policy defaults to reuse on manual and coder, fresh on kubernetes" do
+  test "reuse_policy defaults to reuse on manual, and to fresh on coder and kubernetes" do
     defaults = %i[manual coder kubernetes].to_h do |type|
       [ type, create(:runner, type, company: @company, created_by: @user).reuse_policy ]
     end
 
-    assert_equal({ manual: "reuse", coder: "reuse", kubernetes: "fresh" }, defaults)
+    assert_equal({ manual: "reuse", coder: "fresh", kubernetes: "fresh" }, defaults)
   end
 
   test "a manual runner takes reuse and reset, and refuses fresh" do
@@ -131,8 +131,31 @@ class RunnerTest < ActiveSupport::TestCase
     assert_includes manual.errors[:reuse_policy], "must be reuse or reset on a manual runner"
   end
 
-  test "a given reuse_policy is kept, except reuse and reset on kubernetes, which are refused" do
+  test "a coder runner takes fresh only" do
     assert_equal "fresh", create(:runner, :coder, company: @company, created_by: @user, reuse_policy: :fresh).reuse_policy
+
+    %i[reuse reset].each do |policy|
+      coder = build(:runner, :coder, company: @company, created_by: @user, reuse_policy: policy)
+      assert_not coder.valid?, policy
+      assert_includes coder.errors[:reuse_policy], "must be fresh on a coder runner"
+    end
+  end
+
+  test "a runner keeps the integration it was created with, and the integration itself stays editable" do
+    runner = create(:runner, :coder, company: @company, created_by: @user)
+    other = create(:integration, :coder, company: @company)
+
+    runner.integration = other
+    assert_not runner.valid?
+    assert_includes runner.errors[:integration], "cannot be changed after the runner is created"
+
+    runner.reload
+    runner.integration.update!(name: "Renamed")
+    assert runner.update(name: "Renamed runner"), runner.errors.full_messages.to_sentence
+  end
+
+  test "a given reuse_policy is kept, except reuse and reset on kubernetes, which are refused" do
+    assert_equal "fresh", create(:runner, :kubernetes, company: @company, created_by: @user, reuse_policy: :fresh).reuse_policy
 
     kubernetes = build(:runner, :kubernetes, company: @company, created_by: @user, reuse_policy: :reuse)
     assert_not kubernetes.valid?

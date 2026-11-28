@@ -93,14 +93,27 @@ class Runners::RevocationConcurrencyTest < ActiveSupport::TestCase
     assert_empty RunnerCredential.where(runner_id: @runner.id).unrevoked
   end
 
-  test "an unregister that waits on a revocation is refused" do
+  # The lock path of the end of a registration accepts a retired runner
+  # (Credentials.lock_runner!), so a machine's own unregister that waited for the
+  # revocation ends the machine instead of being refused (runner-coder.md §6.1).
+  test "an unregister that waits on a revocation still ends the machine, and leaves no credential unrevoked" do
     environment = create(:runner_environment, runner: @runner)
     Runners::Credentials.issue_pair!(environment)
 
-    refusals = revoke_then_issue(-> { Runners::Registration.unregister!(RunnerEnvironment.find(environment.id)) })
+    results = revoke_then_issue(-> { Runners::Registration.unregister!(RunnerEnvironment.find(environment.id)) })
 
-    assert_equal [ "runner_revoked" ], refusals.map(&:reason)
-    assert environment.reload.registered?
+    assert_not results.any?(Runners::Credentials::Refused), results.inspect
+    assert environment.reload.gone?
+    assert_empty RunnerCredential.where(runner_id: @runner.id).unrevoked
+  end
+
+  test "a revocation ends every machine of the runner, whichever lock it takes first" do
+    machines = create_list(:runner_environment, 2, runner: @runner)
+    machines.each { |machine| Runners::Credentials.issue_pair!(machine) }
+
+    issue_then_revoke { Runners::Registration.unregister!(RunnerEnvironment.find(machines.first.id)) }
+
+    assert_equal %w[gone gone], machines.map { |machine| machine.reload.state }
     assert_empty RunnerCredential.where(runner_id: @runner.id).unrevoked
   end
 
