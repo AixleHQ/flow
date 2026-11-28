@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Runners
-  # A `manual` machine's host runner reporting itself after a start
+  # A machine's host runner reporting itself after a start
   # (docs/design/agent-runtimes/DESIGN.md §6.2; runner/protocol/PROTOCOL.md
   # §5.9): `POST /runner/v1/check-in`, authenticated with the environment's
   # access token, so no token is exchanged.
@@ -50,7 +50,7 @@ module Runners
           raise Credentials::Refused.new("invalid_check_in", environment.errors.full_messages.to_sentence)
         end
 
-        fail_for_preflight!(environment)
+        fail_for_preflight!(environment) || arrive!(environment)
       end
 
       Result.new(environment: environment, config: config,
@@ -58,22 +58,33 @@ module Runners
     end
 
     # A machine that reports a failed preflight (no reachable Docker daemon, too
-    # little disk) cannot run a session: it goes `failed`, out of rotation, with
-    # the failure for people in its reason (DESIGN.md §8, "Prerequisites
-    # missing"), and stays so until it is revoked (§5.2). Its credentials stop
-    # working with it, so a later check-in, with or without the failure, is
-    # refused and does not bring the machine back.
+    # little disk) cannot run a session: it fails, with the failure for people in
+    # its reason (DESIGN.md §8, "Prerequisites missing"), through the allocator,
+    # which does what its type does with a failed environment (a `manual` machine
+    # goes out of rotation until it is revoked and registered again, §5.2). Its
+    # credentials stop working with it, so a later check-in, with or without the
+    # failure, is refused and does not bring it back. True when it failed.
     def fail_for_preflight!(environment)
       failure = environment.preflight_failure
-      return unless failure
+      return false unless failure
 
-      # Machines.fail! changes its own locked copy of the row, which also drops
-      # the hold of a session the machine still has: read the row again, the
+      # Allocator.fail! changes its own locked copy of the row, which also drops
+      # the hold of a session the environment still has: read the row again, the
       # answer returns its state and Release.update_for reads its hold.
-      Machines.fail!(environment, "#{Machines.label(environment)} cannot run sessions: #{failure}")
+      Allocator.fail!(environment, "#{Machines.label(environment)} cannot run sessions: #{failure}")
       environment.reload
+      true
     end
     private_class_method :fail_for_preflight!
+
+    # The first check-in of an environment the platform created (`booting`) moves
+    # it to `idle`, once its preflight reported nothing wrong
+    # (runner-coder.md §8.4): it is never `idle` before. A `manual` machine is
+    # `registered` and stays so.
+    def arrive!(environment)
+      environment.check_in! if environment.may_check_in?
+    end
+    private_class_method :arrive!
 
     # What the platform tells a runner about its limits. It is for the runner's
     # log: each upload slot of an op carries the `max_bytes` that binds that

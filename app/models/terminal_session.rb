@@ -132,7 +132,7 @@ class TerminalSession < ApplicationRecord
   # create a per-company (billed) agent credential — see SessionCompany.
   belongs_to :company, optional: true
   belongs_to :configured_agent, class_name: "Agent", optional: true
-  # The runner machine the session runs on, assigned by Runners::Machines when
+  # The runner machine the session runs on, assigned by Runners::Allocator when
   # its first runtime phase needs one (DESIGN.md §2.4). Kept after the session,
   # as the record of where it ran.
   belongs_to :runner_environment, optional: true

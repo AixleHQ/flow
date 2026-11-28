@@ -9,11 +9,10 @@ class Runner < ApplicationRecord
 
   # §2.7, §7.1. `reuse`: a scrub after every session. `reset`: a reset after
   # every session, on the same machine. `fresh`: a new machine or workspace per
-  # session. `manual` takes the first two, `kubernetes` `fresh` only, and
-  # `coder` all three (container mode only for `reset`, §6.8) once it can be
-  # created (task 17).
-  # kubernetes has a fresh pod per session and nothing else.
-  DEFAULT_REUSE_POLICY = { "manual" => "reuse", "coder" => "reuse", "kubernetes" => "fresh" }.freeze
+  # session. `manual` takes the first two; `kubernetes` and `coder` take
+  # `fresh` only (runner-coder.md §7.1): a pod or a workspace per session and
+  # nothing else.
+  DEFAULT_REUSE_POLICY = { "manual" => "reuse", "coder" => "fresh", "kubernetes" => "fresh" }.freeze
 
   enumerize :runner_type, in: %i[manual coder kubernetes], predicates: true
   enumerize :reuse_policy, in: %i[reuse reset fresh]
@@ -52,12 +51,16 @@ class Runner < ApplicationRecord
   validates :max_environments, numericality: { only_integer: true, greater_than: 0 }, allow_nil: true
   validates :max_environments, absence: true, if: :manual?
   validates :reuse_policy, inclusion: { in: %w[fresh], message: "must be fresh on a kubernetes runner" }, if: :kubernetes?
+  validates :reuse_policy, inclusion: { in: %w[fresh], message: "must be fresh on a coder runner" }, if: :coder?
   validates :reuse_policy, inclusion: { in: %w[reuse reset], message: "must be reuse or reset on a manual runner" }, if: :manual?
   validates :integration, presence: true, if: :coder?
   validates :integration, absence: true, unless: :coder?
   validate :name_unique_in_scope, if: -> { name.present? && company_id.present? && deleted_at.nil? }
   validate :project_belongs_to_same_company, if: -> { project_id.present? }
   validate :integration_usable, if: -> { coder? && integration.present? }
+  # The integration is chosen when the runner is created: its environments and
+  # their holds belong to it (runner-coder.md §7.1). To use another one, create a new runner.
+  validate :integration_unchanged, on: :update
   # Only when config or the type changes: a stored config that a later, tighter
   # schema refuses must not block its runner's revoke or delete, which save
   # with whiny_persistence.
@@ -136,6 +139,10 @@ class Runner < ApplicationRecord
     return if integration.project_id.nil? || integration.project_id == project_id
 
     errors.add(:integration, project_id ? "must be company-wide or this project's" : "must be company-wide")
+  end
+
+  def integration_unchanged
+    errors.add(:integration, "cannot be changed after the runner is created") if will_save_change_to_integration_id?
   end
 
   def config_or_type_changing?

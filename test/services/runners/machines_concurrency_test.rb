@@ -41,7 +41,7 @@ class Runners::MachinesConcurrencyTest < ActiveSupport::TestCase
       Thread.new do
         ActiveRecord::Base.connection_pool.with_connection do
           start.pop
-          Runners::Machines.acquire!(TerminalSession.find(session.id))
+          Runners::Allocator.acquire!(TerminalSession.find(session.id))
           :took
         rescue ContainerRuntime::CapacityError
           :waits
@@ -68,7 +68,7 @@ class Runners::MachinesConcurrencyTest < ActiveSupport::TestCase
     first = Thread.new do
       ActiveRecord::Base.connection_pool.with_connection do
         ActiveRecord::Base.transaction do
-          Runners::Machines.acquire!(TerminalSession.find(session.id)).tap do
+          Runners::Allocator.acquire!(TerminalSession.find(session.id)).tap do
             taken << true
             release.pop
           end
@@ -80,7 +80,7 @@ class Runners::MachinesConcurrencyTest < ActiveSupport::TestCase
     second = Thread.new do
       ActiveRecord::Base.connection_pool.with_connection do
         pid << ActiveRecord::Base.connection.select_value("SELECT pg_backend_pid()")
-        Runners::Machines.acquire!(TerminalSession.find(session.id))
+        Runners::Allocator.acquire!(TerminalSession.find(session.id))
       end
     end
     wait_until_waiting_on_lock(pid.pop(timeout: LOCK_WAIT_TIMEOUT))
@@ -117,7 +117,7 @@ class Runners::MachinesConcurrencyTest < ActiveSupport::TestCase
     taker = Thread.new do
       ActiveRecord::Base.connection_pool.with_connection do
         pid << ActiveRecord::Base.connection.select_value("SELECT pg_backend_pid()")
-        Runners::Machines.acquire!(TerminalSession.find(session.id))
+        Runners::Allocator.acquire!(TerminalSession.find(session.id))
       rescue Runners::Machines::NoMachine => e
         e
       end
@@ -145,7 +145,7 @@ class Runners::MachinesConcurrencyTest < ActiveSupport::TestCase
     taker = Thread.new do
       ActiveRecord::Base.connection_pool.with_connection do
         ActiveRecord::Base.transaction do
-          Runners::Machines.acquire!(TerminalSession.find(session.id)).tap do
+          Runners::Allocator.acquire!(TerminalSession.find(session.id)).tap do
             taken << true
             release.pop
           end

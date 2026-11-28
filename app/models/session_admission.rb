@@ -5,11 +5,12 @@ class SessionAdmission < ApplicationRecord
   # staleness, so the reapers must leave them alone (AD-7, AD-8).
   #
   # `runner_capacity` is a session on an external runner whose every machine is
-  # busy (Runners::Machines::RUNNER_CAPACITY): a wait like `cluster_capacity`,
-  # for a machine instead of a pod.
-  WAIT_REASONS = %w[concurrency_limit namespace_quota cluster_capacity runner_capacity].freeze
+  # busy (Runners::Allocator::RUNNER_CAPACITY): a wait like `cluster_capacity`,
+  # for a machine instead of a pod. `runner_provisioning` is a session whose
+  # environment the platform is building for it (Runners::Allocator::Pending).
+  WAIT_REASONS = %w[concurrency_limit namespace_quota cluster_capacity runner_capacity runner_provisioning].freeze
   # The reasons the launch itself waits on, which a screen names.
-  LAUNCH_WAITS = %w[namespace_quota cluster_capacity runner_capacity].freeze
+  LAUNCH_WAITS = %w[namespace_quota cluster_capacity runner_capacity runner_provisioning].freeze
 
   belongs_to :terminal_session
   belongs_to :session_admission_pool
@@ -19,7 +20,7 @@ class SessionAdmission < ApplicationRecord
   scope :waiting, -> { unreleased.where(wait_reason: WAIT_REASONS) }
 
   # Whether this reservation waits for a machine of its session's runner: every
-  # machine is busy, or offline and not yet lapsed (Runners::Machines).
+  # machine is busy, or offline and not yet lapsed (Runners::Allocator).
   def waiting_for_runner_machine?
     wait_reason == "runner_capacity"
   end

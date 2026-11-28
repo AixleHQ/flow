@@ -732,6 +732,11 @@ runners:
   # The deadline of an image pull, a container start or stop, or a reset that
   # no activity bounds, in seconds.
   lifecycle_op_timeout: 600
+  # How long an environment the platform creates may take to build, boot and
+  # check in, in seconds (runner-coder.md §5.2, D5). Its clock starts when the
+  # integration hands over a machine (`boot_started_at`), not before: a session
+  # waiting for the integration's capacity waits with no time limit.
+  bootstrap_timeout: 900
   # The cap on an op of a sweep that reads every session in turn (the dead
   # container, quota and no-output scans), in seconds: a machine that does not
   # answer reads as unknown, never as dead or idle, and costs the sweep no more.

@@ -5,7 +5,7 @@ module Runners
   # (docs/design/agent-runtimes/DESIGN.md §9.2). A token is returned once, by the
   # call that issues it; only its SHA-256 digest is stored (RunnerCredential).
   #
-  #   token = Runners::Credentials.mint_registration!(runner)    # "Add machine" (task 12) calls this
+  #   token = Runners::Credentials.mint_registration!(runner)    # "Add machine" (task 12) calls this; a coder runner's takes `environment:`
   #   pair  = Runners::Credentials.issue_pair!(environment)      # on register
   #   pair  = Runners::Credentials.rotate!(refresh_credential)   # POST /runner/v1/token
   module Credentials
@@ -37,21 +37,32 @@ module Runners
 
     module_function
 
-    # A single-use token that registers one machine of a `manual` runner within
-    # an hour. There is no endpoint for it yet: tests and local development call
-    # this, and "Add machine" will (§15 task 12). Like every issuer, it locks
-    # the runner first (lock_live_runner!), so a revoked or deleted runner gets
-    # no token and a revocation running alongside revokes the one minted here.
-    # `created_by` is the user who asked for it; the machine that spends the
-    # token is recorded as added by them (Registration.register!).
-    def mint_registration!(runner, created_by: nil)
-      raise ArgumentError, "registration tokens are minted for manual runners only" unless runner.manual?
+    # A single-use token that registers one machine within an hour. A `manual`
+    # runner's is not bound to anything: whichever machine spends it creates its
+    # environment. A `coder` runner's is bound to one environment the platform
+    # created, in `provisioning` (runner-coder.md §8.1): `environment:` is
+    # required, and the token fills that row when it is spent
+    # (Registration.register!). One token is minted per environment, once: the
+    # plaintext cannot be recovered, so a second one would mean a second install.
+    # Like every issuer, it locks the runner first (lock_live_runner!), so a
+    # revoked or deleted runner gets no token and a revocation running alongside
+    # revokes the one minted here. `created_by` is the user who asked for it; the
+    # machine that spends the token is recorded as added by them.
+    def mint_registration!(runner, created_by: nil, environment: nil)
+      if runner.manual?
+        raise ArgumentError, "a manual runner's registration token is bound to no environment" if environment
+      elsif runner.coder?
+        raise ArgumentError, "a coder runner's registration token is bound to an environment" if environment.nil?
+      else
+        raise ArgumentError, "registration tokens are minted for manual and coder runners only"
+      end
 
       token = generate(:registration)
       RunnerCredential.transaction do
         live = lock_live_runner!(runner.id)
+        bound = environment && lock_bindable_environment!(live, environment)
         RunnerCredential.create!(runner: live, kind: :registration, token_digest: RunnerCredential.digest(token),
-                                 expires_at: REGISTRATION_TTL.from_now, created_by: created_by)
+                                 expires_at: REGISTRATION_TTL.from_now, created_by: created_by, runner_environment: bound)
       end
       token
     end
@@ -100,7 +111,7 @@ module Runners
     # as `rotated_from`. A refresh token presented a second time means two
     # holders have it, so the whole family is revoked and the machine moves to
     # `failed`, held by no session, with the reason in `state_reason` for people
-    # (§9.2, Runners::Machines.fail!); the revocation commits before the
+    # (§9.2, Runners::Allocator.fail!); the revocation commits before the
     # refusal is raised.
     # A spent token counts as reused even past its own expiry: the 30-day limit
     # is for a token left unused, and the family it was rotated into may still
@@ -133,7 +144,7 @@ module Runners
           else
             reused = true
             revoke_family!(credential.family_id)
-            Runners::Machines.fail!(environment, REUSE_DETECTED)
+            Runners::Allocator.fail!(environment, REUSE_DETECTED)
             nil
           end
         elsif credential.expired?
@@ -190,11 +201,35 @@ module Runners
     # one that takes it after sees the runner revoked (§9.3). FOR SHARE lets
     # issuers of one runner run side by side; only the revocation waits.
     def lock_live_runner!(runner_id)
-      runner = Runner.lock("FOR SHARE").find(runner_id)
+      runner = lock_runner!(runner_id)
       raise Refused.new("runner_revoked", "The runner is revoked or deleted.") if runner.retired?
 
       runner
     end
+
+    # The same lock, for a retired runner too: what ending an environment's
+    # registration takes (Adapter#end_registration!), which runs after its
+    # runner was revoked or deleted (runner-coder.md §6.1). The order stays
+    # runner, then environment, then credentials. `lock_live_runner!` is this call
+    # plus the live check, and stays for registration and token issuance.
+    def lock_runner!(runner_id)
+      Runner.lock("FOR SHARE").find(runner_id)
+    end
+
+    # The environment a registration token is bound to, locked: an `allocated`
+    # one of the runner, in `provisioning`, that has no token yet.
+    def lock_bindable_environment!(runner, environment)
+      locked = RunnerEnvironment.where(id: environment.id, runner_id: runner.id).lock.first
+      unless locked&.origin_allocated? && locked.provisioning?
+        raise ArgumentError, "a registration token is bound to an allocated environment of the runner, in provisioning"
+      end
+      if locked.credentials.where(kind: "registration").exists?
+        raise ArgumentError, "a registration token was already minted for this environment"
+      end
+
+      locked
+    end
+    private_class_method :lock_bindable_environment!
 
     def revoke_family!(family_id)
       now = Time.current

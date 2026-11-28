@@ -15,7 +15,7 @@ module Api
             session = TerminalSession.on_runner.find_by(route_token: params[:route_token].to_s)
             return head :not_found if session.nil?
 
-            holder = Runners::Machines.held_by(session)
+            holder = Runners::Allocator.held_by(session)
             render json: Runners::RelayRoute.describe(session, environment_id: holder&.id).except(:route_token)
           end
         end

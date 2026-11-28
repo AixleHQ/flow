@@ -243,6 +243,30 @@ module Activities
         assert dead.reload.metadata["container_dead_since"].present?,
                "a failure on one session must not abandon the rest of the sweep"
       end
+
+      # == An environment the platform is still bringing up is not lost ==
+
+      # runner-coder.md §15: the boot timeout owns the window before the first
+      # check-in, so a never-heard `provisioning` or `booting` environment is
+      # neither asked about nor failed by the contact-loss grace.
+      test "does not count a never-heard provisioning or booting environment as lost, and counts an idle one" do
+        with_fake_provisioned_adapter
+        runner = create(:runner, :coder)
+        sessions = %w[provisioning booting idle].index_with do |state|
+          environment = create(:runner_environment, :allocated, runner: runner, state: state, created_at: 1.hour.ago)
+          session = create(:runner_session, environment: environment, runner_environment: environment, state: "ready",
+                                            started_at: 1.hour.ago, container_id: "box-#{state}", temporal_workflow_id: "wf-#{state}")
+          environment.update!(current_session: session)
+          session
+        end
+
+        result = run_activity(ScanDeadContainersActivity)
+
+        assert_equal 3, result[:checked]
+        assert_equal 1, result[:failed]
+        assert_equal %w[ready ready failed], sessions.values.map { |session| session.reload.state }
+        assert_equal "Runner environment lost contact for 15 minutes.", sessions["idle"].error_message
+      end
     end
   end
 end

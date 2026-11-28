@@ -109,9 +109,9 @@ class Runners::OperationsTest < ActiveSupport::TestCase
   test "an op read for a session that has since released the machine is not created, an env.reset included" do
     first = holder
     observed = RunnerEnvironment.find(@environment.id)
-    Runners::Machines.release!(observed, first)
+    Runners::Allocator.free!(observed, first)
     second = create(:runner_session, environment: @environment, runner_environment: nil)
-    Runners::Machines.acquire!(second)
+    Runners::Allocator.acquire!(second)
 
     late = %w[exec env.reset].map do |op|
       Runners::Operations.enqueue!(observed, op: op, payload: {}, deadline_at: 1.minute.from_now, session: first)
@@ -191,7 +191,7 @@ class Runners::OperationsTest < ActiveSupport::TestCase
     end
     ops.each { |op| Runners::Operations.record_result!(op, status: "ok") }
     acknowledged = ops.last.sequence
-    Runners::Machines.release!(@environment, session)
+    Runners::Allocator.free!(@environment, session)
 
     session.destroy!
     @holders = nil

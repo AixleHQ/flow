@@ -333,13 +333,13 @@ module Activities
         host = ContainerRuntime::FakeHostRunner.new(machine)
 
         run_activity(CleanupStaleActivity)
-        Runners::Machines.sweep_abandoned!
-        Runners::Machines.sweep_abandoned!
+        Runners::Allocator.sweep_abandoned!
+        Runners::Allocator.sweep_abandoned!
 
         assert_equal %w[env.reset], host.ops
         machine.reload
         assert_equal [ "registered", nil ], [ machine.state, machine.current_session_id ]
-        assert_equal machine, Runners::Machines.acquire!(create(:runner_session, environment: machine, runner_environment: nil))
+        assert_equal machine, Runners::Allocator.acquire!(create(:runner_session, environment: machine, runner_environment: nil))
         assert_equal "failed", stale.reload.state
       ensure
         host&.stop
@@ -351,14 +351,14 @@ module Activities
         host.answer_with("env.reset", "status" => "error", "error" => { "class" => "reset_failed", "message" => "volume in use" })
 
         run_activity(CleanupStaleActivity)
-        Runners::Machines.sweep_abandoned!
-        Runners::Machines.sweep_abandoned!
+        Runners::Allocator.sweep_abandoned!
+        Runners::Allocator.sweep_abandoned!
 
         machine.reload
         assert_equal [ "failed", nil ], [ machine.state, machine.current_session_id ]
         assert_match(/failed to reset after stale session #{stale.id}: reset_failed: volume in use/, machine.state_reason)
         assert_raises(Runners::Machines::NoMachine) do
-          Runners::Machines.acquire!(create(:runner_session, environment: machine, runner_environment: nil))
+          Runners::Allocator.acquire!(create(:runner_session, environment: machine, runner_environment: nil))
         end
       ensure
         host&.stop

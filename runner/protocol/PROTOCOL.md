@@ -254,8 +254,18 @@ own.
 
 ### 5.1 `POST /runner/v1/register`
 
-`aixle-runner configure` on a `manual` machine: spends the registration token and creates the
-machine, which the platform calls an environment.
+`aixle-runner configure` on a machine: spends the registration token and creates the machine,
+which the platform calls an environment.
+
+**A token bound to an environment.** The token of a `manual` runner is bound to nothing: the
+machine that spends it creates its environment, `registered`. A token the platform minted for an
+environment it created itself (a machine it built for one session) is bound to that row, and
+`register` fills the row instead of creating one. The request, the answer and the fixtures are the
+same: the runner cannot tell the two apart and does not change. The row must be one of the token's
+own runner and still be coming up (`provisioning` or `booting`); a row that is another runner's,
+`gone`, `failed`, being torn down or already registered answers `invalid_token`, as a used or revoked
+token does, and the token is spent only by a registration that passes. `environment.state` in the
+answer is `registered` for the first and `booting` for the second, and a runner does not parse it.
 
 | Field | Type | Rule |
 | --- | --- | --- |
@@ -619,6 +629,11 @@ A `facts.preflight_error` (a string) says the machine can no longer run sessions
 the Docker daemon is not reachable. The platform moves the machine to `failed` with that text in its
 reason; the machine stays `failed` until it is revoked, and its credentials are refused from then on
 (`invalid_token`, as for a revoked machine), so a later check-in does not return it.
+
+The first check-in of an environment the platform built for a session (`booting`, §5.1) with no
+`preflight_error` is what makes it ready for that session. An environment with a `preflight_error`
+fails as above, and the platform deletes the machine. Nothing in the request or the answer
+changes for the runner.
 
 Other fields are ignored. The `X-Aixle-Runner-Version` and `X-Aixle-Runner-Protocol` of the request
 are recorded as the machine's runner and protocol versions, **over** the ones it registered with.

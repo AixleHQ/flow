@@ -13,7 +13,7 @@ module Runners
   # back to hosted. A `manual` runner with no registered machine, or whose every
   # machine failed its reset, is refused as unreachable (§8); one whose machines
   # are all busy is not: its session waits for a free machine at create_container
-  # (Runners::Machines).
+  # (Runners::Allocator).
   #
   #   Runners::Resolver.resolve!(run)  # => nil (hosted), the Runner, or raises Refused
   module Resolver
@@ -52,8 +52,8 @@ module Runners
       end
 
       check_status!(runner, pick_from)
-      availability = Machines.availability(runner)
-      raise Refused.new(UNREACHABLE, Machines.unavailable_message(runner, availability, pick_from)) unless availability.available?
+      refusal = Adapter.for(runner).launch_refusal(runner, pick_from: pick_from)
+      raise Refused.new(refusal.reason, refusal.message) if refusal
 
       runner
     end

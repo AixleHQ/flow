@@ -25,11 +25,15 @@ module Runners
 
     # The attributes `params[:runner]` sets. Scope, company and author come
     # from the request, never from params. The type, `runner_type` as in the
-    # model and RunnerResource, is chosen once, at creation.
+    # model and RunnerResource, is chosen once, at creation, and so is the
+    # integration (runner-coder.md §7.1).
     def attributes(params, creating:)
       runner = params.require(:runner)
-      attributes = runner.permit(:name, :max_concurrency, :max_environments, :reuse_policy, :integration_id)
-      attributes[:runner_type] = runner[:runner_type] if creating
+      attributes = runner.permit(:name, :max_concurrency, :max_environments, :reuse_policy)
+      if creating
+        attributes[:runner_type] = runner[:runner_type]
+        attributes[:integration_id] = runner[:integration_id] if runner.key?(:integration_id)
+      end
       attributes[:config] = config(runner[:config]) if runner.key?(:config)
       attributes
     end
