@@ -104,8 +104,11 @@ class Runners::RelaySignalsTest < ActiveSupport::TestCase
 
     @runner.revoke!
 
+    # The runner's revoke tells the relay at once, and each machine's own end of
+    # registration tells it again (runner-coder.md §6.1): the connection closes
+    # either way, so the second signal is harmless.
     revoked = signals.select { |signal| signal["type"] == "machine_revoked" }
-    assert_equal [ @machine.id, other.id ].sort, revoked.map { |signal| signal["environment_id"] }.sort
+    assert_equal [ @machine.id, other.id ].sort, revoked.map { |signal| signal["environment_id"] }.uniq.sort
   end
 
   # -- timing and failure ----------------------------------------------------

@@ -130,9 +130,11 @@ class Runners::RegistrationTest < ActiveSupport::TestCase
   end
 
   test "a row that is booting already is filled as well, and stays booting" do
-    environment = allocated(state: "booting")
+    environment = allocated
+    credential = bound_credential(environment)
+    environment.update_columns(state: "booting")
 
-    register(credential: bound_credential(environment))
+    register(credential: credential)
 
     assert_equal "booting", environment.reload.state
   end

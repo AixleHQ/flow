@@ -39,7 +39,7 @@ module Runners
     # `auto_update: false` is a machine configured with `--no-auto-update`
     # (DESIGN.md §14.4): it is never offered an update.
     def register!(credential, name:, os:, arch:, facts:, auto_update:, runner_version:, protocol_version:, remote_ip: nil)
-      RunnerCredential.transaction do
+      result = RunnerCredential.transaction do
         Credentials.lock_live_runner!(credential.runner_id)
         credential.lock!
         if credential.used? || credential.revoked? || credential.expired?
@@ -55,9 +55,14 @@ module Runners
         end
 
         credential.update!(used_at: Time.current, runner_environment: environment)
-        Liveness.record!(runner_id: environment.runner_id, environment_id: environment.id)
         Result.new(environment: environment, pair: Credentials.issue_pair!(environment))
       end
+      # The machine's first sign of life, once the registration has committed: it
+      # writes the runner's row, which another registration holds `FOR SHARE`
+      # (lock_live_runner!) while it waits for this token's row, so inside the
+      # transaction two machines racing for one token would deadlock.
+      Liveness.record!(runner_id: result.environment.runner_id, environment_id: result.environment.id)
+      result
     end
 
     # What `aixle-runner unregister` does, and what a Revoke of the machine does
