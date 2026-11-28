@@ -115,11 +115,14 @@ class Runners::AllocatorConcurrencyTest < ActiveSupport::TestCase
         e.reason.to_sym
       end
     end
-    # The registration waits for the row the Revoke holds.
-    Timeout.timeout(LOCK_WAIT_TIMEOUT) do
-      sleep 0.05 until ActiveRecord::Base.connection.select_value("SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database()").to_i.positive?
+    begin
+      # The registration waits for the row the Revoke holds.
+      Timeout.timeout(LOCK_WAIT_TIMEOUT) do
+        sleep 0.05 until ActiveRecord::Base.connection.select_value("SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND datname = current_database()").to_i.positive?
+      end
+    ensure
+      release << true
     end
-    release << true
 
     assert_equal :revoked, revoke.value
     assert_equal :invalid_token, register.value
