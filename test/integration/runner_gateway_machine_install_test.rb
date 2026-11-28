@@ -101,7 +101,9 @@ class RunnerGatewayMachineInstallTest < ActionDispatch::IntegrationTest
       esac
     SH
     stub.call("id", "echo #{uid}")
-    stub.call("systemctl", "exit 0") if systemctl
+    # `:no_unit`: a fresh machine, where no aixle-runner unit exists and every `systemctl` call about it fails.
+    stub.call("systemctl", "echo 'Unit aixle-runner.service not found.' >&2\nexit 4") if systemctl == :no_unit
+    stub.call("systemctl", "exit 0") if systemctl == true
     # curl -fsSL -o <file> <url>: records the URL and writes the fake binary.
     File.write(File.join(dir, "fake-binary"), BINARY)
     stub.call("curl", <<~'SH')
@@ -139,6 +141,24 @@ class RunnerGatewayMachineInstallTest < ActionDispatch::IntegrationTest
                        "aixle-runner service install", "aixle-runner service start" ], lines[1..]
         assert_not_includes output, "arreg_t'ok"
       end
+    end
+  end
+
+  # runner-coder.md §8.2: the platform runs this script on a workspace it just
+  # created, which has had no aixle-runner service. The script asks systemd
+  # nothing itself (the binary's `service install` creates the unit), so a
+  # machine with no earlier service gets the same three commands.
+  test "it runs on a fresh machine with no earlier service" do
+    pin(amd64: sha(BINARY))
+    get "/runner/v1/machine-install.sh"
+
+    Dir.mktmpdir do |dir|
+      output, status, log = run_script(dir, "--token", "arreg_x", "--name", "fresh-vm", systemctl: :no_unit)
+
+      assert status.success?, output
+      assert_equal [ "aixle-runner configure --url #{Runners::MachineRegistration.gateway_url} --token arreg_x --name fresh-vm",
+                     "aixle-runner service install", "aixle-runner service start" ], log.lines.map(&:chomp).grep(/\Aaixle-runner /)
+      assert_not_includes output, "not found"
     end
   end
 

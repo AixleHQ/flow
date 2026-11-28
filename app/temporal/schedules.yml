@@ -39,7 +39,7 @@ schedules:
     enabled: true
     overlap: skip
 
-  # The machines that a stale session still holds (Runners::Machines.sweep_abandoned!):
+  # The machines that a stale session still holds (Runners::Allocator.sweep_abandoned!):
   # the session ended and its container workflow's cleanup will never run, so
   # nothing resets its machine. Each gets the `env.reset` a failed session gets,
   # under the lifecycle budget, and is free when it succeeds and `failed` when it

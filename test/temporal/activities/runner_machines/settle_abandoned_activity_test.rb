@@ -14,7 +14,7 @@ class Activities::RunnerMachines::SettleAbandonedActivityTest < ActiveSupport::T
   test "sends the reset of a machine a stale session holds" do
     machine = create(:runner_environment, runner: create(:runner, :manual))
     session = create(:runner_session, environment: machine, runner_environment: nil, state: "failed")
-    Runners::Machines.acquire!(session)
+    Runners::Allocator.acquire!(session)
 
     result = run_activity(Activities::RunnerMachines::SettleAbandonedActivity)
 

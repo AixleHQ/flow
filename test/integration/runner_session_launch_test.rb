@@ -216,7 +216,7 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
 
   test "revoking a machine that is idle, or failed, makes it gone and leaves the others alone" do
     failed = create(:runner_environment, runner: @runner)
-    Runners::Machines.fail!(failed, "boom")
+    Runners::Allocator.fail!(failed, "boom")
     idle = @machine
 
     assert Runners::Registration.revoke!(failed)
@@ -320,7 +320,7 @@ class RunnerSessionLaunchTest < ActiveSupport::TestCase
   test "a machine lost between the launch and the create fails with the runner's message and releases the admission at once" do
     session = launch
     run_phases(session, %w[pull_image])
-    Runners::Machines.fail!(@machine, "lost after the launch")
+    Runners::Allocator.fail!(@machine, "lost after the launch")
 
     error = assert_raises(Temporalio::Error::ApplicationError) { run_phase(session, "create_container") }
     assert_includes error.message, "Runner \"Build farm\" has no machine that can take a session"

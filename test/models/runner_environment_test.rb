@@ -109,7 +109,7 @@ class RunnerEnvironmentTest < ActiveSupport::TestCase
   test "display_state: failed and gone machines show as such, however recently they were heard" do
     gone = create(:runner_environment, runner: @runner, state: :gone)
     failed = create(:runner_environment, runner: @runner)
-    Runners::Machines.fail!(failed, "env.reset failed")
+    Runners::Allocator.fail!(failed, "env.reset failed")
 
     assert_equal "gone", gone.display_state
     assert_equal "failed", failed.reload.display_state

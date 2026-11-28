@@ -269,7 +269,7 @@ class RunnerTest < ActiveSupport::TestCase
     create(:runner_session, :holding, environment: busy)
     create(:runner_environment, runner: runner)
     failed = create(:runner_environment, runner: runner)
-    Runners::Machines.fail!(failed, "boom")
+    Runners::Allocator.fail!(failed, "boom")
     create(:runner_environment, runner: runner, state: :gone)
 
     counts = Runner.includes(:environments).where(id: [ runner.id, other.id ]).index_by(&:id)

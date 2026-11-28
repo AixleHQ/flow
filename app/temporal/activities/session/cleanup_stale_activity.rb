@@ -139,7 +139,7 @@ module Activities
       # A stale session on an external runner is only failed here. Its machine
       # is not touched: the sweep that finds machines held by a session whose
       # cleanup will never run resets it, and fails it only if that reset fails
-      # (Runners::Machines.sweep_abandoned!, every minute). The session's
+      # (Runners::Allocator.sweep_abandoned!, every minute). The session's
       # staleness is not the machine's failure, and a reset under the scanners'
       # cap could fail a healthy machine.
       def cleanup_runner_session(session)

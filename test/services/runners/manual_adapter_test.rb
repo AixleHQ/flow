@@ -60,7 +60,7 @@ class Runners::ManualAdapterTest < ActiveSupport::TestCase
     now = Time.current
     create(:runner_environment, runner: runner, display_name: "build-01", last_heartbeat_at: now)
     failed = create(:runner_environment, runner: runner, display_name: "build-02", last_heartbeat_at: now)
-    Runners::Machines.fail!(failed, "env.reset failed")
+    Runners::Allocator.fail!(failed, "env.reset failed")
 
     assert_equal [ "degraded", "Failed: build-02 (env.reset failed)." ], check(now)
   end
@@ -69,7 +69,7 @@ class Runners::ManualAdapterTest < ActiveSupport::TestCase
     now = Time.current
     create(:runner_environment, runner: runner, display_name: "build-01", last_heartbeat_at: now)
     create(:runner_environment, runner: runner, display_name: "build-02", last_heartbeat_at: now - 2.minutes)
-    Runners::Machines.fail!(create(:runner_environment, runner: runner, display_name: "build-03"), "refresh token reused")
+    Runners::Allocator.fail!(create(:runner_environment, runner: runner, display_name: "build-03"), "refresh token reused")
 
     assert_equal [ "degraded", "Offline: build-02. Failed: build-03 (refresh token reused)." ], check(now)
   end
@@ -98,8 +98,8 @@ class Runners::ManualAdapterTest < ActiveSupport::TestCase
   test "every machine failed is unreachable, with the failures as the reason" do
     one = create(:runner_environment, runner: runner, display_name: "build-01")
     two = create(:runner_environment, runner: runner, display_name: "build-02")
-    Runners::Machines.fail!(one, "env.reset failed")
-    Runners::Machines.fail!(two, "refresh token reused")
+    Runners::Allocator.fail!(one, "env.reset failed")
+    Runners::Allocator.fail!(two, "refresh token reused")
 
     assert_equal [ "unreachable",
                    "No machine can take a session: every machine failed: build-01 (env.reset failed); build-02 (refresh token reused)." ],
@@ -107,7 +107,7 @@ class Runners::ManualAdapterTest < ActiveSupport::TestCase
   end
 
   test "a single failed machine is described as such" do
-    Runners::Machines.fail!(create(:runner_environment, runner: runner, display_name: "build-01"), "env.reset failed")
+    Runners::Allocator.fail!(create(:runner_environment, runner: runner, display_name: "build-01"), "env.reset failed")
 
     assert_equal "No machine can take a session: its machine failed: build-01 (env.reset failed).", check(Time.current).last
   end

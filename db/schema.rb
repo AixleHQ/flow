@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_27_133318) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_28_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1423,10 +1423,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_27_133318) do
     t.datetime "last_heartbeat_at"
     t.string "first_seen_ip"
     t.bigint "created_by_id"
+    t.string "external_id"
+    t.datetime "boot_started_at"
     t.index ["company_id"], name: "index_runner_environments_on_company_id"
     t.index ["created_by_id"], name: "index_runner_environments_on_created_by_id"
     t.index ["current_session_id"], name: "index_runner_environments_on_current_session_id", unique: true
     t.index ["id", "runner_id"], name: "index_runner_environments_on_id_and_runner_id", unique: true
+    t.index ["runner_id", "external_id"], name: "index_runner_environments_on_runner_id_and_external_id", unique: true, where: "(external_id IS NOT NULL)"
     t.index ["runner_id", "key"], name: "index_runner_environments_on_runner_id_and_key", unique: true
     t.index ["runner_id"], name: "index_runner_environments_on_runner_id"
   end

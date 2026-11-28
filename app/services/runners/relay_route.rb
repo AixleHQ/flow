@@ -14,7 +14,7 @@ module Runners
 
     # `environment_id` is the machine the caller means: the one the signal is
     # about, or, for a question, the one that holds the session now
-    # (Machines.held_by), nil when none does.
+    # (Allocator.held_by), nil when none does.
     def describe(session, environment_id:)
       {
         session_id: session.id,

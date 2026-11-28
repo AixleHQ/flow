@@ -1,11 +1,12 @@
 # frozen_string_literal: true
 
 module Runners
-  # A `manual` machine joining and leaving its runner
-  # (docs/design/agent-runtimes/DESIGN.md §5.2, §6.2, §6.3): `aixle-runner
-  # configure` spends a registration token on a new environment and its
-  # access/refresh pair, and `aixle-runner unregister` marks the environment
-  # `gone`, ends its hold on a session and revokes its credentials.
+  # A machine joining and leaving its runner
+  # (docs/design/agent-runtimes/DESIGN.md §5.2, §6.2, §6.3, runner-coder.md §8.4):
+  # `aixle-runner configure` spends a registration token on a new environment
+  # (a `manual` machine) or fills the one the platform made for it (the token is
+  # bound to it), and issues its access/refresh pair; `aixle-runner unregister`
+  # ends the environment's registration through its adapter.
   #
   # `register!` takes named parameters, never the request: the gateway checks
   # the headers and the body's shape and maps the body to them
@@ -45,15 +46,12 @@ module Runners
           raise Credentials::Refused.new("invalid_token", "The registration token is used, revoked or expired.")
         end
 
-        environment = RunnerEnvironment.new(
-          runner_id: credential.runner_id, company_id: credential.company_id, origin: :registered,
-          state: :registered, key: "aixle-r#{credential.runner_id}-#{SecureRandom.hex(4)}",
-          display_name: name.to_s.strip, os: os, arch: arch, facts: facts, auto_update: auto_update,
-          runner_version: runner_version, protocol_version: protocol_version,
-          first_seen_ip: remote_ip, created_by_id: credential.created_by_id
-        )
-        unless environment.save
-          raise Credentials::Refused.new("invalid_registration", environment.errors.full_messages.to_sentence)
+        attributes = { display_name: name.to_s.strip, os: os, arch: arch, facts: facts, auto_update: auto_update,
+                       runner_version: runner_version, protocol_version: protocol_version, first_seen_ip: remote_ip }
+        environment = if credential.runner_environment_id
+          fill_environment!(credential, attributes)
+        else
+          create_environment!(credential, attributes)
         end
 
         credential.update!(used_at: Time.current, runner_environment: environment)
@@ -62,22 +60,13 @@ module Runners
       end
     end
 
-    # Locks in the one order every issuer and revoker uses: the runner, then
-    # the environment, then the credentials (Credentials.rotate!). Holding the
-    # runner first keeps this from deadlocking with a runner Revoke, which
-    # revokes the same credential rows (Runner#revoke_credentials); a rotation
-    # racing this either sees the environment `gone` or has its pair revoked
-    # here.
-    #
-    # The machine stops holding its session, if it had one, and the session ends
-    # at once with a message that names the machine; its cleanup finds the
-    # machine absent and releases its admission (PROTOCOL.md §9). `ended_by` is
-    # how the message says the machine left: `aixle-runner unregister` from the
-    # machine, or a Revoke on the runner page (DESIGN.md §9.3).
+    # What `aixle-runner unregister` does, and what a Revoke of the machine does
+    # (DESIGN.md §9.3): the environment's registration ends, through its adapter
+    # (`Adapter#end_registration!`, runner-coder.md §6.1), whatever its type.
+    # `ended_by` is how the message to a live session says the machine left:
+    # `aixle-runner unregister` from the machine, or a Revoke on the runner page.
     def unregister!(environment, ended_by: RunnerEnvironmentStateMachine::UNREGISTERED)
-      held_session_id = release_machine!(environment, ended_by)
-      RelaySignals.machine_revoked(environment.id)
-      end_session(environment, held_session_id, ended_by) if held_session_id
+      Adapter.for(environment.runner).end_registration!(environment, ended_by: ended_by)
     end
 
     # Revoke of one machine from the platform (§9.3): what `unregister!` does,
@@ -89,30 +78,44 @@ module Runners
       true
     end
 
-    # The id of the session the machine held, read under the locks.
-    def release_machine!(environment, reason)
-      RunnerEnvironment.transaction do
-        Credentials.lock_live_runner!(environment.runner_id)
-        environment.lock!
-        held = environment.current_session_id
-        environment.unregister!(reason)
-        now = Time.current
-        environment.credentials.unrevoked.update_all(revoked_at: now, updated_at: now)
-        held
-      end
-    end
-    private_class_method :release_machine!
-
-    def end_session(environment, session_id, ended_by)
-      session = TerminalSession.find_by(id: session_id)
-      return if session.nil?
-
-      # A compare-and-set: a session that finished or was cancelled meanwhile keeps its outcome.
-      Sessions::Lifecycle.fail_if(
-        session,
-        error_message: "Machine \"#{Machines.label(environment)}\" of runner \"#{environment.runner.name}\" was #{ended_by}."
+    # A `manual` machine registering: a new row, `registered`.
+    def create_environment!(credential, attributes)
+      environment = RunnerEnvironment.new(
+        attributes.merge(runner_id: credential.runner_id, company_id: credential.company_id, origin: :registered,
+                         state: :registered, key: "aixle-r#{credential.runner_id}-#{SecureRandom.hex(4)}",
+                         created_by_id: credential.created_by_id)
       )
+      unless environment.save
+        raise Credentials::Refused.new("invalid_registration", environment.errors.full_messages.to_sentence)
+      end
+
+      environment
     end
-    private_class_method :end_session
+    private_class_method :create_environment!
+
+    # A machine registering into the row the platform made for it
+    # (runner-coder.md §8.4), under the runner's lock and the row's: the row must
+    # be an `allocated` one of the credential's runner, `provisioning` or
+    # `booting`, else the token is refused. It records what the machine reports,
+    # and moves to `booting` when it was still `provisioning` (the install call had
+    # not returned yet; the step that installs re-reads the row and fires no second
+    # transition).
+    def fill_environment!(credential, attributes)
+      environment = RunnerEnvironment.where(id: credential.runner_environment_id, runner_id: credential.runner_id).lock.first
+      unless environment&.origin_allocated? && (environment.provisioning? || environment.booting?)
+        raise Credentials::Refused.new("invalid_token", "The registration token is used, revoked or expired.")
+      end
+      if attributes[:display_name].blank?
+        raise Credentials::Refused.new("invalid_registration", "Display name can't be blank")
+      end
+
+      unless environment.update(attributes)
+        raise Credentials::Refused.new("invalid_registration", environment.errors.full_messages.to_sentence)
+      end
+
+      environment.finish_build! if environment.provisioning?
+      environment
+    end
+    private_class_method :fill_environment!
   end
 end

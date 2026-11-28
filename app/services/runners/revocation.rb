@@ -13,6 +13,9 @@ module Runners
   # A machine that held one of those sessions stops holding it, so the session's
   # cleanup finds the machine absent and releases its admission at once, instead
   # of waiting for ops that a revoked runner never answers (PROTOCOL.md §9).
+  # Every environment of the runner then ends its registration through its
+  # adapter (`Adapter#end_registration!`, runner-coder.md §6.1), whatever its type:
+  # a `manual` machine becomes `gone`.
   module Revocation
     module_function
 
@@ -29,10 +32,31 @@ module Runners
         Rails.logger.error("[Runners::Revocation] session #{session.id} of runner #{runner.id}: #{e.class}: #{e.message}")
         Sentry.capture_exception(e, extra: { runner_id: runner.id, session_id: session.id })
       end
+      end_registrations!(runner)
     end
 
+    # Every environment of the runner that is not `gone` ends its registration
+    # through its adapter (runner-coder.md §6.1, D50), after its session ended with
+    # the runner's own message. A `manual` machine becomes `gone`, its credentials
+    # revoked, with no `runner_revoked` refusal: the lock path accepts a retired
+    # runner (Credentials.lock_runner!).
+    def end_registrations!(runner)
+      # A type with no adapter yet has no environment to end.
+      adapter = Adapter.for(runner)
+      RunnerEnvironment.where(runner_id: runner.id).not_gone.order(:id).each do |environment|
+        adapter.end_registration!(environment, ended_by: RunnerEnvironmentStateMachine::REVOKED)
+      rescue StandardError => e
+        # One environment that cannot end must not keep the others waiting.
+        Rails.logger.error("[Runners::Revocation] environment #{environment.id} of runner #{runner.id}: #{e.class}: #{e.message}")
+        Sentry.capture_exception(e, extra: { runner_id: runner.id, runner_environment_id: environment.id })
+      end
+    rescue Adapter::UnavailableType
+      nil
+    end
+    private_class_method :end_registrations!
+
     def end_session(runner, session, running:)
-      Machines.let_go!(session) if running
+      Allocator.let_go!(session) if running
       # A compare-and-set: a session that finished or was cancelled meanwhile keeps its outcome.
       Sessions::Lifecycle.fail_if(session, error_message: message(runner, session, running))
     end

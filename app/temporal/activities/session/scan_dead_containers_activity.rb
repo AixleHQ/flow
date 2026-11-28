@@ -62,6 +62,8 @@ module Activities
 
         candidate_sessions.find_each do |session|
           checked += 1
+          next if bringing_up?(session)
+
           # A machine that is not heard is asked nothing: that case belongs to
           # the grace (Runners::ContactLoss), not to this scan.
           environment = unheard_machine(session)
@@ -91,12 +93,21 @@ module Activities
       private
 
       # The machine of a runner session when its runner's adapter cannot see the
-      # session's container (`:unknown`), else nil.
+      # session's container (`:unknown`), else nil. An environment the platform is
+      # still bringing up has never been heard: see #bringing_up?.
       def unheard_machine(session)
         environment = session.runner_environment
         return nil if session.runner_id.nil? || environment.nil?
 
         environment if Runners::Adapter.for(session.runner).observe(environment) == :unknown
+      end
+
+      # The session's environment is one the platform is still bringing up
+      # (`provisioning`, `booting`). It has never been heard and has no container,
+      # so it is not lost: the boot timeout owns that window (runner-coder.md §15).
+      def bringing_up?(session)
+        environment = session.runner_environment
+        session.runner_id.present? && environment.present? && (environment.provisioning? || environment.booting?)
       end
 
       def candidate_sessions

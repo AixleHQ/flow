@@ -55,7 +55,7 @@ module Runners
     # for `session`, and answers it, or nil when the session no longer holds
     # the environment (runner_environments.current_session_id): then nothing
     # is created. The hold is checked under the environment's row lock, which
-    # Runners::Machines takes too, so an op read for a session that has since
+    # Runners::Allocator takes too, so an op read for a session that has since
     # released the machine never reaches the next session's machine, an
     # environment op (`env.reset`) included.
     #

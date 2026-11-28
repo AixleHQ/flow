@@ -194,7 +194,7 @@ class RunnerGatewayTest < ActionDispatch::IntegrationTest
   test "a failed machine's credentials are refused" do
     pair = registered_pair
     environment = RunnerEnvironment.sole
-    Runners::Machines.fail!(environment, "env.reset failed after session 1: reset_failed: volume in use")
+    Runners::Allocator.fail!(environment, "env.reset failed after session 1: reset_failed: volume in use")
     assert environment.reload.failed?
 
     refresh(pair["refresh_token"])

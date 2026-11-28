@@ -136,7 +136,7 @@ FactoryBot.define do
     runner { environment.runner }
     runner_environment { environment }
 
-    # The session holds its machine, as Runners::Machines.acquire! leaves it:
+    # The session holds its machine, as Runners::Allocator.acquire! leaves it:
     # its ops can be enqueued (Runners::Operations.enqueue!).
     trait :holding do
       after(:create) { |session, evaluator| evaluator.environment.update!(current_session: session) }

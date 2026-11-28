@@ -9,7 +9,7 @@
 # the runner checks it against the container's label (PROTOCOL.md §5.4, §6.3).
 # An environment op (`env.scrub`, `env.reset`) names none on the wire, but the
 # platform records the session it was sent for, so that the outcome of a stale
-# session's reset can be read back (Runners::Machines.settle_abandoned!). Either
+# session's reset can be read back (Runners::ManualAdapter#settle_abandoned!). Either
 # kind is created only while its session holds the environment, which
 # Runners::Operations.enqueue! checks under the environment's lock.
 #

@@ -283,7 +283,7 @@ class Web::Company::RunnersControllerTest < ActionDispatch::IntegrationTest
 
   test "a failed machine is revoked from the runner page, and there is no Return to service route" do
     machine = create(:runner_environment, runner: @runner, display_name: "build-01")
-    Runners::Machines.fail!(machine, "build-01 failed to reset after session 7: boom")
+    Runners::Allocator.fail!(machine, "build-01 failed to reset after session 7: boom")
     sign_in_as(@admin)
 
     assert_not_respond_to self, :return_to_service_company_settings_runner_machine_path

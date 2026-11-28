@@ -15,7 +15,7 @@
  */
 
 export type LaunchPhase =
-  'queued_for_slot' | 'starting' | 'cluster_capacity' | 'namespace_quota' | 'runner_capacity' | 'running';
+  'queued_for_slot' | 'starting' | 'cluster_capacity' | 'namespace_quota' | 'runner_capacity' | 'runner_provisioning' | 'running';
 
 /** True only when the session really is behind other sessions in its pool. */
 export function isWaitingForSlot(phase: string | null | undefined): boolean {
@@ -32,6 +32,11 @@ export function isWaitingForRunner(phase: string | null | undefined): boolean {
   return phase === 'runner_capacity';
 }
 
+/** True when the platform is building the session's environment on a provisioned runner. */
+export function isWaitingForProvisioning(phase: string | null | undefined): boolean {
+  return phase === 'runner_provisioning';
+}
+
 /**
  * The headline for a session that is not up yet. `kind` only changes the noun:
  * an authentication session is not "a session" to the person who started it.
@@ -44,6 +49,8 @@ export function launchWaitMessage(
   if (isWaitingForCluster(phase)) return 'Waiting for cluster capacity';
   // The launch error under the headline names the runner and how many machines are busy.
   if (isWaitingForRunner(phase)) return 'Waiting for a free machine';
+  // The launch error under the headline says what the platform is doing.
+  if (isWaitingForProvisioning(phase)) return 'Starting a workspace';
 
   return kind === 'authentication' ? 'Starting authentication session…' : 'Starting session…';
 }
