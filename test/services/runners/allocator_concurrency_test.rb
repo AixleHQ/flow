@@ -80,7 +80,7 @@ class Runners::AllocatorConcurrencyTest < ActiveSupport::TestCase
     end
     2.times { start << true }
 
-    assert_equal %w[invalid_token registered], threads.map(&:value).sort
+    assert_equal %w[invalid_token registered], threads.map(&:value).map(&:to_s).sort
     assert_equal "booting", environment.reload.state
     assert_equal 1, RunnerCredential.where(runner_environment_id: environment.id, kind: "access").count
   end
