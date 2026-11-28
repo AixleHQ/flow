@@ -147,6 +147,16 @@ A failed unregister on stop says that unregistering failed and that, if the mach
 is to be removed there. It does not say the credentials were kept: with the default `--rm` they go with the
 container. The `unregister` command keeps its own text.
 
+**What a stop removes, volumes included.** A stop removes the session containers and the sidecars. When the
+machine unregisters (unregister-on-stop, or the `unregister` command) the runner then also removes the
+environment's own volumes: the workspace volume `aixle-ws-<key>` and the cache volumes `aixle-cache-<key>-*`, since
+the key is never used again and nothing else would remove them. It selects them by name **and** the environment
+label (`Environment.RemoveVolumes`, as `env.reset` does), so another environment's volume, or one without the label,
+is left alone. The volumes are removed after the unregister, under the same stop budget, so they never delay the
+unregister or push the stop past it; a failed removal is logged with the volume names and is not an error. A stop
+that keeps the registration (the volume and directory modes) keeps the volumes: the machine comes back with the
+same key and its workspace.
+
 | Where | Setting | Why |
 | --- | --- | --- |
 | The Docker image | **on** (`ENV AIXLE_RUNNER_UNREGISTER_ON_STOP=1`) | The default command keeps nothing, so a stopped runner must not leave a registered machine that can never come back. The default command stays short. |

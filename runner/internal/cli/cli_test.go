@@ -386,6 +386,10 @@ func (hostDocker) ContainerList(context.Context, client.ContainerListOptions) (c
 	return client.ContainerListResult{}, nil
 }
 
+func (hostDocker) VolumeList(context.Context, client.VolumeListOptions) (client.VolumeListResult, error) {
+	return client.VolumeListResult{}, nil
+}
+
 // unlistableDocker is the Docker of a machine whose daemon cannot list the
 // environment's containers when the machine runner starts.
 type unlistableDocker struct{ hostDocker }

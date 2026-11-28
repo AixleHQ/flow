@@ -12,6 +12,8 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -20,6 +22,7 @@ import (
 
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/mount"
+	"github.com/moby/moby/api/types/volume"
 	"github.com/moby/moby/client"
 
 	"github.com/aixlehq/aixle-runner/internal/credentials"
@@ -37,10 +40,21 @@ type sessionDocker struct {
 	mu      sync.Mutex
 	items   []container.Summary
 	removed []string
+	volumes []volume.Volume
+	// volumesRemoved are the volumes removed, by name.
+	volumesRemoved []string
+	// failVolume is a volume whose removal fails.
+	failVolume string
 }
 
 func newSessionDocker() *sessionDocker {
-	return &sessionDocker{items: []container.Summary{
+	return &sessionDocker{volumes: []volume.Volume{
+		{Name: "aixle-ws-" + machineKey, Labels: map[string]string{docker.LabelEnvironment: machineKey}},
+		{Name: "aixle-cache-" + machineKey + "-pip", Labels: map[string]string{docker.LabelEnvironment: machineKey}},
+		{Name: "aixle-ws-aixle-other", Labels: map[string]string{docker.LabelEnvironment: "aixle-other"}},
+		{Name: "aixle-cache-" + machineKey + "-nolabel", Labels: map[string]string{}},
+		{Name: "unrelated"},
+	}, items: []container.Summary{
 		{ID: "agent", Labels: map[string]string{docker.LabelEnvironment: machineKey, docker.LabelSession: "7"}},
 		{ID: "sidecar", Labels: map[string]string{docker.LabelEnvironment: machineKey, docker.LabelSession: "7", docker.LabelRole: docker.RoleProxy}},
 		{ID: "of-another-machine", Labels: map[string]string{docker.LabelEnvironment: "aixle-other", docker.LabelSession: "9"}},
@@ -67,6 +81,39 @@ func (d *sessionDocker) ContainerRemove(_ context.Context, id string, _ client.C
 		}
 	}
 	return client.ContainerRemoveResult{}, nil
+}
+
+func (d *sessionDocker) VolumeList(context.Context, client.VolumeListOptions) (client.VolumeListResult, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return client.VolumeListResult{Items: append([]volume.Volume(nil), d.volumes...)}, nil
+}
+
+func (d *sessionDocker) VolumeRemove(_ context.Context, name string, _ client.VolumeRemoveOptions) (client.VolumeRemoveResult, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if name == d.failVolume {
+		return client.VolumeRemoveResult{}, errors.New("volume is in use")
+	}
+	d.volumesRemoved = append(d.volumesRemoved, name)
+	for i, v := range d.volumes {
+		if v.Name == name {
+			d.volumes = append(d.volumes[:i], d.volumes[i+1:]...)
+			break
+		}
+	}
+	return client.VolumeRemoveResult{}, nil
+}
+
+// volumeNames are the volumes the daemon still has.
+func (d *sessionDocker) volumeNames() []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	var names []string
+	for _, v := range d.volumes {
+		names = append(names, v.Name)
+	}
+	return names
 }
 
 func (d *sessionDocker) removedIDs() []string {
@@ -268,6 +315,14 @@ func TestEachStopSignalRemovesTheSessionContainersAndUnregistersOnlyWhenAsked(t 
 				if got := d.removedIDs(); len(got) != 2 || !contains(got, "agent") || !contains(got, "sidecar") {
 					t.Fatalf("removed %v", got)
 				}
+				// The machine's own volumes go with an unregister, and stay with a kept
+				// registration. Another environment's, an unlabelled one and an
+				// unrelated one are never touched.
+				if unregister {
+					assertVolumes(t, d, "aixle-ws-aixle-other", "aixle-cache-"+machineKey+"-nolabel", "unrelated")
+				} else {
+					assertVolumes(t, d, "aixle-ws-"+machineKey, "aixle-cache-"+machineKey+"-pip", "aixle-ws-aixle-other", "aixle-cache-"+machineKey+"-nolabel", "unrelated")
+				}
 				if n := p.count(http.MethodDelete, "/runner/v1/registration"); (n == 1) != unregister || n > 1 {
 					t.Fatalf("unregistered %d times, with the setting %v", n, unregister)
 				}
@@ -276,6 +331,75 @@ func TestEachStopSignalRemovesTheSessionContainersAndUnregistersOnlyWhenAsked(t 
 				}
 			})
 		}
+	}
+}
+
+func assertVolumes(t *testing.T, d *sessionDocker, want ...string) {
+	t.Helper()
+	got := d.volumeNames()
+	sort.Strings(got)
+	sort.Strings(want)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("volumes left %v, want %v", got, want)
+	}
+}
+
+// A volume that cannot be removed is logged by name, and the machine is
+// unregistered all the same.
+func TestAFailedVolumeRemovalOnStopIsLoggedAndDoesNotUndoTheUnregister(t *testing.T) {
+	p, url := newPlatform(t, map[string][]answer{
+		"GET /runner/v1/ops":             {{200, map[string]any{"ops": []any{}}}},
+		"DELETE /runner/v1/registration": {{204, nil}},
+	})
+	dir := t.TempDir()
+	storeMachineCreds(t, dir, url)
+	d := newSessionDocker()
+	d.failVolume = "aixle-ws-" + machineKey
+	ctx, cancel := context.WithCancel(context.Background())
+	stopOnFirstPoll(p, cancel)
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+
+	if err := RunMachine(ctx, MachineOptions{StateDir: dir, Docker: d, Logger: logger, UnregisterOnStop: true, Out: io.Discard}); err != nil {
+		t.Fatal(err)
+	}
+	if credsExist(t, dir) || p.count(http.MethodDelete, "/runner/v1/registration") != 1 {
+		t.Fatal("the machine was not unregistered")
+	}
+	if !strings.Contains(logs.String(), "removing the machine's volumes failed") || !strings.Contains(logs.String(), "aixle-ws-"+machineKey) {
+		t.Fatalf("log: %s", logs.String())
+	}
+	// The other volume of the machine is still removed.
+	assertVolumes(t, d, "aixle-ws-"+machineKey, "aixle-ws-aixle-other", "aixle-cache-"+machineKey+"-nolabel", "unrelated")
+}
+
+// A failed unregister keeps the machine, so it keeps its volumes.
+func TestAFailedUnregisterKeepsTheMachinesVolumes(t *testing.T) {
+	_, url := newPlatform(t, map[string][]answer{"DELETE /runner/v1/registration": {{500, nil}}})
+	dir := t.TempDir()
+	storeMachineCreds(t, dir, url)
+	d := newSessionDocker()
+	if err := Unregister(context.Background(), UnregisterOptions{StateDir: dir, Out: io.Discard, Docker: d, Logger: quiet}); err == nil {
+		t.Fatal("no error")
+	}
+	if got := d.volumeNames(); len(got) != 5 {
+		t.Fatalf("volumes left %v", got)
+	}
+}
+
+// The unregister command removes the volumes of a kept machine too.
+func TestTheUnregisterCommandRemovesTheMachinesVolumes(t *testing.T) {
+	_, url := newPlatform(t, map[string][]answer{"DELETE /runner/v1/registration": {{204, nil}}})
+	dir := t.TempDir()
+	storeMachineCreds(t, dir, url)
+	d := newSessionDocker()
+	var out bytes.Buffer
+	if err := Unregister(context.Background(), UnregisterOptions{StateDir: dir, Out: &out, Docker: d, Logger: quiet}); err != nil {
+		t.Fatal(err)
+	}
+	assertVolumes(t, d, "aixle-ws-aixle-other", "aixle-cache-"+machineKey+"-nolabel", "unrelated")
+	if !strings.Contains(out.String(), "aixle-ws-"+machineKey) {
+		t.Fatalf("output: %s", out.String())
 	}
 }
 

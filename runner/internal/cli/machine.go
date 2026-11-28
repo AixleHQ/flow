@@ -459,7 +459,7 @@ func stopMachine(ctx context.Context, env *docker.Environment, opts MachineOptio
 	if out == nil {
 		out = io.Discard
 	}
-	if err := unregisterLocked(base, UnregisterOptions{StateDir: opts.StateDir, HTTPClient: opts.HTTPClient, Out: out}); err != nil {
+	if err := unregisterLocked(base, UnregisterOptions{StateDir: opts.StateDir, HTTPClient: opts.HTTPClient, Out: out, Docker: env.API, Logger: opts.Logger}); err != nil {
 		// The credentials may be gone with the container (`--rm`), so there may be
 		// nothing left to try again with.
 		opts.Logger.Warn("unregistering this machine on stop failed. If the machine still shows on the platform, remove it there", "error", err)

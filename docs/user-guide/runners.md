@@ -101,13 +101,20 @@ a registration.
 machine shows as not answering on the runner's page: press **Revoke** or
 **Delete** on its row. In the default mode the next start is a new machine and
 does not touch what the old run left, so remove the leftovers by hand. List the
-containers the old runner started (they carry its machine key in a label) and
-remove them together with their anonymous volumes:
+containers and volumes the old runner created (they carry its machine key in a
+label) and remove the containers together with their anonymous volumes, then
+the volumes:
 
 ```sh
 docker ps -a --filter label=aixle.com/environment
 docker rm -fv <container id>
+docker volume ls --filter label=aixle.com/environment
+docker volume rm <volume name>
 ```
+
+A runner that unregisters itself (a stop with unregister-on-stop on, or the
+`unregister` command) removes its own workspace and cache volumes, so only a
+hard kill leaves them.
 
 With a kept registration the restarted runner is the same machine, and it
 removes its own leftovers at start.
