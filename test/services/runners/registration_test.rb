@@ -181,7 +181,7 @@ class Runners::RegistrationTest < ActiveSupport::TestCase
     environment = register.environment
     @runner.revoke!
 
-    assert Runners::Registration.revoke!(environment.reload) == false, "the runner's revoke already ended it"
+    assert_equal false, Runners::Registration.revoke!(environment.reload), "the runner's revoke already ended it"
     assert_equal "revoked", environment.state_reason
     assert environment.gone?
   end

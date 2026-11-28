@@ -218,8 +218,11 @@ class Runners::MachinesTest < ActiveSupport::TestCase
     abandoned_session
     other = create(:runner_session, environment: second, runner_environment: nil, state: "failed")
     Runners::Allocator.acquire!(other)
-    Runners::ManualAdapter.any_instance.stubs(:settle_abandoned!).with(@machine.id).raises(RuntimeError, "boom")
-    Runners::ManualAdapter.any_instance.stubs(:settle_abandoned!).with(second.id).returns(:released)
+    failing = @machine.id
+    adapter = Class.new(Runners::ManualAdapter) do
+      define_method(:settle_abandoned!) { |id| id == failing ? raise("boom") : :released }
+    end.new
+    Runners::Adapter.stubs(:for).returns(adapter)
 
     counts = Runners::Allocator.sweep_abandoned!
 

@@ -114,7 +114,7 @@ class Runners::ProvisioningTest < ActiveSupport::TestCase
       @adapter.exhausted = "No capacity."
       assert_raises(ContainerRuntime::CapacityError) { advance }
     end
-    travel_to(Time.zone.local(2026, 11, 28, 10) + 3 * timeout) do
+    travel_to(Time.zone.local(2026, 11, 28, 10) + (3 * timeout)) do
       assert_raises(ContainerRuntime::CapacityError) { advance }
       assert_equal "provisioning", @environment.reload.state, "no machine, no clock"
     end
