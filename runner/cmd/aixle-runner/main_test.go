@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -165,5 +167,35 @@ func TestAStopIsSIGINTSIGTERMOrSIGHUP(t *testing.T) {
 	}
 	if want := "interrupt terminated hangup"; strings.Join(names, " ") != want {
 		t.Fatalf("stop signals: %v", names)
+	}
+}
+
+func TestUnregisterSaysTheVolumesStayWhenDockerCannotBeReached(t *testing.T) {
+	platform := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer platform.Close()
+	dir := t.TempDir()
+	exp := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
+	err := credentials.NewStore(dir).Save(credentials.Credentials{URL: platform.URL, TokenPair: protocol.TokenPair{
+		AccessToken: "aracc_one", AccessTokenExpiresAt: exp, RefreshToken: "arref_one", RefreshTokenExpiresAt: exp.Add(720 * time.Hour),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("DOCKER_HOST", "bogus://nowhere")
+
+	var stdout, stderr bytes.Buffer
+	if err := unregister(context.Background(), []string{"--state-dir", dir}, &stdout, &stderr); err != nil {
+		t.Fatalf("unregister: %v (stdout %s, stderr %s)", err, stdout.String(), stderr.String())
+	}
+	if got := stderr.String(); !strings.Contains(got, "Could not connect to Docker, so the machine's volumes were not removed") {
+		t.Errorf("stderr = %q", got)
+	}
+	if !strings.Contains(stdout.String(), "Unregistered this machine") {
+		t.Errorf("stdout = %q", stdout.String())
+	}
+	if _, err := credentials.NewStore(dir).Load(); err == nil {
+		t.Error("the credentials are still there")
 	}
 }

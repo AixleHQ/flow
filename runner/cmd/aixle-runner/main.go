@@ -151,10 +151,15 @@ func unregister(ctx context.Context, args []string, stdout, stderr io.Writer) er
 	if err := parse(fs, args); err != nil {
 		return err
 	}
-	// The machine's volumes go with it. connecting does not dial: with no daemon
-	// the unregister still works and the removal is logged as failed.
+	// The machine's volumes go with it. Connecting does not dial, so with the
+	// daemon down the unregister works and cli logs the failed removal. A client
+	// that cannot be built (a malformed DOCKER_HOST) is said here: the unregister
+	// still runs, and the volumes stay on the host.
 	opts := cli.UnregisterOptions{StateDir: *stateDir, Out: stdout}
-	if api, err := docker.Connect(); err == nil {
+	api, err := docker.Connect()
+	if err != nil {
+		fmt.Fprintf(stderr, "Could not connect to Docker, so the machine's volumes were not removed: %v\n", err)
+	} else {
 		defer api.Close()
 		opts.Docker = api
 	}
