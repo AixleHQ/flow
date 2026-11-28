@@ -39,6 +39,14 @@ class RunnerEnvironmentTest < ActiveSupport::TestCase
     assert_equal %w[registered], RunnerEnvironment.free.where(runner: @runner).map(&:state)
   end
 
+  test "being_built? is provisioning or booting, and the being_built scope reads it" do
+    states = %w[registered provisioning booting idle failed tearing_down gone]
+    environments = states.index_with { |state| create(:runner_environment, runner: @runner, state: state) }
+
+    assert_equal %w[provisioning booting], environments.select { |_, environment| environment.being_built? }.keys
+    assert_equal %w[booting provisioning], RunnerEnvironment.being_built.where(runner: @runner).map(&:state).sort
+  end
+
   test "an environment takes no more calls once it failed, is torn down or left" do
     out = %w[failed tearing_down gone]
 

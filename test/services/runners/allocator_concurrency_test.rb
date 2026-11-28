@@ -84,4 +84,46 @@ class Runners::AllocatorConcurrencyTest < ActiveSupport::TestCase
     assert_equal "booting", environment.reload.state
     assert_equal 1, RunnerCredential.where(runner_environment_id: environment.id, kind: "access").count
   end
+
+  test "a bound registration waiting for a Revoke's row lock takes none of the token's, so the Revoke ends with no deadlock" do
+    environment = RunnerEnvironment.create!(runner: @runner, origin: :allocated, state: :provisioning, key: "lock-order", external_id: "ws-order")
+    token = Runners::Credentials.mint_registration!(@runner, environment: environment)
+    held = Queue.new
+    release = Queue.new
+
+    revoke = Thread.new do
+      ActiveRecord::Base.connection_pool.with_connection do
+        RunnerEnvironment.transaction do
+          locked = RunnerEnvironment.lock.find(environment.id)
+          held << true
+          release.pop
+          # What a Revoke does next: the environment's credentials, then its state.
+          locked.credentials.update_all(revoked_at: Time.current)
+          locked.update_columns(state: "gone")
+        end
+        :revoked
+      end
+    end
+    held.pop
+    register = Thread.new do
+      ActiveRecord::Base.connection_pool.with_connection do
+        credential = RunnerCredential.find_by_token(token, kind: :registration)
+        Runners::Registration.register!(credential, name: "ws", os: "linux", arch: "amd64", facts: {},
+                                                    auto_update: true, runner_version: "1.4.0", protocol_version: "1")
+        :registered
+      rescue Runners::Credentials::Refused => e
+        e.reason.to_sym
+      end
+    end
+    begin
+      # The registration waits for the row the Revoke holds.
+      assert_nil register.join(1), "the registration waits for the environment's lock"
+    ensure
+      release << true
+    end
+
+    assert_equal :revoked, revoke.value
+    assert_equal :invalid_token, register.value
+    assert_equal "gone", environment.reload.state
+  end
 end

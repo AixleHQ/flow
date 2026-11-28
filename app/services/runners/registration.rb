@@ -41,6 +41,10 @@ module Runners
     def register!(credential, name:, os:, arch:, facts:, auto_update:, runner_version:, protocol_version:, remote_ip: nil)
       result = RunnerCredential.transaction do
         Credentials.lock_live_runner!(credential.runner_id)
+        # Runner, environment, credentials: the order a Revoke of the machine
+        # takes (ManualAdapter#release_machine!, runner-coder.md §6.1, D50), so a
+        # bound registration locks its row before the token's.
+        bound = lock_bound_environment!(credential) if credential.runner_environment_id
         credential.lock!
         if credential.used? || credential.revoked? || credential.expired?
           raise Credentials::Refused.new("invalid_token", "The registration token is used, revoked or expired.")
@@ -48,8 +52,8 @@ module Runners
 
         attributes = { display_name: name.to_s.strip, os: os, arch: arch, facts: facts, auto_update: auto_update,
                        runner_version: runner_version, protocol_version: protocol_version, first_seen_ip: remote_ip }
-        environment = if credential.runner_environment_id
-          fill_environment!(credential, attributes)
+        environment = if bound
+          fill_environment!(bound, attributes)
         else
           create_environment!(credential, attributes)
         end
@@ -98,18 +102,24 @@ module Runners
     end
     private_class_method :create_environment!
 
-    # A machine registering into the row the platform made for it
-    # (runner-coder.md §8.4), under the runner's lock and the row's: the row must
-    # be an `allocated` one of the credential's runner, `provisioning` or
-    # `booting`, else the token is refused. It records what the machine reports,
-    # and moves to `booting` when it was still `provisioning` (the install call had
-    # not returned yet; the step that installs re-reads the row and fires no second
-    # transition).
-    def fill_environment!(credential, attributes)
+    # The row a bound token registers into (runner-coder.md §8.4), locked under
+    # the runner's lock and before the token's: an `allocated` one of the
+    # credential's runner, `provisioning` or `booting`, else the token is refused.
+    def lock_bound_environment!(credential)
       environment = RunnerEnvironment.where(id: credential.runner_environment_id, runner_id: credential.runner_id).lock.first
-      unless environment&.origin_allocated? && (environment.provisioning? || environment.booting?)
+      unless environment&.origin_allocated? && environment.being_built?
         raise Credentials::Refused.new("invalid_token", "The registration token is used, revoked or expired.")
       end
+
+      environment
+    end
+    private_class_method :lock_bound_environment!
+
+    # A machine registering into the locked row the platform made for it. It
+    # records what the machine reports, and moves to `booting` when it was still
+    # `provisioning` (the install call had not returned yet; the step that
+    # installs re-reads the row and fires no second transition).
+    def fill_environment!(environment, attributes)
       if attributes[:display_name].blank?
         raise Credentials::Refused.new("invalid_registration", "Display name can't be blank")
       end
