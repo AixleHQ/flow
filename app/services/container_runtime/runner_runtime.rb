@@ -24,9 +24,10 @@ module ContainerRuntime
   # - pull_image does nothing, as KubernetesRuntime#pull_image: the runner
   #   pulls the image in `container.start`. The image is the one this runtime
   #   chooses (runner_image), not the hosted image the strategy resolves.
-  # - create_container takes a free machine of the session's runner, the first
-  #   phase that needs one (Runners::Machines; every machine busy is a
-  #   CapacityError, so the session waits), and sends `container.start` with
+  # - create_container takes a free machine of the session's runner, or has one
+  #   made, the first phase that needs one (Runners::Allocator; every machine
+  #   busy, or one still being made, is a CapacityError, so the session waits;
+  #   one that could not be made is a CreateRefusedError), and sends `container.start` with
   #   the image runner_image chooses (the runner's override, else the runner
   #   default), as the reference was given, a tag or a digest: the runner always
   #   pulls it, then creates and starts the container in one op, as a
@@ -37,13 +38,15 @@ module ContainerRuntime
   #   included, still runs cleanup_session and frees the machine.
   # - start_container and wait_for_ready wait for nothing more than the
   #   container running (`status`), as DockerRuntime#start_container does.
-  # - cleanup_session sends `container.stop`, then `env.scrub` under the
-  #   runner's `reuse` policy or `env.reset` under `reset` (a reset after a
-  #   failed session too), and frees the machine once that succeeded. A failed
-  #   scrub is followed by a reset; a failed reset moves the machine to `failed`
-  #   (a reset nobody answered does not, for a session that lost contact while
-  #   the machine is not heard when the reset expires: the machine is reset when
-  #   it is heard again). A session's outcome never fails the machine (§7.2).
+  # - cleanup_session sends `container.stop`, then releases the machine through
+  #   the allocator, which its type's adapter carries out: a `manual` machine
+  #   gets `env.scrub` under the runner's `reuse` policy or `env.reset` under
+  #   `reset` (a reset after a failed session too), and is freed once that
+  #   succeeded. A failed scrub is followed by a reset; a failed reset moves the
+  #   machine to `failed` (a reset nobody answered does not, for a session that
+  #   lost contact while the machine is not heard when the reset expires: the
+  #   machine is reset when it is heard again). A session's outcome never fails
+  #   the machine (§7.2).
   #   It waits for nothing queued: while an earlier op is unfinished on the
   #   machine the session holds (a `container.start` whose wait a stop cut
   #   short, or an `env.reset` of an earlier cleanup attempt), cleanup_ready?
@@ -137,60 +140,45 @@ module ContainerRuntime
       return true if environment.nil?
       # A session failed because its machine stopped answering keeps the
       # machine, and so its slot, until the machine is heard again
-      # (Runners::ContactLoss): its ops would only expire.
-      return false if session.contact_lost? && !environment.heard?
+      # (Runners::ContactLoss): its ops would only expire. Whether the cleanup
+      # waits for a machine that is not heard is the type's answer.
+      return false if session.contact_lost? && !environment.heard? && adapter_for(environment).cleanup_waits_for_unheard?(environment)
 
       !RunnerOperation.deliverable.exists?(runner_environment_id: environment.id)
     end
 
-    # `container.stop`, then the runner's cleanup level (§7.1, §7.2). Under
-    # `reuse`, `env.scrub`: the machine's containers and the session's outputs go,
-    # the checkouts, caches and images stay. Under `reset`, or after a `failed`
-    # session under either policy, `env.reset`: the workspace and cache volumes go
-    # too. A failed scrub is followed by a reset, and the machine is free again
-    # once either succeeded. A failed reset, a machine that does not answer
-    # included, moves the machine to `failed` with the reason. The exception is a session that
-    # lost contact whose reset expired while the machine was not heard: the
-    # session keeps the machine and the cleanup sends a new reset when the
-    # machine is heard again. A machine heard throughout the reset's deadline
-    # that still did not answer is failed. A failed `container.stop` is
-    # logged, and the cleanup goes on.
+    # `container.stop`, then the environment is released through the allocator,
+    # whose adapter does what its type does after a session (a `manual` machine
+    # is scrubbed or reset by the runner's policy and returns to rotation, or
+    # leaves it: Runners::ManualAdapter#release!). The session's outcome is not
+    # counted: `failed` only says which cleanup level a session needs. A failed
+    # `container.stop` is logged, and the cleanup goes on. The stop is skipped when
+    # the environment is not heard and the type does not wait for it to be (its
+    # op would only expire).
     def cleanup_session(id, failed: false)
       session = session_for(id)
       environment = session && machine(session)
       return if environment.nil?
 
-      stopped = call(session, "container.stop", {}, lifecycle: true)
-      Rails.logger.warn("[RunnerRuntime] session #{session.id}: #{stopped.message}") unless stopped.ok?
-
-      if !failed && session.runner.reuse_policy == "reuse"
-        scrub = call(session, "env.scrub", { "image" => scrub_image(session) }, lifecycle: true)
-        return Runners::Machines.release!(environment, session) if scrub.ok?
-
-        Rails.logger.warn("[RunnerRuntime] session #{session.id}: #{scrub.message}; machine #{environment.key} is reset instead")
+      if environment.heard? || adapter_for(environment).cleanup_waits_for_unheard?(environment)
+        stopped = call(session, "container.stop", {}, lifecycle: true)
+        Rails.logger.warn("[RunnerRuntime] session #{session.id}: #{stopped.message}") unless stopped.ok?
       end
 
-      reset = call(session, "env.reset", {}, lifecycle: true)
-      return Runners::Machines.release!(environment, session) if reset.ok?
+      Runners::Allocator.release!(environment, session, failed: failed, runtime: self)
+    end
 
-      # A machine that is not heard when its reset expires is still away (or
-      # went quiet again before it took the reset: DESIGN.md §6.7). The reset it
-      # never answered says nothing of the machine's state, so the session keeps
-      # the machine and the cleanup waits until it is heard again, as it did
-      # before the reset was sent. A machine that is heard and still left the
-      # reset unanswered is not away, so it is failed below; otherwise a runner
-      # that heartbeats but never runs ops would hold its slot and be reset
-      # without end.
-      if reset.expired? && session.contact_lost? && !machine(session).heard?
-        Rails.logger.warn("[RunnerRuntime] session #{session.id}: #{reset.message}; machine #{environment.key} " \
-                          "is not heard, so its reset is sent again when it is heard")
-        return
-      end
+    # One op of the session's cleanup on the machine it holds, with the
+    # lifecycle deadline. For the adapter's release (Runners::Adapter#release!),
+    # which decides which ops and what their outcomes mean.
+    def lifecycle_op(session, op, payload)
+      call(session, op, payload, lifecycle: true)
+    end
 
-      Rails.logger.warn("[RunnerRuntime] session #{session.id}: #{reset.message}; machine #{environment.key} is failed")
-      reason = reset.expired? ? "the runner did not answer" : Runners::Machines.failure_text(reset.result)
-      Runners::Machines.fail!(environment, "#{Runners::Machines.label(environment)} failed to reset after session #{session.id}: #{reason}",
-                              holder: session)
+    # The image `env.scrub` runs its short-lived container from: the one the
+    # session's `container.start` pulled.
+    def scrub_image(session)
+      runner_image(session.runner&.config || {}, session)
     end
 
     # -- Callbacks ------------------------------------------------------------
@@ -223,7 +211,13 @@ module ContainerRuntime
     # cleanup still resets the machine.
     def create_container(spec)
       session = spec_session(spec)
-      Runners::Machines.acquire!(session)
+      begin
+        Runners::Allocator.acquire!(session)
+      rescue Runners::ProvisionError => e
+        # The environment could not be made ready: the phase fails with the
+        # diagnosis, and the cleanup frees what is held.
+        raise CreateRefusedError, e.message
+      end
       payload = container_payload(session, spec)
       outcome = call(session, "container.start", payload, lifecycle: true)
       return started_container_name(session, outcome) if outcome.ok?
@@ -550,7 +544,11 @@ module ContainerRuntime
     # The machine while the session holds it, read fresh for every op: the
     # hold is what the cleanup changes.
     def machine(session)
-      Runners::Machines.held_by(session)
+      Runners::Allocator.held_by(session)
+    end
+
+    def adapter_for(environment)
+      Runners::Adapter.for(environment.runner)
     end
 
     # An op's deadline is its own budget plus the upload budget when it offers
@@ -602,12 +600,6 @@ module ContainerRuntime
       return Runners::ConfigSchema.image_reference(override, image_name) if override
 
       default_runner_image(session.agent_type, image_name)
-    end
-
-    # The image `env.scrub` runs its short-lived container from: the one the
-    # session's `container.start` pulled.
-    def scrub_image(session)
-      runner_image(session.runner&.config || {}, session)
     end
 
     def default_runner_image(agent_type, image_name)

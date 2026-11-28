@@ -56,7 +56,7 @@ class RunnerFailedMachineTest < ActionDispatch::IntegrationTest
     assert_match(/\ARunner "Build farm" has no machine that can take a session: its machine is out of rotation: build-01 \(build-01 failed to reset after session #{session.id}: reset_failed: volume aixle-ws-x is in use\)/,
                  next_session.error_message)
     assert_raises(Runners::Machines::NoMachine) do
-      Runners::Machines.acquire!(create(:runner_session, environment: @machine, runner_environment: nil))
+      Runners::Allocator.acquire!(create(:runner_session, environment: @machine, runner_environment: nil))
     end
     assert_empty @host_runner.operations, "nothing reached the failed machine"
   end

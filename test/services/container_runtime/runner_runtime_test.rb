@@ -308,14 +308,14 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
 
     3.times do
       session = another_session
-      Runners::Machines.acquire!(session)
+      Runners::Allocator.acquire!(session)
       identity = ContainerRuntime::FakeHostRunner.identify!(session).runtime_id
       @runtime.cleanup_session(identity, failed: true)
     end
 
     @environment.reload
     assert_equal [ "registered", nil, nil ], [ @environment.state, @environment.current_session_id, @environment.state_reason ]
-    assert_equal @environment, Runners::Machines.acquire!(another_session)
+    assert_equal @environment, Runners::Allocator.acquire!(another_session)
   end
 
   test "the cleanup identity finds the session as its container's name does" do
@@ -342,7 +342,7 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
     assert_equal "#{@environment.display_name} failed to reset after session #{@session.id}: reset_failed: volume aixle-ws-x is in use",
                  @environment.state_reason
     assert @runtime.session_absent?(handle)
-    assert_raises(Runners::Machines::NoMachine) { Runners::Machines.acquire!(another_session) }
+    assert_raises(Runners::Machines::NoMachine) { Runners::Allocator.acquire!(another_session) }
   end
 
   test "a failed container.stop is logged and the scrub still runs" do
@@ -402,12 +402,12 @@ class ContainerRuntime::RunnerRuntimeTest < ActiveSupport::TestCase
   # The holder was read before the pause; the machine changed hands during it.
   test "a session op and an env.reset of a session that released its machine after the read are not created" do
     handle = start_session
-    observed = Runners::Machines.held_by(@session)
-    Runners::Machines.release!(observed, @session)
+    observed = Runners::Allocator.held_by(@session)
+    Runners::Allocator.free!(observed, @session)
     next_session = another_session
-    Runners::Machines.acquire!(next_session)
-    Runners::Machines.stubs(:held_by).with(@session).returns(observed)
-    Runners::Machines.stubs(:held_by).with(next_session).returns(@environment.reload)
+    Runners::Allocator.acquire!(next_session)
+    Runners::Allocator.stubs(:held_by).with(@session).returns(observed)
+    Runners::Allocator.stubs(:held_by).with(next_session).returns(@environment.reload)
     @host_runner.operations.clear
 
     assert_raises(ContainerRuntime::ContainerUnreachableError) { @runtime.exec!(handle, [ "true" ]) }

@@ -31,7 +31,7 @@ class Runners::ResolverTest < ActiveSupport::TestCase
   test "a runner whose every machine failed is unreachable, with the machines and what to do" do
     @run.update!(runner: @runner)
     machine = create(:runner_environment, runner: @runner, display_name: "build-01")
-    Runners::Machines.fail!(machine, "env.reset failed after session 3: the runner did not answer")
+    Runners::Allocator.fail!(machine, "env.reset failed after session 3: the runner did not answer")
 
     refusal = with_feature(:external_runners, true, company: @company) { refusal_for(@run) }
 

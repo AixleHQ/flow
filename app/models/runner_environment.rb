@@ -5,21 +5,23 @@
 # through the runner gateway (§5.2), which creates the row `registered`;
 # unregistering marks it `gone`. A machine whose `env.reset` failed after a
 # session, whose check-in reported missing prerequisites or whose refresh token
-# was reused (Runners::Credentials.rotate!) is `failed` (Runners::Machines.fail!),
+# was reused (Runners::Credentials.rotate!) is `failed` (Runners::Allocator.fail!),
 # with the reason in `state_reason`, and takes no session. `failed` is final:
 # its credentials stop working, and it leaves by a Revoke (`gone`) and is
 # registered again with Add machine. A session's outcome never fails a machine.
-# The states and their events are RunnerEnvironmentStateMachine's; the rest of
-# the §5.2 state machine arrives with Runners::Allocator.
+# The states and their events are RunnerEnvironmentStateMachine's; the provisioned
+# arm (`provisioning`, `booting`, `idle`, `tearing_down`) is for environments the
+# platform creates, `origin: allocated` (runner-coder.md §6).
 #
-# `current_session` is the session that holds the machine (Runners::Machines):
-# a `registered` machine without one is free. It is cleared once the machine
-# has been reset after the session, and when it fails.
+# `current_session` is the session that holds the machine (Runners::Allocator):
+# an in-service machine (`registered` or `idle`) without one is free. It is
+# cleared once the machine has been reset after the session, and when it fails
+# or is torn down.
 #
 # `last_heartbeat_at` is the last time the platform heard from the machine
 # (Runners::Liveness.record!): its polls, and its heartbeats while it runs an
-# op (§6.7). A `registered` machine heard within ONLINE_WINDOW is online; any
-# other is offline and takes no new session (Runners::Machines).
+# op (§6.7). An in-service machine heard within ONLINE_WINDOW is online; any
+# other is offline and takes no new session (Runners::Allocator).
 #
 # `first_seen_ip` is the address the machine registered from, recorded once, and
 # `created_by` the user who minted its registration token ("Add machine"). A
@@ -33,8 +35,10 @@ class RunnerEnvironment < ApplicationRecord
   include RunnerEnvironmentStateMachine
 
   # Prefixed: origin and state share the value `registered`. The states are
-  # RunnerEnvironmentStateMachine's.
-  enumerize :origin, in: %i[registered], predicates: { prefix: true }
+  # RunnerEnvironmentStateMachine's. `registered` is a machine an operator
+  # installed `aixle-runner` on (`manual`); `allocated` is one the platform
+  # created for a session (runner-coder.md §6).
+  enumerize :origin, in: %i[registered allocated], predicates: { prefix: true }
 
   # §2.5: a machine not heard for this long is offline.
   ONLINE_WINDOW = 90.seconds
@@ -46,7 +50,17 @@ class RunnerEnvironment < ApplicationRecord
   belongs_to :created_by, class_name: "User", optional: true
   has_many :credentials, class_name: "RunnerCredential", inverse_of: :runner_environment
 
-  scope :free, -> { where(state: "registered", current_session_id: nil) }
+  # The states that can take a session: `registered` (a `manual` machine) and `idle`.
+  IN_SERVICE_STATES = %w[registered idle].freeze
+
+  # The platform is still bringing the environment up: it has never been heard
+  # and has no container yet (runner-coder.md §15).
+  BEING_BUILT_STATES = %w[provisioning booting].freeze
+
+  scope :free, -> { where(state: IN_SERVICE_STATES, current_session_id: nil) }
+  # Every environment of a runner that is not `gone`: what `max_environments` counts.
+  scope :not_gone, -> { where.not(state: "gone") }
+  scope :being_built, -> { where(state: BEING_BUILT_STATES) }
   scope :holding_session, -> { where.not(current_session_id: nil) }
   # Held by a session whose cleanup will never run (TerminalSession.cleanup_abandoned).
   scope :held_by_abandoned_session, -> { where(current_session_id: TerminalSession.cleanup_abandoned.select(:id)) }
@@ -80,10 +94,23 @@ class RunnerEnvironment < ApplicationRecord
     gone? && state_reason == REVOKED
   end
 
-  # The machine takes no more calls from the platform: it left (`gone`) or it
-  # failed, and nothing but a Revoke and a new Add machine follows either.
+  # The environment can take a session: `registered` or `idle` (an `idle` one
+  # holding a session is busy). `Allocator`, the `free` scope and the
+  # availability of a `manual` runner share this one definition.
+  def in_service?
+    state.to_s.in?(IN_SERVICE_STATES)
+  end
+
+  # The platform is still bringing the environment up: `provisioning` or `booting`.
+  def being_built?
+    state.to_s.in?(BEING_BUILT_STATES)
+  end
+
+  # The environment takes no more calls from the platform: it left (`gone`),
+  # it failed, or its machine is being deleted (`tearing_down`). A `failed` or
+  # `gone` `manual` machine follows with nothing but a Revoke and a new Add machine.
   def out_of_service?
-    gone? || failed?
+    gone? || failed? || tearing_down?
   end
 
   # What the machine's last report says keeps it from running sessions (the
@@ -102,11 +129,11 @@ class RunnerEnvironment < ApplicationRecord
     (last_heartbeat_at || created_at) <= now - period
   end
 
-  # How the machine shows on the runner page (§2.5): `failed` and `gone` as
-  # they are; a `registered` one is `offline` unless it is heard, else `online`
-  # holding a session and `idle` without one.
+  # How the machine shows on the runner page (§2.5): the other states as they
+  # are; a `registered` or `idle` one is `offline` unless it is heard, else
+  # `online` holding a session and `idle` without one.
   def display_state(now = Time.current)
-    return state.to_s unless registered?
+    return state.to_s unless in_service?
     return "offline" unless heard?(now)
 
     busy? ? "online" : "idle"

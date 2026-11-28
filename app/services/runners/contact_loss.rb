@@ -33,7 +33,7 @@ module Runners
       # A compare-and-set: a session that finished or was cancelled meanwhile keeps its outcome.
       failed = Sessions::Lifecycle.fail_if(session, expected_state: session.state, error_message: MESSAGE)
       if failed
-        Machines.let_go!(session) if session.runner.retired?
+        Allocator.let_go!(session) if session.runner.retired?
       else
         session.clear_contact_lost!
       end

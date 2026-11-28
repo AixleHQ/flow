@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { isWaitingForCluster, isWaitingForRunner, isWaitingForSlot, launchWaitMessage } from './launchStatus';
+import {
+  isWaitingForCluster,
+  isWaitingForProvisioning,
+  isWaitingForRunner,
+  isWaitingForSlot,
+  launchWaitMessage,
+} from './launchStatus';
 
 describe('launchWaitMessage', () => {
   it('blames the queue only when the session is actually behind others', () => {
@@ -28,6 +34,13 @@ describe('launchWaitMessage', () => {
     expect(isWaitingForRunner('runner_capacity')).toBe(true);
     expect(isWaitingForCluster('runner_capacity')).toBe(false);
     expect(isWaitingForRunner('cluster_capacity')).toBe(false);
+  });
+
+  it('says a workspace is starting, not that a machine is busy, while the platform builds one', () => {
+    expect(launchWaitMessage('runner_provisioning')).toBe('Starting a workspace');
+    expect(isWaitingForProvisioning('runner_provisioning')).toBe(true);
+    expect(isWaitingForRunner('runner_provisioning')).toBe(false);
+    expect(isWaitingForProvisioning('runner_capacity')).toBe(false);
   });
 
   it('does not invent a queue for a session with no admission at all', () => {

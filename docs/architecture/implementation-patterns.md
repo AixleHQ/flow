@@ -155,7 +155,7 @@ What the controllers return — no envelope around the resource:
   - **TerminalSession:** `state` (not_started/queued/running/ready/finishing/finished/failed/cancelled/suspended/restored)
   - **WorkflowRun:** `state` (pending/running/paused/completed/failed/cancelled)
   - **Runner:** `status` (pending/connected/degraded/unreachable/disabled/revoked)
-  - **RunnerEnvironment:** `state` (registered/failed/gone)
+  - **RunnerEnvironment:** `state` (registered/provisioning/booting/idle/failed/tearing_down/gone)
   - **MarketplaceLicense:** `subscription_state` (pending/active/ending/ended)
 - **`TerminalSession`'s state is owned by `Sessions::Lifecycle`** (`app/services/sessions/lifecycle.rb`). It is the only code that fires the machine's state events, through `transition!`, and it sends what a move sets off (wake the parent run, the relay's `session_ended`) after the commit. The machine's callbacks only assign columns. AASM's `no_direct_assignment: true` makes `state =` and `update!(state: ...)` raise, and `test/services/sessions/lifecycle_ownership_test.rb` fails on an event fired elsewhere. A test that needs a session in a state uses `put_session_in_state!` or the factory's `state:`.
 - **A state changes only through its events.** Other code does not write `state` with `update` or `state =`; a move the machine lacks is added to the machine (see Anti-Patterns → change a record's state, or another column whose change has an owner, past that owner)

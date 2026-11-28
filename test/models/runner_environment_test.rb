@@ -21,6 +21,55 @@ class RunnerEnvironmentTest < ActiveSupport::TestCase
     assert environment.errors.added?(:display_name, :blank)
   end
 
+  test "an allocated environment needs no name until its machine registers into it" do
+    environment = build(:runner_environment, :allocated)
+
+    assert environment.valid?, environment.errors.full_messages.to_sentence
+    assert environment.origin_allocated?
+    assert environment.provisioning?
+  end
+
+  test "in_service? is registered or idle, and the free scope reads it" do
+    states = %w[registered provisioning booting idle failed tearing_down gone]
+    environments = states.index_with { |state| create(:runner_environment, runner: @runner, state: state) }
+
+    assert_equal %w[registered idle], environments.select { |_, environment| environment.in_service? }.keys
+    assert_equal %w[registered idle], RunnerEnvironment.free.where(runner: @runner).map(&:state).sort.reverse
+    create(:runner_session, :holding, environment: environments["idle"])
+    assert_equal %w[registered], RunnerEnvironment.free.where(runner: @runner).map(&:state)
+  end
+
+  test "being_built? is provisioning or booting, and the being_built scope reads it" do
+    states = %w[registered provisioning booting idle failed tearing_down gone]
+    environments = states.index_with { |state| create(:runner_environment, runner: @runner, state: state) }
+
+    assert_equal %w[provisioning booting], environments.select { |_, environment| environment.being_built? }.keys
+    assert_equal %w[booting provisioning], RunnerEnvironment.being_built.where(runner: @runner).map(&:state).sort
+  end
+
+  test "an environment takes no more calls once it failed, is torn down or left" do
+    out = %w[failed tearing_down gone]
+
+    %w[registered provisioning booting idle failed tearing_down gone].each do |state|
+      assert_equal out.include?(state), build(:runner_environment, runner: @runner, state: state).out_of_service?, state
+    end
+  end
+
+  test "not_gone is what max_environments counts: a failed or a tearing down environment is still one" do
+    %w[provisioning booting idle failed tearing_down gone].each { |state| create(:runner_environment, runner: @runner, state: state) }
+
+    assert_equal 5, RunnerEnvironment.where(runner: @runner).not_gone.count
+  end
+
+  test "an idle environment shows as the other in-service one does, and the rest as their state" do
+    now = Time.current
+    idle = create(:runner_environment, runner: @runner, state: "idle", last_heartbeat_at: now)
+
+    assert_equal "idle", idle.display_state(now)
+    assert_equal "offline", idle.display_state(now + 5.minutes)
+    assert_equal "tearing_down", build(:runner_environment, runner: @runner, state: "tearing_down").display_state
+  end
+
   test "facts are an object" do
     environment = build(:runner_environment, runner: @runner, facts: [ "docker" ])
 
@@ -109,7 +158,7 @@ class RunnerEnvironmentTest < ActiveSupport::TestCase
   test "display_state: failed and gone machines show as such, however recently they were heard" do
     gone = create(:runner_environment, runner: @runner, state: :gone)
     failed = create(:runner_environment, runner: @runner)
-    Runners::Machines.fail!(failed, "env.reset failed")
+    Runners::Allocator.fail!(failed, "env.reset failed")
 
     assert_equal "gone", gone.display_state
     assert_equal "failed", failed.reload.display_state

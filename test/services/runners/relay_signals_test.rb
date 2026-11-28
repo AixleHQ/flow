@@ -18,7 +18,7 @@ class Runners::RelaySignalsTest < ActiveSupport::TestCase
   test "a session taking a machine sends machine_session with its route token and ports" do
     session = runner_session
 
-    Runners::Machines.acquire!(session)
+    Runners::Allocator.acquire!(session)
 
     assert_equal [ machine_session(@machine, session) ], signals
     assert_equal Runners::Tunnel.ports(session).keys, signals.sole["ports"].keys
@@ -26,10 +26,10 @@ class Runners::RelaySignalsTest < ActiveSupport::TestCase
 
   test "a session that keeps the machine it holds sends nothing again" do
     session = runner_session
-    Runners::Machines.acquire!(session)
+    Runners::Allocator.acquire!(session)
     clear
 
-    Runners::Machines.acquire!(session)
+    Runners::Allocator.acquire!(session)
 
     assert_empty signals
   end
@@ -38,7 +38,7 @@ class Runners::RelaySignalsTest < ActiveSupport::TestCase
     @runner.update!(config: { "container" => { "network" => "host" } })
     session = runner_session
 
-    Runners::Machines.acquire!(session)
+    Runners::Allocator.acquire!(session)
 
     assert_equal Runners::Tunnel.ports(session.reload), signals.sole["ports"]
     assert_not_equal 7681, signals.sole["ports"]["tty"]
@@ -47,7 +47,7 @@ class Runners::RelaySignalsTest < ActiveSupport::TestCase
   test "a session leaving the machine on release sends machine_session without a session" do
     session = held_session
 
-    Runners::Machines.release!(@machine, session)
+    Runners::Allocator.free!(@machine, session)
 
     assert_equal [ machine_session(@machine, nil) ], signals
   end
@@ -55,7 +55,7 @@ class Runners::RelaySignalsTest < ActiveSupport::TestCase
   test "a machine failed while it holds a session sends machine_session without a session" do
     session = held_session
 
-    Runners::Machines.fail!(@machine, "reset failed", holder: session)
+    Runners::Allocator.fail!(@machine, "reset failed", holder: session)
 
     assert_equal [ machine_session(@machine, nil) ], signals
   end
@@ -71,7 +71,7 @@ class Runners::RelaySignalsTest < ActiveSupport::TestCase
   test "the loss of contact with a revoked runner's machine sends machine_session without a session" do
     session = held_session
 
-    Runners::Machines.let_go!(session)
+    Runners::Allocator.let_go!(session)
 
     assert_equal [ machine_session(@machine, nil) ], signals
     assert_nil @machine.reload.current_session_id
@@ -104,8 +104,11 @@ class Runners::RelaySignalsTest < ActiveSupport::TestCase
 
     @runner.revoke!
 
+    # The runner's revoke tells the relay at once, and each machine's own end of
+    # registration tells it again (runner-coder.md §6.1): the connection closes
+    # either way, so the second signal is harmless.
     revoked = signals.select { |signal| signal["type"] == "machine_revoked" }
-    assert_equal [ @machine.id, other.id ].sort, revoked.map { |signal| signal["environment_id"] }.sort
+    assert_equal [ @machine.id, other.id ].sort, revoked.map { |signal| signal["environment_id"] }.uniq.sort
   end
 
   # -- timing and failure ----------------------------------------------------
@@ -114,7 +117,7 @@ class Runners::RelaySignalsTest < ActiveSupport::TestCase
     session = runner_session
 
     ActiveRecord::Base.transaction do
-      Runners::Machines.acquire!(session)
+      Runners::Allocator.acquire!(session)
       assert_empty signals, "nothing is published before the commit"
     end
 
@@ -125,7 +128,7 @@ class Runners::RelaySignalsTest < ActiveSupport::TestCase
     session = runner_session
 
     ActiveRecord::Base.transaction do
-      Runners::Machines.acquire!(session)
+      Runners::Allocator.acquire!(session)
       raise ActiveRecord::Rollback
     end
 
@@ -139,7 +142,7 @@ class Runners::RelaySignalsTest < ActiveSupport::TestCase
     Rails.logger.stubs(:warn)
     Rails.logger.expects(:warn).with(regexp_matches(/RelaySignals\] machine_session signal failed: StandardError: redis is down/)).once
 
-    assert_equal @machine, Runners::Machines.acquire!(session)
+    assert_equal @machine, Runners::Allocator.acquire!(session)
     assert_equal session.id, @machine.reload.current_session_id
   end
 
@@ -151,7 +154,7 @@ class Runners::RelaySignalsTest < ActiveSupport::TestCase
 
   def held_session
     session = runner_session
-    Runners::Machines.acquire!(session)
+    Runners::Allocator.acquire!(session)
     clear
     session
   end
