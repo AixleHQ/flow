@@ -13,7 +13,7 @@ module InternalTools
     #
     #   1. an authorized, active project session
     #   2. repository tools: the local id must be in session.repositories
-    #   3. build tools: an EXPLICIT integration_id — never "the first Azure
+    #   3. build tools: an EXPLICIT integration_id, in the session's integration set — never "the first Azure
     #      connection in the project", which would silently pick a target
     #   4. the connection, its installation binding and its capability profile
     #   5. every fetched entity re-checked against that scope before it is
@@ -56,7 +56,17 @@ module InternalTools
         raise AzureDevops::NotAuthorized, "No such Azure DevOps connection" if integration.nil? || !integration.azure_devops?
 
         verify_project_ownership!(integration)
+        unless session.integrations.exists?(integration.id)
+          raise AzureDevops::NotAuthorized, "Azure DevOps connection #{integration.id} is not attached to this session. " \
+                                            "#{attached_connections_hint}"
+        end
+
         integration
+      end
+
+      def attached_connections_hint
+        ids = eligible_integrations.pluck(:id)
+        ids.any? ? "Attached: #{ids.join(', ')}." : "No Azure DevOps connection is attached to this session."
       end
 
       # Which of the connection's Azure projects this call is for.
@@ -90,10 +100,11 @@ module InternalTools
         raise AzureDevops::NotAuthorized, "That Azure DevOps connection belongs to another project"
       end
 
+      # The connections of this session's own set (docs/design/session-integrations.md §5.3).
       def eligible_integrations
-        return Integration.none if project.nil?
+        return Integration.none if session.nil?
 
-        Integration.where(project_id: project.id, provider: "azure_devops").active
+        session.integrations.where(provider: "azure_devops").active
       end
 
       # Mutations run through the operations ledger so a retry is answerable.

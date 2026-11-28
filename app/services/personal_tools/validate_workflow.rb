@@ -5,7 +5,7 @@ module PersonalTools
     tool do
       display_name "Validate Workflow"
       description "Check a workflow before it runs: every step has instructions, linked agents, " \
-                  "tools, skills, MCP servers, assets, repositories, config items and AWS roles exist " \
+                  "tools, skills, MCP servers, assets, repositories, config items, AWS roles and integrations exist " \
                   "and are enabled in this project, dependencies form no cycle, every step allows " \
                   "non-interactive runs when a trigger launches the workflow unattended, every " \
                   "@ reference ({{asset:…}}, {{output:…}}, {{step:…}}, {{mcp:…}}, {{tool:…}}, {{skill:…}}, " \
@@ -26,8 +26,12 @@ module PersonalTools
       asset_ids: ->(project) { Asset.visible_for_project(project) },
       repository_ids: ->(project) { Repository.visible_for_project(project) },
       config_item_ids: ->(project) { ConfigItem.visible_for_project(project) },
-      aws_oidc_role_ids: ->(project) { AwsOidcRole.for_project(project).where(integrations: { status: "active" }) }
+      aws_oidc_role_ids: ->(project) { AwsOidcRole.for_project(project).where(integrations: { status: "active" }) },
+      integration_ids: ->(project) { TenantScope.owned(Integration, project: project).attachable.active }
     }.freeze
+
+    # The providers a tool's `requires_integration` can be met by from an attached integration.
+    ATTACHED_REQUIREMENTS = { "coder" => %w[coder], "azure_devops" => %w[azure_devops], "chat" => %w[slack teams] }.freeze
 
     def execute
       project = find_project!
@@ -44,6 +48,7 @@ module PersonalTools
         errors << "Step '#{step.name}' has no instructions" if step.instructions.blank?
         check_agent(project, step, errors, warnings)
         check_links(project, step, errors)
+        check_integrations(project, workflow, step, warnings)
         if unattended.any? && !step.allow_non_interactive
           errors << "Step '#{step.name}' must allow non-interactive runs — the workflow is launched " \
                     "unattended by #{unattended.to_sentence}"
@@ -86,6 +91,21 @@ module PersonalTools
           errors << "Step '#{step.name}' links #{field.to_s.delete_suffix('_ids').tr('_', ' ')} " \
                     "#{id}, which is missing, disabled or not in this project"
         end
+      end
+    end
+
+    # A tool served only with an integration of its provider attached to the session: warn when
+    # the workflow and the step attach none, since the tool would not be offered.
+    def check_integrations(project, workflow, step, warnings)
+      attached = TenantScope.owned(Integration, project: project)
+                            .where(id: workflow.base_integration_ids + step.integration_ids).pluck(:provider).map(&:to_s)
+      tools = TenantScope.owned(Tool, project: project)
+                         .where(source: "code", id: workflow.base_tool_ids + step.tool_ids, requires_integration: ATTACHED_REQUIREMENTS.keys)
+      tools.each do |tool|
+        next if (ATTACHED_REQUIREMENTS.fetch(tool.requires_integration) & attached).any?
+
+        warnings << "Step '#{step.name}' uses tool #{tool.name}, which needs a #{tool.requires_integration.tr('_', ' ')} " \
+                    "integration attached to the workflow or the step (list_integrations)"
       end
     end
 

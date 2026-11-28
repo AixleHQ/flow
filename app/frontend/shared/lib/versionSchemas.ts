@@ -85,6 +85,7 @@ const STEP: FieldSpec[] = [
   { kind: 'refs', key: 'repository_ids', label: 'Repositories', model: 'Repository' },
   { kind: 'refs', key: 'config_item_ids', label: 'Config items', model: 'ConfigItem' },
   { kind: 'refs', key: 'aws_oidc_role_ids', label: 'AWS roles', model: 'AwsOidcRole' },
+  { kind: 'refs', key: 'integration_ids', label: 'Integrations', model: 'Integration' },
   { kind: 'refs', key: 'asset_ids', label: 'Assets', model: 'Asset' },
   { kind: 'json', key: 'input_asset_specs', label: 'Input assets' },
   { kind: 'json', key: 'output_asset_specs', label: 'Output assets' },
@@ -107,6 +108,7 @@ const WORKFLOW: FieldSpec[] = [
   { kind: 'refs', key: 'config.base_repository_ids', label: 'Workflow repositories', model: 'Repository' },
   { kind: 'refs', key: 'config.base_config_item_ids', label: 'Workflow config items', model: 'ConfigItem' },
   { kind: 'refs', key: 'config.base_aws_oidc_role_ids', label: 'Workflow AWS roles', model: 'AwsOidcRole' },
+  { kind: 'refs', key: 'config.base_integration_ids', label: 'Workflow integrations', model: 'Integration' },
   { kind: 'refs', key: 'config.base_asset_ids', label: 'Workflow assets', model: 'Asset' },
   { kind: 'collection', key: 'steps', label: 'Steps', itemKey: 'id', itemLabel: 'name', fields: STEP },
 ];

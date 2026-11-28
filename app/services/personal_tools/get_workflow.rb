@@ -31,6 +31,7 @@ module PersonalTools
               base_repository_ids: workflow.base_repository_ids,
               base_config_item_ids: workflow.base_config_item_ids,
               base_aws_oidc_role_ids: workflow.base_aws_oidc_role_ids,
+              base_integration_ids: workflow.base_integration_ids,
               base_asset_ids: workflow.base_asset_ids,
               inherit_all_project_resources: workflow.inherit_all_project_resources,
               steps_count: steps.size, steps: steps)

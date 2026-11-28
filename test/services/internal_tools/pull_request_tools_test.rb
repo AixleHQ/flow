@@ -17,6 +17,7 @@ class InternalTools::PullRequestToolsTest < ActiveSupport::TestCase
                                       clone_url: "https://gitlab.com/group/app.git", source_branch: "develop")
     @session = create(:terminal_session, :running, user: @user, project: @project)
     @session.repositories << @repository
+    @session.integrations << @integration
     @fake = stub_pull_requests!
   end
 

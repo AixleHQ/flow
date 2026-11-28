@@ -44,14 +44,15 @@ module Versions
       end
     end
 
-    # A runner id is read through the workflow's tenant (TenantScope's Runner
-    # rule), so a version that names another tenant's runner shows "#N
-    # (deleted)", never that runner's name.
+    # A runner or an integration id is read through the workflow's tenant (TenantScope's rules),
+    # so a version that names another tenant's row shows "#N (deleted)", never its name.
+    TENANT_READ = %w[Runner Integration].freeze
+
     def scope(model, workflow)
-      return model.constantize unless model == "Runner"
+      return model.constantize unless TENANT_READ.include?(model)
 
       project = workflow&.runner_project
-      project ? TenantScope.owned(Runner, project: project) : Runner.none
+      project ? TenantScope.owned(model.constantize, project: project) : model.constantize.none
     end
 
     def display_name(record)

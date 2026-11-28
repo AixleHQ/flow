@@ -7,15 +7,18 @@ module Chat
   module ChannelAccess
     module_function
 
-    def installs(project, provider: nil)
-      Integration.active.visible_for_project(project).where(provider: provider&.to_s || Chat::PROVIDERS.keys)
+    # `within:` is a relation of integrations (a session's set, docs/design/session-integrations.md
+    # §5.3): only the installs in it. Without it, every install the project can see.
+    def installs(project, provider: nil, within: nil)
+      rows = Integration.active.visible_for_project(project).where(provider: provider&.to_s || Chat::PROVIDERS.keys)
+      within ? rows.where(id: within.select(:id)) : rows
     end
 
     # The company's connected channels, through its active installs, or in the
     # workspace of one of them.
-    def channels(project, provider: nil, integration: nil)
+    def channels(project, provider: nil, integration: nil, within: nil)
       rows = ChatConversation.connected_to_company(project.company_id)
-                             .in_workspace_of(integration ? integration.id : installs(project).select(:id))
+                             .in_workspace_of(integration ? integration.id : installs(project, within: within).select(:id))
                              .order(:team_name, :name, :id)
       provider ? rows.where(provider: provider.to_s) : rows
     end
@@ -23,11 +26,11 @@ module Chat
     # A connected channel named by its registry id, its messenger id, or its
     # name ("#deploys", "deploys"; "Workspace/#deploys" in Slack; Teams also
     # "Team/Channel").
-    def find(project, provider, value)
+    def find(project, provider, value, within: nil)
       value = value.to_s.strip
       return nil if value.blank?
 
-      scope = channels(project, provider: provider)
+      scope = channels(project, provider: provider, within: within)
       row = scope.find_by(id: value) if value.match?(/\A\d+\z/)
       row || scope.find_by(external_id: value) || by_name(scope, value)
     end
@@ -48,8 +51,8 @@ module Chat
     end
 
     # The project's company's own install of the workspace a channel lives in.
-    def install_for(project, conversation)
-      rows = installs(project, provider: conversation.provider)
+    def install_for(project, conversation, within: nil)
+      rows = installs(project, provider: conversation.provider, within: within)
       rows = if conversation.chat_workspace_id
         rows.where(chat_workspace_id: conversation.chat_workspace_id)
       else
@@ -58,9 +61,9 @@ module Chat
       rows.order(:id).first
     end
 
-    def not_connected(project, provider, value)
+    def not_connected(project, provider, value, within: nil)
       label = Chat.provider(provider)&.label || provider.to_s
-      scope = channels(project, provider: provider)
+      scope = channels(project, provider: provider, within: within)
       rows = scope.preload(:chat_workspace).limit(20).to_a
       several = rows.map(&:workspace_name).uniq.many?
       known = rows.map { |row| several ? qualified_label(row) : row.label }

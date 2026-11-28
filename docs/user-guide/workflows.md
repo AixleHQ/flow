@@ -19,6 +19,7 @@ agent session in one container.
 | `config.base_skill_ids`          | Skills always injected into agent context.                                   |
 | `config.base_mcp_server_ids`     | MCP servers always connected.                                                |
 | `config.base_asset_ids`          | Files always pre-loaded into `/workspace/assets/`.                           |
+| `config.base_integration_ids`    | Coder, Slack, Teams and Azure DevOps integrations every step may act through. Never inherited, see [Integrations of a session](#integrations-of-a-session). |
 | `config.inherit_all_project_resources` | If true, the project's resources merge in additively; its repositories only when no level names one. |
 
 A workflow has no mode of its own. Each run picks its `mode` when it starts:
@@ -43,11 +44,45 @@ One Step = one agent session = one container = one major deliverable.
 | `skill_ids`            | Skills injected (merged with workflow base).                             |
 | `mcp_server_ids`       | MCP servers connected (merged with workflow base).                       |
 | `repository_ids`       | Repos cloned under `/workspace/repo/` (merged with workflow base).       |
+| `integration_ids`      | Integrations this step may act through, added to the workflow's (see [Integrations of a session](#integrations-of-a-session)). |
 | `depends_on_step_ids`  | DAG dependencies — enables parallel execution.                           |
 | `preferred_model`      | LLM model override for this step.                                        |
 | `reasoning_effort`     | Reasoning effort the step's CLI runs at (`low`, `high`, …). Unset keeps the CLI's default. It needs an explicit `required_agent_runtime` and `preferred_model`: a level without either is refused, so clear the level with them. Only the levels that runtime takes for that model are accepted. The CLI may still lower or ignore a level the model doesn't support. |
 | `input_asset_specs`    | Expected inputs. A required one is checked before the step starts; a missing one fails the step ("Required input missing"). Needed only for files picked when a run starts: an `@` reference is checked without one. |
 | `output_asset_specs`   | Expected outputs. A required one is checked when the step ends; a missing one fails the step ("Output validation failed"). A name is the file's path under `/workspace/outputs/` (a `/workspace/…` prefix is dropped), or a glob such as `reports/*.md`; `dir/**` takes everything under `dir`. |
+
+## Integrations of a session
+
+A session gets only the integrations in its **integration set**. For a workflow
+step the set is the workflow's **Integrations** list plus the step's own, the
+integrations of the repositories attached to the step, and the integration the
+run started from (the Slack or Teams install of the message that started it, or
+the integration of the tracker that did). A set is never widened by
+`inherit_all_project_resources`: an integration is access to an external account,
+so each one is attached by hand.
+
+Only Coder, Slack, Teams and Azure DevOps integrations can be attached. GitHub,
+GitLab and Bitbucket are reached through repositories, trackers through the
+project's trackers, and AWS through roles.
+
+A tool that acts through an integration (the `coder_*`, `chat_*` and Azure
+DevOps build tools) is served when it is attached **and** its provider's
+integration is in the session's set. It takes an `integration_id`, which may be
+left out when the set holds exactly one integration of that provider; with
+several, leaving it out is an error that lists them. An id outside the set is
+refused. The agent is told its integrations (id, name, provider) in its context.
+
+An interactive session chooses its integrations in the new-session form, which
+preselects the project's Coder integration, every Slack and Teams install the
+project can see and its Azure DevOps connections. Over the API,
+`POST /api/v1/terminal_sessions` takes `integration_ids`; **a session created
+without it has no integrations.** Restoring a suspended session copies its set.
+Over MCP, `list_integrations` lists what can be attached, and the workflow and
+step tools take `base_integration_ids` and `integration_ids`.
+
+Duplicating a workflow inside its project keeps its integrations; copying it to
+another project drops them, and a template carries none: attach the receiving
+project's own.
 
 ## DAG and parallelism
 

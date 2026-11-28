@@ -170,6 +170,10 @@ class TerminalSession < ApplicationRecord
   # through `get_config_item` — the tool resolves against this set, never against
   # the project's items. See docs/implementation-artifacts/spec-session-config-item-access.md.
   has_and_belongs_to_many :config_items, join_table: :session_config_items
+  # The integrations this session may use: the ones attached explicitly, those of its
+  # repositories and the one it was started from (docs/design/session-integrations.md §3).
+  # Tools and gates read this set, never the project's integrations.
+  has_and_belongs_to_many :integrations, join_table: :session_integrations
 
   # Callbacks
   before_create :generate_route_token
@@ -204,9 +208,12 @@ class TerminalSession < ApplicationRecord
   # config item's decrypted value — must be this tenant's. Checked on create,
   # where the ids arrive; the readers in SessionContextService scope again.
   { tools: Tool, skills: Skill, mcp_servers: MCPServer, repositories: Repository, input_assets: Asset,
-    config_items: ConfigItem }.each do |association, model|
+    config_items: ConfigItem, integrations: Integration }.each do |association, model|
     validates association, tenant_ids: { model: model, company: :company }, on: :create
   end
+  # What is named explicitly is checked before the integrations derived from repositories and
+  # the origin are added (those are added after the save), and is refused, never dropped.
+  validate :integrations_are_attachable, on: :create
   before_validation :inherit_project_company
   before_save :inherit_project_company
   validates :company_id, presence: true
@@ -557,6 +564,13 @@ class TerminalSession < ApplicationRecord
   end
 
   private
+
+  def integrations_are_attachable
+    refused = integrations.reject { |integration| Integration::ATTACHABLE_PROVIDERS.include?(integration.provider.to_s) }
+    return if refused.empty?
+
+    errors.add(:integrations, "contains integrations of a provider that cannot be attached: #{refused.map(&:id).sort.join(', ')}")
+  end
 
   def runner_project = project
 

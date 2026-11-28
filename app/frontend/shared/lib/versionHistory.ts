@@ -27,6 +27,7 @@ const REFERENCE_KEYS: [string, string][] = [
   ['repository_ids', 'Repository'],
   ['config_item_ids', 'ConfigItem'],
   ['aws_oidc_role_ids', 'AwsOidcRole'],
+  ['integration_ids', 'Integration'],
 ];
 
 /** [model, id] for every resource a workflow snapshot names. */

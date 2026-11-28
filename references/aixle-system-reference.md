@@ -68,6 +68,7 @@ the provider never reported (stale stops blocking). Step agents open gates with
 | `base_repository_ids` | repositories every step gets |
 | `base_config_item_ids` | secrets/variables every step may read |
 | `base_aws_oidc_role_ids` | AWS roles every step may assume (the project's `aws_oidc` integration) |
+| `base_integration_ids` | Coder, Slack, Teams and Azure DevOps integrations every step may act through. Never inherited by `inherit_all_project_resources`; a session gets only the integrations attached to it, plus its repositories' and the one that started the run |
 | `inherit_all_project_resources` | fall back to every project tool, skill, MCP server and repository |
 
 Unknown config keys are rejected.
@@ -89,6 +90,7 @@ Unknown config keys are rejected.
 | `repository_ids` | repositories cloned for this step |
 | `config_item_ids` | secrets/variables this step may read |
 | `aws_oidc_role_ids` | AWS roles this step may assume (the project's `aws_oidc` integration) |
+| `integration_ids` | Coder, Slack, Teams and Azure DevOps integrations this step may act through, added to the workflow's `base_integration_ids` |
 | `preferred_model` | model id override |
 | `reasoning_effort` | reasoning-effort level for the step's CLI (`low`, `medium`, `high`, …); unset is the CLI's default. Needs an explicit `required_agent_runtime` and `preferred_model` (a level without either is refused; clear it with them), and only a level that runtime takes for that model is accepted |
 | `required_agent_runtime` | pin to one runtime (see §5) |

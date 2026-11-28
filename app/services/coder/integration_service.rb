@@ -2,17 +2,18 @@
 
 module Coder
   # Connects a project to a Coder deployment, replaces the session token, and
-  # re-checks it.
+  # re-checks it (docs/design/session-integrations.md §4.1, §4.2).
   #
-  # A scope holds at most one active Coder connection: the coder_* tools pick
-  # one per project, and with two the pick is arbitrary. Connecting the same
-  # URL as the same account again renews that row. A token Coder refuses, or
-  # cannot be asked about, is never saved.
+  # A scope may hold several Coder integrations, with no identity rules: what a
+  # user connects is the user's business, and `create` always makes a new one.
+  # Which one a session uses is decided by the integrations attached to it. A
+  # token Coder refuses, or cannot be asked about, is never saved. A default
+  # template and a machine prefix are required (#294).
   class IntegrationService
     class ConfigurationError < StandardError; end
 
     # `code`: "validation_failed", "not_authorized" (Coder refused the token),
-    # "unreachable" (Coder could not be asked), or "already_connected".
+    # or "unreachable" (Coder could not be asked).
     class ConnectionError < StandardError
       attr_reader :code
 
@@ -30,37 +31,51 @@ module Coder
       @project = project
     end
 
-    # Pool settings left blank keep what a renewed row already has: clearing
-    # them is a deliberate edit (#update_settings), and a blank prefix widens
-    # the pool to every workspace the token can see.
     def create(coder_url:, session_token:, default_template: nil, machine_prefix: nil, lock_ttl_minutes: nil)
       url = normalize_url(coder_url)
       token = session_token.to_s.strip
       ttl = parse_positive_int(lock_ttl_minutes) ||
             raise(ConnectionError.new("Lock TTL minutes is required", code: "validation_failed"))
+      require_pool_settings!(default_template, machine_prefix)
       info = verify!(url, token)
+      require_known_template!(default_template, template_names(url, token))
 
-      integration = existing_for(url, info) || build_integration
-      ensure_only_active!(integration)
+      integration = build_integration
       apply(integration, url, token, info)
       integration.settings = integration.settings.merge(
-        { "default_template" => default_template.presence, "machine_prefix" => machine_prefix.presence }.compact
-      ).merge("lock_ttl_minutes" => ttl)
+        "default_template" => default_template.to_s.strip, "machine_prefix" => machine_prefix.to_s.strip,
+        "lock_ttl_minutes" => ttl
+      )
       integration.save!
       integration
     end
 
+    # The templates a token can see, for the connect form's select. The token is not saved
+    # yet, so the form sends the URL and the token it just collected.
+    def templates(coder_url:, session_token:)
+      url = normalize_url(coder_url)
+      token = session_token.to_s.strip
+      check_connection_input!(url, token)
+      template_names(url, token)
+    end
+
+    # The same list for a connected integration, read with its stored token (the settings form).
+    def templates_of(integration)
+      raise ConfigurationError, "Only Coder integrations have templates" unless integration.coder?
+
+      stored = Coder::TokenService.new(integration)
+      template_names(stored.coder_url, stored.session_token)
+    rescue Coder::TokenService::ConfigurationError
+      raise ConnectionError.new("The stored session token cannot be read. Renew the token first.", code: "not_authorized")
+    end
+
+    # Renew token: the new token has to work against the integration's own URL. The
+    # integration keeps its id, which runners and attachments refer to.
     def replace_token(integration, session_token:)
       raise ConfigurationError, "Only Coder integrations have a session token" unless integration.coder?
 
       token = session_token.to_s.strip
       info = verify!(integration.coder_url.to_s, token)
-      if existing_for(integration.coder_url, info, except: integration)
-        raise ConnectionError.new("#{display_name_for(info[:username])} already has another connection here. " \
-                                  "Replace the token on that one.", code: "already_connected")
-      end
-
-      ensure_only_active!(integration)
       apply(integration, integration.coder_url, token, info)
       integration.save!
       integration
@@ -70,7 +85,6 @@ module Coder
     # for attention; Coder being unreachable says nothing about the token.
     def test(integration)
       info = Coder::TokenService.new(integration).verify_token
-      ensure_only_active!(integration)
       integration.update!(name: display_name_for(info[:username]), status: :active,
                           settings: identity(integration, info).merge("last_verified_at" => Time.current.iso8601))
       { status: :active }
@@ -87,26 +101,32 @@ module Coder
     end
 
     # Edit the operational settings of a connected integration in place. Only
-    # these three are editable: they change how the allocator behaves, carry no
-    # secret, and need no round-trip to Coder to validate.
-    #
-    # A blank `default_template` or `machine_prefix` clears the setting; blank
-    # or non-positive `lock_ttl_minutes` is rejected, since the lock TTL has no
-    # sane "unset" (the allocator would silently fall back to its own default).
+    # these three are editable: they change how the allocator behaves and carry no
+    # secret. The template and the prefix are required, also on a row that was
+    # connected before they were, and the template has to be one the stored token
+    # can see. A blank or non-positive `lock_ttl_minutes` is rejected, since the
+    # lock TTL has no sane "unset" (the allocator would silently fall back to its
+    # own default).
     def update_settings(integration:, default_template: nil, machine_prefix: nil, lock_ttl_minutes: nil)
       raise ConfigurationError, "Only Coder integrations have editable settings" unless integration.coder?
 
       ttl_value = parse_positive_int(lock_ttl_minutes)
       raise ConfigurationError, "Lock TTL minutes must be a positive number" if ttl_value.nil?
 
+      require_pool_settings!(default_template, machine_prefix)
+      stored = Coder::TokenService.new(integration)
+      require_known_template!(default_template, template_names(stored.coder_url, stored.session_token))
+
       integration.update!(
         settings: (integration.settings || {}).merge(
-          "default_template" => default_template.presence,
-          "machine_prefix"   => machine_prefix.presence,
+          "default_template" => default_template.to_s.strip,
+          "machine_prefix"   => machine_prefix.to_s.strip,
           "lock_ttl_minutes" => ttl_value
-        ).compact
+        )
       )
       integration
+    rescue Coder::TokenService::ConfigurationError
+      raise ConnectionError.new("The stored session token cannot be read. Renew the token first.", code: "not_authorized")
     end
 
     private
@@ -115,20 +135,51 @@ module Coder
       @company.integrations.build(provider: :coder, project: @project)
     end
 
-    def scope
-      @company.integrations.where(provider: :coder, project_id: @project&.id)
-    end
-
     def verify!(url, token)
-      url_errors = UrlSafetyValidator.errors_for(url, trusted_hosts_override: UrlSafetyValidator.configured_trusted_hosts)
-      raise ConnectionError.new("Coder URL #{url_errors.first}", code: "validation_failed") if url_errors.any?
-      raise ConnectionError.new("Enter a Coder session token", code: "validation_failed") if token.blank?
+      check_connection_input!(url, token)
 
       candidate = Integration.new(provider: :coder, company: @company)
       candidate.credentials_data = { "coder_url" => url, "session_token" => token }
       Coder::TokenService.new(candidate).verify_token
     rescue Coder::TokenService::AuthenticationError => e
       raise ConnectionError.new(e.message, code: e.rejected? ? "not_authorized" : "unreachable")
+    end
+
+    def check_connection_input!(url, token)
+      url_errors = UrlSafetyValidator.errors_for(url, trusted_hosts_override: UrlSafetyValidator.configured_trusted_hosts)
+      raise ConnectionError.new("Coder URL #{url_errors.first}", code: "validation_failed") if url_errors.any?
+      raise ConnectionError.new("Enter a Coder session token", code: "validation_failed") if token.blank?
+    end
+
+    # The names of the templates this token can see, sorted. Coder's refusal and Coder being
+    # out of reach are told apart, as `verify!` does.
+    def template_names(url, token)
+      Coder::Api.list_templates(coder_url: url, session_token: token).filter_map { |t| t["name"].presence }.sort
+    rescue Coder::Api::HTTPError => e
+      raise ConnectionError.new("Coder did not list its templates (HTTP #{e.status})",
+                                code: [ 401, 403 ].include?(e.status) ? "not_authorized" : "unreachable")
+    rescue Coder::Api::ApiError
+      raise ConnectionError.new("Coder could not be reached to list its templates", code: "unreachable")
+    end
+
+    # Both are required on connect and on every settings save (#294).
+    def require_pool_settings!(default_template, machine_prefix)
+      if default_template.to_s.strip.empty?
+        raise ConnectionError.new("Default template is required", code: "validation_failed")
+      end
+      return if Coder::Pool.valid_prefix?(machine_prefix.to_s.strip)
+
+      raise ConnectionError.new(
+        "Machine prefix is required: lowercase letters, digits and hyphens, no leading or trailing hyphen, " \
+        "at most #{Coder::Pool::MAX_PREFIX_LENGTH} characters", code: "validation_failed"
+      )
+    end
+
+    def require_known_template!(default_template, names)
+      return if names.include?(default_template.to_s.strip)
+
+      raise ConnectionError.new("Default template #{default_template.to_s.strip.inspect} is not one of the templates " \
+                                "this token can see", code: "validation_failed")
     end
 
     def apply(integration, url, token, info)
@@ -146,25 +197,6 @@ module Coder
     def mark_rejected(integration)
       integration.update_columns(status: "error", settings: integration.settings.to_h.merge("error" => REJECTED),
                                  updated_at: Time.current)
-    end
-
-    # The row this URL and account already have here. A row a failed attempt
-    # saved holds the URL but never learned the account, and is taken over.
-    def existing_for(url, info, except: nil)
-      rows = scope.to_a.reject { |row| row == except }
-      rows = rows.select { |row| row.credentials_data_for_display["coder_url"] == url }
-      rows.find { |row| row.coder_user_id.present? && row.coder_user_id == info[:id] } ||
-        (rows.find { |row| row.coder_user_id.blank? && !row.active? } unless except)
-    end
-
-    def ensure_only_active!(integration)
-      return if integration.persisted? && integration.active?
-
-      other = scope.where(status: "active").where.not(id: integration.id).first
-      return unless other
-
-      raise ConnectionError.new("#{other.name} is already connected here. Replace its token, " \
-                                "or remove it before connecting another Coder account.", code: "already_connected")
     end
 
     def normalize_url(url)

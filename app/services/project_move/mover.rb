@@ -108,6 +108,7 @@ module ProjectMove
       Repository.where(id: preflight.detached_repositories.map(&:id)).update_all(integration_id: nil, updated_at: Time.current)
       ProjectTracker.where(id: preflight.detached_trackers.map(&:id))
                     .update_all(status: "detached", primary: false, updated_at: Time.current)
+      preflight.integration_links.each { |_, links| links.delete_all }
       Integration.where(id: preflight.deactivated_integrations.map(&:first).map(&:id))
                  .update_all(status: "inactive", updated_at: Time.current)
       preflight.deactivated_integrations.each { |integration, _| integration.release_chat_workspace! }

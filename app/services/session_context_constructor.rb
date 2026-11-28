@@ -14,6 +14,7 @@ class SessionContextConstructor
     ContextBuilders::BoardContext,
     ContextBuilders::Tools,
     ContextBuilders::Resources,
+    ContextBuilders::Integrations,
     ContextBuilders::ConfigItems,
     ContextBuilders::AwsProfiles,
     ContextBuilders::BmadMethod,

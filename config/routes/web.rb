@@ -750,6 +750,8 @@ scope module: :web, defaults: { format: :html } do
             post :linear_inspect
             # GitLab: the OAuth app redirect that starts a service-account connection.
             get :gitlab_oauth_start
+            # Coder: the templates a token can see, before the connection is saved.
+            post :coder_templates
             # YouTrack: a pairing for the Aixle Flow app on the instance.
             post :youtrack_connect
             # Microsoft Teams: a pending connection and its approval link.
@@ -760,6 +762,7 @@ scope module: :web, defaults: { format: :html } do
             get :teams_package
             post :teams_link
             get :jira_projects
+            get :coder_template_list
             get :github_projects
             get :linear_teams
             get :gitlab_projects

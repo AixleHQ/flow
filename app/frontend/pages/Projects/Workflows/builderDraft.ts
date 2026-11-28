@@ -42,6 +42,7 @@ export function draftStep(steps: Step[], name: string): Step {
     skillIds: [],
     configItemIds: [],
     awsOidcRoleIds: [],
+    integrationIds: [],
     assetIds: [],
     subSteps: [],
   };
@@ -70,6 +71,7 @@ const CONFIG_KEYS = {
   base_repository_ids: 'baseRepositoryIds',
   base_config_item_ids: 'baseConfigItemIds',
   base_aws_oidc_role_ids: 'baseAwsOidcRoleIds',
+  base_integration_ids: 'baseIntegrationIds',
 } as const satisfies Record<string, keyof Workflow>;
 
 /** How the Save payload, Run after and `@` references name a step: its id, or `new-<n>` until it is saved. */
@@ -107,6 +109,7 @@ export function aggregatePayload(workflow: Workflow, sortedSteps: Step[]) {
       repositoryIds: step.repositoryIds,
       configItemIds: step.configItemIds,
       awsOidcRoleIds: step.awsOidcRoleIds,
+      integrationIds: step.integrationIds,
       dependsOnStepIds: step.dependsOnStepIds.map(stepKey),
       subSteps: [...step.subSteps].sort(bySubPosition).map((sub) => ({
         id: isDraftId(sub.id) ? null : sub.id,

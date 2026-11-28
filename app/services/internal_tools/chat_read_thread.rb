@@ -22,6 +22,7 @@ module InternalTools
         type: "object",
         required: [],
         properties: {
+          integration_id: Concerns::ChatContext::INTEGRATION_ID_SCHEMA,
           provider: {
             type: "string", enum: %w[slack teams],
             description: "slack or teams. Defaults to the messenger this run was started from, or the only one connected."

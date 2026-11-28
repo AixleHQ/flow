@@ -25,6 +25,7 @@ class SessionConfigResolver
       mcp_server_ids: resolve_mcp_server_ids,
       config_item_ids: resolve_config_item_ids,
       aws_oidc_role_ids: resolve_aws_oidc_role_ids,
+      integration_ids: resolve_integration_ids,
       repository_ids: resolve_repository_ids,
       input_asset_ids: resolve_input_asset_ids,
       mode: resolve_mode,
@@ -43,6 +44,7 @@ class SessionConfigResolver
       mcp_servers: build_resource_breakdown(:mcp_server_ids),
       config_items: config_item_breakdown,
       aws_oidc_roles: aws_oidc_role_breakdown,
+      integrations: integration_breakdown,
       input_assets: build_input_asset_breakdown,
       repositories: build_repository_breakdown,
       mode: resolve_mode,
@@ -85,6 +87,16 @@ class SessionConfigResolver
     ((workflow&.base_aws_oidc_role_ids || []) + (step&.aws_oidc_role_ids || [])).uniq
   end
 
+  # The session's integration set (docs/design/session-integrations.md §3): what was attached
+  # explicitly, the integrations of its repositories, and the one it was started from. Tools and
+  # gates read the set stored from this, never the project's integrations.
+  #
+  # Explicit means the session itself, or the workflow's base list plus the step's, additive and
+  # NOT widened by `inherit_all_project_resources`: access to an external account is never implied.
+  def resolve_integration_ids
+    (explicit_integration_ids + repository_integration_ids + origin_integration_ids).uniq
+  end
+
   def mcp_referenced_config_item_ids
     return [] unless project.present?
 
@@ -107,6 +119,45 @@ class SessionConfigResolver
     ids += workflow&.base_config_item_ids || []
     ids += step&.config_item_ids || []
     ids.uniq
+  end
+
+  def explicit_integration_ids
+    return Array(session.integration_ids) if standalone_session?
+
+    ((workflow&.base_integration_ids || []) + (step&.integration_ids || [])).uniq
+  end
+
+  # Derived, never attached twice: a repository already names its integration.
+  def repository_integration_ids
+    ids = resolve_repository_ids
+    return [] if ids.blank?
+
+    TenantScope.owned(Repository, project: project, company: SessionCompany.company_for(session))
+               .where(id: ids).where.not(integration_id: nil).distinct.pluck(:integration_id)
+  end
+
+  # The Slack or Teams install that started the run and the integration of the tracker that
+  # did, so a reply to the thread always works.
+  def origin_integration_ids
+    return [] unless workflow_run
+
+    context = workflow_run.shared_context.to_h
+    ids = [ context.dig("chat", "integration_id") ].map(&:to_i).select(&:positive?)
+    tracker_id = context.dig("tracker", "id").to_i
+    if tracker_id.positive? && project
+      ids += ProjectTracker.where(project_id: project.id, id: tracker_id).pluck(:integration_id)
+    end
+    return [] if ids.empty?
+
+    TenantScope.owned(Integration, project: project, company: SessionCompany.company_for(session)).where(id: ids).pluck(:id)
+  end
+
+  def integration_breakdown
+    explicit = explicit_integration_ids
+    from_repositories = repository_integration_ids
+    from_origin = origin_integration_ids
+    { from_explicit: explicit, from_repositories: from_repositories, from_origin: from_origin,
+      resolved: (explicit + from_repositories + from_origin).uniq }
   end
 
   def config_item_breakdown

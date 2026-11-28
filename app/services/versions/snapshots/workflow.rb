@@ -25,12 +25,12 @@ module Versions
       STEP_REFERENCES = {
         "tool_ids" => "Tool", "skill_ids" => "Skill", "mcp_server_ids" => "MCPServer",
         "asset_ids" => "Asset", "repository_ids" => "Repository", "config_item_ids" => "ConfigItem",
-        "aws_oidc_role_ids" => "AwsOidcRole"
+        "aws_oidc_role_ids" => "AwsOidcRole", "integration_ids" => "Integration"
       }.freeze
       CONFIG_REFERENCES = {
         "base_tool_ids" => "Tool", "base_skill_ids" => "Skill", "base_mcp_server_ids" => "MCPServer",
         "base_asset_ids" => "Asset", "base_repository_ids" => "Repository", "base_config_item_ids" => "ConfigItem",
-        "base_aws_oidc_role_ids" => "AwsOidcRole"
+        "base_aws_oidc_role_ids" => "AwsOidcRole", "base_integration_ids" => "Integration"
       }.freeze
 
       class << self
@@ -55,7 +55,7 @@ module Versions
           attrs = with_column_defaults(::Workflow, FIELDS, snapshot.slice(*FIELDS))
           record.assign_attributes(
             "name" => attrs["name"], "description" => attrs["description"],
-            "config" => existing_config(attrs["config"] || {}),
+            "config" => existing_config(attrs["config"] || {}, record.runner_project),
             "runner_id" => restorable_runner_id(record, attrs["runner_id"])
           )
           record.save!
@@ -102,9 +102,9 @@ module Versions
           id if TenantScope.owned(::Runner, project: project).exists?(id)
         end
 
-        def existing_config(config)
+        def existing_config(config, project)
           CONFIG_REFERENCES.each_with_object(config.dup) do |(key, model), memo|
-            memo[key] = WorkflowStepSync.existing_ids(model, config[key])
+            memo[key] = WorkflowStepSync.existing_ids(model, config[key], project: project)
           end
         end
       end

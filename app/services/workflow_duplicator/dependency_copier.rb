@@ -80,6 +80,15 @@ class WorkflowDuplicator
       []
     end
 
+    # An attached integration is access to one account of one project's company, so, like an
+    # AWS role, it stays only on a copy inside the same project. Another project attaches its own.
+    def map_integration_ids(ids)
+      return [] if ids.blank?
+      return ids if within_source_project?
+
+      []
+    end
+
     # Human-readable summary of what was NOT copied / needs setup. Returns nil
     # when nothing needs attention, so callers can conditionally surface it.
     def summary

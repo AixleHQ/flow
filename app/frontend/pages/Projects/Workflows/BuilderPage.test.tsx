@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildAssetPicker } from 'test/factories/assetPicker';
 import { buildAwsOidcRolePicker } from 'test/factories/awsOidc';
+import { buildIntegrationPicker } from 'test/factories/integrationPicker';
 import { buildRunnerSummary } from 'test/factories/runner';
 import { answerFetch, jsonResponse } from 'test/fetchStub';
 import { visitHeld } from 'test/inertiaVisit';
@@ -107,6 +108,7 @@ const CONFIG_FIELDS: Record<string, string> = {
   base_repository_ids: 'baseRepositoryIds',
   base_config_item_ids: 'baseConfigItemIds',
   base_aws_oidc_role_ids: 'baseAwsOidcRoleIds',
+  base_integration_ids: 'baseIntegrationIds',
 };
 
 function savedState({ aggregate }: SaveBody, workflow: ReturnType<typeof makeWorkflow>) {
@@ -471,6 +473,26 @@ describe('Projects/Workflows/BuilderPage', () => {
     const aggregate = await save(bodies);
 
     expect(aggregate.steps[0].awsOidcRoleIds).toEqual([31]);
+  });
+
+  it('offers integrations on a session only when the project has some, and sends the picked one on Save', async () => {
+    const { unmount } = renderAuthedPage(<BuilderPage />, { props: projectProps() });
+    expect(screen.queryByRole('combobox', { name: 'Integrations' })).not.toBeInTheDocument();
+    unmount();
+
+    const { bodies } = answerSave();
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1 })],
+        integrations: [buildIntegrationPicker({ id: 41, name: 'Coder (alice)' })],
+      }),
+    });
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Integrations' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Coder (alice) (coder @ coder.example.com)' }));
+    const aggregate = await save(bodies);
+
+    expect(aggregate.steps[0].integrationIds).toEqual([41]);
   });
 
   it('renders drag handles for sessions in the tree nav', () => {
@@ -926,6 +948,22 @@ describe('Projects/Workflows/BuilderPage', () => {
     const aggregate = await save(bodies);
 
     expect(aggregate.config.base_aws_oidc_role_ids).toEqual([31]);
+  });
+
+  // "Inherit all" never attaches an integration, so its picker stays usable while it is on.
+  it('a base integration is sent in base_integration_ids on Save, with "inherit all" on', async () => {
+    const workflow = makeWorkflow({ inheritAllProjectResources: true });
+    const { bodies } = answerSave(workflow);
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({ workflow, integrations: [buildIntegrationPicker({ id: 41, name: 'Coder (alice)' })] }),
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /Base Resources/ }));
+    await userEvent.click(await screen.findByRole('combobox', { name: 'Integrations' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Coder (alice) (coder @ coder.example.com)' }));
+    const aggregate = await save(bodies);
+
+    expect(aggregate.config.base_integration_ids).toEqual([41]);
   });
 
   it('a repository selected on a session is sent in the step repositoryIds on Save', async () => {
