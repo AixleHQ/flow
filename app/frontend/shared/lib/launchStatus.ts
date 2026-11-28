@@ -15,7 +15,13 @@
  */
 
 export type LaunchPhase =
-  'queued_for_slot' | 'starting' | 'cluster_capacity' | 'namespace_quota' | 'runner_capacity' | 'runner_provisioning' | 'running';
+  | 'queued_for_slot'
+  | 'starting'
+  | 'cluster_capacity'
+  | 'namespace_quota'
+  | 'runner_capacity'
+  | 'runner_provisioning'
+  | 'running';
 
 /** True only when the session really is behind other sessions in its pool. */
 export function isWaitingForSlot(phase: string | null | undefined): boolean {
